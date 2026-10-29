@@ -107,9 +107,21 @@ describe('PD-45 migration: the rules', () => {
     expect(flat).toMatch(/outcome in \('saved', 'later'\)/);
   });
 
+  it('keeps the booking\'s location beside the prospect, never on it (owner 2026-10-29, BR-2)', () => {
+    expect(flat).toMatch(/create table chat\.trial_prospect_location \(\s*prospect_id uuid primary key references chat\.trial_prospect \(id\)/);
+    expect(flat).toMatch(/country_code text not null constraint trial_prospect_location_country_listed references chat\.geo_country \(code\)/);
+    expect(flat).toMatch(
+      /constraint trial_prospect_location_subdivision_in_country foreign key \(country_code, subdivision_code\) references chat\.geo_subdivision \(country_code, code\)/,
+    );
+    expect(flat).toMatch(/create trigger trial_prospect_location_is_coherent before insert or update or delete on chat\.trial_prospect_location for each row execute function chat\.guard_trial_prospect_location\(\)/);
+    expect(flat).not.toMatch(/alter table chat\.trial_prospect add/);
+  });
+
   it('grants nothing on the new tables to a request role, and no request role may write the new columns', () => {
-    expect(flat).toMatch(/revoke all on chat\.geo_country, chat\.geo_subdivision, chat\.contact_location_prompt from public, anon, authenticated, chat_app/);
-    for (const t of ['geo_country', 'geo_subdivision', 'contact_location_prompt']) {
+    expect(flat).toMatch(
+      /revoke all on chat\.geo_country, chat\.geo_subdivision, chat\.contact_location_prompt, chat\.trial_prospect_location from public, anon, authenticated, chat_app/,
+    );
+    for (const t of ['geo_country', 'geo_subdivision', 'contact_location_prompt', 'trial_prospect_location']) {
       expect(flat).toContain(`alter table chat.${t} enable row level security`);
     }
     expect(flat).not.toMatch(/grant [^;]* to (authenticated|chat_app|anon|public)/);
@@ -143,5 +155,7 @@ describe('PD-45 migration: Prisma', () => {
     expect(model('GeoCountry')).toMatch(/@@map\("geo_country"\)/);
     expect(model('GeoSubdivision')).toMatch(/@@id\(\[countryCode, code\]\)/);
     expect(model('ContactLocationPrompt')).toMatch(/@@map\("contact_location_prompt"\)/);
+    expect(model('TrialProspectLocation')).toMatch(/@@map\("trial_prospect_location"\)/);
+    expect(model('TrialProspect')).not.toMatch(/country|subdivision/i);
   });
 });

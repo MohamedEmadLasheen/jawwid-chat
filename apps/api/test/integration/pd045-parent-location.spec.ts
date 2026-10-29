@@ -11,9 +11,12 @@
  *   6. Sales' subscription form carries the same two keys
  *   7. the one-time prompt is answered once per contact
  *   8. no request role reads the reference tables or writes the new columns
+ *   9. the booking's location (owner 2026-10-29): beside the prospect, in its
+ *      organization, the same keys, kept
  *
  * Every refusal is the database's own. Synthetic fixtures only (G-16).
  */
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildGraph, seed, truncate, type Scenario } from './harness';
@@ -171,7 +174,7 @@ describe('7. the one-time prompt', () => {
 describe('8. request roles', () => {
   it('read none of the new tables and write none of the new columns', async () => {
     for (const role of ['authenticated', 'chat_app', 'anon']) {
-      for (const t of ['chat.geo_country', 'chat.geo_subdivision', 'chat.contact_location_prompt']) {
+      for (const t of ['chat.geo_country', 'chat.geo_subdivision', 'chat.contact_location_prompt', 'chat.trial_prospect_location']) {
         const r = await one<{ ok: boolean }>(`select has_table_privilege($1, $2, 'SELECT') or has_table_privilege($1, $2, 'INSERT') as ok`, role, t);
         expect({ role, t, ok: r.ok }).toEqual({ role, t, ok: false });
       }
@@ -183,5 +186,47 @@ describe('8. request roles', () => {
         expect({ role, t, col, ok: r.ok }).toEqual({ role, t, col, ok: false });
       }
     }
+  });
+});
+
+describe('9. the booking\'s location', () => {
+  async function prospect(): Promise<string> {
+    const { id } = await one<{ id: string }>(
+      `insert into chat.trial_prospect (organization_id, display_name, created_by)
+       values (chat.default_organization_id(), 'prospect_p', $1::uuid) returning id::text as id`,
+      s.ownerId,
+    );
+    return id;
+  }
+  const record = (prospectId: string, country: string, subdivision: string | null, org = 'chat.default_organization_id()') =>
+    sql(
+      `insert into chat.trial_prospect_location (prospect_id, organization_id, country_code, subdivision_code, recorded_by)
+       values ($1::uuid, ${org}, $2, $3, $4::uuid)`,
+      prospectId, country, subdivision, s.ownerId,
+    );
+
+  it('stores a country, with or without its subdivision, once per prospect', async () => {
+    const p = await prospect();
+    await record(p, 'AE', 'AE-DU');
+    expect(await refusal(record(p, 'AE', null))).toMatch(/trial_prospect_location_pkey/);
+    await sql(`update chat.trial_prospect_location set subdivision_code = null, recorded_by = $2::uuid where prospect_id = $1::uuid`, p, s.ownerId);
+    await sql(`update chat.trial_prospect_location set country_code = 'EG', subdivision_code = 'EG-GZ', recorded_by = $2::uuid where prospect_id = $1::uuid`, p, s.ownerId);
+  });
+
+  it('holds the same keys as the family: the subdivision is the country\'s, the country is listed', async () => {
+    expect(await refusal(record(await prospect(), 'EG', 'AE-DU'))).toMatch(/trial_prospect_location_subdivision_in_country/);
+    expect(await refusal(record(await prospect(), 'UK', null))).toMatch(/trial_prospect_location_country_listed/);
+  });
+
+  it('belongs to its prospect\'s organization, keeps its prospect, and is never deleted', async () => {
+    const p = await prospect();
+    const other = randomUUID();
+    await sql(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_other')`, other, `pd45-${other.slice(0, 8)}`);
+    expect(await refusal(record(p, 'EG', null, `'${other}'::uuid`))).toMatch(/its prospect's organization/);
+    await record(p, 'EG', null);
+    const q = await prospect();
+    expect(await refusal(sql(`update chat.trial_prospect_location set prospect_id = $2::uuid where prospect_id = $1::uuid`, p, q)))
+      .toMatch(/keeps its prospect/);
+    expect(await refusal(sql(`delete from chat.trial_prospect_location where prospect_id = $1::uuid`, p))).toMatch(/never deleted/);
   });
 });

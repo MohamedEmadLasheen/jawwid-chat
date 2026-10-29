@@ -2978,3 +2978,18 @@ model ContactLocationPrompt {
   @@map("contact_location_prompt")
   @@schema("chat")
 }
+
+/// PD-45 (owner 2026-10-29): the location given at trial booking, BESIDE the
+/// prospect (BR-2). Read only to pre-fill Sales' subscription form
+/// (trial-prospect-location-confinement.spec.ts).
+model TrialProspectLocation {
+  prospectId      String   @id @map("prospect_id") @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  countryCode     String   @map("country_code")
+  subdivisionCode String?  @map("subdivision_code")
+  recordedBy      String   @map("recorded_by") @db.Uuid
+  recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz
+
+  @@map("trial_prospect_location")
+  @@schema("chat")
+}

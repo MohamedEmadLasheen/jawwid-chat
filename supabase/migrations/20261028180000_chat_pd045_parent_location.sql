@@ -21,6 +21,12 @@
 --   chat.contact_location_prompt  who answered the app's one-time "where does
 --                              the family live?" (PR-4), so it is never asked
 --                              again on another device.
+--   chat.trial_prospect_location  the location given at trial booking (owner,
+--                              2026-10-29: "At booking too"), BESIDE the
+--                              prospect and never on it: a prospect is a display
+--                              name only (BR-2), and booking cards go to the
+--                              teacher's trial group. It pre-fills Sales' form
+--                              (PR-3), where it is confirmed.
 --
 -- "The subdivision belongs to the country" is a COMPOSITE foreign key, so no
 -- writer -- the API, a legacy path, or SQL -- can store Giza under the UAE.
@@ -3972,17 +3978,62 @@ comment on table chat.contact_location_prompt is
   'PD-45: a parent answered the app''s one-time location prompt (saved it, or chose Later, which also counts). One row per contact; the prompt is never shown again, on any device.';
 
 -- ===========================================================================
--- 6. Access: only the API's service
+-- 6. The booking's location
+-- ===========================================================================
+
+create table chat.trial_prospect_location (
+  prospect_id       uuid primary key references chat.trial_prospect (id),
+  organization_id   uuid not null references chat.organization (id),
+  country_code      text not null constraint trial_prospect_location_country_listed references chat.geo_country (code),
+  subdivision_code  text,
+  recorded_by       uuid not null references chat.staff (id),
+  recorded_at       timestamptz not null default now(),
+  constraint trial_prospect_location_subdivision_in_country
+    foreign key (country_code, subdivision_code) references chat.geo_subdivision (country_code, code)
+);
+
+comment on table chat.trial_prospect_location is
+  'PD-45 (owner 2026-10-29): the country and subdivision given when a trial was booked. Beside chat.trial_prospect, never on it (BR-2: a prospect is a display name only). Read only to pre-fill Sales'' subscription form; never in a trial card, event or teacher view (trial-prospect-location-confinement.spec.ts). No request-role grant.';
+
+create or replace function chat.guard_trial_prospect_location()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'a booking''s location is kept with its prospect and never deleted' using errcode = 'check_violation';
+  end if;
+  if not exists (select 1 from chat.trial_prospect p where p.id = new.prospect_id and p.organization_id = new.organization_id) then
+    raise exception 'a booking''s location belongs to its prospect''s organization' using errcode = 'insufficient_privilege';
+  end if;
+  if not exists (select 1 from chat.staff s where s.id = new.recorded_by and s.organization_id = new.organization_id) then
+    raise exception 'a booking''s location is recorded by staff of its organization' using errcode = 'insufficient_privilege';
+  end if;
+  if tg_op = 'UPDATE' and (new.prospect_id, new.organization_id) is distinct from (old.prospect_id, old.organization_id) then
+    raise exception 'a booking''s location keeps its prospect' using errcode = 'check_violation';
+  end if;
+  new.recorded_at := now();
+  return new;
+end;
+$$;
+
+create trigger trial_prospect_location_is_coherent before insert or update or delete on chat.trial_prospect_location
+  for each row execute function chat.guard_trial_prospect_location();
+
+-- ===========================================================================
+-- 7. Access: only the API's service
 -- ===========================================================================
 
 alter table chat.geo_country enable row level security;
 alter table chat.geo_subdivision enable row level security;
 alter table chat.contact_location_prompt enable row level security;
-revoke all on chat.geo_country, chat.geo_subdivision, chat.contact_location_prompt from public, anon, authenticated, chat_app;
+alter table chat.trial_prospect_location enable row level security;
+revoke all on chat.geo_country, chat.geo_subdivision, chat.contact_location_prompt, chat.trial_prospect_location from public, anon, authenticated, chat_app;
 revoke all on function chat.forbid_geo_change() from public;
+revoke all on function chat.guard_trial_prospect_location() from public;
 
 -- ===========================================================================
--- 7. Prove it
+-- 8. Prove it
 -- ===========================================================================
 
 do $assert$
@@ -3997,8 +4048,9 @@ begin
     raise exception 'PD-45: a location column is writable by a request role';
   end if;
   if (select count(*) from pg_constraint
-       where conname in ('family_subdivision_in_country', 'trial_subscription_subdivision_in_country')
-         and contype = 'f' and array_length(conkey, 1) = 2) <> 2 then
+       where conname in ('family_subdivision_in_country', 'trial_subscription_subdivision_in_country',
+                         'trial_prospect_location_subdivision_in_country')
+         and contype = 'f' and array_length(conkey, 1) = 2) <> 3 then
     raise exception 'PD-45: the subdivision is not tied to its country by a composite foreign key';
   end if;
   if not exists (select 1 from chat.geo_subdivision where country_code = 'EG' and code = 'EG-GZ')
