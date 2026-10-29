@@ -18,16 +18,19 @@
  * Synthetic fixtures only (G-16).
  */
 import { randomUUID } from 'node:crypto';
+import { crc32, deflateSync } from 'node:zlib';
+import { LocalFsBlobStore } from '../../src/communication/attachments/blob-store';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { runWithRequestContext } from '@platform/request-context';
 import type { Actor } from '@platform/types';
+import { WhiteboardAssetService } from '../../src/whiteboards/whiteboard-asset.service';
 import { WhiteboardService } from '../../src/whiteboards/whiteboard.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(120_000);
 
 const g = buildGraph();
-const boards = new WhiteboardService(g.prisma, g.storage, g.notifications);
+const boards = new WhiteboardService(g.prisma, g.storage, g.notifications, new WhiteboardAssetService(g.storage), g.config);
 const exec = (sql: string, ...args: unknown[]) => g.prisma.$executeRawUnsafe(sql, ...args);
 
 let s: Scenario;
@@ -415,5 +418,183 @@ describe('limits and concurrency', () => {
     );
     expect(await code(boards.duplicate(full.id, t))).toBe(CommErrorCode.WHITEBOARD_LIMIT);
     expect((await boards.list(t)).map((x) => x.title).sort()).toEqual(['Full', 'Next']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR-4: images and export (§4.4, §4.6, §6.3)
+// ---------------------------------------------------------------------------
+
+const blobs = new LocalFsBlobStore();
+
+/** A real, decodable RGB PNG. */
+function png(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.set([8, 2, 0, 0, 0], 8);
+  const rows = Buffer.alloc((width * 3 + 1) * height, 0x80);
+  for (let y = 0; y < height; y++) rows[y * (width * 3 + 1)] = 0;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+async function assetsSwitch(on: boolean) {
+  await exec(
+    `insert into chat.config (key, value, scope) values ('whiteboards.assets_enabled', $1::jsonb, 'whiteboards')
+     on conflict (key) do update set value = excluded.value`,
+    JSON.stringify(on),
+  );
+  g.config.invalidate();
+}
+
+/** An image granted, uploaded and confirmed on `boardId`. */
+async function addImage(boardId: string, t: Actor, bytes = png(40, 30)) {
+  const { assetId, upload } = await boards.grantImage(boardId, { contentType: 'image/png', byteSize: bytes.length }, t);
+  await blobs.put(upload.objectKey, 'image/png', bytes);
+  const { asset } = await boards.confirmImage(boardId, assetId, { objectKey: upload.objectKey }, t);
+  return { asset, upload };
+}
+
+const imageOn = (assetId: string) => ({ v: 1, elements: [{ id: 'i1', kind: 'image', assetId, x: 10, y: 10, w: 400, h: 300 }] });
+
+describe('PR-4: images and export', () => {
+  beforeEach(() => assetsSwitch(true));
+  afterAll(() => assetsSwitch(false));
+
+  it('is off until the environment switches it on: nothing granted, nothing written', async () => {
+    await assetsSwitch(false);
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Off' }, t);
+    expect(await code(boards.grantImage(b.id, { contentType: 'image/png', byteSize: 100 }, t))).toBe(CommErrorCode.WHITEBOARD_ASSETS_OFF);
+    expect(await code(boards.grantExport(b.id, { pages: [{ byteSize: 100 }] }, t))).toBe(CommErrorCode.WHITEBOARD_ASSETS_OFF);
+    expect((await snapshot(b.id))!.assets).toBe(0);
+  });
+
+  it('an image is granted for a key the server chose, and kept only once its real bytes pass', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Images' }, t);
+    const bytes = png(40, 30);
+    const { assetId, upload } = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: bytes.length }, t);
+    expect(upload.objectKey.split('/')).toEqual(['whiteboard-uploads', org, b.id, assetId, expect.stringMatching(/^[0-9a-f-]{36}$/)]);
+    await blobs.put(upload.objectKey, 'image/png', bytes);
+    // Not ready yet: no page may name it.
+    expect(await code(boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(assetId) }, t))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+    // A key that is not this image's upload is refused, whatever it holds.
+    const other = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: bytes.length }, t);
+    await blobs.put(other.upload.objectKey, 'image/png', bytes);
+    expect(await code(boards.confirmImage(b.id, assetId, { objectKey: other.upload.objectKey }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect(await code(boards.confirmImage(b.id, assetId, { objectKey: `whiteboards/${org}/${b.id}/${assetId}` }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+
+    const { asset } = await boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t);
+    expect(asset).toMatchObject({ id: assetId, width: 40, height: 30, contentType: 'image/png', byteSize: bytes.length });
+    const [row] = await g.prisma.$queryRaw<Array<{ object_key: string; state: string; sha256: string }>>`
+      SELECT object_key, state, sha256 FROM chat.whiteboard_asset WHERE id = ${assetId}::uuid`;
+    expect(row).toMatchObject({ object_key: `whiteboards/${org}/${b.id}/${assetId}`, state: 'ready' });
+    expect(row!.sha256).toMatch(/^[0-9a-f]{64}$/);
+    // The upload is gone; the kept bytes are the ones inspected.
+    expect(await blobs.get(upload.objectKey)).toBeNull();
+    expect((await blobs.get(row!.object_key))?.bytes.equals(bytes)).toBe(true);
+    // A replay answers the ready image again.
+    expect(await boards.confirmImage(b.id, assetId, { objectKey: upload.objectKey }, t)).toMatchObject({ replayed: true, asset: { id: assetId } });
+
+    const saved = await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(assetId) }, t);
+    expect(saved.revision).toBe(2);
+    const opened = await boards.open(b.id, t);
+    expect(opened.assets.map((a) => a.id)).toEqual([assetId]);
+    expect(opened.assets[0]!.url).toEqual(expect.any(String));
+  });
+
+  it('refuses a type that lies, and a foreign board\'s image, leaving nothing ready', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Lies' }, t);
+    const html = Buffer.from('<html><script>alert(1)</script></html>');
+    const lie = await boards.grantImage(b.id, { contentType: 'image/png', byteSize: html.length }, t);
+    await blobs.put(lie.upload.objectKey, 'image/png', html);
+    expect(await code(boards.confirmImage(b.id, lie.assetId, { objectKey: lie.upload.objectKey }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect(await code(boards.grantImage(b.id, { contentType: 'image/svg+xml', byteSize: 10 }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+
+    const theirs = await boards.create({ title: 'Theirs' }, teacher(s.newTeacherId));
+    const foreign = await addImage(theirs.id, teacher(s.newTeacherId));
+    expect(await code(boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(foreign.asset.id) }, t))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+    // Another teacher can neither confirm nor sign this board's images.
+    expect(await code(boards.confirmImage(b.id, lie.assetId, { objectKey: lie.upload.objectKey }, teacher(s.newTeacherId)))).toBe(CommErrorCode.WHITEBOARD_NOT_FOUND);
+    expect(await code(boards.imageUrls(b.id, teacher(s.newTeacherId)))).toBe(CommErrorCode.WHITEBOARD_NOT_FOUND);
+    const [{ ready }] = await g.prisma.$queryRaw<Array<{ ready: number }>>`
+      SELECT count(*)::int AS ready FROM chat.whiteboard_asset WHERE board_id = ${b.id}::uuid AND state = 'ready'`;
+    expect(Number(ready)).toBe(0);
+  });
+
+  it('staff reading a board get its images signed (the open is logged); no one but the teacher adds one', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Read' }, t);
+    const { asset } = await addImage(b.id, t);
+    const seen = await boards.review(b.id, staff(tsup, 'admin'));
+    expect(seen.assets.map((a) => a.id)).toEqual([asset.id]);
+    expect((await log(b.id)).filter((r) => r.viewer_id === tsup).map((r) => r.action)).toEqual(['open']);
+    for (const who of [staff(tmgr, 'manager'), staff(sa, 'super_admin'), staff(tsup, 'admin')]) {
+      expect(await code(boards.grantImage(b.id, { contentType: 'image/png', byteSize: 10 }, who))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+    }
+    const support = await supportSession();
+    expect(await code(asSupport(support, () => boards.grantImage(b.id, { contentType: 'image/png', byteSize: 10 }, t)))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+    expect(await code(asSupport(support, () => boards.grantExport(b.id, { pages: [{ byteSize: 10 }] }, t)))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+  });
+
+  it('a copy takes its images to keys of the new board, and the pages name the copies', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Original' }, t);
+    const { asset } = await addImage(b.id, t);
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(asset.id) }, t);
+    const before = await snapshot(b.id);
+    const copy = await boards.duplicate(b.id, t);
+    expect(copy.assets).toHaveLength(1);
+    const copied = copy.assets[0]!;
+    expect(copied.id).not.toBe(asset.id);
+    expect((copy.pages[0]!.document as { elements: Array<{ assetId: string }> }).elements[0]!.assetId).toBe(copied.id);
+    const [row] = await g.prisma.$queryRaw<Array<{ object_key: string }>>`SELECT object_key FROM chat.whiteboard_asset WHERE id = ${copied.id}::uuid`;
+    expect(row!.object_key).toBe(`whiteboards/${org}/${copy.id}/${copied.id}`);
+    expect((await blobs.get(row!.object_key))?.bytes.length).toBe(asset.byteSize);
+    expect(await snapshot(b.id)).toEqual(before);
+  });
+
+  it('an export: the pages checked as images, one PDF back, logged, and nothing of it kept', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Export me' }, t);
+    await boards.addPage(b.id, { revision: 1 }, t);
+    const pages = [png(64, 36), png(64, 36)];
+    const grant = await boards.grantExport(b.id, { pages: pages.map((p) => ({ byteSize: p.length })) }, t);
+    expect(grant.pages).toHaveLength(2);
+    for (const [i, p] of grant.pages.entries()) await blobs.put(p.upload.objectKey, 'image/png', pages[i]!);
+    // Every page of one export, each once.
+    expect(await code(boards.composeExport(b.id, { pages: [{ assetId: grant.pages[0]!.assetId, objectKey: grant.pages[0]!.upload.objectKey }] }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    const { pdf, fileName } = await boards.composeExport(b.id, { pages: grant.pages.map((p) => ({ assetId: p.assetId, objectKey: p.upload.objectKey })) }, t);
+    expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(2);
+    expect(fileName).toBe('Export me.pdf');
+    expect((await log(b.id)).map((r) => r.action)).toContain('export');
+    expect((await snapshot(b.id))!.assets).toBe(0);
+    for (const p of grant.pages) expect(await blobs.get(p.upload.objectKey)).toBeNull();
+  });
+
+  it('at most five exports at once; uploads never confirmed are swept an hour on', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Busy' }, t);
+    for (let i = 0; i < 5; i++) {
+      await boards.grantExport(b.id, { pages: [{ byteSize: 100 }] }, t);
+      // Each export has its own expiry: the next grant is a new transaction.
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(await code(boards.grantExport(b.id, { pages: [{ byteSize: 100 }] }, t))).toBe(CommErrorCode.WHITEBOARD_LIMIT);
+    await boards.grantImage(b.id, { contentType: 'image/png', byteSize: 100 }, t);
+    await exec(`update chat.whiteboard_asset set expires_at = now() - interval '1 minute' where board_id = $1::uuid`, b.id);
+    expect(await boards.sweepAbandonedAssets()).toBe(6);
+    expect((await snapshot(b.id))!.assets).toBe(0);
   });
 });

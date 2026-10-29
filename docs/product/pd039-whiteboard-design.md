@@ -293,6 +293,11 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   which it already uses for certificates. The verse attribution goes in the footer when a
   verse is present. The result is a board asset with a 10-minute signed URL, and is purged
   after 24 h. Vector PDF is not planned: a second renderer would drift from the first.
+- **As built (PR-4a).** `POST /whiteboards/:id/exports/compose` answers with the PDF itself
+  (`application/pdf`, `Content-Disposition: attachment`) instead of storing it: the storage
+  seam has no server-side write, and nothing of an export needs to outlive the request. The
+  uploaded page PNGs are deleted as soon as the PDF is made; an export never composed is
+  swept an hour on. It is logged `export`.
 
 ### 4.7 What "built-in" versus "teacher-made" means
 
@@ -508,6 +513,17 @@ never enough to read an object.**
   - The key namespace test is structural (exactly four segments), not `startsWith`.
 - **References.** A page document may name only `ready` asset ids of **the same board**.
   The page save refuses others (403, not 500).
+- **As built (PR-4a).**
+  - The grant's key is `whiteboard-uploads/<org>/<board>/<asset>/<random>`; the kept key is
+    `whiteboards/<org>/<board>/<asset>` (the table's key-shape check). Confirm takes the
+    upload key back and accepts it only if it is exactly that asset's upload (five
+    segments, structural), then copies, inspects (type, format end, still image, at most
+    8,000 px) and deletes the upload. No grant can name a kept key.
+  - An upload never confirmed is never signed. Its row (and any kept copy) is swept an
+    hour on; the upload object itself needs a bucket **lifecycle rule expiring
+    `whiteboard-uploads/` after 1 day**, added with the bucket's versioning (#191).
+  - Everything is behind `chat.config` `whiteboards.assets_enabled` (default off), turned
+    on per environment once that bucket, its versioning and the lifecycle rule exist.
 
 ### 6.4 Limits (configuration, with these defaults)
 
