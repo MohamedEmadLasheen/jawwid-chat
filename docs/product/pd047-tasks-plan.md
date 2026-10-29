@@ -242,13 +242,15 @@ The **Needs action** page and the other source pages stay as they are. A task is
 **Phase B decisions (department head, 2026-10-29).**
 - **Already built:** `instalment_overdue`, `receipt_review` and `renewal_request` became PR-2b's financial sources (`instalment`, `receipt_review`, `renewal_request`; §5.1 of the priority amendment).
 - **PR-6a** (slot `20261029235800`): `family_unsupervised`, `teacher_setup`, `new_student_assign` / `new_student_group`.
-- **Complaints and parent feedback** (next, slot to come) use the records that already exist; no new state.
+- **PR-6b** (slot `20261029235900`): `teacher_unsupervised`, `trial_attendance` / `trial_outcome`, `certificate` (the owner's answers below).
+- **PR-6c** (slot `20261030000000`): `complaint`, `parent_feedback`, `schedule_change`, `makeup_owed`. Both branch off `main` after PR-6a, one commit per source.
+- **Complaints and parent feedback** use the records that already exist; no new state.
   - `complaint:<entryId>`: a Teacher File entry (`chat.teacher_supervision_entry`, kind `complaint`). Its task is **done when a `complaint_resolution` entry refers to it** (`refers_to`, unique per complaint). It goes to the teacher's supervisor, else the Teachers manager.
   - `parent_feedback:<feedbackId>`: PD-32's `chat.parent_feedback`. Its task is **done when that record reaches its closed state, `status = 'resolved'`**. It goes to the teacher's supervisor, else the Teachers manager.
   - `schedule_change:<requestId>` (PD-11's `chat.schedule_change_request`) goes with these.
-- **`makeup_owed`** waits for its design note (below). No code until it is agreed.
+- **`makeup_owed`** follows its design note below, as decided by the department head on 2026-10-29.
 
-**`makeup_owed` -- design note (for agreement; no code yet).**
+**`makeup_owed` -- design note (agreed by the department head, 2026-10-29).**
 - **What record means "a make-up is owed".** No new record is needed: the **original lesson** owes one, exactly by the rule `LessonService.owedMakeups` already applies (`apps/api/src/lessons/lesson.service.ts`, repeated by the database in `guard_lesson`). A lesson owes a make-up when all of these hold:
   - it is not a trial;
   - its outcome is a make-up cause: `teacher_apology` or `teacher_no_show`, and `student_apology` only where the academy's policy owes one for it;
@@ -262,11 +264,12 @@ The **Needs action** page and the other source pages stay as they are. A task is
   - **Done** when a live make-up is booked (`SchedulingService.bookMakeup`; actor = whoever booked it), or when a `makeup_followup` ruling settles it (`resolveMakeup`: substitute teacher, family credit, package extension or waived; actor = whoever decided).
   - **Withdrawn** when the lesson's outcome is corrected away from a cause.
   - **If a booked make-up is itself cancelled** (`teacher_apology`, `teacher_no_show`, `admin_cancelled`, `rescheduled`), the original lesson owes again. That should be a **fresh** task, because the first one was completed by the booking. One way is an episode per booked make-up, as PR-2b did for packages.
-- **Questions for agreement:**
-  1. Completed at **booking** (as above), or only once the make-up is **held**? Held is stricter, but then the task stays open for days after the work is arranged.
-  2. Should `student_apology` owe a make-up task at all, or only the teacher causes?
-  3. A `makeup_followup` ruling also raises PR-2's `lesson_ruling` task for the supervisor. Settling `makeup_owed` by the same decision is right, but confirm the two do not need to be one task.
-**Owner's answers, 2026-10-29** (relayed verbatim by the department head). These three are **PR-6b**, each source in its own commit; its slot is asked for after PR-6a.
+- **Department-head decisions, 2026-10-29** (the three questions this note asked):
+  1. **Done at booking.** The work is arranged then. A booked make-up that is itself cancelled re-owes as a **fresh episode** task, as above.
+  2. **`student_apology` follows exactly the rule `LessonService.owedMakeups` / `guard_lesson` already applies.** No new policy: the task source calls the same rule and never re-implements it. A spec proves that the set of lessons with an open `makeup_owed` task equals `owedMakeups`' set.
+  3. **Two tasks.** `lesson_ruling` is "decide"; `makeup_owed` is "make sure it is made up". The one `makeup_followup` decision completes **both**, with the same actor. A spec proves it.
+
+**Owner's answers, 2026-10-29** (relayed verbatim by the department head). These three are **PR-6b** (slot `20261029235900`), each source in its own commit.
 - **`teacher_unsupervised`: "Replace it".** The task replaces PD-43's two notices to the Teachers manager, `teacher_added_unsupervised` (the API, `teacher-onboarding.service.ts`) and `teacher_supervisor_left` (the trigger on `chat.staff`, `mig/20261029150000`), the way Q-F6 replaced the renewal push. The manager hears of it once, through the task's own `task_assigned`. `teacher_duplicate_hidden` is not a task and stays a notice.
 - **`trial_outcome`: "Two tasks".** The **teacher** gets an attendance task (`trial_attendance:<lessonId>`), done when attendance is recorded. Only **then** does the family's **Sales owner** get an outcome task (`trial_outcome:<lessonId>`), done when the outcome is recorded. Each sees only their own step: the teacher never sees the outcome task, and Sales never sees the attendance task.
 - **`certificate`: "Yes, replace them".** Each PD-41 step that needs someone to act becomes a task for that person, and the four `task` notifications (`certificate_requested`, `certificate_returned`, `certificate_uploaded`, `certificate_suggestion_decided`) stop. PD-47 owns the change in PD-41's emitters (`certificate.service.ts`). **PD-41's state machine and its tests stay intact**: only who is told, and how, changes.
