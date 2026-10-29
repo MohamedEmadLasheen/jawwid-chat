@@ -90,3 +90,55 @@ Map<String, Object?>? lessonAudioMessage(int surah, Iterable<Object?> ayahs) {
   }
   return out.isEmpty ? null : {'type': lessonAudioType, 'surah': surah, 'ayahs': out};
 }
+
+// --- PD-48: voice-over for the Arabic letters lessons -------------------------------------
+//
+// The same path as recitation, for a different message: the app reads
+// `GET /lesson-audio/arabic-NNN` (only clips two teachers approved for exactly
+// this text, of the lesson's one voice, through the separate lesson-audio
+// release gate) and hands the lesson
+//
+//   { type: 'jawwid:lesson-audio', lesson: 'arabic-001', clips: [{ id, audio: { key, url, sha256, textSha256 } }] }
+//
+// as DATA. Unlike recitation it is posted even when EMPTY: an empty list clears
+// what the lesson held before. The lesson checks every key, the text hash and
+// every file's SHA-256 itself (apps/lessons/src/arabic/voice.ts). Never Quran.
+
+const lessonVoiceType = 'jawwid:lesson-audio';
+
+final _lettersPage = RegExp(r'^/lessons/arabic/lesson-([1-9]\d{0,2})/?$');
+
+/// The lesson key (`arabic-NNN`) of a lessons-site Arabic letters page (`…/lessons/arabic/lesson-N`), or null.
+String? lessonLettersOf(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) return null;
+  final m = _lettersPage.firstMatch(uri.path);
+  return m == null ? null : 'arabic-${m.group(1)!.padLeft(3, '0')}';
+}
+
+/// The message for [lesson] from `GET /lesson-audio/:lesson`, field by field (nothing added), or null
+/// when the answer is not this lesson's. An answer with no clips is a message with none.
+Map<String, Object?>? lessonVoiceMessage(String lesson, Map<String, Object?> answer) {
+  if (answer['lesson'] != lesson) return null;
+  final clips = <Map<String, Object?>>[];
+  for (final c in (answer['clips'] as List?) ?? const []) {
+    if (c is! Map) continue;
+    final id = c['id'];
+    final audio = c['audio'];
+    if (id is! String || audio is! Map) continue;
+    clips.add({
+      'id': id,
+      'audio': {'key': audio['key'], 'url': audio['url'], 'sha256': audio['sha256'], 'textSha256': audio['textSha256']},
+    });
+  }
+  return {'type': lessonVoiceType, 'lesson': lesson, 'clips': clips};
+}
+
+/// Whether a `jawwid:lesson-ready` message names the lesson framed at [url] (a Quran surah or a letters lesson).
+bool readyFor(Object? data, String url) {
+  if (data is! Map || data['type'] != 'jawwid:lesson-ready') return false;
+  final surah = lessonSurahOf(url);
+  if (surah != null) return data['surah'] == surah;
+  final lesson = lessonLettersOf(url);
+  return lesson != null && data['lesson'] == lesson;
+}
