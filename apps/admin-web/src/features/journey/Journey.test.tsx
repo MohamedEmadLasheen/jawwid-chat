@@ -123,6 +123,8 @@ describe('the supervisor\'s Student excuse card', () => {
     on('POST', /\/lessons\/l-5\/teacher-apology$/, () => json(record({ id: 'l-5', outcome: 'teacher_apology' })))
     renderWithProviders(<LessonCardDialog conversationId="c-1" kind="teacher_excuse" tickets={[ticket('teacher_apology', 'l-5')]} onClose={() => {}} />, { staff, locale: 'ar' })
     const dialog = await screen.findByRole('dialog', { name: 'عذر المعلم' })
+    // A teacher's reason is staff data: the picker says so (PD-50, head review).
+    expect(within(dialog).getByRole('radiogroup', { name: 'السبب (للإدارة والمعلم فقط)' })).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('radio', { name: 'مرض' }))
     await userEvent.type(within(dialog).getByLabelText('ملاحظة (للإدارة والمعلم فقط)'), 'موعد طبيب')
     await userEvent.click(within(dialog).getByRole('button', { name: 'إرسال' }))

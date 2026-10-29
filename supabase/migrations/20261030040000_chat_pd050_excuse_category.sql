@@ -8,7 +8,9 @@
 -- teacher only.
 --
 --   chat.lesson.excuse_category          the excused lesson's category, written
---                                        with its outcome (never on its own).
+--                                        with its outcome (never on its own). The
+--                                        family reads a student excuse's; a
+--                                        teacher apology's is staff data (API).
 --   chat.lesson_ruling.excuse_category   a family's late apology's category,
 --                                        written when the ruling is opened; an
 --                                        excusing decision copies it to the lesson.
@@ -33,14 +35,21 @@ comment on column chat.lesson_ruling.excuse_category is
   'PD-50: a late apology''s reason category, written when the ruling is opened; never changed.';
 
 -- chat.guard_lesson writes an outcome once and lists the columns that go with
--- it. The category is one of them: it changes only in the update that changes
--- the outcome (an excuse, an excusing ruling, a recorded correction).
+-- it. The category is one of them: a lesson is born without one (it is born
+-- open), and it changes only in the update that changes the outcome (an excuse,
+-- an excusing ruling, a recorded correction).
 create function chat.guard_lesson_excuse_category()
 returns trigger
 language plpgsql
 set search_path = chat, pg_temp
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if new.excuse_category is not null and new.outcome is null then
+      raise exception 'an excuse''s category is written with its outcome' using errcode = 'check_violation';
+    end if;
+    return new;
+  end if;
   if new.excuse_category is distinct from old.excuse_category
      and new.outcome is not distinct from old.outcome then
     raise exception 'an excuse''s category is written with its outcome' using errcode = 'check_violation';
@@ -50,7 +59,7 @@ end;
 $$;
 
 create trigger lesson_excuse_category_with_outcome
-  before update of excuse_category on chat.lesson
+  before insert or update of excuse_category on chat.lesson
   for each row execute function chat.guard_lesson_excuse_category();
 
 -- chat.guard_lesson_ruling lets only the decision change; the category is

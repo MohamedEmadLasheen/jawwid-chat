@@ -732,7 +732,9 @@ export class LessonService {
     return this.close(actorId, lessonId, 'teacher_apology', LessonOutcome.TEACHER_APOLOGY, reason, async (tx, lesson, actor, lang) => {
       await this.postCard(
         tx, lesson, actor, CardKind.LESSON_TEACHER_APOLOGY,
-        { ...this.cardBase(lesson), makeupOwed: true, ...excuseOnCard(category, null) },
+        // PD-50: a teacher's category is personal (health, family) -- kept on the
+        // lesson for staff and the teacher, never on the family's card.
+        { ...this.cardBase(lesson), makeupOwed: true },
         lang,
       );
     }, null, category);
@@ -1367,8 +1369,8 @@ export class LessonService {
           ? lesson.outcomeNote
           : null,
       outcomeAt: lesson.outcomeAt?.toISOString() ?? null,
-      // PD-50: the family reads the category; the note above stays PD-15's.
-      excuseCategory: lesson.excuseCategory,
+      // PD-50: the family reads its own excuse's category, never a teacher's.
+      excuseCategory: excuseCategoryFor(standing, lesson),
       // Who recorded it is staff-facing; a family sees what happened, not whom to blame.
       outcomeBy: staffView
         ? (lesson.outcomeBy ? { kind: lesson.outcomeByKind, id: lesson.outcomeBy } : null)
@@ -1553,6 +1555,31 @@ export function dateField(body: Record<string, unknown>, key: string): Date {
   if (typeof v !== 'string') throw invalid(`${key}: must be an ISO-8601 timestamp`);
   return parseDate(v, key);
 }
+/**
+ * PD-50: who reads an excuse's category. The owner's decision is about the
+ * family's own excuses: a family reads the category of a student excuse; a
+ * teacher's apology's category is staff data (a teacher's health is not the
+ * family's to read), for staff and the teacher only.
+ */
+export function excuseCategoryFor(
+  standing: LessonStanding,
+  lesson: Pick<Lesson, 'outcome' | 'excuseCategory'>,
+): string | null {
+  if (standing === 'family' && lesson.outcome === LessonOutcome.TEACHER_APOLOGY) return null;
+  return lesson.excuseCategory;
+}
+
+/**
+ * PD-50: a correction keeps the category only while the same party stays
+ * excused (a student excuse re-timed); a change to the other party (teacher <->
+ * student) or away from an excuse drops it -- one party's reason is never
+ * passed off as the other's.
+ */
+export function categoryAfterCorrection(from: string | null, to: string, category: string | null): string | null {
+  const excuse = to === LessonOutcome.STUDENT_APOLOGY || to === LessonOutcome.TEACHER_APOLOGY;
+  return excuse && from === to ? category : null;
+}
+
 /** PD-50: `reasonCategory`, one of EXCUSE_CATEGORIES, or null when not given. */
 export function excuseCategoryField(body: Record<string, unknown>): ExcuseCategory | null {
   const v = body.reasonCategory;

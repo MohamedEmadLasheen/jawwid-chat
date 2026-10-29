@@ -55,7 +55,6 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       // The teacher's reason is internal (PD-15): the family is told only that a make-up follows.
       return join(
         ar ? `🙏 اعتذر المعلم عن حصة ${learner}` : `🙏 The teacher cannot teach ${learner}'s lesson`,
-        category,
         ar ? 'سيتم ترتيب حصة تعويضية.' : 'A make-up lesson will be arranged.',
       );
     case CardKind.LESSON_CANCELLED:

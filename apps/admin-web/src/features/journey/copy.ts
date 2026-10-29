@@ -40,10 +40,11 @@ export const J = {
   // PD-50: the category the family reads, and the free text beside it, which it does not.
   reasonCategory: { en: 'Reason (the family sees this)', ar: 'السبب (تراه الأسرة)' },
   noteStaffTeacher: { en: 'Note (staff and the teacher only)', ar: 'ملاحظة (للإدارة والمعلم فقط)' },
+  familyWordsStaffTeacher: { en: 'Details from the family (staff and the teacher only)', ar: 'تفاصيل من الأسرة (للإدارة والمعلم فقط)' },
   noteStaffTeacherOptional: { en: 'Note (staff and the teacher only, optional)', ar: 'ملاحظة (للإدارة والمعلم فقط، اختيارية)' },
   teacherExcuseHint: {
-    en: 'The group is told the teacher has an excuse and a make-up follows. The family sees the reason you pick; only staff and the teacher read the note. Schedules are not changed.',
-    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. ترى الأسرة السبب الذي تختاره، ولا يطّلع على الملاحظة إلا فريق الإدارة والمعلم، ولا تتغيّر المواعيد.',
+    en: 'The group is told the teacher has an excuse and a make-up follows. The reason and the note stay with staff and the teacher; the family never sees them. Schedules are not changed.',
+    ar: 'سيُبلَّغ أعضاء المجموعة بأن لدى المعلم عذرًا وأن حصة تعويضية ستُرتَّب. يبقى السبب والملاحظة لدى فريق الإدارة والمعلم ولا يظهران للأسرة، ولا تتغيّر المواعيد.',
   },
   makeupHint: {
     en: 'Record the make-up once the family and the teacher have agreed on a time. The teacher\'s free times are suggested below.',

@@ -38,8 +38,10 @@ export interface LessonRecord {
   outcome: string | null
   apologyTiming: 'before_start' | 'after_start' | null
   outcomeNote: string | null
-  /** PD-50: the excuse's reason category, which the family reads. */
+  /** PD-50: the excuse's reason category (a family reads a student excuse's, never a teacher's). */
   excuseCategory?: string | null
+  /** A late apology's ruling; `reason` is the family's words (staff and the teacher). */
+  ruling?: { id: string; reason: string; decision: string | null } | null
   report: (Omit<ReportInput, 'note'> & {
     note?: string | null
     version: number

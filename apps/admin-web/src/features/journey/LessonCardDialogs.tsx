@@ -194,7 +194,8 @@ export function LessonCardDialog({
 
           {needsCategory && (
             <div className="field">
-              <span className="field__label" id={`${base}-category`}>{tx(J.reasonCategory)}</span>
+              {/* PD-50: a student excuse's category is the family's to read; a teacher's is not. */}
+              <span className="field__label" id={`${base}-category`}>{tx(kind === 'teacher_excuse' ? J.reasonStaffTeacher : J.reasonCategory)}</span>
               <div className="jr-chips" role="radiogroup" aria-labelledby={`${base}-category`}>
                 {EXCUSE_CATEGORIES.map((c) => (
                   <button

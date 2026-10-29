@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EXCUSE_CATEGORIES } from '../../../src/communication/contracts/vocab';
 import { renderCardBody, excuseCategoryLabel } from '../../../src/lessons/lesson-card';
-import { LessonService, excuseCategoryField, excuseOnCard } from '../../../src/lessons/lesson.service';
+import { LessonService, categoryAfterCorrection, excuseCategoryField, excuseCategoryFor, excuseOnCard } from '../../../src/lessons/lesson.service';
 
 const base = { lessonId: 'l1', learnerName: 'Omar', teacherName: 'T', startsAt: '2026-11-02T15:00:00.000Z' };
 
@@ -22,6 +22,40 @@ describe('the category list', () => {
       expect(excuseCategoryLabel(c, true)).toMatch(/[؀-ۿ]/);
     }
     expect(excuseCategoryLabel('secret', false)).toBeNull();
+  });
+});
+
+describe('who reads the category (department head review of #298)', () => {
+  it('a family reads its own excuse\'s category, never a teacher\'s; staff and the teacher read both', () => {
+    const student = { outcome: 'student_apology', excuseCategory: 'travel' };
+    const teacher = { outcome: 'teacher_apology', excuseCategory: 'illness' };
+    expect(excuseCategoryFor('family', student)).toBe('travel');
+    expect(excuseCategoryFor('family', teacher)).toBeNull();
+    for (const s of ['teacher', 'supervisor', 'manager'] as const) {
+      expect(excuseCategoryFor(s, teacher)).toBe('illness');
+      expect(excuseCategoryFor(s, student)).toBe('travel');
+    }
+  });
+});
+
+describe('categoryAfterCorrection', () => {
+  it('keeps the category only while the same party stays excused', () => {
+    expect(categoryAfterCorrection('student_apology', 'student_apology', 'exams')).toBe('exams');
+    expect(categoryAfterCorrection('teacher_apology', 'teacher_apology', 'illness')).toBe('illness');
+    // The other party: one party's reason is never passed off as the other's.
+    expect(categoryAfterCorrection('teacher_apology', 'student_apology', 'illness')).toBeNull();
+    expect(categoryAfterCorrection('student_apology', 'teacher_apology', 'travel')).toBeNull();
+    // Away from an excuse.
+    expect(categoryAfterCorrection('student_apology', 'held', 'travel')).toBeNull();
+    expect(categoryAfterCorrection('student_apology', 'voided', 'travel')).toBeNull();
+  });
+});
+
+describe('the migration\'s guard', () => {
+  it('refuses a category without its outcome on INSERT as well as on UPDATE', () => {
+    const sql = readFileSync(join(__dirname, '../../../../../supabase/migrations/20261030040000_chat_pd050_excuse_category.sql'), 'utf8');
+    expect(sql).toMatch(/before insert or update of excuse_category on chat\.lesson\b/);
+    expect(sql).toMatch(/tg_op = 'INSERT'[\s\S]*new\.excuse_category is not null and new\.outcome is null[\s\S]*raise exception/);
   });
 });
 
@@ -47,10 +81,14 @@ describe('the plain-text body', () => {
   it('names the category on every excuse card, in both languages', () => {
     expect(renderCardBody('lesson_apology', { ...base, timing: 'before_start', reasonCategory: 'travel' }, 'en')).toContain('Reason: Travel');
     expect(renderCardBody('lesson_apology', { ...base, timing: 'after_start', reasonCategory: 'exams' }, 'ar')).toContain('السبب: امتحانات');
-    expect(renderCardBody('lesson_teacher_apology', { ...base, reasonCategory: 'illness' }, 'en')).toContain('Reason: Illness');
     expect(renderCardBody('lesson_late_apology', { ...base, reasonCategory: 'emergency' }, 'ar')).toContain('ظرف طارئ');
     expect(renderCardBody('lesson_ruling', { ...base, decision: 'excused', reasonCategory: 'other' }, 'en')).toContain('Reason: Other');
     expect(renderCardBody('lesson_ruling', { ...base, decision: 'teacher_credited', reasonCategory: 'other' }, 'en')).not.toContain('Reason');
+  });
+
+  it('a teacher apology never names a category to the family, even if a payload carried one', () => {
+    expect(renderCardBody('lesson_teacher_apology', { ...base, reasonCategory: 'illness' }, 'en')).not.toContain('Illness');
+    expect(renderCardBody('lesson_teacher_apology', { ...base, reasonCategory: 'illness' }, 'ar')).not.toContain('مرض');
   });
 
   it('a card without a category reads exactly as before', () => {

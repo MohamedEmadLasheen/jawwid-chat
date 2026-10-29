@@ -17,13 +17,17 @@ function json(body: unknown, status = 200) {
 }
 let fetchMock: ReturnType<typeof vi.fn>
 let outcomeNote: string | null
+let excuseCategory: string | null
+let ruling: { id: string; reason: string; decision: string | null } | null
 const lessonGets = () => fetchMock.mock.calls.filter(([u]) => /\/lessons\/l-1$/.test(String(u))).length
 
 beforeEach(() => {
   outcomeNote = null
+  excuseCategory = null
+  ruling = null
   fetchMock = vi.fn(async (input: RequestInfo | URL) =>
     /\/lessons\/l-1$/.test(String(input))
-      ? json({ id: 'l-1', outcome: 'student_apology', outcomeNote })
+      ? json({ id: 'l-1', outcome: 'student_apology', outcomeNote, excuseCategory, ruling })
       : json({ error: { code: 'unrouted', message: 'no mock' } }, 404),
   )
   vi.stubGlobal('fetch', fetchMock)
@@ -76,6 +80,32 @@ describe('an excused lesson\'s card', () => {
     const group = screen.getByRole('group')
     expect(group).toHaveTextContent('ReasonIllness')
     await waitFor(() => expect(group).toHaveTextContent('Note (staff and the teacher only)Fever since yesterday'))
+  })
+
+  it('a teacher apology never draws a category from its card; staff read it, labelled staff and the teacher only', async () => {
+    outcomeNote = 'Doctor appointment'
+    excuseCategory = 'illness'
+    const card = readLessonExcuseCard('lesson_teacher_apology', { ...base, makeupOwed: true, reasonCategory: 'illness' })!
+    expect(card.category).toBeNull()
+    renderWithProviders(<LessonExcuseCard card={card} />, { staff })
+    const group = screen.getByRole('group')
+    await waitFor(() => expect(group).toHaveTextContent('Reason (staff and the teacher only)Illness'))
+    expect(group).toHaveTextContent('Note (staff and the teacher only)Doctor appointment')
+  })
+
+  it('a late apology with a category shows the family\'s words from its ruling, for staff and the teacher', async () => {
+    ruling = { id: 'r-1', reason: 'Power cut at home', decision: null }
+    renderWithProviders(<LessonExcuseCard card={readLessonExcuseCard('lesson_late_apology', { ...base, reasonCategory: 'emergency', rulingId: 'r-1' })!} />, { staff })
+    const group = screen.getByRole('group', { name: "🕊️ Late apology for Child Alpha's lesson" })
+    expect(group).toHaveTextContent('ReasonAn emergency')
+    await waitFor(() => expect(group).toHaveTextContent('Details from the family (staff and the teacher only)Power cut at home'))
+    expect(group).toHaveTextContent('The supervision team will review it.')
+  })
+
+  it('an older late apology carries the family\'s words itself: no lookup', () => {
+    renderWithProviders(<LessonExcuseCard card={readLessonExcuseCard('lesson_late_apology', { ...base, reason: 'Power cut', rulingId: 'r-1' })!} />, { staff })
+    expect(screen.getByRole('group')).toHaveTextContent('ReasonPower cut')
+    expect(lessonGets()).toBe(0)
   })
 
   it('an unknown category code is not drawn', () => {
