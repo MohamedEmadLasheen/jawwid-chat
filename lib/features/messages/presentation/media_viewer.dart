@@ -58,6 +58,10 @@ class _MediaViewerState extends State<MediaViewer> {
       PageController(initialPage: widget.initialIndex);
   late int _index = widget.initialIndex;
 
+  /// The photo on screen is zoomed in: a drag moves it, and the pages hold
+  /// still until it is back to its size.
+  bool _zoomed = false;
+
   @override
   void dispose() {
     _pages.dispose();
@@ -99,11 +103,18 @@ class _MediaViewerState extends State<MediaViewer> {
           PageView.builder(
             controller: _pages,
             itemCount: widget.photos.length,
-            onPageChanged: (index) => setState(() => _index = index),
-            itemBuilder: (context, index) => InteractiveViewer(
-              minScale: 1,
-              maxScale: 4,
-              child: Center(child: _Photo(attachment: widget.photos[index])),
+            // PD-37: swipe between the photos, as WhatsApp does -- unless the
+            // photo is zoomed in, when the same drag moves around it.
+            physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+            onPageChanged: (index) => setState(() {
+              _index = index;
+              _zoomed = false;
+            }),
+            itemBuilder: (context, index) => _ZoomablePhoto(
+              onZoomChanged: (zoomed) {
+                if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+              },
+              child: _Photo(attachment: widget.photos[index]),
             ),
           ),
           // The counter appears only when there is more than one, so a single
@@ -139,6 +150,56 @@ class _MediaViewerState extends State<MediaViewer> {
       ),
     );
   }
+}
+
+/// One page: pinch to zoom up to 4x.
+///
+/// At its own size it does not pan. InteractiveViewer pans by default even
+/// unzoomed, and so it took every one-finger drag from the PageView -- the
+/// photos could not be swiped. Once zoomed in, a drag moves the photo.
+class _ZoomablePhoto extends StatefulWidget {
+  const _ZoomablePhoto({required this.child, required this.onZoomChanged});
+
+  final Widget child;
+  final ValueChanged<bool> onZoomChanged;
+
+  @override
+  State<_ZoomablePhoto> createState() => _ZoomablePhotoState();
+}
+
+class _ZoomablePhotoState extends State<_ZoomablePhoto> {
+  final _transform = TransformationController();
+  bool _zoomed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _transform.addListener(_onTransform);
+  }
+
+  @override
+  void dispose() {
+    _transform
+      ..removeListener(_onTransform)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onTransform() {
+    final zoomed = _transform.value.getMaxScaleOnAxis() > 1.01;
+    if (zoomed == _zoomed) return;
+    setState(() => _zoomed = zoomed);
+    widget.onZoomChanged(zoomed);
+  }
+
+  @override
+  Widget build(BuildContext context) => InteractiveViewer(
+        transformationController: _transform,
+        minScale: 1,
+        maxScale: 4,
+        panEnabled: _zoomed,
+        child: Center(child: widget.child),
+      );
 }
 
 /// One photo, from wherever it currently lives.
