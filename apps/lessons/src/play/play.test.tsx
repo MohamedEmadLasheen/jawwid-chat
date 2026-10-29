@@ -374,6 +374,8 @@ describe('the games page', () => {
     // Folded away from the child until a grown-up opens them.
     expect(screen.queryByRole('button', { name: /أوقف/ })).toBeNull();
     expect(screen.getByRole('button', { name: /للكبار/ }).getAttribute('aria-expanded')).toBe('false');
+    // Folded means not there at all (not merely hidden, which a stylesheet's display rule could undo).
+    expect(document.getElementById('play-grownup')).toBeNull();
     grownUp();
     fireEvent.click(screen.getByRole('button', { name: /أوقف/ }));
     expect(screen.getByText('توقّفت الألعاب.')).toBeTruthy();

@@ -246,45 +246,47 @@ export function PlayLesson({
       <button type="button" className="play__grownup-toggle" aria-expanded={grownUp} aria-controls="play-grownup" onClick={() => setGrownUp(!grownUp)}>
         ⚙ للكبار
       </button>
-      <nav id="play-grownup" className="play__grownup" aria-label="أدوات الكبير" hidden={!grownUp}>
-        {live ? (
-          <>
-            <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
-              ↻ أعد اللعبة
+      {grownUp ? (
+        <nav id="play-grownup" className="play__grownup" aria-label="أدوات الكبير">
+          {live ? (
+            <>
+              <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
+                ↻ أعد اللعبة
+              </button>
+              <button type="button" onClick={advance}>
+                ⏭ تخطَّ اللعبة
+              </button>
+              <button type="button" onClick={() => (audio?.stop(), setStopped(true))}>
+                ■ أوقف
+              </button>
+            </>
+          ) : null}
+          {surahAudio ? (
+            <button type="button" aria-pressed={muted} onClick={() => (audio?.stop(), setMuted(!muted), setStep(0), setAttempt(0))}>
+              {muted ? '🔊 شغّل التلاوة' : '🔇 بلا تلاوة'}
             </button>
-            <button type="button" onClick={advance}>
-              ⏭ تخطَّ اللعبة
-            </button>
-            <button type="button" onClick={() => (audio?.stop(), setStopped(true))}>
-              ■ أوقف
-            </button>
-          </>
-        ) : null}
-        {surahAudio ? (
-          <button type="button" aria-pressed={muted} onClick={() => (audio?.stop(), setMuted(!muted), setStep(0), setAttempt(0))}>
-            {muted ? '🔊 شغّل التلاوة' : '🔇 بلا تلاوة'}
+          ) : null}
+          <button type="button" disabled={scale === 0} onClick={() => setScale(scale - 1)}>
+            أ− تصغير الآيات
           </button>
-        ) : null}
-        <button type="button" disabled={scale === 0} onClick={() => setScale(scale - 1)}>
-          أ− تصغير الآيات
-        </button>
-        <button type="button" disabled={scale === SCALES.length - 1} onClick={() => setScale(scale + 1)}>
-          أ+ تكبير الآيات
-        </button>
-        <span className="play__bands" role="group" aria-label="عمر الطفل">
-          العمر:
-          {BANDS.filter((b) => Math.abs(BANDS.indexOf(b) - BANDS.indexOf(band)) <= 1).map((b) => (
-            <button
-              key={b}
-              type="button"
-              aria-pressed={chosen === b}
-              onClick={() => (audio?.stop(), setChosen(b), setSegment(0), setStep(0), setAttempt(0), setStopped(false))}
-            >
-              {BAND_NAMES[b]}
-            </button>
-          ))}
-        </span>
-      </nav>
+          <button type="button" disabled={scale === SCALES.length - 1} onClick={() => setScale(scale + 1)}>
+            أ+ تكبير الآيات
+          </button>
+          <span className="play__bands" role="group" aria-label="عمر الطفل">
+            العمر:
+            {BANDS.filter((b) => Math.abs(BANDS.indexOf(b) - BANDS.indexOf(band)) <= 1).map((b) => (
+              <button
+                key={b}
+                type="button"
+                aria-pressed={chosen === b}
+                onClick={() => (audio?.stop(), setChosen(b), setSegment(0), setStep(0), setAttempt(0), setStopped(false))}
+              >
+                {BAND_NAMES[b]}
+              </button>
+            ))}
+          </span>
+        </nav>
+      ) : null}
       {stopped ? (
         <>
           <p className="note" role="status">
