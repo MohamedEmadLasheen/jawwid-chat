@@ -1,6 +1,6 @@
 # PD-29 P0-5c: the reading lessons (Arabic lessons 4, 5 and 10)
 
-Status: **DESIGN, for the department head's review.** This is a docs-only PR; no code is built until it is approved. The answers below are recommendations by the PD-29 session. The head asked for this design to answer its own questions, so the head can override any of them.
+Status: **APPROVED by the department head (2026-10-29)** as written, with one addition: the 3-word Quran refusal in §2. This is a docs-only PR; the engine PR follows, then lessons 5, 4 and 10, each cut from main.
 
 ## 1. Why a new lesson kind
 
@@ -42,7 +42,10 @@ What the checker (Python) and the browser (TypeScript) prove, both failing close
 - **The stage's vowel (lesson 4).** In a fatha stage, every letter of a syllable drill carries a fatha; kasra and damma likewise. The rule is shared, with fixtures, like `letters.fixture.json`.
 - **Every sentence word is one written word,** and a sentence splits into words on single spaces only.
 - **The order game's answer is the sentence itself,** never a stored order. The old lesson 5 stored `words` beside `full`, and the two could disagree.
-- **No typed Quran.** Every sentence and passage goes through the shared `rasm.py` check against the whole verified Quran, as PD-48 does for voice-over.
+- **No typed Quran.** Every sentence, passage and title goes through the shared `rasm.py` skeleton, compared against the whole verified Quran, as PD-48 does for voice-over.
+  - Any run of **3 or more consecutive Quran words** (in rasm) is REFUSED. That is the PD-49 calibration; the letter lessons' prose check uses 4.
+  - A refused line is never held, it is refused: a child's reading text must never carry altered Quran.
+  - Quran is taught only through the Quran lessons, by position into the verified text.
 
 ## 3. The three questions, answered (recommendations)
 
@@ -63,7 +66,7 @@ What the checker (Python) and the browser (TypeScript) prove, both failing close
 ## 4. Quiz
 
 - **Lesson 4:** "which one is all fatha / kasra / damma", proved by the stage's vowel rule, with wrong options drawn from the other stages.
-- **Lesson 5:** "put the words in order" questions, plus "which word is missing" (the sentence with one word blanked, and options from other sentences' words). Exactly one option completes the sentence verbatim.
+- **Lesson 5:** "put the words in order" questions, plus "which word is missing" (the sentence with one word blanked). The wrong options come from other sentences' words, and exactly one option completes the sentence verbatim.
 - **Lesson 10:** per passage, "put the sentences in order".
 
 Exactly one right answer is proved for every question, as in the letter lessons.
