@@ -171,20 +171,26 @@ describe('§10 1a: nobody but the teacher edits', () => {
     await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: drawing(2) }, owner);
     const before = await snapshot(b.id);
     const page = b.pages[0]!.id;
+    // Thunks, run one at a time: a refusal is awaited the moment it happens.
     const writes = (a: Actor) => [
-      boards.savePage(b.id, page, { revision: 2, document: drawing(5) }, a),
-      boards.rename(b.id, { revision: 2, title: 'x' }, a),
-      boards.addPage(b.id, { revision: 2 }, a),
-      boards.duplicatePage(b.id, page, { revision: 2 }, a),
-      boards.deletePage(b.id, page, { revision: 2 }, a),
-      boards.reorderPages(b.id, { revision: 2, pageIds: [page] }, a),
-      boards.moveToTrash(b.id, { revision: 2 }, a),
-      boards.duplicate(b.id, a),
+      () => boards.savePage(b.id, page, { revision: 2, document: drawing(5) }, a),
+      () => boards.rename(b.id, { revision: 2, title: 'x' }, a),
+      () => boards.addPage(b.id, { revision: 2 }, a),
+      () => boards.duplicatePage(b.id, page, { revision: 2 }, a),
+      () => boards.deletePage(b.id, page, { revision: 2 }, a),
+      () => boards.reorderPages(b.id, { revision: 2, pageIds: [page] }, a),
+      () => boards.moveToTrash(b.id, { revision: 2 }, a),
+      () => boards.duplicate(b.id, a),
     ];
     for (const a of [teacher(s.unrelatedTeacherId), staff(sa, 'super_admin'), staff(tmgr, 'manager'), staff(tsup, 'admin')]) {
-      for (const w of writes(a)) expect([CommErrorCode.WHITEBOARD_NOT_FOUND, CommErrorCode.WHITEBOARD_DENIED]).toContain(await code(w));
+      for (const w of writes(a)) expect([CommErrorCode.WHITEBOARD_NOT_FOUND, CommErrorCode.WHITEBOARD_DENIED]).toContain(await code(w()));
     }
-    for (const w of await asSupport(async () => writes(owner).map((p) => code(p)))) expect(await w).toBe(CommErrorCode.WHITEBOARD_DENIED);
+    const asOwnerInSupport = await asSupport(async () => {
+      const out: string[] = [];
+      for (const w of writes(owner)) out.push(await code(w()));
+      return out;
+    });
+    expect(asOwnerInSupport).toEqual(Array(8).fill(CommErrorCode.WHITEBOARD_DENIED));
     expect(await snapshot(b.id)).toEqual(before);
     // A support session may look: logged as one.
     const seen = await asSupport(() => boards.open(b.id, owner));
