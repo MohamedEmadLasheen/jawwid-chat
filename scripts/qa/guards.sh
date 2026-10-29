@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset pd040-routes lessons-supply-chain ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset geo-dataset pd040-routes lessons-supply-chain ci-wiring"
 
 title() {
   case "$1" in
@@ -201,6 +201,7 @@ title() {
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
+    geo-dataset)   echo "PD-45 · the country and subdivision dataset is exactly what its pinned CLDR files and reviewed overlay build" ;;
     pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
     lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the API's voice-over text is current" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
@@ -349,6 +350,31 @@ gate_quran_dataset() {
   fi
   "$PYTHON" -I scripts/db/test_load_quran.py || return 1
   "$PYTHON" -I scripts/db/check-quran-pins.py
+}
+
+gate_geo_dataset() {
+  # PD-45 (docs/product/pd045-parent-location-plan.md §3.1): apps/api/src/geo/
+  # dataset.json, its LICENSE-CLDR.txt and the migration's generated seed are
+  # rebuilt from the pinned CLDR 49 files (data/geo/cldr-49.json) and the
+  # reviewed overlay, and must come out byte for byte. The files are downloaded
+  # into a temporary directory; one that does not match its SHA-256 pin fails,
+  # and so does a missing tool or network -- never a pass for want of either.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the geo-dataset gate cannot run, so it FAILS"
+    return 2
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "guards: curl not found -- the geo-dataset gate cannot run, so it FAILS"
+    return 2
+  fi
+  local dir rc
+  dir="$(mktemp -d)" || return 2
+  PYTHON="$PYTHON" bash scripts/geo/fetch-cldr.sh "$dir" &&
+    "$PYTHON" -I scripts/geo/build-dataset.py --cldr "$dir" --check
+  rc=$?
+  rm -rf "$dir"
+  [ "$rc" -eq 0 ] && echo "the geo dataset is what its pinned inputs build"
+  return "$rc"
 }
 
 gate_pd040_routes() {
