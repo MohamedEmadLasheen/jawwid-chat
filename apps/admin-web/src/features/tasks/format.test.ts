@@ -79,8 +79,14 @@ describe('PD-47 PR-6c: the Teachers department\'s decisions', () => {
     expect(sourceLink(t)).toBe('/teachers/supervision?section=complaints')
   })
 
+  it('a parent\'s feedback names the teacher and the child, never what was written', () => {
+    const t = task('parent_feedback', 'f1', { teacherName: 'teacher_c', learnerName: 'learner_l', category: 'praise' })
+    expect(titleOf(t, en, fmt)).toBe('Answer a parent about teacher_c: learner_l')
+    expect(sourceLink(t)).toBe('/teachers/supervision?section=feedback')
+  })
+
   it('every one has its label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['complaint'] as const) {
+    for (const type of ['complaint', 'parent_feedback'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
     }

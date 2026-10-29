@@ -4,6 +4,8 @@
  *
  *   complaint        a PD-26 complaint: the teacher's supervisor's (else the
  *                    Teachers manager's); done by its complaint_resolution
+ *   parent_feedback  a parent's praise or suggestion: as complaint; done when
+ *                    it is resolved (a parent's complaint is a complaint)
  *   every one        raised by the sweep past the settle window, announced
  *                    once (task_assigned, ids only); a source's write stands
  *                    when its task cannot be settled; an owner who leaves is
@@ -15,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { PrismaAuditService } from '@platform/audit.service';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
+import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { TaskService } from '../../src/tasks/task.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -24,10 +27,11 @@ const g = buildGraph();
 const tasks = new TaskService(g.prisma, g.outbox);
 const audit = new PrismaAuditService();
 const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit);
+const feedback = new ParentFeedbackService(g.prisma, g.conversations, files, audit);
 const recorder = { toThread: async () => undefined, toThreadAudience: async () => undefined, toUsers: async () => undefined };
 const worker = new OutboxWorker(g.prisma, g.notifications, recorder as never, g.identity, g.pipeline);
 
-const SOURCES = ['complaint'];
+const SOURCES = ['complaint', 'parent_feedback'];
 
 let s: Scenario;
 let sa: string;
@@ -71,6 +75,10 @@ const leaves = (staffId: string) =>
 /** A management complaint about the seeded teacher, filed by the Teachers manager. */
 const complaint = async () => (await files.addEntry(tmgr, s.teacherId, { kind: 'complaint', body: 'late twice this week', source: 'management' })).id as string;
 const resolve = (id: string, by = tmgr) => files.addEntry(by, s.teacherId, { kind: 'complaint_resolution', body: 'Spoken to; resolved.', refersTo: id });
+
+/** A parent's feedback on the seeded child's teacher. */
+const parentSays = async (category: string) =>
+  ((await feedback.file(s.parentId, { learnerId: s.learnerId, category, body: 'Lessons are wonderful and very clear.' })) as { id: string }).id;
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -167,14 +175,60 @@ describe('a complaint on the Teacher File', () => {
   });
 });
 
+describe('a parent\'s praise or suggestion', () => {
+  it('is the teacher\'s supervisor\'s; answered and closed, it is done, by who answered', async () => {
+    const f = await parentSays('praise');
+    await tasks.sweep();
+    const id = (await taskFor(`parent_feedback:${f}`)) as string;
+    const task = await tasks.get(tmgr, id);
+    expect(task).toMatchObject({ assignee: { kind: 'staff', id: tmgr }, titleParams: { category: 'praise', learnerName: expect.any(String) } });
+    expect(JSON.stringify(task)).not.toContain('wonderful');
+    await feedback.reply(tmgr, f, { response: 'Thank you -- passed on.', resolve: true });
+    expect(await tasks.get(tmgr, id)).toMatchObject({ state: 'completed', outcome: 'done' });
+    expect((await completion(id))?.actor).toMatchObject({ kind: 'staff', id: tmgr });
+  });
+
+  it('a reply that does not close it leaves the task open', async () => {
+    const f = await parentSays('suggestion');
+    await tasks.sweep();
+    const id = (await taskFor(`parent_feedback:${f}`)) as string;
+    await feedback.reply(tmgr, f, { response: 'We are looking into it.' });
+    expect(await stateOf(id)).toMatchObject({ state: 'open', source_state: 'pending' });
+  });
+
+  it('a parent\'s complaint raises the complaint\'s task, not one of its own', async () => {
+    const f = await parentSays('complaint');
+    await tasks.sweep();
+    expect(await taskFor(`parent_feedback:${f}`)).toBeUndefined();
+    const [{ id: entry }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.teacher_supervision_entry WHERE parent_feedback_id = ${f}::uuid`;
+    expect(await taskFor(`complaint:${entry}`)).toEqual(expect.any(String));
+  });
+
+  it('closing it stands even when its task cannot be settled; the sweep settles it after', async () => {
+    const f = await parentSays('praise');
+    await tasks.sweep();
+    const id = (await taskFor(`parent_feedback:${f}`)) as string;
+    await refusingTaskChanges(() => feedback.reply(tmgr, f, { response: 'Thank you.', resolve: true }));
+    expect((await g.prisma.parentFeedback.findUniqueOrThrow({ where: { id: f } })).status).toBe('resolved');
+    expect(await stateOf(id)).toMatchObject({ state: 'open' });
+    await tasks.sweep();
+    expect(await stateOf(id)).toMatchObject({ state: 'completed' });
+  });
+});
+
 describe('each source is announced once', () => {
   it('one task_assigned push per source, to its assignee, with no variables -- however often the sweep runs', async () => {
     const c = await complaint();
+    const f = await parentSays('suggestion');
     for (let i = 0; i < 2; i++) {
       await tasks.sweep();
       await worker.drain(500);
     }
-    const expected: Array<[string, string, string]> = [['complaint', (await taskFor(`complaint:${c}`)) as string, tmgr]];
+    const expected: Array<[string, string, string]> = [
+      ['complaint', (await taskFor(`complaint:${c}`)) as string, tmgr],
+      ['parent_feedback', (await taskFor(`parent_feedback:${f}`)) as string, tmgr],
+    ];
     for (const [key, id, to] of expected) {
       const sent = await pushes(id);
       expect({ key, recipients: sent.map((p) => p.recipientId) }).toEqual({ key, recipients: [to] });

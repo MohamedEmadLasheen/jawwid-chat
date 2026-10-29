@@ -9,6 +9,7 @@
 --   source_type      key                          assignee                                    due
 --   complaint        complaint:<entry>            the teacher's supervisor, else the          filed + 48 h
 --                                                 Teachers manager (work_task_teacher_owner)
+--   parent_feedback  parent_feedback:<feedback>   as complaint                                filed + 48 h
 --
 --   Every one: operational, medium; reassignable by hand. The records that
 --   already exist decide them; no new state (department head, 2026-10-29).
@@ -18,6 +19,9 @@
 --                    when a complaint_resolution entry refers to it, by who
 --                    wrote it. A parent's complaint (PD-32) is one of these:
 --                    its feedback raises no task of its own.
+--   parent_feedback  a parent's praise or suggestion (chat.parent_feedback).
+--                    Done when it reaches its closed state, resolved, by who
+--                    answered it. A complaint is the complaint source's.
 --
 --   RAISED by chat.work_task_sweep_decisions() (the worker, every minute, its
 --   own advisory lock and batches), past PR-6a's settle window. COMPLETED at
@@ -48,6 +52,7 @@ set search_path = chat, pg_temp
 as $$
   select case p_type
     when 'complaint' then (select chat.work_task_teacher_owner(e.teacher_id) from chat.teacher_supervision_entry e where e.id = p_source)
+    when 'parent_feedback' then (select chat.work_task_teacher_owner(f.teacher_id) from chat.parent_feedback f where f.id = p_source)
   end;
 $$;
 
@@ -71,6 +76,13 @@ begin
     elsif exists (select 1 from chat.teacher_supervision_entry e where e.id = p_source and e.kind = 'complaint') then
       verdict := 'back';
     end if;
+  end if;
+  if p_type = 'parent_feedback' then
+    select case when f.status = 'resolved' then 'done' else 'back' end,
+           case when f.status = 'resolved' then f.responded_by end
+      into verdict, actor
+      from chat.parent_feedback f where f.id = p_source and f.category <> 'complaint';
+    verdict := coalesce(verdict, 'gone');
   end if;
 end;
 $$;
@@ -103,6 +115,29 @@ begin
 end;
 $$;
 
+create or replace function chat.work_task_raise_parent_feedback(p_feedback uuid)
+returns uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  f       chat.parent_feedback;
+  v_owner uuid;
+begin
+  select * into f from chat.parent_feedback where id = p_feedback;
+  if f.id is null or f.category = 'complaint' or f.status = 'resolved' or f.created_at < chat.work_task_since('parent_feedback') then
+    return null;
+  end if;
+  v_owner := chat.work_task_teacher_owner(f.teacher_id);
+  if v_owner is null then
+    perform chat.work_task_note_issue(f.organization_id, 'parent_feedback:' || f.id, 'no live supervisor or Teachers manager for the teacher');
+    return null;
+  end if;
+  return chat.work_task_raise(f.organization_id, 'parent_feedback', f.id, v_owner, null,
+                              'medium', 'operational', 'generic', f.created_at + interval '48 hours');
+end;
+$$;
+
 -- ===========================================================================
 -- 3. The sweep: create what is missing, reconcile what is done, follow owners
 -- ===========================================================================
@@ -128,17 +163,19 @@ declare
   r           record;
   v_settle    interval := chat.work_task_settle_window();
   s_complaint  timestamptz;
+  s_feedback  timestamptz;
 begin
   if not pg_try_advisory_xact_lock(hashtext('chat.work_task_sweep_decisions')) then
     return jsonb_build_object('skipped', true);
   end if;
   s_complaint := chat.work_task_since('complaint');
+  s_feedback := chat.work_task_since('parent_feedback');
 
   -- The issue log shrinks with these sources too: an occurrence whose task
   -- closed, whose work is done or gone, or an orphan given an owner again.
   -- Only these sources' keys.
   delete from chat.work_task_source_issue i
-   where split_part(i.source_key, ':', 1) in ('complaint')
+   where split_part(i.source_key, ':', 1) in ('complaint', 'parent_feedback')
      and (exists (select 1 from chat.work_task t
                    where t.organization_id = i.organization_id and t.source_key = i.source_key
                      and t.state in ('completed', 'removed'))
@@ -158,6 +195,10 @@ begin
         from chat.teacher_supervision_entry e
        where e.kind = 'complaint' and e.created_at >= s_complaint
          and not exists (select 1 from chat.teacher_supervision_entry r where r.refers_to = e.id and r.kind = 'complaint_resolution')
+      union all
+      select f.organization_id, 'parent_feedback', f.id, 'parent_feedback:' || f.id, f.created_at
+        from chat.parent_feedback f
+       where f.category <> 'complaint' and f.status <> 'resolved' and f.created_at >= s_feedback
     ) x
      where x.at <= now() - v_settle
        and not exists (select 1 from chat.work_task t where t.organization_id = x.org and t.source_key = x.key)
@@ -171,6 +212,7 @@ begin
     begin
       if (case r.src
             when 'complaint' then chat.work_task_raise_complaint(r.id)
+            when 'parent_feedback' then chat.work_task_raise_parent_feedback(r.id)
           end) is not null then
         v_raised := v_raised + 1;
       else
@@ -193,7 +235,7 @@ begin
         from chat.work_task t
         cross join lateral chat.work_task_decision_verdict(t.source_type, t.source_id) v
        where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-         and t.source_type in ('complaint')
+         and t.source_type in ('complaint', 'parent_feedback')
     ) y
      where y.source_state = 'pending' and y.verdict in ('done', 'gone')
         or y.source_state = 'withdrawn' and y.verdict in ('back', 'done')
@@ -220,7 +262,7 @@ begin
     select t.organization_id as org, t.source_key as key, chat.work_task_decision_owner(t.source_type, t.source_id) as owner
       from chat.work_task t
      where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-       and t.source_type in ('complaint')
+       and t.source_type in ('complaint', 'parent_feedback')
        and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
        and chat.work_task_decision_owner(t.source_type, t.source_id) is not null
        and not exists (select 1 from chat.work_task_source_issue i
@@ -242,7 +284,7 @@ begin
     select t.organization_id as org, t.source_key as key
       from chat.work_task t
      where t.kind = 'system' and t.state in ('open', 'awaiting_decision')
-       and t.source_type in ('complaint')
+       and t.source_type in ('complaint', 'parent_feedback')
        and chat.task_principal_kind(coalesce(t.assignee_staff_id, t.assignee_teacher_id), t.organization_id) is null
        and chat.work_task_decision_owner(t.source_type, t.source_id) is null
        and not exists (select 1 from chat.work_task_source_issue i
@@ -287,6 +329,26 @@ create trigger supervision_entry_settles_its_complaint after insert on chat.teac
   for each row when (new.kind = 'complaint_resolution' and new.refers_to is not null)
   execute function chat.work_task_from_supervision_entry();
 
+-- A parent's praise or suggestion answered and closed: done, by who answered.
+create or replace function chat.work_task_from_parent_feedback()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  begin
+    perform chat.work_task_settle(new.organization_id, 'parent_feedback:' || new.id, new.responded_by);
+  exception when others then
+    perform chat.work_task_note_issue(new.organization_id, 'parent_feedback:' || new.id, sqlerrm);
+  end;
+  return null;
+end;
+$$;
+
+create trigger parent_feedback_settles_its_task after update of status on chat.parent_feedback
+  for each row when (old.status is distinct from 'resolved' and new.status = 'resolved')
+  execute function chat.work_task_from_parent_feedback();
+
 -- ===========================================================================
 -- 6. Fail closed
 -- ===========================================================================
@@ -296,3 +358,5 @@ revoke all on function chat.work_task_decision_verdict(text, uuid) from public;
 revoke all on function chat.work_task_sweep_decisions(integer) from public;
 revoke all on function chat.work_task_raise_complaint(uuid) from public;
 revoke all on function chat.work_task_from_supervision_entry() from public;
+revoke all on function chat.work_task_raise_parent_feedback(uuid) from public;
+revoke all on function chat.work_task_from_parent_feedback() from public;
