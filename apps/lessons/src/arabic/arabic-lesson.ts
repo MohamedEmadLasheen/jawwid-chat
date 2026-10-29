@@ -50,6 +50,8 @@ export interface ArabicUnit {
   madd?: Madd;
   /** Lesson 8: the unit is a word ENDING in this tanween, whatever its letter; `letters` is empty. */
   tanween?: Tanween;
+  /** Lesson 6's one sukun unit: a marked unit named like any unit (سُكُونْ), not by its syllable. */
+  phraseName?: true;
   /** The picker's first row: units of one group (the letter) sit under it. */
   group?: string;
   name: string;
@@ -157,12 +159,13 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
         // A marked unit is single letters with one mark; its name is exactly that syllable (بَ) --
         // except a unit over the whole alphabet (lesson 6's one sukun unit), named like any unit.
         check(typeof u.mark === 'string' && Object.hasOwn(HARAKA, u.mark) && u.letters.every((l) => [...l].length === 1));
-        check(u.letters.length > 5 || u.letters.some((l) => u.name === l + HARAKA[u.mark!]));
+        check(u.phraseName === true || u.letters.some((l) => u.name === l + HARAKA[u.mark!]));
       }
       if (u.madd !== undefined) {
         // A madd unit is exactly its madd letter, and never also marked.
         check(typeof u.madd === 'string' && Object.hasOwn(MADD, u.madd) && u.mark === undefined && u.letters.length === 1 && u.letters[0] === MADD[u.madd].letter);
       }
+      check(u.phraseName === undefined || (u.phraseName === true && u.mark !== undefined));
       check(u.group === undefined || (typeof u.group === 'string' && u.group.length > 0 && u.group.length <= 8));
       check(Array.isArray(u.forms) && u.forms.every((f) => typeof f === 'string' && f.length > 0));
       check(u.note === null || (typeof u.note === 'object' && typeof u.note.text === 'string' && u.note.text.trim().length > 0 && isReview(u.note.review)));
@@ -182,13 +185,20 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
         if (w.review) flagged.add(w.text);
       }
     }
+    const unitWords = new Set(vocabulary); // every word that belongs to a unit
     check(raw.distractors === undefined || Array.isArray(raw.distractors));
+    const distractorTexts = new Set<string>();
     for (const w of raw.distractors ?? []) {
       check(typeof w.id === 'string' && WORD_ID.test(w.id) && w.id.slice(0, -4) === 'distractor' && !wordIds.has(w.id) && !retired.has(w.id));
       wordIds.add(w.id);
       check(typeof w.text === 'string' && isWord(w.text) && !sukunOnMadd(w.text) && isReview(w.review));
+      // Only ever a wrong option: not a unit word, not listed twice, carrying no unit's feature.
+      check(!unitWords.has(w.text) && !distractorTexts.has(w.text) && raw.units.every((u) => !has(w.text, ruleOf(u))));
+      distractorTexts.add(w.text);
       check(w.was === null || typeof w.was === 'string');
-      if (w.finalMarkException !== undefined) check(typeof w.finalMarkException === 'string' && (approved || !!w.review));
+      if (w.finalMarkException !== undefined) {
+        check(typeof w.finalMarkException === 'string' && w.finalMarkException.trim().length > 0 && (approved || !!w.review));
+      }
       vocabulary.add(w.text);
       if (w.review) {
         flagged.add(w.text);
@@ -211,12 +221,13 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
         check(q.options.every((o) => typeof o === 'string' && vocabulary.has(o)) && typeof q.answer === 'number');
         const right = q.options.flatMap((o, i) => (has(o, ruleOf(unit)) ? [i] : []));
         check(right.length === 1 && right[0] === q.answer); // exactly one right answer, and it is the answer
+        check(unitWords.has(q.options[q.answer]!)); // the answer is a unit's word, never a distractor
         // A madd unit's wrong option must not secretly have a madd the rule cannot see (هٰذَا، عَلَى، آ).
         if (unit.madd !== undefined) check(q.options.every((o) => !uncountedMadd(o)));
         item = { id: q.id, question: askContains(unit.name), prompt: null, word: null, options: q.options, answer: q.answer };
         words = q.options;
       } else if (q.kind === 'position') {
-        check(typeof q.word === 'string' && vocabulary.has(q.word) && typeof q.answer === 'string' && POSITIONS.includes(q.answer));
+        check(typeof q.word === 'string' && unitWords.has(q.word) && typeof q.answer === 'string' && POSITIONS.includes(q.answer));
         const at = positions(q.word, ruleOf(unit));
         check(at.length === 1 && at[0] === q.answer); // the letter is in exactly one place
         item = { id: q.id, question: askPosition(unit.name), prompt: null, word: q.word, options: POSITIONS.map((p) => POSITION_LABEL[p]), answer: POSITIONS.indexOf(q.answer) };
