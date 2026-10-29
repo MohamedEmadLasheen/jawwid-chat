@@ -678,6 +678,12 @@ The department head relayed the answers, from the owner's replies to these quest
    > النطق في الدروس بصوت حاسوبي، وكلُّ تسجيل يراجعه ويعتمده اثنان من معلمينا قبل أن يسمعه طفلك. وإذا لم يُحسن الصوت الحاسوبي نطق كلمة، فلا يكون لها صوت. ولا تُتلى آيات القرآن الكريم بصوت حاسوبي أبدًا.
 
 
+   **How the notice is acknowledged (built in #268; the department head's review, 2026-10-29).**
+   - One record per parent and notice version: `chat.parent_notice_ack`. The sign-up tick and the next-sign-in notice write the same row. Bumping the version in `apps/api/src/lesson-audio/parent-notices.ts` is the only way to ask again.
+   - **Sign-up without the tick stays allowed.** This covers an older app or a direct API call. The parent is then shown the notice once, at their next sign-in, and that is the accepted fallback. Sign-up is never refused for a missing tick.
+   - **A support session (PD-21) is shown nothing and records nothing.** The acknowledgement is the parent's own. The server lists no notice to an administrator acting as the parent, and refuses the acknowledgement at the route and in the service.
+   - **For R-48a's evidence:** a recorded acknowledgement exists only for parents who have used an app with the notice (sign-up, or a sign-in after the release). A parent who has not opened the new app since has none. Any count given to the vendor, or held as proof of notice, must say so. It must not stand for every family.
+
 ## 18. The code PR as built (2026-10-29)
 
 The department head said go on 2026-10-29. One draft PR carries what §15 split into PR-1 to PR-4. It is on migration slot `20261029230000`. No vendor account, key or API call was made.
