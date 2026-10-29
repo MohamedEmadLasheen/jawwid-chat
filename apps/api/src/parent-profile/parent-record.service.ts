@@ -2,6 +2,7 @@ import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
+import { invalidCountryMessage, isGeoForeignKeyViolation, listedCountry } from '../geo/countries';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
@@ -121,8 +122,9 @@ export class ParentRecordService implements OnModuleInit {
     if ('adminNote' in body) file.adminNote = optionalText('adminNote', body.adminNote, 1000);
     let countryCode: string | null | undefined;
     if ('countryCode' in body) {
-      const c = body.countryCode === null ? null : String(body.countryCode).trim().toUpperCase();
-      if (c !== null && !/^[A-Z]{2}$/.test(c)) throw invalid('countryCode: ISO 3166-1 alpha-2, e.g. AE, or null');
+      // PD-45: one of the list (chat.geo_country), never just two letters.
+      const c = body.countryCode === null ? null : listedCountry(body.countryCode);
+      if (body.countryCode !== null && c === null) throw invalid(invalidCountryMessage('countryCode'));
       countryCode = c;
     }
 
@@ -155,6 +157,9 @@ export class ParentRecordService implements OnModuleInit {
         await tx.family.update({
           where: { id: contact.familyId },
           data: { countryCode, segmentSource: 'admin', segmentUpdatedAt: new Date() },
+        }).catch((e: unknown) => {
+          // PD-45 safety net: the database's own list refused it.
+          throw isGeoForeignKeyViolation(e) ? invalid(invalidCountryMessage('countryCode')) : e;
         });
       }
       await this.audit.audit(tx, {

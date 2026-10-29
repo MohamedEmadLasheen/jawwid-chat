@@ -4,6 +4,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { BackupLink, DepartmentMember, LearnerAssignment } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useAssignSupervisor, useBackupAction, useCreateBackup, type BackupAction } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 
 /** A required reason: every structure change is audited with one. */
 function ReasonField({ value, onChange, touched }: { value: string; onChange: (v: string) => void; touched: boolean }) {
@@ -90,11 +91,11 @@ export function AssignSupervisorDialog({
     >
       <div className="field">
         <label className="field__label" htmlFor={selectId}>{tx(T.assignTo)}</label>
-        <select
+        <SearchableSelect
           id={selectId}
           className="select"
           value={supervisorId}
-          onChange={(e) => setSupervisorId(e.target.value)}
+          onValueChange={(v) => setSupervisorId(v)}
           aria-invalid={touched && !supervisorId}
         >
           <option value="">{tx(T.choose)}</option>
@@ -103,7 +104,7 @@ export function AssignSupervisorDialog({
               {s.name} ({s.learnerCount})
             </option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !supervisorId && <span className="field__error">{tx(T.required)}</span>}
         <span className="field__hint">{tx(T.assignHint)}</span>
       </div>
@@ -204,22 +205,22 @@ export function CreateBackupDialog({ members, onClose }: { members: DepartmentMe
       <p className="field__hint">{tx(T.backupsHint)}</p>
       <div className="field">
         <label className="field__label" htmlFor={ids.primary}>{tx(T.primaryLabel)}</label>
-        <select id={ids.primary} className="select" value={primaryId} onChange={(e) => setPrimaryId(e.target.value)}>
+        <SearchableSelect id={ids.primary} className="select" value={primaryId} onValueChange={(v) => setPrimaryId(v)}>
           <option value="">{tx(T.choose)}</option>
           {primaries.map((m) => (
             <option key={m.id} value={m.id}>{m.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !primaryId && <span className="field__error">{tx(T.required)}</span>}
       </div>
       <div className="field">
         <label className="field__label" htmlFor={ids.backup}>{tx(T.backupLabel)}</label>
-        <select id={ids.backup} className="select" value={backupId} onChange={(e) => setBackupId(e.target.value)}>
+        <SearchableSelect id={ids.backup} className="select" value={backupId} onValueChange={(v) => setBackupId(v)}>
           <option value="">{tx(T.choose)}</option>
           {backups.map((m) => (
             <option key={m.id} value={m.id}>{m.name}</option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !backupId && <span className="field__error">{tx(T.required)}</span>}
       </div>
       <ReasonField value={reason} onChange={setReason} touched={touched} />

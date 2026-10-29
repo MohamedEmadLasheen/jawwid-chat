@@ -27,6 +27,7 @@ import {
   useJourneyCopy,
 } from './copy'
 import { ReportForm, reportBody } from './ReportForm'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './journey.css'
 
 type Mode = 'view' | 'correct' | 'edit' | 'delete' | 'history' | 'request'
@@ -283,23 +284,23 @@ function CorrectForm({ l, onBack, onDone }: { l: LessonRecord; onBack: () => voi
       <p className="ts-muted">{tx(J.correctHint)}</p>
       <div className="field">
         <label className="field__label" htmlFor={`${id}-to`}>{tx(J.correctTo)}</label>
-        <select id={`${id}-to`} className="select" value={to} onChange={(e) => setTo(e.target.value)} aria-invalid={touched && !to}>
+        <SearchableSelect id={`${id}-to`} className="select" value={to} onValueChange={(v) => setTo(v)} aria-invalid={touched && !to}>
           <option value="">{tx(J.choose)}</option>
           {options.map((o) => (
             <option key={o} value={o}>{tx(OUTCOME_LABELS[o])}</option>
           ))}
-        </select>
+        </SearchableSelect>
         {touched && !to && <span className="field__error">{tx(J.required)}</span>}
         {to === 'voided' && <span className="field__hint">{tx(J.leaveUnsentHint)}</span>}
       </div>
       {to === 'student_apology' && (
         <div className="field">
           <label className="field__label" htmlFor={`${id}-t`}>{tx(J.timing)}</label>
-          <select id={`${id}-t`} className="select" value={timing} onChange={(e) => setTiming(e.target.value)} aria-invalid={touched && !timing}>
+          <SearchableSelect id={`${id}-t`} className="select" value={timing} onValueChange={(v) => setTiming(v)} aria-invalid={touched && !timing}>
             <option value="">{tx(J.choose)}</option>
             <option value="before_start">{tx(TIMING_LABELS.before_start)}</option>
             <option value="after_start">{tx(TIMING_LABELS.after_start)}</option>
-          </select>
+          </SearchableSelect>
         </div>
       )}
       {needsReport && <ReportForm value={report} onChange={setReport} touched={touched} />}

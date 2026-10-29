@@ -7,6 +7,7 @@ import { CasesPage } from './CasesPage'
 import { OpenCaseButton } from './OpenCaseDialog'
 import { CaseEscalatedCard } from './CaseEscalatedCard'
 import type { CaseDetail, CaseSummary } from './api'
+import { chooseOption } from '@/test/select'
 
 /**
  * PD-35 B5: escalation cases in Admin Web, with `fetch` answered at the network
@@ -130,7 +131,7 @@ describe('the cases queue', () => {
     const panel = await screen.findByRole('region', { name: 'Late reports again' })
     expect(within(panel).getByText('Opened')).toBeInTheDocument()
 
-    await userEvent.selectOptions(within(panel).getByRole('combobox', { name: 'Owner' }), 'tsup-2')
+    await chooseOption(userEvent, within(panel).getByRole('combobox', { name: 'Owner' }), 'tsup-2')
     await waitFor(() => expect(sent('POST', /\/cases\/c-1\/assign$/)).toHaveLength(1))
     expect(sent('POST', /\/cases\/c-1\/assign$/)[0]!.body).toEqual({ ownerId: 'tsup-2' })
 
