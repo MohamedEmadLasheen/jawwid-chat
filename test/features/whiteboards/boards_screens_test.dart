@@ -4,7 +4,6 @@
 // restored; there is no "delete forever"; a pen stroke on the page is saved.
 import 'dart:ui';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
