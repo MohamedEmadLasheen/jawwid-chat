@@ -461,7 +461,11 @@ PY
   "$PYTHON" -I scripts/lessons/lesson-audio-texts.py selftest || return 1
   "$PYTHON" -I scripts/lessons/lesson-audio-texts.py check || return 1
   # PD-48: the operator's generation script plans and refuses as it must (no network, no key).
-  "$PYTHON" -I scripts/lessons/tts/tts.py selftest
+  "$PYTHON" -I scripts/lessons/tts/tts.py selftest || return 1
+  # PD-49: every Arabic string the games show is on the Teachers department's review
+  # list (docs/product/pd049-game-copy-review.md), generated from the code.
+  "$PYTHON" -I scripts/lessons/game-copy.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/game-copy.py check
 }
 
 gate_ci_wiring() {

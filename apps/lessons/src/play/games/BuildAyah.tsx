@@ -91,9 +91,9 @@ export function BuildAyah({ ayahs, band, seed, onComplete }: GameProps) {
   };
 
   return (
-    <section className="play" aria-label="ركّب الآية">
+    <section className="play" aria-label="نرتّب كلمات الآية">
       <p className="play__ask">
-        لنركّب الآية {arabic(current.ayah.ayah)}: نلمس الكلمات بترتيبها
+        لنرتّب كلمات الآية {arabic(current.ayah.ayah)}
       </p>
       {built ? (
         <div className="play-cards">

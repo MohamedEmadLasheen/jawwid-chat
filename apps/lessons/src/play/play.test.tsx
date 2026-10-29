@@ -10,7 +10,7 @@ import { KNOBS, segmentsFor, tierOf } from './adapt';
 import { MECHANICS, approvedMechanics, parseMechanics } from './mechanics';
 import registry from './mechanics.json';
 import { buildSession, sessionSeed, today } from './session';
-import { CountAyat } from './games/CountAyat';
+import { CountAyat, ayatCount } from './games/CountAyat';
 import { Echo } from './games/Echo';
 import { ListenGlow } from './games/ListenGlow';
 import { WhichHeard, planRounds } from './games/WhichHeard';
@@ -233,19 +233,21 @@ describe('the games: a whole verse, still, on a big card', () => {
   it('a verse card is named by what it shows: the ayah number and the verse itself', () => {
     render(<CountAyat {...props({ ayahs: AYAHS.slice(0, 1) })} />);
     expect(screen.getByRole('button', { name: `الآية ١ ${TEXTS[0]}` })).toBeTruthy();
-    expect(screen.getByText('الآيات التي عددتها: ٠ من ١')).toBeTruthy();
+    expect(screen.getByText('الآيات التي عددناها: ٠ من ١')).toBeTruthy();
   });
 
   it('Count the ayat, without recitation: a grown-up reads, the child counts in order; another touch does nothing', () => {
     const onComplete = vi.fn();
     render(<CountAyat {...props({ ayahs: AYAHS, onComplete })} />);
-    expect(screen.getByText(/يقرأ الكبير الآية المضيئة/)).toBeTruthy();
+    expect(screen.getByText(/يتلو أحدُ الكبار/)).toBeTruthy();
     const cards = screen.getAllByRole('button');
     fireEvent.click(cards[3]!);
     expect(cards[0]!.className).toContain('play-card--glow');
     for (const c of cards) fireEvent.click(c);
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/عددنا ٥ آيات/)).toBeTruthy();
+    // The count agrees with its noun: 3-10 (and 103-110...) آيات, else آية.
+    expect([1, 2, 3, 10, 11, 100, 103, 110, 111].map(ayatCount)).toEqual(['آية واحدة', 'آيتين', '٣ آيات', '١٠ آيات', '١١ آية', '١٠٠ آية', '١٠٣ آيات', '١١٠ آيات', '١١١ آية']);
   });
 });
 
@@ -314,7 +316,7 @@ describe('the games page', () => {
 
   it('plays a signed mechanic that works without recitation, on the segment only', async () => {
     await page({ approvals: await sign('count_ayat') });
-    const game = await screen.findByRole('region', { name: 'عُدّ الآيات' });
+    const game = await screen.findByRole('region', { name: 'نعدّ الآيات' });
     // 3-5 plays 112 (5 stand-in ayat) as [1-3], [4-5]: the counting game counts the segment.
     expect(within(game).getAllByRole('button')).toHaveLength(3);
     expect(screen.getByText(/الآيات ١–٣/)).toBeTruthy();
@@ -326,43 +328,43 @@ describe('the games page', () => {
     expect(await screen.findByText('جارٍ تجهيز الألعاب…')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/ألعاب سورة/);
     rerender({ audioSource: r.audioSource, audioFactory: r.audioFactory });
-    expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نسمع ونلمس' })).toBeTruthy();
   });
 
   it('a recitation list arriving late does not change the sitting under the child; the next segment uses it', async () => {
     const r = recitation();
     const { rerender } = await page({ approvals: await sign('listen_glow', 'count_ayat') });
-    const game = await screen.findByRole('region', { name: 'عُدّ الآيات' });
+    const game = await screen.findByRole('region', { name: 'نعدّ الآيات' });
     fireEvent.click(within(game).getAllByRole('button')[0]!);
     rerender({ audioSource: r.audioSource, audioFactory: r.audioFactory });
     // Same game, same progress: one counted of three.
-    expect(region()).toBe('عُدّ الآيات');
-    expect(screen.getByText('الآيات التي عددتها: ١ من ٣')).toBeTruthy();
+    expect(region()).toBe('نعدّ الآيات');
+    expect(screen.getByText('الآيات التي عددناها: ١ من ٣')).toBeTruthy();
     expect(screen.getByText(/اللعبة ١ من ١/)).toBeTruthy();
     for (const c of within(game).getAllByRole('button')) fireEvent.click(c);
     fireEvent.click(await screen.findByRole('button', { name: /الآيات التالية/ }));
-    expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نسمع ونلمس' })).toBeTruthy();
   });
 
   it('a segment with an ayah missing its file gets no game that needs recitation', async () => {
     const r = recitation([2]);
     await page({ approvals: await sign('listen_glow', 'count_ayat'), audioSource: r.audioSource, audioFactory: r.audioFactory });
-    expect(await screen.findByRole('region', { name: 'عُدّ الآيات' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نعدّ الآيات' })).toBeTruthy();
     // Without recitation for the segment, the counting game is read by a grown-up.
-    expect(screen.getByText(/يقرأ الكبير الآية المضيئة/)).toBeTruthy();
+    expect(screen.getByText(/يتلو أحدُ الكبار/)).toBeTruthy();
   });
 
   it('an audio game across segments: each segment plays its own ayat', async () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow'), audioSource: r.audioSource, audioFactory: r.audioFactory });
-    let game = await screen.findByRole('region', { name: 'اسمع والمس' });
+    let game = await screen.findByRole('region', { name: 'نسمع ونلمس' });
     expect(within(game).getAllByRole('button').map((b) => b.dataset.ayah)).toEqual(['1', '2', '3']);
     for (const c of within(game).getAllByRole('button')) {
       fireEvent.click(c);
       r.end();
     }
     fireEvent.click(await screen.findByRole('button', { name: /الآيات التالية/ }));
-    game = await screen.findByRole('region', { name: 'اسمع والمس' });
+    game = await screen.findByRole('region', { name: 'نسمع ونلمس' });
     expect(within(game).getAllByRole('button').map((b) => b.dataset.ayah)).toEqual(['4', '5']);
     expect(screen.getByText(/الآيات ٤–٥/)).toBeTruthy();
   });
@@ -370,7 +372,7 @@ describe('the games page', () => {
   it('the grown-up can skip a game that waits on recitation, stop, and carry on', async () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow', 'echo'), audioSource: r.audioSource, audioFactory: r.audioFactory });
-    expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نسمع ونلمس' })).toBeTruthy();
     // Folded away from the child until a grown-up opens them.
     expect(screen.queryByRole('button', { name: /إيقاف/ })).toBeNull();
     expect(screen.getByRole('button', { name: /للكبار/ }).getAttribute('aria-expanded')).toBe('false');
@@ -382,7 +384,7 @@ describe('the games page', () => {
     expect(document.querySelectorAll('.play-card')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'متابعة' }));
     fireEvent.click(screen.getByRole('button', { name: /تخطّي اللعبة/ }));
-    expect(await screen.findByRole('region', { name: 'ردّد معي' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نردّد معًا' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /تخطّي اللعبة/ }));
     expect(await screen.findByText('أحسنت! انتهت ألعاب هذه الآيات')).toBeTruthy();
   });
@@ -390,14 +392,14 @@ describe('the games page', () => {
   it('turning the recitation off restarts the sitting without it; the verse size can change', async () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow', 'count_ayat'), audioSource: r.audioSource, audioFactory: r.audioFactory });
-    expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نسمع ونلمس' })).toBeTruthy();
     grownUp();
     fireEvent.click(screen.getByRole('button', { name: /بلا تلاوة/ }));
-    expect(await screen.findByRole('region', { name: 'عُدّ الآيات' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /تشغيل التلاوة/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(await screen.findByRole('region', { name: 'نعدّ الآيات' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /بلا تلاوة/ }).getAttribute('aria-pressed')).toBe('true');
     const main = document.querySelector('main')!;
     expect(main.style.getPropertyValue('--verse-scale')).toBe('1');
-    fireEvent.click(screen.getByRole('button', { name: /تكبير الآيات/ }));
+    fireEvent.click(screen.getByRole('button', { name: /تكبير الخط/ }));
     expect(main.style.getPropertyValue('--verse-scale')).toBe('1.25');
   });
 
@@ -406,14 +408,14 @@ describe('the games page', () => {
     expect(GAMES.ghost_game).toBeUndefined();
     const approvals = envelope([{ id: 'ghost_game', approvalSha256: await approvalSha256(pin.datasetId, 'play', ghost), steps: ['teacher', 'scholar'] }]);
     await page({ mechanics: [...MECHANICS, ghost], approvals });
-    expect(await screen.findByText('لا توجد لعبة لهذه الآيات بعد.')).toBeTruthy();
+    expect(await screen.findByText('لا توجد ألعاب لهذه الآيات بعد.')).toBeTruthy();
     expect(screen.queryByText(/أحسنت/)).toBeNull();
   });
 
   it('the grown-up moves the age band one step: the sitting restarts for it, with that band\'s games and segments', async () => {
     await page({ approvals: await sign('order_ayat', 'build_ayah') });
     // 3-5 by default: ordering pairs (building is not for 3-5), on 1-3.
-    expect(await screen.findByRole('region', { name: 'رتّب الآيات' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'نرتّب الآيات' })).toBeTruthy();
     expect(screen.getByText(/الآيات ١–٣ · اللعبة ١ من ١/)).toBeTruthy();
     grownUp();
     // One band up or down only (plan §B.1): from 3-5, not 9-12.
@@ -429,7 +431,7 @@ describe('the games page', () => {
     expect(FITS.start_end!(AYAHS, AYAHS, '6-8')).toBe(false);
     expect(FITS.build_ayah!(AYAHS, AYAHS, '6-8')).toBe(true);
     await page({ approvals: await sign('start_end'), band: '6-8' });
-    expect(await screen.findByText('لا توجد لعبة لهذه الآيات بعد.')).toBeTruthy();
+    expect(await screen.findByText('لا توجد ألعاب لهذه الآيات بعد.')).toBeTruthy();
   });
 
   it('lives at /lessons/quran/surah-N/play', () => {

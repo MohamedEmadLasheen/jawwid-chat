@@ -19,14 +19,14 @@ export function ListenGlow({ surah, ayahs, audio, onComplete }: GameProps) {
   useCompleteOnce(done, onComplete);
 
   return (
-    <section className="play" aria-label="اسمع والمس">
-      <p className="play__ask">لنلمس الآية ونسمعها</p>
+    <section className="play" aria-label="نسمع ونلمس">
+      <p className="play__ask">لنلمس البطاقة ونستمع إلى الآية</p>
       <div className="play-cards">
         {ayahs.map((a, i) => (
           <VerseCard key={a.ayah} ayah={a} shape={i} glow={playing === `${surah}:${a.ayah}`} onPress={() => audio?.play(surah, a.ayah)} />
         ))}
       </div>
-      <Beads done={heard.size} total={ayahs.length} label="الآيات التي سمعتها" />
+      <Beads done={heard.size} total={ayahs.length} label="الآيات التي استمعنا إليها" />
       {done ? <Praise /> : null}
     </section>
   );

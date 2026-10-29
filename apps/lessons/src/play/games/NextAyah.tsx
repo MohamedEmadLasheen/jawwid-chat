@@ -91,7 +91,7 @@ export function NextAyah({ surah, ayahs, pool, audio, band, seed, onComplete }: 
   const ask = current.way === 'next' ? 'ما الآية التي تأتي بعدها؟' : 'ما الآية التي تأتي قبلها؟';
 
   return (
-    <section className="play" aria-label="ما الآية التالية؟">
+    <section className="play" aria-label="نتذكّر الآية التالية">
       <div className="play-cards">
         <VerseCard ayah={current.prompt} shape={0} disabled={!audio} onPress={() => audio?.play(surah, current.prompt.ayah)} />
       </div>

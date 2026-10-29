@@ -70,7 +70,7 @@ export function WhichHeard({ surah, ayahs, pool, audio, band, seed, onComplete }
   };
 
   return (
-    <section className="play" aria-label="أيّ آية سمعت؟">
+    <section className="play" aria-label="أيّ آية سمعنا؟">
       <button type="button" className="primary play__big" onClick={() => audio?.play(surah, current.target.ayah)}>
         🔊 لنستمع
       </button>

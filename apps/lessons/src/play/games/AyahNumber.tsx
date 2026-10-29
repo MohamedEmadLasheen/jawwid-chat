@@ -72,7 +72,7 @@ export function AyahNumber({ ayahs, pool, band, seed, onComplete }: GameProps) {
   const mark = (ok: boolean) => (answered && ok ? (right ? 'right' : 'shown') : null);
 
   return (
-    <section className="play" aria-label="رقم الآية">
+    <section className="play" aria-label="نعرف رقم الآية">
       {current.kind === 'number' ? (
         <>
           <p className="play__ask">ما رقم هذه الآية؟</p>

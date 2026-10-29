@@ -138,6 +138,8 @@ describe('Order the ayat (رتّب الآيات)', () => {
       const wrong = within(tray).getAllByRole('button').find((b) => Number(b.dataset.ayah) !== k + 1)!;
       fireEvent.click(wrong);
       expect(ordered()).toEqual(TEXTS.slice(0, k));
+      // The answer shown is named for what it is: the first ayah, then the next one.
+      expect(screen.getByText(k === 0 ? 'هذه هي الآية الأولى' : 'هذه هي الآية التالية')).toBeTruthy();
       fireEvent.click(within(tray).getAllByRole('button').find((b) => Number(b.dataset.ayah) === k + 1)!);
     }
     // The last card has nowhere else to go.
@@ -165,8 +167,8 @@ describe('Order the ayat (رتّب الآيات)', () => {
   it('3-5: each listen button names its card by its shape, in words', () => {
     const { controller } = { controller: { play: vi.fn(), stop: vi.fn() } };
     render(<OrderAyat {...props({ band: '3-5', ayahs: AYAHS.slice(0, 1), audio: controller })} />);
-    expect(screen.getByRole('button', { name: /لنستمع إلى آية الدائرة/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /لنستمع إلى آية المثلث/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /لنستمع إلى الآية التي في الدائرة/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /لنستمع إلى الآية التي في المثلث/ })).toBeTruthy();
   });
 
   it('two ayat with the same words are never asked to be told apart', () => {

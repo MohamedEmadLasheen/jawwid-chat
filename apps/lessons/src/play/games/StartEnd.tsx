@@ -102,8 +102,8 @@ export function StartEnd({ ayahs, pool, band, seed, onComplete }: GameProps) {
   };
 
   return (
-    <section className="play" aria-label="بداية ونهاية">
-      <p className="play__ask">لنلمس بداية آية، ثم نهايتها</p>
+    <section className="play" aria-label="نصل البداية بالنهاية">
+      <p className="play__ask">لنختر بداية آية، ثم نهايتها</p>
       {matched.length > 0 ? (
         <div className="play-cards" role="group" aria-label="آيات اكتملت">
           {[...matched]

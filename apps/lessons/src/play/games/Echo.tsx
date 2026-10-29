@@ -46,7 +46,7 @@ export function Echo({ surah, ayahs, audio, band, onComplete }: GameProps) {
   };
 
   return (
-    <section className="play" aria-label="ردّد معي">
+    <section className="play" aria-label="نردّد معًا">
       <p className="play__ask">
         الآية {arabic(index + 1)} من {arabic(ayahs.length)}
       </p>

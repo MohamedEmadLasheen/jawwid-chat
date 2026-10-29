@@ -69,9 +69,9 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
   };
 
   return (
-    <section className="play" aria-label="المحو التدريجي">
+    <section className="play" aria-label="نخفي ونتذكّر">
       <p className="play__ask">
-        {revealed ? 'هذه هي الآية كاملة' : step === 0 ? `لنقرأ الآية ${arabic(current.ayah.ayah)} بصوت مسموع` : 'لنقرأها مرة أخرى، ولو خفيت بعض كلماتها'}
+        {revealed ? 'هذه هي الآية كاملة' : step === 0 ? `لنقرأ الآية ${arabic(current.ayah.ayah)} بصوت مسموع` : 'لنقرأها مرة أخرى، ونتذكّر الكلمات المخفية'}
       </p>
       {revealed ? (
         <div className="play-cards">
@@ -79,7 +79,7 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
         </div>
       ) : (
         <p className="play__line">
-          <span className="sr-only">{`الآية ${arabic(current.ayah.ayah)}، وفيها ${arabic(hidden.size)} من الكلمات مخفية: `}</span>
+          <span className="sr-only">{`الآية ${arabic(current.ayah.ayah)}، عدد الكلمات المخفية: ${arabic(hidden.size)}. `}</span>
           {current.tiles.map((t, i) => {
             const { word, mark } = splitMark(t);
             // A space between words, so the line reads as words (the flex gap lays them out).
@@ -111,7 +111,7 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
                       </span>
                     )
                   ) : (
-                    <span className="sr-only">كلمة مخفية، تظهر عند لمسها</span>
+                    <span className="sr-only">كلمة مخفية، تظهر عند اختيارها</span>
                   )}
                 </button>
                 {mark ? ` ${mark}` : null}
@@ -132,11 +132,11 @@ export function FadingAyah({ surah, ayahs, audio, band, seed, onComplete }: Game
         </button>
       ) : step < steps ? (
         <button type="button" className="primary play__big" onClick={() => (setStep(step + 1), setPeeked(new Set()))}>
-          {band === '9-12' && step + 1 === steps ? 'نبقي الحرف الأول من كل كلمة' : 'نخفي كلمات أخرى'}
+          {band === '9-12' && step + 1 === steps ? 'إبقاء الحرف الأول فقط' : 'إخفاء كلمات أخرى'}
         </button>
       ) : (
         <button type="button" className="primary play__big" onClick={() => setRevealed(true)}>
-          نكشف الآية
+          إظهار الآية كاملة
         </button>
       )}
       <p className="note">

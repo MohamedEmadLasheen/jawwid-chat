@@ -10,7 +10,7 @@ import { Beads, Praise, VerseCard, arabic, type GameProps, useCompleteOnce } fro
  * Works without recitation.
  */
 /** "N ayat", with the Arabic dual and the 3-10 plural. */
-export const ayatCount = (n: number) => (n === 1 ? 'آية واحدة' : n === 2 ? 'آيتين' : `${arabic(n)} ${n <= 10 ? 'آيات' : 'آية'}`);
+export const ayatCount = (n: number) => (n === 1 ? 'آية واحدة' : n === 2 ? 'آيتين' : `${arabic(n)} ${n % 100 >= 3 && n % 100 <= 10 ? 'آيات' : 'آية'}`);
 
 export function CountAyat({ surah, ayahs, audio, onComplete }: GameProps) {
   const [count, setCount] = useState(0);
@@ -25,14 +25,14 @@ export function CountAyat({ surah, ayahs, audio, onComplete }: GameProps) {
   };
 
   return (
-    <section className="play" aria-label="عُدّ الآيات">
-      <p className="play__ask">{audio ? 'لنلمس الآية المضيئة: نسمعها ونعدّها' : 'يقرأ الكبير الآية المضيئة، ثم نلمسها لنعدّها'}</p>
+    <section className="play" aria-label="نعدّ الآيات">
+      <p className="play__ask">{audio ? 'لنلمس البطاقة المضيئة، ونستمع إلى الآية ونعدّها' : 'يتلو أحدُ الكبار آيةَ البطاقة المضيئة، ثم نلمسها لنعدّها'}</p>
       <div className="play-cards">
         {ayahs.map((a, i) => (
           <VerseCard key={a.ayah} ayah={a} shape={i} glow={i === count} onPress={() => touch(i)} />
         ))}
       </div>
-      <Beads done={count} total={ayahs.length} label="الآيات التي عددتها" />
+      <Beads done={count} total={ayahs.length} label="الآيات التي عددناها" />
       {done ? <Praise text={`أحسنت! عددنا ${ayatCount(ayahs.length)}`} /> : null}
     </section>
   );

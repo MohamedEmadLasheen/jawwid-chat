@@ -221,7 +221,7 @@ export function PlayLesson({
     return (
       <main className={page}>
         {header}
-        <p className="note">لا توجد لعبة لهذه الآيات بعد.</p>
+        <p className="note">لا توجد ألعاب لهذه الآيات بعد.</p>
         {nextButton}
       </main>
     );
@@ -247,7 +247,7 @@ export function PlayLesson({
         ⚙ للكبار
       </button>
       {grownUp ? (
-        <nav id="play-grownup" className="play__grownup" aria-label="أدوات الكبير">
+        <nav id="play-grownup" className="play__grownup" aria-label="أدوات الكبار">
           {live ? (
             <>
               <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
@@ -263,14 +263,15 @@ export function PlayLesson({
           ) : null}
           {surahAudio ? (
             <button type="button" aria-pressed={muted} onClick={() => (audio?.stop(), setMuted(!muted), setStep(0), setAttempt(0))}>
-              {muted ? '🔊 تشغيل التلاوة' : '🔇 بلا تلاوة'}
+              {/* One label: "pressed" means the recitation is off, which is what it says. */}
+              🔇 بلا تلاوة
             </button>
           ) : null}
           <button type="button" disabled={scale === 0} onClick={() => setScale(scale - 1)}>
-            أ− تصغير الآيات
+            أ− تصغير الخط
           </button>
           <button type="button" disabled={scale === SCALES.length - 1} onClick={() => setScale(scale + 1)}>
-            أ+ تكبير الآيات
+            أ+ تكبير الخط
           </button>
           <span className="play__bands" role="group" aria-label="عمر الطفل">
             العمر:

@@ -114,7 +114,7 @@ export function CompleteAyah({ ayahs, pool, band, seed, onComplete }: GameProps)
   };
 
   return (
-    <section className="play" aria-label="أكمل الآية">
+    <section className="play" aria-label="نكمل الآية">
       <p className="play__ask">
         لنكمل الآية {arabic(current.ayah.ayah)}
       </p>
