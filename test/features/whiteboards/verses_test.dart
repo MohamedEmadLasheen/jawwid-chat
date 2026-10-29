@@ -42,6 +42,9 @@ class _Quran implements QuranTextRepository {
   /// When set, every answer waits for it (a slow network).
   Completer<void>? hold;
 
+  /// Per range: that answer waits for its own completer (answers out of order).
+  final Map<(int, int), Completer<void>> holdRange = {};
+
   /// A broken server: answers this range whatever is asked.
   (int, int)? answersInstead;
 
@@ -49,6 +52,8 @@ class _Quran implements QuranTextRepository {
   Future<VerseText> ayahs(int surah, int from, int to) async {
     asked.add((surah, from, to));
     if (hold != null) await hold!.future;
+    final own = holdRange[(from, to)];
+    if (own != null) await own.future;
     if (error != null) throw error!;
     final (f, t) = answersInstead ?? (from, to);
     return _text(f, t, basmala: true, surah: surah);
@@ -116,6 +121,8 @@ void main() {
 
   group('the verse cache', () {
     test('a range is fetched once; its text is shown only while its SHA-256 is the stored one', () async {
+      // The editor keeps the cache alive while a board is open; so does each case.
+      container.listen(verseCacheProvider, (_, _) {});
       final cache = container.read(verseCacheProvider.notifier);
       cache.ensure([_verse(), _verse()]);
       await Future<void>.delayed(Duration.zero);
@@ -125,6 +132,8 @@ void main() {
     });
 
     test('P0: a text that is not exactly the reference\'s ayat is never shown under it', () {
+      // The editor keeps the cache alive while a board is open; so does each case.
+      container.listen(verseCacheProvider, (_, _) {});
       final cache = container.read(verseCacheProvider.notifier);
       // remember() refuses another range's text outright...
       cache.remember(_verse(), _text(4, 6));
@@ -138,6 +147,8 @@ void main() {
 
     testWidgets('P1: an unavailable dataset is not asked again on every rebuild, only after a back-off', (tester) async {
       quran.error = Exception('COMM.QURAN_UNAVAILABLE');
+      // The editor keeps the cache alive while a board is open; so does each case.
+      container.listen(verseCacheProvider, (_, _) {});
       final cache = container.read(verseCacheProvider.notifier);
       cache.ensure([_verse()]);
       await tester.pump();
@@ -264,6 +275,45 @@ void main() {
       expect((verse.surah, verse.fromAyah, verse.toAyah), (2, 1, 3));
       await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('an older answer arriving after the newer one is ignored', (tester) async {
+      tester0 = tester;
+      final l10n = await openPicker(tester); // 2:1-7 shown
+      final older = quran.holdRange[(1, 3)] = Completer<void>();
+      final newer = quran.holdRange[(1, 2)] = Completer<void>();
+      // Both answers are held, so the spinner never settles: fixed pumps only.
+      for (final to in ['3', '2']) {
+        await tester.tap(find.byType(DropdownButtonFormField<int>).last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.text(to).last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      newer.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      older.complete();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.boardVerseInsert));
+      await tester.pumpAndSettle();
+      final verse = container.read(boardEditorProvider('b1')).value!.page.elements.single as VerseElement;
+      expect((verse.fromAyah, verse.toAyah), (1, 2));
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('closing the last board disposes the verse cache and its retry timers', (tester) async {
+      quran.error = Exception('COMM.QURAN_UNAVAILABLE');
+      final sub = container.listen(verseCacheProvider, (_, _) {});
+      container.read(verseCacheProvider.notifier).ensure([_verse()]);
+      await tester.pump();
+      expect(quran.asked, hasLength(1));
+      sub.close();
+      await tester.pump();
+      await tester.pump(VerseCache.maxRetry * 2);
+      expect(quran.asked, hasLength(1));
     });
 
     testWidgets('an answer for another range (a broken server) is never insertable', (tester) async {

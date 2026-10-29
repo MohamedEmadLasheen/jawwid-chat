@@ -196,4 +196,6 @@ class VerseCache extends Notifier<Map<String, VerseLookup>> {
   }
 }
 
-final verseCacheProvider = NotifierProvider<VerseCache, Map<String, VerseLookup>>(VerseCache.new);
+/// Lives while a board is open (the editor watches it): closing the last board
+/// disposes it, and its retry timers with it (review of #295).
+final verseCacheProvider = NotifierProvider.autoDispose<VerseCache, Map<String, VerseLookup>>(VerseCache.new);
