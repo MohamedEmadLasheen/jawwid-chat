@@ -235,18 +235,25 @@ as $$
    where c.id = p_certificate;
 $$;
 
--- The organization's one live Designer (certificates.design), if it has
--- exactly one. The super admin holds every key, so is not counted.
+-- The organization's one live Designer, if it has exactly one: staff given
+-- certificates.design by an explicit PD-40 access-role grant (the 'designer'
+-- template, say). PD-40's legacy bundle gives the Teachers department's
+-- manager and supervisors the key too, and the super admin holds every key:
+-- neither is counted (department head, 2026-10-29). They may still design,
+-- so the overseer's hand-on offers every holder.
 create or replace function chat.work_task_sole_designer(p_org uuid)
 returns uuid
 language sql
 stable
 set search_path = chat, pg_temp
 as $$
-  select case when count(*) = 1 then (array_agg(s.id))[1] end
-    from chat.staff s
-   where s.organization_id = p_org and s.is_active and s.left_at is null and s.role <> 'super_admin'
-     and chat.staff_has_permission(s.id, 'certificates.design');
+  select case when count(*) = 1 then (array_agg(d.id))[1] end
+    from (select distinct s.id
+            from chat.staff s
+            join chat.staff_access_role sar on sar.staff_id = s.id
+            join chat.access_role r on r.id = sar.role_id and r.organization_id = s.organization_id
+            join chat.access_role_permission arp on arp.role_id = r.id and arp.permission_key = 'certificates.design'
+           where s.organization_id = p_org and s.is_active and s.left_at is null and s.role <> 'super_admin') d;
 $$;
 
 -- Who a certificate waits on now; the overseer holds what has nobody of its own.

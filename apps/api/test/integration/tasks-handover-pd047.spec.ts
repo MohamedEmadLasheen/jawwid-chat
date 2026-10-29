@@ -446,6 +446,27 @@ describe('a trial: the teacher\'s attendance, then Sales\' outcome', () => {
   });
 });
 
+describe('a certificate step, beside the Teachers department\'s legacy Designers', () => {
+  // tmgr, tsup and tsup2 hold certificates.design by PD-40's legacy bundle; the spec's Designers by a grant.
+  it('one explicit Designer gets the unclaimed request', async () => {
+    const d1 = await designer('one');
+    const c = await certificateRequest();
+    expect(await steps(c)).toEqual([expect.objectContaining({ type: 'certificate_design', assignee: d1, state: 'open' })]);
+  });
+
+  it('with two, it is the overseer\'s; the picker offers every holder, legacy ones included', async () => {
+    const [d1, d2] = [await designer('one'), await designer('two')];
+    const c = await certificateRequest();
+    const [step] = await steps(c);
+    expect(step).toMatchObject({ type: 'certificate_design', assignee: s.managerId });
+    const offered = (await tasks.assignees(s.managerId, { task: step!.id })).people.map((p) => p.id).sort();
+    // The super admin holds every key, so is a holder too.
+    expect(offered).toEqual([d1, d2, tmgr, tsup, tsup2, sa].sort());
+    await tasks.reassign(s.managerId, step!.id, { to: staff(tsup) });
+    expect(await stateOf(step!.id)).toMatchObject({ assignee: tsup });
+  });
+});
+
 describe('a certificate step (PD-41)', () => {
   beforeEach(onlySpecDesigners);
 

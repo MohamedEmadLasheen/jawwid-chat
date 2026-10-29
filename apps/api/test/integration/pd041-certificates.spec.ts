@@ -680,9 +680,9 @@ describe('PD-47 PR-6b: each step that waits on a person is their task (owner 202
     const [accept, designStep] = await steps(certificate.id);
     expect(accept).toMatchObject({ type: 'certificate_accept', state: 'completed' });
     expect(await closer(accept!.id)).toBe(s.ownerId);
-    // Several Designers here (PD-40's legacy bundle gives the Teachers supervisors
-    // certificates.design too): the unclaimed request is the overseer's to hand on.
-    expect(designStep).toMatchObject({ type: 'certificate_design', assignee: s.managerId, state: 'open' });
+    // designerId is the one Designer by an explicit grant (the Teachers supervisors'
+    // legacy key is not counted): the unclaimed request is theirs.
+    expect(designStep).toMatchObject({ type: 'certificate_design', assignee: designerId, state: 'open' });
   });
 
   it('a return is the requester\'s step; resubmitting opens a FRESH design step', async () => {
@@ -691,10 +691,10 @@ describe('PD-47 PR-6b: each step that waits on a person is their task (owner 202
     await svc.returnForChanges(designerId, c.id, { message: 'which Juz exactly? 29 or 30?' });
     await svc.resubmit(s.ownerId, c.id);
     expect((await steps(c.id)).map((x) => [x.type, x.assignee, x.state])).toEqual([
-      ['certificate_design', s.managerId, 'completed'],
+      ['certificate_design', designerId, 'completed'],
       ['certificate_design', designerId, 'completed'],
       ['certificate_resubmit', s.ownerId, 'completed'],
-      ['certificate_design', s.managerId, 'open'],
+      ['certificate_design', designerId, 'open'],
     ]);
   });
 
