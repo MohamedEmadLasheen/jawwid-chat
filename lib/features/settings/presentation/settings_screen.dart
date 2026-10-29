@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,10 +15,13 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../app_lock/application/app_lock_controller.dart';
+import '../../app_lock/data/device_security_settings.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
+import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
+import 'lesson_audio_about_screen.dart';
 
 /// Profile and settings.
 ///
@@ -178,6 +183,17 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
+          // PD-48: the lesson-audio notice and its terms -- the parents' only.
+          if (user?.role == UserRole.parent) ...[
+            ListTile(
+              key: const ValueKey('settings-lesson-audio'),
+              leading: const Icon(Icons.record_voice_over_outlined),
+              title: Text(l10n.lessonAudioAboutTitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => LessonAudioAboutScreen.open(context),
+            ),
+            const Divider(),
+          ],
           // PD-32: Starred messages moved to the Chats screen's "Starred" chip.
           // PD-22: the account's time zone, under the same name a phone uses.
           ListTile(
@@ -252,12 +268,28 @@ class SettingsScreen extends ConsumerWidget {
 /// PD-23: the app lock's toggle and timeout.
 ///
 /// Disabled, with the reason, when the device can authenticate nobody -- no biometrics and
-/// no passcode -- rather than hidden: the person should learn what would make it work.
-class _AppLockSection extends ConsumerWidget {
+/// no passcode -- rather than hidden: the person should learn what would make it work. On
+/// Android the reason comes with a way there, "Open settings".
+///
+/// Asks the device again whenever it is shown: whether it can authenticate is the phone's
+/// to change, not ours, and a stale answer kept the switch disabled after a screen lock
+/// was added (Redmi A5 QA, 2026-10-27).
+class _AppLockSection extends ConsumerStatefulWidget {
   const _AppLockSection();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AppLockSection> createState() => _AppLockSectionState();
+}
+
+class _AppLockSectionState extends ConsumerState<_AppLockSection> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(ref.read(appLockControllerProvider.notifier).refreshAvailability());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final lock = ref.watch(appLockControllerProvider);
     final controller = ref.read(appLockControllerProvider.notifier);
@@ -270,13 +302,27 @@ class _AppLockSection extends ConsumerWidget {
         SwitchListTile(
           key: const ValueKey('settings-app-lock'),
           secondary: const Icon(Icons.lock_outline),
-          title: Text(l10n.appLockToggle),
-          subtitle: Text(lock.available ? l10n.appLockToggleSubtitle : l10n.appLockUnavailable),
+          title: Text(l10n.appLockToggle(unlockPlatform(context))),
+          subtitle: Text(lock.available ? l10n.appLockToggleSubtitle : l10n.appLockUnavailable(unlockPlatform(context))),
           value: enabled,
           onChanged: !lock.available || lock.authenticating
               ? null
               : (value) => controller.setEnabled(value, reason: l10n.appLockReason),
         ),
+        if (!lock.available && unlockPlatform(context) == 'android')
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(end: Spacing.spacing4),
+              child: TextButton.icon(
+                key: const ValueKey('settings-app-lock-open-settings'),
+                icon: const Icon(Icons.open_in_new),
+                label: Text(l10n.appLockOpenSettings),
+                // Coming back from the phone's Settings is a resume, which asks again.
+                onPressed: () => ref.read(deviceSecuritySettingsProvider).open(),
+              ),
+            ),
+          ),
         if (enabled)
           SettingChoiceRow<AppLockTimeout>(
             key: const ValueKey('settings-app-lock-timeout'),

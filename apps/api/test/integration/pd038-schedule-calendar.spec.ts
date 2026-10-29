@@ -189,9 +189,9 @@ beforeEach(async () => {
      values ('${learnerN}'::uuid, '${s.familyId}'::uuid, 'learner_n', '${s.teacherId}'::uuid)`,
   );
   await g.prisma.$executeRawUnsafe(
-    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
-     values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
-    learnerN, s.otherAdminId,
+    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
+     values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`,
+    learnerN, s.otherAdminId, s.managerId,
   );
   g.config.invalidate();
 });

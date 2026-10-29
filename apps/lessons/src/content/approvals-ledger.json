@@ -1,0 +1,4 @@
+{
+ "about": "PD-49: the high-water mark of every signed lesson's approvals: issued[lessonKey] = the issuedAt of its approvals file. scripts/lessons/verify-approvals.mjs requires each signed file to be recorded here at exactly its issuedAt, and each entry to have its signed file. It only grows: against the base branch, an entry is never removed or moved back, a changed file must be issued after its entry (no replay of an export since withdrawn), and a signed file is never deleted or unsigned. Updated in the same PR as the approvals file it records; changes here need the owner's review (CODEOWNERS).",
+ "issued": {}
+}

@@ -8,12 +8,14 @@ import { useCopy, type Pair } from './copy'
 import { useCalendarDate } from './calendar'
 import { useAddAdjustment, useRevealPayoutAccount, useSetPayoutAccount, useSetTerms, useTeacherFinance } from './hooks'
 import { P, describePayrollError } from './payrollCopy'
-import { Field, Footer } from './TeacherFileDialogs'
+import { Field } from '@/shared/components/Field'
+import { Footer } from './TeacherFileDialogs'
 
 /**
  * PD-18 on the Teacher File: employment for every reader; salary terms, the
  * payment method, the financial summary and every amount for the super admin
- * only (`access.canViewFinance`, re-checked by the server on every route).
+ * and the Teachers manager (PD-43) only (`access.canViewFinance`, re-checked by
+ * the server on every route).
  * The page lays out what the server computed and adds nothing up itself.
  */
 

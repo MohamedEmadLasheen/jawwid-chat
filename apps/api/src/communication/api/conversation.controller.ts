@@ -13,6 +13,7 @@ import { MentionService, type ViewerMentionDto } from '../mentions/mention.servi
 import { SUBSCRIPTION_LOCK } from '../../platform/tokens';
 import type { SubscriptionLockReader } from '../../platform/subscription-lock';
 import type { Actor } from '../../platform/types';
+import { Requires } from '../../platform/permissions/route-access';
 
 @Controller('conversations')
 @UseFilters(CommErrorFilter)
@@ -50,6 +51,7 @@ export class ConversationController {
    *
    * One count query for the whole list, not one per row (mobile gap O1).
    */
+  @Requires('chat.use')
   @Get()
   async list(@ActorId() actorId: string, @Query('q') q?: string) {
     const actor = await this.conversations.requireActor(actorId);
@@ -114,6 +116,7 @@ export class ConversationController {
    * COMM.BR1_TEACHER_PARENT_DIRECT, whatever their relationship. `withActorId`
    * selects the other party; it asserts nothing about them.
    */
+  @Requires('chat.use')
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {
     const conv = await this.conversations.getOrCreateDirect(actorId, body.withActorId);
@@ -134,6 +137,7 @@ export class ConversationController {
    * those children. Every participant is validated server side and by the
    * database; see ConversationService.createFamilyGroup.
    */
+  @Requires('chat.manage')
   @Post('family-group')
   async familyGroup(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     const conv = await this.conversations.createFamilyGroup(actorId, body ?? {});
@@ -144,12 +148,14 @@ export class ConversationController {
   }
 
   /** The official group for a learner, created from Core relationships. */
+  @Requires('chat.manage')
   @Post('student-group')
   async studentGroup(@ActorId() actorId: string, @Body() body: { learnerId: string }) {
     const conv = await this.conversations.ensureStudentGroup(body.learnerId, actorId);
     return toConversationDto(conv);
   }
 
+  @Requires('chat.manage')
   @Post('student-group/:learnerId/sync')
   async sync(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
     const conv = await this.conversations.syncStudentGroup(learnerId, actorId);
@@ -164,6 +170,7 @@ export class ConversationController {
    * authorizes the read explicitly rather than leaving it to the preferences
    * upsert below to throw.
    */
+  @Requires('chat.use')
   @Get(':id')
   async get(@ActorId() actorId: string, @Param('id') id: string) {
     // Authorization is EXPLICIT here. It used to ride on setPreferences
@@ -271,12 +278,14 @@ export class ConversationController {
    * Response: `{ canCall, code }` -- the code a stable COMM.* value or null,
    * and nothing else. No ids, no names, no relationship detail.
    */
+  @Requires('calls.use')
   @Get(':id/call-capability')
   async callCapability(@ActorId() actorId: string, @Param('id') id: string) {
     return this.calls.callCapability(id, actorId);
   }
 
   /** Membership mutations are staff-only, and always carry a reason. */
+  @Requires('chat.manage')
   @Post(':id/members')
   async setMember(
     @ActorId() actorId: string,
@@ -309,6 +318,7 @@ export class ConversationController {
   }
 
   /** Archive / mute / pin / favorite are per-user preferences. */
+  @Requires('chat.use')
   @Post(':id/preferences')
   async preferences(
     @ActorId() actorId: string,

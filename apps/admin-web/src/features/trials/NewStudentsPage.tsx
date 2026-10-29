@@ -30,6 +30,7 @@ import {
 import { useNewStudents, useTrialOp } from './hooks'
 import { SubscriptionForm, draftFrom, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
 import { NewStudentSetup } from './NewStudentSetup'
+import { EnteredFamilies } from '@/features/intake/EnteredFamilies'
 import '../teachers/teachers.css'
 import './trials.css'
 import './new-students.css'
@@ -113,6 +114,8 @@ export function NewStudentsPage() {
             </>
           )}
         </QueryBoundary>
+        {/* PD-42 PR-3: the families supervisors entered by hand, to whoever owns them (the server's answer). */}
+        <EnteredFamilies />
         {editing && <EditSubscriptionDialog student={editing} onClose={() => setEditing(null)} />}
         {paying && <TrialPaymentsDialog trialId={paying.trialId} name={paying.parent.name} onClose={() => setPaying(null)} />}
       </div>

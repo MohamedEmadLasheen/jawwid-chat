@@ -142,12 +142,17 @@ describe('1. an absence with no lesson', () => {
     expect((await discipline.list(tsupId, { kind: 'late', state: 'all' })).violations).toEqual([]);
   });
 
-  it('needs a note, a past or present day, and the Teachers department', async () => {
+  it('needs a note, a past or present day, and someone who works on that teacher', async () => {
     expect(await code(discipline.recordAbsence(tsupId, s.teacherId, { occurredOn: today }))).toBe(CommErrorCode.VALIDATION);
     expect(await code(discipline.recordAbsence(tsupId, s.teacherId, { occurredOn: plusDays(today, 2), note: 'x' }))).toBe(
       CommErrorCode.DISCIPLINE_STATE,
     );
-    expect(await code(discipline.recordAbsence(s.ownerId, s.teacherId, { occurredOn: today, note: 'x' }))).toBe(
+    // PD-26 amendment: an Operations supervisor works on the teachers of her own
+    // families only; admin_b has no charge over teacher_c (pd026-operations-access.spec).
+    expect(await code(discipline.recordAbsence(s.otherAdminId, s.teacherId, { occurredOn: today, note: 'x' }))).toBe(
+      CommErrorCode.DISCIPLINE_NOT_FOUND,
+    );
+    expect(await code(discipline.recordAbsence(s.parentId, s.teacherId, { occurredOn: today, note: 'x' }))).toBe(
       CommErrorCode.DISCIPLINE_DENIED,
     );
   });
@@ -158,7 +163,7 @@ describe('1. an absence with no lesson', () => {
     await expect(g.prisma.teacherViolation.create({ data: { ...base, kind: 'absence', note: 'x' } })).rejects.toThrow(/lesson_shape/);
     await expect(g.prisma.teacherViolation.create({ data: { ...base, kind: 'teacher_no_show', recordedBy: tsupId } })).rejects.toThrow(/lesson_shape/);
     await expect(
-      g.prisma.teacherViolation.create({ data: { ...base, kind: 'absence', note: 'x', recordedBy: s.ownerId } }),
+      g.prisma.teacherViolation.create({ data: { ...base, kind: 'absence', note: 'x', recordedBy: s.otherAdminId } }),
     ).rejects.toThrow(/Teachers department/);
   });
 });
@@ -194,7 +199,7 @@ describe('2. an upheld complaint joins the ladder', () => {
     expect(fromParents.complaints.map((x) => [x.id, x.teacher.name, x.status, x.followUps.length])).toEqual([[c.id, 'teacher_c', 'resolved', 2]]);
     expect((await files.complaints(tsupId, { from: 'management' })).complaints).toEqual([]);
     expect((await files.complaints(tsupId, { status: 'open' })).complaints).toEqual([]);
-    expect(await code(files.complaints(s.ownerId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    expect(await code(files.complaints(s.parentId, {}))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
   });
 
   it('a follow-up does not resolve a complaint; a second resolution is still refused', async () => {
@@ -207,9 +212,10 @@ describe('2. an upheld complaint joins the ladder', () => {
     );
   });
 
-  it('a complaint is handled by the Teachers department only', async () => {
+  it('a complaint is handled by someone who works on that teacher', async () => {
+    // admin_b is an Operations supervisor with no charge over teacher_c.
     expect(
-      await code(files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'management', handledBy: s.ownerId })),
+      await code(files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'management', handledBy: s.otherAdminId })),
     ).toBe(CommErrorCode.TEACHER_FILE_CONFLICT);
     const ok = await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'x', source: 'management', handledBy: tmgrId });
     expect((await files.detail(tsupId, s.teacherId)).supervision.complaints.find((c) => c.id === ok.id)?.handledBy?.id).toBe(tmgrId);
@@ -273,17 +279,18 @@ describe('3. a decided deduction is priced from the default', () => {
     expect((await payroll.finance(superId, s.teacherId, today.slice(0, 7))).unpriced.violationIds).toEqual([violationId]);
   });
 
-  it('only the super admin sets a default, even with the application bypassed', async () => {
-    expect(await code(payroll.setDeductionDefault(tmgrId, { kind: 'deduction_1', currency: 'EGP', amount: '10' }))).toBe(
+  it('the super admin and the Teachers manager set a default (PD-43 N2); a supervisor never, even with the application bypassed', async () => {
+    await expect(payroll.setDeductionDefault(tmgrId, { kind: 'deduction_1', currency: 'EGP', amount: '10' })).resolves.toBeDefined();
+    expect(await code(payroll.setDeductionDefault(tsupId, { kind: 'deduction_1', currency: 'EGP', amount: '10' }))).toBe(
       CommErrorCode.TEACHER_FILE_DENIED,
     );
     const org = (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
     await expect(
-      g.prisma.teacherPayDefault.create({ data: { organizationId: org, kind: 'deduction_1', currency: 'EGP', amount: '10', createdBy: tmgrId } }),
-    ).rejects.toThrow(/super admin/);
+      g.prisma.teacherPayDefault.create({ data: { organizationId: org, kind: 'deduction_1', currency: 'EGP', amount: '10', createdBy: tsupId } }),
+    ).rejects.toThrow(/super admin or the Teachers manager/);
   });
 
-  it('the Rewards list shows amounts to the super admin only', async () => {
+  it('the Rewards list shows amounts to the super admin and the Teachers manager only', async () => {
     await terms('EGP');
     const bonus = await g.prisma.teacherSupervisionEntry.create({
       data: {
@@ -297,6 +304,9 @@ describe('3. a decided deduction is priced from the default', () => {
     await payroll.addAdjustment(superId, s.teacherId, { kind: 'bonus', bonusEntryId: bonus.id, amount: '300', reason: 'reward' });
     const asSuper = await payroll.rewards(superId);
     expect(asSuper.rewards[0]).toMatchObject({ reason: 'Ten perfect reports', recordedBy: { id: tsupId }, amount: { amount: '300.00', currency: 'EGP' } });
+    const asManager = await payroll.rewards(tmgrId);
+    expect(asManager.canViewAmounts).toBe(true);
+    expect(asManager.rewards[0]).toMatchObject({ amount: { amount: '300.00', currency: 'EGP' } });
     const asSupervisor = await payroll.rewards(tsupId);
     expect(asSupervisor.canViewAmounts).toBe(false);
     expect(asSupervisor.rewards[0]).not.toHaveProperty('amount');
@@ -391,9 +401,11 @@ describe('6. the known limits, closed (PD-26 amendment 2026-10-26)', () => {
     expect(await g.prisma.teacherPayAdjustment.count()).toBe(0);
   });
 
-  it('a reward with an amount is the super admin\'s; the Teachers department records one without', async () => {
+  it('a reward with an amount is payroll\'s (the super admin and, since PD-43 N2, the Teachers manager); a supervisor records one without', async () => {
     await terms('EGP');
-    expect(await code(payroll.recordReward(tmgrId, s.teacherId, { reason: 'x', amount: '10' }))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    expect(await code(payroll.recordReward(tsupId, s.teacherId, { reason: 'x', amount: '10' }))).toBe(CommErrorCode.TEACHER_FILE_DENIED);
+    await payroll.recordReward(tmgrId, s.teacherId, { reason: 'Ten perfect reports', amount: '10' });
+    expect(await g.prisma.teacherPayAdjustment.count({ where: { teacherId: s.teacherId, createdBy: tmgrId } })).toBe(1);
     await expect(timeline.bonus(tmgrId, s.teacherId, { reason: 'Covered a class' })).resolves.toMatchObject({ kind: 'bonus' });
   });
 

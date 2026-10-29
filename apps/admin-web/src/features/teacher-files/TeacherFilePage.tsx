@@ -1,14 +1,15 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
-import type { Complaint, EntryBrief, TeacherFile } from './api'
-import { T, useCopy } from './copy'
+import type { Complaint, EntryBrief, TeacherFile, TeacherHistoryEvent } from './api'
+import { HISTORY_ACTION, T, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
-import { useTeacherFile } from './hooks'
+import { useReissueFirstLogin, useTeacherFile, useTeacherHistory } from './hooks'
+import { FirstLoginCodeDialog, GiveSignInDialog } from './AddTeacherDialog'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import { AwayBadge, ComplaintItem, UpholdDialog } from './Complaint'
 import { SupervisionTimeline } from './SupervisionTimeline'
@@ -19,6 +20,9 @@ import { ShiftSection } from '@/features/schedule/ShiftSection'
 import './teacher-files.css'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
+import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
+import { OffboardButton, ReactivateButton } from './Offboarding'
+import { ChangeSignInButton } from './ChangeSignIn'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;
@@ -55,9 +59,37 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                         {tx(data.teacher.isActive ? T.active : T.inactive)}
                       </Badge>
                       <AwayBadge away={data.teacher.away} />
+                      <SignInBadge status={data.signIn?.status} />
                     </>
                   }
-                  actions={data.teacher.isActive && data.access.canWriteSupervision ? <OpenSupervisionButton teacherId={data.teacher.id} /> : undefined}
+                  actions={
+                    data.access.canWriteSupervision ? (
+                      <>
+                        {/* Mounted whatever the file says: a code shown once must outlive the reload. */}
+                        <GiveSignInButton show={!!data.signIn?.canGive} teacherId={data.teacher.id} basePath={basePath} />
+                        {data.signIn?.canSendCode && <SendCodeButton teacherId={data.teacher.id} />}
+                        <ChangeSignInButton
+                          show={!!data.signIn?.canChange}
+                          teacherId={data.teacher.id}
+                          signedIn={data.signIn?.status === 'active'}
+                        />
+                        {data.teacher.isActive && <OpenSupervisionButton teacherId={data.teacher.id} />}
+                        {/* PD-35 B5: escalate about this teacher (the server checks the scope). */}
+                        <OpenCaseButton subject={{ kind: 'teacher', id: data.teacher.id }} target="teachers" />
+                        {/* PD-43 PR-1b: the server says who may (the routes re-check). */}
+                        <ReactivateButton
+                          show={!!data.onboarding?.canReactivate && !data.teacher.isActive}
+                          teacherId={data.teacher.id}
+                          name={data.teacher.name}
+                        />
+                        <OffboardButton
+                          show={!!data.onboarding?.canOffboard && data.teacher.isActive}
+                          teacherId={data.teacher.id}
+                          name={data.teacher.name}
+                        />
+                      </>
+                    ) : undefined
+                  }
                 />
                 <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
                 {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
@@ -86,6 +118,7 @@ function FileSections({
   const payroll = usePayroll(file)
   return (
     <>
+      <SetupChecklist file={file} />
       <Personal file={file} onEdit={onEdit} />
       <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
       <Students file={file} />
@@ -96,13 +129,15 @@ function FileSections({
       <Complaints file={file} onAdd={onAdd} />
       {/* PD-35: evaluations and improvement plans; the teacher sees them once shared. */}
       <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
-      {/* PD-18: the super admin only; the server re-checks every route. */}
+      {/* PD-18: the super admin and the Teachers manager (PD-43); the server re-checks every route. */}
       <FinancialSummarySection payroll={payroll} />
       <HistorySection kind="bonus" file={file} payroll={payroll} />
       <HistorySection kind="deduction" file={file} payroll={payroll} />
       <DaysOff file={file} onAdd={onAdd} />
       {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
       <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
+      {/* PD-43: the teacher's and their login's lifecycle. */}
+      <LifecycleHistory teacherId={file.teacher.id} />
       {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
       <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
       {payroll.dialogs}
@@ -134,6 +169,95 @@ function Section({
       {hint && <p className="field__hint">{hint}</p>}
       {children}
     </section>
+  )
+}
+
+const SETUP_STEPS = [
+  ['signedIn', T.stepSignedIn],
+  ['supervisor', T.stepSupervisor],
+  ['contact', T.stepContact],
+  ['payTerms', T.stepPayTerms],
+  ['payoutAccount', T.stepPayoutAccount],
+  ['leaveAllowance', T.stepLeaveAllowance],
+  ['shift', T.stepShift],
+  ['availability', T.stepAvailability],
+  ['profile', T.stepProfile],
+] as const
+
+/** PD-43: what is still to set up for an active teacher, read live; gone once everything is done. */
+function SetupChecklist({ file }: { file: TeacherFile }) {
+  const tx = useCopy()
+  const { number } = useI18n()
+  const setup = file.setup
+  if (!setup || !file.teacher.isActive || (setup.missing === 0 && setup.payMatchesShift)) return null
+  return (
+    <Section
+      id="tf-setup"
+      title={tx(T.setupTitle)}
+      action={
+        <Badge tone="warn">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { n: number(setup.missing) })}</Badge>
+      }
+    >
+      <ul className="tf-setup">
+        {SETUP_STEPS.map(([key, label]) => (
+          <li key={key}>
+            <span>{tx(label)}</span>
+            <Badge tone={setup[key] ? 'ok' : 'outline'} dot>
+              {tx(setup[key] ? T.done : T.stepNotDone)}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+      {!setup.payMatchesShift && (
+        <p className="banner banner--warn" role="note">
+          {tx(T.payMismatch)}
+        </p>
+      )}
+    </Section>
+  )
+}
+
+/** PD-43: added, sign-in, supervisor, offboarded, reactivated -- newest first, with who and why. */
+function LifecycleHistory({ teacherId }: { teacherId: string }) {
+  const tx = useCopy()
+  const { dateTime } = useI18n()
+  const history = useTeacherHistory(teacherId)
+  const events = history.data?.events
+  const what = (e: TeacherHistoryEvent) => {
+    if (e.action === 'teacher_supervisor.assigned') {
+      return tx(T.historySupervisorChanged, { from: e.detail.from?.name ?? tx(T.historyNone), to: e.detail.to?.name ?? tx(T.historyNone) })
+    }
+    const label = HISTORY_ACTION[e.action]
+    return label ? tx(label) : e.action
+  }
+  // No staff member: the teacher themselves for their own sign-in, the system otherwise.
+  const who = (e: TeacherHistoryEvent) =>
+    e.actor?.name ?? tx(e.action === 'account.activated' || e.action === 'account.password_reset_completed' ? T.historyByTeacher : T.historyAutomatic)
+  return (
+    <Section id="tf-history" title={tx(T.historyTitle)}>
+      <QueryBoundary isLoading={history.isLoading} error={history.error} onRetry={() => void history.refetch()}>
+        {events && events.length === 0 && <p className="tf-muted">{tx(T.historyEmpty)}</p>}
+        {events && events.length > 0 && (
+          <ul className="tf-history">
+            {events.map((e, i) => (
+              <li key={`${e.at}-${i}`}>
+                <strong dir="auto">{what(e)}</strong>
+                <span className="tf-byline">
+                  {' '}
+                  · <bdi>{who(e)}</bdi> · {dateTime(e.at)}
+                </span>
+                {e.reason && (
+                  <span className="tf-muted" dir="auto">
+                    {' '}
+                    · {e.reason}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryBoundary>
+    </Section>
   )
 }
 
@@ -379,5 +503,47 @@ function DaysOff({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent) =
         </ul>
       )}
     </Section>
+  )
+}
+
+/** PD-43: a login that waits for its first sign-in, or is suspended. Nothing for an active login. */
+function SignInBadge({ status }: { status?: string }) {
+  const tx = useCopy()
+  if (status === 'provisioned') return <Badge tone="warn">{tx(T.notSignedInYet)}</Badge>
+  if (status === 'suspended') return <Badge tone="outline">{tx(T.signInSuspended)}</Badge>
+  if (status === 'none') return <Badge tone="outline">{tx(T.noSignIn)}</Badge>
+  return null
+}
+
+/** PD-43: a new first sign-in code; the server decides who may and who sees it. */
+function SendCodeButton({ teacherId }: { teacherId: string }) {
+  const tx = useCopy()
+  const reissue = useReissueFirstLogin(teacherId)
+  const answer = reissue.data
+  return (
+    <>
+      <button type="button" className="btn" disabled={reissue.isPending} onClick={() => reissue.mutate()}>
+        {reissue.isPending ? tx(T.sending) : tx(T.sendNewCode)}
+      </button>
+      {answer && <FirstLoginCodeDialog signIn={answer.signIn} firstLogin={answer.firstLogin} onClose={() => reissue.reset()} />}
+    </>
+  )
+}
+
+/** PD-43 Give sign-in, for a teacher who has no login. */
+function GiveSignInButton({ show, teacherId, basePath }: { show: boolean; teacherId: string; basePath: string }) {
+  const tx = useCopy()
+  const [open, setOpen] = useState(false)
+  // Stable: the Dialog re-focuses whenever onClose changes.
+  const close = useCallback(() => setOpen(false), [])
+  return (
+    <>
+      {show && (
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
+          {tx(T.giveSignIn)}
+        </button>
+      )}
+      {open && <GiveSignInDialog teacherId={teacherId} basePath={basePath} onClose={close} />}
+    </>
   )
 }

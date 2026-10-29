@@ -1,41 +1,31 @@
-import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { CertificateService } from './certificate.service';
+import { NotForStaff } from '../platform/permissions/route-access';
 
 /**
- * PD-12 student certificates. Behind the global bearer guard; who may do what is
- * decided in CertificateService (pd012-policy), never here. POST for every
- * change: the shared admin-web client has no PUT.
+ * PD-12's teacher surface, kept for the app: a teacher suggests a certificate
+ * for one of their learners and reads what became of their suggestions. Since
+ * PD-41 the staff side is the Certificates page (/certificates); the learner's
+ * Operations supervisor decides each suggestion there.
  */
 @Controller('learner-certificates')
 @UseFilters(CommErrorFilter)
 export class CertificateController {
   constructor(private readonly certificates: CertificateService) {}
 
+  /** A teacher's own suggestions. */
+  @NotForStaff()
   @Get()
   list(@ActorId() actorId: string, @Query('state') state?: string) {
-    return this.certificates.list(actorId, { state });
+    return this.certificates.listOwnSuggestions(actorId, { state });
   }
 
-  /** The teacher's Certificate ticket. */
+  /** The teacher's Certificate ticket: a suggestion. */
+  @NotForStaff()
   @Post()
   request(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
-    return this.certificates.request(actorId, body ?? {});
-  }
-
-  @Post(':id/upload')
-  authorizeUpload(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.certificates.authorizeUpload(actorId, id, body ?? {});
-  }
-
-  @Post(':id/issue')
-  issue(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.certificates.issue(actorId, id, body ?? {});
-  }
-
-  @Post(':id/decline')
-  decline(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.certificates.decline(actorId, id, body ?? {});
+    return this.certificates.suggest(actorId, body ?? {});
   }
 }

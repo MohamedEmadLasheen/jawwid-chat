@@ -27,6 +27,7 @@ import {
   PACKAGE_MAX_BYTES,
   type Kind,
 } from './vocab';
+import { RECITATION_HOSTS, recitationHostOf, type RecitationHost } from './recitation-hosts';
 
 type Tx = Prisma.TransactionClient;
 
@@ -76,7 +77,18 @@ export class MaterialsAdminService {
     private readonly conversations: ConversationService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(RECITATION_HOSTS) private readonly recitationHosts: readonly RecitationHost[],
   ) {}
+
+  /** A recitation URL must be on a host allowed in code (recitation-hosts.ts). */
+  private allowedRecitationUrl(field: string, url: string | null): string | null {
+    if (url === null) return null;
+    const sample = field === 'urlTemplate' ? renderTemplate(url, 1) : url;
+    if (!recitationHostOf(this.recitationHosts, sample)) {
+      throw invalid(`${field}: ${hostOf(sample)} is not an allowed recitation host (the academy has not recorded a licence for it)`);
+    }
+    return url;
+  }
 
   // ------------------------------------------------------------------
   // Who
@@ -375,7 +387,7 @@ export class MaterialsAdminService {
   async createSource(actorId: string, body: Record<string, unknown>) {
     const actor = await this.requireManager(actorId);
     const name = sourceName(body.name, true) as string;
-    const urlTemplate = templateOf(body.urlTemplate);
+    const urlTemplate = this.allowedRecitationUrl('urlTemplate', templateOf(body.urlTemplate));
     const isDefault = body.isDefault === true;
     const source = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
@@ -397,7 +409,7 @@ export class MaterialsAdminService {
     const actor = await this.requireManager(actorId);
     const current = await this.source(actor.organizationId, sourceId);
     const name = 'name' in body ? (sourceName(body.name, true) as string) : current.name;
-    const urlTemplate = 'urlTemplate' in body ? templateOf(body.urlTemplate) : current.urlTemplate;
+    const urlTemplate = 'urlTemplate' in body ? this.allowedRecitationUrl('urlTemplate', templateOf(body.urlTemplate)) : current.urlTemplate;
     if ('isActive' in body && typeof body.isActive !== 'boolean') throw invalid('isActive: true or false');
     if ('isDefault' in body && typeof body.isDefault !== 'boolean') throw invalid('isDefault: true or false');
     const isActive = typeof body.isActive === 'boolean' ? body.isActive : current.isActive;
@@ -430,7 +442,7 @@ export class MaterialsAdminService {
     else if (typeof body.url === 'string' && body.url.trim()) {
       const why = checkHttpsUrl(body.url.trim());
       if (why) throw invalid(`url: ${why}`);
-      data = { url: body.url.trim(), objectKey: null };
+      data = { url: this.allowedRecitationUrl('url', body.url.trim()), objectKey: null };
     } else if (typeof body.uploadToken === 'string' && body.uploadToken) {
       const file = await this.fileSource(actor, body.uploadToken, 'recitation', 'audio');
       data = { url: null, objectKey: (file as { objectKey: string }).objectKey };
@@ -708,6 +720,14 @@ function templateOf(v: unknown): string | null {
   const why = checkHttpsUrl(renderTemplate(t, 1));
   if (why) throw invalid(`urlTemplate: ${why}`);
   return t;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'this URL';
+  }
 }
 
 export function renderTemplate(template: string, surah: number): string {

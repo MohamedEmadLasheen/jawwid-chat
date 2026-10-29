@@ -1,28 +1,41 @@
-import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AUDIT_SERVICE } from '../tokens';
 import type { AuditService } from '../audit.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthService } from './auth.service';
 import { hashPassword, spendComparableTime } from './password';
+import { isPasswordLengthAcceptable } from './password-policy';
+import { MIN_SECRET_LENGTH } from './auth.config';
 import { RevocationUnconfirmedError } from '../realtime-revocation';
 
 /** How long a code lives: long enough to be passed on by hand. */
 export const RESET_CODE_MINUTES = 10;
+/** PD-43: how long a first sign-in code lives -- a new person may not open the app the same day. */
+export const FIRST_LOGIN_CODE_HOURS = 72;
 /** Wrong tries before a code is spent and the administrator must issue another. */
 export const RESET_CODE_TRIES = 5;
 /** Codes one account may be issued in an hour, whoever issues them. */
 export const RESET_CODES_PER_HOUR = 10;
-const MIN_PASSWORD = 8;
-const MAX_PASSWORD = 128;
 
 export const RESET_AUDIT = {
   ISSUED: 'account.password_reset_issued',
   COMPLETED: 'account.password_reset_completed',
   /** PD-25: a parent asked for a code, and one was sent to the contact method on file. */
   RECOVERY_SENT: 'account.recovery_code_sent',
+  /** PD-43: a first sign-in code for an account that has never signed in. Completing it writes `account.activated` (SQL). */
+  FIRST_LOGIN_ISSUED: 'account.first_login_code_issued',
 } as const;
+
+/**
+ * PD-43: what a code is for. `reset` -- a new password for an account in use
+ * (PD-21, PD-25). `first_login` -- the first password of a provisioned account;
+ * completing it also activates the account (chat.activate_account_with_code).
+ * Kind-agnostic: teachers now, PD-40's staff accounts later.
+ */
+export type ResetCodePurpose = 'reset' | 'first_login';
 
 /** PD-25: where a code the parent asked for is sent. */
 export type RecoveryChannel = 'email' | 'whatsapp';
@@ -44,6 +57,8 @@ export interface IssueResetInput {
   readonly reason: string;
   /** End every session now, before the person has chosen a new password (a compromised account). */
   readonly signOutEverywhere: boolean;
+  /** PD-43: `first_login` for an account that has never signed in. Default `reset`. */
+  readonly purpose?: ResetCodePurpose;
 }
 
 /**
@@ -63,6 +78,11 @@ export interface IssueResetInput {
  * The old password keeps working until step 2, unless the administrator chose
  * to sign the account out everywhere at step 1 -- then nothing works until the
  * person finishes the reset.
+ *
+ * PD-43 adds a purpose: a `first_login` code (72 hours) is how a new account
+ * gets its first password, and completing it activates the account, in the
+ * same transaction, through chat.activate_account_with_code -- the only way the
+ * database lets an account move from provisioned to active.
  *
  * PD-25 adds the parent's own way in: issueRecovery() stores a code the parent
  * asked for (channel email / whatsapp, no issuer) for AccountRecoveryService to
@@ -86,49 +106,76 @@ export class PasswordResetService {
 
   /** Returns the plain code: the ONLY time it exists outside the person's hands. */
   async issue(input: IssueResetInput): Promise<{ code: string; expiresAt: Date; revokedSessions: number }> {
-    const recent = await this.prisma.passwordResetCode.count({
+    const { id, code, expiresAt, revokedSessions } = await this.prisma.$transaction((tx) => this.issueInTx(tx, input));
+    if (input.signOutEverywhere) await this.enforce(input.accountId, revokedSessions > 0);
+    this.log.log(`reset code ${id} issued for account ${input.accountId}`);
+    return { code, expiresAt, revokedSessions };
+  }
+
+  /**
+   * issue(), inside the CALLER's transaction: PD-43 adds a teacher, opens their
+   * supervision chat and writes their first sign-in code in one commit. The
+   * caller enforces a sign-out-everywhere after its commit (issue() does).
+   */
+  async issueInTx(
+    tx: Prisma.TransactionClient,
+    input: IssueResetInput,
+  ): Promise<{ id: string; code: string; expiresAt: Date; revokedSessions: number }> {
+    // One account's codes are issued one at a time, so two at once cannot both pass the hourly count.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'password_reset_code:' + input.accountId}))`;
+    const recent = await tx.passwordResetCode.count({
       where: { accountId: input.accountId, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
     });
     if (recent >= RESET_CODES_PER_HOUR) throw new AuthError(AuthErrorCode.RATE_LIMITED, 3600);
 
+    const purpose: ResetCodePurpose = input.purpose ?? 'reset';
     const code = newCode();
-    const expiresAt = new Date(Date.now() + RESET_CODE_MINUTES * 60_000);
-    const { id, revoked } = await this.prisma.$transaction(async (tx) => {
-      await tx.passwordResetCode.updateMany({
-        where: { accountId: input.accountId, usedAt: null, supersededAt: null },
-        data: { supersededAt: new Date() },
-      });
-      const row = await tx.passwordResetCode.create({
-        data: {
-          organizationId: input.organizationId,
-          accountId: input.accountId,
-          issuedBy: input.issuedByStaffId,
-          codeHash: codeHash(input.accountId, code),
-          reason: input.reason,
-          expiresAt,
-        },
-        select: { id: true },
-      });
-      const revokedSessions = input.signOutEverywhere
-        ? await this.auth.revokeAccountSessionsInTx(tx, input.accountId, 'password reset issued', {
-            revokedBy: input.issuedByAccountId,
-            actorId: input.issuedByStaffId,
-          })
-        : 0;
-      // Never the code, nor its hash: only what an incident review needs.
-      await this.audit.audit(tx, {
-        actorId: input.issuedByStaffId,
-        action: RESET_AUDIT.ISSUED,
-        entity: 'account',
-        entityId: input.accountId,
-        after: { resetCodeId: row.id, expiresAt: expiresAt.toISOString(), signOutEverywhere: input.signOutEverywhere },
-        reason: input.reason,
-      });
-      return { id: row.id, revoked: revokedSessions };
+    const expiresAt = new Date(
+      Date.now() + (purpose === 'first_login' ? FIRST_LOGIN_CODE_HOURS * 3_600_000 : RESET_CODE_MINUTES * 60_000),
+    );
+    // A reissue kills every live code, and the audit names them.
+    const superseded = await tx.passwordResetCode.findMany({
+      where: { accountId: input.accountId, usedAt: null, supersededAt: null },
+      select: { id: true },
     });
-    if (input.signOutEverywhere) await this.enforce(input.accountId, revoked > 0);
-    this.log.log(`reset code ${id} issued for account ${input.accountId}`);
-    return { code, expiresAt, revokedSessions: revoked };
+    await tx.passwordResetCode.updateMany({
+      where: { accountId: input.accountId, usedAt: null, supersededAt: null },
+      data: { supersededAt: new Date() },
+    });
+    const row = await tx.passwordResetCode.create({
+      data: {
+        organizationId: input.organizationId,
+        accountId: input.accountId,
+        issuedBy: input.issuedByStaffId,
+        codeHash: resetCodeHash(input.accountId, code),
+        reason: input.reason,
+        expiresAt,
+        purpose,
+      },
+      select: { id: true },
+    });
+    const revokedSessions = input.signOutEverywhere
+      ? await this.auth.revokeAccountSessionsInTx(tx, input.accountId, 'password reset issued', {
+          revokedBy: input.issuedByAccountId,
+          actorId: input.issuedByStaffId,
+        })
+      : 0;
+    // Never the code, nor its hash: only what an incident review needs.
+    await this.audit.audit(tx, {
+      actorId: input.issuedByStaffId,
+      action: purpose === 'first_login' ? RESET_AUDIT.FIRST_LOGIN_ISSUED : RESET_AUDIT.ISSUED,
+      entity: 'account',
+      entityId: input.accountId,
+      after: {
+        resetCodeId: row.id,
+        purpose,
+        supersedes: superseded.map((x) => x.id),
+        expiresAt: expiresAt.toISOString(),
+        signOutEverywhere: input.signOutEverywhere,
+      },
+      reason: input.reason,
+    });
+    return { id: row.id, code, expiresAt, revokedSessions };
   }
 
   async complete(rawUsername: string, rawCode: string, password: string): Promise<{ ok: true }> {
@@ -136,13 +183,10 @@ export class PasswordResetService {
     // person types here is the login they will sign in with.
     const subject = rawUsername.trim();
     const code = rawCode.trim();
-    if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+    if (!isPasswordLengthAcceptable(password)) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
-    const account =
-      subject && /^[0-9]{6}$/.test(code)
-        ? await this.prisma.account.findUnique({ where: { subject }, select: { id: true } })
-        : null;
+    const account = subject && /^[0-9]{6}$/.test(code) ? await this.accountBySubject(subject) : null;
     const live = account
       ? await this.prisma.passwordResetCode.findFirst({
           where: { accountId: account.id, usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
@@ -153,7 +197,7 @@ export class PasswordResetService {
       throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
     }
 
-    if (!sameHash(live.codeHash, codeHash(account.id, code))) {
+    if (!sameHash(live.codeHash, resetCodeHash(account.id, code))) {
       const attempts = live.attempts + 1;
       await this.prisma.passwordResetCode.update({
         where: { id: live.id },
@@ -165,34 +209,67 @@ export class PasswordResetService {
 
     // OUTSIDE the transaction: Argon2id must not hold a pooled connection.
     const passwordHash = await hashPassword(password);
-    const revoked = await this.prisma.$transaction(async (tx) => {
-      // Re-read under the transaction: two submissions of one code finish once.
-      const spent = await tx.passwordResetCode.updateMany({
+    let revoked: number;
+    try {
+      revoked = await this.prisma.$transaction(async (tx) => {
+        // Re-read under the transaction: two submissions of one code finish once.
+        const spent = await tx.passwordResetCode.updateMany({
+          where: { id: live.id, usedAt: null, supersededAt: null },
+          data: { usedAt: new Date() },
+        });
+        if (spent.count !== 1) throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
+        await tx.accountCredential.upsert({
+          where: { accountId: account.id },
+          create: { accountId: account.id, passwordHash },
+          update: { passwordHash, passwordChangedAt: new Date(), failedAttempts: 0, lockedUntil: null },
+        });
+        const count = await this.auth.revokeAccountSessionsInTx(tx, account.id, RESET_REVOCATION_REASON);
+        // The person is the actor, and has no staff id (audit_log.actor_id names
+        // staff): no actor, the account as entity, the issuer in `after`.
+        await this.audit.audit(tx, {
+          actorId: null,
+          action: RESET_AUDIT.COMPLETED,
+          entity: 'account',
+          entityId: account.id,
+          after: { resetCodeId: live.id, channel: live.channel, purpose: live.purpose, issuedBy: live.issuedBy, revokedSessions: count },
+          reason: 'the account holder set a new password with a one-time reset code',
+        });
+        // PD-43: a first sign-in code also activates the account (provisioned ->
+        // active), here, so the code is never spent without it. The SQL writer
+        // refuses anything but a spent first_login code of a provisioned account.
+        if (live.purpose === 'first_login') {
+          await tx.$queryRaw`SELECT chat.activate_account_with_code(${live.id}::uuid)::text AS activated`;
+        }
+        return count;
+      });
+    } catch (e) {
+      if (e instanceof AuthError || live.purpose !== 'first_login') throw e;
+      // The activation refused -- the login no longer waits for its first
+      // password (suspended meanwhile, say). The transaction rolled back, so no
+      // password was set. Spend the code so it is not tried again, and answer
+      // exactly as for a wrong code: no oracle, no 500.
+      await this.prisma.passwordResetCode.updateMany({
         where: { id: live.id, usedAt: null, supersededAt: null },
-        data: { usedAt: new Date() },
+        data: { supersededAt: new Date() },
       });
-      if (spent.count !== 1) throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
-      await tx.accountCredential.upsert({
-        where: { accountId: account.id },
-        create: { accountId: account.id, passwordHash },
-        update: { passwordHash, passwordChangedAt: new Date(), failedAttempts: 0, lockedUntil: null },
-      });
-      const count = await this.auth.revokeAccountSessionsInTx(tx, account.id, RESET_REVOCATION_REASON);
-      // The person is the actor, and has no staff id (audit_log.actor_id names
-      // staff): no actor, the account as entity, the issuer in `after`.
-      await this.audit.audit(tx, {
-        actorId: null,
-        action: RESET_AUDIT.COMPLETED,
-        entity: 'account',
-        entityId: account.id,
-        after: { resetCodeId: live.id, channel: live.channel, issuedBy: live.issuedBy, revokedSessions: count },
-        reason: 'the account holder set a new password with a one-time reset code',
-      });
-      return count;
-    });
+      this.log.warn(`account ${account.id}: first sign-in code ${live.id} did not activate the account`);
+      throw new AuthError(AuthErrorCode.RESET_CODE_INVALID);
+    }
     await this.enforce(account.id, revoked > 0);
     this.log.log(`account ${account.id} completed a password reset`);
     return { ok: true };
+  }
+
+  /**
+   * The account a sign-in name names: exactly as typed, else lower-cased (a
+   * teacher's sign-in is stored lower-cased, PD-43). AuthService.login applies
+   * the same rule, so the name that completes a code is the name that signs in.
+   */
+  private async accountBySubject(subject: string): Promise<{ id: string } | null> {
+    const exact = await this.prisma.account.findUnique({ where: { subject }, select: { id: true } });
+    const lower = subject.toLowerCase();
+    if (exact || lower === subject) return exact;
+    return this.prisma.account.findUnique({ where: { subject: lower }, select: { id: true } });
   }
 
   /**
@@ -238,7 +315,7 @@ export class PasswordResetService {
           accountId: input.accountId,
           issuedBy: null,
           channel: input.channel,
-          codeHash: codeHash(input.accountId, code),
+          codeHash: resetCodeHash(input.accountId, code),
           reason: `the parent asked for a recovery code by ${input.channel}`,
           expiresAt,
         },
@@ -270,7 +347,7 @@ export class PasswordResetService {
       where: { accountId, channel: 'whatsapp', usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
     });
     if (!live || live.attempts >= RESET_CODE_TRIES) return false;
-    if (!sameHash(live.codeHash, codeHash(accountId, code))) {
+    if (!sameHash(live.codeHash, resetCodeHash(accountId, code))) {
       const attempts = live.attempts + 1;
       await this.prisma.passwordResetCode.update({
         where: { id: live.id },
@@ -306,8 +383,42 @@ export function newCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
 }
 
-function codeHash(accountId: string, code: string): string {
-  return createHash('sha256').update(`${accountId}:${code}`).digest('hex');
+/** Labels the key derived locally from JWT_REFRESH_SECRET, so it is never the refresh-token key itself. */
+const LOCAL_KEY_LABEL = 'jawwid:reset-code-hash:v1';
+
+/** Environments that must hold RESET_CODE_HASH_SECRET (infra/env/manifest.tsv: req). */
+const DEPLOYED_ENVIRONMENTS: ReadonlySet<string> = new Set(['staging', 'production']);
+
+/**
+ * What is stored for a one-time code: a KEYED hash, never one anybody can
+ * reverse from the table (owner rule: "never store or log the code in
+ * plaintext"; PD-43 review P2-3). A code is 6 digits, so an unkeyed sha256 is
+ * recovered from a database read or a backup by trying all 10^6 in
+ * milliseconds; under HMAC-SHA256 that needs the server's secret too.
+ *
+ *   RESET_CODE_HASH_SECRET   the key, at least 32 characters. Required in
+ *                            staging and production: there, without it, no
+ *                            code is issued or accepted (fails closed).
+ *   otherwise (local, test)  a key derived from JWT_REFRESH_SECRET, so a
+ *                            developer needs nothing new -- still never
+ *                            unkeyed.
+ *
+ * Rotating the key voids every live code; the person asks for a new one. The
+ * migration that introduced it retired every code stored the old way.
+ */
+export function resetCodeHash(accountId: string, code: string): string {
+  return createHmac('sha256', resetCodeKey()).update(`${accountId}:${code}`).digest('hex');
+}
+
+function resetCodeKey(): Buffer {
+  const dedicated = (process.env.RESET_CODE_HASH_SECRET ?? '').trim();
+  if (dedicated.length >= MIN_SECRET_LENGTH) return Buffer.from(dedicated, 'utf8');
+  if (DEPLOYED_ENVIRONMENTS.has((process.env.APP_ENV ?? '').trim())) {
+    throw new Error(`RESET_CODE_HASH_SECRET must be set to at least ${MIN_SECRET_LENGTH} characters in ${process.env.APP_ENV}`);
+  }
+  const refresh = (process.env.JWT_REFRESH_SECRET ?? '').trim();
+  if (refresh.length < MIN_SECRET_LENGTH) throw new Error('RESET_CODE_HASH_SECRET (or, locally, JWT_REFRESH_SECRET) is required to hash a code');
+  return createHmac('sha256', refresh).update(LOCAL_KEY_LABEL).digest();
 }
 
 function sameHash(a: string, b: string): boolean {

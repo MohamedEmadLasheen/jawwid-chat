@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -10,7 +9,8 @@ import type { LeaveRequest, LeaveState } from './api'
 import { S, describeError, isSupervisionRefusal, useCopy, type Pair } from './copy'
 import { useLeaveRequests } from './hooks'
 import { ApproveLeaveDialog, CancelLeaveDialog, DeclineLeaveDialog } from './SupervisionDialogs'
-import { TeachersTabs, teacherFilePath } from './TeachersTabs'
+import { TeachersTabs } from './TeachersTabs'
+import { TeacherName } from '@/features/teacher-files/TeacherName'
 import './supervision.css'
 
 type Filter = 'requested' | 'approved' | 'all'
@@ -102,15 +102,16 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                       return (
                         <tr key={r.id}>
                           <td dir="auto">
-                            <Link to={teacherFilePath(basePath, r.teacher.id)}>{r.teacher.name}</Link>
+                            <TeacherName basePath={basePath} teacher={r.teacher} />
                           </td>
                           <td>{dates(r)}</td>
                           <td>
                             <div className="sv-cell-main">
                               <span>{number(r.days)}</span>
-                              {r.state === 'requested' && (
+                              {/* Absent for Operations: the allowance is the Teachers department's (PD-26 amendment). */}
+                              {r.state === 'requested' && r.balance !== undefined && (
                                 <span className="sv-muted">
-                                  {tx(S.balanceNow)}: {r.balance === null || r.balance === undefined ? tx(S.noAllowance) : number(r.balance)}
+                                  {tx(S.balanceNow)}: {r.balance === null ? tx(S.noAllowance) : number(r.balance)}
                                 </span>
                               )}
                             </div>

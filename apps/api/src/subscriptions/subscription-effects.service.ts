@@ -233,7 +233,9 @@ export class SubscriptionEffects {
       return rows[0]!.id;
     });
     if (!created) throw new CommError(CommErrorCode.SUBSCRIPTION_STATE, 'a renewal was already requested today', 409);
-    await this.notifySales(created, learner).catch((e) => this.log.error(`renewal push failed: ${(e as Error).name}`));
+    // PD-47 PR-4 (owner Q-F6): no push to every Sales member. The request raises
+    // its renewal task for the family's one Sales owner (else the Sales manager),
+    // and that task's assignment is their notice (OutboxWorker.deliverTask).
     return { requested: true };
   }
 
@@ -404,23 +406,6 @@ export class SubscriptionEffects {
     }
   }
 
-  private async notifySales(renewalId: string, learner: { id: string; name: string; organizationId: string }): Promise<void> {
-    const sales = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT s.id::text FROM chat.staff s
-       WHERE s.organization_id = ${learner.organizationId}::uuid AND s.is_active AND s.left_at IS NULL
-         AND chat.sales_department_role(s.id) IS NOT NULL`;
-    for (const s of sales) {
-      await this.notifications.schedule({
-        dedupeKey: `subscription_renewal_requested:${renewalId}:${s.id}`,
-        templateKey: 'subscription_renewal_requested',
-        eventType: 'subscription_renewal_requested',
-        recipientId: s.id,
-        priority: 'normal',
-        variables: { learner: learner.name },
-        scheduledAt: new Date(),
-      });
-    }
-  }
 }
 
 function nextDay(d: Date): string {

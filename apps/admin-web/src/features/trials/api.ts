@@ -1,3 +1,4 @@
+import type { TeacherReadiness } from '@/features/teacher-files/readiness'
 import { api } from '@/core/api/client'
 import type { TransferResult } from '@/features/organization/api'
 
@@ -123,6 +124,9 @@ export interface AssignResult {
   familyId: string
   learnerIds: string[]
   schedules: Array<{ learnerId: string; set: boolean; reason: string | null }>
+  /** PD-42 PR-3: added to the family the parent is already in (a trial sibling). */
+  attached?: boolean
+  group?: 'joined' | 'none' | 'not_joined'
 }
 
 /** What the "+ -> Trial" card needs in one trial group. */
@@ -145,7 +149,8 @@ const id = (v: string) => encodeURIComponent(v)
 export const trialsApi = {
   prospects: () => api.get<{ prospects: ProspectDto[] }>('/trials/prospects'),
   createProspect: (body: { displayName: string; level?: string; note?: string }) => api.post<ProspectDto>('/trials/prospects', body),
-  teachers: () => api.get<{ teachers: Array<{ id: string; name: string }> }>('/trials/teachers'),
+  /** PD-43: `readiness` is a warning beside the name (older servers omit it). */
+  teachers: () => api.get<{ teachers: Array<{ id: string; name: string; readiness?: TeacherReadiness | null }> }>('/trials/teachers'),
   slots: (teacherId: string, durationMinutes: number) =>
     api.get<{ teacherId: string; durationMinutes: number; slots: string[] }>('/trials/slots', { teacherId, durationMinutes: String(durationMinutes) }),
   list: (query: { from?: string; to?: string; teacherId?: string } = {}) => api.get<{ trials: TrialDto[] }>('/trials', query),
@@ -170,7 +175,7 @@ export const trialsApi = {
   leaveGroup: (conversationId: string) => api.post<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}/leave`),
   newStudents: () => api.get<{ students: NewStudentDto[]; canAssign?: boolean }>('/trials/new-students'),
   /** PD-16: the Operations manager assigns the supervisor; Chat creates the family. */
-  assignNewStudent: (trialId: string, body: { supervisorId: string; email?: string }) =>
+  assignNewStudent: (trialId: string, body: { supervisorId?: string; email?: string; familyId?: string }) =>
     api.post<AssignResult>(`/trials/new-students/${id(trialId)}/assign`, body),
   /** PD-24: the Operations manager changes the supervisor; the children, their group and records move. */
   changeNewStudentSupervisor: (trialId: string, body: { supervisorId: string; reason: string }) =>

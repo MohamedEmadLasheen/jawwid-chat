@@ -130,7 +130,7 @@ describe('Admin Portal registry and navigation', () => {
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
       ['conversations', 'dashboard', 'instalments', 'reports', 'users'],
     )
-    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'parents', 'payments', 'stories', 'teachers', 'teams'])
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'parents', 'payments', 'stories', 'tasks', 'teachers', 'teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {
@@ -139,10 +139,13 @@ describe('Admin Portal registry and navigation', () => {
     const nav = await screen.findByRole('navigation')
 
     // Five destinations hold all twenty-one sections plus Chat, (PD-21)
-    // Accounts, (PD-29) Materials and (PD-38) the Schedule. Below desktop
-    // width the drawer lists every one of them, none behind a toggle. (The
-    // desktop rail's menus are covered in app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(25)
+    // Accounts, (PD-29) Materials, (PD-38) the Schedule, (PD-11 T4, PD-16)
+    // Trials & new students, Teacher credentials review and (PD-35 B5)
+    // Escalations. Below desktop width the drawer lists every one of them, none
+    // behind a toggle. (The desktop rail's menus are covered in
+    // app/Navigation.test.tsx.)
+    // PD-41: plus Certificates under People; PD-48: Lesson audio under More.
+    expect(within(nav).getAllByRole('link')).toHaveLength(30)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { hashPassword } from '../platform/auth/password';
+import { PASSWORD_MIN_LENGTH } from '../platform/auth/password-policy';
 import { StaffRole } from '../communication/contracts/vocab';
 
 /**
@@ -48,7 +49,11 @@ import { StaffRole } from '../communication/contracts/vocab';
 
 export const BOOTSTRAP_AUDIT_ACTION = 'staff.super_admin_bootstrapped';
 export const BOOTSTRAP_REVOKE_REASON = 'super admin bootstrap: password reset';
-export const MIN_PASSWORD_LENGTH = 12;
+/**
+ * Owner decision 2026-10-27: the minimum is 4 for ALL accounts, the super admin
+ * included (it was 12 here). The shared rule lives in platform/auth/password-policy.
+ */
+export const MIN_PASSWORD_LENGTH = PASSWORD_MIN_LENGTH;
 export const MAX_PASSWORD_LENGTH = 256;
 
 export type BootstrapOutcome = 'created' | 'promoted' | 'already_super_admin';
@@ -70,6 +75,12 @@ export interface BootstrapResult {
   readonly organizationId: string;
   readonly passwordSet: boolean;
   readonly sessionsRevoked: number;
+  /**
+   * PD-40: template access roles (role-templates.ts) the organization lacked
+   * and now has -- chat.seed_access_role_templates, in the same transaction.
+   * 0 on a dry run, and on every run after the first.
+   */
+  readonly templatesSeeded: number;
   readonly dryRun: boolean;
 }
 
@@ -219,6 +230,7 @@ export async function bootstrapSuperAdmin(
         organizationId,
         passwordSet: willSetPassword,
         sessionsRevoked: 0,
+        templatesSeeded: 0,
         dryRun: true,
       };
     }
@@ -281,6 +293,11 @@ export async function bootstrapSuperAdmin(
       });
     }
 
+    // PD-40 (review of #231): the organization the super admin owns starts
+    // with the template roles; idempotent, so a re-run adds nothing.
+    const [{ seeded }] = await tx.$queryRaw<{ seeded: number }[]>`
+      select chat.seed_access_role_templates(${organizationId}::uuid) as seeded`;
+
     return {
       outcome,
       accountId,
@@ -288,6 +305,7 @@ export async function bootstrapSuperAdmin(
       organizationId,
       passwordSet: willSetPassword,
       sessionsRevoked,
+      templatesSeeded: seeded,
       dryRun: false,
     };
   });

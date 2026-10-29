@@ -24,7 +24,7 @@ export function TeacherLeaveSection({ teacherId, canSetAllowance }: { teacherId:
   const [editing, setEditing] = useState(false)
   if (leave.isLoading || leave.error || !leave.data) return null
   const d = leave.data
-  const figure = (v: number | null) => (v === null ? <span className="sv-muted">{tx(S.noAllowance)}</span> : number(v))
+  const figure = (v: number | null | undefined) => (v === null || v === undefined ? <span className="sv-muted">{tx(S.noAllowance)}</span> : number(v))
 
   return (
     <section className="card panel tf-section" aria-labelledby="tf-leave">
@@ -38,20 +38,23 @@ export function TeacherLeaveSection({ teacherId, canSetAllowance }: { teacherId:
           </button>
         )}
       </div>
-      <dl className="sv-figures">
-        <div className="sv-figure">
-          <dt>{tx(S.allowance, { year: d.year })}</dt>
-          <dd>{figure(d.allowance)}</dd>
-        </div>
-        <div className="sv-figure">
-          <dt>{tx(S.used)}</dt>
-          <dd>{number(d.used)}</dd>
-        </div>
-        <div className="sv-figure">
-          <dt>{tx(S.balance)}</dt>
-          <dd>{figure(d.balance)}</dd>
-        </div>
-      </dl>
+      {/* The figures are the Teachers department's; the server leaves them out for anyone else. */}
+      {d.used !== undefined && (
+        <dl className="sv-figures">
+          <div className="sv-figure">
+            <dt>{tx(S.allowance, { year: d.year })}</dt>
+            <dd>{figure(d.allowance)}</dd>
+          </div>
+          <div className="sv-figure">
+            <dt>{tx(S.used)}</dt>
+            <dd>{number(d.used)}</dd>
+          </div>
+          <div className="sv-figure">
+            <dt>{tx(S.balance)}</dt>
+            <dd>{figure(d.balance)}</dd>
+          </div>
+        </dl>
+      )}
       {d.requests.length === 0 ? (
         <p className="tf-muted">{tx(S.noRequestsYear)}</p>
       ) : (
@@ -79,7 +82,7 @@ export function TeacherLeaveSection({ teacherId, canSetAllowance }: { teacherId:
           ))}
         </ul>
       )}
-      {editing && <SetAllowanceDialog teacherId={teacherId} year={d.year} current={d.allowance} onClose={() => setEditing(false)} />}
+      {editing && <SetAllowanceDialog teacherId={teacherId} year={d.year} current={d.allowance ?? null} onClose={() => setEditing(false)} />}
     </section>
   )
 }

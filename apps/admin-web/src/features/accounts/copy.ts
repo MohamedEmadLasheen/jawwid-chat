@@ -27,6 +27,10 @@ export const A = {
   locked: { en: 'Locked', ar: 'مقفل مؤقتًا' },
   children: { en: 'Children: {names}', ar: 'الأطفال: {names}' },
   empty: { en: 'No accounts to show.', ar: 'لا توجد حسابات لعرضها.' },
+  noneAdministered: {
+    en: 'Your department does not administer accounts. Ask the Operations or Teachers department.',
+    ar: 'قسمك لا يدير الحسابات. تواصل مع قسم العمليات أو قسم المعلمين.',
+  },
   truncated: { en: 'Showing the first 100. Search to narrow the list.', ar: 'تُعرض أول 100 نتيجة. ابحث لتضييق القائمة.' },
 
   resetPassword: { en: 'Reset password', ar: 'إعادة تعيين كلمة المرور' },
@@ -54,6 +58,15 @@ export const A = {
     ar: 'في التطبيق: «نسيت كلمة المرور؟ لديّ رمز»، ثم بيانات الدخول وهذا الرمز وكلمة مرور جديدة.',
   },
   signedOut: { en: 'Signed out of {n} session(s).', ar: 'تم تسجيل الخروج من {n} جلسة.' },
+  // PD-40 PR-3: a manager's code for a staff account goes by e-mail only.
+  codeEmailed: {
+    ar: 'أُرسل الرمز بالبريد إلى بريد الدخول الخاص بالحساب. يعمل مرة واحدة ولمدة {minutes} دقائق.',
+    en: "The code was sent by e-mail to the account's sign-in address. It works once, for {minutes} minutes.",
+  },
+  codeNotEmailed: {
+    ar: 'تعذّر إرسال الرمز بالبريد، ولن يظهر هنا. اطلب من مدير النظام إعادة التعيين.',
+    en: 'The code could not be e-mailed, and it is not shown here. Ask the super admin to reset this account.',
+  },
   copy: { en: 'Copy code', ar: 'نسخ الرمز' },
   copied: { en: 'Copied', ar: 'تم النسخ' },
   done: { en: 'Done', ar: 'تم' },

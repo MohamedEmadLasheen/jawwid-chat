@@ -77,19 +77,17 @@ export function toSessionListDto(rows: readonly LiveSession[], currentSessionId:
 }
 
 /**
- * `permissions` is UX only -- the client uses it to hide a button it would not
- * be allowed to press, and the server re-decides every action regardless.
+ * `permissions` is UX only -- the client uses it to hide a page or a button it
+ * would not be allowed to use, and the server re-decides every action
+ * regardless.
  *
- * EMPTY BY DECISION, not by omission. `chat.role_permission` is deferred, and
- * the alternative -- mirroring AUTHORIZATION-MODEL §3's matrix into a
- * TypeScript constant -- would create a second source of truth that can drift
- * from `AuthorizationService` silently. An empty array is honest: the client
- * shows everything and the server refuses what it must. When the table lands,
- * this is the only line that changes.
+ * PD-40: GET /me fills it from chat.staff_access_profile (PermissionService),
+ * the same answer PermissionGuard checks. Other responses that carry an actor
+ * (login, refresh) send none: the client reads them from /me.
  */
-export const PERMISSIONS_DEFERRED: readonly string[] = Object.freeze([]);
+export const NO_PERMISSIONS: readonly string[] = Object.freeze([]);
 
-export function toActorDto(actor: Actor): ActorDto {
+export function toActorDto(actor: Actor, permissions: readonly string[] = NO_PERMISSIONS): ActorDto {
   return {
     actorId: actor.actorId,
     kind: actor.kind,
@@ -100,7 +98,7 @@ export function toActorDto(actor: Actor): ActorDto {
     familyId: actor.familyId ?? null,
     canMessage: actor.canMessage ?? null,
     organizationId: actor.organizationId ?? null,
-    permissions: PERMISSIONS_DEFERRED,
+    permissions,
   };
 }
 

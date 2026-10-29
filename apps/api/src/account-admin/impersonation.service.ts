@@ -4,6 +4,7 @@ import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { IdentityService } from '../platform/identity.service';
 import { AuthorizationService } from '../platform/authorization.service';
+import { accountAdminStandingOf } from '../platform/account-admin-standing';
 import { AuthService, SUPPORT_SESSION } from '../platform/auth/auth.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
@@ -94,6 +95,7 @@ export class ImpersonationService {
       admin.actor,
       { accountId: target.id, organizationId: target.organizationId, kind: target.kind, staffId: target.staff?.id, staffRole: target.staff?.role },
       'impersonate',
+      await accountAdminStandingOf(this.prisma, admin.actor),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -261,7 +263,12 @@ export class ImpersonationService {
       where: { id: row.targetAccountId },
       select: { id: true, organizationId: true, kind: true },
     });
-    const decision = this.authz.canAdministerAccount(admin.actor, { accountId: target.id, organizationId: target.organizationId, kind: target.kind }, 'impersonate');
+    const decision = this.authz.canAdministerAccount(
+      admin.actor,
+      { accountId: target.id, organizationId: target.organizationId, kind: target.kind },
+      'impersonate',
+      await accountAdminStandingOf(this.prisma, admin.actor),
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     return row;
   }

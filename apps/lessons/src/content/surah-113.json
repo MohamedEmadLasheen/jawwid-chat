@@ -1,0 +1,398 @@
+{
+  "surah": 113,
+  "datasetId": "tanzil-uthmani-1.1",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Extracted as text from the old lesson, then reviewed against the verified dataset. A line with \"review\" set is held (not shown) until a teacher resolves it. Dropped: the three Tajweed rules (Tajweed comes only from the reviewed dataset; the old quiz had no Tajweed question), the audio URLs, the typed basmala, and every hand-typed Quran string (replaced by positions). The completion game's hand-typed distractors not of this surah (an-nas, al-alamin) are gone: the game draws its options from this surah's words. The old quiz had no categories; they were assigned here. Not carried (no field or no such game in the engine): the \"Makki\" surah type, the ayah-ordering and start-to-end matching games, the word-meaning games, the intro quiz, and the reflection's lead-in line."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/quran/surah-113 (read as text, never built or run)",
+    "sha256": {
+      "lib/surahData.ts": "d36cdf671809d7a40865f63f142f1e90153297fd409da2b687030393bb7d17d8",
+      "components/SectionIntro.tsx": "b478eb15a40a913bc615c22a3b2582d909c88951609aaffd6b5a0c24a53c21a7",
+      "components/SectionVerses.tsx": "9632d42b0516932fd67e4a52d8f83d5a9a5f7fb0d0c40c7b68efb224b393e2b0",
+      "components/SectionMeanings.tsx": "289a6ae4d1d26c3aa06cfc538a454186ce0ffc4f813d2e71ccff36800ca603d4",
+      "components/SectionMemoryGames.tsx": "5de1a85b5a23cec8719a523a82e0bfa3c1f528395ed9b5b0b59e6d6c8e48a69b",
+      "components/SectionTajweed.tsx": "87d4365390a2c2e3028e9dd41f9102e5038cc27d8c85917ebbfa9e7ab957d1ec",
+      "components/SectionQuiz.tsx": "5772efcc0343f8c95812a4f9e845a9ba4afe88680fbdb39fb38d0af1f251f1a1"
+    }
+  },
+  "intro": {
+    "text": "سورة الفلق تعلمنا أن نطلب الحماية من الله من كل الشرور والأذى.",
+    "review": null
+  },
+  "tafsir": [
+    {
+      "ayah": 1,
+      "text": "نقول: يا الله أنا أحتمي بك يا رب الصباح الجميل!",
+      "review": null
+    },
+    {
+      "ayah": 2,
+      "text": "احمني يا الله من كل شيء سيء في الدنيا.",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "text": "احمني يا الله من الظلام عندما يأتي الليل.",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "text": "احمني يا الله من السحر والأشياء السيئة.",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "text": "احمني يا الله من الحسد، وهو أن يتمنى أحد زوال نعمتي.",
+      "review": null
+    }
+  ],
+  "words": [
+    {
+      "ayah": 1,
+      "word": 4,
+      "meaning": "الصبح عندما ينشق النور",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 3,
+      "meaning": "الليل المظلم",
+      "review": null
+    },
+    {
+      "ayah": 3,
+      "word": 5,
+      "meaning": "دخل وانتشر الظلام",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 3,
+      "meaning": "الساحرات اللاتي ينفخن في العُقَد",
+      "review": null
+    },
+    {
+      "ayah": 4,
+      "word": 5,
+      "meaning": "عُقَد الخيوط في السحر",
+      "review": null
+    },
+    {
+      "ayah": 5,
+      "word": 3,
+      "meaning": "الشخص الذي يتمنى زوال نعمة غيره",
+      "review": null
+    }
+  ],
+  "complete": [
+    {
+      "ayah": 1,
+      "word": 4
+    },
+    {
+      "ayah": 2,
+      "word": 4
+    },
+    {
+      "ayah": 3,
+      "word": 5
+    },
+    {
+      "ayah": 4,
+      "word": 5
+    },
+    {
+      "ayah": 5,
+      "word": 5
+    }
+  ],
+  "quiz": [
+    {
+      "category": "hifz",
+      "question": "ما اسم السورة التي تعلمناها اليوم؟",
+      "options": [
+        {
+          "text": "سورة الناس"
+        },
+        {
+          "text": "سورة الفلق"
+        },
+        {
+          "text": "سورة الإخلاص"
+        },
+        {
+          "text": "سورة الفاتحة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q1"
+    },
+    {
+      "category": "hifz",
+      "question": "كم عدد آيات سورة الفلق؟",
+      "options": [
+        {
+          "text": "3 آيات"
+        },
+        {
+          "text": "4 آيات"
+        },
+        {
+          "text": "5 آيات"
+        },
+        {
+          "text": "6 آيات"
+        }
+      ],
+      "answer": 2,
+      "review": null,
+      "id": "q2"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الليل"
+        },
+        {
+          "text": "الصبح"
+        },
+        {
+          "text": "النجوم"
+        },
+        {
+          "text": "القمر"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 1,
+        "word": 4
+      },
+      "id": "q3"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى كلمة",
+      "options": [
+        {
+          "text": "الصباح"
+        },
+        {
+          "text": "الليل المظلم"
+        },
+        {
+          "text": "الشمس"
+        },
+        {
+          "text": "المطر"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 3,
+        "word": 3
+      },
+      "id": "q4"
+    },
+    {
+      "category": "lessons",
+      "question": "ماذا نتعلم من سورة الفلق؟",
+      "options": [
+        {
+          "text": "أن نطلب الحماية من الله"
+        },
+        {
+          "text": "أن نلعب كثيراً"
+        },
+        {
+          "text": "أن ننام مبكراً"
+        },
+        {
+          "text": "أن نأكل كثيراً"
+        }
+      ],
+      "answer": 0,
+      "review": null,
+      "id": "q5"
+    },
+    {
+      "category": "hifz",
+      "question": "ما هي الآية الأولى في سورة الفلق؟",
+      "options": [
+        {
+          "ayah": 2
+        },
+        {
+          "ayah": 1
+        },
+        {
+          "ayah": 5
+        },
+        {
+          "ayah": 4
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the fourth old option was \"qul a'udhu bi-rabbi an-nas\", which is An-Nas 114:1, typed, not an ayah of this surah. It is replaced by ayah 4 of Al-Falaq.",
+      "id": "q6"
+    },
+    {
+      "category": "meanings",
+      "question": "ما معنى",
+      "options": [
+        {
+          "text": "الشخص الطيب"
+        },
+        {
+          "text": "الشخص الذي يتمنى زوال نعمة غيره"
+        },
+        {
+          "text": "الشخص النائم"
+        },
+        {
+          "text": "الشخص الجائع"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "word": {
+        "ayah": 5,
+        "word": 3
+      },
+      "id": "q7"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 1,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 1,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 5
+        },
+        {
+          "ayah": 3,
+          "word": 3
+        }
+      ],
+      "answer": 1,
+      "review": "CHANGED: the old distractors (an-nas, al-alamin, as-sama') were hand-typed, not of this surah; these three (khalaq, al-uqad, ghasiq) are words of this surah.",
+      "id": "q8"
+    },
+    {
+      "category": "hifz",
+      "question": "أكمل",
+      "prompt": {
+        "ayah": 2,
+        "words": 3
+      },
+      "options": [
+        {
+          "ayah": 5,
+          "word": 5
+        },
+        {
+          "ayah": 3,
+          "word": 5
+        },
+        {
+          "ayah": 2,
+          "word": 4
+        },
+        {
+          "ayah": 4,
+          "word": 5
+        }
+      ],
+      "answer": 2,
+      "review": "CHANGED: the old distractor \"nazala\" was hand-typed, not of this surah; it is replaced by al-uqad, a word of this surah.",
+      "id": "q9"
+    },
+    {
+      "category": "lessons",
+      "question": "متى كان النبي ﷺ يقرأ سورة الفلق؟",
+      "options": [
+        {
+          "text": "قبل الأكل"
+        },
+        {
+          "text": "قبل النوم"
+        },
+        {
+          "text": "قبل اللعب"
+        },
+        {
+          "text": "قبل الدراسة"
+        }
+      ],
+      "answer": 1,
+      "review": null,
+      "id": "q10"
+    }
+  ],
+  "lessons": [
+    {
+      "text": "الله يحمينا من كل الشرور إذا طلبنا منه",
+      "review": null
+    },
+    {
+      "text": "نقرأ سورة الفلق كل يوم لنحمي أنفسنا",
+      "review": null
+    },
+    {
+      "text": "الحسد شيء سيء ونطلب من الله أن يحمينا منه",
+      "review": null
+    },
+    {
+      "text": "نتوكل على الله في كل وقت",
+      "review": null
+    }
+  ],
+  "reflection": {
+    "question": "متى يمكننا قراءة سورة الفلق لنطلب حماية الله؟",
+    "ideas": [
+      "قبل النوم كل ليلة",
+      "في الصباح والمساء (أذكار الصباح والمساء)",
+      "عندما نشعر بالخوف",
+      "في أي وقت نريد حماية الله"
+    ],
+    "review": null
+  },
+  "didYouKnow": [
+    {
+      "text": "هل تعلم أن النبي ﷺ كان يقرأ سورة الفلق قبل النوم كل ليلة؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الفلق من المعوذات التي نطلب بها الحماية من الله؟",
+      "review": null
+    },
+    {
+      "text": "هل تعلم أن سورة الفلق نزلت في مكة المكرمة؟",
+      "review": "Whether Al-Falaq is Makki or Madani is disputed: the Madinah mushaf heads it Makki, but many scholars hold it is Madani (the report of Labid's sorcery against the Prophet is set in Madinah). Teacher to decide whether to keep this."
+    },
+    {
+      "text": "هل تعلم أن النبي ﷺ كان ينفث في يديه ويقرأ المعوذات ثم يمسح بهما جسده؟",
+      "review": null
+    }
+  ]
+}

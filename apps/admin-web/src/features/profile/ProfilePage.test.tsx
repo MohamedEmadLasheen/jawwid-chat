@@ -428,7 +428,11 @@ describe('the super admin master profile', () => {
     expect(within(panel).getByText(/Active staff without a reporting manager/)).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Admin B' })).toHaveAttribute('href', '/profile/admin_b')
     expect(within(panel).getByRole('link', { name: 'All accounts (read-only)' })).toHaveAttribute('href', '/admin/users')
-    expect(within(panel).getByText(/no management screen exists yet/)).toBeInTheDocument()
+    // PD-40 PR-5b: roles and permissions have a screen now -- the Accounts page's tabs.
+    expect(within(panel).queryByText(/no management screen exists yet/)).not.toBeInTheDocument()
+    expect(within(panel).getByText(/managed on the Accounts page, under the Staff accounts and Roles tabs/)).toBeInTheDocument()
+    expect(within(panel).getByRole('link', { name: 'Staff accounts' })).toHaveAttribute('href', '/accounts/staff')
+    expect(within(panel).getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/accounts/roles')
   })
 
   it('tabs are keyboard operable', async () => {

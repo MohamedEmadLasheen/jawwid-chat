@@ -103,6 +103,24 @@ export const CommEvent = {
    * For Core; no conversationId.
    */
   LESSON_MAKEUP_RESOLVED: 'lesson.makeup_resolved',
+  /**
+   * PD-35 B5, for PD-34 to deliver: an escalation case was opened (to its
+   * owner), assigned to someone else (to the new owner), or is due tomorrow.
+   * No conversationId and no title or body: a consumer reads the case.
+   */
+  CASE_OPENED: 'case.opened',
+  CASE_ASSIGNED: 'case.assigned',
+  CASE_DUE_SOON: 'case.due_soon',
+  /**
+   * PD-47: a task changed (created, commented, disputed, returned, reassigned,
+   * completed, removed, its due date). A refetch signal, not content: ids and
+   * the revision only. No conversationId.
+   * TODO(PD-47 PR-4): delivered by OutboxWorker to the assignee, the previous
+   * assignee and the responsible managers' actor rooms, beside #223's
+   * deliverCase; until then it falls to the worker's default branch and reaches
+   * no one.
+   */
+  TASK_CHANGED: 'task.changed',
   /** PD-11 T3, for Core: a learner changed teacher in Chat. */
   LEARNER_TRANSFERRED: 'learner.transferred',
   /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
@@ -385,6 +403,56 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_SUSPENDED]: TeacherSuspendedPayload;
   [CommEvent.MENTION_CREATED]: MentionCreatedPayload;
   [CommEvent.MENTION_UPDATED]: MentionUpdatedPayload;
+  [CommEvent.CASE_OPENED]: CaseOpenedPayload;
+  [CommEvent.CASE_ASSIGNED]: CaseAssignedPayload;
+  [CommEvent.CASE_DUE_SOON]: CaseDueSoonPayload;
+  [CommEvent.TASK_CHANGED]: TaskChangedPayload;
+}
+
+/** PD-47. A client drops a revision lower than one it has; it refetches through its own authorized route. */
+export interface TaskChangedPayload {
+  taskId: string;
+  revision: number;
+  change: 'created' | 'commented' | 'out_of_scope' | 'returned' | 'reassigned' | 'completed' | 'removed' | 'due_changed' | 'priority_changed' | 'source_withdrawn' | 'source_restored' | 'source_raised'
+    /** PD-47 PR-4: not a change of the row -- it passed its due date (TaskService.sweepOverdue, once per due date). */
+    | 'overdue';
+  /**
+   * PD-47 PR-4, written WITH the change (never read back later, when the task
+   * may have moved on): who did it (null: the system), and for a hand-on whom
+   * it left and whom it reached. Ids only.
+   */
+  actorId?: string | null;
+  fromAssignee?: string | null;
+  toAssignee?: string | null;
+  /** 'overdue': the due date it is overdue for (a task re-dated since is not). */
+  dueAt?: string | null;
+}
+
+/** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */
+export interface CaseOpenedPayload {
+  caseId: string;
+  organizationId: string;
+  targetDepartmentId: string;
+  ownerId: string | null;
+  openedBy: string;
+}
+
+export interface CaseAssignedPayload {
+  caseId: string;
+  organizationId: string;
+  ownerId: string | null;
+  previousOwnerId: string | null;
+  assignedBy: string;
+  /** When, so each assignment (back and forth too) is its own notification. */
+  assignedAt: string;
+}
+
+export interface CaseDueSoonPayload {
+  caseId: string;
+  organizationId: string;
+  ownerId: string | null;
+  /** YYYY-MM-DD, the academy's calendar. */
+  dueOn: string;
 }
 
 export interface LearnerTransferredPayload {

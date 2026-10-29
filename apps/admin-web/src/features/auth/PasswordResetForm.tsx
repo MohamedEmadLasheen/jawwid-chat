@@ -4,8 +4,8 @@ import { sessionApi } from '@/core/api/endpoints'
 import { ApiError } from '@/core/api/errors'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useCopy, type Pair } from '@/features/organization/copy'
+import { PASSWORD_MIN_LENGTH } from './passwordPolicy'
 
-const MIN_PASSWORD = 8
 
 export const R = {
   open: { en: 'Forgot your password? I have a reset code', ar: 'نسيت كلمة المرور؟ لديّ رمز إعادة تعيين' },
@@ -17,7 +17,7 @@ export const R = {
   code: { en: 'One-time code', ar: 'الرمز لمرة واحدة' },
   password: { en: 'New password', ar: 'كلمة المرور الجديدة' },
   confirm: { en: 'Repeat the new password', ar: 'أعد كتابة كلمة المرور الجديدة' },
-  tooShort: { en: 'At least 8 characters.', ar: '8 أحرف على الأقل.' },
+  tooShort: { en: `At least ${PASSWORD_MIN_LENGTH} characters.`, ar: `${PASSWORD_MIN_LENGTH} أحرف على الأقل.` },
   mismatch: { en: 'The two passwords differ.', ar: 'كلمتا المرور غير متطابقتين.' },
   submit: { en: 'Set password', ar: 'تعيين كلمة المرور' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
@@ -33,7 +33,10 @@ const BY_CODE: Record<string, Pair> = {
     en: 'This code is not valid, has expired or was already used. Ask your administrator for a new one.',
     ar: 'هذا الرمز غير صالح أو منتهي أو مستخدم من قبل. اطلب رمزًا جديدًا من المسؤول.',
   },
-  'AUTH.PASSWORD_TOO_WEAK': { en: 'Choose a password of at least 8 characters.', ar: 'اختر كلمة مرور من 8 أحرف على الأقل.' },
+  'AUTH.PASSWORD_TOO_WEAK': {
+    en: `Choose a password of at least ${PASSWORD_MIN_LENGTH} characters.`,
+    ar: `اختر كلمة مرور من ${PASSWORD_MIN_LENGTH} أحرف على الأقل.`,
+  },
   'COMMON.RATE_LIMITED': { en: 'Too many attempts. Try again in a few minutes.', ar: 'محاولات كثيرة. حاول مرة أخرى بعد دقائق.' },
 }
 
@@ -56,7 +59,7 @@ export function PasswordResetForm({ initialEmail, onDone, onBack }: { initialEma
     onSuccess: () => onDone(email.trim()),
   })
 
-  const problem = password.length < MIN_PASSWORD ? R.tooShort : password !== confirm ? R.mismatch : null
+  const problem = password.length < PASSWORD_MIN_LENGTH ? R.tooShort : password !== confirm ? R.mismatch : null
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()

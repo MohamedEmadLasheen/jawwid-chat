@@ -10,6 +10,7 @@ import type { IdentityService } from '../identity.service';
 import type { AuditService, Tx } from '../audit.service';
 import type { Actor } from '../types';
 import { AuthorizationService } from '../authorization.service';
+import { accountAdminStandingOf } from '../account-admin-standing';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthConfig, loadAuthConfig } from './auth.config';
 import {
@@ -191,14 +192,19 @@ export class AuthService {
    * email column; the subject is the login identifier).
    */
   async login(username: string, password: string, context: LoginContext = {}): Promise<TokenPair> {
-    const subject = username.trim();
-
-    const account = subject
-      ? await this.prisma.account.findUnique({
-          where: { subject },
-          include: { credential: true },
-        })
+    const typed = username.trim();
+    // Exactly as typed, else lower-cased: a teacher's sign-in is stored
+    // lower-cased (PD-43), and an older account with capitals keeps matching
+    // exactly. PasswordResetService.complete() applies the same rule.
+    const exact = typed
+      ? await this.prisma.account.findUnique({ where: { subject: typed }, include: { credential: true } })
       : null;
+    const lower = typed.toLowerCase();
+    const account =
+      exact || !typed || lower === typed
+        ? exact
+        : await this.prisma.account.findUnique({ where: { subject: lower }, include: { credential: true } });
+    const subject = account?.subject ?? typed;
 
     if (!account || !account.credential) {
       // Spend a real Argon2id verification so an unknown subject costs the same
@@ -583,6 +589,7 @@ export class AuthService {
       staff,
       { accountId: target.id, organizationId: target.organizationId, kind: target.kind },
       'impersonate',
+      await accountAdminStandingOf(this.prisma, staff),
     );
     if (!decision.allowed) return refuse('the administrator may no longer open this account');
     return { id: row.id, staffId: row.staffId, staffAccountId: row.staffAccountId };

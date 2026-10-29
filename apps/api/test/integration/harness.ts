@@ -48,8 +48,10 @@ export class PinnedCoverage implements CoverageService {
  */
 export function buildGraph(
   wrapIdentity: (inner: IdentityService) => IdentityService = (inner) => inner,
+  // PD-44: a suite that counts statements passes a client built with query
+  // events on; every service below then shares it, as they share this one.
+  prisma: PrismaService = new PrismaService(),
 ) {
-  const prisma = new PrismaService();
   const coverage = new PinnedCoverage();
   const identity = wrapIdentity(new PrismaIdentityService(prisma));
   const audit = new PrismaAuditService();
@@ -98,6 +100,21 @@ export function buildGraph(
   const stories = new StoryService(
     prisma, authz, storyAudience, outbox, config, identity, storage, audit, undefined, conversations,
   );
+  // PD-41: a story's media must be a stories/ key Stories granted to its author.
+  // Specs that make media stories from a synthetic key get the grant POST
+  // /stories/media would have recorded; a key Stories never issued (any other
+  // prefix, or already granted to someone) is left to be refused.
+  const createStory = stories.create.bind(stories);
+  stories.create = async (actorId, input) => {
+    const key = input.mediaObjectKey;
+    if (key && /^stories\/[^/]+$/.test(key)) {
+      await prisma.$executeRaw`
+        INSERT INTO chat.story_media_grant (object_key, organization_id, issued_to, mime_type, byte_size)
+        SELECT ${key}, s.organization_id, s.id, ${input.mediaMime ?? 'image/png'}, 1 FROM chat.staff s WHERE s.id = ${actorId}::uuid
+        ON CONFLICT (object_key) DO NOTHING`.catch(() => undefined);
+    }
+    return createStory(actorId, input);
+  };
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
   const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit);
 
@@ -232,9 +249,9 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
        ('${ids.otherAdminId}'::uuid, chat.default_organization_id(), '${ids.departmentId}'::uuid, 'supervisor')`,
   );
   await prisma.$executeRawUnsafe(
-    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id) values
-       ('${ids.learnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid),
-       ('${ids.secondLearnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid)`,
+    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by) values
+       ('${ids.learnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid, '${ids.managerId}'::uuid),
+       ('${ids.secondLearnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid, '${ids.managerId}'::uuid)`,
   );
   return ids;
 }
@@ -282,15 +299,21 @@ export async function supervise(
     org,
     departmentId,
   );
+  // Stands in for the Operations Manager's assignment, which these suites
+  // never name: the academy's own import gate (PD-42's assigner backstop).
   for (const learnerId of learnerIds) {
-    await prisma.$executeRawUnsafe(
-      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
-       values ($1::uuid, $2::uuid, $3::uuid)
-       on conflict (learner_id) do update set supervisor_id = excluded.supervisor_id`,
-      learnerId,
-      org,
-      supervisorId,
-    );
+    await prisma.$transaction([
+      prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision', 'on', true)`),
+      prisma.$executeRawUnsafe(`select set_config('chat.syncing_supervision_source', 'test harness: supervise()', true)`),
+      prisma.$executeRawUnsafe(
+        `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
+         values ($1::uuid, $2::uuid, $3::uuid)
+         on conflict (learner_id) do update set supervisor_id = excluded.supervisor_id`,
+        learnerId,
+        org,
+        supervisorId,
+      ),
+    ]);
   }
   return departmentId;
 }
@@ -478,6 +501,9 @@ export async function truncate(prisma: PrismaService): Promise<void> {
   try {
     await prisma.$transaction([
       prisma.$executeRawUnsafe(`set local lock_timeout = '60s'`),
+      // PD-47: chat.work_task and its history refuse TRUNCATE; the CASCADE from
+      // chat.staff reaches them, so the harness says it is the harness.
+      prisma.$executeRawUnsafe(`select set_config('chat.test_truncate', 'on', true)`),
       prisma.$executeRawUnsafe(sql),
     ]);
   } catch (e) {

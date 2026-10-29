@@ -1,10 +1,11 @@
 import { useId, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
+import { Field } from '@/shared/components/Field'
 import type { NewEntry, TeacherFile } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
-import { useAddEntryFor, useTeacherList, useUpdatePersonal } from './hooks'
+import { useAddEntryFor, useSupervisionDirectory, useUpdatePersonal } from './hooks'
 
 export function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
   const tx = useCopy()
@@ -24,60 +25,6 @@ function ServerError({ error }: { error: unknown }) {
   return (
     <div className="banner banner--danger" role="alert">
       {describeError(error, locale)}
-    </div>
-  )
-}
-
-export function Field({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  multiline = false,
-  error,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  type?: 'text' | 'tel' | 'email' | 'date' | 'month' | 'number'
-  multiline?: boolean
-  error?: string | null
-}) {
-  const id = useId()
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      {multiline ? (
-        <textarea
-          id={id}
-          className="input tf-textarea"
-          value={value}
-          dir="auto"
-          rows={4}
-          maxLength={4000}
-          onChange={(e) => onChange(e.target.value)}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-err` : undefined}
-        />
-      ) : (
-        <input
-          id={id}
-          className="input"
-          type={type}
-          value={value}
-          dir={type === 'text' ? 'auto' : 'ltr'}
-          onChange={(e) => onChange(e.target.value)}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-err` : undefined}
-        />
-      )}
-      {error && (
-        <span id={`${id}-err`} className="field__error">
-          {error}
-        </span>
-      )}
     </div>
   )
 }
@@ -164,11 +111,14 @@ export function AddEntryDialog({
   const teacherFieldId = useId()
   const sourceId = useId()
   const handlerId = useId()
+  const chatId = useId()
   // The supervisors a complaint may be handed to, and the teachers to choose from.
-  const directory = useTeacherList(intent.kind === 'complaint' || teacherId === null)
+  // PD-26 amendment: the page's directory -- the caller's teachers and who may handle a complaint.
+  const directory = useSupervisionDirectory(intent.kind === 'complaint' || teacherId === null)
   const [chosen, setChosen] = useState(teacherId ?? '')
   const [source, setSource] = useState<'' | 'management' | 'parent'>(intent.kind === 'complaint' ? (intent.source ?? '') : '')
   const [handler, setHandler] = useState('')
+  const [chat, setChat] = useState('')
   const [body, setBody] = useState('')
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [day, setDay] = useState('')
@@ -187,9 +137,14 @@ export function AddEntryDialog({
             ? tx(T.addDayOff)
             : tx(T.cancelTitle, { date: cal.day(intent.date) })
 
+  // PD-26 amendment: about a teacher the caller reaches only through Operations, a
+  // parent's complaint names the family chat it came from (the server requires it).
+  const needsChat =
+    intent.kind === 'complaint' && source === 'parent' && directory.data?.teachers.find((t) => t.id === chosen)?.operationsOnly === true
   const missing = {
     teacher: !chosen,
     source: intent.kind === 'complaint' && !source,
+    chat: needsChat && !chat,
     body: !body.trim(),
     month: intent.kind === 'monthly_comment' && !/^\d{4}-\d{2}$/.test(month),
     day: intent.kind === 'day_off' && !/^\d{4}-\d{2}-\d{2}$/.test(day),
@@ -199,7 +154,13 @@ export function AddEntryDialog({
     const text = body.trim()
     switch (intent.kind) {
       case 'complaint':
-        return { kind: 'complaint', body: text, source: source || 'management', ...(handler ? { handledBy: handler } : {}) }
+        return {
+          kind: 'complaint',
+          body: text,
+          source: source || 'management',
+          ...(handler ? { handledBy: handler } : {}),
+          ...(needsChat && chat ? { sourceConversationId: chat } : {}),
+        }
       case 'complaint_followup':
         return { kind: 'complaint_followup', body: text, refersTo: intent.refersTo }
       case 'monthly_comment':
@@ -270,6 +231,22 @@ export function AddEntryDialog({
             </select>
             {touched && missing.source && <span className="field__error">{tx(T.required)}</span>}
           </div>
+          {needsChat && (
+            <div className="field">
+              <label className="field__label" htmlFor={chatId}>
+                {tx(T.familyChat)}
+              </label>
+              <select id={chatId} className="input" value={chat} onChange={(e) => setChat(e.target.value)}>
+                <option value="">{tx(T.chooseFamilyChat)}</option>
+                {(directory.data?.familyChats ?? []).map((c) => (
+                  <option key={c.conversationId} value={c.conversationId}>
+                    {c.learnerName}
+                  </option>
+                ))}
+              </select>
+              {touched && missing.chat && <span className="field__error">{tx(T.required)}</span>}
+            </div>
+          )}
           <div className="field">
             <label className="field__label" htmlFor={handlerId}>
               {tx(T.handler)}

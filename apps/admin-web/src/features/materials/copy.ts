@@ -64,6 +64,8 @@ export const M = {
   emptyLibrary: { en: 'The library is empty. Add an item or import a manifest.', ar: 'المكتبة فارغة. أضف مادة أو استورد قائمة.' },
   edit: { en: 'Edit', ar: 'تعديل' },
   preview: { en: 'Preview', ar: 'معاينة' },
+  backToLibrary: { en: 'Back to the library', ar: 'العودة إلى المكتبة' },
+  fullScreen: { en: 'Full screen', ar: 'ملء الشاشة' },
   publish: { en: 'Publish', ar: 'نشر' },
   retire: { en: 'Retire', ar: 'إيقاف' },
   restoreDraft: { en: 'Back to draft', ar: 'إرجاع إلى مسودة' },

@@ -48,7 +48,7 @@ let m: SeedManifest;
 let orgId: string;
 
 /** A child, their teacher and parent, and the group a certificate is delivered into. */
-let fam: { groupId: string; parent: string; childId: string; teacher: string; teacherId: string };
+let fam: { groupId: string; parent: string; childId: string; teacher: string; teacherId: string; supervisor: string };
 
 const tokens = new Map<string, string>();
 async function tokenFor(subject: string): Promise<string> {
@@ -96,8 +96,10 @@ beforeAll(async () => {
   for (const f of m.families) {
     for (const gr of f.groups) {
       const child = f.children.find((c) => gr.learnerIds.includes(c.id) && gr.teacherIds.includes(c.teacherId));
-      if (child && !fam) {
+      const supervisor = [...m.supervisors, ...m.backups].find((p) => p.id === child?.supervisorId);
+      if (child && supervisor && !fam) {
         fam = {
+          supervisor: supervisor.subject,
           groupId: gr.conversationId,
           parent: f.parent.subject,
           childId: child.id,
@@ -142,61 +144,85 @@ describe('PD-12 S1 over HTTP', () => {
       ['GET', '/teacher-leave-requests'],
       ['GET', '/learner-certificates'],
       ['POST', '/learner-certificates'],
+      ['GET', '/certificates'],
+      ['POST', '/certificates'],
+      ['POST', `/certificates/${randomUUID()}/send`],
       ['POST', '/supervision-conversations/ensure-all'],
     ]) {
       expect({ path, status: (await http(null, method, path)).status }).toEqual({ path, status: 401 });
     }
   });
 
-  it('a certificate: requested privately, uploaded through the storage route, delivered to the family with its file', async () => {
+  it('a certificate: suggested privately, accepted by the supervisor, designed, approved, delivered to the family with its file', async () => {
     const tsup = m.teacherSupervisors[0].subject;
-    const requested = await http(fam.teacher, 'POST', '/learner-certificates', {
+    const suggested = await http(fam.teacher, 'POST', '/learner-certificates', {
       learnerId: fam.childId,
       title: 'Juz Amma',
       achievement: 'Memorized Juz Amma',
       achievedOn: '2026-10-01',
       printedName: 'QA Child',
     });
-    expect(requested.status).toBe(201);
-    const certId = (requested.json.certificate as { id: string }).id;
-    const supervisionId = requested.json.conversationId as string;
+    expect(suggested.status).toBe(201);
+    expect((suggested.json.certificate as { state: string }).state).toBe('proposed');
+    const certId = (suggested.json.certificate as { id: string }).id;
+    const supervisionId = suggested.json.conversationId as string;
 
     // PD-11's route opens the SAME one-per-teacher conversation (reconciled 2026-10-19).
     const viaLessons = await http(tsup, 'GET', `/teachers/${fam.teacherId}/supervision-chat`);
     expect(viaLessons.status).toBe(200);
     expect(viaLessons.json.conversationId).toBe(supervisionId);
 
-    // The request is private: the teacher reads it in the supervision chat; the parent cannot open that chat.
-    const privatePage = await http(fam.teacher, 'GET', `/conversations/${supervisionId}/messages`);
-    expect(privatePage.status).toBe(200);
-    // (403 like any conversation of the same academy one is not in; another tenant's would read 404.)
+    // The suggestion is private: the teacher reads it in the supervision chat; the parent cannot open that chat.
+    expect((await http(fam.teacher, 'GET', `/conversations/${supervisionId}/messages`)).status).toBe(200);
     expect((await http(fam.parent, 'GET', `/conversations/${supervisionId}/messages`)).code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
-    // ...and Operations cannot see the queue.
-    expect((await http(m.supervisors[0].subject, 'GET', '/learner-certificates')).code).toBe(CommErrorCode.CERTIFICATE_DENIED);
 
-    const bytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(100, 0x20)]);
-    const grant = await http(tsup, 'POST', `/learner-certificates/${certId}/upload`, { mimeType: 'application/pdf', byteSize: bytes.length });
+    // The super admin keeps the types (this academy was made after the migration seeded its list).
+    const type = await http(`owner@${DOMAIN}`, 'POST', '/certificates/types', { category: 'student', key: 'juz_completed', labelEn: "Juz' completed", labelAr: 'إتمام جزء', needsJuz: true });
+    expect(type.status).toBe(201);
+    const typeId = (type.json.type as { id: string }).id;
+    // ...and nobody else does.
+    expect((await http(fam.supervisor, 'POST', '/certificates/types', { category: 'student', key: 'x_type', labelEn: 'x', labelAr: 'x' })).code).toBe(CommErrorCode.CERTIFICATE_DENIED);
+
+    // The learner's Operations supervisor decides the suggestion (owner safeguard 5).
+    expect((await http(tsup, 'POST', `/certificates/${certId}/accept`, { typeId, juz: 30 })).status).toBe(404);
+    const accepted = await http(fam.supervisor, 'POST', `/certificates/${certId}/accept`, { typeId, juz: 30, publishStory: false });
+    expect(accepted.status).toBe(201);
+    expect((accepted.json.certificate as { state: string }).state).toBe('requested');
+
+    // The Teachers department designs it (PD-12's issuers, until a Designer exists).
+    expect((await http(tsup, 'POST', `/certificates/${certId}/start`)).status).toBe(201);
+    const bytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(100, 0x20), Buffer.from('\n%%EOF\n')]);
+    const grant = await http(tsup, 'POST', `/certificates/${certId}/files/upload`, { mimeType: 'application/pdf', byteSize: bytes.length });
     expect(grant.status).toBe(201);
-    expect(grant.json.conversationId).toBe(fam.groupId);
     const upload = grant.json.upload as { uploadUrl: string; objectKey: string; headers: Record<string, string> };
+    expect(upload.objectKey.startsWith('certificate-uploads/')).toBe(true);
     // The signed URL names this process's storage route; send it to the port under test.
     const route = upload.uploadUrl.slice(upload.uploadUrl.indexOf('/storage/'));
-    // The bearer: on this line the local storage route is still behind the global guard
-    // (its @Public fix is on another branch); in production the PUT goes to S3.
     const put = await fetch(`${base}${route}`, {
       method: 'PUT',
       headers: { ...upload.headers, authorization: `Bearer ${await tokenFor(tsup)}` },
       body: bytes,
     });
     expect(put.status).toBe(201);
+    const confirmed = await http(tsup, 'POST', `/certificates/${certId}/files`, { objectKey: upload.objectKey, fileName: 'certificate.pdf' });
+    expect(confirmed.status).toBe(201);
+    const fileId = ((confirmed.json.certificate as { currentFile: { id: string } }).currentFile).id;
 
-    const issued = await http(tsup, 'POST', `/learner-certificates/${certId}/issue`, {
-      objectKey: upload.objectKey,
-      mimeType: 'application/pdf',
-      byteSize: bytes.length,
-      fileName: 'certificate.pdf',
-    });
-    expect(issued.status).toBe(201);
+    // Nothing reaches the family before the requester approves (owner safeguard 1).
+    const early = await http(fam.supervisor, 'GET', `/certificates/${certId}/delivery`);
+    expect(early.status).toBe(200);
+    const target = (early.json.target as { conversationId: string }).conversationId;
+    expect(target).toBe(fam.groupId);
+    expect((await http(fam.supervisor, 'POST', `/certificates/${certId}/send`, { conversationId: target })).code).toBe(CommErrorCode.CERTIFICATE_NOT_APPROVED);
+    // The designer sees the job, never the approval.
+    expect((await http(tsup, 'POST', `/certificates/${certId}/approve`, { fileId })).code).toBe(CommErrorCode.CERTIFICATE_DENIED);
+
+    expect((await http(fam.supervisor, 'POST', `/certificates/${certId}/approve`, { fileId })).status).toBe(201);
+    const sent = await http(fam.supervisor, 'POST', `/certificates/${certId}/send`, { conversationId: target });
+    expect(sent.status).toBe(201);
+    expect((sent.json.certificate as { state: string }).state).toBe('sent');
+    // A second press sends nothing more.
+    expect((await http(fam.supervisor, 'POST', `/certificates/${certId}/send`, { conversationId: target })).json.replayed).toBe(true);
 
     const page = await http(fam.parent, 'GET', `/conversations/${fam.groupId}/messages`);
     expect(page.status).toBe(200);
@@ -212,6 +238,17 @@ describe('PD-12 S1 over HTTP', () => {
     expect(progress.json.certificates).toEqual([
       expect.objectContaining({ id: certId, title: 'Juz Amma', achievedOn: '2026-10-01', conversationId: fam.groupId }),
     ]);
+
+    // The whole life is in the history.
+    const read = await http(fam.supervisor, 'GET', `/certificates/${certId}`);
+    expect(((read.json.certificate as { history: Array<{ kind: string }> }).history).map((h) => h.kind)).toEqual([
+      'proposed',
+      'accepted',
+      'started',
+      'file_uploaded',
+      'approved',
+      'sent',
+    ]);
   });
 
   it('leave: the teacher requests, the department approves, the teacher reads the computed balance', async () => {
@@ -224,7 +261,9 @@ describe('PD-12 S1 over HTTP', () => {
     expect(requested.status).toBe(201);
     const requestId = (requested.json.request as { id: string }).id;
 
-    expect((await http(m.supervisors[0].subject, 'GET', '/teacher-leave-requests')).code).toBe(CommErrorCode.LEAVE_DENIED);
+    // PD-26 amendment: Operations decides the leave of their families' teachers;
+    // anyone outside both departments (here Sales) is still refused.
+    expect((await http(m.salesManager.subject, 'GET', '/teacher-leave-requests')).code).toBe(CommErrorCode.LEAVE_DENIED);
     expect((await http(fam.teacher, 'GET', '/teacher-leave-requests')).code).toBe(CommErrorCode.LEAVE_DENIED);
     const queue = await http(tsup, 'GET', '/teacher-leave-requests?state=requested');
     expect((queue.json.requests as Array<{ id: string }>).map((r) => r.id)).toContain(requestId);

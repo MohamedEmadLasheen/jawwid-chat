@@ -1,3 +1,4 @@
+import { PARENT_NOTICES, acknowledgeParentNotice } from '../../lesson-audio/parent-notices';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
@@ -5,6 +6,7 @@ import { AUDIT_SERVICE } from '../tokens';
 import type { AuditService } from '../audit.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { hashPassword } from './password';
+import { isPasswordLengthAcceptable } from './password-policy';
 import { subjectHash } from './subject-hash';
 
 /** Wrong tries before a code is spent and a new one must be asked for. */
@@ -18,8 +20,6 @@ const CODES_PER_HOUR = 5;
 export const SIGNUP_WRONG_CODES_PER_DAY = 10;
 const WRONG_CODES_KEY = 'signup.wrong_codes_per_day';
 const DAY_MS = 24 * 3_600_000;
-const MIN_PASSWORD = 8;
-const MAX_PASSWORD = 128;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
@@ -106,10 +106,10 @@ export class ParentSignupService {
    * rest are refused as locked. Nothing is checked outside the lock and acted
    * on inside it.
    */
-  async verify(rawEmail: string, rawCode: string, password: string): Promise<{ ok: true }> {
+  async verify(rawEmail: string, rawCode: string, password: string, lessonAudioNotice: number | null = null): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
     const code = rawCode.trim();
-    if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+    if (!isPasswordLengthAcceptable(password)) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
     // Hashed for every attempt, before anything is looked up: as costly for an
@@ -148,6 +148,12 @@ export class ParentSignupService {
       });
       if (spent.count !== 1) return 'invalid' as const;
       await tx.accountCredential.create({ data: { accountId: account.id, passwordHash } });
+      // PD-48: the sign-up acknowledgement of the lesson-audio notice is the SAME
+      // record the next-sign-in prompt looks for, so a new parent is never asked again.
+      // Only the current version counts; an older app's tick records nothing.
+      if (lessonAudioNotice === PARENT_NOTICES.lesson_audio) {
+        await acknowledgeParentNotice(tx, account.contactId, 'lesson_audio', PARENT_NOTICES.lesson_audio);
+      }
       // The parent is not staff (audit_log.actor_id names staff): no actor, the account as entity.
       await this.audit.audit(tx, {
         actorId: null,

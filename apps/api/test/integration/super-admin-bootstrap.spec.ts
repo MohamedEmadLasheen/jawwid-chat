@@ -1,3 +1,4 @@
+import { ACCESS_ROLE_TEMPLATES } from '@platform/permissions/role-templates';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@platform/prisma.service';
 import { PrismaIdentityService } from '@platform/identity.service';
@@ -197,6 +198,37 @@ describe('super admin bootstrap against Postgres', () => {
         code: AuthErrorCode.INVALID_CREDENTIALS,
       });
       await expect(auth.login(email, 'a-different-password-2')).resolves.toBeDefined();
+    });
+
+    it('PD-40: gives its organization the template roles, once (review of #231)', async () => {
+      const org = '00000000-0000-0000-0000-000000000001';
+      // Every template there is (PD-49 added scholar_reviewer beside the designer).
+      const keys = ACCESS_ROLE_TEMPLATES.map((t) => `'${t.key}'`).join(', ');
+      const all = ACCESS_ROLE_TEMPLATES.map((t) => ({ key: t.key, is_template: true })).sort((a, b) => a.key.localeCompare(b.key));
+      const templates = () =>
+        prisma.$queryRawUnsafe<{ key: string; is_template: boolean }[]>(
+          `select key, is_template from chat.access_role where organization_id = '${org}'::uuid and key in (${keys}) order by key`,
+        );
+      // Start from an organization without them, whatever earlier specs left.
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`select set_config('chat.pd040_access_change', 'on', true)`);
+        const roles = `select id from chat.access_role where organization_id = '${org}'::uuid and key in (${keys})`;
+        await tx.$executeRawUnsafe(`delete from chat.staff_access_role where role_id in (${roles})`);
+        await tx.$executeRawUnsafe(`delete from chat.access_role_permission where role_id in (${roles})`);
+        await tx.$executeRawUnsafe(`delete from chat.access_role where id in (${roles})`);
+      });
+      expect(await templates()).toEqual([]);
+
+      const dry = await bootstrapSuperAdmin(prisma, { email, password: PASSWORD, displayName: 'owner_o', dryRun: true });
+      expect(dry.templatesSeeded).toBe(0);
+      expect(await templates()).toEqual([]);
+
+      const first = await bootstrapSuperAdmin(prisma, { email, password: PASSWORD, displayName: 'owner_o' });
+      expect(first.templatesSeeded).toBe(ACCESS_ROLE_TEMPLATES.length);
+      expect(await templates()).toEqual(all);
+      const again = await bootstrapSuperAdmin(prisma, { email, password: PASSWORD, displayName: 'owner_o' });
+      expect(again.templatesSeeded).toBe(0);
+      expect(await templates()).toEqual(all);
     });
 
     it('a dry run writes nothing', async () => {

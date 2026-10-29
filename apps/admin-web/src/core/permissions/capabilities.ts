@@ -9,21 +9,18 @@
  * Two consequences we hold ourselves to:
  *   1. Nothing here ever *grants* access. If the server says no, the answer is
  *      no, and the UI shows the server's message and refreshes.
- *   2. Per-family decisions are NOT made here. They come from the server in
- *      `FamilyDetail.capabilities`, because only the server can evaluate
- *      on_duty(family, now), stickiness, assist eligibility and owner_locked.
+ *   2. Per-family decisions are NOT made here. Only the server can evaluate
+ *      on_duty(family, now), stickiness, assist eligibility and owner_locked,
+ *      so each page takes them from the server's answer.
  *
  * This file therefore only answers coarse, role-level questions used for
  * navigation and page-level routing.
  */
-import type { StaffRole } from '@/shared/types/domain'
+import type { Staff, StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
   | 'chat'
-  | 'inbox'
-  | 'families'
   | 'tasks'
-  | 'coverage'
   | 'dashboard'
   | 'stories'
   | 'organization'
@@ -37,6 +34,9 @@ export type NavArea =
   | 'accounts'
   | 'materials'
   | 'schedule'
+  | 'cases'
+  | 'certificates'
+  | 'lesson-audio'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -74,19 +74,23 @@ export function visibleAreas(role: StaffRole): NavArea[] {
   if (isSuperAdmin(role)) {
     // `teachers` stays routable for the super admin; it is offered as the
     // Admin Portal's Reports section rather than as an operator area.
-    // `instalments` and `trials` likewise: offered as Admin Portal sections.
+    // `instalments` likewise: offered as an Admin Portal section.
+    // `trials` (PD-11 T4, PD-16) is offered under People beside the Admin Portal's sections.
     // `chat` is the real conversation workspace: offered beside the read-only
     // Conversations section, so the super admin can reply (PD-8).
     // `calls` stays routable too (a call link lands on /calls/join/:id); the
     // page itself is offered as the Admin Portal's Calls section.
-    // `teacher-profiles` (the teacher certificate review queue) is routable
-    // too: the server admits the super admin as a reviewer.
+    // `teacher-profiles` (the teacher certificate review queue) is offered
+    // under People as Teacher credentials review: the server admits the super
+    // admin as a reviewer.
     // `parents` (PD-17) likewise: offered as the Admin Portal's Parents section.
     // `accounts` (PD-21) is offered beside the read-only Users section.
     // `payments` (PD-27) likewise: offered as the Admin Portal's Payments section.
     // `materials` (PD-29) is offered under More beside the Admin Portal's sections.
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'settings']
+    // `certificates` (PD-41) is offered under People: the page and its types.
+    // `lesson-audio` (PD-48): the voice-over review page, under More.
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -98,7 +102,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-29: the Materials library -- offered only when the server confirms
     // the Teachers manager (see SERVER_CONFIRMED_AREAS).
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
-    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'settings']
+    // PD-41: the Certificates page -- offered when GET /certificates/access opens it.
+    // PD-48: Lesson audio -- offered when GET /lesson-audio/access opens it (the Teachers manager).
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -115,7 +121,14 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // teacher-profiles is here for the same reason stories is: admin and
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
-    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts']
+    // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
+    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio']
+  }
+  if (role === 'specialist') {
+    // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
+    // tasks given to them, as every staff member has; PD-48: the Pronunciation
+    // reviewer -- the Lesson audio page, on the server's word.
+    return ['certificates', 'tasks', 'lesson-audio']
   }
   if (isDepartment(role)) {
     // Departments get tasks — they may not open family records — and, PD-21
@@ -125,17 +138,21 @@ export function visibleAreas(role: StaffRole): NavArea[] {
   return []
 }
 
+/**
+ * PD-40: does GET /me report one of these permission keys? The page-level gate
+ * for pages that are a permission's, not a role's (Staff accounts, Roles). It
+ * fails closed: no keys reported (an API older than PD-40) is no page. The
+ * super admin holds every key (chat.staff_access_profile). UX only.
+ */
+export function holdsAny(staff: Pick<Staff, 'role' | 'permissions'> | null | undefined, keys: readonly string[]): boolean {
+  if (!staff) return false
+  if (isSuperAdmin(staff.role)) return true
+  return keys.some((key) => staff.permissions?.includes(key) === true)
+}
+
 export function canOpenArea(role: StaffRole, area: NavArea): boolean {
   return visibleAreas(role).includes(area)
 }
-
-/**
- * Areas that stay ROUTABLE (old links, bookmarks) but are not OFFERED in any
- * navigation. The legacy Inbox calls `/inbox` and `/families/*`, which no API
- * on any current branch serves, so presenting it as a destination would offer
- * a page that cannot load. The working conversation interface is `/chat`.
- */
-export const UNLISTED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['inbox'])
 
 /**
  * Areas offered only when the server confirms a fact the role alone does not
@@ -159,6 +176,16 @@ export interface DepartmentAccess {
   materialsManager?: boolean
   /** PD-38: GET /lessons/access -- the Teachers department, Operations and the super admin open the schedule. */
   calendar?: boolean
+  /**
+   * PD-26 amendment (owner 2026-10-27): GET /lessons/access -- the Teacher
+   * Supervision page, for the Teachers department, the super admin and an
+   * Operations supervisor (the teachers of their families).
+   */
+  supervisionPage?: boolean
+  /** PD-41: GET /certificates/access -- the account holds a certificates key. */
+  certificates?: boolean
+  /** PD-48: GET /lesson-audio/access -- the account holds lesson_audio.view or .review. */
+  lessonAudio?: boolean
 }
 
 /**
@@ -167,7 +194,8 @@ export interface DepartmentAccess {
  * department (the teachers' trials) and Operations (new students).
  */
 const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => boolean>> = {
-  teachers: (a) => a.lessonManager === true,
+  // The Teachers department's area; Operations is offered its Supervision page only (PD-26 amendment).
+  teachers: (a) => a.lessonManager === true || a.supervisionPage === true,
   trials: (a) => a.lessonManager === true || a.sales === true || a.operations === true,
   instalments: (a) => a.billingReader === true,
   // PD-17: the Parent Profile follows the same rule as the money on it.
@@ -178,16 +206,19 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   materials: (a) => a.materialsManager === true,
   // PD-38: the scheduling calendar.
   schedule: (a) => a.calendar === true,
+  // PD-41: the Certificates page, for whoever holds a certificates key.
+  certificates: (a) => a.certificates === true,
+  // PD-48: the Lesson audio review page, for whoever may listen.
+  'lesson-audio': (a) => a.lessonAudio === true,
 }
 
-/** What navigation shows: the areas this role may open, minus the unlisted ones and those the server has not confirmed. */
+/** What navigation shows: the areas this role may open, minus those the server has not confirmed. */
 export function navAreas(role: StaffRole, opts: DepartmentAccess = {}): NavArea[] {
-  return visibleAreas(role).filter((area) => !UNLISTED_AREAS.has(area) && (SERVER_CONFIRMED_AREAS[area]?.(opts) ?? true))
+  return visibleAreas(role).filter((area) => SERVER_CONFIRMED_AREAS[area]?.(opts) ?? true)
 }
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
 export const managerOnly = {
-  editCoverageConfig: isManager,
   editConfigWeights: isManager,
   readAuditLog: isManager,
   activateBackup: isManager,
@@ -195,26 +226,3 @@ export const managerOnly = {
   viewUnattended: isManager,
 } as const
 
-/**
- * Ownership and offboarding -- the approved policy (DB: 20261014110000, API:
- * AuthorizationService.canAssignFamilies / canTransferStaffFamilies /
- * canDeactivateStaff). Separate actions, separate rules; the database refuses
- * anything else whatever this says.
- */
-export const ownershipActions = {
-  /** families.assign: transfer or assign a family's owner. */
-  transferOwnership: (role: StaffRole) => isManager(role) || isSuperAdmin(role),
-  /** Offboarding, part 1: move a staff member's families. */
-  moveStaffFamilies: (role: StaffRole) => isManager(role) || isSuperAdmin(role),
-  /** Offboarding, part 2: deactivate the account (users.manage). */
-  deactivateStaff: isSuperAdmin,
-  /** Both parts in one transaction, so it needs both authorities. */
-  offboardStaff: isSuperAdmin,
-} as const
-
-/** The task scope a role should request from the API. */
-export function taskScopeFor(role: StaffRole): 'mine' | 'team' | 'department' {
-  if (isManager(role) || isSuperAdmin(role)) return 'team'
-  if (isDepartment(role)) return 'department'
-  return 'mine'
-}

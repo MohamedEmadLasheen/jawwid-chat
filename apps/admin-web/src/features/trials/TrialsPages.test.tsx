@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
+import { destinationsFor, entriesOf } from '@/app/navigation'
 import type { NewStudentDto, TrialDto, TrialGroupContextDto } from './api'
 import { TrialCardDialog, TrialGroupBar } from './TrialCardDialog'
 
@@ -182,6 +183,37 @@ describe('Trial lessons, as Sales', () => {
     )
   })
 
+  it('PD-43: the assigned-teacher select says which teachers are still being set up; any may be chosen', async () => {
+    access({ sales: true })
+    on('GET', /\/trials\/teachers$/, () =>
+      json({
+        teachers: [
+          { id: 't-1', name: 'Teacher One', readiness: { setupIncomplete: false, notSignedIn: false, noSupervisor: false, loginSuspended: false } },
+          { id: 't-2', name: 'Teacher Two', readiness: { setupIncomplete: true, notSignedIn: false, noSupervisor: true, loginSuspended: false } },
+          { id: 't-3', name: 'Teacher Three', readiness: { setupIncomplete: true, notSignedIn: false, noSupervisor: false, loginSuspended: false } },
+        ],
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
+    const child = within(dialog).getByRole('group', { name: 'Child 1' })
+    const select = within(child).getByLabelText('Assigned teacher')
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(4))
+    expect(within(select).getByRole('option', { name: 'Teacher One' })).toBeInTheDocument()
+    expect(within(select).getByRole('option', { name: 'Teacher Two — Setup incomplete · No supervisor' })).toBeInTheDocument()
+    await userEvent.selectOptions(select, 't-2')
+    expect(select).toHaveValue('t-2')
+    expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
+    // No supervisor: who covers them (plan §3.7).
+    expect(within(child).getByText('The Teachers Manager covers this teacher until a supervisor is set.')).toBeInTheDocument()
+    await userEvent.selectOptions(select, 't-3')
+    expect(within(child).getByText('This teacher’s set-up is not finished. Students are allowed; this is a warning.')).toBeInTheDocument()
+    expect(within(child).queryByText('The Teachers Manager covers this teacher until a supervisor is set.')).not.toBeInTheDocument()
+  })
+
   it('corrects an outcome, saying why', async () => {
     access({ sales: true })
     on('POST', /\/trials\/tr-sub\/correction$/, () => json(trial('tr-sub', { outcome: 'no_show' }), 201))
@@ -346,6 +378,33 @@ describe('Trial lessons, as Operations (the trial desk)', () => {
     expect(within(dialog).getByRole('button', { name: /Why didn't the student subscribe/ })).toBeEnabled()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     expect(within((await screen.findByText('Prospect Gamma')).closest('tr')!).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
+  })
+})
+
+describe('Trials & new students, as the super admin', () => {
+  // The server admits the super admin to both pages (GET /lessons/access
+  // answers sales and operations; trials.view/manage), and the area is
+  // routable for it -- so the Admin Portal must link it, under People & teams.
+  const superAdmin = makeStaff({ id: 'staff_super', name: 'Synthetic owner', role: 'super_admin' })
+
+  it('is linked from the Admin Portal\'s People & teams, and both tabs open', async () => {
+    const listed = destinationsFor('super_admin', {}).find((d) => d.key === 'people')!
+    expect(entriesOf(listed).map((e) => e.path)).toContain('/trials')
+
+    access({ sales: true, operations: true })
+    on('GET', /\/trials\/new-students$/, () => json({ students: [] }))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations' })
+    const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
+    const people = within(nav).getByRole('group', { name: 'People & teams' })
+    const link = within(people).getByRole('link', { name: 'Trials & new students' })
+    expect(link).toHaveAttribute('href', '/trials')
+    await userEvent.click(link)
+
+    const tabs = await screen.findByRole('navigation', { name: 'Trials' })
+    expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Trial lessons', 'New students'])
+    await userEvent.click(within(tabs).getByRole('link', { name: 'New students' }))
+    await waitFor(() => expect(sent('GET', /\/trials\/new-students$/)).toHaveLength(1))
+    expect(document.querySelector('.state--forbidden')).toBeNull()
   })
 })
 

@@ -1,0 +1,623 @@
+{
+  "comment": "The one letter rule, as cases. Run by letters.test.ts AND scripts/lessons/check-arabic-lesson.py selftest, so the browser and CI agree. Only marks are removed; no letter is folded into another. Tricky inputs are given as code points (cps) so no editor can normalise them.",
+  "units": {
+    "alif": [
+      "ا"
+    ],
+    "hamza": [
+      "ء",
+      "أ",
+      "إ",
+      "ؤ",
+      "ئ"
+    ],
+    "lam-alif": [
+      "لا"
+    ],
+    "ba": [
+      "ب"
+    ],
+    "ya": [
+      "ي"
+    ],
+    "alif-maqsura": [
+      "ى"
+    ],
+    "wasla": [
+      "ٱ"
+    ],
+    "ta_marbuta": [
+      "ة"
+    ],
+    "ha": [
+      "ه"
+    ]
+  },
+  "cases": [
+    {
+      "word": "أَسَدْ",
+      "unit": "alif",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "أَسَدْ",
+      "unit": "hamza",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "إِبْرَةْ",
+      "unit": "alif",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "آدَمْ",
+      "unit": "alif",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "آدَمْ",
+      "unit": "hamza",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "كِتَابْ",
+      "unit": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "عَصَا",
+      "unit": "alif",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "هٰذَا",
+      "unit": "alif",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "رَأْسْ",
+      "unit": "hamza",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "رَأْسْ",
+      "unit": "alif",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "سُؤَالْ",
+      "unit": "hamza",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "بِئْرْ",
+      "unit": "hamza",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "جُزْءْ",
+      "unit": "hamza",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "سَمَاءْ",
+      "unit": "hamza",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "سَمَاءْ",
+      "unit": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "لَاعِبْ",
+      "unit": "lam-alif",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "لَاعِبْ",
+      "unit": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "بَابْ",
+      "unit": "ba",
+      "has": true,
+      "positions": [
+        "start",
+        "end"
+      ]
+    },
+    {
+      "word": "مُوسَى",
+      "unit": "ya",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "مُوسَى",
+      "unit": "alif-maqsura",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "ٱلْكِتَابْ",
+      "unit": "alif",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "ٱلْكِتَابْ",
+      "unit": "wasla",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "مَدْرَسَةْ",
+      "unit": "ta_marbuta",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "مَدْرَسَةْ",
+      "unit": "ha",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "هُدًى",
+      "unit": "alif-maqsura",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "هُدًى",
+      "unit": "ya",
+      "has": false,
+      "positions": []
+    }
+  ],
+  "marks": [
+    {
+      "cp": 1611,
+      "isMark": true,
+      "note": "fathatan"
+    },
+    {
+      "cp": 1615,
+      "isMark": true,
+      "note": "damma"
+    },
+    {
+      "cp": 1617,
+      "isMark": true,
+      "note": "shadda"
+    },
+    {
+      "cp": 1618,
+      "isMark": true,
+      "note": "sukun"
+    },
+    {
+      "cp": 1648,
+      "isMark": true,
+      "note": "dagger alif"
+    },
+    {
+      "cp": 1619,
+      "isMark": false,
+      "note": "madda above (only in NFD آ)"
+    },
+    {
+      "cp": 1620,
+      "isMark": false,
+      "note": "hamza above (only in NFD أ)"
+    },
+    {
+      "cp": 1600,
+      "isMark": false,
+      "note": "tatweel"
+    },
+    {
+      "cp": 1574,
+      "isMark": false,
+      "note": "ئ is a letter"
+    }
+  ],
+  "letters": [
+    {
+      "cp": 1575,
+      "isLetter": true,
+      "note": "alif"
+    },
+    {
+      "cp": 1649,
+      "isLetter": true,
+      "note": "alif wasla"
+    },
+    {
+      "cp": 1570,
+      "isLetter": true,
+      "note": "alif madda"
+    },
+    {
+      "cp": 1577,
+      "isLetter": true,
+      "note": "ta marbuta"
+    },
+    {
+      "cp": 1607,
+      "isLetter": true,
+      "note": "ha"
+    },
+    {
+      "cp": 1609,
+      "isLetter": true,
+      "note": "alif maqsura"
+    },
+    {
+      "cp": 1610,
+      "isLetter": true,
+      "note": "ya"
+    },
+    {
+      "cp": 1600,
+      "isLetter": false,
+      "note": "tatweel"
+    },
+    {
+      "cp": 65275,
+      "isLetter": false,
+      "note": "lam-alif presentation form"
+    },
+    {
+      "cp": 1740,
+      "isLetter": false,
+      "note": "Farsi ya"
+    }
+  ],
+  "words": [
+    {
+      "text": "كِتَابْ",
+      "isWord": true
+    },
+    {
+      "text": "ٱلْكِتَابْ",
+      "isWord": true
+    },
+    {
+      "text": "مَدْرَسَةْ",
+      "isWord": true
+    },
+    {
+      "text": "",
+      "isWord": false
+    },
+    {
+      "text": "كِتَابْ بَابْ",
+      "isWord": false
+    },
+    {
+      "cps": [
+        1581,
+        1614,
+        1617,
+        1576,
+        1618
+      ],
+      "isWord": true,
+      "note": "fatha then shadda: NFC order"
+    },
+    {
+      "cps": [
+        1581,
+        1617,
+        1614,
+        1576,
+        1618
+      ],
+      "isWord": false,
+      "note": "shadda then fatha: not NFC"
+    },
+    {
+      "cps": [
+        1575,
+        1619,
+        1583,
+        1614,
+        1605,
+        1618
+      ],
+      "isWord": false,
+      "note": "NFD alif madda"
+    },
+    {
+      "cps": [
+        1575,
+        1620,
+        1614,
+        1587,
+        1614,
+        1583,
+        1618
+      ],
+      "isWord": false,
+      "note": "NFD hamza on alif"
+    },
+    {
+      "cps": [
+        65275,
+        1593,
+        1616,
+        1576,
+        1618
+      ],
+      "isWord": false,
+      "note": "presentation-form lam-alif"
+    },
+    {
+      "cps": [
+        1603,
+        1600,
+        1578,
+        1614,
+        1575,
+        1576,
+        1618
+      ],
+      "isWord": false,
+      "note": "tatweel inside"
+    },
+    {
+      "cps": [
+        1614,
+        1576
+      ],
+      "isWord": false,
+      "note": "starts with a mark"
+    }
+  ],
+  "markedCases": [
+    {
+      "word": "كَتَبَ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "end"
+      ],
+      "note": "the vowel on the last letter"
+    },
+    {
+      "word": "كَتَبَ",
+      "letters": [
+        "ك"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "كِتَابْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "كِتَابْ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "fatha",
+      "has": false,
+      "positions": [],
+      "note": "ب is there, but with a sukun"
+    },
+    {
+      "word": "كِتَابْ",
+      "letters": [
+        "ك"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "مَكْتُوبْ",
+      "letters": [
+        "ب"
+      ],
+      "mark": "damma",
+      "has": false,
+      "positions": [],
+      "note": "the old lesson's error: the damma is on ت"
+    },
+    {
+      "word": "مَكْتُوبْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "damma",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "قَرَأَ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "end"
+      ]
+    },
+    {
+      "word": "إِبْرَةْ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "أُمّْ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "damma",
+      "has": true,
+      "positions": [
+        "start"
+      ]
+    },
+    {
+      "word": "سُئِلَ",
+      "letters": [
+        "ء",
+        "أ",
+        "إ",
+        "ؤ",
+        "ئ"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "middle"
+      ]
+    },
+    {
+      "word": "مُعَلِّمَةْ",
+      "letters": [
+        "ل"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "shadda and the vowel together"
+    },
+    {
+      "word": "مُعَلِّمَةْ",
+      "letters": [
+        "ل"
+      ],
+      "mark": "fatha",
+      "has": false,
+      "positions": []
+    },
+    {
+      "word": "تَتِمَّةْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "fatha",
+      "has": true,
+      "positions": [
+        "start"
+      ],
+      "note": "the same letter with two vowels: only the one with the fatha"
+    },
+    {
+      "word": "تَتِمَّةْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "kasra",
+      "has": true,
+      "positions": [
+        "middle"
+      ],
+      "note": "the same letter with two vowels: only the one with the kasra"
+    },
+    {
+      "word": "تَتِمَّةْ",
+      "letters": [
+        "ت"
+      ],
+      "mark": "damma",
+      "has": false,
+      "positions": []
+    }
+  ]
+}

@@ -103,6 +103,8 @@ export interface OpenResult {
   mode: 'link' | 'file' | 'package'
   presentation: Presentation
   url: string
+  /** Only a lessons-site item: the opener may hand it Quran audio (lessonAudio.ts). */
+  audioEligible?: boolean
   mimeType?: string | null
   expiresAt?: string
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { ACADEMY_ZONE } from '@/core/time/academyTime'
+import { ACADEMY_ZONE, wallClock12 } from '@/core/time/academyTime'
 import { Dialog } from '@/shared/components/Dialog'
 import { QueryBoundary } from '@/shared/components/States'
 import type { Category, ShiftDefault, ShiftWindow, WorkPattern, WorkPatterns } from './api'
@@ -70,6 +70,7 @@ export function ShiftSection({ teacherId }: { teacherId: string }) {
 
 function Windows({ windows, zone }: { windows: ShiftWindow[]; zone: string }) {
   const tx = useScheduleText()
+  const { locale } = useI18n()
   const byDay = WEEKDAYS.map((w) => ({ w, ranges: windows.filter((x) => x.weekday === w.iso) }))
   return (
     <>
@@ -77,7 +78,7 @@ function Windows({ windows, zone }: { windows: ShiftWindow[]; zone: string }) {
         {byDay.map(({ w, ranges }) => (
           <div key={w.iso} className="sc-kvrow">
             <dt>{tx(w.label)}</dt>
-            <dd>{ranges.length === 0 ? tx(S.dayOff) : <bdi dir="ltr">{ranges.map((r) => `${r.start}–${r.end}`).join(' · ')}</bdi>}</dd>
+            <dd>{ranges.length === 0 ? tx(S.dayOff) : <bdi>{ranges.map((r) => `${wallClock12(r.start, locale)} – ${wallClock12(r.end, locale)}`).join(' · ')}</bdi>}</dd>
           </div>
         ))}
       </dl>
@@ -184,9 +185,9 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
                 {rows[w.iso]!.length === 0 && <span className="sc-muted">{tx(S.dayOff)}</span>}
                 {rows[w.iso]!.map((r, i) => (
                   <span key={i} className="sc-windows__range">
-                    <input type="time" className="input" aria-label={`${tx(w.label)} ${tx(S.from)}`} value={r.start} onChange={(e) => setRow(w.iso, i, 'start', e.target.value)} />
+                    <ClockSelect label={`${tx(w.label)} ${tx(S.from)}`} value={r.start} onChange={(v) => setRow(w.iso, i, 'start', v)} />
                     <span aria-hidden="true">–</span>
-                    <input type="time" className="input" aria-label={`${tx(w.label)} ${tx(S.to)}`} value={r.end} onChange={(e) => setRow(w.iso, i, 'end', e.target.value)} />
+                    <ClockSelect label={`${tx(w.label)} ${tx(S.to)}`} value={r.end} onChange={(v) => setRow(w.iso, i, 'end', v)} end />
                     <button type="button" className="btn btn--sm btn--ghost" onClick={() => setRows((x) => ({ ...x, [w.iso]: x[w.iso]!.filter((_, j) => j !== i) }))}>
                       {tx(S.removeWindow)}
                     </button>
@@ -223,5 +224,26 @@ function ShiftDialog({ teacherId, data, onClose }: { teacherId: string; data: Wo
       </label>
       {problem && <p className="field__error" role="alert">{problem}</p>}
     </Dialog>
+  )
+}
+
+/** Every quarter hour of the day, "HH:MM" (an end may be "24:00"). */
+const QUARTERS = Array.from({ length: 97 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`)
+
+/**
+ * A wall-clock time on the 12-hour clock. A select rather than `<input type="time">`,
+ * whose display follows the browser's locale and cannot be made 12-hour; the value
+ * stays "HH:MM", as the API takes it. A time off the quarter hour keeps its own option.
+ */
+function ClockSelect({ label, value, onChange, end = false }: { label: string; value: string; onChange: (v: string) => void; end?: boolean }) {
+  const { locale } = useI18n()
+  const times = end ? QUARTERS.slice(1) : QUARTERS.slice(0, -1)
+  const all = times.includes(value) ? times : [value, ...times].sort()
+  return (
+    <select className="select select--sm" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {all.map((t) => (
+        <option key={t} value={t}>{t === '24:00' ? `${wallClock12(t, locale)} +1` : wallClock12(t, locale)}</option>
+      ))}
+    </select>
   )
 }

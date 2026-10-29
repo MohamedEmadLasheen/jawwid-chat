@@ -30,6 +30,7 @@ import {
 } from '@platform/auth/action-throttle.guard';
 import { AuthErrorCode } from '@platform/auth/auth.errors';
 import { AuthenticatedGuard } from '@platform/auth/auth.guard';
+import { PermissionGuard } from '@platform/permissions/permission.guard';
 import { AuthModule } from '@platform/auth/auth.module';
 import { COMMUNICATION_CONFIG_DEFAULTS } from '@platform/app-config.service';
 import type { RateLimitStore } from '@platform/auth/login-rate-limit';
@@ -207,9 +208,10 @@ describe('ActionThrottleGuard — fails OPEN, unlike login', () => {
 describe('ActionThrottleGuard — registration', () => {
   it('is a global guard registered AFTER AuthenticatedGuard', () => {
     // Nest runs APP_GUARDs in registration order. Before AuthenticatedGuard
-    // there is no verified actor, and the guard would count nothing.
+    // there is no verified actor, and the guard would count nothing. PD-40's
+    // PermissionGuard sits between them, so a refused request spends no budget.
     const providers = Reflect.getMetadata('providers', AuthModule) as Array<{ provide?: unknown; useClass?: unknown }>;
     const guards = providers.filter((p) => p?.provide === APP_GUARD).map((p) => p.useClass);
-    expect(guards).toEqual([AuthenticatedGuard, ActionThrottleGuard]);
+    expect(guards).toEqual([AuthenticatedGuard, PermissionGuard, ActionThrottleGuard]);
   });
 });

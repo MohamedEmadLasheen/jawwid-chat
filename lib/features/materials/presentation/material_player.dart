@@ -7,9 +7,11 @@ import '../../../app/providers.dart';
 import '../../../core/audio/voice_player.dart';
 import '../../../core/media/story_video_player.dart';
 import '../../../design/tokens.dart';
+import '../../../design/widgets/edge_swipe_back.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/materials.dart';
+import '../data/lesson_audio.dart';
 import '../data/materials_repository.dart';
 import 'activity_view.dart';
 
@@ -56,11 +58,22 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
   OpenedMaterial? _opened;
   Object? _error;
   bool _handedOver = false;
+  /// For a Quran lesson of the lessons site: its audio list, asked for once.
+  Future<Map<String, Object?>?>? _audio;
 
   @override
   void initState() {
     super.initState();
     _open();
+  }
+
+  /// What the release gate gives this account for the lesson's surah: only for a
+  /// lessons-site item (the server's `audioEligible`) on this build's lessons origin.
+  Future<Map<String, Object?>?>? _audioFor(OpenedMaterial o) {
+    final surah = lessonSurahOf(o.url);
+    final origin = ref.read(lessonsOriginProvider);
+    if (surah == null || !o.audioEligible || origin.isEmpty || lessonOriginOf(o.url) != origin) return null;
+    return _audio ??= ref.read(materialsRepositoryProvider).lessonAudio(surah).catchError((Object _) => null);
   }
 
   Future<void> _open() async {
@@ -109,12 +122,17 @@ class _MaterialPlayerScreenState extends ConsumerState<MaterialPlayerScreen> {
         (_, final Object _, _) => JawwidErrorView(title: l10n.materialsUnavailable),
         (_, _, true) => JawwidErrorView(title: l10n.materialsCannotOpen),
         (null, _, _) => const JawwidLoadingView(),
-        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameIsolated => ref
-            .watch(activityViewFactoryProvider)
-            .build(context, url: o.url, sandbox: sandboxIsolated, allow: activityAllowance(o.url, isPackage: true)),
-        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameSite => ref
-            .watch(activityViewFactoryProvider)
-            .build(context, url: o.url, sandbox: sandboxSite, allow: activityAllowance(o.url, isPackage: false)),
+        // A WebView would take the edge swipe-back; the strip keeps the leading edge for it.
+        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameIsolated => EdgeSwipeBack(
+            child: ref
+                .watch(activityViewFactoryProvider)
+                .build(context, url: o.url, sandbox: sandboxIsolated, allow: activityAllowance(o.url, isPackage: true)),
+          ),
+        (final OpenedMaterial o, _, _) when o.presentation == MaterialPresentation.frameSite => EdgeSwipeBack(
+            child: ref
+                .watch(activityViewFactoryProvider)
+                .build(context, url: o.url, sandbox: sandboxSite, allow: activityAllowance(o.url, isPackage: false), audio: _audioFor(o)),
+          ),
         (final OpenedMaterial o, _, _) when o.kind == 'audio' => _AudioBody(url: o.url),
         (final OpenedMaterial o, _, _) when o.kind == 'video' => _VideoBody(url: o.url),
         (final OpenedMaterial o, _, _) when o.kind == 'image' => InteractiveViewer(

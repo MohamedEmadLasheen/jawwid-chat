@@ -8,10 +8,47 @@ Owner: AI #7 · Date: 2026-09-05 · Encryption and restore corrected, re-drilled
 |---|---|---|---|---|
 | Postgres (authoritative state) | Managed provider continuous backup + PITR | continuous | 7–30 days | **not provisioned** |
 | Postgres (portable copy) | `scripts/infra/backup-db.sh` (`pg_dump -Fc`, encrypted) | before every deploy; nightly | 30 days | **implemented and drilled** |
-| Object storage | Provider versioning + lifecycle rules | continuous | 30 days | **not provisioned** |
+| Object storage | Bucket versioning + lifecycle (`scripts/infra/storage-versioning.sh`) | continuous | deleted or overwritten objects: 30 days | **scripted and enforced; no bucket exists yet** (§1a) |
 | Redis | Not backed up by design | — | — | — |
 | Secrets | Secret store's own durability | — | — | not provisioned |
 | Container images | Registry, tagged by commit | per deploy | 90 days | pipeline written |
+
+### 1a. Object storage: versioning, and what it means for deletion
+
+Attachments, voice notes, avatars, Materials, certificates and whiteboard
+images exist **only** in the bucket. Postgres holds their keys, not their bytes.
+So the bucket keeps versions:
+
+* **Versioning is enabled.** A deleted or overwritten object is not destroyed.
+  It becomes a *noncurrent version* that can be copied back
+  (`production-runbook.md` §3a).
+* **A lifecycle bounds it.** Noncurrent versions expire after **30 days**, and
+  abandoned multipart uploads after 1 day. Current objects are never expired by
+  the lifecycle. The extra storage is about 30 days' worth of deleted bytes, not
+  unbounded growth.
+* **It is enforced, not hoped for.** `storage-versioning.sh apply` sets both
+  and reads them back. The production deploy runs `storage-versioning.sh
+  verify` before the backup and refuses to release if either is missing or
+  wrong, including a rule that would expire current objects.
+* **The expiry is proven on the provider.** `--verify-expiry start` and then
+  `check` show that the provider really removes old versions. That uses a
+  1-day rule on the `_lifecycle-probe/` prefix, so the proof takes days, not a
+  month.
+* **Provider.** This requires a store that implements S3 versioning:
+  DigitalOcean Spaces, AWS S3 or MinIO. Cloudflare R2 does not, so it is ruled
+  out for production. Local MinIO keeps versions but silently drops the
+  abandoned-upload rule, so `verify` fails against MinIO by design. It is a
+  production check.
+
+**For the privacy notice — deleted content is recoverable for 30 days.** When a
+photo, voice note, attachment, story or other file is deleted in Jawwid Chat,
+it disappears from the app immediately. A copy is kept in the storage's
+version history for up to **30 days**, so it can be restored after an accidental or
+malicious deletion. After 30 days it is permanently erased. During that time
+only authorised operators with storage credentials can restore it, following
+the runbook. Database backups (§1) keep message text for the same 30 days. Any
+promise that a deletion is "immediate and permanent" is therefore inaccurate,
+and the privacy notice should say "within 30 days".
 
 Redis is deliberately not backed up: it holds cache entries and in-flight jobs,
 not customer data. It is configured `appendonly yes` so queued jobs survive a
@@ -251,7 +288,8 @@ rather than assumed.
 | Database corrupted or data deleted | Stop writes. PITR to just before the event. If only `chat` is affected, restore per §4. Verify with the §5 checklist before reopening. |
 | Database host lost | Provider failover, or provision a new instance and restore. Update `DATABASE_URL`; redeploy. |
 | Redis lost | Provision a new instance, update `REDIS_URL`, redeploy. Queued jobs are gone — reconcile from the outbox (AI #2). Expect delayed notifications, not lost messages. |
-| Object storage lost | Restore from versioning. Attachments are not reproducible from Postgres: this is the one data class with no second copy in the system. |
+| Object deleted or overwritten (by a person, a bug or a stolen key) | Copy the noncurrent version back (`production-runbook.md` §3a). Possible for 30 days. |
+| Object storage lost (bucket or account deleted) | **Not covered by versioning**: versions live in the same bucket. Attachments are not reproducible from Postgres; this is the one data class with no second copy in the system. Cross-account replication is a separate, not-yet-decided measure. |
 | Bad deployment | Roll back the image (`production-runbook.md`). If a migration ran, roll back the **application only** and assess the migration separately — most are not reversible. |
 | Credential compromised | `secrets.md` §5. Revoke at the provider first. If it was the **backup passphrase**, rotate it and treat every archive written under it as readable by the holder. |
 | Jawwid Core outage | Chat stays up; Core-dependent reads degrade visibly. Do not fabricate Core data; do not let Chat become a second source of truth. |
@@ -275,4 +313,8 @@ rather than assumed.
   fine at today's size, worth measuring before it is not.
 - No provider backups exist, because no managed database exists.
 - Retention, PITR window and restore speed are unmeasured.
-- Object storage backup is a policy, not yet a configuration.
+- Object storage versioning is scripted and enforced, but no bucket exists yet,
+  and the provider's expiry of noncurrent versions is unproven until
+  `storage-versioning.sh --verify-expiry check` passes on the real bucket.
+- Versioning protects against deletion, not against losing the bucket or the
+  account. A second copy outside the account does not exist.
