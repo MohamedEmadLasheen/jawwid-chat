@@ -335,12 +335,127 @@ void main() {
         endsAt: DateTime(2026, 10, 19, 17, 30),
       );
       await tester.pumpWidget(app(LessonTicketForm(ticket: apology), lessons: repo));
+      await tester.tap(find.byKey(const ValueKey('excuse-category-illness')));
       await tester.enterText(find.byKey(const ValueKey('lesson-ticket-main')), 'fever');
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('lesson-ticket-submit')));
       await tester.pumpAndSettle();
       expect(find.text('This lesson can no longer be updated this way.'), findsOneWidget);
       expect(find.text('fever'), findsOneWidget);
+    });
+
+    group('PD-50: every apology names a category the family sees', () {
+      LessonTicket ticket(LessonTicketKind kind) => LessonTicket(
+            kind: kind,
+            lessonId: 'l2',
+            startsAt: DateTime(2026, 10, 19, 17),
+            endsAt: DateTime(2026, 10, 19, 17, 30),
+          );
+      bool canSend(WidgetTester tester) =>
+          tester.widget<FilledButton>(find.byKey(const ValueKey('lesson-ticket-submit'))).onPressed != null;
+      Future<void> send(WidgetTester tester) async {
+        await tester.tap(find.byKey(const ValueKey('lesson-ticket-submit')));
+        await tester.pumpAndSettle();
+      }
+
+      for (final lang in ['en', 'ar']) {
+        testWidgets('a family before the start: a category alone is enough; the note is optional ($lang)', (tester) async {
+          final repo = _RecordingLessons();
+          await tester.pumpWidget(app(LessonTicketForm(ticket: ticket(LessonTicketKind.apology)), lessons: repo, locale: Locale(lang)));
+          await tester.pumpAndSettle();
+          final l10n = L10n.of(tester.element(find.byType(LessonTicketForm)));
+          expect(find.text(l10n.ticketCategoryLabel), findsOneWidget, reason: 'the picker is labelled');
+          for (final label in [
+            l10n.excuseCategoryTravel, l10n.excuseCategoryIllness, l10n.excuseCategoryExams,
+            l10n.excuseCategoryEmergency, l10n.excuseCategoryOther,
+          ]) {
+            expect(find.text(label), findsOneWidget);
+          }
+          expect(find.text(l10n.ticketFamilyNoteOptional), findsOneWidget);
+          if (lang == 'ar') {
+            expect(find.text('ظرف طارئ'), findsOneWidget);
+            expect(find.text('ملاحظة للمعلم والإدارة (اختياري)'), findsOneWidget);
+          }
+
+          expect(canSend(tester), isFalse, reason: 'nothing picked yet');
+          await send(tester);
+          expect(repo.apologies, isEmpty);
+
+          await tester.tap(find.byKey(const ValueKey('excuse-category-travel')));
+          await tester.pump();
+          expect(canSend(tester), isTrue, reason: 'a category, no text');
+          await send(tester);
+          expect(repo.apologies.single, (LessonTicketKind.apology, null, 'travel'));
+        });
+      }
+
+      testWidgets('a family before the start may add a note, sent beside the category', (tester) async {
+        final repo = _RecordingLessons();
+        await tester.pumpWidget(app(LessonTicketForm(ticket: ticket(LessonTicketKind.apology)), lessons: repo));
+        await tester.enterText(find.byKey(const ValueKey('lesson-ticket-main')), 'A fever since last night');
+        await tester.pump();
+        expect(canSend(tester), isFalse, reason: 'text alone is not enough');
+        await tester.tap(find.byKey(const ValueKey('excuse-category-illness')));
+        await tester.pump();
+        await send(tester);
+        expect(repo.apologies.single, (LessonTicketKind.apology, 'A fever since last night', 'illness'));
+      });
+
+      for (final (kind, lang) in [
+        (LessonTicketKind.lateApology, 'en'),
+        (LessonTicketKind.lateApology, 'ar'),
+        (LessonTicketKind.teacherApology, 'en'),
+        (LessonTicketKind.teacherApology, 'ar'),
+      ]) {
+        testWidgets('${kind.name}: needs both a category and the note, and sends both ($lang)', (tester) async {
+          final repo = _RecordingLessons();
+          await tester.pumpWidget(app(LessonTicketForm(ticket: ticket(kind)), lessons: repo, locale: Locale(lang)));
+          await tester.pumpAndSettle();
+          final l10n = L10n.of(tester.element(find.byType(LessonTicketForm)));
+          final noteLabel = kind == LessonTicketKind.teacherApology ? l10n.cardStaffNote : l10n.ticketFamilyDetails;
+          expect(find.text(noteLabel), findsOneWidget, reason: 'the note says who reads it');
+          // The category says who reads it too: a teacher's reason never reaches the family.
+          if (kind == LessonTicketKind.teacherApology) {
+            expect(find.text(l10n.ticketCategoryStaffLabel), findsOneWidget);
+            expect(find.text(l10n.ticketCategoryLabel), findsNothing);
+            if (lang == 'en') expect(find.text('Reason (staff and the teacher only)'), findsOneWidget);
+            if (lang == 'ar') expect(find.text('السبب (للإدارة والمعلم فقط)'), findsOneWidget);
+          } else {
+            expect(find.text(l10n.ticketCategoryLabel), findsOneWidget);
+            expect(find.text(l10n.ticketCategoryStaffLabel), findsNothing);
+            if (lang == 'en') expect(find.text('Reason (shown in the group)'), findsOneWidget);
+            if (lang == 'ar') expect(find.text('السبب (يظهر في المجموعة)'), findsOneWidget);
+          }
+          if (lang == 'en' && kind == LessonTicketKind.teacherApology) {
+            expect(find.text('Note (staff and the teacher only)'), findsOneWidget);
+          }
+          if (lang == 'ar' && kind == LessonTicketKind.teacherApology) {
+            expect(find.text('ملاحظة (للإدارة والمعلم فقط)'), findsOneWidget);
+          }
+
+          await tester.enterText(find.byKey(const ValueKey('lesson-ticket-main')), 'Out of town');
+          await tester.pump();
+          expect(canSend(tester), isFalse, reason: 'no category yet');
+          await send(tester);
+          expect(repo.apologies, isEmpty);
+
+          await tester.tap(find.byKey(const ValueKey('excuse-category-emergency')));
+          await tester.enterText(find.byKey(const ValueKey('lesson-ticket-main')), '');
+          await tester.pump();
+          expect(canSend(tester), isFalse, reason: 'the note is still required here');
+
+          await tester.enterText(find.byKey(const ValueKey('lesson-ticket-main')), 'Out of town');
+          await tester.pump();
+          expect(canSend(tester), isTrue);
+          await send(tester);
+          expect(repo.apologies.single, (kind, 'Out of town', 'emergency'));
+        });
+      }
+
+      testWidgets('an absence has no category picker', (tester) async {
+        await tester.pumpWidget(app(LessonTicketForm(ticket: ticket(LessonTicketKind.absence)), lessons: _RecordingLessons()));
+        expect(find.byKey(const ValueKey('excuse-category-travel')), findsNothing);
+      });
     });
   });
   group('T2: make-ups, regular times and the Schedule', () {
@@ -697,8 +812,14 @@ class _RecordingLessons implements LessonRepository {
   @override
   Future<List<GroupChild>> groupChildren(String conversationId) async => children;
 
+  /// PD-50: what each apology sent -- (kind, reason, category).
+  final apologies = <(LessonTicketKind, String?, String?)>[];
+
   @override
-  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) async => _maybeRefuse();
+  Future<void> apologise(String lessonId, LessonTicketKind kind, {String? reason, String? category}) async {
+    _maybeRefuse();
+    apologies.add((kind, reason, category));
+  }
 
   /// What makeupSlots answers; and what was booked / requested.
   MakeupOffer offer = const MakeupOffer(durationMinutes: 30, slots: []);

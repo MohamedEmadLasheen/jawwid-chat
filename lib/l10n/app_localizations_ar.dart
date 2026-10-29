@@ -1300,6 +1300,12 @@ class L10nAr extends L10n {
   String get cardReason => 'السبب';
 
   @override
+  String get ticketCategoryLabel => 'السبب (يظهر في المجموعة)';
+
+  @override
+  String get ticketCategoryStaffLabel => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
   String get cardMakeupLesson => 'الحصة التعويضية';
 
   @override
@@ -1307,6 +1313,33 @@ class L10nAr extends L10n {
 
   @override
   String get cardStaffReason => 'السبب (للإدارة والمعلم فقط)';
+
+  @override
+  String get cardStaffNote => 'ملاحظة (للإدارة والمعلم فقط)';
+
+  @override
+  String get cardFamilyDetails => 'تفاصيل من الأسرة (للإدارة والمعلم فقط)';
+
+  @override
+  String get excuseCategoryTravel => 'سفر';
+
+  @override
+  String get excuseCategoryIllness => 'مرض';
+
+  @override
+  String get excuseCategoryExams => 'امتحانات';
+
+  @override
+  String get excuseCategoryEmergency => 'ظرف طارئ';
+
+  @override
+  String get excuseCategoryOther => 'أخرى';
+
+  @override
+  String get ticketFamilyNoteOptional => 'ملاحظة للمعلم والإدارة (اختياري)';
+
+  @override
+  String get ticketFamilyDetails => 'تفاصيل للمعلم والإدارة';
 
   @override
   String get ticketBookMakeup => 'حجز حصة التعويض';
@@ -4450,4 +4483,312 @@ class L10nAr extends L10n {
 
   @override
   String get lessonAudioTermsTitle => 'الشروط والخصوصية';
+
+  @override
+  String get tabBoards => 'السبورات';
+
+  @override
+  String get boardsTitle => 'السبورات';
+
+  @override
+  String get boardsInUse => 'السبورات';
+
+  @override
+  String get boardsDeleted => 'السبورات المحذوفة';
+
+  @override
+  String get boardsEmpty => 'لا توجد سبورات بعد. أنشئ سبورة لتبدأ الرسم.';
+
+  @override
+  String get boardsDeletedEmpty => 'لا شيء في السبورات المحذوفة.';
+
+  @override
+  String get boardsDeletedFooter =>
+      'يمكن استعادة السبورات المحذوفة خلال 30 يومًا، ثم تُحذف نهائيًا خلال 60 يومًا.';
+
+  @override
+  String get boardsNew => 'سبورة جديدة';
+
+  @override
+  String get boardsTitleLabel => 'اسم السبورة';
+
+  @override
+  String get boardsUntitled => 'سبورة بلا اسم';
+
+  @override
+  String get boardsCreate => 'إنشاء';
+
+  @override
+  String get boardsCancel => 'إلغاء';
+
+  @override
+  String get boardsSave => 'حفظ';
+
+  @override
+  String get boardsRename => 'إعادة التسمية';
+
+  @override
+  String get boardsDuplicate => 'نسخ';
+
+  @override
+  String get boardsDelete => 'حذف';
+
+  @override
+  String get boardsRestore => 'استعادة';
+
+  @override
+  String boardsPages(String count) {
+    return 'الصفحات: $count';
+  }
+
+  @override
+  String boardsUpdated(String date) {
+    return 'آخر تعديل $date';
+  }
+
+  @override
+  String boardsDeleteTitle(String title) {
+    return 'نقل «$title» إلى السبورات المحذوفة؟';
+  }
+
+  @override
+  String boardsDeleteBody(String date) {
+    return 'يمكنك استعادتها حتى $date. بعد ذلك تُحذف نهائيًا.';
+  }
+
+  @override
+  String boardsDeletedOnUntil(String deleted, String until) {
+    return 'حُذفت في $deleted · يمكن استعادتها حتى $until';
+  }
+
+  @override
+  String get boardsRestored => 'استُعيدت السبورة.';
+
+  @override
+  String get boardsMovedToTrash => 'نُقلت إلى السبورات المحذوفة.';
+
+  @override
+  String get boardSaved => 'محفوظ';
+
+  @override
+  String get boardSaving => 'جارٍ الحفظ…';
+
+  @override
+  String get boardUnsaved => 'لم يُحفظ بعد';
+
+  @override
+  String get boardConflictTitle => 'تغيّرت هذه السبورة في مكان آخر';
+
+  @override
+  String get boardConflictBody =>
+      'عُدِّلت في تبويب أو جهاز آخر. أعد تحميلها لترى تلك النسخة، أو احتفظ بنسختك سبورةً جديدة.';
+
+  @override
+  String get boardConflictReload => 'إعادة التحميل';
+
+  @override
+  String get boardConflictCopy => 'احتفظ بنسختي سبورةً جديدة';
+
+  @override
+  String boardCopyTitle(String title) {
+    return '$title (نسخة)';
+  }
+
+  @override
+  String get boardFailedLimit =>
+      'بلغت هذه السبورة حدًّا: الصفحة حتى 512 كيلوبايت، والسبورة 50 صفحة، وسبوراتك 25 ميغابايت من الرسوم.';
+
+  @override
+  String get boardFailedInvalid => 'تعذّر حفظ هذا التغيير.';
+
+  @override
+  String get boardFailedOther => 'تعذّر حفظ السبورة. حاول مرة أخرى.';
+
+  @override
+  String get boardReadOnly => 'للعرض فقط';
+
+  @override
+  String get boardEditNeedsLargerScreen =>
+      'يحتاج تعديل السبورات إلى حاسوب محمول أو جهاز لوحي. يمكنك عرض هذه السبورة هنا.';
+
+  @override
+  String get boardEditBrowserUnsupported =>
+      'لا يدعم هذا المتصفح تعديل السبورات. جرّب أحدث إصدار من Chrome أو Edge أو Safari أو Firefox.';
+
+  @override
+  String boardPageOf(String page, String count) {
+    return 'الصفحة $page من $count';
+  }
+
+  @override
+  String get boardAddPage => 'إضافة صفحة';
+
+  @override
+  String get boardDuplicatePage => 'نسخ الصفحة';
+
+  @override
+  String get boardDeletePage => 'حذف الصفحة';
+
+  @override
+  String get boardMovePageEarlier => 'نقل الصفحة إلى الأمام';
+
+  @override
+  String get boardMovePageLater => 'نقل الصفحة إلى الخلف';
+
+  @override
+  String get boardLayout => 'التسطير';
+
+  @override
+  String get boardBackground => 'لون الصفحة';
+
+  @override
+  String get boardLayoutPlain => 'بلا تسطير';
+
+  @override
+  String get boardLayoutRuled => 'مسطّر';
+
+  @override
+  String get boardLayoutNarrowRuled => 'مسطّر ضيق';
+
+  @override
+  String get boardLayoutGrid => 'مربعات';
+
+  @override
+  String get boardLayoutArabicLines => 'أسطر الخط العربي';
+
+  @override
+  String get boardBackgroundWhite => 'أبيض';
+
+  @override
+  String get boardBackgroundCream => 'كريمي';
+
+  @override
+  String get boardBackgroundGrey => 'رمادي';
+
+  @override
+  String get boardBackgroundGreen => 'أخضر السبورة';
+
+  @override
+  String get boardBackgroundDark => 'داكن';
+
+  @override
+  String get boardToolSelect => 'تحديد';
+
+  @override
+  String get boardToolHand => 'تحريك العرض';
+
+  @override
+  String get boardToolPen => 'قلم';
+
+  @override
+  String get boardToolHighlighter => 'قلم تمييز';
+
+  @override
+  String get boardToolEraser => 'ممحاة (الخط كاملًا)';
+
+  @override
+  String get boardToolAreaEraser => 'ممحاة (جزء)';
+
+  @override
+  String get boardToolText => 'نص';
+
+  @override
+  String get boardToolRect => 'مستطيل';
+
+  @override
+  String get boardToolEllipse => 'دائرة';
+
+  @override
+  String get boardToolTriangle => 'مثلث';
+
+  @override
+  String get boardToolLine => 'خط';
+
+  @override
+  String get boardToolArrow => 'سهم';
+
+  @override
+  String get boardToolStamp => 'ختم';
+
+  @override
+  String get boardUndo => 'تراجع';
+
+  @override
+  String get boardRedo => 'إعادة';
+
+  @override
+  String get boardZoomIn => 'تكبير';
+
+  @override
+  String get boardZoomOut => 'تصغير';
+
+  @override
+  String get boardZoomFit => 'ملاءمة الصفحة';
+
+  @override
+  String get boardDeleteSelection => 'حذف المحدد';
+
+  @override
+  String get boardColour => 'اللون';
+
+  @override
+  String get boardThickness => 'السُّمك';
+
+  @override
+  String get boardTajweed => 'التجويد';
+
+  @override
+  String get boardTajweedMadd => 'المد';
+
+  @override
+  String get boardTajweedGhunnah => 'الغنة';
+
+  @override
+  String get boardTajweedIkhfa => 'الإخفاء';
+
+  @override
+  String get boardTajweedIzhar => 'الإظهار';
+
+  @override
+  String get boardTextTitle => 'نص';
+
+  @override
+  String get boardTextHint => 'اكتب هنا';
+
+  @override
+  String get boardVersePlaceholder => 'آية قرآنية';
+
+  @override
+  String get boardElementUnknown => 'لا يظهر في هذا الإصدار';
+
+  @override
+  String get boardStampExcellent => 'ممتاز';
+
+  @override
+  String get boardStampWellDone => 'أحسنت';
+
+  @override
+  String get boardMore => 'المزيد';
+
+  @override
+  String get boardDraftStale =>
+      'لديك تغييرات من زيارة سابقة لم تُحفظ، على صفحات تغيّرت منذ ذلك الحين. احتفظ بتغييراتك (تحلّ محلّ تلك الصفحات) أو تجاهلها.';
+
+  @override
+  String get boardDraftStaleKeep => 'احتفظ بتغييراتي';
+
+  @override
+  String get boardDraftStaleDiscard => 'تجاهل';
+
+  @override
+  String get boardDraftNotKept =>
+      'تعذّر الاحتفاظ بتغييراتك غير المحفوظة على هذا الجهاز. ابقَ على هذه السبورة حتى تظهر عبارة «محفوظ».';
+
+  @override
+  String get boardPageFull =>
+      'امتلأت هذه الصفحة (512 كيلوبايت). أضف صفحة جديدة لتواصل الكتابة؛ لن يُحفظ المزيد على هذه الصفحة.';
+
+  @override
+  String get boardSaveFirst =>
+      'يجب حفظ تغييراتك أولًا. حاول مرة أخرى عندما تظهر عبارة «محفوظ».';
 }
