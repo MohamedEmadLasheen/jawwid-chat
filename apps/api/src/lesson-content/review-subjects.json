@@ -6,14 +6,14 @@
    "scope": "play",
    "subjects": [
     {
-     "approvalSha256": "b507eb664ac26a733a334eb7d04dc48dfa4d88d458e66fab0348d176fc283959",
+     "approvalSha256": "458130d36287abc4c160853002e4ac3d84bc093c0432d33ed0321139c055dd90",
      "id": "count_ayat",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "CountAyat.tsx",
-      "codeSha256": "fb9981fe774b5b7789bdd86e706cc07575fa31b4958b85f003a7073e61607867",
+      "codeSha256": "9bad925e734f4a00305f8802c42984f08ee18d0d988d297067947712572326a3",
       "id": "count_ayat",
       "nameAr": "\u0639\u064f\u062f\u0651 \u0627\u0644\u0622\u064a\u0627\u062a",
       "needsAudio": false,
@@ -35,14 +35,14 @@
      ]
     },
     {
-     "approvalSha256": "e52f0a4d0bf4002ef71e27451920242038b40c65b303a5fab7033b6651fe865c",
+     "approvalSha256": "9d18fc04c93640e1d3a08ba40c5451bc91b92d180861da0dad6479750608ded9",
      "id": "echo",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "Echo.tsx",
-      "codeSha256": "573bb7463be943871a6ee6aae4a98d42c428a4f76f7458f30c9f11c818cb5a41",
+      "codeSha256": "ab7552b81c4af9c2fccb981cd0f7a749f1e91ac8afa343c993aa29377b3a8972",
       "id": "echo",
       "nameAr": "\u0631\u062f\u0651\u062f \u0645\u0639\u064a",
       "needsAudio": true,
@@ -68,14 +68,14 @@
      ]
     },
     {
-     "approvalSha256": "72682963644dc5f313cbd365a7bb09ed8cbbe2e7dd63323bc294ad045cafcf66",
+     "approvalSha256": "da70fc26a6bad8af82e07f8173e49282082cf25bc8fd3ebbbbc7d71e1ae2af64",
      "id": "listen_glow",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "ListenGlow.tsx",
-      "codeSha256": "fe5d6d125a91b6475253a223d52c5589f13fef53e8a2346bc89189a57f8667c0",
+      "codeSha256": "869e5278f34971fd8b5caa0eb4d7994668536227b7633e851296dfe610cf5d5d",
       "id": "listen_glow",
       "nameAr": "\u0627\u0633\u0645\u0639 \u0648\u0627\u0644\u0645\u0633",
       "needsAudio": true,
@@ -99,14 +99,14 @@
      ]
     },
     {
-     "approvalSha256": "22b65fae0ce5e7f51e098adc0e43775e647e0c2a020fdb6e0c3f461bd890a505",
+     "approvalSha256": "6f99cea516c7e1be1aaeeb83929013a9e82674748291cd6b9da48a7f0b803f9d",
      "id": "which_heard",
      "item": {
       "bands": [
        "3-5"
       ],
       "code": "WhichHeard.tsx",
-      "codeSha256": "5abbc5c0aa9bc6f7b9463451b3ad08543eb17d5e6ec0d2769fe7f3455ffe65db",
+      "codeSha256": "6f3af046480a8e823cbfa9390c583f62c496ddfa70abb8725b7b3a1b0364a45d",
       "id": "which_heard",
       "nameAr": "\u0623\u064a\u0651 \u0622\u064a\u0629 \u0633\u0645\u0639\u062a\u061f",
       "needsAudio": true,

@@ -62,11 +62,16 @@ VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
 MECHANICS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'mechanics.json')
 LESSONS_SRC = os.path.join(ROOT, 'apps', 'lessons', 'src')
-# What every mechanic's signature covers besides its own game (src-relative): the card and
-# respect rules, the band's knobs (tries before the answer is shown, rounds, options), the
-# session, the page that runs it, and the shuffle that places the answer. Change one and
-# every mechanic waits for review again.
-SHARED_CODE = ('play/games/common.tsx', 'play/adapt.ts', 'play/session.ts', 'play/PlayLesson.tsx', 'games/shuffle.ts')
+# What every mechanic's signature covers besides its own game (src-relative): everything that
+# changes what a game does -- the card and respect rules, the band's knobs (tries before the
+# answer is shown, rounds, options), the session, the page that runs it and the route that
+# gives it its band and recitation, the registry and what may sign it, the shuffle that places
+# the answer, the recitation player and its verified list, and the loader of the verified text.
+# Change one and every mechanic waits for review again. (route.ts only maps a path to a surah
+# number, and App.tsx only renders PlayRoute: neither is here.)
+SHARED_CODE = ('play/games/common.tsx', 'play/adapt.ts', 'play/session.ts', 'play/PlayLesson.tsx', 'play/PlayRoute.tsx',
+               'play/mechanics.ts', 'play/signed.ts', 'games/shuffle.ts', 'audio/audio-controller.ts', 'audio/audio-manifest.ts',
+               'quran/dataset.ts')
 PLAY_APPROVALS = os.path.join(APPROVALS, 'play.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')

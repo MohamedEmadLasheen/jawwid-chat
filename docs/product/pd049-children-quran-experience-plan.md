@@ -444,8 +444,13 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
   - **Signing a mechanic signs its code:** the record carries `code` (its file in `play/games/`) and `codeSha256`. That is the SHA-256 of that file plus the shared play code:
     - `common.tsx`, the card;
     - `adapt.ts`, the band's knobs such as tries before the answer is shown;
-    - `session.ts` and `PlayLesson.tsx`;
-    - `games/shuffle.ts`, which places the answer.
+    - `session.ts`, `PlayLesson.tsx` and `PlayRoute.tsx`, which gives the page its band and recitation;
+    - `mechanics.ts` and `signed.ts`, the registry and what may sign it;
+    - `games/shuffle.ts`, which places the answer;
+    - `audio/audio-controller.ts` and `audio/audio-manifest.ts`, the recitation and its verified list;
+    - `quran/dataset.ts`, the loader of the verified text.
+
+    `route.ts` only maps a path to a surah number, and `App.tsx` only renders `PlayRoute`, so neither is covered. Which games may be played (the registry, `play.json`, the keys) is fixed at build time in `signed.ts`: no page passes them to `PlayLesson`.
 
     Each file is hashed with its path, and CRLF is read as LF. `check-quran-content.py` refuses a hash that does not match. Changing any of these changes the record, so every mechanic must be signed again.
   - **Progress, v1:** stopping, or turning the recitation off or on, restarts the current game; the recitation toggle restarts the whole sitting. Nothing done so far is kept. That is accepted for v1, and it is safe: no star or progress is recorded yet (§B.5).
@@ -610,6 +615,7 @@ The scholar key is a deliberate grant to named people, never a bundle default.
     - CODEOWNERS covers all of these, and any future engine approvals loader joins `PROTECTED` and CODEOWNERS. The owner turns on "Require review from Code Owners" before the first key is added.
     - Times compare as instants, so a timestamp with or without milliseconds is the same time. An `issuedAt` more than 5 minutes in the future is refused.
     - The key registry is validated field by field, and the golden vector's test key can never be listed in it. The golden vectors include an Arabic value.
+  - **The first signed `play.json`** comes in a PR of its own: the export and its ledger entry, with no change to any protected file. The PR that widens the code the signature covers (SHARED_CODE: the audio, the loader, the route, `signed.ts`) lands before it.
   - **The loader rule:** any engine loader reads exactly the set `verify-approvals.mjs` checks, `apps/lessons/src/content/approvals/*.json`, and nothing else.
   - **Future option:** verify the signature at runtime in the engine too (WebCrypto Ed25519), once the WebViews families use support it widely: Safari/iOS 17+, Chrome 137+, Firefox 129+.
 - **The build ships approved text only.** The snapshot step drops every item without a complete approval for its current hash. **Held, draft and rejected text never reaches the browser bundle.** Today held lines ship and are hidden at runtime; PD-49 closes that.

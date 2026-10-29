@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import pin from '../../quran-pin.json';
 import { AudioController, type AudioFactory, type AudioSource, type Playable } from '../audio/audio-controller';
 import { approvalSha256, type ApprovalKey } from '../content/quran-content';
@@ -15,6 +15,12 @@ import { Echo } from './games/Echo';
 import { ListenGlow } from './games/ListenGlow';
 import { WhichHeard, planRounds } from './games/WhichHeard';
 import { GAMES, PlayLesson } from './PlayLesson';
+import type { Mechanic } from './mechanics';
+import committedPlay from '../content/approvals/play.json';
+
+// signed.ts is fixed at build time and no parent passes keys or approvals; the tests replace the module.
+const signed = vi.hoisted(() => ({ mechanics: [] as readonly Mechanic[], approvals: null as unknown, keys: [] as readonly ApprovalKey[] }));
+vi.mock('./signed', () => ({ SIGNED: signed }));
 
 // Stand-in verses (not Quran).
 const TEXTS = ['ألف باء تاء', 'جيم حاء', 'دال ذال راء', 'شين صاد', 'قاف لام'];
@@ -251,15 +257,38 @@ describe('the games page', () => {
     const end = () => act(() => files[files.length - 1]!.onended?.());
     return { audioSource, audioFactory, end };
   }
-  async function page(over: Partial<Parameters<typeof PlayLesson>[0]> = {}) {
+  beforeEach(() => {
+    Object.assign(signed, { mechanics: MECHANICS, approvals: committedPlay, keys: KEYS });
+  });
+  async function page({ approvals, mechanics, ...over }: Partial<Parameters<typeof PlayLesson>[0]> & { approvals?: unknown; mechanics?: readonly Mechanic[] } = {}) {
+    if (approvals !== undefined) signed.approvals = approvals;
+    if (mechanics !== undefined) signed.mechanics = mechanics;
     const s = await snapshot(112, 5, { texts: TEXTS, basmala: true });
     const el = (o: Partial<Parameters<typeof PlayLesson>[0]>) => (
-      <PlayLesson surah={112} fetcher={s.fetcher} anchor={s.anchor} date="2026-10-29" audioWaitMs={0} approvalKeys={KEYS} {...over} {...o} />
+      <PlayLesson surah={112} fetcher={s.fetcher} anchor={s.anchor} date="2026-10-29" audioWaitMs={0} {...over} {...o} />
     );
     const r = render(el({}));
     return { rerender: (o: Partial<Parameters<typeof PlayLesson>[0]>) => r.rerender(el(o)) };
   }
   const region = () => document.querySelector('section.play')?.getAttribute('aria-label') ?? null;
+
+  it('no page passes keys, approvals or mechanics: they are fixed at build time (signed.ts), frozen', async () => {
+    const refused = [
+      // @ts-expect-error -- not a prop: a parent cannot hand PlayLesson its own keys
+      <PlayLesson key="k" surah={112} approvalKeys={[]} />,
+      // @ts-expect-error -- not a prop: nor its own approvals
+      <PlayLesson key="a" surah={112} approvals={{}} />,
+      // @ts-expect-error -- not a prop: nor its own mechanics
+      <PlayLesson key="m" surah={112} mechanics={[]} />,
+    ];
+    expect(refused).toHaveLength(3);
+    const real = await vi.importActual<typeof import('./signed')>('./signed');
+    const { APPROVAL_KEYS } = await vi.importActual<typeof import('../content/quran-content')>('../content/quran-content');
+    expect(Object.isFrozen(real.SIGNED)).toBe(true);
+    expect(real.SIGNED.approvals).toEqual(committedPlay);
+    expect(real.SIGNED.keys).toBe(APPROVAL_KEYS);
+    expect(real.SIGNED.mechanics).toBe(MECHANICS);
+  });
 
   it('shows no game while none is signed', async () => {
     await page();
