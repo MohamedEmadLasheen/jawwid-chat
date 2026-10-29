@@ -725,3 +725,94 @@ describe('PD-47 PR-6b: each step that waits on a person is their task (owner 202
     }
   });
 });
+
+describe('PD-41 "Their manager": the requester uploaded it and has no cover (owner, 2026-10-29)', () => {
+  const tasks = new TaskService(g.prisma, g.outbox);
+  /** The certificate's open review step: its person. */
+  const reviewer = async (certificateId: string) =>
+    (
+      await g.prisma.$queryRaw<Array<{ assignee: string }>>`
+        SELECT t.assignee_staff_id::text AS assignee
+          FROM chat.work_task t JOIN chat.appreciation_certificate_event e ON e.id = t.source_id
+         WHERE e.certificate_id = ${certificateId}::uuid AND t.source_type = 'certificate_review' AND t.state = 'open'`
+    ).map((r) => r.assignee);
+  /** An Operations supervisor who may also design (a PD-40 role, given by the super admin). */
+  async function supervisorDesigns(staffId: string) {
+    const [{ id }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT chat.define_access_role('pd041_supervisor_designer', 'Supervisor designer (spec)', 'مشرف مصمم', null, 'supervisor', ${['certificates.design']}::text[], 'spec', ${superId}::uuid)::text AS id`;
+    await g.prisma.$queryRaw`SELECT chat.grant_access_role(${staffId}::uuid, ${id}::uuid, 'spec', ${superId}::uuid)`;
+  }
+  /** The same approval, written directly. */
+  async function approveDirectly(id: string, actor: string) {
+    const row = await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id } });
+    return g.prisma.appreciationCertificate.update({
+      where: { id },
+      data: { state: 'approved', approvedFileId: row.currentFileId, approvedBy: actor, approvedAt: new Date(), actionSeq: row.actionSeq + 1, lastAction: 'approved', lastNote: null, lastActorStaff: actor, lastActorTeacher: null },
+    });
+  }
+  const teacherRequest = async (by: string) =>
+    dto(await svc.create(by, { category: 'teacher', typeId: teacherTypeId, teacherId: s.teacherId, printedName: 'teacher_c', periodStart: '2026-10-01', periodEnd: '2026-10-31', requestKey: randomUUID() }));
+
+  it('a student certificate: the Operations Manager approves; the uploader cannot; sending stays the requester\'s', async () => {
+    await supervisorDesigns(s.ownerId);
+    const c = await studentRequest();
+    const up = await design(c.id, s.ownerId);
+    const fileId = up.currentFile!.id;
+    expect(up.actions).not.toContain('approve');
+    expect(await code(svc.approve(s.ownerId, c.id, { fileId }))).toBe(CommErrorCode.CERTIFICATE_SELF_APPROVAL);
+    // The review is the overseer's step, and the overseer is offered it.
+    expect(await reviewer(c.id)).toEqual([s.managerId]);
+    expect(dto(await svc.get(s.managerId, c.id)).actions).toContain('approve');
+
+    const out = dto(await svc.approve(s.managerId, c.id, { fileId }));
+    expect(out.state).toBe('approved');
+    expect(await g.prisma.appreciationCertificate.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ approvedBy: s.managerId, approvedFileId: fileId });
+    // Only the approval: the overseer does not send someone else's request; its requester does.
+    expect(await code(svc.send(s.managerId, c.id, { conversationId: groupId }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(dto(await svc.send(s.ownerId, c.id, { conversationId: groupId })).state).toBe('sent');
+  });
+
+  it('with an active cover the cover approves, and the overseer is refused -- by the service and by the database', async () => {
+    await supervisorDesigns(s.ownerId);
+    const c = await studentRequest();
+    const up = await design(c.id, s.ownerId);
+    expect(await reviewer(c.id)).toEqual([s.managerId]);
+    await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    // The open step follows: the sweep hands it to the cover.
+    await tasks.sweep();
+    expect(await reviewer(c.id)).toEqual([s.otherAdminId]);
+
+    expect(dto(await svc.get(s.managerId, c.id)).actions).not.toContain('approve');
+    expect(await code(svc.approve(s.managerId, c.id, { fileId: up.currentFile!.id }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(await sqlError(approveDirectly(c.id, s.managerId))).toMatch(/only the requester of record/);
+    expect(dto(await svc.approve(s.otherAdminId, c.id, { fileId: up.currentFile!.id })).state).toBe('approved');
+  });
+
+  it('a Designer\'s upload is the requester\'s to approve, as before: the overseer is not offered it', async () => {
+    const c = await studentRequest();
+    const up = await design(c.id);
+    expect(await reviewer(c.id)).toEqual([s.ownerId]);
+    expect(dto(await svc.get(s.managerId, c.id)).actions).not.toContain('approve');
+    expect(await code(svc.approve(s.managerId, c.id, { fileId: up.currentFile!.id }))).toBe(CommErrorCode.CERTIFICATE_DENIED);
+    expect(await sqlError(approveDirectly(c.id, s.managerId))).toMatch(/only the requester of record/);
+  });
+
+  it('a teacher certificate: the Teachers Manager approves what Teacher Supervision designed itself; the Operations Manager cannot', async () => {
+    const c = await teacherRequest(tsupId);
+    const up = await design(c.id, tsupId);
+    expect(await reviewer(c.id)).toEqual([tmgrId]);
+    expect(await code(svc.approve(tsupId, c.id, { fileId: up.currentFile!.id }))).toBe(CommErrorCode.CERTIFICATE_SELF_APPROVAL);
+    expect(await code(svc.approve(s.managerId, c.id, { fileId: up.currentFile!.id }))).toBe(CommErrorCode.CERTIFICATE_NOT_FOUND);
+    expect(await sqlError(approveDirectly(c.id, s.managerId))).toMatch(/only the requester of record/);
+    expect(dto(await svc.approve(tmgrId, c.id, { fileId: up.currentFile!.id })).state).toBe('approved');
+  });
+
+  it('the uploader never approves, overseer or not: the manager who designed their own request is reviewed by the super admin', async () => {
+    const c = await teacherRequest(tmgrId);
+    const up = await design(c.id, tmgrId);
+    expect(await reviewer(c.id)).toEqual([superId]);
+    expect(await code(svc.approve(tmgrId, c.id, { fileId: up.currentFile!.id }))).toBe(CommErrorCode.CERTIFICATE_SELF_APPROVAL);
+    expect(await sqlError(approveDirectly(c.id, tmgrId))).toMatch(/uploaded a design does not approve it/);
+    expect(dto(await svc.approve(superId, c.id, { fileId: up.currentFile!.id })).state).toBe('approved');
+  });
+});
