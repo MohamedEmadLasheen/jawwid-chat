@@ -1,23 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AudioController, NO_AUDIO, htmlAudio, type AudioFactory, type AudioSource } from '../audio/audio-controller';
-import type { Band } from '../content/quran-content';
-import { BUILD_ANCHOR, loadSurah, type Fetcher, type QuranAnchor, type Surah } from '../quran/dataset';
+import { BANDS, type Band } from '../content/quran-content';
+import { BUILD_ANCHOR, loadSurah, type Ayah, type Fetcher, type QuranAnchor, type Surah } from '../quran/dataset';
 import { segmentsFor } from './adapt';
 import { approvedMechanics } from './mechanics';
 import { buildSession, seedOf, sessionSeed, today, type Activity } from './session';
 import { SIGNED } from './signed';
+import { BuildAyah, fitsBuild } from './games/BuildAyah';
 import { CountAyat } from './games/CountAyat';
 import { Echo } from './games/Echo';
 import { ListenGlow } from './games/ListenGlow';
+import { NextAyah, fitsNext } from './games/NextAyah';
+import { OrderAyat, fitsOrder } from './games/OrderAyat';
+import { StartEnd, fitsStartEnd } from './games/StartEnd';
 import { WhichHeard } from './games/WhichHeard';
 import { Praise, arabic, type GameProps } from './games/common';
+import './play.css';
 
 export const GAMES: Readonly<Record<string, (p: GameProps) => JSX.Element>> = {
   listen_glow: ListenGlow,
   echo: Echo,
   which_heard: WhichHeard,
   count_ayat: CountAyat,
+  build_ayah: BuildAyah,
+  order_ayat: OrderAyat,
+  start_end: StartEnd,
+  next_ayah: NextAyah,
 };
+
+/**
+ * Whether a game can be played on these ayat (the segment, and its surah), for this band:
+ * a game that cannot (no ayah short enough to build, too few to cut in two) is not offered,
+ * rather than shown and skipped. A game without an entry fits any segment its tier allows.
+ */
+export const FITS: Readonly<Record<string, (ayahs: readonly Ayah[], pool: readonly Ayah[], band: Band) => boolean>> = {
+  build_ayah: fitsBuild,
+  order_ayat: fitsOrder,
+  start_end: fitsStartEnd,
+  next_ayah: fitsNext,
+};
+
+/** The bands as the grown-up reads them. */
+const BAND_NAMES: Readonly<Record<Band, string>> = { '3-5': '٣–٥', '6-8': '٦–٨', '9-12': '٩–١٢' };
 
 /** How long a sitting waits for the recitation list before it starts without it. */
 export const AUDIO_WAIT_MS = 2000;
@@ -47,7 +71,10 @@ interface Sitting {
  *
  * The grown-up can always replay, skip forward or stop (plan §C.3.4), turn the
  * recitation off (the sitting restarts without it: there is no other sound to
- * mute) and change the verse size (§C.4).
+ * mute), change the verse size (§C.4) and move the child's age band one step
+ * up or down from `band` (§B.1; the sitting restarts for it). These controls are
+ * folded behind "للكبار", so the child sees the game, not the settings. `band`
+ * is where it starts; the opener's profile will set it (§B.5) once it exists.
  */
 export function PlayLesson({
   surah,
@@ -80,6 +107,9 @@ export function PlayLesson({
   const [muted, setMuted] = useState(false);
   const [scale, setScale] = useState(0);
   const [sitting, setSitting] = useState<Sitting | null>(null);
+  const [chosen, setChosen] = useState<Band>(band);
+  // The grown-up's controls are folded away: the child sees the game, not the settings.
+  const [grownUp, setGrownUp] = useState(false);
   const [day] = useState(() => date ?? today());
   // Which games may be played is fixed at build time (signed.ts), never a prop.
   const { mechanics, approvals, keys } = SIGNED;
@@ -109,17 +139,19 @@ export function PlayLesson({
 
   const s = loaded && loaded !== 'refused' ? loaded : null;
   const surahAudio = !!s && !!audio?.availableFor(s.info.number);
-  const segments = useMemo(() => (s ? segmentsFor(band, s.ayahs.length) : []), [s, band]);
+  const segments = useMemo(() => (s ? segmentsFor(chosen, s.ayahs.length) : []), [s, chosen]);
   const playable = useMemo(() => mechanics.filter((m) => GAMES[m.id] !== undefined), [mechanics]);
   const seg = segments[segment];
-  const key = `${segment}:${muted}`;
+  const key = `${chosen}:${segment}:${muted}`;
 
   // Build this segment's sitting once: after the recitation list came, or the wait ran out.
   if (s && seg && approved && (surahAudio || waited) && sitting?.key !== key) {
     const segAudio = !muted && surahAudio && s.ayahs.every((a) => a.ayah < seg[0] || a.ayah > seg[1] || audio!.has(s.info.number, a.ayah));
-    const seed = sessionSeed({ surah: s.info.number, segment, band, date: day });
-    const activities = buildSession(playable, {
-      band,
+    const seed = sessionSeed({ surah: s.info.number, segment, band: chosen, date: day });
+    const segAyahs = s.ayahs.filter((a) => a.ayah >= seg[0] && a.ayah <= seg[1]);
+    const fits = playable.filter((m) => FITS[m.id]?.(segAyahs, s.ayahs, chosen) ?? true);
+    const activities = buildSession(fits, {
+      band: chosen,
       ayahCount: s.ayahs.length,
       segment: seg,
       audio: segAudio,
@@ -198,32 +230,50 @@ export function PlayLesson({
       <p className="note">
         الآيات {arabic(seg![0])}–{arabic(seg![1])} · اللعبة {arabic(Math.min(step + 1, session.length))} من {arabic(session.length)}
       </p>
-      <nav className="play__grownup" aria-label="أدوات الكبير">
-        {live ? (
-          <>
-            <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
-              ↻ أعد اللعبة
+      <button type="button" className="play__grownup-toggle" aria-expanded={grownUp} aria-controls="play-grownup" onClick={() => setGrownUp(!grownUp)}>
+        ⚙ للكبار
+      </button>
+      {grownUp ? (
+        <nav id="play-grownup" className="play__grownup" aria-label="أدوات الكبير">
+          {live ? (
+            <>
+              <button type="button" onClick={() => (audio?.stop(), setAttempt(attempt + 1))}>
+                ↻ أعد اللعبة
+              </button>
+              <button type="button" onClick={advance}>
+                ⏭ تخطَّ اللعبة
+              </button>
+              <button type="button" onClick={() => (audio?.stop(), setStopped(true))}>
+                ■ أوقف
+              </button>
+            </>
+          ) : null}
+          {surahAudio ? (
+            <button type="button" aria-pressed={muted} onClick={() => (audio?.stop(), setMuted(!muted), setStep(0), setAttempt(0))}>
+              {muted ? '🔊 شغّل التلاوة' : '🔇 بلا تلاوة'}
             </button>
-            <button type="button" onClick={advance}>
-              ⏭ تخطَّ اللعبة
-            </button>
-            <button type="button" onClick={() => (audio?.stop(), setStopped(true))}>
-              ■ أوقف
-            </button>
-          </>
-        ) : null}
-        {surahAudio ? (
-          <button type="button" aria-pressed={muted} onClick={() => (audio?.stop(), setMuted(!muted), setStep(0), setAttempt(0))}>
-            {muted ? '🔊 شغّل التلاوة' : '🔇 بلا تلاوة'}
+          ) : null}
+          <button type="button" disabled={scale === 0} onClick={() => setScale(scale - 1)}>
+            أ− تصغير الآيات
           </button>
-        ) : null}
-        <button type="button" disabled={scale === 0} onClick={() => setScale(scale - 1)}>
-          أ− تصغير الآيات
-        </button>
-        <button type="button" disabled={scale === SCALES.length - 1} onClick={() => setScale(scale + 1)}>
-          أ+ تكبير الآيات
-        </button>
-      </nav>
+          <button type="button" disabled={scale === SCALES.length - 1} onClick={() => setScale(scale + 1)}>
+            أ+ تكبير الآيات
+          </button>
+          <span className="play__bands" role="group" aria-label="عمر الطفل">
+            العمر:
+            {BANDS.filter((b) => Math.abs(BANDS.indexOf(b) - BANDS.indexOf(band)) <= 1).map((b) => (
+              <button
+                key={b}
+                type="button"
+                aria-pressed={chosen === b}
+                onClick={() => (audio?.stop(), setChosen(b), setSegment(0), setStep(0), setAttempt(0), setStopped(false))}
+              >
+                {BAND_NAMES[b]}
+              </button>
+            ))}
+          </span>
+        </nav>
+      ) : null}
       {stopped ? (
         <>
           <p className="note" role="status">
@@ -235,12 +285,12 @@ export function PlayLesson({
         </>
       ) : activity && Game ? (
         <Game
-          key={`${segment}:${muted}:${step}:${attempt}`}
+          key={`${chosen}:${segment}:${muted}:${step}:${attempt}`}
           surah={s.info.number}
           ayahs={ayahs}
           pool={s.ayahs}
           audio={sitting.audio ? audio : null}
-          band={band}
+          band={chosen}
           seed={seedOf([sitting.seed, step, attempt])}
           onComplete={() => setTimeout(advance, 0)}
         />

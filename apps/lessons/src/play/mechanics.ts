@@ -12,7 +12,7 @@ import { TIERS, type Tier } from './adapt';
  * are part of what they sign.
  * None is signed yet, so no child sees a game.
  */
-export type Skill = 'listening' | 'recitation' | 'recognition' | 'structure';
+export type Skill = 'listening' | 'recitation' | 'recognition' | 'structure' | 'order' | 'recall';
 
 export interface Mechanic {
   id: string;
@@ -26,14 +26,15 @@ export interface Mechanic {
   /**
    * The game's file in play/games/, and the SHA-256 of it plus every file that changes what a
    * game does (the card, the knobs, the session, the page and its route, this registry and
-   * signed.ts, the shuffle, the recitation player and list, the verified-text loader): what is
+   * signed.ts, the shuffle, the recitation player and list, the verified-text loader, the
+   * stylesheets): what is
    * signed includes the code. check-quran-content.py (SHARED_CODE) defines and verifies it.
    */
   code: string;
   codeSha256: string;
 }
 
-const SKILLS: readonly Skill[] = ['listening', 'recitation', 'recognition', 'structure'];
+const SKILLS: readonly Skill[] = ['listening', 'recitation', 'recognition', 'structure', 'order', 'recall'];
 const ID = /^[a-z][a-z0-9_]{1,62}$/;
 const CODE = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const SHA256 = /^[0-9a-f]{64}$/;

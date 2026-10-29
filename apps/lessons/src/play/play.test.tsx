@@ -14,7 +14,7 @@ import { CountAyat } from './games/CountAyat';
 import { Echo } from './games/Echo';
 import { ListenGlow } from './games/ListenGlow';
 import { WhichHeard, planRounds } from './games/WhichHeard';
-import { GAMES, PlayLesson } from './PlayLesson';
+import { FITS, GAMES, PlayLesson } from './PlayLesson';
 import type { Mechanic } from './mechanics';
 import committedPlay from '../content/approvals/play.json';
 
@@ -77,7 +77,9 @@ describe('adaptation (plan §B)', () => {
 
 describe('the mechanics and who signs them (plan §C.4)', () => {
   it('the registry is valid, and every mechanic states its respect rules', () => {
-    expect(MECHANICS.map((m) => m.id)).toEqual(['listen_glow', 'echo', 'which_heard', 'count_ayat']);
+    expect(MECHANICS.map((m) => m.id)).toEqual(['listen_glow', 'echo', 'which_heard', 'count_ayat', 'build_ayah', 'order_ayat', 'start_end', 'next_ayah']);
+    // Every mechanic in the registry has its game here.
+    for (const m of MECHANICS) expect(GAMES[m.id]).toBeDefined();
     for (const m of MECHANICS) expect(m.respect.length).toBeGreaterThan(0);
     // One malformed mechanic refuses them all.
     expect(parseMechanics({ mechanics: [...registry.mechanics, { ...registry.mechanics[0], id: 'Bad Id' }] })).toBeNull();
@@ -120,18 +122,23 @@ describe('the session (plan §C.3)', () => {
     expect(s.every((m, i) => i === 0 || m !== s[i - 1])).toBe(true);
   });
 
-  it('without recitation, only what works without it: counting, in a short surah', () => {
-    expect(session({ audio: false })).toEqual(['count_ayat']);
-    expect(session({ audio: false, ayahCount: 30 })).toEqual([]);
+  it('without recitation, only what works without it: counting (in a short surah) and ordering', () => {
+    expect(session({ audio: false })).toEqual(['count_ayat', 'order_ayat']);
+    expect(session({ audio: false, ayahCount: 30 })).toEqual(['order_ayat']);
   });
 
   it('the length tier decides: no listen-and-glow or counting in a 30-ayah surah', () => {
-    expect(session({ ayahCount: 30 })).toEqual(['echo', 'which_heard']);
+    expect(session({ ayahCount: 30 })).toEqual(['echo', 'which_heard', 'order_ayat']);
   });
 
-  it('only signed mechanics, and only for their band', () => {
+  it('only signed mechanics, and only for their band: order before recall', () => {
     expect(session({ approved: new Set(['echo']) })).toEqual(['echo']);
-    expect(session({ band: '9-12' })).toEqual([]);
+    const older = session({ band: '9-12' });
+    expect([...older].sort()).toEqual(['build_ayah', 'order_ayat', 'start_end']);
+    expect(older[2]).toBe('start_end');
+    // "What comes next" is for longer surahs (L2 and up).
+    expect(session({ band: '6-8', ayahCount: 12 })).toContain('next_ayah');
+    expect(session({ band: '6-8' })).not.toContain('next_ayah');
   });
 
   it("does not open with the last sitting's mechanic", () => {
@@ -271,6 +278,11 @@ describe('the games page', () => {
     return { rerender: (o: Partial<Parameters<typeof PlayLesson>[0]>) => r.rerender(el(o)) };
   }
   const region = () => document.querySelector('section.play')?.getAttribute('aria-label') ?? null;
+  /** Opens the folded grown-up controls (the child does not see them). */
+  const grownUp = () => {
+    const t = screen.getByRole('button', { name: /للكبار/ });
+    if (t.getAttribute('aria-expanded') !== 'true') fireEvent.click(t);
+  };
 
   it('no page passes keys, approvals or mechanics: they are fixed at build time (signed.ts), frozen', async () => {
     const refused = [
@@ -355,6 +367,12 @@ describe('the games page', () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow', 'echo'), audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    // Folded away from the child until a grown-up opens them.
+    expect(screen.queryByRole('button', { name: /أوقف/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /للكبار/ }).getAttribute('aria-expanded')).toBe('false');
+    // Folded means not there at all (not merely hidden, which a stylesheet's display rule could undo).
+    expect(document.getElementById('play-grownup')).toBeNull();
+    grownUp();
     fireEvent.click(screen.getByRole('button', { name: /أوقف/ }));
     expect(screen.getByText('توقّفت الألعاب.')).toBeTruthy();
     expect(document.querySelectorAll('.play-card')).toHaveLength(0);
@@ -369,6 +387,7 @@ describe('the games page', () => {
     const r = recitation();
     await page({ approvals: await sign('listen_glow', 'count_ayat'), audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
+    grownUp();
     fireEvent.click(screen.getByRole('button', { name: /بلا تلاوة/ }));
     expect(await screen.findByRole('region', { name: 'عُدّ الآيات' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /شغّل التلاوة/ }).getAttribute('aria-pressed')).toBe('true');
@@ -385,6 +404,28 @@ describe('the games page', () => {
     await page({ mechanics: [...MECHANICS, ghost], approvals });
     expect(await screen.findByText('لا توجد لعبة لهذه الآيات بعد.')).toBeTruthy();
     expect(screen.queryByText(/أحسنت/)).toBeNull();
+  });
+
+  it('the grown-up moves the age band one step: the sitting restarts for it, with that band\'s games and segments', async () => {
+    await page({ approvals: await sign('order_ayat', 'build_ayah') });
+    // 3-5 by default: ordering pairs (building is not for 3-5), on 1-3.
+    expect(await screen.findByRole('region', { name: 'رتّب الآيات' })).toBeTruthy();
+    expect(screen.getByText(/الآيات ١–٣ · اللعبة ١ من ١/)).toBeTruthy();
+    grownUp();
+    // One band up or down only (plan §B.1): from 3-5, not 9-12.
+    expect(screen.queryByRole('button', { name: '٩–١٢' })).toBeNull();
+    expect(screen.getByRole('button', { name: '٣–٥' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: '٦–٨' }));
+    expect(screen.getByRole('button', { name: '٦–٨' }).getAttribute('aria-pressed')).toBe('true');
+    // 6-8 plays the short surah as one segment, both games.
+    expect(await screen.findByText(/الآيات ١–٥ · اللعبة ١ من ٢/)).toBeTruthy();
+  });
+
+  it('a game that cannot be played on these ayat is not offered (no ayah long enough to cut in two)', async () => {
+    expect(FITS.start_end!(AYAHS, AYAHS, '6-8')).toBe(false);
+    expect(FITS.build_ayah!(AYAHS, AYAHS, '6-8')).toBe(true);
+    await page({ approvals: await sign('start_end'), band: '6-8' });
+    expect(await screen.findByText('لا توجد لعبة لهذه الآيات بعد.')).toBeTruthy();
   });
 
   it('lives at /lessons/quran/surah-N/play', () => {

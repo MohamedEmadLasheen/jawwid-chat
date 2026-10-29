@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AudioController } from '../../audio/audio-controller';
 import type { Band } from '../../content/quran-content';
 import type { Ayah } from '../../quran/dataset';
+import { KNOBS } from '../adapt';
 
 /**
  * What every PD-49 game gets. The respect rules (plan §C.4) live here once:
@@ -24,8 +25,32 @@ export interface GameProps {
 
 export const arabic = (n: number) => n.toLocaleString('ar-EG');
 
+// An Arabic letter (hamza..yaa, and alef wasla): a token without one is a pause mark (as lesson-content's wordsOf).
+const LETTER = new RegExp('[' + String.fromCodePoint(0x621) + '-' + String.fromCodePoint(0x64a) + String.fromCodePoint(0x671) + ']');
+
+/**
+ * The words of a verse as tiles, in order: each tile is one word with any pause mark after it
+ * (a mark alone is never a tile, and never lost), so the tiles joined by spaces ARE the verse.
+ * A game may hide or reorder whole tiles; it never changes one.
+ */
+export function tilesOf(verse: string): string[] {
+  const out: string[] = [];
+  for (const t of verse.split(' ')) {
+    if (LETTER.test(t) || out.length === 0) out.push(t);
+    else out[out.length - 1] += ' ' + t;
+  }
+  return out;
+}
+
+/** A word's letters only, without its vowel and recitation marks: two words that look alike to a child share it. */
+export function skeleton(word: string): string {
+  return [...word].filter((c) => LETTER.test(c)).join('');
+}
+
 /** Shapes, so a card is never told apart by colour alone. */
 export const SHAPES = ['●', '▲', '■', '★', '◆'] as const;
+/** Their names, for a screen reader. */
+export const SHAPE_NAMES = ['الدائرة', 'المثلث', 'المربع', 'النجمة', 'المعيّن'] as const;
 
 /** Calls onComplete once, the first time `done` is true. */
 export function useCompleteOnce(done: boolean, onComplete: () => void): void {
@@ -56,6 +81,7 @@ export function VerseCard({
   glow = false,
   mark = null,
   disabled = false,
+  numbered = true,
   onPress,
 }: {
   ayah: Ayah;
@@ -63,6 +89,8 @@ export function VerseCard({
   glow?: boolean;
   mark?: 'right' | 'shown' | null;
   disabled?: boolean;
+  /** False where the number would give the answer away (ordering, what comes next): the shape stays. */
+  numbered?: boolean;
   onPress?: () => void;
 }) {
   const cls = ['play-card', glow ? 'play-card--glow' : '', mark ? `play-card--${mark}` : ''].filter(Boolean).join(' ');
@@ -70,8 +98,12 @@ export function VerseCard({
     <button type="button" className={cls} data-ayah={ayah.ayah} disabled={disabled} onClick={onPress}>
       <span className="play-card__shape">
         <span aria-hidden="true">{SHAPES[shape % SHAPES.length]} </span>
-        <span className="sr-only">الآية </span>
-        {arabic(ayah.ayah)}
+        {numbered ? (
+          <>
+            <span className="sr-only">الآية </span>
+            {arabic(ayah.ayah)}
+          </>
+        ) : null}
       </span>
       <span className="play-card__verse">{ayah.text}</span>
       {mark ? (
@@ -102,5 +134,32 @@ export function Praise({ text = 'أحسنت! ما شاء الله' }: { text?: s
     <p className="praise" role="status">
       {text}
     </p>
+  );
+}
+
+/**
+ * The end of a game. 9-12 keeps a score, so what was missed is listed to review -- whole,
+ * verified ayat, never the wrong choices -- and the child moves on when ready. Otherwise
+ * (and when nothing was missed) it is praise, and the sitting moves on.
+ */
+export function GameEnd({ band, missed, onComplete }: { band: GameProps['band']; missed: readonly Ayah[]; onComplete: () => void }) {
+  const review = KNOBS[band].reviewList && missed.length > 0;
+  const [left, setLeft] = useState(false);
+  useCompleteOnce(!review || left, onComplete);
+  if (!review) return <Praise />;
+  const unique = missed.filter((a, i) => missed.findIndex((b) => b.ayah === a.ayah) === i).sort((x, y) => x.ayah - y.ayah);
+  return (
+    <section className="play__review" aria-label="راجع هذه الآيات">
+      <Praise text="أحسنت! انتهت اللعبة" />
+      <h2>راجع هذه الآيات</h2>
+      <div className="play-cards">
+        {unique.map((a, i) => (
+          <VerseCard key={a.ayah} ayah={a} shape={i} disabled />
+        ))}
+      </div>
+      <button type="button" className="primary play__big" disabled={left} onClick={() => setLeft(true)}>
+        التالي ←
+      </button>
+    </section>
   );
 }

@@ -31,12 +31,19 @@ export interface Knobs {
   activities: number;
   /** Never for 3-8; an opt-in challenge only for 9-12 (not built yet). */
   timers: boolean;
+  /**
+   * Where a wrong choice comes from (plan §B.3): far from the answer (3-5), the same surah but
+   * not next to it (6-8), or its neighbours (9-12). Always a real, whole unit of the verified text.
+   */
+  distractors: 'far' | 'apart' | 'near';
+  /** A list of what was missed, to review at the end of a game (9-12: "score kept, a review list"). */
+  reviewList: boolean;
 }
 
 export const KNOBS: Readonly<Record<Band, Knobs>> = {
-  '3-5': { options: 2, rounds: 3, echoes: 3, triesBeforeShown: 2, activities: 3, timers: false },
-  '6-8': { options: 3, rounds: 5, echoes: 5, triesBeforeShown: 1, activities: 5, timers: false },
-  '9-12': { options: 4, rounds: 8, echoes: 5, triesBeforeShown: 1, activities: 6, timers: false },
+  '3-5': { options: 2, rounds: 3, echoes: 3, triesBeforeShown: 2, activities: 3, timers: false, distractors: 'far', reviewList: false },
+  '6-8': { options: 3, rounds: 5, echoes: 5, triesBeforeShown: 1, activities: 5, timers: false, distractors: 'apart', reviewList: false },
+  '9-12': { options: 4, rounds: 8, echoes: 5, triesBeforeShown: 1, activities: 6, timers: false, distractors: 'near', reviewList: true },
 };
 
 /** Ayat played at a time: a 3-5 child gets 1-3, longer surahs smaller pieces (plan §B.2). */
