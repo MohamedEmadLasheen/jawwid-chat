@@ -101,6 +101,11 @@ class _MessageComposerState extends State<MessageComposer> {
   bool _edited = false;
   bool _restoring = false;
 
+  /// The text [MessageComposer.onDraftChanged] last heard about. The
+  /// controller also notifies for a caret or selection move -- a tap in the
+  /// field -- and that is not typing.
+  String _reported = '';
+
   @override
   void initState() {
     super.initState();
@@ -139,8 +144,11 @@ class _MessageComposerState extends State<MessageComposer> {
   void _onChanged() {
     setState(() {});
     if (_restoring) return;
-    if (_controller.text.isNotEmpty) _edited = true;
-    widget.onDraftChanged?.call(_controller.text);
+    if (_controller.text != _reported) {
+      _reported = _controller.text;
+      if (_reported.isNotEmpty) _edited = true;
+      widget.onDraftChanged?.call(_reported);
+    }
     final source = widget.mentionCandidates;
     if (source == null) return;
     final caret = _controller.selection.baseOffset;
