@@ -21,7 +21,8 @@ import type { Actor } from './types';
  *
  * A key is necessary, never sufficient. The row rules -- "the requester of
  * record or their active cover", "the learner's assigned supervisor", "not who
- * uploaded it" -- are applied by CertificateService and, again, by the
+ * uploaded it", "the overseer when the requester uploaded it and has no cover"
+ * -- are applied by CertificateService and, again, by the
  * database trigger chat.guard_appreciation_certificate.
  *
  * Pure: the caller resolves the department roles and the permission set.
@@ -183,6 +184,12 @@ export interface CertificateRelation {
   isAssignedDesigner: boolean;
   /** Uploaded the current revision (and so may not approve it). */
   uploadedCurrent: boolean;
+  /**
+   * PD-41 "Their manager" (chat.certificate_overseer_approves): the requester of
+   * record uploaded the current revision themself and nobody else answers for
+   * it -- no active PD-33 cover -- so the category's overseer approves it.
+   */
+  overseerApproves?: boolean;
   publishStory: boolean;
   storyPublished: boolean;
   storyWithdrawn: boolean;
@@ -230,6 +237,8 @@ export function allowedActs(access: CertificateAccess, r: CertificateRelation): 
       acts.push(CertificateAct.STORY);
     }
   }
+  // "Their manager": the overseer approves what only its uploader could otherwise answer for.
+  if (s === CertificateState.UPLOADED && !r.uploadedCurrent && c.oversee && r.overseerApproves) acts.push(CertificateAct.APPROVE);
   if (OPEN_FOR_CANCEL.has(s) && !storyLive && (requester || c.oversee)) acts.push(CertificateAct.CANCEL);
   if (access.design) {
     if (s === CertificateState.REQUESTED) acts.push(CertificateAct.START, CertificateAct.RETURN);

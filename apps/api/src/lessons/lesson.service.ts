@@ -431,16 +431,13 @@ export class LessonService {
       SELECT l.id::text AS id
         FROM chat.lesson l
        WHERE l.organization_id = ${organizationId}::uuid
-         AND l.kind <> 'trial'
+         -- An index-friendly first cut; the rule itself is chat.lesson_owes_makeup,
+         -- the one PD-47's makeup_owed tasks read too (never re-implemented).
          AND l.outcome = ANY(${causes}::text[])
+         AND chat.lesson_owes_makeup(l.id, ${causes}::text[])
          AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
          AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
          AND (${opts.learnerIds ?? null}::uuid[] IS NULL OR l.learner_id = ANY(${opts.learnerIds ?? null}::uuid[]))
-         AND NOT EXISTS (
-           SELECT 1 FROM chat.lesson m
-            WHERE m.makeup_for = l.id AND m.kind = 'makeup'
-              AND (m.outcome IS NULL OR m.outcome NOT IN ('teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled', 'voided')))
-         AND NOT EXISTS (SELECT 1 FROM chat.lesson_ruling r WHERE r.lesson_id = l.id AND r.kind = 'makeup_followup')
        ORDER BY l.outcome_at ASC
        LIMIT 500`;
     if (ids.length === 0) return [];
