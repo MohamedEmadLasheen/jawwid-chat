@@ -110,7 +110,13 @@ class ChatRealtimeCoordinator {
         _scheduleListRefresh();
       case ChatSignalKind.messageChanged:
         final thread = _openThread(id);
-        if (thread != null) unawaited(thread.refreshLatest());
+        if (thread != null) {
+          // PD-50: a `message.updated` naming its seq may be a card far up the thread,
+          // outside the newest page: re-read just that one as well.
+          final seq = signal.seq;
+          if (seq != null) unawaited(thread.refreshMessage(seq));
+          unawaited(thread.refreshLatest());
+        }
         _scheduleListRefresh();
       case ChatSignalKind.conversationUpdated:
         // A pin or unpin arrives this way: the open thread re-reads its page

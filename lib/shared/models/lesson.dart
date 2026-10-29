@@ -304,6 +304,24 @@ class LessonReportDraft {
       };
 }
 
+/// PD-15 / PD-50: what `GET /lessons/:id` tells a teacher or staff reader about an
+/// excuse that the group card deliberately leaves out. The server decides who reads
+/// each field; a blank one arrives here as null. NEVER fetched for a parent.
+class LessonStaffDetails {
+  const LessonStaffDetails({this.note, this.category, this.familyWords});
+
+  /// The internal reason (`outcomeNote`): a supervisor's excuse, a teacher's apology.
+  final String? note;
+
+  /// The excuse's category code (`excuseCategory`). For a teacher's own apology this is
+  /// staff data: the card payload never carries it.
+  final String? category;
+
+  /// A family's own words on its late apology (`ruling.reason`), which a PD-50 card
+  /// replaces with the category.
+  final String? familyWords;
+}
+
 /// One child of a group, as its details page shows it (PD-15): each child apart, so
 /// siblings' courses, times and packages are never confused.
 class GroupChild {

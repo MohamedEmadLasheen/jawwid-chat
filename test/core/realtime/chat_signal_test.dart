@@ -69,6 +69,16 @@ void main() {
     expect(decodeChatSignal('message.created', null), isNull);
   });
 
+  test('PD-50: message.updated carries the changed message\'s seq; other changes carry none', () {
+    final s = decodeChatSignal('message.updated', {'conversationId': conv, 'messageId': 'm1', 'seq': '17'})!;
+    expect(s.kind, ChatSignalKind.messageChanged);
+    expect(s.seq, 17);
+    expect(decodeChatSignal('message.updated', {'conversationId': conv, 'messageId': 'm1'})!.seq, isNull);
+    for (final event in ['message.deleted', 'reaction.added', 'approval.decided', 'conversation.updated']) {
+      expect(decodeChatSignal(event, {'conversationId': conv, 'seq': '17'})!.seq, isNull, reason: event);
+    }
+  });
+
   test('a malformed seq is not invented: it decodes as null', () {
     final s = decodeChatSignal('message.created', {'conversationId': conv, 'seq': 'x'})!;
     expect(s.seq, isNull);
