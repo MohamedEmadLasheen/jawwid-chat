@@ -2245,6 +2245,18 @@ abstract class L10n {
   /// **'Reason'**
   String get cardReason;
 
+  /// PD-50: label above the excuse reason category chips; the category is shown on the group card, the note is not.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (shown in the group)'**
+  String get ticketCategoryLabel;
+
+  /// PD-50: label above the reason category chips on the teacher's own apology; a teacher's reason, its category included, is never shown to the family.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (staff and the teacher only)'**
+  String get ticketCategoryStaffLabel;
+
   /// Lesson card row label: the booked make-up lesson's day, date and time follow (on the make-up card and on the excuse card it replaces).
   ///
   /// In en, this message translates to:
@@ -2262,6 +2274,60 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Reason (staff and the teacher only)'**
   String get cardStaffReason;
+
+  /// PD-50: label of the free-text note beside an excuse category -- on the lesson card (staff and the teacher only, never a family) and on the teacher's apology form.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (staff and the teacher only)'**
+  String get cardStaffNote;
+
+  /// PD-50: lesson card row label for the family's own words on a late apology, fetched from the lesson; shown to staff and the teacher only, never to a family.
+  ///
+  /// In en, this message translates to:
+  /// **'Details from the family (staff and the teacher only)'**
+  String get cardFamilyDetails;
+
+  /// PD-50: an excuse category, shown on the apology forms and to the family on the lesson card.
+  ///
+  /// In en, this message translates to:
+  /// **'Travel'**
+  String get excuseCategoryTravel;
+
+  /// No description provided for @excuseCategoryIllness.
+  ///
+  /// In en, this message translates to:
+  /// **'Illness'**
+  String get excuseCategoryIllness;
+
+  /// No description provided for @excuseCategoryExams.
+  ///
+  /// In en, this message translates to:
+  /// **'Exams'**
+  String get excuseCategoryExams;
+
+  /// No description provided for @excuseCategoryEmergency.
+  ///
+  /// In en, this message translates to:
+  /// **'An emergency'**
+  String get excuseCategoryEmergency;
+
+  /// No description provided for @excuseCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get excuseCategoryOther;
+
+  /// PD-50: the optional free-text note on a family's apology before the lesson; only the teacher and staff read it, never the family group card.
+  ///
+  /// In en, this message translates to:
+  /// **'Note for the teacher and staff (optional)'**
+  String get ticketFamilyNoteOptional;
+
+  /// PD-50: the required free-text details on a family's late apology; only the teacher and staff read them.
+  ///
+  /// In en, this message translates to:
+  /// **'Details for the teacher and staff'**
+  String get ticketFamilyDetails;
 
   /// No description provided for @ticketBookMakeup.
   ///
@@ -8028,6 +8094,24 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your changes have to be saved first. Try again once the board says Saved.'**
   String get boardSaveFirst;
+
+  /// The search field at the top of every list picker (owner 2026-10-29: every list can be typed into).
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search'**
+  String get pickerSearchHint;
+
+  /// A list picker whose search matched nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get pickerNoMatches;
+
+  /// The age filter on the child materials library; names the picker and its sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get materialsAgeLabel;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
