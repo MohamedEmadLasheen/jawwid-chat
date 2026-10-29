@@ -4756,9 +4756,6 @@ class L10nAr extends L10n {
   String get boardTextHint => 'اكتب هنا';
 
   @override
-  String get boardVersePlaceholder => 'آية قرآنية';
-
-  @override
   String get boardElementUnknown => 'لا يظهر في هذا الإصدار';
 
   @override
@@ -4769,6 +4766,40 @@ class L10nAr extends L10n {
 
   @override
   String get boardMore => 'المزيد';
+
+  @override
+  String get boardToolVerse => 'آية قرآنية';
+
+  @override
+  String get boardVerseSurah => 'السورة';
+
+  @override
+  String get boardVerseFrom => 'من الآية';
+
+  @override
+  String get boardVerseTo => 'إلى الآية';
+
+  @override
+  String boardVerseMax(String count) {
+    return '$count آية على الأكثر في المرة الواحدة.';
+  }
+
+  @override
+  String boardVerseSource(String source) {
+    return 'نص القرآن الكريم: $source';
+  }
+
+  @override
+  String get boardVerseInsert => 'إدراج';
+
+  @override
+  String get boardVerseLoading => 'جارٍ تحميل الآية…';
+
+  @override
+  String get boardVerseUnavailable => 'نص القرآن غير متاح';
+
+  @override
+  String get boardVerseChanged => 'تغيّر نص الآية، أعد إدراجها';
 
   @override
   String get boardDraftStale =>
