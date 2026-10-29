@@ -22,6 +22,7 @@ import {
   TASK_LABELS,
   TIMING_LABELS,
   TOPIC_LABELS,
+  excuseCategoryLabel,
   formatLessonWhen,
   useJourneyCopy,
 } from './copy'
@@ -122,9 +123,15 @@ function RecordView({ l, onClose, onMode }: { l: LessonRecord; onClose: () => vo
         <dd>{formatLessonWhen(l.startsAt, locale)} · {l.teacher.name}</dd>
         <dt>{tx(J.outcome)}</dt>
         <dd>{outcomeText(l, tx)}</dd>
+        {excuseCategoryLabel(l.excuseCategory) && (
+          <>
+            <dt>{tx(J.reason)}</dt>
+            <dd>{tx(excuseCategoryLabel(l.excuseCategory)!)}</dd>
+          </>
+        )}
         {l.outcomeNote && (
           <>
-            <dt>{tx(J.reasonStaffTeacher)}</dt>
+            <dt>{tx(l.excuseCategory ? J.noteStaffTeacher : J.reasonStaffTeacher)}</dt>
             <dd dir="auto">{l.outcomeNote}</dd>
           </>
         )}

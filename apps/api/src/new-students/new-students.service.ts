@@ -8,6 +8,8 @@ import { isUuid } from '../communication/conversations/conversation.service';
 type Tx = Prisma.TransactionClient;
 
 export const PAYMENT_METHODS: ReadonlySet<string> = new Set(['bank_transfer', 'invoice']);
+/** The New Students page lists at most this many live forms, newest first (PD-44 counts the same). */
+export const NEW_STUDENTS_LIMIT = 500;
 const MAX_CHILDREN = 10;
 const MAX_SLOTS = 14;
 const MAX_PRICE = 1_000_000_000;
@@ -138,8 +140,9 @@ export class NewStudentsService {
   async list(organizationId: string) {
     const forms = await this.prisma.trialSubscription.findMany({
       where: { organizationId, withdrawnAt: null },
-      orderBy: { recordedAt: 'desc' },
-      take: 500,
+      // The lesson id breaks ties, so the page and its Dashboard count (PD-44) take the same forms.
+      orderBy: [{ recordedAt: 'desc' }, { lessonId: 'asc' }],
+      take: NEW_STUDENTS_LIMIT,
     });
     return this.present(organizationId, forms);
   }

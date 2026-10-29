@@ -1,6 +1,6 @@
 # PD-47: one Tasks page for everyone (plan)
 
-**State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8). No feature code is written. PR-1 waits for the department head's GO (machine load).
+**State:** **DONE (2026-10-29).** Every PR in §7 and every source in §3.6 is on `main`, with the last one, PR-6c #275, merged at `f3e7f027`. One item is deferred: a Tasks screen on mobile for staff (Sales). §9 lists what shipped and what did not. Approved 2026-10-28: the owner answered Q1–Q13 "Approve all 13 (Recommended)", relayed verbatim by the department head (§8).
 **Claim:** `docs/product/pd-registry/PD-47.md`. **Migration slots, assigned by the department head:** PR-1 `20261029160000` (`chat_pd047_work_tasks`), PR-2 `20261029210000` (`chat_pd047_task_sources`; moved from `20261029170000`, released, so it runs after the priority amendment's PR-1b `20261029200000`), claimed in `docs/product/migration-slots/`. PR-4 asks for its own slot if it needs one.
 **Base:** `main` @ `08bfd9dd`. Paths are relative to the repository root. `mig/` is `supabase/migrations/`.
 **Frozen, not touched:** the call workstreams W1–W8; legacy `chat.task` (§1.1); Jawwid Core.
@@ -612,3 +612,40 @@ Every recommendation below is therefore the decision. The table keeps each quest
 | **Q11** | The assignee is deactivated (staff) or offboarded (teacher). | **Tasks stay assigned**, flagged "Needs reassignment" for the responsible manager and on the Dashboard. PD-43's offboarding preview lists open tasks as a **warning, not a block**. |
 | **Q12** | Does a completed manual task need the manager's confirmation? | **No.** The assignee completes it, with an optional note (your exit 1). The manager sees it in the history and can create a follow-up. |
 | **Q13** | How long are closed tasks kept? | **For ever, never deleted.** The Closed tab shows the last 90 days by default; the super admin can search all of them. |
+
+---
+
+## 9. Close-out (2026-10-29)
+
+**Shipped, all on `main`:**
+
+| PR | What | Migration | Merged |
+|---|---|---|---|
+| #220 | This plan | -- | `fd8422dd` |
+| #228 | PR-1: the task model, the four exits, append-only history | `20261029160000` | `b1436968` |
+| #233 | The priority amendment (plan rev 2) | -- | `7700237e` |
+| #238 | PR-1b: priority, effective level at read time, urgency sort, financial tier | `20261029200000` | `ff614d11` |
+| #241 | PR-2: Phase A sources (lesson report, correction, ruling, leave, violation, case) | `20261029210000` | `54a7ad54` |
+| #244 | PR-2b: financial sources (instalment, package low, renewal, receipt, card payment) | `20261029233000` | `d53bb848` |
+| #246 | PR-3: the Admin Web Tasks page | -- | `64f427fc` |
+| #248 | PR-5: the teacher's To do on the Schedule tab (app and teacher web) | -- | `400b056b` |
+| #257 | PR-4: delivery, PD-34 notifications, `/dashboard/tasks` | `20261029234000` | `9094dcb7` |
+| #267 | PR-7: the action log gains task events | -- | `4067ce64` |
+| #269 | PR-6a: set-up sources (family without supervisor, teacher set-up, new family to assign and to group) | `20261029235800` | `a50c6da8` |
+| #271 | PR-6b: hand-over sources (teacher without supervisor, trial attendance and outcome, certificate steps) | `20261029235900` | `4f2d33fa` |
+| #275 | PR-6c: decision sources (complaint, parent feedback, schedule change, make-up owed) | `20261030000000` | `f3e7f027` |
+
+- **Every signal in §1.2 that needs a person** is now a task with one assignee and the four exits. Its source completes it, attributed to whoever did the work.
+- **Replaced, as the owner decided:**
+  - the renewal push to every Sales member (Q-F6);
+  - PD-43's two notices to the Teachers manager;
+  - PD-41's four certificate notifications.
+- **Related, outside PD-47:** PD-41's #274 (`b2d35428`) decided who reviews a design its requester uploaded: the overseer, or the super admin when the overseer uploaded it. Its migration redefines `chat.work_task_certificate_assignee`.
+
+**Deferred, not built:**
+- **A Tasks screen on mobile for staff (Sales).** §3.12: "Staff on mobile (Sales) come later." Staff use the Admin Web Tasks page; only teachers have the mobile To do. It needs its own plan and the department head's GO.
+
+**Left as they were, by decision:**
+- Legacy `chat.task` stays frozen and untouched (§2); removing it is a separate decision.
+- A teacher reactivated after their withdrawn set-up task was acknowledged gets no second task (§3.6.2). The PD-43 set-up list shows them.
+- A Designer who claims a request is told of the step they just took (§3.6, known noise).
