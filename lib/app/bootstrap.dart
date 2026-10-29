@@ -164,7 +164,7 @@ List<Override> _httpOverrides() {
   );
 
   client = buildApiClient(config: config, tokens: tokens);
-  const drafts = SharedPreferencesDraftStore();
+  final drafts = platformDraftStore();
 
   return [
     // The language choice survives a restart (see PersistedLocaleController).
@@ -209,7 +209,7 @@ List<Override> _httpOverrides() {
     receiptRepositoryProvider.overrideWithValue(HttpReceiptRepository(client: client)),
     typingRepositoryProvider.overrideWithValue(HttpTypingRepository(client: client)),
     viewerActorIdProvider.overrideWithValue(session.actorId),
-    // PD-37: unsent drafts stay on this device; sign-out deletes them.
+    // PD-37: unsent drafts stay on this device, in its secure storage; sign-out deletes them.
     draftStoreProvider.overrideWithValue(drafts),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
@@ -348,6 +348,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final tokens = InMemoryTokenStore();
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
   final calls = FakeCallRepository(backend);
+  // PD-37: drafts in memory, deleted at sign-out exactly as the real stack does.
+  final drafts = InMemoryDraftStore();
 
   return [
     localeOverrideProvider.overrideWith(PersistedLocaleController.new),
@@ -388,11 +390,12 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
     // A Sales seat can join a fixture trial group (PD-20).
     trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
+    draftStoreProvider.overrideWithValue(drafts),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
         tokens: tokens,
-        clearLocalData: () async {},
+        clearLocalData: drafts.clearAll,
       ),
     ),
   ];

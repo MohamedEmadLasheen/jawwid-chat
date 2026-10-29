@@ -1,71 +1,179 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../../../core/storage/browser_storage.dart';
+import '../domain/mentions.dart';
+
+/// PD-37: one conversation's unsent message -- its text, and the people or
+/// roles picked from the @ list in it, so a restored "@Name" is still a
+/// mention when it is sent.
+class Draft {
+  const Draft(this.text, {this.mentions = const []});
+
+  final String text;
+  final List<PickedMention> mentions;
+
+  bool get isBlank => text.trim().isEmpty;
+
+  Map<String, Object?> toJson() => {
+        'text': text,
+        if (mentions.isNotEmpty)
+          'mentions': [
+            for (final m in mentions)
+              {'label': m.label, if (m.actorId != null) 'actorId': m.actorId, if (m.role != null) 'role': m.role},
+          ],
+      };
+
+  /// Null for anything that is not a draft: a damaged entry is dropped, never shown.
+  static Draft? fromJson(Object? json) {
+    if (json is! Map || json['text'] is! String) return null;
+    final mentions = <PickedMention>[];
+    final raw = json['mentions'];
+    if (raw is List) {
+      for (final m in raw) {
+        if (m is! Map || m['label'] is! String) continue;
+        final label = m['label'] as String;
+        if (m['actorId'] is String) {
+          mentions.add(PickedMention.person(label, m['actorId'] as String));
+        } else if (m['role'] is String) {
+          mentions.add(PickedMention.role(label, m['role'] as String));
+        }
+      }
+    }
+    return Draft(json['text'] as String, mentions: mentions);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is Draft &&
+      other.text == text &&
+      const ListEquality<String>().equals(_keys(other.mentions), _keys(mentions));
+
+  @override
+  int get hashCode => Object.hash(text, Object.hashAll(_keys(mentions)));
+
+  static List<String> _keys(List<PickedMention> ms) => [for (final m in ms) '${m.label}|${m.actorId}|${m.role}'];
+}
 
 /// PD-37: unsent drafts, per account and per conversation, kept on this device
 /// only -- they never reach the server. One entry per account, so one person's
 /// drafts are never loaded for another on a shared phone.
 abstract interface class DraftStore {
-  Future<Map<String, String>> load(String principalId);
-  Future<void> save(String principalId, Map<String, String> drafts);
+  Future<Map<String, Draft>> load(String principalId);
+
+  /// Writes [drafts] -- unless the store was cleared since [generation] was
+  /// read, so a save that was already waiting when the person signed out can
+  /// never bring their drafts back.
+  Future<void> save(String principalId, Map<String, Draft> drafts, {required int generation});
 
   /// Sign-out: forget every account's drafts on this device.
   Future<void> clearAll();
+
+  /// Moves on at every [clearAll]; read it when the text is typed.
+  int get generation;
+
+  /// Called at the start of every [clearAll]. Returns the unsubscribe.
+  void Function() onCleared(void Function() listener);
 }
 
-class SharedPreferencesDraftStore implements DraftStore {
-  const SharedPreferencesDraftStore();
+/// The generation and the clear listeners, shared by both stores.
+mixin _ClearGenerations {
+  int _generation = 0;
+  final _listeners = <void Function()>[];
+
+  int get generation => _generation;
+
+  void Function() onCleared(void Function() listener) {
+    _listeners.add(listener);
+    return () => _listeners.remove(listener);
+  }
+
+  /// First, and synchronously: from here no earlier save may write.
+  void _markCleared() {
+    _generation++;
+    for (final l in List.of(_listeners)) {
+      l();
+    }
+  }
+}
+
+Map<String, Draft> _decode(String? raw) {
+  if (raw == null) return const {};
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return const {};
+    return {
+      for (final e in decoded.entries)
+        if (e.key is String && Draft.fromJson(e.value) != null) e.key as String: Draft.fromJson(e.value)!,
+    };
+  } on FormatException {
+    return const {}; // a damaged entry is dropped, never shown
+  }
+}
+
+String _encode(Map<String, Draft> drafts) => jsonEncode({for (final e in drafts.entries) e.key: e.value.toJson()});
+
+/// The phone's secure storage: the Keychain (this device only, never in a
+/// backup) and Android's Keystore-backed storage -- where the session tokens
+/// already live. A child's unsent words are kept no less carefully.
+class SecureDraftStore with _ClearGenerations implements DraftStore {
+  SecureDraftStore({FlutterSecureStorage? storage})
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(),
+              iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+            );
 
   static const _prefix = 'jawwid.drafts.';
   static String _key(String principalId) => '$_prefix$principalId';
 
-  @override
-  Future<Map<String, String>> load(String principalId) async {
-    final raw = (await SharedPreferences.getInstance()).getString(_key(principalId));
-    if (raw == null) return const {};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return const {};
-      return {
-        for (final e in decoded.entries)
-          if (e.key is String && e.value is String) e.key as String: e.value as String,
-      };
-    } on FormatException {
-      return const {}; // a damaged entry is dropped, never shown
-    }
-  }
+  final FlutterSecureStorage _storage;
 
   @override
-  Future<void> save(String principalId, Map<String, String> drafts) async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<Map<String, Draft>> load(String principalId) async => _decode(await _storage.read(key: _key(principalId)));
+
+  @override
+  Future<void> save(String principalId, Map<String, Draft> drafts, {required int generation}) async {
+    if (generation != _generation) return;
     if (drafts.isEmpty) {
-      await prefs.remove(_key(principalId));
+      await _storage.delete(key: _key(principalId));
     } else {
-      await prefs.setString(_key(principalId), jsonEncode(drafts));
+      await _storage.write(key: _key(principalId), value: _encode(drafts));
     }
   }
 
   @override
   Future<void> clearAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final key in prefs.getKeys().where((k) => k.startsWith(_prefix)).toList()) {
-      await prefs.remove(key);
+    _markCleared();
+    final keys = (await _storage.readAll()).keys.where((k) => k.startsWith(_prefix)).toList();
+    for (final key in keys) {
+      await _storage.delete(key: key);
     }
   }
 }
 
-/// Keeps drafts in memory: the default for a build without storage, and for tests.
-@visibleForTesting
-class InMemoryDraftStore implements DraftStore {
-  final saved = <String, Map<String, String>>{};
+/// Drafts in memory only: the web (a browser profile is not a place for a
+/// child's unsent words), fixture builds and tests. Lost when the app closes.
+class InMemoryDraftStore with _ClearGenerations implements DraftStore {
+  final saved = <String, Map<String, Draft>>{};
 
   @override
-  Future<Map<String, String>> load(String principalId) async => Map.of(saved[principalId] ?? const {});
+  Future<Map<String, Draft>> load(String principalId) async => Map.of(saved[principalId] ?? const {});
 
   @override
-  Future<void> save(String principalId, Map<String, String> drafts) async => saved[principalId] = Map.of(drafts);
+  Future<void> save(String principalId, Map<String, Draft> drafts, {required int generation}) async {
+    if (generation != _generation) return;
+    saved[principalId] = Map.of(drafts);
+  }
 
   @override
-  Future<void> clearAll() async => saved.clear();
+  Future<void> clearAll() async {
+    _markCleared();
+    saved.clear();
+  }
 }
+
+/// The store this platform keeps drafts in.
+DraftStore platformDraftStore() => browserBindings() == null ? SecureDraftStore() : InMemoryDraftStore();

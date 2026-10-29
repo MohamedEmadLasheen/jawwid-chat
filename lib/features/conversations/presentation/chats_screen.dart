@@ -216,7 +216,7 @@ class _Feed extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = AppClock.now();
     // PD-37: an unsent draft shows as "Draft: ..." on its chat's row.
-    final drafts = ref.watch(draftsProvider).value ?? const <String, String>{};
+    final drafts = ref.watch(draftsProvider).value ?? const {};
     // The same box searches message text across every chat (owner decision
     // 2026-10-20) once there is a term worth sending.
     final term = query.trim();
@@ -286,7 +286,7 @@ class _Feed extends ConsumerWidget {
                 return ConversationTile(
                   conversation: conversation,
                   now: now,
-                  draft: drafts[conversation.id],
+                  draft: drafts[conversation.id]?.text,
                   onTap: () => onOpen(conversation.id),
                   onLongPress: () =>
                       _showActions(context, ref, conversation),
