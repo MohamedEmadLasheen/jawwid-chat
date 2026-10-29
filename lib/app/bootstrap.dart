@@ -55,6 +55,7 @@ import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../features/settings/data/parent_notice_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
+import '../features/whiteboards/data/whiteboards_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -233,6 +234,10 @@ List<Override> _httpOverrides() {
     feedbackRepositoryProvider.overrideWithValue(
       HttpFeedbackRepository(client: client),
     ),
+    // PD-39: the teacher's boards (the whiteboard).
+    whiteboardsRepositoryProvider.overrideWithValue(
+      HttpWhiteboardsRepository(client: client),
+    ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(
       HttpSalesPaymentsRepository(client: client),
@@ -379,6 +384,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     // PD-32: in memory, the fixture parent's OWN feedback.
     feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
+    // PD-39: boards in memory, for trying the Boards tab without an API.
+    whiteboardsRepositoryProvider.overrideWithValue(FakeWhiteboardsRepository()),
     // A Sales seat can join a fixture trial group (PD-20).
     trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
     authControllerProvider.overrideWith(
