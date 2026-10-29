@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Payment, PaymentReceipt, PaymentRequest } from '@prisma/client';
+import { Prisma, type Payment, type PaymentReceipt, type PaymentRequest } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
@@ -14,6 +14,8 @@ import { todayIn } from '../leave/leave.service';
 import { BillingService, mapPaymentRefusal, parseBankAccount, type BankAccount } from './billing.service';
 import { BANK_ACCOUNT_KEY, INVOICE_ISSUER_KEY, PaymentLedger, REQUEST_PURPOSES, parseIssuer, type RequestPurpose } from './payment-ledger.service';
 import { PaymentsReadService } from './payments-read.service';
+import { familyInScopeSql } from './billing-access';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
 import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
 import { formatMajor, minorDigits } from './money';
@@ -423,6 +425,26 @@ export class PaymentsService {
     for (const g of grouped) counts[g.status as keyof typeof counts] = g._count._all;
     // PD-17 / PD-20: whoever records the family's payments decides its receipts.
     return { items: await this.reads.presentReceipts(rows, actor.actorId), counts, canDecide: access.canRecord };
+  }
+
+  /**
+   * PD-44: the Dashboard's receipts tile -- `receipts`' own counts.pending, in
+   * one statement over the same families (every receipt of the organization
+   * for the `all` scope; those of the families in scope otherwise). Staff who
+   * read no family's money get no tile; non-staff are refused.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const reader = await this.billing.readerOrNone(actorId);
+    if (!reader) return [];
+    const { actor, access } = reader;
+    const all = access.scope === 'all';
+    const [r] = await this.prisma.$queryRaw<Array<{ pending: number; oldest: Date | null }>>`
+      SELECT count(*)::int AS pending, min(r.uploaded_at) AS oldest
+        FROM chat.payment_receipt r
+       WHERE r.organization_id = ${actor.organizationId as string}::uuid
+         AND r.status = 'pending'
+         AND (${all}::boolean OR (r.family_id IS NOT NULL AND ${familyInScopeSql(actor.actorId, access.scope, Prisma.sql`r.family_id`)}))`;
+    return [dashboardTile('receipts.pending', r?.pending ?? 0, r?.oldest ?? null)];
   }
 
   /** { amountMinor?, paidOn? } -- the verifier saw the money arrive. */

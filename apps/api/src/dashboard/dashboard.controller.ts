@@ -7,6 +7,9 @@ import { TaskService } from '../tasks/task.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { TrialService } from '../lessons/trial.service';
 import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
+import { BillingService } from '../billing/billing.service';
+import { PaymentsService } from '../billing/payments.service';
+import { ParentRecordService } from '../parent-profile/parent-record.service';
 import { Requires, SelfService } from '../platform/permissions/route-access';
 import { dashboardSection, type DashboardSection, type DashboardTile } from './dashboard-tile';
 
@@ -29,6 +32,9 @@ export class DashboardController {
     private readonly calendar: CalendarService,
     private readonly trials: TrialService,
     private readonly enrolment: NewStudentEnrolmentService,
+    private readonly billing: BillingService,
+    private readonly payments: PaymentsService,
+    private readonly parents: ParentRecordService,
   ) {}
 
   /** Chats waiting for a staff reply, in the caller's PD-8 scope. Links to /chat. */
@@ -92,6 +98,30 @@ export class DashboardController {
     const tiles: DashboardTile[] = [
       ...(holds('trials.view') ? await this.trials.dashboardCounts(actorId, now) : []),
       ...(holds('new_students.view') ? await this.enrolment.dashboardCounts(actorId) : []),
+    ];
+    return dashboardSection(tiles, now);
+  }
+
+  /**
+   * Payments: the Instalment Payments page's lines (billing.view) -- overdue,
+   * due today, no billing supervisor -- the receipts waiting for review on
+   * Payments (billing.view), and the Parents list's subscription filters
+   * (parents.view): locked, grace period. Each page's service applies its
+   * own scope (billingAccessOf). Links to /instalments, /payments, /parents.
+   */
+  @Requires('billing.view', 'parents.view')
+  @Get('billing')
+  async billingSection(
+    @ActorId() actorId: string,
+    @Req() request?: { permissions?: ReadonlySet<string> },
+  ): Promise<DashboardSection> {
+    const now = new Date();
+    const keys = request?.permissions;
+    const holds = (key: string) => !keys || keys.has(key);
+    const tiles: DashboardTile[] = [
+      ...(holds('billing.view') ? await this.billing.dashboardCounts(actorId) : []),
+      ...(holds('billing.view') ? await this.payments.dashboardCounts(actorId) : []),
+      ...(holds('parents.view') ? await this.parents.dashboardCounts(actorId) : []),
     ];
     return dashboardSection(tiles, now);
   }

@@ -16,11 +16,11 @@ import { Requires } from '../platform/permissions/route-access';
 export class ParentRecordController {
   constructor(private readonly parents: ParentRecordService) {}
 
-  /** ?q= -- the parents this staff member may open. */
+  /** ?q= &access=locked|grace (PD-44) -- the parents this staff member may open. */
   @Requires('parents.view')
   @Get()
-  list(@ActorId() actorId: string, @Query('q') q?: string) {
-    return this.parents.list(actorId, q);
+  list(@ActorId() actorId: string, @Query('q') q?: string, @Query('access') access?: string) {
+    return this.parents.list(actorId, q, access);
   }
 
   @Requires('parents.view')

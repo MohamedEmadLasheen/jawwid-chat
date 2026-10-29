@@ -237,7 +237,7 @@ describe('GET /dashboard/billing -- instalments, receipts and locked subscriptio
     expect(await both(tsupId)).toEqual([]);
     expect(await code(billing.dashboardCounts(s.parentId))).toBe(CommErrorCode.BILLING_DENIED);
     expect(await code(payments.dashboardCounts(s.parentId))).toBe(CommErrorCode.BILLING_DENIED);
-    expect(await code(parents.dashboardCounts(s.parentId))).toBe(CommErrorCode.BILLING_DENIED);
+    expect(await code(parents.dashboardCounts(s.parentId))).toBe(CommErrorCode.PARENT_PROFILE_DENIED);
     expect((await both(sa2)).every((t) => t.count === 0)).toBe(true);
     expect((await both(sa)).every((t) => t.capped === false)).toBe(true);
   });
