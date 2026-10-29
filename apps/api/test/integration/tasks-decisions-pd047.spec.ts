@@ -8,12 +8,13 @@
  *                    it is resolved (a parent's complaint is a complaint)
  *   schedule_change  a family's request for new times: the child's teacher's
  *                    supervisor's; done when decided, withdrawn with it
- *   makeup_owed      a lesson owing a make-up, by THE rule owedMakeups reads
- *                    (the two sets equal): done at booking, by who booked
- *                    (the system for a family), or by a makeup_followup
- *                    ruling, which also completes PR-2's lesson_ruling task
- *                    with the same actor; a booked make-up that dies owes a
- *                    fresh one
+ *   makeup_owed      a lesson its teacher missed, by the supervisor follow-up's
+ *                    rule (owedMakeups with its default causes; the two sets
+ *                    equal): done at booking anywhere in its make-up chain, by
+ *                    who booked (the system for a family), or by a DECIDED
+ *                    makeup_followup ruling, which also completes PR-2's
+ *                    lesson_ruling task with the same actor; a pending ruling
+ *                    keeps it owed; a booked make-up that dies owes a fresh one
  *   every one        raised by the sweep past the settle window, announced
  *                    once (task_assigned, ids only); a source's write stands
  *                    when its task cannot be settled; an owner who leaves is
@@ -26,7 +27,9 @@ import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { PrismaAuditService } from '@platform/audit.service';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
-import { LessonService, MAKEUP_CAUSES } from '../../src/lessons/lesson.service';
+import { CommError, CommErrorCode } from '@platform/errors';
+import { LessonService } from '../../src/lessons/lesson.service';
+import { LessonRecordService } from '../../src/lessons/lesson-record.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { TaskService } from '../../src/tasks/task.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -40,6 +43,7 @@ const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit);
 const feedback = new ParentFeedbackService(g.prisma, g.conversations, files, audit);
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
+const records = new LessonRecordService(g.prisma, lessons, g.conversations, g.outbox, audit);
 const recorder = { toThread: async () => undefined, toThreadAudience: async () => undefined, toUsers: async () => undefined };
 const worker = new OutboxWorker(g.prisma, g.notifications, recorder as never, g.identity, g.pipeline);
 
@@ -117,6 +121,15 @@ async function owedLesson(cause: 'teacher' | 'student' = 'teacher'): Promise<str
   if (cause === 'teacher') await lessons.teacherApology(s.teacherId, id, { reason: 'ill' });
   else await lessons.apology(s.parentId, id, { reason: 'travel' });
   return id;
+}
+async function code(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+  } catch (e) {
+    if (e instanceof CommError) return e.code;
+    throw e;
+  }
+  throw new Error('expected a refusal');
 }
 const book = async (by: string, id: string) =>
   scheduling.bookMakeup(by, id, { startsAt: (await scheduling.makeupSlots(by, id)).slots[0] });
@@ -228,6 +241,18 @@ describe('a parent\'s praise or suggestion', () => {
     await feedback.reply(tmgr, f, { response: 'Thank you -- passed on.', resolve: true });
     expect(await tasks.get(tmgr, id)).toMatchObject({ state: 'completed', outcome: 'done' });
     expect((await completion(id))?.actor).toMatchObject({ kind: 'staff', id: tmgr });
+  });
+
+  it('is never its own teacher\'s: they cannot read it, and it cannot be handed to them', async () => {
+    const f = await parentSays('praise');
+    await tasks.sweep();
+    const id = (await taskFor(`feedback:${f}`)) as string;
+    await expect(tasks.get(s.teacherId, id)).rejects.toThrow();
+    expect(await code(tasks.reassign(tmgr, id, { to: { kind: 'teacher', id: s.teacherId } }))).toBe(CommErrorCode.TASK_INVALID);
+    // What Tasks reads of a feedback is exactly these names (a widening fails here).
+    const keys = (await g.prisma.$queryRaw<Array<{ k: string }>>`
+      SELECT jsonb_object_keys(chat.work_task_feedback_title(${f}::uuid)) AS k`).map((r) => r.k).sort();
+    expect(keys).toEqual(['category', 'learnerName', 'teacherName']);
   });
 
   it('a reply that does not close it leaves the task open', async () => {
@@ -346,20 +371,56 @@ describe('a lesson that owes a make-up', () => {
     }
   });
 
-  it('the set of lessons with an open task is exactly owedMakeups\' set, for MAKEUP_CAUSES', async () => {
+  it('the set of lessons with an open task is exactly owedMakeups\' set -- its default, the supervisor follow-up\'s', async () => {
     const teacherMiss = await owedLesson('teacher');
-    const studentApology = await owedLesson('student');
+    // A family's own apology owes a make-up, but is never escalated: no task.
+    await owedLesson('student');
     const madeUp = await owedLesson('teacher');
     await book(s.teacherId, madeUp);
     await tasks.sweep();
     const owed = (await lessons.owedMakeups(
-      (await g.prisma.learner.findUniqueOrThrow({ where: { id: s.learnerId } })).organizationId, { causes: MAKEUP_CAUSES },
+      (await g.prisma.learner.findUniqueOrThrow({ where: { id: s.learnerId } })).organizationId,
     )).map((l) => l.id).sort();
     const tasked = (await g.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT chat.work_task_makeup_original(t.source_id)::text AS id FROM chat.work_task t
        WHERE t.source_type = 'makeup_owed' AND t.state IN ('open', 'awaiting_decision') AND t.source_state = 'pending'`).map((r) => r.id).sort();
     expect(tasked).toEqual(owed);
-    expect(owed).toEqual([teacherMiss, studentApology].sort());
+    expect(owed).toEqual([teacherMiss]);
+  });
+
+  it('an outcome corrected away withdraws the task', async () => {
+    const lesson = await owedLesson();
+    await tasks.sweep();
+    const id = (await taskFor(`makeup_owed:${lesson}`)) as string;
+    await records.correct(s.ownerId, lesson, { outcome: 'admin_cancelled', reason: 'recorded on the wrong lesson' });
+    expect(await stateOf(id)).toMatchObject({ state: 'open', source_state: 'withdrawn' });
+  });
+
+  it('a makeup_followup ruling still pending keeps it owed', async () => {
+    const lesson = await owedLesson();
+    await tasks.sweep();
+    const id = (await taskFor(`makeup_owed:${lesson}`)) as string;
+    await exec(
+      `insert into chat.lesson_ruling (organization_id, lesson_id, kind, opened_by_kind, opened_by, reason)
+       values (chat.default_organization_id(), $1::uuid, 'makeup_followup', 'staff', $2::uuid, 'deciding with the family')`, lesson, tsup,
+    );
+    await tasks.sweep();
+    expect(await stateOf(id)).toMatchObject({ state: 'open', source_state: 'pending' });
+  });
+
+  it('a make-up of a missed make-up completes the missed one\'s task', async () => {
+    const lesson = await owedLesson();
+    await tasks.sweep();
+    const first = await book(s.teacherId, lesson);
+    await lessons.teacherApology(s.teacherId, first.id, { reason: 'ill again' });
+    await tasks.sweep();
+    const second = (await taskFor(`makeup_owed:${first.id}`)) as string;
+    expect(await stateOf(second)).toMatchObject({ state: 'open', source_state: 'pending' });
+    // The family books a make-up OF the missed make-up (makeup_for = it).
+    await book(s.parentId, first.id);
+    expect(await stateOf(second)).toMatchObject({ state: 'completed' });
+    await tasks.sweep();
+    expect(await stateOf(second)).toMatchObject({ state: 'completed' });
   });
 
   it('a booking stands even when its task cannot be settled; the sweep settles it after', async () => {

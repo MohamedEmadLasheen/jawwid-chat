@@ -12,7 +12,7 @@
 --   feedback         feedback:<parent_feedback>   as complaint                                filed + 48 h
 --   schedule_change  schedule_change:<request>    the child's teacher's supervisor, else the  asked + 48 h
 --                                                 Teachers manager
---   makeup_owed      makeup_owed:<lesson>         the lesson's teacher's supervisor, else     its end + the make-up
+--   makeup_owed      makeup_owed:<episode>        the lesson's teacher's supervisor, else     its end + the make-up
 --                                                 the Teachers manager                        window (7 days)
 --
 --   Every one: operational, medium; reassignable by hand. The records that
@@ -31,17 +31,23 @@
 --   schedule_change  a request for new regular times (PD-11). Done when it
 --                    is approved or rejected, by who decided; withdrawn when
 --                    the family withdraws it.
---   makeup_owed      a lesson that owes a make-up, by chat.lesson_owes_makeup:
---                    THE rule, which LessonService.owedMakeups now calls too
---                    (never re-implemented; a spec proves the two sets equal).
---                    The causes are MAKEUP_CAUSES: the teacher's misses and the
---                    student's apology (department head, 2026-10-29). Done at
---                    BOOKING (a live make-up), by who booked it -- the system
---                    when a family booked -- or by a makeup_followup ruling, by
---                    who decided it (the same decision completes PR-2's
---                    lesson_ruling task). Withdrawn when the outcome is
---                    corrected away. A booked make-up that dies (cancelled,
---                    moved) owes again: a FRESH episode, keyed on that make-up.
+--   makeup_owed      a lesson the teacher missed (teacher_apology,
+--                    teacher_no_show), by the SUPERVISOR follow-up rule:
+--                    LessonService.owedMakeups with its default
+--                    TEACHER_MAKEUP_CAUSES -- a family's own apology owes a
+--                    make-up but is never escalated (department head, revised
+--                    2026-10-29). chat.lesson_owes_makeup is that rule, and
+--                    owedMakeups now calls it too; a spec proves the two sets
+--                    equal. Done at BOOKING, by who booked it -- the system
+--                    when a family booked -- or when a makeup_followup ruling
+--                    is DECIDED, by who decided it (the same decision completes
+--                    PR-2's lesson_ruling task); a ruling still pending keeps
+--                    it owed. Withdrawn when the outcome is corrected away.
+--                    A booked make-up that dies (cancelled, moved) owes again:
+--                    a FRESH episode, keyed on that make-up. The lesson is
+--                    found through make-up CHAINS (a make-up of a missed
+--                    make-up, makeup_for = that make-up): a booking anywhere
+--                    in the chain counts for the original lesson.
 --
 --   RAISED by chat.work_task_sweep_decisions() (the worker, every minute, its
 --   own advisory lock and batches), past PR-6a's settle window. COMPLETED at
@@ -83,29 +89,61 @@ as $$
      where l.id = p_lesson), false);
 $$;
 
--- The causes that owe a make-up task: LessonService's MAKEUP_CAUSES (a spec
--- holds the two to one list).
+-- The causes that owe a make-up task: LessonService's TEACHER_MAKEUP_CAUSES,
+-- the supervisor follow-up's (a spec holds the two to one list).
 create or replace function chat.work_task_makeup_causes()
 returns text[]
 language sql
 immutable
 set search_path = chat, pg_temp
 as $$
-  select array['teacher_apology', 'teacher_no_show', 'student_apology']::text[];
+  select array['teacher_apology', 'teacher_no_show']::text[];
 $$;
 
--- The lesson a makeup_owed key names, and the original lesson it is about:
--- the original itself, or a make-up of it that died (a fresh episode).
+-- The outcomes after which a booked make-up no longer makes the lesson good
+-- (chat.lesson_owes_makeup's "live" test, the other way round).
+create or replace function chat.work_task_makeup_dead()
+returns text[]
+language sql
+immutable
+set search_path = chat, pg_temp
+as $$
+  select array['teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled', 'voided']::text[];
+$$;
+
+-- The original lesson a makeup_owed key is about: up the make-up chain
+-- (makeup_for) to the first lesson that is not a make-up of another.
 create or replace function chat.work_task_makeup_original(p_source uuid)
 returns uuid
 language sql
 stable
 set search_path = chat, pg_temp
 as $$
-  select case when s.kind = 'makeup' then s.makeup_for else s.id end from chat.lesson s where s.id = p_source;
+  with recursive up as (
+    select l.id, l.kind, l.makeup_for, 0 as depth from chat.lesson l where l.id = p_source
+    union all
+    select p.id, p.kind, p.makeup_for, u.depth + 1
+      from up u join chat.lesson p on p.id = u.makeup_for
+     where u.kind = 'makeup' and u.depth < 50)
+  select up.id from up order by up.depth desc limit 1;
 $$;
 
--- An original lesson's current episode: its latest make-up that died, else itself.
+-- An original lesson's make-up chain: its make-ups, theirs, and so on.
+create or replace function chat.work_task_makeup_chain(p_original uuid)
+returns setof uuid
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  with recursive down as (
+    select m.id, 0 as depth from chat.lesson m where m.makeup_for = p_original and m.kind = 'makeup'
+    union all
+    select m.id, d.depth + 1 from down d join chat.lesson m on m.makeup_for = d.id and m.kind = 'makeup' where d.depth < 50)
+  select down.id from down;
+$$;
+
+-- An original lesson's current episode: its chain's latest make-up that
+-- died, else the lesson itself.
 create or replace function chat.work_task_makeup_episode(p_original uuid)
 returns uuid
 language sql
@@ -114,8 +152,8 @@ set search_path = chat, pg_temp
 as $$
   select coalesce(
     (select m.id from chat.lesson m
-      where m.makeup_for = p_original and m.kind = 'makeup'
-        and m.outcome in ('teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled', 'voided')
+      where m.id in (select chat.work_task_makeup_chain(p_original))
+        and m.outcome = any (chat.work_task_makeup_dead())
       order by m.outcome_at desc nulls last, m.created_at desc, m.id
       limit 1),
     p_original);
@@ -212,31 +250,35 @@ begin
   end if;
   if p_type = 'makeup_owed' then
     v_original := chat.work_task_makeup_original(p_source);
-    if v_original is null then
+    -- Corrected away: the lesson is no longer one its teacher missed.
+    if v_original is null or not exists (select 1 from chat.lesson o where o.id = v_original and o.kind <> 'trial'
+                                            and o.outcome = any (chat.work_task_makeup_causes())) then
       return;
     end if;
-    -- Still owed, and this episode is the current one.
-    if chat.lesson_owes_makeup(v_original, chat.work_task_makeup_causes())
-       and chat.work_task_makeup_episode(v_original) = p_source then
-      verdict := 'back';
-      return;
-    end if;
-    -- Booked: the first make-up booked after this episode began.
-    select coalesce(s.outcome_at, s.created_at) into v_since from chat.lesson s where s.id = p_source and s.kind = 'makeup';
+    select coalesce(s.outcome_at, s.created_at) into v_since from chat.lesson s where s.id = p_source;
+    -- Booked: the first make-up anywhere in the chain booked after this
+    -- episode began (a later one that died opens the next episode).
     select 'done', chat.work_task_lesson_actor(m.created_by_kind, m.created_by) into verdict, actor
       from chat.lesson m
-     where m.makeup_for = v_original and m.kind = 'makeup' and (v_since is null or m.created_at > v_since)
+     where m.id in (select chat.work_task_makeup_chain(v_original)) and m.created_at > v_since
      order by m.created_at, m.id
      limit 1;
     if verdict = 'done' then
       return;
     end if;
-    -- Ruled on instead (a substitute, a credit, an extension, waived).
+    -- Ruled on and DECIDED (a substitute, a credit, an extension, waived); a
+    -- ruling still pending keeps it owed.
     select 'done', r.decided_by into verdict, actor
       from chat.lesson_ruling r
-     where r.lesson_id = v_original and r.kind = 'makeup_followup' and r.decision is not null
+     where (r.lesson_id = v_original or r.lesson_id in (select chat.work_task_makeup_chain(v_original)))
+       and r.kind = 'makeup_followup' and r.decision is not null
+     order by r.decided_at
      limit 1;
-    verdict := coalesce(verdict, 'gone');
+    if verdict = 'done' then
+      return;
+    end if;
+    -- Still owed only while this is the current episode.
+    verdict := case when chat.work_task_makeup_episode(v_original) = p_source then 'back' else 'gone' end;
   end if;
 end;
 $$;
@@ -328,10 +370,14 @@ declare
   v_window integer := coalesce((select (c.value #>> '{}')::int from chat.config c where c.key = 'lesson.makeup_window_days'), 7);
 begin
   select * into o from chat.lesson where id = p_original;
-  if o.id is null or not chat.lesson_owes_makeup(o.id, chat.work_task_makeup_causes()) then
+  select * into s from chat.lesson where id = chat.work_task_makeup_episode(p_original);
+  -- The supervisor follow-up's rule for a lesson with no make-up of its own;
+  -- the chain's evidence for one whose make-up died.
+  if o.id is null or (o.kind = 'makeup' and o.makeup_for is not null)
+     or (s.id = o.id and not chat.lesson_owes_makeup(o.id, chat.work_task_makeup_causes()))
+     or (select v.verdict from chat.work_task_decision_verdict('makeup_owed', s.id) v) is distinct from 'back' then
     return null;
   end if;
-  select * into s from chat.lesson where id = chat.work_task_makeup_episode(o.id);
   if coalesce(s.outcome_at, s.ends_at) < chat.work_task_since('makeup_owed') then
     return null;
   end if;
@@ -418,8 +464,9 @@ begin
       select l.organization_id, 'makeup_owed', l.id, 'makeup_owed:' || ep.id, coalesce(ep.outcome_at, ep.ends_at)
         from chat.lesson l
         cross join lateral (select x.id, x.outcome_at, x.ends_at from chat.lesson x where x.id = chat.work_task_makeup_episode(l.id)) ep
-       where l.kind <> 'trial' and l.outcome = any (chat.work_task_makeup_causes())
-         and chat.lesson_owes_makeup(l.id, chat.work_task_makeup_causes())
+       where l.kind <> 'trial' and not (l.kind = 'makeup' and l.makeup_for is not null)
+         and l.outcome = any (chat.work_task_makeup_causes())
+         and (select v.verdict from chat.work_task_decision_verdict('makeup_owed', ep.id) v) = 'back'
          and coalesce(ep.outcome_at, ep.ends_at) >= s_makeup
     ) x
      where x.at <= now() - v_settle
@@ -612,7 +659,7 @@ begin
       join chat.lesson s on s.id = t.source_id
       cross join lateral chat.work_task_decision_verdict('makeup_owed', t.source_id) v
      where t.source_type = 'makeup_owed' and t.state in ('open', 'awaiting_decision')
-       and (s.id = p_original or s.makeup_for = p_original)
+       and (s.id = p_original or s.id in (select chat.work_task_makeup_chain(p_original)))
   loop
     begin
       if r.verdict = 'done' then
@@ -638,9 +685,11 @@ set search_path = chat, pg_temp
 as $$
 begin
   begin
-    perform chat.work_task_makeup_follow(case when new.kind = 'makeup' then new.makeup_for else new.id end);
+    perform chat.work_task_makeup_follow(chat.work_task_makeup_original(new.id));
   exception when others then
-    perform chat.work_task_note_issue(new.organization_id, 'makeup_owed:' || new.id, sqlerrm);
+    -- Recorded under the episode's key, where the sweep's back-off reads it.
+    perform chat.work_task_note_issue(new.organization_id,
+      'makeup_owed:' || coalesce(chat.work_task_makeup_episode(chat.work_task_makeup_original(new.id)), new.id), sqlerrm);
   end;
   return null;
 end;
@@ -665,9 +714,10 @@ set search_path = chat, pg_temp
 as $$
 begin
   begin
-    perform chat.work_task_makeup_follow(new.lesson_id);
+    perform chat.work_task_makeup_follow(chat.work_task_makeup_original(new.lesson_id));
   exception when others then
-    perform chat.work_task_note_issue(new.organization_id, 'makeup_owed:' || new.lesson_id, sqlerrm);
+    perform chat.work_task_note_issue(new.organization_id,
+      'makeup_owed:' || coalesce(chat.work_task_makeup_episode(chat.work_task_makeup_original(new.lesson_id)), new.lesson_id), sqlerrm);
   end;
   return null;
 end;
@@ -909,6 +959,8 @@ revoke all on function chat.lesson_owes_makeup(uuid, text[]) from public;
 revoke all on function chat.work_task_makeup_causes() from public;
 revoke all on function chat.work_task_makeup_original(uuid) from public;
 revoke all on function chat.work_task_makeup_episode(uuid) from public;
+revoke all on function chat.work_task_makeup_chain(uuid) from public;
+revoke all on function chat.work_task_makeup_dead() from public;
 revoke all on function chat.work_task_lesson_actor(text, uuid) from public;
 revoke all on function chat.work_task_decision_owner(text, uuid) from public;
 revoke all on function chat.work_task_feedback_teacher(uuid) from public;
