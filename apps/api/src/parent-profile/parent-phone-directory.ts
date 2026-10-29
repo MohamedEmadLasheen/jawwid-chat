@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/min';
 import { PrismaService } from '../platform/prisma.service';
+import { listedCountry } from '../geo/countries';
 
 /**
  * Where a typed number with no "+" is read from, and a parent-file phone whose
@@ -56,4 +57,19 @@ export function toE164(text: string, region: CountryCode): string | null {
   if (digits.length < 5 || digits.length > 32 || !/^[+0-9 ()-]+$/.test(digits)) return null;
   const parsed = parsePhoneNumberFromString(digits, region);
   return parsed && parsed.isPossible() ? parsed.number : null;
+}
+
+/**
+ * PD-45 §6.2: the country an INTERNATIONAL number belongs to (+971... is AE), as
+ * a suggestion staff may accept -- never saved by itself. A local number gives
+ * none: reading it would need the very country being guessed. Only the code
+ * leaves this module, never the number (G-07).
+ */
+export function suggestedCountryFromPhone(text: string | null): string | null {
+  if (!text) return null;
+  const digits = text.trim().replace(/^00/, '+');
+  if (!digits.startsWith('+') || digits.length < 5 || digits.length > 32 || !/^[+0-9 ()-]+$/.test(digits)) return null;
+  const parsed = parsePhoneNumberFromString(digits);
+  if (!parsed || !parsed.isPossible() || !parsed.country) return null;
+  return listedCountry(parsed.country);
 }

@@ -93,7 +93,7 @@ void main() {
 
   test('a conflict reaches the caller as COMM.WHITEBOARD_CONFLICT', () async {
     server.on('POST', '/whiteboards/b1/pages/p1', [Reply.commError(409, 'COMM.WHITEBOARD_CONFLICT')]);
-    final page = const BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: []);
+    const page = BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: []);
     await expectLater(
       repository().savePage('b1', 'p1', 3, page),
       throwsA(isA<AppError>().having((e) => e.code, 'code', 'COMM.WHITEBOARD_CONFLICT')),
