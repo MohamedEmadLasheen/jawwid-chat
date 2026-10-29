@@ -4662,9 +4662,6 @@ class L10nEn extends L10n {
   String get boardTextHint => 'Write here';
 
   @override
-  String get boardVersePlaceholder => 'Quran verse';
-
-  @override
   String get boardElementUnknown => 'Not shown in this version';
 
   @override
@@ -4675,6 +4672,40 @@ class L10nEn extends L10n {
 
   @override
   String get boardMore => 'More';
+
+  @override
+  String get boardToolVerse => 'Quran verse';
+
+  @override
+  String get boardVerseSurah => 'Surah';
+
+  @override
+  String get boardVerseFrom => 'From ayah';
+
+  @override
+  String get boardVerseTo => 'To ayah';
+
+  @override
+  String boardVerseMax(String count) {
+    return 'At most $count ayat at a time.';
+  }
+
+  @override
+  String boardVerseSource(String source) {
+    return 'Quran text: $source';
+  }
+
+  @override
+  String get boardVerseInsert => 'Insert';
+
+  @override
+  String get boardVerseLoading => 'Loading the verse…';
+
+  @override
+  String get boardVerseUnavailable => 'Quran text unavailable';
+
+  @override
+  String get boardVerseChanged => 'Verse text updated, re-insert';
 
   @override
   String get boardDraftStale =>
@@ -4697,4 +4728,13 @@ class L10nEn extends L10n {
   @override
   String get boardSaveFirst =>
       'Your changes have to be saved first. Try again once the board says Saved.';
+
+  @override
+  String get pickerSearchHint => 'Type to search';
+
+  @override
+  String get pickerNoMatches => 'No matches';
+
+  @override
+  String get materialsAgeLabel => 'Age';
 }

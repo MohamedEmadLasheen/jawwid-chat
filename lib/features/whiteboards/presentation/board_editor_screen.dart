@@ -14,11 +14,13 @@ import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/board_editor_controller.dart';
 import '../application/boards_controller.dart';
+import '../data/quran_text_repository.dart';
 import '../domain/board_elements.dart';
 import '../domain/board_page.dart';
 import 'board_canvas.dart';
 import 'board_painter.dart';
 import 'boards_screen.dart';
+import 'verse_picker.dart';
 
 /// §10 2a/2b: whether this device edits. Shortest side at least 600 dp
 /// (laptops and tablets); phones view. A UX gate, never a security control:
@@ -145,6 +147,21 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     final blockedByDevice = kBoardEditGateEnforced && gate != EditGate.allowed;
     final editable = s.canEdit && !blockedByDevice;
     final page = s.page;
+    // The verses' texts: fetched once per range, for every page (the strip
+    // draws them too); the cache's identity changes when one arrives.
+    final versesVersion = ref.watch(verseCacheProvider);
+    final verseCache = ref.read(verseCacheProvider.notifier);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) verseCache.ensure(s.pages.expand((p) => p.elements));
+    });
+    String label(BoardElement e) => switch (e) {
+      VerseElement() => switch (verseCache.lookup(e).status) {
+        VerseStatus.changed => l10n.boardVerseChanged,
+        VerseStatus.unavailable => l10n.boardVerseUnavailable,
+        _ => l10n.boardVerseLoading,
+      },
+      _ => l10n.boardElementUnknown,
+    };
     final canvas = BoardCanvas(
       key: _canvas,
       page: page,
@@ -154,7 +171,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       view: _view,
       onCommit: _controller.commit,
       onRequestText: ({initial}) => _askText(context, initial),
-      placeholderLabel: (e) => e.kind == 'verse' ? l10n.boardVersePlaceholder : l10n.boardElementUnknown,
+      placeholderLabel: label,
+      verses: verseCache.lookup,
+      versesVersion: versesVersion,
     );
     return CallbackShortcuts(
       bindings: {
@@ -227,6 +246,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                               _stampColor = k.index >= StampKind.excellentAr.index ? BoardPalette.stampGreen : BoardPalette.stampGold;
                             }),
                             onDelete: _deleteSelection,
+                            onVerse: () => _insertVerse(context),
                             onLayout: _controller.setLayout,
                             onBackground: _controller.setBackground,
                           )
@@ -259,7 +279,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                   },
                 ),
               ),
-              _PageBar(state: s, editable: editable),
+              _PageBar(state: s, editable: editable, verses: verseCache.lookup, versesVersion: versesVersion, placeholderLabel: label),
             ],
           ),
         ),
@@ -328,6 +348,34 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ErrorPresenter.present(asAppErrorOf(e), l10n).title)));
       }
     }
+  }
+
+  /// §4.3: a verse from the shared, verified dataset, as a reference; placed in
+  /// the middle of the page, as wide as most of it.
+  Future<void> _insertVerse(BuildContext context) async {
+    final picked = await pickVerse(context);
+    final s = ref.read(boardEditorProvider(widget.boardId)).value;
+    if (picked == null || s == null || !mounted) return;
+    const width = 1400.0, size = 64.0;
+    final height = verseHeight(picked.text, size, width);
+    final verse = VerseElement(
+      id: 'v${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}',
+      surah: picked.surah,
+      fromAyah: picked.from,
+      toAyah: picked.to,
+      datasetId: picked.text.datasetId,
+      rangeSha256: picked.text.rangeSha256,
+      rect: Rect.fromLTWH(
+        (kBoardPageSize.width - width) / 2,
+        ((kBoardPageSize.height - height) / 2).clamp(24, double.infinity),
+        width,
+        height,
+      ),
+      fontSize: size,
+      color: _ink,
+    );
+    ref.read(verseCacheProvider.notifier).remember(verse, picked.text);
+    _controller.commit([...s.page.elements, verse]);
   }
 
   Future<void> _rename(BuildContext context, EditorState s) async {
@@ -453,6 +501,7 @@ class _ToolPanel extends StatelessWidget {
     required this.onWidth,
     required this.onStamp,
     required this.onDelete,
+    required this.onVerse,
     required this.onLayout,
     required this.onBackground,
   });
@@ -468,6 +517,7 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<double> onWidth;
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
+  final VoidCallback onVerse;
   final ValueChanged<PageLayout> onLayout;
   final ValueChanged<PageBackground> onBackground;
 
@@ -519,6 +569,7 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.line, Icons.horizontal_rule, l10n.boardToolLine),
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
+      IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
@@ -654,10 +705,13 @@ class _ZoomControls extends StatelessWidget {
 
 /// The page strip: thumbnails, and add / duplicate / delete / move a page.
 class _PageBar extends ConsumerWidget {
-  const _PageBar({required this.state, required this.editable});
+  const _PageBar({required this.state, required this.editable, this.verses, this.versesVersion, this.placeholderLabel});
 
   final EditorState state;
   final bool editable;
+  final VerseSource? verses;
+  final Object? versesVersion;
+  final String Function(BoardElement element)? placeholderLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -695,7 +749,12 @@ class _PageBar extends ConsumerWidget {
                         textDirection: TextDirection.ltr,
                         child: CustomPaint(
                           size: const Size(128, 72),
-                          painter: BoardPagePainter(page: state.pages[i]),
+                          painter: BoardPagePainter(
+                            page: state.pages[i],
+                            verses: verses,
+                            versesVersion: versesVersion,
+                            placeholderLabel: placeholderLabel,
+                          ),
                         ),
                       ),
                     ),
