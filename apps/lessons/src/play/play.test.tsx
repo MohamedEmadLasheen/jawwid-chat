@@ -249,7 +249,8 @@ describe('the games page', () => {
   it('waits for the recitation list, then plays the mechanics that need it', async () => {
     const r = recitation();
     const { rerender } = await page({ approvals: await sign('listen_glow', 'count_ayat'), audioWaitMs: 60_000 });
-    expect(await screen.findByText('جارٍ التحميل…')).toBeTruthy();
+    expect(await screen.findByText('جارٍ تجهيز الألعاب…')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/ألعاب سورة/);
     rerender({ audioSource: r.audioSource, audioFactory: r.audioFactory });
     expect(await screen.findByRole('region', { name: 'اسمع والمس' })).toBeTruthy();
   });

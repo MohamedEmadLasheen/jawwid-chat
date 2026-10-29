@@ -1,0 +1,4 @@
+# PD-49: a mechanic's signature covers this code (scripts/lessons/check-quran-content.py SHARED_CODE);
+# keep it LF in every checkout (the hash also reads CRLF as LF).
+apps/lessons/src/play/** text eol=lf
+apps/lessons/src/games/shuffle.ts text eol=lf

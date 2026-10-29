@@ -23,7 +23,11 @@ export interface Mechanic {
   tiers: Tier[];
   needsAudio: boolean;
   respect: string[];
-  /** The game's file in play/games/, and SHA-256 of its bytes, a NUL, then common.tsx's bytes: what is signed includes the code (check-quran-content.py verifies it). */
+  /**
+   * The game's file in play/games/, and the SHA-256 of it plus the shared play code (common.tsx,
+   * adapt.ts's knobs, session.ts, PlayLesson.tsx, games/shuffle.ts): what is signed includes the
+   * code. check-quran-content.py (SHARED_CODE) defines and verifies it.
+   */
   code: string;
   codeSha256: string;
 }

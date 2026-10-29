@@ -59,7 +59,12 @@ SOURCES = os.path.join(CONTENT, 'sources.json')
 VECTORS = os.path.join(CONTENT, 'item-hash.vectors.json')
 CASES = os.path.join(CONTENT, 'quran-content.cases.json')
 MECHANICS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'mechanics.json')
-GAMES_DIR = os.path.join(ROOT, 'apps', 'lessons', 'src', 'play', 'games')
+LESSONS_SRC = os.path.join(ROOT, 'apps', 'lessons', 'src')
+# What every mechanic's signature covers besides its own game (src-relative): the card and
+# respect rules, the band's knobs (tries before the answer is shown, rounds, options), the
+# session, the page that runs it, and the shuffle that places the answer. Change one and
+# every mechanic waits for review again.
+SHARED_CODE = ('play/games/common.tsx', 'play/adapt.ts', 'play/session.ts', 'play/PlayLesson.tsx', 'games/shuffle.ts')
 PLAY_APPROVALS = os.path.join(APPROVALS, 'play.json')
 RASM_VECTORS = os.path.join(ROOT, 'apps', 'lessons', 'src', 'quran', 'rasm.vectors.json')
 PIN = os.path.join(ROOT, 'apps', 'lessons', 'quran-pin.json')
@@ -571,16 +576,17 @@ SKILLS = ('listening', 'recitation', 'recognition', 'structure')
 TIERS = ('L1', 'L2', 'L3', 'L4', 'L5')
 
 
-def code_sha256(code, games_dir=GAMES_DIR):
-    """SHA-256 of a game's file, a NUL byte, then common.tsx: the code a mechanic's signature covers."""
-    with open(os.path.join(games_dir, code), 'rb') as f:
-        game = f.read()
-    with open(os.path.join(games_dir, 'common.tsx'), 'rb') as f:
-        common = f.read()
-    return hashlib.sha256(game + b'\0' + common).hexdigest()
+def code_sha256(code, src_dir=LESSONS_SRC):
+    """SHA-256 over the game's file then SHARED_CODE, each as its src-relative path, a NUL, its text with
+    CRLF read as LF (so a Windows checkout hashes the same), and a NUL: the code a mechanic's signature covers."""
+    h = hashlib.sha256()
+    for rel in ('play/games/' + code,) + SHARED_CODE:
+        with open(os.path.join(src_dir, *rel.split('/')), 'rb') as f:
+            h.update(rel.encode('utf-8') + b'\0' + f.read().replace(b'\r\n', b'\n') + b'\0')
+    return h.hexdigest()
 
 
-def check_mechanics(reg, games_dir=GAMES_DIR):
+def check_mechanics(reg, src_dir=LESSONS_SRC):
     """The game mechanics registry (apps/lessons/src/play/mechanics.json; mechanics.ts applies the same).
     Each record names its game's file and carries the code's hash, so signing a mechanic signs its code:
     change the game (or common.tsx) and the hash, the record and so the approval no longer match."""
@@ -605,10 +611,10 @@ def check_mechanics(reg, games_dir=GAMES_DIR):
         if not isinstance(m['respect'], list) or not m['respect'] or not all(isinstance(r, str) and r.strip() for r in m['respect']):
             errors.append(f'mechanics: {mid}: the respect rules (plan C.4) the scholar signs')
         code = m['code']
-        if not isinstance(code, str) or not re.fullmatch(r'[A-Z][A-Za-z0-9]*\.tsx', code) or not os.path.isfile(os.path.join(games_dir, code)):
+        if not isinstance(code, str) or not re.fullmatch(r'[A-Z][A-Za-z0-9]*\.tsx', code) or not os.path.isfile(os.path.join(src_dir, 'play', 'games', code)):
             errors.append(f'mechanics: {mid}: code must name its game file in play/games/')
-        elif m['codeSha256'] != code_sha256(code, games_dir):
-            errors.append(f'mechanics: {mid}: codeSha256 is not the code of {code} + common.tsx (the game changed: re-hash, and it is re-signed)')
+        elif m['codeSha256'] != code_sha256(code, src_dir):
+            errors.append(f'mechanics: {mid}: codeSha256 is not the code of {code} + the shared play code (it changed: re-hash, and it is re-signed)')
         out[mid] = m
     return errors, out
 
@@ -759,6 +765,24 @@ def selftest():
     ):
         if not any(expected in e for e in check_mechanics({'mechanics': bad})[0]):
             failed.append(f'mechanics: {name} was accepted')
+    # The hash covers the shared code, and reads a CRLF checkout as the same code.
+    import shutil
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        for rel in ('play/games/' + m0['code'],) + SHARED_CODE:
+            dst = os.path.join(d, *rel.split('/'))
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(os.path.join(LESSONS_SRC, *rel.split('/')), dst)
+        if code_sha256(m0['code'], d) != m0['codeSha256']:
+            failed.append('mechanics: a copy of the code hashes differently')
+        crlf = os.path.join(d, 'play', 'adapt.ts')
+        data = open(crlf, 'rb').read()
+        open(crlf, 'wb').write(data.replace(b'\n', b'\r\n'))
+        if code_sha256(m0['code'], d) != m0['codeSha256']:
+            failed.append('mechanics: a CRLF checkout hashes differently')
+        open(crlf, 'wb').write(data.replace(b'triesBeforeShown: 2', b'triesBeforeShown: 9'))
+        if code_sha256(m0['code'], d) == m0['codeSha256']:
+            failed.append('mechanics: changing the knobs (adapt.ts) kept the signature')
 
     # The shared hash vectors (quran-content.test.ts checks the same file).
     failed += check_vectors(json.load(open(VECTORS, encoding='utf-8')))

@@ -150,7 +150,16 @@ export function PlayLesson({
       </main>
     );
   }
-  if (!sitting || sitting.key !== key) return <p className="note" role="status">جارٍ التحميل…</p>;
+  if (!sitting || sitting.key !== key) {
+    return (
+      <main className="lesson">
+        {header}
+        <p className="note" role="status">
+          جارٍ تجهيز الألعاب…
+        </p>
+      </main>
+    );
+  }
 
   const session = sitting.activities;
   const nextSegment = () => {

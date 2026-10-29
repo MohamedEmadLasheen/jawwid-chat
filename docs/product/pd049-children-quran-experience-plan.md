@@ -441,7 +441,14 @@ For one child on one surah (or segment), the engine builds a playlist. It is det
   - there are no sound effects; the only sound is the recitation. So the mute control is "no recitation", which restarts the sitting with the mechanics that work without it.
   - The verse size control has four steps.
   - A verse card's accessible name is what it shows: the ayah number, then the verse. Progress beads are read as text.
-  - **Signing a mechanic signs its code:** the record carries `code` (its file in `play/games/`) and `codeSha256` (SHA-256 of that file, a NUL, then `common.tsx`). `check-quran-content.py` refuses a hash that does not match. Changing a game therefore changes the record, so the mechanic must be signed again.
+  - **Signing a mechanic signs its code:** the record carries `code` (its file in `play/games/`) and `codeSha256`. That is the SHA-256 of that file plus the shared play code:
+    - `common.tsx`, the card;
+    - `adapt.ts`, the band's knobs such as tries before the answer is shown;
+    - `session.ts` and `PlayLesson.tsx`;
+    - `games/shuffle.ts`, which places the answer.
+
+    Each file is hashed with its path, and CRLF is read as LF. `check-quran-content.py` refuses a hash that does not match. Changing any of these changes the record, so every mechanic must be signed again.
+  - **Progress, v1:** stopping, or turning the recitation off or on, restarts the current game; the recitation toggle restarts the whole sitting. Nothing done so far is kept. That is accepted for v1, and it is safe: no star or progress is recorded yet (§B.5).
 
 ---
 
