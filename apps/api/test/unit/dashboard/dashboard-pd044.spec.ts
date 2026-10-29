@@ -12,6 +12,8 @@ import type { ConversationService } from '@communication/conversations/conversat
 import type { SupervisionCaseService } from '../../../src/cases/supervision-case.service';
 import type { TaskService } from '../../../src/tasks/task.service';
 import type { CalendarService } from '../../../src/calendar/calendar.service';
+import type { TrialService } from '../../../src/lessons/trial.service';
+import type { NewStudentEnrolmentService } from '../../../src/new-students/enrolment.service';
 
 describe('PD-44 dashboard tiles', () => {
   it('a tile is a count, an optional oldest time and a capped flag -- nothing about a person', () => {
@@ -40,7 +42,11 @@ describe('PD-44 DashboardController', () => {
   const tasks = { dashboardCounts: jest.fn(async () => taskTiles) } as unknown as TaskService;
   const lessonTiles = [dashboardTile('lessons.today_held', 4)];
   const calendar = { dashboardCounts: jest.fn(async () => lessonTiles) } as unknown as CalendarService;
-  const controller = new DashboardController(conversations, cases, tasks, calendar);
+  const trialTiles = [dashboardTile('trials.awaiting', 2)];
+  const trials = { dashboardCounts: jest.fn(async () => trialTiles) } as unknown as TrialService;
+  const studentTiles = [dashboardTile('new_students.unassigned', 1)];
+  const enrolment = { dashboardCounts: jest.fn(async () => studentTiles) } as unknown as NewStudentEnrolmentService;
+  const controller = new DashboardController(conversations, cases, tasks, calendar, trials, enrolment);
 
   it('serves each section from the owning page\'s service, unchanged', async () => {
     const chats = await controller.chats('staff-1');
@@ -53,6 +59,10 @@ describe('PD-44 DashboardController', () => {
     expect(tasks.dashboardCounts).toHaveBeenCalledWith('staff-1');
     expect((await controller.lessons('staff-1')).tiles).toBe(lessonTiles);
     expect(calendar.dashboardCounts).toHaveBeenCalledWith('staff-1', expect.any(Date));
+    // PD-44 PR-4: two pages' tiles in one section, the Trials page's first.
+    expect((await controller.enrolmentSection('staff-1')).tiles).toEqual([...trialTiles, ...studentTiles]);
+    expect(trials.dashboardCounts).toHaveBeenCalledWith('staff-1', expect.any(Date));
+    expect(enrolment.dashboardCounts).toHaveBeenCalledWith('staff-1');
   });
 
   it('each section requires the PD-40 key of the page it links to -- no dashboard key of its own', () => {
@@ -63,5 +73,6 @@ describe('PD-44 DashboardController', () => {
     // PD-47: everyone's own tasks are self-service, like the Tasks page itself.
     expect(access('tasksSection')).toEqual({ kind: 'self' });
     expect(access('lessons')).toEqual({ kind: 'requires', anyOf: ['lessons.view', 'schedule.view'] });
+    expect(access('enrolmentSection')).toEqual({ kind: 'requires', anyOf: ['trials.view', 'new_students.view'] });
   });
 });
