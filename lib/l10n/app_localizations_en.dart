@@ -4708,6 +4708,32 @@ class L10nEn extends L10n {
   String get boardVerseChanged => 'Verse text updated, re-insert';
 
   @override
+  String get boardToolImage => 'Image';
+
+  @override
+  String get boardImageAdding => 'Adding the image…';
+
+  @override
+  String get boardImageLoading => 'Loading the image…';
+
+  @override
+  String get boardImageUnavailable => 'Image unavailable';
+
+  @override
+  String get boardImageOff => 'Pictures on boards aren\'t switched on yet.';
+
+  @override
+  String get boardImageTooLarge =>
+      'This picture is too large. Use one under 10 MB, or fewer pictures on this board.';
+
+  @override
+  String get boardImageNotImage =>
+      'That file isn\'t a picture the board can show. Use a PNG, JPEG or WebP.';
+
+  @override
+  String get boardImageFailed => 'The picture couldn\'t be added. Try again.';
+
+  @override
   String get boardDraftStale =>
       'You have changes from an earlier visit that were not saved, on pages that have changed since. Keep yours (they replace those pages) or discard them.';
 

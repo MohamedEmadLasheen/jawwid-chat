@@ -8113,6 +8113,54 @@ abstract class L10n {
   /// **'Verse text updated, re-insert'**
   String get boardVerseChanged;
 
+  /// PD-39 whiteboard: the tool that puts a picture on the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get boardToolImage;
+
+  /// PD-39 whiteboard images: while a picture uploads.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding the image…'**
+  String get boardImageAdding;
+
+  /// PD-39 whiteboard images: an image not yet shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the image…'**
+  String get boardImageLoading;
+
+  /// PD-39 whiteboard images: an image that could not be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Image unavailable'**
+  String get boardImageUnavailable;
+
+  /// PD-39 whiteboard images: 503 COMM.WHITEBOARD_ASSETS_OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Pictures on boards aren\'t switched on yet.'**
+  String get boardImageOff;
+
+  /// PD-39 whiteboard images: over a size, board or storage limit.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture is too large. Use one under 10 MB, or fewer pictures on this board.'**
+  String get boardImageTooLarge;
+
+  /// PD-39 whiteboard images: not a picture the server accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'That file isn\'t a picture the board can show. Use a PNG, JPEG or WebP.'**
+  String get boardImageNotImage;
+
+  /// PD-39 whiteboard images: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The picture couldn\'t be added. Try again.'**
+  String get boardImageFailed;
+
   /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
   ///
   /// In en, this message translates to:
