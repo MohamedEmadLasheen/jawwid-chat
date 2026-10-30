@@ -38,9 +38,11 @@ import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
+import '../application/drafts_controller.dart';
 import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
+import '../data/draft_store.dart';
 import '../data/message_search_repository.dart';
 import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
@@ -1065,6 +1067,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     );
   }
 
+  /// PD-37: this chat's saved draft, for the composer to put back. Watches
+  /// only whether the drafts have loaded, so the screen rebuilds once, not on
+  /// every keystroke.
+  Draft? _savedDraft() {
+    if (!ref.watch(draftsProvider.select((d) => d.hasValue))) return null;
+    return ref.read(draftsProvider).value?[widget.conversationId];
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -1256,8 +1266,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
-            // PD-37: "typing…" -- a read-only chat says nothing.
+            // PD-37: "typing…" (a read-only chat says nothing), and the unsent
+            // text kept as this chat's draft.
+            // Keyed by the account: a switch with this chat open starts an
+            // empty field with the NEW account's draft, never the last one's text.
+            key: ValueKey(('composer', ref.watch(principalIdProvider))),
+            initialDraft: _savedDraft(),
             onDraftChanged: _typingSender?.typed,
+            onDraft: (draft) => ref.read(draftsProvider.notifier).set(widget.conversationId, draft),
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,
