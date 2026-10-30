@@ -1,0 +1,215 @@
+{
+ "lesson": 8,
+ "kind": "topic",
+ "title": {
+  "text": "التعريف بالنبي ﷺ",
+  "review": null
+ },
+ "review": {
+  "status": "pending",
+  "by": null,
+  "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 src/lessons/islamic/lesson-8, read as text from the quarantined copy, never built or run). Quran by reference only; every hadith held; everything pending the Teachers department (and a qualified scholar for any fiqh)."
+ },
+ "provenance": {
+  "source": "jawwid-lessons @ c231532, src/lessons/islamic/lesson-8 (read as text, never built or run)",
+  "sha256": {
+   "src/lessons/islamic/lesson-8/components/core/SlideRegistry.ts": "36d5923ff104fd28dc58b12b3d05e97539e02aed95eb0ffc53cd8cddc7420b3e",
+   "src/lessons/islamic/lesson-8/pages/Index.tsx": "d41f59a46eaec3a9c3d1ef60ae872b8bcf39f6dddd52ae55e42403be9ac70ee9",
+   "src/lessons/islamic/lesson-8/pages/slides/CoverSlide.tsx": "cf95c524b6131e96084eded02e36f4e882969505944c277f3dc70392f4aafb50",
+   "src/lessons/islamic/lesson-8/pages/slides/EndSlide.tsx": "5ab4e9ca5fa4b79d9c1f8d455e99cb32fd59ac2b83d875a6dda46fa6879b25f2",
+   "src/lessons/islamic/lesson-8/pages/slides/ProphetBirthSlide.tsx": "283107c8ee58877398764183abaa3924a8f7a46d32e745c15d0c619fc8ad48d8",
+   "src/lessons/islamic/lesson-8/pages/slides/ProphetIntroSlide.tsx": "4baab3c7fdce1224bcd83336842f1b5fda63bd24cb196e5a3ad6377299ed1495",
+   "src/lessons/islamic/lesson-8/pages/slides/ProphetLineageSlide.tsx": "3f0bca0d37398042dc1bcf5ecf41597e8ab30f8d46d621cc5814d53c7da8d6bf",
+   "src/lessons/islamic/lesson-8/pages/slides/QuizChooseSlide.tsx": "babb06c52e2a05ea1602ce6ef864e73783f94746136f1c0d11aba8b1fdf25693",
+   "src/lessons/islamic/lesson-8/pages/slides/QuizTrueFalseSlide.tsx": "638f2c2a6dcfe1b78fb681f69dd4689b7c52f4a7c39cfeb4c7c5bed00bfcdaaa",
+   "src/lessons/islamic/lesson-8/pages/slides/WelcomeSlide.tsx": "66e4ab78dc062c6593ad7c46558b586bc6df878d786745503da3b1da35b95874"
+  }
+ },
+ "retiredIds": [],
+ "sections": [
+  {
+   "id": "intro",
+   "title": {
+    "text": "مرحباً يا بطل!",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "intro-001",
+     "kind": "text",
+     "text": "رحلة ممتعة للتعرف على نبينا الحبيب ﷺ",
+     "review": null
+    },
+    {
+     "id": "intro-002",
+     "kind": "text",
+     "text": "اليوم سنتعرف معاً على نبينا الحبيب محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "intro-003",
+     "kind": "text",
+     "text": "سنعرف من هو؟ ومن أبوه وأمه؟ وأين ولد؟",
+     "review": null
+    },
+    {
+     "id": "intro-004",
+     "kind": "text",
+     "text": "هل أنت مستعد للمغامرة؟",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "who",
+   "title": {
+    "text": "أولاً: التعريف بالنبي محمد ﷺ",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "who-001",
+     "kind": "text",
+     "text": "مَن هو نبينا الذي نحبه ونطيعه؟",
+     "review": null
+    },
+    {
+     "id": "who-002",
+     "kind": "text",
+     "text": "هو محمد ﷺ نبينا ورسولنا الكريم",
+     "review": null
+    },
+    {
+     "id": "who-003",
+     "kind": "text",
+     "text": "أرسله الله تعالى لدعوة الناس جميعاً إلى دين الإسلام",
+     "review": null
+    },
+    {
+     "id": "who-004",
+     "kind": "text",
+     "text": "نحبه ونطيعه ﷺ لأنه خير البشر وأعظم معلم",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "lineage",
+   "title": {
+    "text": "مَن هو والده ومَن هي والدته؟",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "lineage-001",
+     "kind": "text",
+     "text": "والده ﷺ",
+     "review": null
+    },
+    {
+     "id": "lineage-002",
+     "kind": "text",
+     "text": "عَبْدُ اللهِ بْنُ عَبْدِ الْمُطَّلِب",
+     "review": null
+    },
+    {
+     "id": "lineage-003",
+     "kind": "text",
+     "text": "والدته ﷺ",
+     "review": null
+    },
+    {
+     "id": "lineage-004",
+     "kind": "text",
+     "text": "آمِنَةُ بِنْتُ وَهْبٍ",
+     "review": null
+    },
+    {
+     "id": "lineage-005",
+     "kind": "text",
+     "text": "نبينا محمد ﷺ من أشرف الناس نسباً وأطهرهم أصلاً",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "birth",
+   "title": {
+    "text": "أين وُلد النبي ﷺ وفي أي عام؟",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "birth-001",
+     "kind": "text",
+     "text": "مكان الولادة",
+     "review": null
+    },
+    {
+     "id": "birth-002",
+     "kind": "text",
+     "text": "مكة المكرمة أطهر بقاع الأرض",
+     "review": "CHECK: a superlative about Makkah stated as fact (\"أطهر بقاع الأرض\"); a teacher confirms the wording for children"
+    },
+    {
+     "id": "birth-003",
+     "kind": "text",
+     "text": "عام الولادة",
+     "review": null
+    },
+    {
+     "id": "birth-004",
+     "kind": "text",
+     "text": "عام الفيل العام الذي جاء فيه أصحاب الفيل",
+     "review": null
+    },
+    {
+     "id": "birth-005",
+     "kind": "text",
+     "text": "وُلد النبي محمد ﷺ في مكة المكرمة في عام الفيل",
+     "review": null
+    }
+   ]
+  }
+ ],
+ "quiz": [
+  {
+   "id": "q1",
+   "kind": "choose",
+   "question": "اسم والد النبي ﷺ هو ........",
+   "options": [
+    "عبد الله",
+    "عبد المطلب",
+    "علي"
+   ],
+   "answer": 0,
+   "review": null
+  },
+  {
+   "id": "q2",
+   "kind": "choose",
+   "question": "ولد النبي ﷺ في مدينة ........",
+   "options": [
+    "المدينة المنورة",
+    "الطائف",
+    "مكة المكرمة"
+   ],
+   "answer": 2,
+   "review": null
+  },
+  {
+   "id": "q3",
+   "kind": "truefalse",
+   "statement": "ولد النبي محمد ﷺ في عام الفيل.",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q4",
+   "kind": "truefalse",
+   "statement": "اسم أم النبي محمد ﷺ هي آمنة بنت وهب.",
+   "answer": true,
+   "review": "CHECK: verbatim from the source, but \"اسم ... هي\" mixes genders (اسم is masculine); a teacher decides whether to fix the wording"
+  }
+ ]
+}

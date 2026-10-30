@@ -1,0 +1,366 @@
+{
+ "lesson": 9,
+ "kind": "topic",
+ "title": {
+  "text": "رحمته ﷺ",
+  "review": null
+ },
+ "review": {
+  "status": "pending",
+  "by": null,
+  "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 src/lessons/islamic/lesson-9, read as text from the quarantined copy, never built or run). Quran by reference only; every hadith held; everything pending the Teachers department (and a qualified scholar for any fiqh)."
+ },
+ "provenance": {
+  "source": "jawwid-lessons @ c231532, src/lessons/islamic/lesson-9 (read as text, never built or run)",
+  "sha256": {
+   "src/lessons/islamic/lesson-9/components/core/SlideRegistry.ts": "36d5923ff104fd28dc58b12b3d05e97539e02aed95eb0ffc53cd8cddc7420b3e",
+   "src/lessons/islamic/lesson-9/pages/Index.tsx": "82eb2e1b9ff5d6cf63091f0e199ef11d842eadd7fee077144f59d961b24f60db",
+   "src/lessons/islamic/lesson-9/pages/slides/CoverSlide.tsx": "56c78a624c06d9921d691b45e2a1f255f9dae19c3b41f1440dc8bfb7b7e1cca7",
+   "src/lessons/islamic/lesson-9/pages/slides/DawahSlide.tsx": "0b9385bea8d7ca4869f1ac119067a06dcef6dc43167841e663dd87a5086c5b25",
+   "src/lessons/islamic/lesson-9/pages/slides/EndSlide.tsx": "d027d69b67eaac2e88d6a972475c4c7ab6a4f67cd853390f962aa5a0a75f89d9",
+   "src/lessons/islamic/lesson-9/pages/slides/HadithBirdSlide.tsx": "7c05297f750613f8ba7096c8214fca5792f7c034c3a830cf4a0f998729aac808",
+   "src/lessons/islamic/lesson-9/pages/slides/LinksSlide.tsx": "b45424dc1b519da556940effdbd67ec565df6573a05b70ab7431ee793f1f96ca",
+   "src/lessons/islamic/lesson-9/pages/slides/MercyPrayerSlide.tsx": "baeebbc524d611fc8e77a3060f43c0d4d126131627cf96a1dff0bf28b429bc7e",
+   "src/lessons/islamic/lesson-9/pages/slides/QuizMatchOrderSlide.tsx": "8003de469fdc1161c84d0aabeeb6f4adc9584c7f4557646dd38a2dd3742bad47",
+   "src/lessons/islamic/lesson-9/pages/slides/QuizMultipleChoiceSlide.tsx": "44d952b3376c7c6fd955139264a9bf2793a41361b9ed6921d51d2590cc5bc96f",
+   "src/lessons/islamic/lesson-9/pages/slides/QuizTrueFalseSlide.tsx": "4b45860fe1a0f7f96566d3e2ba3bb0f1f7780ee97856d5ee7b82d34a5fe8b954",
+   "src/lessons/islamic/lesson-9/pages/slides/WelcomeSlide.tsx": "fbe2d409b0a168fd780954e82b79702f3dd8c20783eeaec56f94136d82539264"
+  }
+ },
+ "retiredIds": [],
+ "sections": [
+  {
+   "id": "intro",
+   "title": {
+    "text": "مرحباً يا بطل!",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "intro-001",
+     "kind": "text",
+     "text": "رحلة ممتعة لنتعرف على رحمة نبينا محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "intro-002",
+     "kind": "text",
+     "text": "اليوم سنتعلم معاً عن رحمة نبينا محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "intro-003",
+     "kind": "text",
+     "text": "سنكتشف كيف كان النبي ﷺ رحيماً بالناس والحيوانات والأطفال",
+     "review": null
+    },
+    {
+     "id": "intro-004",
+     "kind": "text",
+     "text": "هل أنت مستعد للمغامرة؟",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "animals",
+   "title": {
+    "text": "رحمته ﷺ بالحيوانات",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "animals-001",
+     "kind": "hadith",
+     "source": "not stated",
+     "text": "عن عبد الله بن مسعود قَالَ: كُنَّا مَعَ رَسُولِ اللهِ ﷺ فِي سَفَرٍ، فَانْطَلَقَ لِحَاجَتِهِ، فَرَأَيْنَا حُمَّرَةً مَعَهَا فَرْخَانِ، فَأَخَذْنَا فَرْخَيْهَا، فَجَاءَتِ الْحُمَّرَةُ فَجَعَلَتْ تَفْرِشُ، فَجَاءَ النَّبِيُّ ﷺ، فَقَالَ: «مَنْ فَجَعَ هَذِهِ بِوَلَدِهَا؟ رُدُّوا وَلَدَهَا إِلَيْهَا.»",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "animals-002",
+     "kind": "text",
+     "text": "ماذا نتعلم؟",
+     "review": null
+    },
+    {
+     "id": "animals-003",
+     "kind": "text",
+     "text": "النبي ﷺ كان رحيماً حتى بالطيور",
+     "review": null
+    },
+    {
+     "id": "animals-004",
+     "kind": "text",
+     "text": "غضب عندما أُخذ فرخا الطائر",
+     "review": "CHECK: says the Prophet ﷺ was angry; the narration on this slide reports his words, not anger; a teacher confirms"
+    },
+    {
+     "id": "animals-005",
+     "kind": "text",
+     "text": "أمر بإرجاع الفرخين لأمهما",
+     "review": null
+    },
+    {
+     "id": "animals-006",
+     "kind": "text",
+     "text": "الحُمَّرة: طائر صغير جميل",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "prayer",
+   "title": {
+    "text": "رحمته ﷺ في الصلاة والحياة",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "prayer-001",
+     "kind": "text",
+     "text": "رحمته بالأطفال في الصلاة",
+     "review": null
+    },
+    {
+     "id": "prayer-002",
+     "kind": "text",
+     "text": "كان النبي ﷺ يُخفف الصلاة إذا سمع بكاء طفل",
+     "review": "CHECK: reports the Prophet's ﷺ practice from a hadith that is not quoted or sourced here; a teacher confirms it"
+    },
+    {
+     "id": "prayer-003",
+     "kind": "text",
+     "text": "وذلك رحمةً بالطفل وبأمه التي يشتد قلقها عليه",
+     "review": null
+    },
+    {
+     "id": "prayer-004",
+     "kind": "hadith",
+     "source": "not stated",
+     "text": "قال رسول الله ﷺ: «الراحمون يرحمهم الرحمن»",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "prayer-005",
+     "kind": "text",
+     "text": "من يرحم الناس يرحمه الله تعالى",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "safa",
+   "title": {
+    "text": "الدعوة على جبل الصفا",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "safa-001",
+     "kind": "text",
+     "text": "ماذا حدث؟",
+     "review": null
+    },
+    {
+     "id": "safa-002",
+     "kind": "text",
+     "text": "أمر الله النبي ﷺ أن يدعو أقاربه للإسلام",
+     "review": null
+    },
+    {
+     "id": "safa-003",
+     "kind": "text",
+     "text": "صعد النبي ﷺ على جبل الصفا",
+     "review": null
+    },
+    {
+     "id": "safa-004",
+     "kind": "text",
+     "text": "نادى أقاربه ليجتمعوا إليه",
+     "review": null
+    },
+    {
+     "id": "safa-005",
+     "kind": "text",
+     "text": "الدليل على صدقه ﷺ",
+     "review": null
+    },
+    {
+     "id": "safa-006",
+     "kind": "hadith",
+     "source": "not stated",
+     "text": "سألهم النبي ﷺ: لو أخبرتكم أن خيلاً بالوادي تريد أن تهجم عليكم، أكنتم تصدقونني؟ قالوا جميعاً: «نعم، ما جربنا عليك كذباً»",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "safa-007",
+     "kind": "text",
+     "text": "قريش كانت تعرف أن النبي ﷺ صادق أمين، لذلك أقروا بصدقه حتى قبل الإسلام",
+     "review": "CHECK: \"حتى قبل الإسلام\" is imprecise: the Safa call came after the mission began; their testimony was to his truthfulness before it; a teacher confirms the wording"
+    }
+   ]
+  }
+ ],
+ "quiz": [
+  {
+   "id": "q1",
+   "kind": "choose",
+   "question": "اسم والد النبي ﷺ هو ........",
+   "options": [
+    "عبد الله",
+    "عبد المطلب",
+    "علي"
+   ],
+   "answer": 0,
+   "review": null
+  },
+  {
+   "id": "q2",
+   "kind": "choose",
+   "question": "ولد النبي ﷺ في مدينة ........",
+   "options": [
+    "المدينة المنورة",
+    "الطائف",
+    "مكة المكرمة"
+   ],
+   "answer": 2,
+   "review": null
+  },
+  {
+   "id": "q3",
+   "kind": "choose",
+   "question": "اللقب الذي عرف به النبي ﷺ قبل البعثة هو ........",
+   "options": [
+    "الفاروق",
+    "الصادق الأمين",
+    "ذو النورين"
+   ],
+   "answer": 1,
+   "review": "CHECK: not taught on any slide of this lesson (the source has no slide at order 5, likely the missing one); a teacher confirms the fact and that it is covered before the quiz"
+  },
+  {
+   "id": "q4",
+   "kind": "choose",
+   "question": "الشخص الذي كلفه النبي ﷺ برد الأمانات هو ........",
+   "options": [
+    "أبو بكر",
+    "عمر",
+    "علي بن أبي طالب"
+   ],
+   "answer": 2,
+   "review": "CHECK: not taught on any slide of this lesson (the source has no slide at order 5, likely the missing one); a teacher confirms the fact and that it is covered before the quiz"
+  },
+  {
+   "id": "q5",
+   "kind": "choose",
+   "question": "صعد النبي ﷺ ليدعو أقاربه فوق جبل ........",
+   "options": [
+    "أحد",
+    "الصفا",
+    "حراء"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q6",
+   "kind": "truefalse",
+   "statement": "ولد النبي محمد ﷺ في عام الفيل.",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q7",
+   "kind": "truefalse",
+   "statement": "اسم أم النبي محمد ﷺ هي آمنة بنت وهب.",
+   "answer": true,
+   "review": "CHECK: verbatim from the source, but \"اسم ... هي\" mixes genders (اسم is masculine); a teacher decides whether to fix the wording"
+  },
+  {
+   "id": "q8",
+   "kind": "truefalse",
+   "statement": "صعد النبي ﷺ جبل الصفا ليخبر قومه برسالته.",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q9",
+   "kind": "truefalse",
+   "statement": "كان النبي ﷺ يخفف الصلاة إذا سمع بكاء طفل رحمةً به وبأمه.",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q10",
+   "kind": "truefalse",
+   "statement": "أرسل الله تعالى النبي محمدًا ﷺ لدعوة العرب فقط إلى الإسلام.",
+   "answer": false,
+   "review": null
+  },
+  {
+   "id": "q11",
+   "kind": "choose",
+   "question": "أرسل الله تعالى النبي محمدًا ﷺ لدعوة الناس جميعاً إلى ........",
+   "options": [
+    "صدقوه",
+    "الأمانات",
+    "الحُمَّرة",
+    "الإسلام"
+   ],
+   "answer": 3,
+   "review": "CHECK: converted from a fill-in-the-blank with a 5-word bank; options are 4 of the bank's words in bank order (الرحمن dropped: it could also complete this sentence); a teacher confirms no other option completes the sentence"
+  },
+  {
+   "id": "q12",
+   "kind": "choose",
+   "question": "طلب النبي ﷺ من علي بن أبي طالب أن يرد ........ لأصحابها.",
+   "options": [
+    "الرحمن",
+    "صدقوه",
+    "الأمانات",
+    "الحُمَّرة"
+   ],
+   "answer": 2,
+   "review": "CHECK: not taught on any slide of this lesson (the source has no slide at order 5, likely the missing one); a teacher confirms the fact and that it is covered before the quiz | CHECK: converted from a fill-in-the-blank with a 5-word bank; options are 4 of the bank's words in bank order (الإسلام dropped: the last non-answer word of the bank); a teacher confirms no other option completes the sentence"
+  },
+  {
+   "id": "q13",
+   "kind": "choose",
+   "question": "كان جواب قوم النبي ﷺ عندما سألهم عن هجوم خيل عليهم، أنهم ........",
+   "options": [
+    "الرحمن",
+    "صدقوه",
+    "الأمانات",
+    "الحُمَّرة"
+   ],
+   "answer": 1,
+   "review": "CHECK: converted from a fill-in-the-blank with a 5-word bank; options are 4 of the bank's words in bank order (الإسلام dropped: the last non-answer word of the bank); a teacher confirms no other option completes the sentence"
+  },
+  {
+   "id": "q14",
+   "kind": "choose",
+   "question": "طائر ........ هو الذي فُجع بولده فأمر النبي ﷺ برده إليه.",
+   "options": [
+    "الرحمن",
+    "صدقوه",
+    "الأمانات",
+    "الحُمَّرة"
+   ],
+   "answer": 3,
+   "review": "CHECK: converted from a fill-in-the-blank with a 5-word bank; options are 4 of the bank's words in bank order (الإسلام dropped: the last non-answer word of the bank); a teacher confirms no other option completes the sentence"
+  },
+  {
+   "id": "q15",
+   "kind": "choose",
+   "question": "قال رسول الله ﷺ: «الراحمون يرحمهم ........»",
+   "options": [
+    "الرحمن",
+    "صدقوه",
+    "الأمانات",
+    "الحُمَّرة"
+   ],
+   "answer": 0,
+   "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade | CHECK: converted from a fill-in-the-blank with a 5-word bank; options are 4 of the bank's words in bank order (الإسلام dropped: the last non-answer word of the bank); a teacher confirms no other option completes the sentence"
+  }
+ ]
+}

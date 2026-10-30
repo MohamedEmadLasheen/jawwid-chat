@@ -8,8 +8,8 @@ export type Route =
   | { kind: 'not-found' };
 
 export const ARABIC_LESSONS: readonly number[] = [1, 3, 5, 6, 7];
-/** The Islamic Studies lessons on the engine (topic lessons); none until batch 1 lands. */
-export const ISLAMIC_LESSONS: readonly number[] = [];
+/** The Islamic Studies lessons on the engine (topic lessons): batch 1, the Prophet ﷺ lessons. */
+export const ISLAMIC_LESSONS: readonly number[] = [8, 9, 10, 11, 20];
 
 export function route(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
