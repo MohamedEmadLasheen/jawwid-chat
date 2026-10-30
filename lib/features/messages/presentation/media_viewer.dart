@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
@@ -63,6 +65,10 @@ class _MediaViewerState extends State<MediaViewer> {
   /// still until it is back to its size.
   bool _zoomed = false;
 
+  /// The page the pages have come to rest on. [_index] changes halfway
+  /// through a turn; this one only once it has finished.
+  late int _settled = widget.initialIndex;
+
   @override
   void dispose() {
     _pages.dispose();
@@ -86,15 +92,17 @@ class _MediaViewerState extends State<MediaViewer> {
     );
   }
 
-  /// A zoomed photo dragged on past its edge: on to the photo that way.
-  void _turn(int by) {
+  /// A zoomed photo dragged on past its edge: on to the photo that way, if
+  /// there is one. False at the first or the last photo -- nothing to turn to.
+  bool _turn(int by) {
     final to = _index + by;
-    if (to < 0 || to >= widget.photos.length) return;
-    _pages.animateToPage(
+    if (to < 0 || to >= widget.photos.length) return false;
+    unawaited(_pages.animateToPage(
       to,
       duration: Motion.respecting(context, Motion.motionBase),
       curve: Motion.easingStandard,
-    );
+    ));
+    return true;
   }
 
   @override
@@ -129,19 +137,26 @@ class _MediaViewerState extends State<MediaViewer> {
       ),
       body: Stack(
         children: [
-          PageView.builder(
-            controller: _pages,
-            itemCount: widget.photos.length,
-            // PD-37: swipe between the photos, as WhatsApp does -- unless the
-            // photo is zoomed in, when the same drag moves around it.
-            physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
-            onPageChanged: _onPageChanged,
-            itemBuilder: (context, index) => _ZoomablePhoto(
-              onZoomChanged: (zoomed) {
-                if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
-              },
-              onPastEdge: _turn,
-              child: _Photo(attachment: widget.photos[index], label: _positionLabel(l10n, index)),
+          NotificationListener<ScrollEndNotification>(
+            onNotification: (_) {
+              if (_settled != _index) setState(() => _settled = _index);
+              return false;
+            },
+            child: PageView.builder(
+              controller: _pages,
+              itemCount: widget.photos.length,
+              // PD-37: swipe between the photos, as WhatsApp does -- unless the
+              // photo is zoomed in, when the same drag moves around it.
+              physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+              onPageChanged: _onPageChanged,
+              itemBuilder: (context, index) => _ZoomablePhoto(
+                onScreen: index == _settled,
+                onZoomChanged: (zoomed) {
+                  if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+                },
+                onPastEdge: _turn,
+                child: _Photo(attachment: widget.photos[index], label: _positionLabel(l10n, index)),
+              ),
             ),
           ),
           // The counter appears only when there is more than one, so a single
@@ -190,13 +205,22 @@ class _MediaViewerState extends State<MediaViewer> {
 /// drag moves the photo -- and a drag that carries on past the photo's edge
 /// turns to the next one, as on WhatsApp.
 class _ZoomablePhoto extends StatefulWidget {
-  const _ZoomablePhoto({required this.child, required this.onZoomChanged, required this.onPastEdge});
+  const _ZoomablePhoto({
+    required this.child,
+    required this.onZoomChanged,
+    required this.onPastEdge,
+    required this.onScreen,
+  });
 
   final Widget child;
   final ValueChanged<bool> onZoomChanged;
 
   /// +1 for the next photo, -1 for the previous (in reading order).
-  final ValueChanged<int> onPastEdge;
+  final bool Function(int by) onPastEdge;
+
+  /// The photo the pages are on. A zoomed photo the pages left is put back
+  /// to its size -- after the page has turned, not before.
+  final bool onScreen;
 
   /// Double-tap zoom.
   static const doubleTapScale = 2.5;
@@ -303,8 +327,18 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto> with SingleTickerProvide
     // previous one in Arabic (the pages run the other way).
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final towardNext = rtl ? past > 0 : past < 0;
-    _transform.value = Matrix4.identity();
+    // The zoom stays: at the first or the last photo there is nowhere to go,
+    // and otherwise the page turns first (see didUpdateWidget).
     widget.onPastEdge(towardNext ? 1 : -1);
+  }
+
+  @override
+  void didUpdateWidget(_ZoomablePhoto oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onScreen && !widget.onScreen) {
+      _zoomAnimation.stop();
+      _transform.value = Matrix4.identity();
+    }
   }
 
   @override
