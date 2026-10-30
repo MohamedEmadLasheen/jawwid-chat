@@ -252,6 +252,13 @@ def words_of(sentence):
     return ws if ws and all(is_word(w) for w in ws) else None
 
 
+def bare(word):
+    """A word's bare letters, a tanween fath's carrier alif or alif maqsura dropped (كِتَابًا = كِتَابْ)."""
+    if is_str(word) and len(word) > 1 and word[-1] in ('ا', 'ى') and word[-2] == chr(0x64B):
+        word = word[:-1]
+    return ''.join(letters_of(word))
+
+
 def all_carry(text, vowel):
     """Every letter carries this vowel (a lesson-4 drill or word of one stage)."""
     ls = letters_marks(text)
@@ -289,8 +296,13 @@ def check_reading(lesson, number, quran_grams=None):
         raise ValueError('a reading lesson is checked against the verified Quran (quran_grams()); refusing to skip that check')
     errors = []
     err = errors.append
-    if not READING_KEYS <= set(lesson) or set(lesson) - READING_KEYS - {'passages'}:
-        return [f'keys must be {sorted(READING_KEYS)} (and passages), not {sorted(lesson)}']
+    if not READING_KEYS <= set(lesson) or set(lesson) - READING_KEYS - {'passages', 'names'}:
+        return [f'keys must be {sorted(READING_KEYS)} (and passages, names), not {sorted(lesson)}']
+    names = lesson.get('names', [])
+    if not isinstance(names, list) or not all(is_word(n) for n in names):
+        err('names must be a list of the proper names the lesson\'s sentences use (one written word each)')
+        names = []
+    name_letters = {bare(n) for n in names}  # by letters, so أَحْمَدْ is أَحْمَدُ
     if not is_int(lesson['lesson']) or lesson['lesson'] != number:
         err(f'lesson is {lesson["lesson"]!r}, not {number}')
     review = lesson['review']
@@ -438,6 +450,22 @@ def check_reading(lesson, number, quran_grams=None):
                     err(f'{qw}: option {o!r} must be a word of another sentence of this lesson (never a drill)')
                 elif unmarked(o):
                     err(f'{qw}: option {o!r} is not fully vowelled')
+                # Reviews of #292: a wrong option must not be able to complete the sentence too. It is never
+                # a word of the blank's own sentence, never a word in the blank's place in another sentence
+                # (a subject for a subject), never a sentence's last word (its pausal form), never the answer
+                # in another form (الْوَلَدْ / الْوَلَدُ, كِتَابًا / كِتَابْ), and never another name for a name.
+                answer = ws[q['blank']]
+                sentences = [words_of(i['text']) or [] for i in items.values() if i['kind'] == 'sentence']
+                if o in ws:
+                    err(f'{qw}: option {o!r} is a word of the blank\'s own sentence')
+                if any(len(x) > q['blank'] and x[q['blank']] == o for x in sentences):
+                    err(f'{qw}: option {o!r} sits in the blank\'s place in another sentence, so it could fill it too')
+                if any(x and x[-1] == o for x in sentences):
+                    err(f'{qw}: option {o!r} is a sentence\'s last word, a pausal form')
+                if bare(o) == bare(answer):
+                    err(f'{qw}: option {o!r} is the answer\'s word in another form')
+                if bare(answer) in name_letters and bare(o) in name_letters:
+                    err(f'{qw}: option {o!r} is another name where the blank is a name: it could complete the sentence too')
         else:
             err(f'{qw}: kind must be vowel or missing')
 
@@ -885,7 +913,7 @@ def selftest():
             ],
             'passages': [{'id': 'passage-001', 'title': {'text': 'الْقِطَّةْ', 'review': None}, 'sentences': ['sentences-002']}],
             'quiz': [{'id': 'q1', 'kind': 'vowel', 'stage': 'fatha', 'options': ['بِتِ', 'بَتَ'], 'answer': 1, 'review': None},
-                     {'id': 'q2', 'kind': 'missing', 'sentence': 'sentences-002', 'blank': 1, 'options': ['الْقِطَّةُ', 'الْوَلَدُ'], 'answer': 0, 'review': None}],
+                     {'id': 'q2', 'kind': 'missing', 'sentence': 'sentences-002', 'blank': 0, 'options': ['نَامَتِ', 'الْوَلَدُ'], 'answer': 0, 'review': None}],
         }
     toy_quran = {tuple(RASM.rasm('نَامَتِ الْقِطَّةُ الصَّغِيرَةُ').split())}
     rcases = {
@@ -909,6 +937,14 @@ def selftest():
         'reading-sukun-particle-inside-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ مِنْ تَعَبْ.'), None, None),
         'reading-feminine-ta-sakina-is-fine': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ قِطَّتِي الصَّغِيرَةْ.') or c['quiz'].pop(), None, None),
         'reading-sukun-before-a-wasl': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتْ الْقِطَّةُ الصَّغِيرَةْ.'), 'hamzat wasl', None),
+        # The real #292 regression: the SUBJECT blanked and another sentence's subject offered -- it fits too.
+        'reading-missing-subject-from-another-sentence': (lambda c: c['quiz'][1].update(blank=1, options=['الْقِطَّةُ', 'الْوَلَدُ'], answer=0), "the blank's place", None),
+        'reading-missing-option-pausal': (lambda c: c['quiz'][1].update(options=['نَامَتِ', 'تُفَّاحًا']), 'last word', None),
+        'reading-missing-option-own-sentence': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ الْوَلَدُ الصَّغِيرَةْ.'), 'own sentence', None),
+        'reading-missing-option-same-word': (lambda c: c['stages'][2]['items'][0].update(text='أَكَلَ الْوَلَدُ كِتَابًا', finalMarkException='the tanween fath')
+                                             or c['stages'][2]['items'][1].update(text='نَامَتِ كِتَابْ الصَّغِيرَةْ.')
+                                             or c['quiz'][1].update(sentence='sentences-001', blank=2, options=['كِتَابًا', 'كِتَابْ'], answer=0), 'another form', None),
+        'reading-missing-option-another-name': (lambda c: c.update(names=['نَامَتْ', 'الْوَلَدْ']), 'another name', None),
         'reading-title-not-vowelled': (lambda c: c['passages'][0]['title'].update(text='القطة'), 'not fully vowelled', None),
         'reading-stage-name-not-pausal': (lambda c: c['stages'][2].update(name='جُمَلٌ'), 'not the pausal sukun', None),
     }

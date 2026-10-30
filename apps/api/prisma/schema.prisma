@@ -2311,6 +2311,8 @@ model FamilyContactKey {
   familyId       String   @map("family_id") @db.Uuid
   /// email | phone
   kind           String
+  /// PD-45: record (never removed while the family exists) | rekey (a local number as the current country reads it).
+  source         String   @default("record")
   createdBy      String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
