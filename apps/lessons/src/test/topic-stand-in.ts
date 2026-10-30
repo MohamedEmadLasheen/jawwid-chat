@@ -5,6 +5,7 @@ export function topicStandIn(): TopicLesson {
   return {
     lesson: 8,
     kind: 'topic',
+    fiqh: false,
     title: { text: 'نبينا محمد', review: null },
     review: { status: 'approved', by: 'test', note: '' },
     provenance: {},

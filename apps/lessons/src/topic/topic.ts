@@ -38,10 +38,11 @@ export interface TopicLesson {
   kind: 'topic';
   title: { text: string; review: Review };
   /**
-   * A lesson that teaches fiqh (wudu, salah): its approval also names the qualified scholar who verified
-   * the method and every step (owner, 2026-10-29): `review.scholar`.
+   * Required on every lesson, so the author decides (review of #318): true for a lesson that teaches fiqh
+   * (wudu, salah), whose approval also names the qualified scholar who verified the method and every step
+   * (owner, 2026-10-29): `review.scholar`.
    */
-  fiqh?: boolean;
+  fiqh: boolean;
   review: { status: 'pending' | 'approved'; by: string | null; note: string; scholar?: string | null };
   provenance: unknown;
   retiredIds: string[];
@@ -82,10 +83,10 @@ export function isTopicLesson(x: unknown): x is TopicLesson {
 
 export function resolveTopicLesson(raw: unknown, lesson: number): ResolvedTopic | null {
   if (!isTopicLesson(raw) || raw.lesson !== lesson) return null;
-  if (!keys(raw, ['lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz'], ['fiqh'])) return null;
+  if (!keys(raw, ['lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz', 'fiqh'])) return null;
   if (!keys(raw.review, ['status', 'by', 'note'], ['scholar']) || !['pending', 'approved'].includes(raw.review.status)) return null;
   const approved = raw.review.status === 'approved';
-  if (raw.fiqh !== undefined && typeof raw.fiqh !== 'boolean') return null;
+  if (typeof raw.fiqh !== 'boolean') return null;
   // A fiqh lesson is approved only with the scholar who verified its method and steps named too.
   if (approved && raw.fiqh && !(typeof raw.review.scholar === 'string' && raw.review.scholar.trim().length > 0)) return null;
   let held = 0;

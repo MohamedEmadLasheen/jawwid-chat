@@ -496,18 +496,31 @@ def quran_grams():
 
 # --- Topic lessons (the Islamic Studies lessons): prose, Quran BY REFERENCE, hadith always held.
 ISLAMIC = os.path.join(ROOT, 'apps', 'lessons', 'src', 'islamic')
-TOPIC_KEYS = {'lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz'}  # (and fiqh)
+# fiqh is required: the author decides, for every lesson, whether it teaches fiqh (review of #318).
+TOPIC_KEYS = {'lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz', 'fiqh'}
 TOPIC_RUN = 4  # 4+ consecutive Quran words in prose: typed Quran (the approved plan; whole Quran)
 # Owner 2026-10-29: no madhhab names or differences in child-facing content (review of #318). A word is
 # folded (no marks, every alef form as ا, ى as ي, ة as ه, no tatweel), stripped of a prefix (و ف ب ك ل),
 # the article, a tanween fath's alif and a pronoun suffix, then compared with these stems. Known false
 # positives fail CLOSED and a teacher rewords: حنفية is also a tap in Egyptian Arabic (a wudu lesson
-# will meet it), and مذهب also means gilded.
+# will meet it), مذهب also means gilded, مالكيه "its owners", مالكي "my owner" and شافعي "my
+# intercessor". A bare حنيف (Ibrahim was حنيفًا) is NOT a stem, nor is "hanif" in Latin.
 MADHHAB = {'حنفي', 'حنفيه', 'احناف', 'حنفيون', 'حنفيين', 'مالكي', 'مالكيه', 'مالكيون', 'مالكيين', 'شافعي', 'شافعيه',
            'شوافع', 'شافعيون', 'شافعيين', 'حنبلي', 'حنابله', 'حنبليون', 'حنبليين', 'مذهب', 'مذاهب'}
 # The imams by name, as folded phrases, and the Latin spellings (any case).
-MADHHAB_PHRASES = ['ابو حنيفه', 'ابي حنيفه', 'مالك بن انس', 'احمد بن حنبل', 'ابن حنبل', 'الامام الشافعي', 'الامام مالك']
-MADHHAB_LATIN = re.compile(r"\b(hanaf|malik[iy]|shaf[iʿ'’]?i|hanbal|madh-?hab)", re.I)
+MADHHAB_PHRASES = ['ابو حنيفه', 'ابي حنيفه', 'ابا حنيفه', 'مالك بن انس', 'احمد بن حنبل', 'ابن حنبل', 'الامام الشافعي',
+                   'الامام مالك', 'الامام احمد']
+# Latin is matched on a fold: NFKD with its combining marks dropped, the apostrophe-like letters dropped
+# and lower case, so Shāfiʿī, Shafi'i and shafii are one spelling. "shafi" ends at a word boundary so
+# the name Shafiq does not match; "malik" alone (a name) does not either, only maliki/malikite.
+MADHHAB_LATIN = re.compile(r"\b(hanaf\w*|hanbal\w*|maliki\w*|shafi(?:i|is|ite|ites|iyya)?\b|madh-?hab\w*|abu\s+hanifa\w*|imam\s+(?:malik|ahmad)\b)")
+LATIN_QUOTES = dict.fromkeys(map(ord, "'’‘ʿʾ`"))
+
+
+def fold_latin(text):
+    """Latin as the madhhab filter compares it: no diacritics, no apostrophes, lower case."""
+    t = ''.join(c for c in unicodedata.normalize('NFKD', text) if not unicodedata.combining(c))
+    return t.translate(LATIN_QUOTES).lower()
 PRONOUN_SUFFIX = re.compile('(?:هما|هم|هن|ها|كم|كن|نا|ه|ك|ي)$')
 
 
@@ -533,7 +546,7 @@ def madhhab_words(text):
             found.append(w)
     folded = ' '.join(words)
     found += [p for p in MADHHAB_PHRASES if p in folded]
-    found += [m.group(0) for m in MADHHAB_LATIN.finditer(text)]
+    found += [m.group(0) for m in MADHHAB_LATIN.finditer(fold_latin(text))]
     return found
 
 
@@ -543,10 +556,10 @@ def check_topic(lesson, number, quran=None):
         raise ValueError('a topic lesson is checked against the verified Quran (topic_quran()); refusing to skip that check')
     errors = []
     err = errors.append
-    if not isinstance(lesson, dict) or not TOPIC_KEYS <= set(lesson) or set(lesson) - TOPIC_KEYS - {'fiqh'}:
-        return [f'keys must be {sorted(TOPIC_KEYS)} (and fiqh), not {sorted(lesson) if isinstance(lesson, dict) else lesson!r}']
-    if 'fiqh' in lesson and not isinstance(lesson['fiqh'], bool):
-        err('fiqh is true or false')
+    if not isinstance(lesson, dict) or set(lesson) != TOPIC_KEYS:
+        return [f'keys must be {sorted(TOPIC_KEYS)}, not {sorted(lesson) if isinstance(lesson, dict) else lesson!r}']
+    if not isinstance(lesson['fiqh'], bool):
+        err('fiqh is true or false (required: does this lesson teach fiqh?)')
     if not is_int(lesson['lesson']) or lesson['lesson'] != number:
         err(f'lesson is {lesson["lesson"]!r}, not {number}')
     review = lesson['review']
@@ -564,7 +577,8 @@ def check_topic(lesson, number, quran=None):
         if r:
             flagged.append(where)
 
-    def prose(where, t):
+    def prose(where, t, standalone=False):
+        """standalone: an option, a statement or a title -- a whole string a child reads on its own."""
         if not is_str(t) or not t.strip() or t != unicodedata.normalize('NFC', t):
             err(f'{where}: text must be non-empty NFC')
             return
@@ -572,16 +586,21 @@ def check_topic(lesson, number, quran=None):
             err(f'{where}: names a madhhab ({w}); child-facing text never does (owner, 2026-10-29)')
         if quran_runs(t, quran['grams'], TOPIC_RUN):
             err(f'{where}: carries {TOPIC_RUN} or more consecutive Quran words: typed Quran is refused; use a {{surah, from, to}} reference')
-        # A whole short ayah (2-3 words) typed anywhere is typed Quran too: «الله الصمد», «إنا أعطيناك الكوثر».
-        ws = RASM.words(t)
-        if any(tuple(ws[i:i + k]) in quran['ayat'] for k in (2, 3) for i in range(len(ws) - k + 1)):
-            err(f'{where}: carries a whole ayah: typed Quran is refused; use a {{surah, from, to}} reference')
+        # A standalone string that IS a whole short ayah (2-3 words) is typed Quran too: an option
+        # «الله الصمد», a title «إنا أعطيناك الكوثر». Only the WHOLE string, never a run inside prose: in
+        # rasm everyday phrases are ayat (خلق الإنسان، علم القرآن، ثم نظر، مالك الناس, and قال له الناس since
+        # إله folds to له), so prose stays under the TOPIC_RUN rule (the agreed typed-Quran policy). What
+        # remains: a 2-3-word ayah inside prose passes (accepted); an option or title that is exactly such
+        # a phrase («ثم نظر», «مالك الناس») is refused though meant as everyday Arabic -- it fails closed
+        # and a teacher rewords it.
+        if standalone and tuple(RASM.words(t)) in quran['ayat']:
+            err(f'{where}: is a whole ayah: typed Quran is refused; use a {{surah, from, to}} reference')
 
     t = lesson['title']
     if not isinstance(t, dict) or set(t) != {'text', 'review'}:
         err('title is {text, review}')
     else:
-        prose('title', t['text'])
+        prose('title', t['text'], standalone=True)
         held('title', t['review'])
     sids = set()
     for s in lesson['sections'] if isinstance(lesson['sections'], list) else []:
@@ -596,7 +615,7 @@ def check_topic(lesson, number, quran=None):
         if not isinstance(s['title'], dict) or set(s['title']) != {'text', 'review'}:
             err(f'{where}: title is {{text, review}}')
         else:
-            prose(f'{where} title', s['title']['text'])
+            prose(f'{where} title', s['title']['text'], standalone=True)
             held(f'{where} title', s['title']['review'])
         for b in s['blocks'] if isinstance(s['blocks'], list) else []:
             bw = f'{where} block {b.get("id") if isinstance(b, dict) else b!r}'
@@ -638,9 +657,9 @@ def check_topic(lesson, number, quran=None):
                 err(f'{qw}: the answer is an option index')
             prose(f'{qw} question', q.get('question'))
             for o in opts:
-                prose(f'{qw} option', o)
+                prose(f'{qw} option', o, standalone=True)
         elif q.get('kind') == 'truefalse':
-            prose(f'{qw} statement', q.get('statement'))
+            prose(f'{qw} statement', q.get('statement'), standalone=True)
             if not isinstance(q.get('answer'), bool):
                 err(f'{qw}: the answer is true or false')
         else:
@@ -1196,7 +1215,7 @@ def selftest():
     # Topic lessons (Islamic Studies): prose, Quran by reference, hadith always held.
     def topic():
         return {
-            'lesson': 8, 'kind': 'topic', 'title': {'text': 'نبينا محمد', 'review': None},
+            'lesson': 8, 'kind': 'topic', 'fiqh': False, 'title': {'text': 'نبينا محمد', 'review': None},
             'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'retiredIds': [],
             'sections': [{'id': 'intro', 'title': {'text': 'من هو نبينا؟', 'review': None}, 'blocks': [
                 {'id': 'intro-001', 'kind': 'text', 'text': 'نبينا محمد نحبه ونطيعه.', 'review': None},
@@ -1206,7 +1225,8 @@ def selftest():
                      {'id': 'q2', 'kind': 'truefalse', 'statement': 'نحب نبينا', 'answer': True, 'review': None}],
         }
     toy_topic_quran = {'grams': runs_of(RASM.words('قُلْ هُوَ اللَّهُ أَحَدٌ'), TOPIC_RUN), 'counts': {85: 3},
-                       'ayat': {tuple(RASM.words('اللَّهُ الصَّمَدُ'))}}
+                       'ayat': {tuple(RASM.words('اللَّهُ الصَّمَدُ')), tuple(RASM.words('خَلَقَ الْإِنسَانَ')),
+                                tuple(RASM.words('مَلِكِ النَّاسِ'))}}
     tcases = {
         'topic-clean': (lambda c: None, None),
         'topic-hadith-shown': (lambda c: c['sections'][0]['blocks'][2].update(review=None), 'always held'),
@@ -1230,7 +1250,24 @@ def selftest():
         'topic-madhhab-latin': (lambda c: c['sections'][0]['blocks'][0].update(text='the Shafi\'i view'), 'names a madhhab'),
         'topic-madhhab-in-an-option': (lambda c: c['quiz'][0].update(options=['مكة', 'المالكية']), 'names a madhhab'),
         'topic-madhhab-in-a-title': (lambda c: c['sections'][0]['title'].update(text='المذهب الحنبلي'), 'names a madhhab'),
-        'topic-whole-short-ayah': (lambda c: c['sections'][0]['blocks'][0].update(text='نقول: الله الصمد'), 'whole ayah'),
+        'topic-short-ayah-in-prose-passes': (lambda c: c['sections'][0]['blocks'][0].update(text='نقول: الله الصمد'), None),
+        'topic-everyday-prose-passes': (lambda c: c['sections'][0]['blocks'][0].update(text='خلق الإنسان من طين، ونحب الناس'), None),
+        'topic-whole-ayah-option': (lambda c: c['quiz'][0].update(options=['مكة', 'الله الصمد']), 'whole ayah'),
+        'topic-whole-ayah-statement': (lambda c: c['quiz'][1].update(statement='خلق الإنسان'), 'whole ayah'),
+        'topic-whole-ayah-title': (lambda c: c['title'].update(text='الله الصمد'), 'whole ayah'),
+        'topic-whole-ayah-section-title': (lambda c: c['sections'][0]['title'].update(text='خَلَقَ الْإِنْسَانَ'), 'whole ayah'),
+        'topic-whole-ayah-option-everyday': (lambda c: c['quiz'][0].update(options=['مكة', 'ملك الناس']), 'whole ayah'),
+        'topic-ayah-question-not-standalone': (lambda c: c['quiz'][0].update(question='الله الصمد'), None),
+        'topic-madhhab-imam-accusative': (lambda c: c['sections'][0]['blocks'][0].update(text='رأينا أبا حنيفة'), 'names a madhhab'),
+        'topic-madhhab-imam-ahmad': (lambda c: c['sections'][0]['blocks'][0].update(text='قال الإمام أحمد'), 'names a madhhab'),
+        'topic-madhhab-latin-abu-hanifa': (lambda c: c['sections'][0]['blocks'][0].update(text='as Abu Hanifa said'), 'names a madhhab'),
+        'topic-madhhab-latin-imam-malik': (lambda c: c['sections'][0]['blocks'][0].update(text='Imam Malik said'), 'names a madhhab'),
+        'topic-madhhab-latin-diacritics': (lambda c: c['sections'][0]['blocks'][0].update(text='the Shāfiʿī school'), 'names a madhhab'),
+        'topic-madhhab-latin-shafiq-passes': (lambda c: c['sections'][0]['blocks'][0].update(text='my friend Shafiq'), None),
+        'topic-madhhab-latin-hanif-passes': (lambda c: c['sections'][0]['blocks'][0].update(text='Ibrahim was hanif'), None),
+        'topic-hanif-passes': (lambda c: c['sections'][0]['blocks'][0].update(text='كان إبراهيم حنيفًا'), None),
+        'topic-fiqh-missing': (lambda c: c.pop('fiqh'), 'keys must be'),
+        'topic-fiqh-not-bool': (lambda c: c.update(fiqh='no'), 'fiqh is true or false'),
         'topic-typed-quran-in-an-option': (lambda c: c['quiz'][0].update(options=['مكة', 'قل هو الله أحد']), 'typed Quran'),
         'topic-ref-from-greater-than-to': (lambda c: c['sections'][0]['blocks'][1].update(**{'from': 3, 'to': 2}), 'not a range'),
         'topic-ref-from-zero': (lambda c: c['sections'][0]['blocks'][1].update(**{'from': 0}), 'not a range'),

@@ -25,3 +25,15 @@
 /apps/lessons/src/reading/ @MohamedEmadLasheen
 /scripts/lessons/check-arabic-lesson.py @MohamedEmadLasheen
 /scripts/lessons/rasm.py @MohamedEmadLasheen
+# The checks above read the verified Quran and the lessons' supply chain, so those paths are owned too
+# (review of #318; the owner's audit found them unowned).
+/scripts/lessons/check-lesson-content.py @MohamedEmadLasheen
+/scripts/lessons/build-quran-snapshot.py @MohamedEmadLasheen
+/apps/lessons/src/quran/ @MohamedEmadLasheen
+/apps/lessons/quran-pin.json @MohamedEmadLasheen
+/data/quran/ @MohamedEmadLasheen
+/apps/api/src/quran/ @MohamedEmadLasheen
+/scripts/db/load-quran.py @MohamedEmadLasheen
+/scripts/db/load-quran.sh @MohamedEmadLasheen
+/scripts/qa/check-lessons-supply-chain.py @MohamedEmadLasheen
+/apps/lessons/src/audio/ @MohamedEmadLasheen

@@ -30,6 +30,8 @@ describe('topic lessons (Islamic Studies)', () => {
       (c) => { c.quiz[0] = { ...c.quiz[0]!, id: '' } as never; }, // an empty quiz id
       (c) => { c.sections[0]!.blocks[0]!.review = 'a teacher checks it'; }, // approved while a line is held
       (c) => { c.fiqh = true; }, // a fiqh lesson approved without its scholar
+      (c) => { delete (c as { fiqh?: boolean }).fiqh; }, // fiqh left undecided (it is required)
+      (c) => { (c as { fiqh: unknown }).fiqh = 'no'; }, // fiqh not a boolean
     ];
     for (const change of bad) {
       const c = topicStandIn();
