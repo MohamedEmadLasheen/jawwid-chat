@@ -309,9 +309,13 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
 
   it('follows a decision: a decided violation and a resolved feedback leave their tiles', async () => {
     const [late] = (await discipline.list(tmgrId, { state: 'open', kind: 'late' })).violations;
-    await discipline.decide(tmgrId, late!.id, { decision: 'warning' });
+    await discipline.decide(tmgrId, late!.id, { decision: 'warning', note: 'a first lateness: a warning' });
+    // A reply resolves praise (PD-32): it leaves the received tile.
+    const [praise] = (await feedback.list(tmgrId, { status: 'received', category: 'praise' })).feedback;
+    await feedback.reply(tmgrId, praise!.id, { response: 'Thank you!' });
     await expectParity(tmgrId);
-    expect(tileOf(await all(tmgrId), 'lateness.open')?.count).toBe(1);
+    const t = await all(tmgrId);
+    expect([tileOf(t, 'lateness.open')?.count, tileOf(t, 'feedback.received')?.count]).toEqual([1, 1]);
   });
 
   it('runs the same number of statements for a few rows as for many (no N+1)', async () => {
