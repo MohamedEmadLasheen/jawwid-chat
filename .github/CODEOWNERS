@@ -1,18 +1,42 @@
-# PD-49: what lets approvals of children's Quran content reach children, and the
-# code that checks them. A PR that changes approvals may not change any of the
-# checking code (scripts/lessons/verify-approvals.mjs PROTECTED), so a PR never
-# checks itself; what protects the checking code is this review. Enforcing this
-# file ("Require review from Code Owners") is a branch-protection setting, the
-# owner's call -- and it must be on before the first key is added.
-/apps/lessons/src/content/approvals-keys.json @MohamedEmadLasheen
-/apps/lessons/src/content/approvals-ledger.json @MohamedEmadLasheen
-/apps/lessons/src/content/approvals/ @MohamedEmadLasheen
-/apps/lessons/src/content/quran-content.ts @MohamedEmadLasheen
-/apps/lessons/src/play/mechanics.ts @MohamedEmadLasheen
-/apps/lessons/src/play/signed.ts @MohamedEmadLasheen
-/apps/lessons/src/fonts/AmiriQuran.ttf @MohamedEmadLasheen
-/scripts/lessons/verify-approvals.mjs @MohamedEmadLasheen
-/scripts/lessons/check-quran-content.py @MohamedEmadLasheen
-/scripts/qa/guards.sh @MohamedEmadLasheen
-/.github/workflows/ @MohamedEmadLasheen
-/.github/CODEOWNERS @MohamedEmadLasheen
+# Every path below needs @MohamedEmadLasheen's approval (ruleset "Require review
+# from Code Owners"). A PR that changes approvals may not change the code that
+# checks them (scripts/lessons/verify-approvals.mjs PROTECTED).
+
+# Repository security, CI, release gates, deployment
+/.github/                                      @MohamedEmadLasheen
+/scripts/qa/                                   @MohamedEmadLasheen
+/scripts/infra/                                @MohamedEmadLasheen
+/infra/                                        @MohamedEmadLasheen
+/.do/                                          @MohamedEmadLasheen
+/docker-compose.yml                            @MohamedEmadLasheen
+/apps/api/Dockerfile                           @MohamedEmadLasheen
+/apps/admin-web/Dockerfile                     @MohamedEmadLasheen
+/apps/admin-web/infra-nginx/                   @MohamedEmadLasheen
+
+# API security: sign-in, tokens, permissions, policies
+/apps/api/src/platform/                        @MohamedEmadLasheen
+/apps/api/src/main.ts                          @MohamedEmadLasheen
+
+# Database: migrations, rollbacks, security tests, the migration runner
+/supabase/migrations/                          @MohamedEmadLasheen
+/db/                                           @MohamedEmadLasheen
+/scripts/db/                                   @MohamedEmadLasheen
+
+# The Quran text: the verified dataset, its pins, loading and display
+/data/quran/                                   @MohamedEmadLasheen
+/apps/api/src/quran/                           @MohamedEmadLasheen
+/assets/fonts/                                 @MohamedEmadLasheen
+/lib/features/whiteboards/data/quran_text_repository.dart    @MohamedEmadLasheen
+/lib/features/whiteboards/presentation/verse_picker.dart     @MohamedEmadLasheen
+
+# Audio: Quran recitation and the lesson voice-over
+/apps/api/src/lesson-audio/                    @MohamedEmadLasheen
+/apps/api/src/cli/ingest-quran-audio.ts        @MohamedEmadLasheen
+/apps/api/src/cli/ingest-lesson-audio.ts       @MohamedEmadLasheen
+
+# Lesson content, approvals, signing, checkers, and what families can open
+/apps/lessons/                                 @MohamedEmadLasheen
+/apps/api/src/lesson-content/                  @MohamedEmadLasheen
+/apps/api/src/materials/                       @MohamedEmadLasheen
+/lib/features/materials/                       @MohamedEmadLasheen
+/scripts/lessons/                              @MohamedEmadLasheen
