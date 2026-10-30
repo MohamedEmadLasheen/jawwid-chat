@@ -1,13 +1,13 @@
 # PD-29 amendment: a reviewer preview of lessons pending teacher review (plan)
 
-**State:** **Plan, docs only. No code until the department head says GO.** This revision (2026-10-30) answers the department head's five points:
+**State:** **ACCEPTED by the department head (2026-10-30, @1d45902f). Docs only.** Nothing is built until the owner turns preview on, environment by environment (§3.3). This revision (2026-10-30) answered the department head's five points:
 1. the grant key is its own key, provisioned per environment and absent in production (§3.3);
 2. the engine checks the grant live against the API, and replay is limited (§3.4);
 3. the holders of `lesson_content.view` are named by role (§1.4);
 4. the four refusal tests (§5.5);
 5. the banner and highlighting are engine-only, with no cache a family could read (§3.5, §3.8).
 
-The remaining questions are in §9.
+Every question in §9 is decided, except Q6, which is the owner's.
 **Claim:** PD-29 amendment, `docs/product/pd-registry/PD-29-amendment-reviewer-preview.md` (confirmed by the department head, 2026-10-30). **Migration slot:** none. The grant is stateless (§3.3), and the audit rows go to the existing audit log.
 **Base:** `main` @ `ea8939dc`. Paths are relative to the repository root.
 
@@ -504,7 +504,8 @@ There is no migration and no new permission key.
 
 - Approving from inside the preview. Approvals stay in the review page and the PD-49 flow (I5).
 - Previews for parents, students or teachers, ever.
-- Keeping pending text out of the family bundle (§9 Q6).
+- Keeping pending text out of the family bundle (§9 Q6: recommended; owner to confirm).
+- Showing which proof failed for a refused file (§9 Q7): a listed follow-up.
 - Islamic Studies lessons (not on the engine yet).
 - Audio in the preview (§9 Q5).
 
@@ -524,15 +525,15 @@ There is no migration and no new permission key.
 
 ---
 
-## 9. Questions for the department head
+## 9. Decisions
 
 | # | Question | Recommendation / decision |
 |---|---|---|
 | Q1 | A PD-29 amendment, or a new PD number? Migration slot? | **DECIDED (department head, 2026-10-30):** PD-29 amendment, no new number, no migration slot; a stateless grant is fine. |
-| Q2 | Reuse PD-49's `lesson_content.view` (plus the step keys) as the preview permission, or add `lesson_content.preview`? | **Reuse.** Its label is already "See lesson content under review". It reaches exactly the reviewers (§1.4), and a second key would only drift from it. |
-| Q3 | A separate preview build and origin, or one build where the grant unlocks preview on the family origin? | **Separate.** It turns "families can't reach preview" from a runtime check into a compile-time fact. The cost is one more artifact and one more origin. |
-| Q4 | Admin Web only? | **Yes.** Every preview holder is a staff account (§1.4). Teacher web and the Flutter app serve teachers and contacts, who never qualify. |
-| Q5 | Audio and voice-over in the preview? | **None in v1.** It would need a second handoff to a second origin, and PD-48 clips are reviewed elsewhere. |
-| Q6 | After this ships, strip pending text from the family bundle, so pending lessons are not public at all? | **Yes, as a separate PD-29 item** (the owner's call). Reviewers would then get content only through the preview build. |
-| Q7 | Show *which* proof failed for a refused file, in the preview only? | **Yes, as a later PR.** It needs the core to return a reason instead of `null`. Families still see only the refusal. |
+| Q2 | Reuse PD-49's `lesson_content.view` (plus the step keys) as the preview permission, or add `lesson_content.preview`? | **DECIDED (department head, 2026-10-30): reuse.** Its label is already "See lesson content under review". It reaches exactly the reviewers (§1.4), and a second key would only drift from it. |
+| Q3 | A separate preview build and origin, or one build where the grant unlocks preview on the family origin? | **DECIDED (department head, 2026-10-30): separate.** It turns "families can't reach preview" from a runtime check into a compile-time fact. The cost is one more artifact and one more origin. |
+| Q4 | Admin Web only? | **DECIDED: yes.** Every preview holder is a staff account (§1.4). Teacher web and the Flutter app serve teachers and contacts, who never qualify. |
+| Q5 | Audio and voice-over in the preview? | **DECIDED (department head, 2026-10-30): none in v1.** It would need a second handoff to a second origin, and PD-48 clips are reviewed elsewhere. |
+| Q6 | After this ships, strip pending and held text from the family bundle, so pending lessons are not public at all? | **Recommended; owner to confirm.** The department head recommends YES (2026-10-30). Today an unreviewed lesson's text ships inside the public JS bundle, where anyone can read it (§1.3). If the owner agrees, it becomes its own PD-29 item after this plan is built, and reviewers then get pending content only through the preview build. |
+| Q7 | Show *which* proof failed for a refused file, in the preview only? | **DECIDED (department head, 2026-10-30): yes, as a listed follow-up PR** (§7). It needs the core to return a reason instead of `null`. Families still see only the refusal. |
 | Q8 | Grant lifetime and heartbeat? | **DECIDED (department head):** ≤15 minutes. Planned: 10-minute grants, a 15-minute engine ceiling, and a 30 s live check. |
