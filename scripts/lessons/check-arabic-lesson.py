@@ -464,23 +464,23 @@ def check_reading(lesson, number, quran_grams=None):
     return errors
 
 
-def runs_of(ws):
-    """Every READING_RUN-word run of a word list, its edge words with and without a prefix letter."""
+def runs_of(ws, n=READING_RUN):
+    """Every n-word run of a word list (READING_RUN by default), its edge words with and without a prefix letter."""
     out = set()
-    for i in range(len(ws) - READING_RUN + 1):
-        run = ws[i:i + READING_RUN]
+    for i in range(len(ws) - n + 1):
+        run = ws[i:i + n]
         for first in RASM.edge_forms(run[0]):
             for last in RASM.edge_forms(run[-1]):
                 out.add((first, *run[1:-1], last))
     return out
 
 
-def quran_runs(text, grams):
+def quran_runs(text, grams, n=READING_RUN):
     """Whether a reading text carries READING_RUN or more consecutive Quran words (rasm, vocative joined,
     edge prefixes stripped on both sides). grams must be given: a check without them is no check."""
     if grams is None:
         raise ValueError('the typed-Quran check needs the verified Quran (quran_grams()); refusing to skip it')
-    return bool(runs_of(RASM.words(text)) & grams)
+    return bool(runs_of(RASM.words(text), n) & grams)
 
 
 def quran_grams():
@@ -492,6 +492,140 @@ def quran_grams():
     for verses in mod.verified_surahs().values():
         grams |= runs_of([w for v in verses for w in RASM.words(v)])
     return frozenset(grams)
+
+
+# --- Topic lessons (the Islamic Studies lessons): prose, Quran BY REFERENCE, hadith always held.
+ISLAMIC = os.path.join(ROOT, 'apps', 'lessons', 'src', 'islamic')
+TOPIC_KEYS = {'lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz'}
+TOPIC_RUN = 4  # 4+ consecutive Quran words in prose: typed Quran (the approved plan; whole Quran)
+# Owner 2026-10-29: no madhhab names or differences in child-facing content. Matched on bare letters.
+MADHHAB = {'حنفي', 'حنفية', 'احناف', 'مالكي', 'مالكية', 'شافعي', 'شافعية', 'حنبلي', 'حنابلة', 'مذهب', 'مذاهب'}
+
+
+def check_topic(lesson, number, quran=None):
+    """quran: {'grams': every TOPIC_RUN-word run of the verified Quran, 'counts': {surah: ayah count}}."""
+    if quran is None:
+        raise ValueError('a topic lesson is checked against the verified Quran (topic_quran()); refusing to skip that check')
+    errors = []
+    err = errors.append
+    if not isinstance(lesson, dict) or set(lesson) != TOPIC_KEYS:
+        return [f'keys must be {sorted(TOPIC_KEYS)}, not {sorted(lesson) if isinstance(lesson, dict) else lesson!r}']
+    if not is_int(lesson['lesson']) or lesson['lesson'] != number:
+        err(f'lesson is {lesson["lesson"]!r}, not {number}')
+    review = lesson['review']
+    if not isinstance(review, dict) or review.get('status') not in ('pending', 'approved'):
+        return errors + ['review.status must be pending or approved']
+    approved = review['status'] == 'approved'
+    retired = lesson['retiredIds'] if isinstance(lesson['retiredIds'], list) else []
+    if not isinstance(lesson['retiredIds'], list) or not all(is_str(r) and WORD_ID.match(r) for r in retired):
+        err('retiredIds must be a list of retired ids')
+    flagged, ids = [], set()
+
+    def held(where, r):
+        if r is not None and (not is_str(r) or not r.strip()):
+            err(f'{where}: review must be null or a non-empty note')
+        if r:
+            flagged.append(where)
+
+    def prose(where, t):
+        if not is_str(t) or not t.strip() or t != unicodedata.normalize('NFC', t):
+            err(f'{where}: text must be non-empty NFC')
+            return
+        bare_text = ''.join(c for c in t if not is_mark(c)).replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+        for w in re.findall('[' + chr(0x621) + '-' + chr(0x64A) + ']+', bare_text):
+            # The word, and the word without a prefix (و ف ب ك ل) and the article: المذهب, والحنفية ...
+            forms = {w, re.sub('^[وفبكل]', '', w), re.sub('^[وفبكل]?ال', '', w), re.sub('^[وفبكل]?لل', '', w)}
+            if forms & MADHHAB:
+                err(f'{where}: names a madhhab ({w}); child-facing text never does (owner, 2026-10-29)')
+        if quran_runs(t, quran['grams'], TOPIC_RUN):
+            err(f'{where}: carries {TOPIC_RUN} or more consecutive Quran words: typed Quran is refused; use a {{surah, from, to}} reference')
+
+    t = lesson['title']
+    if not isinstance(t, dict) or set(t) != {'text', 'review'}:
+        err('title is {text, review}')
+    else:
+        prose('title', t['text'])
+        held('title', t['review'])
+    sids = set()
+    for s in lesson['sections'] if isinstance(lesson['sections'], list) else []:
+        where = f'section {s.get("id") if isinstance(s, dict) else s!r}'
+        if not isinstance(s, dict) or set(s) != {'id', 'title', 'blocks'}:
+            err(f'{where}: keys are id, title, blocks')
+            continue
+        if not is_str(s['id']) or not STAGE_ID.match(s['id']) or s['id'] in sids:
+            err(f'{where}: a section id is a unique lowercase slug')
+            continue
+        sids.add(s['id'])
+        if not isinstance(s['title'], dict) or set(s['title']) != {'text', 'review'}:
+            err(f'{where}: title is {{text, review}}')
+        else:
+            prose(f'{where} title', s['title']['text'])
+            held(f'{where} title', s['title']['review'])
+        for b in s['blocks'] if isinstance(s['blocks'], list) else []:
+            bw = f'{where} block {b.get("id") if isinstance(b, dict) else b!r}'
+            if not isinstance(b, dict) or not is_str(b.get('id')) or not WORD_ID.match(b['id']) or b['id'][:-4] != s['id'] or b['id'] in ids or b['id'] in retired:
+                err(f'{bw}: id must be {s["id"]}-NNN, unique and never retired')
+                continue
+            ids.add(b['id'])
+            kind = b.get('kind')
+            if kind == 'text' and set(b) == {'id', 'kind', 'text', 'review'}:
+                prose(bw, b['text'])
+                held(bw, b['review'])
+            elif kind == 'quran' and set(b) == {'id', 'kind', 'surah', 'from', 'to', 'review'}:
+                n, a, z = b['surah'], b['from'], b['to']
+                if not (is_int(n) and is_int(a) and is_int(z)) or n not in quran['counts'] or not 1 <= a <= z <= quran['counts'][n]:
+                    err(f'{bw}: {n}:{a}-{z} is not a range of the verified Quran')
+                held(bw, b['review'])
+            elif kind == 'hadith' and set(b) == {'id', 'kind', 'source', 'text', 'review'}:
+                # Every hadith stays held (no verified hadith source yet): even an approved file never shows one.
+                if not is_str(b['source']) or not b['source'].strip() or not is_str(b['text']) or not b['text'].strip():
+                    err(f'{bw}: a hadith has its source and its text')
+                if not is_str(b['review']) or not b['review'].strip():
+                    err(f'{bw}: a hadith is always held until a verified hadith source is approved')
+            else:
+                err(f'{bw}: a block is text {{text}}, quran {{surah, from, to}} or hadith {{source, text}}, with its review')
+    qids = set()
+    for q in lesson['quiz'] if isinstance(lesson['quiz'], list) else []:
+        qw = f'quiz {q.get("id") if isinstance(q, dict) else q!r}'
+        if not isinstance(q, dict) or not is_str(q.get('id')) or q['id'] in qids:
+            err(f'{qw}: quiz ids must be unique')
+            continue
+        qids.add(q['id'])
+        held(qw, q.get('review'))
+        if q.get('kind') == 'choose':
+            opts = q.get('options')
+            if not isinstance(opts, list) or not 2 <= len(opts) <= 4 or not all(is_str(o) and o.strip() for o in opts) or len(set(opts)) != len(opts):
+                err(f'{qw}: 2-4 distinct options')
+                continue
+            if not is_int(q.get('answer')) or not 0 <= q['answer'] < len(opts):
+                err(f'{qw}: the answer is an option index')
+            prose(f'{qw} question', q.get('question'))
+            for o in opts:
+                prose(f'{qw} option', o)
+        elif q.get('kind') == 'truefalse':
+            prose(f'{qw} statement', q.get('statement'))
+            if not isinstance(q.get('answer'), bool):
+                err(f'{qw}: the answer is true or false')
+        else:
+            err(f'{qw}: kind must be choose or truefalse')
+    if approved:
+        if not is_str(review.get('by')) or not review['by'].strip():
+            err('review: an approved lesson names its reviewer')
+        if flagged:
+            err(f'review: approved while {len(flagged)} item(s) are still flagged ({", ".join(flagged[:3])}...)')
+    return errors
+
+
+def topic_quran():
+    """The verified Quran for topic lessons: its TOPIC_RUN-word runs and each surah's ayah count."""
+    spec = importlib.util.spec_from_file_location('lesson_content', os.path.join(HERE, 'check-lesson-content.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    grams, counts = set(), {}
+    for n, verses in mod.verified_surahs().items():
+        counts[n] = len(verses)
+        grams |= runs_of([w for v in verses for w in RASM.words(v)], TOPIC_RUN)
+    return {'grams': frozenset(grams), 'counts': counts}
 
 
 def check(lesson, number, quran=None):
@@ -1016,6 +1150,45 @@ def selftest():
         failed.append('quran-no-grams: a reading check without the Quran did not refuse to run')
     except ValueError:
         pass
+    # Topic lessons (Islamic Studies): prose, Quran by reference, hadith always held.
+    def topic():
+        return {
+            'lesson': 8, 'kind': 'topic', 'title': {'text': 'نبينا محمد', 'review': None},
+            'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'retiredIds': [],
+            'sections': [{'id': 'intro', 'title': {'text': 'من هو نبينا؟', 'review': None}, 'blocks': [
+                {'id': 'intro-001', 'kind': 'text', 'text': 'نبينا محمد نحبه ونطيعه.', 'review': None},
+                {'id': 'intro-002', 'kind': 'quran', 'surah': 85, 'from': 1, 'to': 2, 'review': None},
+                {'id': 'intro-003', 'kind': 'hadith', 'source': 'a collection, number 1', 'text': 'نص', 'review': 'HADITH: held'}]}],
+            'quiz': [{'id': 'q1', 'kind': 'choose', 'question': 'أين ولد النبي؟', 'options': ['مكة', 'المدينة'], 'answer': 0, 'review': None},
+                     {'id': 'q2', 'kind': 'truefalse', 'statement': 'نحب نبينا', 'answer': True, 'review': None}],
+        }
+    toy_topic_quran = {'grams': runs_of(RASM.words('قُلْ هُوَ اللَّهُ أَحَدٌ'), TOPIC_RUN), 'counts': {85: 3}}
+    tcases = {
+        'topic-clean': (lambda c: None, None),
+        'topic-hadith-shown': (lambda c: c['sections'][0]['blocks'][2].update(review=None), 'always held'),
+        'topic-ref-out-of-range': (lambda c: c['sections'][0]['blocks'][1].update(to=4), 'not a range of the verified Quran'),
+        'topic-ref-no-surah': (lambda c: c['sections'][0]['blocks'][1].update(surah=86), 'not a range of the verified Quran'),
+        'topic-typed-quran': (lambda c: c['sections'][0]['blocks'][0].update(text='قال تعالى: قل هو الله أحد'), 'typed Quran'),
+        'topic-madhhab-name': (lambda c: c['sections'][0]['blocks'][0].update(text='في المذهب الحنفي نفعل كذا'), 'names a madhhab'),
+        'topic-unknown-block': (lambda c: c['sections'][0]['blocks'][0].update(kind='ayah'), 'a block is'),
+        'topic-truefalse-not-bool': (lambda c: c['quiz'][1].update(answer='yes'), 'true or false'),
+        'topic-approved-with-flags': (lambda c: c['sections'][0]['blocks'][0].update(review='a teacher checks it') or c['review'].update(status='approved', by='Teachers department'), 'still flagged'),
+        'topic-approved-hadith-stays-held': (lambda c: c['review'].update(status='approved', by='Teachers department'), None),
+        'topic-madhhab-word-alone': (lambda c: c['sections'][0]['blocks'][0].update(text='هذا عند الشافعية'), 'names a madhhab'),
+        'topic-shafi-is-not-a-madhhab': (lambda c: c['sections'][0]['blocks'][0].update(text='النبي هو الشافع المشفع'), None),
+    }
+    for name, (mutate, expected) in tcases.items():
+        c = topic()
+        mutate(c)
+        errors = check_topic(c, 8, toy_topic_quran)
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
+    try:
+        check_topic(topic(), 8)
+        failed.append('topic-no-quran: a topic check without the Quran did not refuse to run')
+    except ValueError:
+        pass
     # A misnamed lesson file is refused, not skipped.
     if not stray_files(['lesson-001.json', FIXTURE_NAME, 'lesson-1.json', 'notes.json', 'index.ts']) == ['lesson-1.json', 'notes.json']:
         failed.append('stray-json: a misnamed .json is not refused')
@@ -1024,7 +1197,7 @@ def selftest():
     for f in failed:
         print(f'arabic-lesson selftest: FAIL {f}')
     if not failed:
-        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + len(rcases) + len(real) + 3} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
+        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + len(rcases) + len(real) + len(tcases) + 4} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
     return 1 if failed else 0
 
 
@@ -1060,6 +1233,24 @@ def main(argv):
                 sum(1 for u in lesson['units'] if u['note'] and u['note']['review']) + sum(1 for q in lesson['quiz'] if q['review'])
             print(f'arabic-lesson: {f}: every word holds its letter by the one rule, full tashkeel with the pausal sukun, '
                   f'every question has one right answer; review {lesson["review"]["status"]}, {held} item(s) held for a teacher')
+    # The Islamic Studies lessons (topic lessons), in their own folder.
+    inames = os.listdir(ISLAMIC) if os.path.isdir(ISLAMIC) else []
+    for f in sorted(x for x in inames if x.endswith('.json') and not LESSON_FILE.fullmatch(x)):
+        print(f'arabic-lesson: islamic/{f}: not a lesson file (lesson-NNN.json); a misnamed lesson would skip every check')
+        failed += 1
+    tfiles = sorted(x for x in inames if LESSON_FILE.fullmatch(x))
+    tquran = topic_quran() if tfiles else None
+    for f in tfiles:
+        lesson = json.load(open(os.path.join(ISLAMIC, f), encoding='utf-8'))
+        errors = check_topic(lesson, int(f[7:10]), tquran) if isinstance(lesson, dict) and lesson.get('kind') == 'topic' else ['kind must be "topic"']
+        for e in errors:
+            print(f'arabic-lesson: islamic/{f}: {e}')
+        if errors:
+            failed += 1
+        else:
+            held = sum(1 for s in lesson['sections'] for b in s['blocks'] if b['review']) + sum(1 for q in lesson['quiz'] if q['review'])
+            print(f'arabic-lesson: islamic/{f}: topic lesson, every Quran reference in the verified text, no typed Quran, every hadith held, '
+                  f'no madhhab name; review {lesson["review"]["status"]}, {held} item(s) held for a teacher')
     if not files and not failed:
         print('arabic-lesson: no Arabic lesson files yet')
     return 1 if failed else 0

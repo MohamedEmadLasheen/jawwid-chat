@@ -112,3 +112,8 @@ button { font: inherit; }
 .play__grownup { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-block: 0.5rem; }
 .play__grownup button { min-block-size: 44px; }
 .sr-only { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Topic lessons (Islamic Studies): prose in the text font; Quran by reference, in the Quran font. */
+.topic-section h2 { font-size: 1.3rem; margin-block: 1.25rem 0.5rem; }
+.topic-text { font-size: 1.15rem; line-height: 2; margin: 0 0 0.75rem; }
+.topic-quran { margin: 0 0 1rem; }
+.topic-quran .attribution { margin-block-start: 0.25rem; }
