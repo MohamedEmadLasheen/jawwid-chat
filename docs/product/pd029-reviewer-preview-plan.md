@@ -100,8 +100,8 @@ Keeping pending text out of the family bundle is a separate, stronger step. Once
 
 | Holder | How the key reaches them | Keys | Account kind |
 |---|---|---|---|
-| Super admin (owner) | Every key, implicitly (`legacyLessonContentKeys`, `lesson-content-policy.ts:52`). The scholar's step counts only through an explicit Scholar reviewer grant. | view, check, review_teacher (+ review_scholar, unsigned) | STAFF |
-| Teachers Manager (`staffRole = manager` + Teachers role `manager`) | Legacy bundle `manager:teachers` (`legacy-bundles.ts:218-220`), and migration rows `('manager','teachers',…)` | view, check, review_teacher | STAFF |
+| Super admin (owner) | Every key, implicitly (`legacyLessonContentKeys`, `lesson-content-policy.ts:51`). The scholar's step counts only through an explicit Scholar reviewer grant. | view, check, review_teacher (+ review_scholar, unsigned) | STAFF |
+| Teachers Manager (`staffRole = manager` + Teachers role `manager`) | Legacy bundle `manager:teachers` (`legacy-bundles.ts:218-220`), `lesson-content-policy.ts:52`, and migration rows `('manager','teachers',…)` | view, check, review_teacher | STAFF |
 | Teachers supervisors (`staffRole = admin` or `coverage` + Teachers role `member`) | Legacy bundle `supervisor:teachers` (`legacy-bundles.ts:231`), `lesson-content-policy.ts:53` | view | STAFF |
 | Scholar reviewer | Role template `scholar_reviewer` (`role-templates.ts:64`), tier `specialist`, granted by the super admin alone | view, review_scholar | STAFF |
 | Anyone the Teachers Manager delegates to | PD-40 delegation of the delegable keys. Role grants attach to staff accounts. | view / check / review_teacher, as delegated | STAFF |
