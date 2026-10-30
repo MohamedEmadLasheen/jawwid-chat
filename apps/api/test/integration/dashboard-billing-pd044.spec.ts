@@ -149,7 +149,11 @@ const graceChild = (learnerId: string, familyId = s.familyId) => carried(learner
 async function voidPackages(learnerId: string): Promise<void> {
   await g.prisma.$transaction([
     g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
-    g.prisma.$executeRawUnsafe(`update chat.learner_subscription set voided_at = now() where learner_id = $1::uuid`, learnerId),
+    g.prisma.$executeRawUnsafe(
+      `update chat.learner_subscription set voided_at = now(), voided_by = $2::uuid, void_reason = 'PD-44 test: ended'
+        where learner_id = $1::uuid and voided_at is null`,
+      learnerId, s.managerId,
+    ),
   ]);
 }
 
@@ -377,8 +381,9 @@ describe('GET /dashboard/billing -- instalments, receipts and locked subscriptio
     await lockedChild(y.learnerId, y.familyId);
     await exec(
       `insert into chat.family_sales_owner (family_id, organization_id, staff_id, assigned_by)
-       values ($1::uuid, chat.default_organization_id(), $2::uuid, $2::uuid)`,
-      y.familyId, salesId,
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`,
+      // Set by the super admin: a Sales member owns only a family they are entering (PD-42).
+      y.familyId, salesId, sa,
     );
     await exec(`insert into chat.config (key, value) values ('sales.family_scope', to_jsonb('own'::text))`);
     g.config.invalidate();
