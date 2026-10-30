@@ -530,8 +530,9 @@ export class WhiteboardService {
    * hour; only a confirm makes it something a page may name.
    */
   async grantImage(boardId: string, body: Record<string, unknown>, actor: Actor) {
-    await this.assetsOn();
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
     const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
     if (body.kind !== undefined && body.kind !== 'image') throw invalid('kind: image (PDF pages are not imported yet)');
     if (typeof body.contentType !== 'string' || !(BOARD_IMAGE_TYPES as readonly string[]).includes(body.contentType)) {
       throw invalid(`contentType: one of ${BOARD_IMAGE_TYPES.join(', ')}`);
@@ -562,8 +563,9 @@ export class WhiteboardService {
    * a confirm answers the ready image again.
    */
   async confirmImage(boardId: string, assetId: string, body: Record<string, unknown>, actor: Actor): Promise<{ asset: AssetView; replayed?: true }> {
-    await this.assetsOn();
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
     const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
     const id = this.uuid(assetId, 'assetId');
     const token = randomUUID();
     // 1. Claim the row in a short transaction (review of #305): no database
@@ -640,8 +642,9 @@ export class WhiteboardService {
    * under way per teacher.
    */
   async grantExport(boardId: string, body: Record<string, unknown>, actor: Actor) {
-    await this.assetsOn();
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
     const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
     if (!Array.isArray(body.pages) || body.pages.length < 1 || body.pages.length > PAGES_PER_BOARD) {
       throw invalid(`pages: 1-${PAGES_PER_BOARD} entries of {byteSize}`);
     }
@@ -684,8 +687,9 @@ export class WhiteboardService {
    * pages are deleted.
    */
   async composeExport(boardId: string, body: Record<string, unknown>, actor: Actor): Promise<{ pdf: Buffer; fileName: string }> {
-    await this.assetsOn();
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
     const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
     if (!Array.isArray(body.pages) || body.pages.length < 1 || body.pages.length > PAGES_PER_BOARD) {
       throw invalid(`pages: 1-${PAGES_PER_BOARD} entries of {assetId, objectKey}, in page order`);
     }
@@ -717,9 +721,12 @@ export class WhiteboardService {
     const { board, rows, credit } = await this.write(async (tx) => {
       const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
       if (board.state !== 'active') throw state('restore the board first');
-      const rows = await tx.$queryRaw<Array<AssetRow & { batch: Date; expired: boolean; state: string; held: boolean }>>`
+      // An export's pages share one expiry to the microsecond (its grant's now()).
+      // Compared in SQL: a JS Date keeps milliseconds only, so the same instant
+      // read back and sent again would no longer equal the stored value.
+      const rows = await tx.$queryRaw<Array<AssetRow & { batch: string; expired: boolean; state: string; held: boolean }>>`
         SELECT a.id::text AS id, a.kind, a.object_key, a.content_type, a.byte_size, a.width, a.height, a.state,
-               a.expires_at AS batch, a.expires_at <= now() AS expired, (a.state = 'claimed' AND a.claimed_until > now()) AS held
+               a.expires_at::text AS batch, a.expires_at <= now() AS expired, (a.state = 'claimed' AND a.claimed_until > now()) AS held
           FROM chat.whiteboard_asset a
          WHERE a.board_id = ${board.id}::uuid AND a.kind = 'export_page' AND a.id = ANY(${ids}::uuid[])
            FOR UPDATE`;
@@ -728,9 +735,10 @@ export class WhiteboardService {
       const [{ n }] = first
         ? await tx.$queryRaw<Array<{ n: number }>>`
             SELECT count(*)::int AS n FROM chat.whiteboard_asset
-             WHERE board_id = ${board.id}::uuid AND kind = 'export_page' AND state = 'pending' AND expires_at = ${first.batch}`
+             WHERE board_id = ${board.id}::uuid AND kind = 'export_page' AND state = 'pending'
+               AND expires_at = (SELECT expires_at FROM chat.whiteboard_asset WHERE id = ${first.id}::uuid)`
         : [{ n: 0 }];
-      if (rows.length !== asked.length || !first || rows.some((r) => r.state !== 'pending' || r.batch.getTime() !== first.batch.getTime()) || Number(n) !== asked.length) {
+      if (rows.length !== asked.length || !first || rows.some((r) => r.state !== 'pending' || r.batch !== first.batch) || Number(n) !== asked.length) {
         throw invalid('pages: every page of one export, each once');
       }
       if (first.expired) throw state('the export expired; export again');
