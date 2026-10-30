@@ -9,6 +9,7 @@ import '../../../shared/models/trial.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../application/voice_composer_controller.dart';
+import '../data/draft_store.dart';
 import '../data/mention_repository.dart';
 import '../domain/mentions.dart';
 import 'voice_recorder_bar.dart';
@@ -39,7 +40,19 @@ class MessageComposer extends StatefulWidget {
     this.mentionCandidates,
     this.onSendWithMentions,
     this.onDraftChanged,
+    this.initialDraft,
+    this.onDraft,
   });
+
+  /// PD-37: the conversation's saved draft, put back in the field with its
+  /// picked mentions. Adopted while the field is still untouched -- drafts
+  /// load a moment after the screen opens -- and never over what the person
+  /// has typed since.
+  final Draft? initialDraft;
+
+  /// PD-37: the unsent message -- its text and its picked mentions -- every
+  /// time the text changes (a blank one after sending), to keep as the draft.
+  final void Function(Draft draft)? onDraft;
 
   /// PD-37: every change of the draft (an empty one after sending), so the
   /// screen can say "typing…". Null says nothing.
@@ -91,6 +104,10 @@ class _MessageComposerState extends State<MessageComposer> {
 
   bool get _canSend => _controller.text.trim().isNotEmpty;
 
+  /// The person has typed here: a draft arriving later no longer applies.
+  bool _edited = false;
+  bool _restoring = false;
+
   /// The text [MessageComposer.onDraftChanged] last heard about. The
   /// controller also notifies for a caret or selection move -- a tap in the
   /// field -- and that is not typing.
@@ -99,7 +116,34 @@ class _MessageComposerState extends State<MessageComposer> {
   @override
   void initState() {
     super.initState();
+    _restore(widget.initialDraft);
     _controller.addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(MessageComposer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialDraft != oldWidget.initialDraft && !_edited && _controller.text.isEmpty) {
+      _restore(widget.initialDraft);
+    }
+  }
+
+  /// Puts a saved draft back, caret at the end, its mentions picked again.
+  /// Restoring is not typing: it says nothing to [MessageComposer.onDraftChanged],
+  /// now or at the first tap in the field.
+  void _restore(Draft? draft) {
+    if (draft == null || draft.text.isEmpty) return;
+    final text = draft.text;
+    _picked
+      ..clear()
+      ..addAll(draft.mentions);
+    _reported = text;
+    _restoring = true;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _restoring = false;
   }
 
   @override
@@ -112,9 +156,15 @@ class _MessageComposerState extends State<MessageComposer> {
 
   void _onChanged() {
     setState(() {});
+    if (_restoring) return;
     if (_controller.text != _reported) {
       _reported = _controller.text;
+      if (_reported.isNotEmpty) _edited = true;
       widget.onDraftChanged?.call(_reported);
+      widget.onDraft?.call(Draft(
+        _reported,
+        mentions: [for (final p in _picked) if (_reported.contains(p.label)) p],
+      ));
     }
     final source = widget.mentionCandidates;
     if (source == null) return;

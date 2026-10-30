@@ -1,5 +1,5 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
-import { HARAKA, isLetter, isMark, isWord } from '../arabic/letters';
+import { HARAKA, isLetter, isMark, isWord, lettersOf } from '../arabic/letters';
 import { WORD_ID } from '../arabic/arabic-lesson';
 
 /**
@@ -57,6 +57,8 @@ export interface ReadingLesson {
   retiredIds: string[];
   stages: ReadingStage[];
   passages?: ReadingPassage[];
+  /** The proper names the sentences use: a "missing" question that blanks one never offers another. */
+  names?: string[];
   quiz: ReadingQuizItem[];
 }
 
@@ -69,6 +71,13 @@ export interface ResolvedReading {
 }
 
 export const STAGE_ID = /^[a-z][a-z0-9_]*$/;
+
+const FATHATAN = String.fromCodePoint(0x64b);
+/** A word's bare letters, with a tanween fath's carrier alif or alif maqsura dropped (كِتَابًا = كِتَابْ). */
+export function bare(word: string): string {
+  const w = word.endsWith(FATHATAN + 'ا') || word.endsWith(FATHATAN + 'ى') ? word.slice(0, -1) : word;
+  return lettersOf(w).join('');
+}
 const PUNCTUATION = new Set(['.', '،', '؟', '!', '؛']);
 
 /** A sentence's words, in order: single spaces only, one optional closing punctuation mark. */
@@ -136,6 +145,7 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
     const passages: ResolvedReading['passages'] = [];
     const passageIds = new Set<string>();
     check(raw.passages === undefined || Array.isArray(raw.passages));
+    check(raw.names === undefined || (Array.isArray(raw.names) && raw.names.every(isWord)));
     for (const p of raw.passages ?? []) {
       check(typeof p.id === 'string' && WORD_ID.test(p.id) && p.id.slice(0, -4) === 'passage' && !passageIds.has(p.id) && !ids.has(p.id));
       passageIds.add(p.id);
@@ -182,6 +192,23 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
           i === q.answer ? [s.text] : [...byId.values()].filter((it) => it.kind === 'sentence' && it.id !== s.id && wordsOf(it.text)!.includes(o)).map((it) => it.text),
         );
         check(q.options.every((o, i) => sources[i]!.length > 0 && (i === q.answer || !drills.has(o))));
+        // A wrong option must not be able to complete the sentence too (reviews of #292): it is never
+        //  - a word of the blank's own sentence;
+        //  - a word that sits in the blank's place in another sentence (the subject for a subject);
+        //  - a sentence's last word (its pausal form);
+        //  - the answer in another form (الْوَلَدْ / الْوَلَدُ, كِتَابًا / كِتَابْ);
+        //  - another name where the blank is a name (compared by letters, so أَحْمَدْ is أَحْمَدُ).
+        const sentences = [...byId.values()].filter((it) => it.kind === 'sentence').map((it) => wordsOf(it.text)!);
+        const names = new Set((raw.names ?? []).map(bare));
+        const answer = ws[q.blank]!;
+        check(q.options.every((o, i) =>
+          i === q.answer || (
+            !ws.includes(o) &&
+            !sentences.some((x) => x[q.blank] === o || x[x.length - 1] === o) &&
+            bare(o) !== bare(answer) &&
+            !(names.has(bare(answer)) && names.has(bare(o)))
+          ),
+        ));
         const shownText = ws.map((w, i) => (i === q.blank ? '…' : w)).join(' ');
         item = { id: q.id, question: 'أَيُّ كَلِمَةٍ تُكْمِلُ الْجُمْلَةَ؟', prompt: shownText, word: null, options: q.options, answer: q.answer };
         words = [s.text, ...sources.slice(0).filter((_, i) => i !== q.answer).map((src) => src.find((t) => !flagged.has(t)) ?? src[0]!)];

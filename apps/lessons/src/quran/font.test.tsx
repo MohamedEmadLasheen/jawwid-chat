@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { QuranFontGate, loadQuranFont, type Fonts } from './font';
 
 const face = (family: string, status = 'loaded') => ({ family, status });
@@ -40,13 +40,16 @@ describe('the Quran font: Amiri Quran or no verse at all', () => {
     expect(await screen.findByText('آية')).toBeTruthy();
   });
 
-  it('if the font cannot load, no verse is shown, and it says so', async () => {
+  it('if the font cannot load: no verse, never a blank screen -- a calm message and a retry', async () => {
+    const retry = vi.fn();
     render(
-      <QuranFontGate load={async () => false}>
+      <QuranFontGate load={async () => false} retry={retry}>
         <p>آية</p>
       </QuranFontGate>,
     );
-    expect((await screen.findByRole('alert')).textContent).toBe('تعذّر تحميل خطّ المصحف، فلم تُعرض الآيات.');
+    expect((await screen.findByRole('alert')).textContent).toBe('تعذّر تحميل خطّ المصحف.');
     expect(screen.queryByText('آية')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'إعادة المحاولة' }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });
