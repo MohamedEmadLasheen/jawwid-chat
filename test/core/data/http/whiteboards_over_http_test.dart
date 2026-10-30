@@ -175,4 +175,36 @@ void main() {
       throwsA(isA<AppError>().having((e) => e.code, 'code', kAssetsOffCode)),
     );
   });
+
+  test('export (PR-4): one grant per page in order; compose sends every page and answers with the PDF bytes', () async {
+    server
+      ..on('POST', '/whiteboards/b1/exports/grant', [
+        const Reply.ok({
+          'pages': [
+            {'assetId': 'e0', 'upload': {'objectKey': 'whiteboard-uploads/o/b1/e0/u', 'uploadUrl': 'https://s.test/e0', 'headers': {'Content-Type': 'image/png'}}},
+            {'assetId': 'e1', 'upload': {'objectKey': 'whiteboard-uploads/o/b1/e1/u', 'uploadUrl': 'https://s.test/e1', 'headers': {'Content-Type': 'image/png'}}},
+          ],
+        }),
+      ])
+      ..on('POST', '/whiteboards/b1/exports/compose', [
+        const Reply(200, '%PDF-1.3 board', headers: {'content-type': 'application/pdf'}),
+      ]);
+    final repo = repository();
+    final grants = await repo.grantExport('b1', [111, 222]);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/exports/grant')!.body, {
+      'pages': [
+        {'byteSize': 111},
+        {'byteSize': 222},
+      ],
+    });
+    expect(grants.map((g) => g.assetId), ['e0', 'e1']);
+    final pdf = await repo.composeExport('b1', grants);
+    expect(String.fromCharCodes(pdf), '%PDF-1.3 board');
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/exports/compose')!.body, {
+      'pages': [
+        {'assetId': 'e0', 'objectKey': 'whiteboard-uploads/o/b1/e0/u'},
+        {'assetId': 'e1', 'objectKey': 'whiteboard-uploads/o/b1/e1/u'},
+      ],
+    });
+  });
 }

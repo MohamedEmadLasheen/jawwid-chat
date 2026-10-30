@@ -8161,6 +8161,60 @@ abstract class L10n {
   /// **'The picture couldn\'t be added. Try again.'**
   String get boardImageFailed;
 
+  /// PD-39 whiteboard export: board menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Export this page as a picture (PNG)'**
+  String get boardExportPng;
+
+  /// PD-39 whiteboard export: board menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Export the board as a PDF'**
+  String get boardExportPdf;
+
+  /// PD-39 whiteboard export: while pages are drawn and the PDF is made.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the export…'**
+  String get boardExporting;
+
+  /// PD-39 whiteboard export: done.
+  ///
+  /// In en, this message translates to:
+  /// **'Exported.'**
+  String get boardExportSaved;
+
+  /// PD-39 whiteboard export: 503 COMM.WHITEBOARD_ASSETS_OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Export isn\'t switched on yet.'**
+  String get boardExportOff;
+
+  /// PD-39 whiteboard export: 429, the export workers are busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Many exports are being made right now. Try again in a minute.'**
+  String get boardExportBusy;
+
+  /// PD-39 whiteboard export: over the export limits.
+  ///
+  /// In en, this message translates to:
+  /// **'This board is too large to export in one go.'**
+  String get boardExportTooLarge;
+
+  /// PD-39 whiteboard export: a phone or tablet build has nowhere to save a file.
+  ///
+  /// In en, this message translates to:
+  /// **'Export works in the browser. Open the board there to export it.'**
+  String get boardExportNotHere;
+
+  /// PD-39 whiteboard export: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The export couldn\'t be made. Try again.'**
+  String get boardExportFailed;
+
   /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
   ///
   /// In en, this message translates to:

@@ -4828,6 +4828,35 @@ class L10nAr extends L10n {
   String get boardImageFailed => 'تعذّرت إضافة الصورة. حاول مرة أخرى.';
 
   @override
+  String get boardExportPng => 'تصدير هذه الصفحة كصورة (PNG)';
+
+  @override
+  String get boardExportPdf => 'تصدير السبورة كملف PDF';
+
+  @override
+  String get boardExporting => 'جارٍ تجهيز التصدير…';
+
+  @override
+  String get boardExportSaved => 'تم التصدير.';
+
+  @override
+  String get boardExportOff => 'لم يُفعَّل التصدير بعد.';
+
+  @override
+  String get boardExportBusy => 'يجري الآن تصدير كثير. حاول بعد دقيقة.';
+
+  @override
+  String get boardExportTooLarge =>
+      'هذه السبورة أكبر من أن تُصدَّر دفعة واحدة.';
+
+  @override
+  String get boardExportNotHere =>
+      'التصدير متاح في المتصفح. افتح السبورة هناك لتصديرها.';
+
+  @override
+  String get boardExportFailed => 'تعذّر التصدير. حاول مرة أخرى.';
+
+  @override
   String get boardDraftStale =>
       'لديك تغييرات من زيارة سابقة لم تُحفظ، على صفحات تغيّرت منذ ذلك الحين. احتفظ بتغييراتك (تحلّ محلّ تلك الصفحات) أو تجاهلها.';
 
