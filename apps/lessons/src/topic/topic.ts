@@ -10,7 +10,8 @@ import { WORD_ID } from '../arabic/arabic-lesson';
  * Resolution FAILS CLOSED: a malformed block, an id out of place, a quiz question without exactly one
  * answer, or a malformed file refuses the whole lesson. A held line (`review` set) is never shown, and
  * nothing at all is shown until the Teachers department (and, for fiqh, a qualified scholar) approved the
- * file. scripts/lessons/check-arabic-lesson.py proves the same in CI, and also refuses typed Quran in the
+ * file -- and a fiqh lesson (`fiqh: true`) only with the qualified scholar who verified it named
+ * (`review.scholar`). scripts/lessons/check-arabic-lesson.py proves the same in CI, and also refuses typed Quran in the
  * prose (rasm.py, the whole Quran), a reference to an ayah the verified text does not have, and a
  * madhhab name in child-facing text (owner, 2026-10-29).
  */
@@ -36,7 +37,12 @@ export interface TopicLesson {
   lesson: number;
   kind: 'topic';
   title: { text: string; review: Review };
-  review: { status: 'pending' | 'approved'; by: string | null; note: string };
+  /**
+   * A lesson that teaches fiqh (wudu, salah): its approval also names the qualified scholar who verified
+   * the method and every step (owner, 2026-10-29): `review.scholar`.
+   */
+  fiqh?: boolean;
+  review: { status: 'pending' | 'approved'; by: string | null; note: string; scholar?: string | null };
   provenance: unknown;
   retiredIds: string[];
   sections: TopicSection[];
@@ -63,6 +69,11 @@ function check(ok: boolean): asserts ok {
 const isReview = (r: unknown): r is Review => r === null || (typeof r === 'string' && r.trim().length > 0);
 const isText = (t: unknown): t is string => typeof t === 'string' && t.trim().length > 0 && t === t.normalize('NFC');
 const isAyah = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1;
+/** Exactly these keys (some optional): an unknown key refuses, as the CI checker does. */
+const keys = (o: object, required: string[], optional: string[] = []) => {
+  const k = Object.keys(o);
+  return required.every((x) => k.includes(x)) && k.every((x) => required.includes(x) || optional.includes(x));
+};
 
 export function isTopicLesson(x: unknown): x is TopicLesson {
   const c = x as TopicLesson;
@@ -71,7 +82,12 @@ export function isTopicLesson(x: unknown): x is TopicLesson {
 
 export function resolveTopicLesson(raw: unknown, lesson: number): ResolvedTopic | null {
   if (!isTopicLesson(raw) || raw.lesson !== lesson) return null;
+  if (!keys(raw, ['lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz'], ['fiqh'])) return null;
+  if (!keys(raw.review, ['status', 'by', 'note'], ['scholar']) || !['pending', 'approved'].includes(raw.review.status)) return null;
   const approved = raw.review.status === 'approved';
+  if (raw.fiqh !== undefined && typeof raw.fiqh !== 'boolean') return null;
+  // A fiqh lesson is approved only with the scholar who verified its method and steps named too.
+  if (approved && raw.fiqh && !(typeof raw.review.scholar === 'string' && raw.review.scholar.trim().length > 0)) return null;
   let held = 0;
   const shown = (r: Review) => {
     if (r) held++;
@@ -80,29 +96,29 @@ export function resolveTopicLesson(raw: unknown, lesson: number): ResolvedTopic 
   try {
     check(raw.retiredIds.every((id) => typeof id === 'string' && WORD_ID.test(id)));
     const retired = new Set(raw.retiredIds);
-    check(!!raw.title && isText(raw.title.text) && isReview(raw.title.review));
+    check(!!raw.title && keys(raw.title, ['text', 'review']) && isText(raw.title.text) && isReview(raw.title.review));
     const ids = new Set<string>();
     const sectionIds = new Set<string>();
     const sections: ResolvedTopic['sections'] = [];
     for (const s of raw.sections) {
-      check(typeof s.id === 'string' && SECTION_ID.test(s.id) && !sectionIds.has(s.id));
+      check(keys(s, ['id', 'title', 'blocks']) && typeof s.id === 'string' && SECTION_ID.test(s.id) && !sectionIds.has(s.id));
       sectionIds.add(s.id);
-      check(!!s.title && isText(s.title.text) && isReview(s.title.review) && Array.isArray(s.blocks));
+      check(!!s.title && keys(s.title, ['text', 'review']) && isText(s.title.text) && isReview(s.title.review) && Array.isArray(s.blocks));
       const blocks: ShownBlock[] = [];
       for (const b of s.blocks) {
         check(typeof b.id === 'string' && WORD_ID.test(b.id) && b.id.slice(0, -4) === s.id && !ids.has(b.id) && !retired.has(b.id));
         ids.add(b.id);
         check(isReview(b.review));
         if (b.kind === 'text') {
-          check(isText(b.text));
+          check(keys(b, ['id', 'kind', 'text', 'review']) && isText(b.text));
           if (shown(b.review)) blocks.push({ id: b.id, kind: 'text', text: b.text });
         } else if (b.kind === 'quran') {
           // The verse itself comes from the verified dataset when the page draws it; here, a reference.
-          check(isAyah(b.surah) && b.surah <= 114 && isAyah(b.from) && isAyah(b.to) && b.from <= b.to);
+          check(keys(b, ['id', 'kind', 'surah', 'from', 'to', 'review']) && isAyah(b.surah) && b.surah <= 114 && isAyah(b.from) && isAyah(b.to) && b.from <= b.to);
           if (shown(b.review)) blocks.push({ id: b.id, kind: 'quran', surah: b.surah, from: b.from, to: b.to });
         } else if (b.kind === 'hadith') {
           // Every hadith stays held until a verified hadith source is approved: never shown, whatever its review.
-          check(isText(b.source) && isText(b.text) && !!b.review);
+          check(keys(b, ['id', 'kind', 'source', 'text', 'review']) && isText(b.source) && isText(b.text) && !!b.review);
           held++;
         } else {
           throw new Refused();
@@ -118,18 +134,22 @@ export function resolveTopicLesson(raw: unknown, lesson: number): ResolvedTopic 
       quizIds.add(q.id);
       let item: ResolvedQuiz;
       if (q.kind === 'choose') {
-        check(isText(q.question) && Array.isArray(q.options) && q.options.length >= 2 && q.options.length <= 4 && q.options.every(isText));
+        check(keys(q, ['id', 'kind', 'question', 'options', 'answer', 'review']) && isText(q.question) && Array.isArray(q.options) && q.options.length >= 2 && q.options.length <= 4 && q.options.every(isText));
         check(new Set(q.options).size === q.options.length && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.options.length);
         item = { id: q.id, question: q.question, prompt: null, word: null, options: q.options, answer: q.answer };
       } else if (q.kind === 'truefalse') {
-        check(isText(q.statement) && typeof q.answer === 'boolean');
+        check(keys(q, ['id', 'kind', 'statement', 'answer', 'review']) && isText(q.statement) && typeof q.answer === 'boolean');
         item = { id: q.id, question: q.statement, prompt: null, word: null, options: [...TRUE_FALSE], answer: q.answer ? 0 : 1 };
       } else {
         throw new Refused();
       }
       if (shown(q.review)) quiz.push(item);
     }
-    return { title: shown(raw.title.review) ? raw.title.text : null, sections, quiz, held, approved };
+    const title = shown(raw.title.review) ? raw.title.text : null;
+    // An approved file holds nothing but its hadith (always held): approved-with-flags refuses, as in CI.
+    const hadith = raw.sections.reduce((n, s) => n + s.blocks.filter((b) => b.kind === 'hadith').length, 0);
+    check(!approved || held === hadith);
+    return { title, sections, quiz, held, approved };
   } catch {
     return null;
   }

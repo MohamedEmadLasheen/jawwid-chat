@@ -22,6 +22,26 @@ describe('TopicLesson', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('تعذّر التحقق من هذا الدرس، فلم يُعرض شيء منه.');
   });
 
+  it('fails closed while the Quran loads: no prose, quiz or star before the references are verified', async () => {
+    const never: Promise<unknown> = new Promise(() => {});
+    render(<TopicLesson lesson={8} content={topicStandIn()} fetcher={() => never} />);
+    expect(screen.getByRole('status').textContent).toBe('جَارٍ تَحْمِيلُ الدَّرْسِ…');
+    expect(screen.queryByText('نبينا محمد نحبه ونطيعه.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'الِاخْتِبَارُ' })).toBeNull();
+  });
+
+  it('shows no prose at all when the dataset refuses', async () => {
+    render(<TopicLesson lesson={8} content={topicStandIn()} fetcher={async () => { throw new Error('404'); }} />);
+    expect((await screen.findByRole('alert')).textContent).toBe('تعذّر التحقق من هذا الدرس، فلم يُعرض شيء منه.');
+    expect(screen.queryByText('نبينا محمد نحبه ونطيعه.')).toBeNull();
+  });
+
+  it('credits the Quran text\'s source under each reference', async () => {
+    const snap = await snapshot(85, 3, { basmala: true });
+    render(<TopicLesson lesson={8} content={topicStandIn()} fetcher={snap.fetcher} anchor={snap.anchor} />);
+    expect((await screen.findByRole('link', { name: 'Tanzil Project — tanzil.net' })).getAttribute('href')).toBe('https://tanzil.net/');
+  });
+
   it('shows nothing of a pending file', () => {
     const c = topicStandIn();
     c.review.status = 'pending';

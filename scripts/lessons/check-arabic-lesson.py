@@ -496,10 +496,45 @@ def quran_grams():
 
 # --- Topic lessons (the Islamic Studies lessons): prose, Quran BY REFERENCE, hadith always held.
 ISLAMIC = os.path.join(ROOT, 'apps', 'lessons', 'src', 'islamic')
-TOPIC_KEYS = {'lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz'}
+TOPIC_KEYS = {'lesson', 'kind', 'title', 'review', 'provenance', 'retiredIds', 'sections', 'quiz'}  # (and fiqh)
 TOPIC_RUN = 4  # 4+ consecutive Quran words in prose: typed Quran (the approved plan; whole Quran)
-# Owner 2026-10-29: no madhhab names or differences in child-facing content. Matched on bare letters.
-MADHHAB = {'حنفي', 'حنفية', 'احناف', 'مالكي', 'مالكية', 'شافعي', 'شافعية', 'حنبلي', 'حنابلة', 'مذهب', 'مذاهب'}
+# Owner 2026-10-29: no madhhab names or differences in child-facing content (review of #318). A word is
+# folded (no marks, every alef form as ا, ى as ي, ة as ه, no tatweel), stripped of a prefix (و ف ب ك ل),
+# the article, a tanween fath's alif and a pronoun suffix, then compared with these stems. Known false
+# positives fail CLOSED and a teacher rewords: حنفية is also a tap in Egyptian Arabic (a wudu lesson
+# will meet it), and مذهب also means gilded.
+MADHHAB = {'حنفي', 'حنفيه', 'احناف', 'حنفيون', 'حنفيين', 'مالكي', 'مالكيه', 'مالكيون', 'مالكيين', 'شافعي', 'شافعيه',
+           'شوافع', 'شافعيون', 'شافعيين', 'حنبلي', 'حنابله', 'حنبليون', 'حنبليين', 'مذهب', 'مذاهب'}
+# The imams by name, as folded phrases, and the Latin spellings (any case).
+MADHHAB_PHRASES = ['ابو حنيفه', 'ابي حنيفه', 'مالك بن انس', 'احمد بن حنبل', 'ابن حنبل', 'الامام الشافعي', 'الامام مالك']
+MADHHAB_LATIN = re.compile(r"\b(hanaf|malik[iy]|shaf[iʿ'’]?i|hanbal|madh-?hab)", re.I)
+PRONOUN_SUFFIX = re.compile('(?:هما|هم|هن|ها|كم|كن|نا|ه|ك|ي)$')
+
+
+def fold_word(w):
+    """A word as the madhhab filter compares it: no marks, one alef, ى as ي, ة as ه, no tatweel."""
+    w = ''.join(c for c in w if not is_mark(c) and c != chr(0x640))
+    return w.translate({0x623: 0x627, 0x625: 0x627, 0x622: 0x627, 0x671: 0x627, 0x649: 0x64A, 0x629: 0x647})
+
+
+def madhhab_words(text):
+    """Every madhhab stem or imam's name the text carries (folded), and any Latin spelling."""
+    found = []
+    words = [fold_word(w) for w in re.findall('[' + chr(0x621) + '-' + chr(0x652) + chr(0x670) + chr(0x671) + ']+', text)]
+    for w in words:
+        bases = {w}
+        for p in (r'^[وفبكل]', r'^[وفبكل]?ال', r'^[وفبكل]?لل'):
+            bases.add(re.sub(p, '', w))
+        for b in list(bases):
+            if b.endswith('ا') and len(b) > 3:
+                bases.add(b[:-1])  # حنفيا (a tanween fath's alif)
+            bases.add(PRONOUN_SUFFIX.sub('', b))  # مذهبه، مذهبنا، مذاهبهم
+        if bases & MADHHAB:
+            found.append(w)
+    folded = ' '.join(words)
+    found += [p for p in MADHHAB_PHRASES if p in folded]
+    found += [m.group(0) for m in MADHHAB_LATIN.finditer(text)]
+    return found
 
 
 def check_topic(lesson, number, quran=None):
@@ -508,8 +543,10 @@ def check_topic(lesson, number, quran=None):
         raise ValueError('a topic lesson is checked against the verified Quran (topic_quran()); refusing to skip that check')
     errors = []
     err = errors.append
-    if not isinstance(lesson, dict) or set(lesson) != TOPIC_KEYS:
-        return [f'keys must be {sorted(TOPIC_KEYS)}, not {sorted(lesson) if isinstance(lesson, dict) else lesson!r}']
+    if not isinstance(lesson, dict) or not TOPIC_KEYS <= set(lesson) or set(lesson) - TOPIC_KEYS - {'fiqh'}:
+        return [f'keys must be {sorted(TOPIC_KEYS)} (and fiqh), not {sorted(lesson) if isinstance(lesson, dict) else lesson!r}']
+    if 'fiqh' in lesson and not isinstance(lesson['fiqh'], bool):
+        err('fiqh is true or false')
     if not is_int(lesson['lesson']) or lesson['lesson'] != number:
         err(f'lesson is {lesson["lesson"]!r}, not {number}')
     review = lesson['review']
@@ -531,14 +568,14 @@ def check_topic(lesson, number, quran=None):
         if not is_str(t) or not t.strip() or t != unicodedata.normalize('NFC', t):
             err(f'{where}: text must be non-empty NFC')
             return
-        bare_text = ''.join(c for c in t if not is_mark(c)).replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
-        for w in re.findall('[' + chr(0x621) + '-' + chr(0x64A) + ']+', bare_text):
-            # The word, and the word without a prefix (و ف ب ك ل) and the article: المذهب, والحنفية ...
-            forms = {w, re.sub('^[وفبكل]', '', w), re.sub('^[وفبكل]?ال', '', w), re.sub('^[وفبكل]?لل', '', w)}
-            if forms & MADHHAB:
-                err(f'{where}: names a madhhab ({w}); child-facing text never does (owner, 2026-10-29)')
+        for w in madhhab_words(t):
+            err(f'{where}: names a madhhab ({w}); child-facing text never does (owner, 2026-10-29)')
         if quran_runs(t, quran['grams'], TOPIC_RUN):
             err(f'{where}: carries {TOPIC_RUN} or more consecutive Quran words: typed Quran is refused; use a {{surah, from, to}} reference')
+        # A whole short ayah (2-3 words) typed anywhere is typed Quran too: «الله الصمد», «إنا أعطيناك الكوثر».
+        ws = RASM.words(t)
+        if any(tuple(ws[i:i + k]) in quran['ayat'] for k in (2, 3) for i in range(len(ws) - k + 1)):
+            err(f'{where}: carries a whole ayah: typed Quran is refused; use a {{surah, from, to}} reference')
 
     t = lesson['title']
     if not isinstance(t, dict) or set(t) != {'text', 'review'}:
@@ -552,7 +589,7 @@ def check_topic(lesson, number, quran=None):
         if not isinstance(s, dict) or set(s) != {'id', 'title', 'blocks'}:
             err(f'{where}: keys are id, title, blocks')
             continue
-        if not is_str(s['id']) or not STAGE_ID.match(s['id']) or s['id'] in sids:
+        if not is_str(s['id']) or not STAGE_ID.fullmatch(s['id']) or s['id'] in sids:
             err(f'{where}: a section id is a unique lowercase slug')
             continue
         sids.add(s['id'])
@@ -563,7 +600,7 @@ def check_topic(lesson, number, quran=None):
             held(f'{where} title', s['title']['review'])
         for b in s['blocks'] if isinstance(s['blocks'], list) else []:
             bw = f'{where} block {b.get("id") if isinstance(b, dict) else b!r}'
-            if not isinstance(b, dict) or not is_str(b.get('id')) or not WORD_ID.match(b['id']) or b['id'][:-4] != s['id'] or b['id'] in ids or b['id'] in retired:
+            if not isinstance(b, dict) or not is_str(b.get('id')) or not WORD_ID.fullmatch(b['id']) or b['id'][:-4] != s['id'] or b['id'] in ids or b['id'] in retired:
                 err(f'{bw}: id must be {s["id"]}-NNN, unique and never retired')
                 continue
             ids.add(b['id'])
@@ -587,8 +624,8 @@ def check_topic(lesson, number, quran=None):
     qids = set()
     for q in lesson['quiz'] if isinstance(lesson['quiz'], list) else []:
         qw = f'quiz {q.get("id") if isinstance(q, dict) else q!r}'
-        if not isinstance(q, dict) or not is_str(q.get('id')) or q['id'] in qids:
-            err(f'{qw}: quiz ids must be unique')
+        if not isinstance(q, dict) or not is_str(q.get('id')) or not q['id'].strip() or q['id'] in qids:
+            err(f'{qw}: quiz ids must be non-empty and unique')
             continue
         qids.add(q['id'])
         held(qw, q.get('review'))
@@ -608,11 +645,16 @@ def check_topic(lesson, number, quran=None):
                 err(f'{qw}: the answer is true or false')
         else:
             err(f'{qw}: kind must be choose or truefalse')
+    if set(review) - {'status', 'by', 'note', 'scholar'}:
+        err('review keys are status, by, note (and scholar)')
     if approved:
         if not is_str(review.get('by')) or not review['by'].strip():
             err('review: an approved lesson names its reviewer')
         if flagged:
             err(f'review: approved while {len(flagged)} item(s) are still flagged ({", ".join(flagged[:3])}...)')
+        # A fiqh lesson's method and every step are verified by a qualified scholar too (owner, 2026-10-29).
+        if lesson.get('fiqh') is True and (not is_str(review.get('scholar')) or not review['scholar'].strip()):
+            err('review: an approved fiqh lesson names the qualified scholar who verified it (review.scholar)')
     return errors
 
 
@@ -621,11 +663,12 @@ def topic_quran():
     spec = importlib.util.spec_from_file_location('lesson_content', os.path.join(HERE, 'check-lesson-content.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    grams, counts = set(), {}
+    grams, counts, ayat = set(), {}, set()
     for n, verses in mod.verified_surahs().items():
         counts[n] = len(verses)
         grams |= runs_of([w for v in verses for w in RASM.words(v)], TOPIC_RUN)
-    return {'grams': frozenset(grams), 'counts': counts}
+        ayat |= {tuple(RASM.words(v)) for v in verses if 2 <= len(RASM.words(v)) <= 3}
+    return {'grams': frozenset(grams), 'counts': counts, 'ayat': frozenset(ayat)}
 
 
 def check(lesson, number, quran=None):
@@ -1162,7 +1205,8 @@ def selftest():
             'quiz': [{'id': 'q1', 'kind': 'choose', 'question': 'أين ولد النبي؟', 'options': ['مكة', 'المدينة'], 'answer': 0, 'review': None},
                      {'id': 'q2', 'kind': 'truefalse', 'statement': 'نحب نبينا', 'answer': True, 'review': None}],
         }
-    toy_topic_quran = {'grams': runs_of(RASM.words('قُلْ هُوَ اللَّهُ أَحَدٌ'), TOPIC_RUN), 'counts': {85: 3}}
+    toy_topic_quran = {'grams': runs_of(RASM.words('قُلْ هُوَ اللَّهُ أَحَدٌ'), TOPIC_RUN), 'counts': {85: 3},
+                       'ayat': {tuple(RASM.words('اللَّهُ الصَّمَدُ'))}}
     tcases = {
         'topic-clean': (lambda c: None, None),
         'topic-hadith-shown': (lambda c: c['sections'][0]['blocks'][2].update(review=None), 'always held'),
@@ -1176,6 +1220,26 @@ def selftest():
         'topic-approved-hadith-stays-held': (lambda c: c['review'].update(status='approved', by='Teachers department'), None),
         'topic-madhhab-word-alone': (lambda c: c['sections'][0]['blocks'][0].update(text='هذا عند الشافعية'), 'names a madhhab'),
         'topic-shafi-is-not-a-madhhab': (lambda c: c['sections'][0]['blocks'][0].update(text='النبي هو الشافع المشفع'), None),
+        'topic-madhhab-alif-maqsura': (lambda c: c['sections'][0]['blocks'][0].update(text='على الرأي الحنفى'), 'names a madhhab'),
+        'topic-madhhab-ta-as-ha': (lambda c: c['sections'][0]['blocks'][0].update(text='قالت حنفيه كذا'), 'names a madhhab'),
+        'topic-madhhab-tanween-alif': (lambda c: c['sections'][0]['blocks'][0].update(text='كان حنفيًا'), 'names a madhhab'),
+        'topic-madhhab-pronoun': (lambda c: c['sections'][0]['blocks'][0].update(text='هذا مذهبنا'), 'names a madhhab'),
+        'topic-madhhab-plural': (lambda c: c['sections'][0]['blocks'][0].update(text='قال الشوافع'), 'names a madhhab'),
+        'topic-madhhab-imam': (lambda c: c['sections'][0]['blocks'][0].update(text='قال أبو حنيفة'), 'names a madhhab'),
+        'topic-madhhab-imam-2': (lambda c: c['sections'][0]['blocks'][0].update(text='روى أحمد بن حنبل'), 'names a madhhab'),
+        'topic-madhhab-latin': (lambda c: c['sections'][0]['blocks'][0].update(text='the Shafi\'i view'), 'names a madhhab'),
+        'topic-madhhab-in-an-option': (lambda c: c['quiz'][0].update(options=['مكة', 'المالكية']), 'names a madhhab'),
+        'topic-madhhab-in-a-title': (lambda c: c['sections'][0]['title'].update(text='المذهب الحنبلي'), 'names a madhhab'),
+        'topic-whole-short-ayah': (lambda c: c['sections'][0]['blocks'][0].update(text='نقول: الله الصمد'), 'whole ayah'),
+        'topic-typed-quran-in-an-option': (lambda c: c['quiz'][0].update(options=['مكة', 'قل هو الله أحد']), 'typed Quran'),
+        'topic-ref-from-greater-than-to': (lambda c: c['sections'][0]['blocks'][1].update(**{'from': 3, 'to': 2}), 'not a range'),
+        'topic-ref-from-zero': (lambda c: c['sections'][0]['blocks'][1].update(**{'from': 0}), 'not a range'),
+        'topic-choose-answer-out-of-range': (lambda c: c['quiz'][0].update(answer=2), 'option index'),
+        'topic-choose-duplicate-options': (lambda c: c['quiz'][0].update(options=['مكة', 'مكة']), 'distinct options'),
+        'topic-empty-quiz-id': (lambda c: c['quiz'][0].update(id=''), 'non-empty'),
+        'topic-section-id-newline': (lambda c: c['sections'][0].update(id='intro\n'), 'lowercase slug'),
+        'topic-fiqh-without-scholar': (lambda c: c.update(fiqh=True) or c['review'].update(status='approved', by='Teachers department'), 'qualified scholar'),
+        'topic-fiqh-with-scholar': (lambda c: c.update(fiqh=True) or c['review'].update(status='approved', by='Teachers department', scholar='a qualified scholar'), None),
     }
     for name, (mutate, expected) in tcases.items():
         c = topic()

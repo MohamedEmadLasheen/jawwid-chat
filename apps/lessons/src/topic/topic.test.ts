@@ -24,6 +24,12 @@ describe('topic lessons (Islamic Studies)', () => {
       (c) => { c.quiz[0] = { ...c.quiz[0]!, answer: 2 } as never; }, // no such option
       (c) => { c.quiz[0] = { ...c.quiz[0]!, options: ['مكة', 'مكة'] } as never; }, // not distinct
       (c) => { c.quiz[1] = { ...c.quiz[1]!, answer: 'yes' } as never; }, // not a boolean
+      (c) => { c.sections[0]!.blocks[1] = { ...c.sections[0]!.blocks[1]!, from: 0 } as never; }, // ayah zero
+      (c) => { c.sections[0]!.blocks[1] = { ...c.sections[0]!.blocks[1]!, to: 1.5 } as never; }, // not an integer
+      (c) => { (c.sections[0]!.blocks[0] as { colour?: string }).colour = 'red'; }, // an unknown key
+      (c) => { c.quiz[0] = { ...c.quiz[0]!, id: '' } as never; }, // an empty quiz id
+      (c) => { c.sections[0]!.blocks[0]!.review = 'a teacher checks it'; }, // approved while a line is held
+      (c) => { c.fiqh = true; }, // a fiqh lesson approved without its scholar
     ];
     for (const change of bad) {
       const c = topicStandIn();
@@ -32,8 +38,17 @@ describe('topic lessons (Islamic Studies)', () => {
     }
   });
 
+  it('refuses another lesson\'s file; a fiqh lesson approves only with its scholar named', () => {
+    expect(resolveTopicLesson(topicStandIn(), 9)).toBeNull();
+    const c = topicStandIn();
+    c.fiqh = true;
+    c.review.scholar = 'a qualified scholar';
+    expect(resolveTopicLesson(c, 8)).not.toBeNull();
+  });
+
   it('holds a flagged line, and shows nothing of a pending file', () => {
     const c = topicStandIn();
+    c.review.status = 'pending';
     c.sections[0]!.blocks[0]!.review = 'a teacher checks it';
     const r = resolveTopicLesson(c, 8)!;
     expect(r.sections[0]!.blocks.map((b) => b.id)).toEqual(['intro-002']);

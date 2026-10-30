@@ -48,6 +48,18 @@ export function TopicLesson({ lesson, content, fetcher = fetchJson, anchor = BUI
       ? resolved.sections.some((s) => s.blocks.some((b) => b.kind === 'quran' && (!surahs.has(b.surah) || b.to > surahs.get(b.surah)!.ayahs.length)))
       : false;
 
+  // Fail closed while the Quran loads: nothing of an approved lesson -- no prose, no quiz, no star -- shows
+  // until every reference it makes has been checked against the verified dataset (review of #318).
+  if (resolved?.approved && wanted.length > 0 && surahs === null) {
+    return (
+      <main className="lesson">
+        <p className="note" role="status">
+          جَارٍ تَحْمِيلُ الدَّرْسِ…
+        </p>
+      </main>
+    );
+  }
+
   if (resolved === undefined || resolved === null || !resolved.approved || surahs === 'refused' || outOfRange) {
     const refused = resolved === null || surahs === 'refused' || outOfRange;
     return (
@@ -105,7 +117,10 @@ function QuranRef({ surah, from, to }: { surah: Surah | undefined; from: number;
     <figure className="topic-quran">
       <blockquote className="quiz__quran">{ayahs.map((a) => `${a.text} ﴿${a.ayah.toLocaleString('ar-EG')}﴾`).join(' ')}</blockquote>
       <figcaption className="attribution">
-        سُورَةُ {surah.info.nameAr} {from === to ? from.toLocaleString('ar-EG') : `${from.toLocaleString('ar-EG')}–${to.toLocaleString('ar-EG')}`}
+        سُورَةُ {surah.info.nameAr} {from === to ? from.toLocaleString('ar-EG') : `${from.toLocaleString('ar-EG')}–${to.toLocaleString('ar-EG')}`} · نص القرآن الكريم:{' '}
+        <a href={surah.sourceUrl} rel="noreferrer">
+          {surah.attribution}
+        </a>
       </figcaption>
     </figure>
   );

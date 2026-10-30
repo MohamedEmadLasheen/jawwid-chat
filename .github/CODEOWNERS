@@ -16,3 +16,12 @@
 /scripts/qa/guards.sh @MohamedEmadLasheen
 /.github/workflows/ @MohamedEmadLasheen
 /.github/CODEOWNERS @MohamedEmadLasheen
+# PD-29: the Arabic and Islamic Studies lessons and their checkers (review of #318). An approval is
+# self-attested in the lesson file, so one PR could loosen a checker and approve content at once; a
+# Code Owners review keeps those apart. Enforcing it is the same branch-protection setting as above.
+/apps/lessons/src/islamic/ @MohamedEmadLasheen
+/apps/lessons/src/arabic/ @MohamedEmadLasheen
+/apps/lessons/src/topic/ @MohamedEmadLasheen
+/apps/lessons/src/reading/ @MohamedEmadLasheen
+/scripts/lessons/check-arabic-lesson.py @MohamedEmadLasheen
+/scripts/lessons/rasm.py @MohamedEmadLasheen
