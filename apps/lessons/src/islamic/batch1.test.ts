@@ -20,6 +20,7 @@ describe('Islamic Studies batch 1, the real files', () => {
       expect(r).not.toBeNull();
       expect(r.approved).toBe(false);
       expect(raw.title.text).toBe(title);
+      expect(raw.fiqh).toBe(false); // none of the Prophet ﷺ lessons teaches fiqh
       expect(blocks(raw).filter((b) => b.kind === 'hadith').every((b) => b.review?.startsWith('HADITH'))).toBe(true);
       expect(r.sections.flatMap((s) => s.blocks).some((b) => (b as { kind: string }).kind === 'hadith')).toBe(false);
     });
