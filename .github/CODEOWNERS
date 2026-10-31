@@ -19,6 +19,11 @@
 /apps/lessons/src/audio/                       @MohamedEmadLasheen
 /apps/lessons/src/fonts/AmiriQuran.ttf         @MohamedEmadLasheen
 /assets/fonts/AmiriQuran.ttf                   @MohamedEmadLasheen
+/scripts/db/check-quran-pins.py                @MohamedEmadLasheen
+/apps/api/src/cli/ingest-quran-audio.ts        @MohamedEmadLasheen
+/apps/api/src/materials/quran-surahs.ts        @MohamedEmadLasheen
+/lib/features/whiteboards/data/quran_text_repository.dart @MohamedEmadLasheen
+/supabase/migrations/*quran*                   @MohamedEmadLasheen
 
 # Lesson content and its approval: content files, approvals, signing, the checkers
 /apps/lessons/src/content/                     @MohamedEmadLasheen
