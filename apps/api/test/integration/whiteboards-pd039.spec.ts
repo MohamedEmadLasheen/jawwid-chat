@@ -380,6 +380,44 @@ describe('§10 4a, 4c: a teacher who leaves', () => {
     const another = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-2');
     expect(another.id).not.toBe(first.id);
   });
+
+  it('a key names one copy: reused for another teacher it is refused, and it is never another staff member\'s (review of #327)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Keyed' }, t);
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const mgr = staff(tmgr, 'manager');
+    const first = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-x');
+    // The same key for a different teacher: 409, and no copy for them.
+    expect(await code(boards.copyToTeacher(b.id, { teacherId: s.unrelatedTeacherId }, mgr, 'key-x'))).toBe(CommErrorCode.WHITEBOARD_CONFLICT);
+    expect((await boards.list(teacher(s.unrelatedTeacherId))).filter((x) => x.title === 'Keyed')).toHaveLength(0);
+    // The same key from another staff member is their own request: a copy of their own, never the first one's answer.
+    const theirs = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, staff(sa, 'super_admin'), 'key-x');
+    expect(theirs.id).not.toBe(first.id);
+    expect((await log(b.id)).filter((r) => r.action === 'copy').map((r) => r.viewer_id).sort()).toEqual([sa, tmgr].sort());
+  });
+});
+
+describe('the staff pickers (review of #327)', () => {
+  it("lists exactly the teachers a staff member may read, departed ones too; copy targets only for who copies", async () => {
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const sup = await boards.boardTeachers(staff(tsup, 'admin'));
+    expect(sup.teachers).toEqual([{ id: s.teacherId, name: expect.any(String), isActive: false }]);
+    expect(sup.copyTargets).toBeNull();
+    // In the department but supervising nobody here: nothing.
+    expect((await boards.boardTeachers(staff(tsup2, 'admin'))).teachers).toEqual([]);
+    for (const who of [staff(tmgr, 'manager'), staff(sa, 'super_admin')]) {
+      const seen = await boards.boardTeachers(who);
+      expect(seen.teachers.map((t) => t.id)).toContain(s.teacherId);
+      const targets = seen.copyTargets!.map((t) => t.id);
+      expect(targets).toContain(s.newTeacherId);
+      expect(targets).not.toContain(s.teacherId);
+    }
+    // Every teacher listed is one whose boards that staff member can open.
+    for (const t of (await boards.boardTeachers(staff(tmgr, 'manager'))).teachers) {
+      await expect(boards.teacherBoards(t.id, staff(tmgr, 'manager'))).resolves.toEqual(expect.any(Array));
+    }
+    expect(await code(boards.boardTeachers(teacher(s.teacherId)))).toBe(CommErrorCode.WHITEBOARD_NOT_FOUND);
+  });
 });
 
 describe('limits and concurrency', () => {

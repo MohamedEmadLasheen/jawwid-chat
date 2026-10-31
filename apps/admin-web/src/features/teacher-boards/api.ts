@@ -45,6 +45,16 @@ export interface BoardDetail extends BoardSummary {
   pages: BoardPageJson[]
 }
 
+/**
+ * GET /teacher-boards/teachers (review of #327): the teachers whose boards the
+ * caller may read -- the same scope as every board read -- and, for whoever
+ * copies a departed teacher's board, the active teachers it may go to.
+ */
+export interface BoardTeachers {
+  teachers: Array<{ id: string; name: string; isActive: boolean }>
+  copyTargets: Array<{ id: string; name: string }> | null
+}
+
 export interface AccessLogEntry {
   viewerId: string | null
   viewerKind: 'teacher' | 'staff' | 'support_session' | 'system' | string
@@ -59,6 +69,7 @@ const seg = (s: string) => encodeURIComponent(s)
 
 export const teacherBoardsApi = {
   list: (teacherId: string) => api.get<BoardSummary[]>('/teacher-boards', { teacherId }),
+  teachers: () => api.get<BoardTeachers>('/teacher-boards/teachers'),
   board: (boardId: string) => api.get<BoardDetail>(`/teacher-boards/${seg(boardId)}`),
   accessLog: (boardId: string) => api.get<AccessLogEntry[]>(`/teacher-boards/${seg(boardId)}/access-log`),
   /** `key` makes a retry of the same copy answer the first copy, never make a second one. */
@@ -70,6 +81,7 @@ export const teacherBoardsApi = {
 export const teacherBoardsKeys = {
   all: ['teacher-boards'] as const,
   list: (teacherId: string) => ['teacher-boards', 'list', teacherId] as const,
+  teachers: ['teacher-boards', 'teachers'] as const,
   board: (boardId: string) => ['teacher-boards', 'board', boardId] as const,
   accessLog: (boardId: string) => ['teacher-boards', 'access-log', boardId] as const,
   verse: (key: string) => ['teacher-boards', 'verse', key] as const,
