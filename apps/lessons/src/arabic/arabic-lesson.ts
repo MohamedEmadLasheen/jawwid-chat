@@ -119,6 +119,18 @@ function ruleOf(u: ArabicUnit): LetterUnit {
   return u.mark === undefined ? { letters: u.letters } : { letters: u.letters, mark: HARAKA[u.mark] };
 }
 
+/** Lesson 2: a unit grouped under a PAIR of letters (group 'ب ن'): the pair's letters, else null. */
+function pairOf(u: ArabicUnit): string[] | null {
+  const parts = typeof u.group === 'string' ? u.group.split(' ') : [];
+  return parts.length >= 2 && parts.every((x) => [...x].length === 1 && isLetter(x)) ? parts : null;
+}
+
+/** A word holding EVERY letter of its unit's pair cannot test telling them apart (review of #280). */
+function bothOfPair(word: string, u: ArabicUnit): boolean {
+  const pair = pairOf(u);
+  return !!pair && pair.every((x) => has(word, { letters: [x] }));
+}
+
 function check(ok: boolean): asserts ok {
   if (!ok) throw new Refused();
 }
@@ -220,6 +232,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
         check(Array.isArray(q.options) && q.options.length >= 2 && q.options.length <= 4 && new Set(q.options).size === q.options.length);
         check(q.options.every((o) => typeof o === 'string' && vocabulary.has(o)) && typeof q.answer === 'number');
         const right = q.options.flatMap((o, i) => (has(o, ruleOf(unit)) ? [i] : []));
+        check(q.options.every((o) => !bothOfPair(o, unit))); // a pair quiz never uses a word with both letters
         check(right.length === 1 && right[0] === q.answer); // exactly one right answer, and it is the answer
         check(unitWords.has(q.options[q.answer]!)); // the answer is a unit's word, never a distractor
         // A madd unit's wrong option must not secretly have a madd the rule cannot see (هٰذَا، عَلَى، آ).
@@ -229,6 +242,7 @@ export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabi
       } else if (q.kind === 'position') {
         check(typeof q.word === 'string' && unitWords.has(q.word) && typeof q.answer === 'string' && POSITIONS.includes(q.answer));
         const at = positions(q.word, ruleOf(unit));
+        check(!bothOfPair(q.word, unit));
         check(at.length === 1 && at[0] === q.answer); // the letter is in exactly one place
         item = { id: q.id, question: askPosition(unit.name), prompt: null, word: q.word, options: POSITIONS.map((p) => POSITION_LABEL[p]), answer: POSITIONS.indexOf(q.answer) };
         words = [q.word];
