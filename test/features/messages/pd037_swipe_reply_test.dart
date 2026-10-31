@@ -41,12 +41,14 @@ Widget _row({required VoidCallback onReply, bool enabled = true}) => SwipeToRepl
 
 double _width(WidgetTester tester) => tester.view.physicalSize.width / tester.view.devicePixelRatio;
 
-/// A thumb from [x], [by] pixels toward the right (negative: the left), in steps.
+/// A thumb from [x], [by] pixels toward the right (negative: the left), 6 px
+/// a frame -- a thumb's pace: the first move decides which gesture a touch is.
 Future<void> _drag(WidgetTester tester, {required double x, required double by, double y = 40}) async {
   final gesture = await tester.startGesture(Offset(x, y));
-  for (var i = 0; i < 10; i++) {
-    await gesture.moveBy(Offset(by / 10, 0));
-    await tester.pump(const Duration(milliseconds: 16));
+  final steps = (by.abs() / 6).ceil();
+  for (var i = 0; i < steps; i++) {
+    await gesture.moveBy(Offset(by / steps, 0));
+    await tester.pump(const Duration(milliseconds: 8));
   }
   await gesture.up();
   await tester.pumpAndSettle();
@@ -101,6 +103,53 @@ void main() {
         await tester.pumpWidget(_app(Scaffold(body: Align(alignment: Alignment.topCenter, child: _row(onReply: () => replies++))), rtl: rtl));
         final justInside = rtl ? _width(tester) - SwipeToReply.backGestureEdge - 6 : SwipeToReply.backGestureEdge + 6;
         await _drag(tester, x: justInside, by: toward * 90);
+        expect(replies, 1);
+      });
+    }
+
+    testWidgets('armed, then taken away by the system (a call, a cancel): no reply', (tester) async {
+      var replies = 0;
+      await tester.pumpWidget(_app(Scaffold(body: Align(alignment: Alignment.topCenter, child: _row(onReply: () => replies++)))));
+      final gesture = await tester.startGesture(Offset(_width(tester) / 2, 40));
+      for (var i = 0; i < 20; i++) {
+        await gesture.moveBy(const Offset(6, 0));
+        await tester.pump(const Duration(milliseconds: 8));
+      }
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+      expect(replies, 0);
+      expect(tester.getTopLeft(find.byType(ColoredBox).last).dx, 0, reason: 'sprung back');
+    });
+
+    for (final rtl in [false, true]) {
+      testWidgets('[${rtl ? 'ar' : 'en'}] the back-gesture strip is the CHAT\'s leading edge, not the screen\'s '
+          '(split view, the web beside a list)', (tester) async {
+        var replies = 0;
+        const list = 300.0;
+        await tester.pumpWidget(_app(
+          Scaffold(
+            body: Row(
+              children: [
+                const SizedBox(width: list), // another pane, on the chat's leading side
+                Expanded(
+                  child: Navigator(
+                    onGenerateRoute: (_) => MaterialPageRoute<void>(
+                      builder: (_) => Align(alignment: Alignment.topCenter, child: _row(onReply: () => replies++)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          rtl: rtl,
+        ));
+        final toward = rtl ? -1.0 : 1.0;
+        final chatEdge = rtl ? _width(tester) - list : list;
+        // 6 pt inside the chat: the back gesture's, though far from the screen's edge.
+        await _drag(tester, x: chatEdge + toward * 6, by: toward * 90);
+        expect(replies, 0);
+        // Clear of the strip: a reply.
+        await _drag(tester, x: chatEdge + toward * (SwipeToReply.backGestureEdge + 10), by: toward * 90);
         expect(replies, 1);
       });
     }
