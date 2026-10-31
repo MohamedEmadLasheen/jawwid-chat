@@ -13,6 +13,7 @@ import { signAvatar } from '../profile/avatar-urls';
 import { sniffCertificateFile } from '../../certificates/certificate-file';
 import { ActorKind } from '../contracts/vocab';
 import { dashboardTile, type DashboardTile } from '../../dashboard/dashboard-tile';
+import { TeacherScopeService, scopeCovers, type TeacherScope } from '../../platform/teacher-scope';
 
 /**
  * The teacher's professional profile. The teacher owns it.
@@ -84,6 +85,8 @@ export class TeacherProfileService {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
+    // TEACHER-001: credential review honours the PD-35 teacher scope.
+    @Optional() private readonly teacherScope: TeacherScopeService = new TeacherScopeService(prisma),
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -361,6 +364,7 @@ export class TeacherProfileService {
     const profiles = await this.prisma.teacherProfessionalProfile.findMany({
       where: {
         ...this.orgScope(actor),
+        ...inScope(await this.teacherScope.scopeOf(actor)),
         certificates: { some: { state: 'pending' } },
       },
       include: {
@@ -392,7 +396,7 @@ export class TeacherProfileService {
       throw new CommError(decision.code, decision.reason);
     }
     const r = await this.prisma.teacherProfessionalProfile.aggregate({
-      where: { ...this.orgScope(actor), certificates: { some: { state: 'pending' } } },
+      where: { ...this.orgScope(actor), ...inScope(await this.teacherScope.scopeOf(actor)), certificates: { some: { state: 'pending' } } },
       _count: { _all: true },
       _min: { updatedAt: true },
     });
@@ -405,6 +409,7 @@ export class TeacherProfileService {
     decision: { approved: boolean; note?: string | null },
   ): Promise<CertificateReviewItem> {
     const actor = await this.requireReviewer(actorId);
+    const scope = await this.teacherScope.scopeOf(actor);
 
     if (!decision.approved && !(decision.note ?? '').trim()) {
       throw new CommError(
@@ -423,7 +428,12 @@ export class TeacherProfileService {
         where: { id: certificateId },
         include: { profile: { include: { teacher: true } } },
       });
-      if (!certificate || !this.inOrg(actor, certificate.profile.organizationId)) {
+      // TEACHER-001: outside the reviewer's teacher scope reads as not found.
+      if (
+        !certificate ||
+        !this.inOrg(actor, certificate.profile.organizationId) ||
+        !scopeCovers(scope, certificate.profile.teacherId)
+      ) {
         throw new CommError(
           CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
           'no such certificate',
@@ -514,7 +524,11 @@ export class TeacherProfileService {
     if (!certificate || !this.inOrg(actor, certificate.profile.organizationId)) throw notFound();
 
     const isOwner = actor.kind === 'teacher' && actor.actorId === certificate.profile.teacherId;
-    if (!isOwner && !this.authz.canReviewTeacherProfile(actor).allowed) throw notFound();
+    if (!isOwner) {
+      // A reviewer, and (TEACHER-001) of a teacher in their PD-35 scope.
+      if (!this.authz.canReviewTeacherProfile(actor).allowed) throw notFound();
+      if (!scopeCovers(await this.teacherScope.scopeOf(actor), certificate.profile.teacherId)) throw notFound();
+    }
     return { objectKey: certificate.objectKey };
   }
 
@@ -987,4 +1001,9 @@ export interface PublicProfileView {
   experience: string | null;
   languages: string[];
   certificates: { title: string; issuingOrganization: string | null; issuedOn: Date | null }[];
+}
+
+/** TEACHER-001: the profiles of the teachers in a reviewer's PD-35 scope (every teacher when it is not narrowed). */
+function inScope(scope: TeacherScope): { teacherId?: { in: string[] } } {
+  return scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } };
 }
