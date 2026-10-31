@@ -3,10 +3,13 @@ export type Route =
   | { kind: 'surah'; surah: number }
   | { kind: 'play'; surah: number }
   | { kind: 'arabic'; lesson: number }
+  | { kind: 'islamic'; lesson: number }
   | { kind: 'index' }
   | { kind: 'not-found' };
 
 export const ARABIC_LESSONS: readonly number[] = [1, 3, 5, 6, 7];
+/** The Islamic Studies lessons on the engine (topic lessons); none until batch 1 lands. */
+export const ISLAMIC_LESSONS: readonly number[] = [];
 
 export function route(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
@@ -21,5 +24,7 @@ export function route(pathname: string): Route {
   // "not found" until each is built (pd029-p05-arabic-letters-design.md §2).
   const a = /^\/lessons\/arabic\/lesson-(\d{1,2})$/.exec(path);
   if (a && ARABIC_LESSONS.includes(Number(a[1])) && String(Number(a[1])) === a[1]) return { kind: 'arabic', lesson: Number(a[1]) };
+  const t = /^\/lessons\/islamic\/lesson-(\d{1,2})$/.exec(path);
+  if (t && ISLAMIC_LESSONS.includes(Number(t[1])) && String(Number(t[1])) === t[1]) return { kind: 'islamic', lesson: Number(t[1]) };
   return { kind: 'not-found' };
 }
