@@ -175,7 +175,10 @@ const parent = (id: string) => `/parent-profiles/${encodeURIComponent(id)}`
 const family = (id: string) => `/families/${encodeURIComponent(id)}`
 
 export const profilesApi = {
-  parents: (q: string) => api.get<{ items: ParentListItem[]; truncated: boolean }>('/parent-profiles', q ? { q } : undefined),
+  parents: (q: string, access: ParentAccessFilter = 'all') => {
+    const params = { ...(q ? { q } : {}), ...(access !== 'all' ? { access } : {}) }
+    return api.get<{ items: ParentListItem[]; truncated: boolean }>('/parent-profiles', Object.keys(params).length ? params : undefined)
+  },
   parent: (id: string) => api.get<ParentProfile>(parent(id)),
   updateParent: (id: string, body: ParentUpdate) => api.post<ParentProfile>(parent(id), body),
   authorizePhoto: (id: string, mimeType: string, byteSize: number) =>
@@ -203,12 +206,15 @@ export const profilesApi = {
 
 export const profileKeys = {
   all: ['pd17-profiles'] as const,
-  parents: (q: string) => ['pd17-profiles', 'parents', q] as const,
+  parents: (q: string, access: ParentAccessFilter = 'all') => ['pd17-profiles', 'parents', q, access] as const,
   parent: (id: string) => ['pd17-profiles', 'parent', id] as const,
   billing: (familyId: string) => ['pd17-profiles', 'billing', familyId] as const,
   student: (id: string) => ['pd17-profiles', 'student', id] as const,
 }
 
 /** Where each profile lives: one URL per person, whoever opens it. */
+/** PD-44: the Parents list's subscription filter -- families with a child locked, or in the grace period. */
+export type ParentAccessFilter = 'all' | 'locked' | 'grace'
+
 export const parentPath = (id: string) => `/parents/${encodeURIComponent(id)}`
 export const studentPath = (id: string) => `/students/${encodeURIComponent(id)}`
