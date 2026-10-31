@@ -24,6 +24,7 @@ import {
 import { hashPassword, spendComparableTime, verifyPassword } from './password';
 import { subjectHash } from './subject-hash';
 import { clientOfPlatform, sessionPolicyFor, sessionWindow, type SessionClient } from './session-policy';
+import { AccountAdminScope } from '../account-admin-scope';
 
 /**
  * The canonical event and action names (API-CONTRACT §3.1). Constants so a
@@ -592,6 +593,13 @@ export class AuthService {
       await accountAdminStandingOf(this.prisma, staff),
     );
     if (!decision.allowed) return refuse('the administrator may no longer open this account');
+    // TEACHER-011: a teacher account, only while the teacher stays in the administrator's scope.
+    if (target.kind === 'teacher') {
+      const teacher = await this.prisma.teacher.findUnique({ where: { accountId: target.id }, select: { id: true } });
+      if (!(await new AccountAdminScope(this.prisma).covers(staff, { kind: target.kind, teacherId: teacher?.id }))) {
+        return refuse('the teacher is no longer in the administrator\'s scope');
+      }
+    }
     return { id: row.id, staffId: row.staffId, staffAccountId: row.staffAccountId };
   }
 
