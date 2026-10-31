@@ -16,6 +16,7 @@ class OutboxEntry {
     this.attempts = 0,
     this.nextAttemptAt,
     this.lastFailureCode,
+    this.carriesUpload = false,
   });
 
   final String clientMessageId;
@@ -28,6 +29,10 @@ class OutboxEntry {
   final DateTime? nextAttemptAt;
 
   final String? lastFailureCode;
+
+  /// A photo, file or voice note: its upload can fail on its own (storage, not the API),
+  /// and while it waits to be tried again it steps aside for the messages behind it.
+  final bool carriesUpload;
 
   OutboxEntry copyWith({
     OutboxState? state,
@@ -44,6 +49,7 @@ class OutboxEntry {
       attempts: attempts ?? this.attempts,
       nextAttemptAt: clearNextAttempt ? null : (nextAttemptAt ?? this.nextAttemptAt),
       lastFailureCode: lastFailureCode ?? this.lastFailureCode,
+      carriesUpload: carriesUpload,
     );
   }
 }
@@ -52,9 +58,14 @@ class OutboxEntry {
 ///
 /// Two properties matter more than anything else here:
 ///
-/// * **Order is preserved per conversation.** Only the *head* entry of a conversation is ever
-///   eligible to send. If message 1 is stuck retrying, message 2 waits behind it rather than
-///   overtaking it — otherwise a flaky network would silently reorder a user's messages.
+/// * **Order is preserved per conversation.** One message is in flight at a time, and a
+///   message waiting out a retry holds its place: if message 1 is backing off, message 2
+///   waits behind it rather than overtaking it — otherwise a flaky network would silently
+///   reorder a user's messages. Two kinds of failure step aside instead (PARENT-005), as
+///   they already show "Not sent · Retry" and nothing behind them depends on them:
+///   a message **parked** for an explicit retry (a refusal, an upload that ran out of
+///   time), which is never sent again on its own; and an **upload** waiting out its
+///   backoff. Holding the queue behind either stalled every later message in the chat.
 /// * **Retries reuse the same entry**, so the server sees the same `client_message_id` and
 ///   deduplicates instead of creating a second message.
 ///
@@ -97,19 +108,37 @@ class Outbox {
 
   /// The next entry eligible to be sent for [conversationId], or null.
   ///
-  /// Returns the head only, and only when it is not already in flight and its backoff has
-  /// elapsed.
+  /// The first entry in order that may go now: none while one is in flight; a parked entry
+  /// or an upload backing off is stepped past; any other entry backing off holds the rest.
   OutboxEntry? nextReady(String conversationId, DateTime now) {
     final queue = _byConversation[conversationId];
-    if (queue == null || queue.isEmpty) return null;
+    if (queue == null) return null;
 
-    final head = queue.first;
-    if (head.state == OutboxState.sending) return null;
+    for (final entry in queue) {
+      if (entry.state == OutboxState.sending) return null;
+      if (isParked(entry)) continue;
 
-    final notBefore = head.nextAttemptAt;
-    if (notBefore != null && now.isBefore(notBefore)) return null;
+      final notBefore = entry.nextAttemptAt;
+      final backingOff = notBefore != null && now.isBefore(notBefore);
+      if (!backingOff) return entry;
+      if (entry.carriesUpload) continue;
+      return null;
+    }
+    return null;
+  }
 
-    return head;
+  /// Failed with no retry scheduled: only the user's explicit retry sends it again.
+  static bool isParked(OutboxEntry entry) =>
+      entry.state == OutboxState.failed && entry.nextAttemptAt == null;
+
+  /// The earliest scheduled retry in [conversationId], wherever it sits in the queue.
+  DateTime? nextRetryAt(String conversationId) {
+    DateTime? earliest;
+    for (final entry in _byConversation[conversationId] ?? const <OutboxEntry>[]) {
+      final at = entry.nextAttemptAt;
+      if (at != null && (earliest == null || at.isBefore(earliest))) earliest = at;
+    }
+    return earliest;
   }
 
   /// Every conversation with an entry ready to send at [now].

@@ -4,11 +4,12 @@ import 'package:jawwid_chat/features/messages/domain/outbox.dart';
 void main() {
   final t0 = DateTime.utc(2026, 9, 5, 12);
 
-  OutboxEntry entry(String id, {String conversation = 'c1', DateTime? at}) =>
+  OutboxEntry entry(String id, {String conversation = 'c1', DateTime? at, bool upload = false}) =>
       OutboxEntry(
         clientMessageId: id,
         conversationId: conversation,
         enqueuedAt: at ?? t0,
+        carriesUpload: upload,
       );
 
   group('idempotency', () {
@@ -91,6 +92,47 @@ void main() {
       expect(outbox.nextReady('c1', t0)!.clientMessageId, 'm3');
     });
 
+    test('a parked message steps aside: what follows it still goes, in order (PARENT-005)', () {
+      final outbox = Outbox()
+        ..enqueue(entry('m1'))
+        ..enqueue(entry('m2'))
+        ..enqueue(entry('m3'));
+
+      outbox.markSending('m1');
+      outbox.markFailed('m1', t0, retryable: false, failureCode: 'forbidden');
+      expect(outbox.nextReady('c1', t0)!.clientMessageId, 'm2');
+      outbox.markSending('m2');
+      expect(outbox.nextReady('c1', t0), isNull, reason: 'one in flight at a time');
+      outbox.markSent('m2');
+      expect(outbox.nextReady('c1', t0)!.clientMessageId, 'm3');
+    });
+
+    test('a failed upload steps aside while it backs off; a text in backoff still holds its place (PARENT-005)', () {
+      final outbox = Outbox()
+        ..enqueue(entry('photo', upload: true))
+        ..enqueue(entry('text'));
+
+      outbox.markSending('photo');
+      outbox.markFailed('photo', t0, retryable: true);
+      // The photo waits out its backoff; the text behind it is independent of it.
+      expect(outbox.nextReady('c1', t0)!.clientMessageId, 'text');
+      outbox.markSending('text');
+      outbox.markSent('text');
+      // Its backoff over, the photo is tried again on its own.
+      expect(outbox.nextReady('c1', t0.add(const Duration(minutes: 10)))!.clientMessageId, 'photo');
+      expect(outbox.nextRetryAt('c1'), isNotNull);
+    });
+
+    test('the next scheduled retry is the earliest backoff, wherever it sits in the queue', () {
+      final outbox = Outbox()
+        ..enqueue(entry('photo', upload: true))
+        ..enqueue(entry('text'));
+      expect(outbox.nextRetryAt('c1'), isNull);
+      outbox.markSending('photo');
+      outbox.markFailed('photo', t0, retryable: true);
+      expect(outbox.nextRetryAt('c1'), t0.add(outbox.backoffFor(1)));
+    });
+
     test('a stalled conversation does not block a different one', () {
       final outbox = Outbox()
         ..enqueue(entry('m1', conversation: 'c1'))
@@ -115,8 +157,11 @@ void main() {
       expect(stored.nextAttemptAt, isNull, reason: 'must not retry a policy rejection');
       expect(stored.lastFailureCode, 'forbidden');
 
-      // Still available for an explicit user-initiated retry.
-      expect(outbox.nextReady('c1', t0), isNotNull);
+      // Parked: never sent again on its own (PARENT-005: it used to be handed back as
+      // "ready" on every drain) -- only an explicit user retry brings it back.
+      expect(outbox.nextReady('c1', t0), isNull);
+      outbox.retryNow('m1');
+      expect(outbox.nextReady('c1', t0)!.clientMessageId, 'm1');
     });
 
     test('retries stop once max attempts are exhausted', () {
