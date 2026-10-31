@@ -13,6 +13,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { FIRST_LOGIN_MAILER, recoveryMail, sendWithin, type MailSender } from '../account-recovery/recovery-delivery';
 import type { Actor } from '../platform/types';
+import { AccountAdminScope } from '../platform/account-admin-scope';
 
 export const ACCOUNT_AUDIT = {
   SUSPENDED: 'account.suspended',
@@ -92,6 +93,11 @@ type AccountRow = Prisma.AccountGetPayload<{ select: typeof ACCOUNT_SELECT }>;
 @Injectable()
 export class AccountAdminService {
   private readonly log = new Logger('AccountAdmin');
+  /** TEACHER-011: the per-account narrowing (a teacher account: the caller's PD-35 scope). */
+  private scopeRule?: AccountAdminScope;
+  private get scope(): AccountAdminScope {
+    return (this.scopeRule ??= new AccountAdminScope(this.prisma));
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -130,6 +136,8 @@ export class AccountAdminService {
         kind: { in: kind },
         // Never the caller's own, never the super admin's.
         NOT: [{ staff: { id: actor.actorId } }, { staff: { role: StaffRole.SUPER_ADMIN } }],
+        // TEACHER-011: a teacher account within the caller's teacher scope only.
+        AND: [await this.scope.listFilter(actor)],
         ...(owned ? { contacts: { some: { familyId: { in: owned } } } } : {}),
         ...(like
           ? {
@@ -172,6 +180,7 @@ export class AccountAdminService {
     // decision says which, for the logs). Every kind's acts include a reset.
     const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), 'reset_password', standing);
     if (!decision.allowed) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, decision.reason);
+    await this.requireInScope(actor, row);
     await this.requireOwnedFamily(actor, standing, row);
     return this.summary(actor, row, standing, await this.managed(actor, row));
   }
@@ -383,8 +392,16 @@ export class AccountAdminService {
     const standing = await accountAdminStandingOf(this.prisma, actor);
     const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), act, standing);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.requireInScope(actor, row);
     await this.requireOwnedFamily(actor, standing, row);
     return { row };
+  }
+
+  /** TEACHER-011: an account outside the caller's scope (a teacher not theirs) reads as not found. */
+  private async requireInScope(actor: Actor, row: AccountRow) {
+    if (!(await this.scope.covers(actor, { kind: row.kind, teacherId: row.teacher?.id }))) {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, "a teacher supervisor administers their own teachers' accounts only");
+    }
   }
 
   /**
