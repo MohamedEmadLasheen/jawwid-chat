@@ -8,6 +8,7 @@ import '../features/billing/presentation/my_payments_screen.dart';
 import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
+import '../features/conversations/application/realtime_keeper.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/lessons/presentation/child_schedule_screen.dart';
 import '../features/lessons/presentation/teacher_schedule_screen.dart';
@@ -512,6 +513,8 @@ class _RoleShell extends ConsumerWidget {
     // Live chat for as long as a signed-in shell is on screen: the list and
     // open threads follow the server without a pull-to-refresh.
     ref.watch(chatRealtimeProvider);
+    // ... and comes back after the API restarts (PARENT-015).
+    ref.watch(realtimeKeeperProvider);
 
     // Android back on another tab returns to Chats first, and only Back on Chats
     // leaves the app -- the start-destination rule of every Android app with a tab

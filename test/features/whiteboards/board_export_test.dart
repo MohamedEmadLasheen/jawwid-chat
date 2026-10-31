@@ -40,6 +40,10 @@ class _Repo implements WhiteboardsRepository {
   /// Each compose takes the next of these, if any, as its failure.
   final composeErrors = <Object>[];
   int composes = 0;
+  final released = <List<String>>[];
+
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async => released.add([for (final p in pages) p.assetId]);
 
   @override
   Future<BoardDetail> open(String boardId) async => BoardDetail(
@@ -76,9 +80,27 @@ class _Repo implements WhiteboardsRepository {
 
 class _Uploads implements AttachmentUploader {
   final urls = <String>[];
+  Object? error;
 
   @override
-  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async => urls.add(uploadUrl);
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async {
+    if (error != null) throw error!;
+    urls.add(uploadUrl);
+  }
+}
+
+/// Uploads the first page, then the editor closes.
+class _CancelAfterFirstPut implements AttachmentUploader {
+  _CancelAfterFirstPut(this.inner, this.close);
+
+  final _Uploads inner;
+  final void Function() close;
+
+  @override
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async {
+    await inner.put(uploadUrl, bytes: bytes, headers: headers);
+    close();
+  }
 }
 
 void main() {
@@ -148,6 +170,40 @@ void main() {
       throwsA(isA<ExportException>().having((e) => e.outcome, 'outcome', ExportOutcome.busy)),
     );
     expect([busy.grants, busy.composes], [1, kComposeTries]);
+  });
+
+  test('an export given up on after its grant is released on the server; a made or refused-at-grant one is not', () async {
+    Future<_Repo> run({_Repo? repo, _Uploads? uploads, bool Function()? cancelled}) async {
+      final r = repo ?? _Repo();
+      try {
+        await exportPdf(r, uploads ?? _Uploads(), 'b1', [Uint8List(1), Uint8List(2)], wait: (_) async {}, cancelled: cancelled);
+      } on ExportException {
+        // the outcome is the other tests'
+      }
+      return r;
+    }
+
+    expect((await run()).released, isEmpty);
+    expect((await run(repo: _Repo()..error = const AppError(AppErrorKind.unknown, code: 'COMM.WHITEBOARD_LIMIT'))).released, isEmpty);
+    // Still busy after the last try: the same grants, released.
+    final busy = await run(repo: _Repo()..composeErrors.addAll(List.filled(10, const AppError(AppErrorKind.rateLimited))));
+    expect(busy.released, [
+      ['e0', 'e1'],
+    ]);
+    expect((await run(repo: _Repo()..composeErrors.add(const AppError(AppErrorKind.unknown, code: 'COMM.WHITEBOARD_STATE')))).released, hasLength(1));
+    expect((await run(uploads: _Uploads()..error = StateError('PUT failed'))).released, hasLength(1));
+    // The editor closed mid-export: no compose, released.
+    var closed = false;
+    final uploads = _Uploads();
+    final repo = _Repo();
+    final cancelling = _CancelAfterFirstPut(uploads, () => closed = true);
+    try {
+      await exportPdf(repo, cancelling, 'b1', [Uint8List(1), Uint8List(2)], wait: (_) async {}, cancelled: () => closed);
+      fail('not cancelled');
+    } on ExportException catch (e) {
+      expect(e.outcome, ExportOutcome.cancelled);
+    }
+    expect([repo.composes, repo.released.length, uploads.urls.length], [0, 1, 1]);
   });
 
   test('nothing is exported while an image is on its way; a stuck one is waited for only so long', () async {

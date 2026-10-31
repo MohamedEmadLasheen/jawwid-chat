@@ -303,4 +303,21 @@ describe('PR-4: the image and export routes over HTTP', () => {
     expect([refused.status, refused.code]).toEqual([422, 'COMM.WHITEBOARD_INVALID']);
     expect((await http(teacher.subject, 'GET', `/whiteboards/${b.id}`)).status).toBe(200);
   });
+
+  it('DELETE an export given up on: the owner releases it; another teacher gets 404 and staff 403 (review of #335)', async () => {
+    await flags(true);
+    const teacher = m.teachers[3]!;
+    const b = await newBoard(teacher.subject);
+    const ex = await http(teacher.subject, 'POST', `/whiteboards/${b.id}/exports/grant`, { pages: [{ byteSize: 100 }] });
+    const pages = [{ assetId: ex.json.pages[0].assetId, objectKey: ex.json.pages[0].upload.objectKey }];
+    const other = m.teachers.find((x) => x.subject !== teacher.subject)!;
+    expect((await http(other.subject, 'DELETE', `/whiteboards/${b.id}/exports`, { pages })).status).toBe(404);
+    for (const staff of [m.superAdmin, m.teachersManager]) {
+      expect((await http(staff.subject, 'DELETE', `/whiteboards/${b.id}/exports`, { pages })).status).toBe(403);
+    }
+    const released = await http(teacher.subject, 'DELETE', `/whiteboards/${b.id}/exports`, { pages });
+    expect([released.status, released.json.released]).toEqual([200, 1]);
+    const again = await http(teacher.subject, 'DELETE', `/whiteboards/${b.id}/exports`, { pages });
+    expect([again.status, again.json.released]).toEqual([200, 0]);
+  });
 });

@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-554 routes.
+555 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -557,6 +557,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/whiteboards/:id/assets/:assetId/confirm` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.confirmImage` |
 | POST | `/api/v1/whiteboards/:id/assets/grant` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.grantImage` |
 | POST | `/api/v1/whiteboards/:id/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicate` |
+| DELETE | `/api/v1/whiteboards/:id/exports` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.releaseExport` |
 | POST | `/api/v1/whiteboards/:id/exports/compose` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.composeExport` |
 | POST | `/api/v1/whiteboards/:id/exports/grant` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.grantExport` |
 | POST | `/api/v1/whiteboards/:id/pages` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.addPage` |

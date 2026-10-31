@@ -90,40 +90,68 @@ const int kComposeTries = 4;
 /// A compose turned away because the workers are busy (429) is asked again
 /// with the SAME grants, after the server's Retry-After or a growing wait
 /// (review of #335): new grants would leave these pending for an hour,
-/// counting toward the teacher's five exports in flight.
+/// counting toward the teacher's five exports in flight. Given up on in any
+/// way after its grant -- an upload that fails, a refusal, still busy after
+/// the last try, or [cancelled] (the editor closed) -- the export is
+/// released on the server at once, quietly.
 Future<Uint8List> exportPdf(
   WhiteboardsRepository repo,
   AttachmentUploader uploads,
   String boardId,
   List<Uint8List> pngs, {
   Future<void> Function(Duration) wait = _wait,
+  bool Function()? cancelled,
 }) async {
   final List<ImageGrant> grants;
   try {
     grants = await repo.grantExport(boardId, [for (final p in pngs) p.length]);
-    if (grants.length != pngs.length) throw const ExportException(ExportOutcome.failed);
-    for (var i = 0; i < pngs.length; i++) {
-      await uploads.put(grants[i].uploadUrl, bytes: pngs[i], headers: grants[i].headers);
-    }
-  } on ExportException {
-    rethrow;
   } on AppError catch (e) {
     throw ExportException(_grantRefusal(e));
   } on Object {
     throw const ExportException(ExportOutcome.failed);
   }
-  for (var attempt = 1; ; attempt++) {
-    try {
-      return await repo.composeExport(boardId, grants);
-    } on AppError catch (e) {
-      if (e.kind == AppErrorKind.rateLimited && attempt < kComposeTries) {
-        await wait(e.retryAfter ?? Duration(seconds: 2 << attempt));
-        continue;
-      }
-      throw ExportException(_composeRefusal(e));
-    } on Object {
-      throw const ExportException(ExportOutcome.failed);
+  try {
+    if (grants.length != pngs.length) throw const ExportException(ExportOutcome.failed);
+    void stopIfCancelled() {
+      if (cancelled?.call() ?? false) throw const ExportException(ExportOutcome.cancelled);
     }
+
+    for (var i = 0; i < pngs.length; i++) {
+      stopIfCancelled();
+      try {
+        await uploads.put(grants[i].uploadUrl, bytes: pngs[i], headers: grants[i].headers);
+      } on Object {
+        throw const ExportException(ExportOutcome.failed);
+      }
+    }
+    for (var attempt = 1; ; attempt++) {
+      stopIfCancelled();
+      try {
+        return await repo.composeExport(boardId, grants);
+      } on AppError catch (e) {
+        if (e.kind == AppErrorKind.rateLimited && attempt < kComposeTries) {
+          await wait(e.retryAfter ?? Duration(seconds: 2 << attempt));
+          continue;
+        }
+        throw ExportException(_composeRefusal(e));
+      } on Object {
+        throw const ExportException(ExportOutcome.failed);
+      }
+    }
+  } on ExportException {
+    await _release(repo, boardId, grants);
+    rethrow;
+  }
+}
+
+/// Lets an export go on the server; a failure here changes nothing for the
+/// teacher (what is not released runs out within the hour).
+Future<void> _release(WhiteboardsRepository repo, String boardId, List<ImageGrant> grants) async {
+  if (grants.isEmpty) return;
+  try {
+    await repo.releaseExport(boardId, grants);
+  } on Object {
+    // Quietly: the export's own outcome is what the teacher hears.
   }
 }
 
