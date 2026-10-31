@@ -66,6 +66,13 @@ export class S3ObjectStorage implements ObjectStorage {
       // DNS label of the endpoint, which is true for AWS and not reliably true
       // for R2 or a self-hosted MinIO. Path style works on all three.
       forcePathStyle: true,
+      // PARENT-008: no flexible checksums. Since @aws-sdk/client-s3 3.729 the
+      // default (WHEN_SUPPORTED) makes the presigner bake x-amz-checksum-crc32 --
+      // the CRC32 of the EMPTY body it signs without -- into every upload URL,
+      // which a store that checks it refuses for any real file. We never hand
+      // the SDK a body to sign; integrity is the signed content-length/type.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
