@@ -68,6 +68,17 @@ STORAGE_BUCKET	storage	no	req	req	req
 STORAGE_ACCESS_KEY	storage	yes	req	req	req
 STORAGE_SECRET_KEY	storage	yes	req	req	req
 STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
+# How long the S3 client waits (s3-object-storage.ts, STORAGE_TIMEOUT_DEFAULTS).
+# Optional everywhere: unset means 3000 ms to connect and 5000 ms to response
+# headers per attempt, 3 attempts (the SDK's own count, so 503 SlowDown keeps its
+# retries). A hung endpoint then costs a call -- or a media read, whose HEAD + GET
+# share one budget -- about 15 s instead of minutes. CopyObject has its own 60 s
+# per attempt. NOT a limit on a streamed body: a slow reader may pause a video
+# for as long as it likes. Out-of-range values refuse to start (connect
+# 100..60000, request 100..300000, attempts 1..5).
+STORAGE_CONNECT_TIMEOUT_MS	storage	no	opt	opt	opt
+STORAGE_REQUEST_TIMEOUT_MS	storage	no	opt	opt	opt
+STORAGE_MAX_ATTEMPTS	storage	no	opt	opt	opt
 STORAGE_SIGNING_SECRET	storage	yes	req	req	req
 # RT-037 (2026-10-14): attachment and story media links point at THIS API's
 # access-checked media route. The base is MEDIA_PUBLIC_BASE_URL when set (the
