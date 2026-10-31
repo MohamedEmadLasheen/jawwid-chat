@@ -529,3 +529,183 @@ describe('PD-27 over HTTP', () => {
     expect(after.json.payments.find((p: any) => p.instalmentId === id)).toMatchObject({ method: 'cash', amountMinor: 20000 });
   });
 });
+
+/**
+ * ADMIN-001 (systest c1838fdf): manual payments and refunds were not
+ * idempotent -- the same cash payment sent twice at once, then again, wrote 3
+ * payments, 3 invoices and 3 audit rows; a refund sent twice at once wrote 2.
+ * A money-recording POST now carries a client key (paymentId / refundId; the
+ * receipt's own objectKey), generated once per submit and resent on retry.
+ */
+describe('ADMIN-001: money is recorded once per submit', () => {
+  const count = async (familyId: string) => ({
+    payments: await g.prisma.payment.count({ where: { familyId } }),
+    invoices: await g.prisma.invoice.count({
+      where: { paymentId: { in: (await g.prisma.payment.findMany({ where: { familyId }, select: { id: true } })).map((p) => p.id) } },
+    }),
+    audits: await g.prisma.auditLog.count({ where: { action: 'payment.recorded', entityId: familyId } }),
+  });
+
+  it('a cash payment sent twice at once, then again with the same key: one payment, one invoice, one audit row', async () => {
+    const { f } = familyOf(20);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const body = { method: 'cash', amountMinor: 12000, paidOn: today(), reference: 'Receipt book 7', paymentId: randomUUID() };
+    const [a, b] = await Promise.all([
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, body),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, body),
+    ]);
+    expect([a.status, b.status]).toEqual([201, 201]);
+    const replay = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, body);
+    expect(replay.status).toBe(201);
+    expect(await count(f.id)).toEqual({ payments: 1, invoices: 1, audits: 1 });
+    // The answer to a replay is the family as the first submit left it.
+    expect(replay.json.payments.map((p: any) => p.id)).toEqual([body.paymentId]);
+  });
+
+  it('the same key for a different payment is refused (409) and writes nothing', async () => {
+    const { f } = familyOf(21);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const paymentId = randomUUID();
+    expect((await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5000, paidOn: today(), paymentId })).status).toBe(201);
+    const other = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5001, paidOn: today(), paymentId });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    // ...and another recorder may not replay someone else's submit either.
+    const stranger = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5000, paidOn: today(), paymentId });
+    expect(stranger.status).toBe(409);
+    expect(await count(f.id)).toEqual({ payments: 1, invoices: 1, audits: 1 });
+  });
+
+  it('a refund sent twice at once, then again: one refund; the same key for another amount is refused', async () => {
+    const { f } = familyOf(22);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const paid = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 20000, paidOn: today(), paymentId: randomUUID() });
+    const paymentId = paid.json.payments[0].id;
+    const body = { amountMinor: 3000, reason: 'one lesson not held', refundId: randomUUID() };
+    const [a, b] = await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
+      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
+    ]);
+    expect([a.status, b.status]).toEqual([201, 201]);
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+    const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { ...body, amountMinor: 3001 });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+  });
+
+  it('"this instalment is paid" sent twice at once: one payment -- with the same key, and even with none', async () => {
+    const { f, supervisor } = familyOf(23);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Term', items: [{ amountMinor: 9000, dueDate: '2026-11-01' }, { amountMinor: 9000, dueDate: '2026-12-01' }],
+    });
+    const [first, second] = plan.json.instalments as any[];
+    const keyed = { paidOn: today(), method: 'cash', paymentId: randomUUID() };
+    const keyedAnswers = await Promise.all([
+      http(supervisor.subject, 'POST', `/instalments/${first.id}/payment`, keyed),
+      http(supervisor.subject, 'POST', `/instalments/${first.id}/payment`, keyed),
+    ]);
+    expect(keyedAnswers.map((r) => r.status)).toEqual([201, 201]);
+    expect(await g.prisma.payment.count({ where: { instalmentId: first.id } })).toBe(1);
+    // An old client sends no key: the instalment's row lock still lets only one through.
+    const unkeyed = await Promise.all([
+      http(supervisor.subject, 'POST', `/instalments/${second.id}/payment`, { paidOn: today(), method: 'cash' }),
+      http(supervisor.subject, 'POST', `/instalments/${second.id}/payment`, { paidOn: today(), method: 'cash' }),
+    ]);
+    expect(unkeyed.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await g.prisma.payment.count({ where: { instalmentId: second.id } })).toBe(1);
+  });
+
+  it('a parent\'s receipt sent twice at once, then again: one receipt; the same file for another amount is refused', async () => {
+    const { f } = familyOf(25);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const requestId = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'balance', label: 'Outstanding balance', amountMinor: 40000,
+    })).json.request.id;
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+    const grant = await http(f.parent.subject, 'POST', '/me/billing/receipts/upload', { mimeType: 'image/jpeg', byteSize: bytes.length });
+    const route = grant.json.uploadUrl.slice(grant.json.uploadUrl.indexOf('/storage/'));
+    const put = await fetch(`${base}${route}`, {
+      method: 'PUT', headers: { ...grant.json.headers, authorization: `Bearer ${await tokenFor(f.parent.subject)}` }, body: bytes,
+    });
+    expect(put.status).toBe(201);
+    const body = { objectKey: grant.json.objectKey, requestId, amountMinor: 40000, transferredOn: today(), note: 'ref 5521' };
+    const sent = await Promise.all([
+      http(f.parent.subject, 'POST', '/me/billing/receipts', body),
+      http(f.parent.subject, 'POST', '/me/billing/receipts', body),
+    ]);
+    expect(sent.map((r) => r.status)).toEqual([201, 201]);
+    expect((await http(f.parent.subject, 'POST', '/me/billing/receipts', body)).status).toBe(201);
+    expect(await g.prisma.paymentReceipt.count({ where: { familyId: f.id } })).toBe(1);
+    const other = await http(f.parent.subject, 'POST', '/me/billing/receipts', { ...body, amountMinor: 39999 });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(await g.prisma.paymentReceipt.count({ where: { familyId: f.id } })).toBe(1);
+  });
+
+  it('a void sent twice at once voids once (one audit row); the second is told it is already voided', async () => {
+    const { f } = familyOf(24);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const paid = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 1000, paidOn: today(), paymentId: randomUUID() });
+    const id = paid.json.payments[0].id;
+    const answers = await Promise.all([
+      http(m.salesManager.subject, 'POST', `/payments/${id}/void`, { reason: 'wrong family' }),
+      http(m.salesManager.subject, 'POST', `/payments/${id}/void`, { reason: 'wrong family' }),
+    ]);
+    expect(answers.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await g.prisma.auditLog.count({ where: { action: 'payment.voided', entityId: f.id } })).toBe(1);
+  });
+});
+
+/**
+ * ADMIN-007: two staff editing one family's billing settings at once used to
+ * be last-write-wins, and the audit's before-image was read before the
+ * transaction, so it could name values the edit never overwrote.
+ */
+describe('ADMIN-007: billing settings edits are versioned', () => {
+  it('two edits from the same version at once: one wins, the other is 409 with the current settings; the audit names the true before and after', async () => {
+    const { f } = familyOf(26);
+    const first = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED', paymentMethod: 'invoice' });
+    expect(first.status).toBe(201);
+    const version = first.json.settingsVersion as string;
+    expect(version).toEqual(expect.any(String));
+
+    const [a, b] = await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { paymentMethod: 'bank_transfer', version }),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/billing`, { currency: 'EGP', version }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([201, 409]);
+    const lost = a.status === 409 ? a : b;
+    const won = a.status === 409 ? b : a;
+    expect(lost.code).toBe(CommErrorCode.BILLING_STATE);
+    // The refusal carries what the settings are now (the winner's), with their version.
+    expect((lost.json.error as any)?.detail?.current).toMatchObject({
+      paymentMethod: won.json.paymentMethod, currency: won.json.currency, settingsVersion: won.json.settingsVersion,
+    });
+
+    // Exactly one change was recorded, and its before/after are the real ones.
+    const rows = await g.prisma.auditLog.findMany({ where: { action: 'family.billing_set', entityId: f.id }, orderBy: { id: 'asc' } });
+    expect(rows).toHaveLength(2); // the initial set, and the one winner
+    const winner = rows[1]!;
+    expect(winner.before).toEqual({ paymentMethod: 'invoice', currency: 'AED', planMonths: null });
+    expect(winner.after).toMatchObject({ paymentMethod: won.json.paymentMethod, currency: won.json.currency });
+
+    // A stale version afterwards is refused too; the current one goes through.
+    expect((await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { planMonths: 3, version })).status).toBe(409);
+    expect((await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { planMonths: 3, version: won.json.settingsVersion })).status).toBe(201);
+  });
+
+  it('an edit with no version (an older client) is still serialized and audited with the true before-image', async () => {
+    const { f } = familyOf(27);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'EGP' }),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/billing`, { currency: 'SAR' }),
+    ]);
+    const rows = await g.prisma.auditLog.findMany({ where: { action: 'family.billing_set', entityId: f.id }, orderBy: { id: 'asc' } });
+    expect(rows).toHaveLength(3);
+    // Each before is the previous after: no edit claims to have overwritten a value it never saw.
+    expect((rows[1]!.before as any).currency).toBe('AED');
+    expect((rows[2]!.before as any).currency).toBe((rows[1]!.after as any).currency);
+  });
+});

@@ -57,10 +57,12 @@ class HttpSalesPaymentsRepository implements SalesPaymentsRepository {
     String instalmentId, {
     required DateTime paidOn,
     required BillingMethod method,
+    required String paymentId,
     String? reference,
   }) async {
     final ref = reference?.trim();
     final d = (await _client.post<Map<String, Object?>>('/instalments/$instalmentId/payment', data: {
+      'paymentId': paymentId,
       'paidOn': calendarDay(paidOn),
       'method': switch (method) {
         BillingMethod.invoice => 'invoice',

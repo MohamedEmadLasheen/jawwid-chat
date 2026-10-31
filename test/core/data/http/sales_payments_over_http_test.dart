@@ -148,10 +148,13 @@ void main() {
       'i1',
       paidOn: DateTime(2026, 10, 20, 23, 30),
       method: BillingMethod.invoice,
+      paymentId: '6f1c2b7e-3a4d-4e5f-8a9b-0c1d2e3f4a5b',
       reference: ' INV-7 ',
     );
 
     expect(server.lastRequestTo('POST', '/instalments/i1/payment')!.json, {
+      // ADMIN-001: the submit's idempotency key, as given.
+      'paymentId': '6f1c2b7e-3a4d-4e5f-8a9b-0c1d2e3f4a5b',
       'paidOn': '2026-10-20',
       'method': 'invoice',
       'reference': 'INV-7',
@@ -166,9 +169,9 @@ void main() {
   test('an empty reference is not sent; bank transfer is spelled the server\'s way', () async {
     server.on('POST', '/instalments/i1/payment', [Reply.ok(billingBody(status: 'paid'))]);
 
-    await repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.bankTransfer, reference: '  ');
+    await repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.bankTransfer, paymentId: 'k-2', reference: '  ');
 
-    expect(server.lastRequestTo('POST', '/instalments/i1/payment')!.json, {'paidOn': '2026-10-22', 'method': 'bank_transfer'});
+    expect(server.lastRequestTo('POST', '/instalments/i1/payment')!.json, {'paymentId': 'k-2', 'paidOn': '2026-10-22', 'method': 'bank_transfer'});
   });
 
   test('POST /instalments/:id/void sends the reason', () async {
@@ -185,7 +188,7 @@ void main() {
     server.on('POST', '/instalments/i1/void', [Reply.commError(400, 'VALIDATION')]);
 
     await expectLater(
-      repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.invoice),
+      repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.invoice, paymentId: 'k-3'),
       throwsA(isA<AppError>().having((e) => e.code, 'code', 'COMM.BILLING_STATE')),
     );
     await expectLater(
