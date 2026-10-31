@@ -43,6 +43,16 @@ export interface BoardDetail extends BoardSummary {
   /** Always false here: staff never edit a teacher's board. */
   canEdit: boolean
   pages: BoardPageJson[]
+  /** PR-4: the board's images, each with a short-lived signed URL. */
+  assets?: BoardAssetJson[]
+}
+
+export interface BoardAssetJson {
+  id: string
+  url: string
+  width: number | null
+  height: number | null
+  expiresAt: string
 }
 
 export interface AccessLogEntry {

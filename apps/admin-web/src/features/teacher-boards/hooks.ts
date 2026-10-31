@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lookupVerse, verseKey, type BoardPage, type VerseLookup, type VerseRef } from './board'
-import { teacherBoardsApi, teacherBoardsKeys } from './api'
+import { teacherBoardsApi, teacherBoardsKeys, type BoardAssetJson } from './api'
+import type { ImageLookup } from './render'
 
 /**
  * Every read here is logged by the server (§10 1c), so none is repeated behind
@@ -67,4 +68,36 @@ export function useVerseTexts(page: BoardPage | null): (ref: VerseRef) => VerseL
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `settled` stands for `results`
   }, [refs, settled])
+}
+
+/**
+ * PR-4: the board's images, loaded once each from the signed URLs the board
+ * answer carried (an <img> request: the storage origin is in img-src). A URL
+ * that has run out shows as unavailable; opening the board again signs anew
+ * (and is logged, as every open is).
+ */
+export function useBoardImages(assets: BoardAssetJson[] | undefined): (assetId: string) => ImageLookup {
+  const [loaded, setLoaded] = useState<Record<string, ImageLookup>>({})
+  const started = useRef(new Set<string>())
+  useEffect(() => {
+    let live = true
+    for (const a of assets ?? []) {
+      const id = a.id.toLowerCase()
+      if (started.current.has(id)) continue
+      started.current.add(id)
+      const img = new Image()
+      img.decoding = 'async'
+      img.onload = () => live && setLoaded((s) => ({ ...s, [id]: { status: 'ready', source: img } }))
+      img.onerror = () => live && setLoaded((s) => ({ ...s, [id]: { status: 'unavailable' } }))
+      img.src = a.url
+    }
+    return () => {
+      live = false
+    }
+  }, [assets])
+  const known = useMemo(() => new Set((assets ?? []).map((a) => a.id.toLowerCase())), [assets])
+  return useCallback(
+    (assetId: string): ImageLookup => loaded[assetId] ?? (known.has(assetId) ? { status: 'loading' } : { status: 'unavailable' }),
+    [loaded, known],
+  )
 }

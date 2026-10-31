@@ -18,7 +18,7 @@ export function familyLoaded(set: Iterable<FontFace>, family: string): boolean {
  * is a "loading" box, and if it fails to load the box says the text is
  * unavailable -- never a fallback face (review of #304).
  */
-export function BoardCanvas({ page, verse, label, ariaLabel }: { page: BoardPage; ariaLabel: string } & DrawOptions) {
+export function BoardCanvas({ page, verse, image, label, ariaLabel }: { page: BoardPage; ariaLabel: string } & DrawOptions) {
   const ref = useRef<HTMLCanvasElement>(null)
   const [fonts, setFonts] = useState(0)
   const [width, setWidth] = useState(0)
@@ -63,8 +63,8 @@ export function BoardCanvas({ page, verse, label, ariaLabel }: { page: BoardPage
     canvas.width = Math.round(cssWidth * scale)
     canvas.height = Math.round((cssWidth * scale * PAGE_HEIGHT) / PAGE_WIDTH)
     ctx.setTransform(canvas.width / PAGE_WIDTH, 0, 0, canvas.height / PAGE_HEIGHT, 0, 0)
-    drawPage(ctx, page, { verse: verseInFont, label })
-  }, [page, verseInFont, label, fonts, width])
+    drawPage(ctx, page, { verse: verseInFont, image, label })
+  }, [page, verseInFont, image, label, fonts, width])
 
   return <canvas ref={ref} className="tb-canvas" role="img" aria-label={ariaLabel} />
 }
