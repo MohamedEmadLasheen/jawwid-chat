@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-542 routes.
+543 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -156,6 +156,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/courses` | lessons.view | `lessons/journey.controller.ts#JourneyController.courses` |
 | POST | `/api/v1/courses` | lessons.courses | `lessons/journey.controller.ts#JourneyController.createCourse` |
 | POST | `/api/v1/courses/:id` | lessons.courses | `lessons/journey.controller.ts#JourneyController.updateCourse` |
+| GET | `/api/v1/dashboard/billing` | billing.view | parents.view | `dashboard/dashboard.controller.ts#DashboardController.billingSection` |
 | GET | `/api/v1/dashboard/cases` | cases.view | `dashboard/dashboard.controller.ts#DashboardController.casesSection` |
 | GET | `/api/v1/dashboard/chats` | chat.use | `dashboard/dashboard.controller.ts#DashboardController.chats` |
 | GET | `/api/v1/dashboard/enrolment` | trials.view | new_students.view | `dashboard/dashboard.controller.ts#DashboardController.enrolmentSection` |
