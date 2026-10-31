@@ -1,5 +1,6 @@
 import pin from '../../quran-pin.json';
 import type { Surah } from '../quran/dataset';
+import { isWithheld } from './release';
 
 /**
  * A lesson's reviewed content (PD-29 P0-4): prose -- tafsir lines, word
@@ -91,6 +92,10 @@ function isContent(x: unknown): x is LessonContent {
 }
 
 export function resolveContent(content: unknown, surah: Surah): ResolvedContent | null {
+  // A pending file reaches a family build only as a stub (release.ts): the lesson is under review.
+  if (isWithheld(content)) {
+    return { intro: null, tafsir: new Map(), words: [], complete: [], quiz: [], lessons: [], reflection: null, didYouKnow: [], held: 0, approved: false };
+  }
   if (!isContent(content)) return null;
   if (content.surah !== surah.info.number || content.datasetId !== pin.datasetId) return null;
   const verses = surah.ayahs.map((a) => a.text);
