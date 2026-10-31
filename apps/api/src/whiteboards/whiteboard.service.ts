@@ -96,7 +96,7 @@ export interface BoardDetail extends BoardSummary {
   assets: AssetView[];
 }
 
-/** A copy's images, already copied in storage to keys of the new board (copyImagesAhead). */
+/** A copy's images and the keys their copies get under the new board (planImageCopy). */
 interface ImagePlan {
   boardId: string;
   images: Array<AssetRow & { sha256: string | null }>;
@@ -257,18 +257,21 @@ export class WhiteboardService {
       await this.assertCopyFits(tx, teacherId, source.id);
       return source;
     });
-    const plan = await this.copyImagesAhead(first, organizationId);
-    return this.withCopiedImages(plan, () =>
-      this.write(async (tx) => {
-        await this.lockTeacher(tx, teacherId);
-        const source = await this.ownBoard(tx, boardId, teacherId, organizationId);
-        if (source.state !== 'active') throw state('only a board in use can be duplicated');
-        await this.assertBoardRoom(tx, teacherId);
-        const copy = await this.copyBoard(tx, source, teacherId, organizationId, this.copyTitle(source.title), plan);
-        await this.assertQuota(tx, teacherId);
-        return this.detail(tx, await this.ownBoard(tx, copy, teacherId, organizationId), true);
-      }),
-    );
+    const plan = await this.planImageCopy(first, organizationId);
+    const copy = await this.write(async (tx) => {
+      await this.lockTeacher(tx, teacherId);
+      const source = await this.ownBoard(tx, boardId, teacherId, organizationId);
+      if (source.state !== 'active') throw state('only a board in use can be duplicated');
+      await this.assertBoardRoom(tx, teacherId);
+      const id = await this.copyBoard(tx, source, teacherId, organizationId, this.copyTitle(source.title), plan);
+      await this.assertQuota(tx, teacherId);
+      return id;
+    });
+    await this.copyImageObjects(plan);
+    return this.write(async (tx) => {
+      await this.imagesCopied(tx, plan);
+      return this.detail(tx, await this.ownBoard(tx, copy, teacherId, organizationId), true);
+    });
   }
 
   /** §10 4d: to Deleted boards for 30 days. Nothing is removed until the purge. */
@@ -505,19 +508,24 @@ export class WhiteboardService {
       await this.assertCopyFits(tx, target, source.id);
       return source;
     });
-    const plan = await this.copyImagesAhead(first, first.organization_id);
-    return this.withCopiedImages(plan, () =>
-      this.write(async (tx) => {
-        const { source, basis } = await check(tx);
-        await this.lockTeacher(tx, target);
-        await this.assertBoardRoom(tx, target);
-        const copy = await this.copyBoard(tx, source, target, source.organization_id, source.title, plan);
-        await this.assertQuota(tx, target);
-        await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target });
-        const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
-        return summary(row);
-      }),
-    );
+    const plan = await this.planImageCopy(first, first.organization_id);
+    const copy = await this.write(async (tx) => {
+      const { source } = await check(tx);
+      await this.lockTeacher(tx, target);
+      await this.assertBoardRoom(tx, target);
+      const id = await this.copyBoard(tx, source, target, source.organization_id, source.title, plan);
+      await this.assertQuota(tx, target);
+      return id;
+    });
+    await this.copyImageObjects(plan);
+    return this.write(async (tx) => {
+      const { source, basis } = await check(tx);
+      await this.imagesCopied(tx, plan);
+      // Logged once the copy is whole: its images are where its pages say.
+      await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target });
+      const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
+      return summary(row);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -626,6 +634,8 @@ export class WhiteboardService {
    */
   async imageUrls(boardId: string, actor: Actor): Promise<{ assets: AssetView[] }> {
     const { teacherId, organizationId } = this.teacher(actor);
+    // Off with the rest of images (review of #325): nothing is signed while they are.
+    await this.assetsOn();
     const support = currentImpersonationId();
     return this.read(async (tx) => {
       const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
@@ -1059,12 +1069,11 @@ export class WhiteboardService {
   }
 
   /**
-   * The ready images a copy will take, copied in storage to keys of the new
-   * board BEFORE any row is written (review of #305): no storage call runs
-   * inside a transaction, and if the rows then fail, withCopiedImages
-   * deletes these copies. The new board's id is chosen here for its keys.
+   * The ready images a copy will take, and the ids and keys their copies get
+   * under the new board (whose id is chosen here). No storage call: the
+   * objects are copied only once their rows exist (copyImageObjects).
    */
-  private async copyImagesAhead(source: BoardRow, organizationId: string): Promise<ImagePlan> {
+  private async planImageCopy(source: BoardRow, organizationId: string): Promise<ImagePlan> {
     const images = await this.prisma.$queryRaw<Array<AssetRow & { sha256: string | null }>>`
       SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height, sha256
         FROM chat.whiteboard_asset
@@ -1073,8 +1082,36 @@ export class WhiteboardService {
     const boardId = randomUUID();
     const renamed = new Map(images.map((a) => [a.id, randomUUID()]));
     const keys = images.map((a) => keptKey(organizationId, boardId, renamed.get(a.id) as string));
-    await this.assets.copyAll(images.map((a, i) => ({ from: a.object_key, to: keys[i] as string })));
     return { boardId, images, renamed, keys };
+  }
+
+  /**
+   * The copy's objects, written AFTER their rows (review of #325): every object
+   * a copy writes has a `pending` row with an expiry, so nothing can be left in
+   * storage that no sweep finds -- a crash between the two leaves rows the
+   * abandoned-upload sweep removes, objects and all. If the copying fails here,
+   * the new board is taken back at once: its rows, and what was copied.
+   */
+  private async copyImageObjects(plan: ImagePlan): Promise<void> {
+    if (plan.images.length === 0) return;
+    try {
+      await this.assets.copyAll(plan.images.map((a, i) => ({ from: a.object_key, to: plan.keys[i] as string })));
+    } catch (e) {
+      // copyAll has deleted what it copied; the rows go with the board.
+      await this.prisma.$executeRaw`DELETE FROM chat.whiteboard WHERE id = ${plan.boardId}::uuid`.catch((err) =>
+        this.log.warn(`unfinished copy ${plan.boardId} not taken back (the sweep will clear its images): ${String(err)}`),
+      );
+      throw e;
+    }
+  }
+
+  /** The copy's images are in storage: they become ready (and stop expiring). */
+  private async imagesCopied(tx: Tx, plan: ImagePlan): Promise<void> {
+    if (plan.images.length === 0) return;
+    const n = await tx.$executeRaw`
+      UPDATE chat.whiteboard_asset SET state = 'ready', expires_at = NULL
+       WHERE board_id = ${plan.boardId}::uuid AND state = 'pending'`;
+    if (n !== plan.images.length) throw state('the copy took too long; copy the board again');
   }
 
   /**
@@ -1094,18 +1131,11 @@ export class WhiteboardService {
     await this.assertAssetQuota(tx, teacherId, Number(images));
   }
 
-  private async withCopiedImages<T>(plan: ImagePlan, fn: () => Promise<T>): Promise<T> {
-    try {
-      return await fn();
-    } catch (e) {
-      await this.assets.deleteQuietly(plan.keys);
-      throw e;
-    }
-  }
+
 
   /**
    * A new board of `teacherId` (id `plan.boardId`) with the source's pages
-   * and the images copyImagesAhead already copied (§10 4a): the pages name
+   * and rows for its images, `pending` until copyImageObjects has copied them (§10 4a): the pages name
    * the copies, so the new board never points at the old one's objects. An
    * image added to the source since the plan refuses the copy (it would be
    * missing). Unconfirmed uploads and exports are not copied.
@@ -1140,8 +1170,9 @@ export class WhiteboardService {
     for (const [i, a] of plan.images.entries()) {
       const to = plan.renamed.get(a.id) as string;
       await tx.$executeRaw`
-        INSERT INTO chat.whiteboard_asset (id, board_id, kind, object_key, content_type, byte_size, sha256, width, height, state)
-        VALUES (${to}::uuid, ${id}::uuid, ${a.kind}, ${plan.keys[i]}, ${a.content_type}, ${a.byte_size}, ${a.sha256}, ${a.width}, ${a.height}, 'ready')`;
+        INSERT INTO chat.whiteboard_asset (id, board_id, kind, object_key, content_type, byte_size, sha256, width, height, state, expires_at)
+        VALUES (${to}::uuid, ${id}::uuid, ${a.kind}, ${plan.keys[i]}, ${a.content_type}, ${a.byte_size}, ${a.sha256}, ${a.width}, ${a.height},
+                'pending', now() + interval '1 hour')`;
     }
     await this.assertAssetQuota(tx, teacherId, 0);
     return id;

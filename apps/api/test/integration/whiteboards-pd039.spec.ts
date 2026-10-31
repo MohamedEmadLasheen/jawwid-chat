@@ -463,6 +463,10 @@ describe('PR-4: images and export', () => {
     const b = await boards.create({ title: 'Off' }, t);
     expect(await code(boards.grantImage(b.id, { contentType: 'image/png', byteSize: 100 }, t))).toBe(CommErrorCode.WHITEBOARD_ASSETS_OFF);
     expect(await code(boards.grantExport(b.id, { pages: [{ byteSize: 100 }] }, t))).toBe(CommErrorCode.WHITEBOARD_ASSETS_OFF);
+    // Reading the images is off too, and logs nothing (review of #325).
+    const before = (await log(b.id)).length;
+    expect(await code(boards.imageUrls(b.id, t))).toBe(CommErrorCode.WHITEBOARD_ASSETS_OFF);
+    expect((await log(b.id)).length).toBe(before);
     expect((await snapshot(b.id))!.assets).toBe(0);
   });
 
@@ -598,8 +602,10 @@ describe('PR-4: images and export', () => {
     expect((refused as CommError).code).toBe(CommErrorCode.WHITEBOARD_INVALID);
     expect((refused as CommError).message).toBe('page 2: the PNG image data is damaged');
     expect((await log(b.id)).map((r) => r.action)).not.toContain('export');
-    // Nothing of it was kept; the rows wait for the sweep.
+    // Nothing of it was kept -- objects or rows (review of #325): a failed export
+    // does not count against the five a teacher may have under way.
     for (const p of grant.pages) expect(await blobs.get(p.upload.objectKey)).toBeNull();
+    expect((await snapshot(b.id))!.assets).toBe(0);
     expect((await boards.open(b.id, t)).id).toBe(b.id);
   });
 
@@ -800,5 +806,37 @@ describe('PR-4: images and export', () => {
     // Its page is untouched: the export can be made once the workers are free.
     const { pdf } = await boards.composeExport(b.id, { pages: [{ assetId: grant.pages[0]!.assetId, objectKey: grant.pages[0]!.upload.objectKey }] }, t);
     expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('a copy writes its images only once their rows exist, pending with an expiry, so a crash leaves nothing unsweepable (review of #325)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Rows first' }, t);
+    const ids = [(await addImage(b.id, t, png(20, 10))).asset.id, (await addImage(b.id, t, png(30, 10))).asset.id];
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: { v: 1, elements: ids.map((assetId, i) => ({ id: `i${i}`, kind: 'image', assetId, x: 0, y: 0, w: 10, h: 10 })) } }, t);
+    const assets = (boards as unknown as { assets: WhiteboardAssetService }).assets;
+    const real = assets.copyAll.bind(assets);
+    const during: Array<{ object_key: string; state: string; expiring: boolean }> = [];
+    const spy = jest.spyOn(assets, 'copyAll').mockImplementation(async (pairs) => {
+      // At the moment the objects are written, each already has its row: pending, expiring.
+      during.push(
+        ...(await g.prisma.$queryRaw<Array<{ object_key: string; state: string; expiring: boolean }>>`
+          SELECT object_key, state, (expires_at > now()) AS expiring FROM chat.whiteboard_asset
+           WHERE object_key = ANY(${pairs.map((p) => p.to)})`),
+      );
+      return real(pairs);
+    });
+    let copy;
+    try {
+      copy = await boards.duplicate(b.id, t);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(during).toHaveLength(2);
+    expect(during.every((r) => r.state === 'pending' && r.expiring)).toBe(true);
+    // Once copied: ready, and no longer expiring.
+    const [{ pending }] = await g.prisma.$queryRaw<Array<{ pending: number }>>`
+      SELECT count(*)::int AS pending FROM chat.whiteboard_asset WHERE board_id = ${copy.id}::uuid AND (state <> 'ready' OR expires_at IS NOT NULL)`;
+    expect(Number(pending)).toBe(0);
+    expect(copy.assets).toHaveLength(2);
   });
 });

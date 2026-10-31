@@ -244,7 +244,9 @@ describe('PR-4: the image and export routes over HTTP', () => {
       const r = await http(teacher.subject, method, path, body);
       expect([path, r.status, r.code]).toEqual([path, 503, 'COMM.WHITEBOARD_ASSETS_OFF']);
     }
-    expect((await http(teacher.subject, 'GET', `/whiteboards/${b.id}/assets`)).json).toEqual({ assets: [] });
+    // Off means off for reading too (review of #325): nothing is signed, and nothing logged.
+    const signedOff = await http(teacher.subject, 'GET', `/whiteboards/${b.id}/assets`);
+    expect([signedOff.status, signedOff.code]).toEqual([503, 'COMM.WHITEBOARD_ASSETS_OFF']);
     for (const staff of [m.superAdmin, m.teachersManager, m.teacherSupervisors[0]!]) {
       for (const [method, path, body] of [...routes, ['GET', `/whiteboards/${b.id}/assets`] as [string, string]]) {
         expect([path, (await http(staff.subject, method, path, body)).status]).toEqual([path, 403]);
