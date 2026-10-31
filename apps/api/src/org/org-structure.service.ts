@@ -206,7 +206,9 @@ export class OrgStructureService {
               await this.prisma.$queryRaw<Array<{ id: string }>>`
                 SELECT l.id::text AS id FROM chat.learner l
                  WHERE l.organization_id = ${org}::uuid
-                   AND NOT EXISTS (SELECT 1 FROM chat.learner_supervision ls WHERE ls.learner_id = l.id)`
+                   AND NOT EXISTS (SELECT 1 FROM chat.learner_supervision ls
+                                     JOIN chat.staff s ON s.id = ls.supervisor_id
+                                    WHERE ls.learner_id = l.id AND s.is_active AND s.left_at IS NULL)`
             ).map((r) => r.id)
           : [];
       where = { organizationId: org, id: { in: [...supervised.map((r) => r.learnerId), ...unassigned] } };
@@ -221,11 +223,15 @@ export class OrgStructureService {
     const supervision = await this.prisma.learnerSupervision.findMany({
       where: { learnerId: { in: rows.map((r) => r.id) } },
     });
-    const supervisorOf = new Map(supervision.map((r) => [r.learnerId, r.supervisorId]));
     const supervisors = await this.prisma.staff.findMany({
       where: { id: { in: [...new Set(supervision.map((r) => r.supervisorId))] } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, isActive: true, leftAt: true },
     });
+    // A supervisor who left supervises no one: their rows stay (no data is
+    // deleted), but the child is listed without a supervisor, to be reassigned
+    // -- as a teacher whose supervisor left is (TeacherSupervisorService).
+    const live = new Set(supervisors.filter((x) => x.isActive && x.leftAt === null).map((x) => x.id));
+    const supervisorOf = new Map(supervision.filter((r) => live.has(r.supervisorId)).map((r) => [r.learnerId, r.supervisorId]));
     const nameOf = new Map(supervisors.map((s) => [s.id, s.name]));
 
     return {
