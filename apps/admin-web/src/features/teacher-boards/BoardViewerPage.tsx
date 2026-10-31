@@ -67,7 +67,9 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
   const shown = pages[Math.min(index, pages.length - 1)]
   const page = useMemo(() => (shown ? parsePage(shown as unknown as Record<string, unknown>) : null), [shown])
   const verse = useVerseTexts(page)
-  const image = useBoardImages(board.assets)
+  // Only the page on view's images are loaded, as its strokes are (review of #336).
+  const pageImages = useMemo(() => (page?.elements ?? []).flatMap((e) => (e.kind === 'image' ? [e.assetId] : [])), [page])
+  const image = useBoardImages(board.assets, pageImages)
   const directory = useBoardTeachers()
   const teacherName = directory.data?.teachers.find((t) => t.id === board.teacherId)?.name
   const [copying, setCopying] = useState(false)
