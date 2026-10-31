@@ -1,6 +1,7 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
 import { HARAKA, isLetter, isMark, isWord, lettersOf } from '../arabic/letters';
 import { WORD_ID } from '../arabic/arabic-lesson';
+import { isWithheld } from '../content/release';
 
 /**
  * A reading lesson (PD-29 P0-5c, pd029-p05-reading-lessons-design.md): Arabic
@@ -111,7 +112,17 @@ export function isReadingLesson(x: unknown): x is ReadingLesson {
   return !!c && typeof c === 'object' && c.kind === 'reading' && Array.isArray(c.stages) && Array.isArray(c.quiz) && Array.isArray(c.retiredIds) && !!c.review;
 }
 
+/**
+ * Opens on the reading screen: a reading lesson, or a pending one that a family
+ * build withheld as {"withheld":true,"kind":"reading"} (release.ts).
+ */
+export function isReadingKind(x: unknown): boolean {
+  return isReadingLesson(x) || (isWithheld(x) && x.kind === 'reading');
+}
+
 export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedReading | null {
+  // A pending file reaches a family build only as a stub (release.ts): the lesson is under review.
+  if (isWithheld(raw)) return { stages: [], passages: [], quiz: [], held: 0, approved: false };
   if (!isReadingLesson(raw) || raw.lesson !== lesson) return null;
   const approved = raw.review.status === 'approved';
   let held = 0;
