@@ -190,4 +190,19 @@ describe('ADMIN-002 B: exceptional access to one family', () => {
       ),
     ).rejects.toThrow(/family_access_grant_window/);
   });
+
+  it('the Admin Web needs: a grantor learns who may receive a grant, anyone else only their own; an account row carries its family', async () => {
+    const manager = await access.list(await actor(s.managerId));
+    expect(manager.canGrant).toBe(true);
+    const ids = (manager.grantees ?? []).map((x) => x.id);
+    expect(ids).toEqual(expect.arrayContaining([s.ownerId, s.otherAdminId]));
+    expect(ids).not.toContain(s.managerId);
+    expect(ids).not.toContain(s.teacherId);
+    expect((await access.list(await actor(superId))).canGrant).toBe(true);
+
+    const b = await access.list(await actor(s.otherAdminId));
+    expect(b).toEqual({ grants: [], canGrant: false });
+
+    expect((await accounts.get(await actor(s.managerId), parentAccount)).familyId).toBe(s.familyId);
+  });
 });

@@ -42,6 +42,8 @@ export interface AccountSummaryDto {
   staffRole: string | null;
   /** Family accounts: the family, and its children -- an administrator looks a student up by name. */
   familyName: string | null;
+  /** ADMIN-002: the family, so a grantor can open it to one Operations staff member. */
+  familyId: string | null;
   children: string[];
   /** provisioned | active | suspended | deactivated */
   status: string;
@@ -478,6 +480,7 @@ export class AccountAdminService {
       name: row.staff?.name ?? row.teacher?.name ?? contact?.name ?? '',
       staffRole: row.staff?.role ?? null,
       familyName: contact?.family.displayName ?? null,
+      familyId: contact?.familyId ?? null,
       children: contact?.family.learners.map((l) => l.name) ?? [],
       status: row.status,
       hasLogin: row.credential !== null,

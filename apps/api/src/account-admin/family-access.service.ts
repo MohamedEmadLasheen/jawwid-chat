@@ -95,10 +95,13 @@ export class FamilyAccessService {
    * of the organization, live or ended in the last 30 days. Anyone else on
    * staff: their own live grants, with their expiry.
    */
-  async list(actor: Actor): Promise<{ grants: FamilyAccessGrantDto[] }> {
+  async list(
+    actor: Actor,
+  ): Promise<{ grants: FamilyAccessGrantDto[]; canGrant: boolean; grantees?: Array<{ id: string; name: string }> }> {
     const org = requireStaff(actor);
     const now = new Date();
-    const rows = (await this.mayGrant(actor, org))
+    const canGrant = await this.mayGrant(actor, org);
+    const rows = canGrant
       ? await this.prisma.familyAccessGrant.findMany({
           where: { organizationId: org, endsAt: { gt: new Date(now.getTime() - RECENT_DAYS * 86_400_000) } },
           orderBy: { createdAt: 'desc' },
@@ -108,7 +111,26 @@ export class FamilyAccessService {
           where: { organizationId: org, granteeId: actor.actorId, revokedAt: null, startsAt: { lte: now }, endsAt: { gt: now } },
           orderBy: { endsAt: 'asc' },
         });
-    return { grants: await this.dtos(rows) };
+    const grants = await this.dtos(rows);
+    return canGrant ? { grants, canGrant, grantees: await this.grantees(actor, org) } : { grants, canGrant };
+  }
+
+  /** Who may receive a grant: the organization's live Operations staff, never the grantor. The trigger has the last word. */
+  private async grantees(actor: Actor, org: string): Promise<Array<{ id: string; name: string }>> {
+    const members = await this.prisma.departmentMember.findMany({
+      where: { organizationId: org, department: { organizationId: org, kind: 'operations' } },
+      select: { staffId: true },
+    });
+    return this.prisma.staff.findMany({
+      where: {
+        organizationId: org,
+        isActive: true,
+        leftAt: null,
+        id: { in: members.map((m) => m.staffId).filter((id) => id !== actor.actorId) },
+      },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async revoke(actor: Actor, grantId: string, input: { reason?: unknown }): Promise<FamilyAccessGrantDto> {
