@@ -3,6 +3,8 @@
 // a still PNG first. It is uploaded by grant, PUT to the signed URL and
 // confirm, and every refusal tells the teacher which one it is. The board's
 // images are decoded once each, and a URL that ran out is signed again once.
+import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -22,6 +24,20 @@ Future<Uint8List> _png(int w, int h) async {
   final recorder = ui.PictureRecorder();
   ui.Canvas(recorder).drawRect(ui.Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), ui.Paint()..color = const ui.Color(0xFF2E7D32));
   final image = await recorder.endRecording().toImage(w, h);
+  return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+}
+
+/// A PNG of [w] x [h] random pixels: it does not compress, so 2,000 px square
+/// is about 16 MB.
+Future<Uint8List> _noisePng(int w, int h) async {
+  final rnd = Random(39);
+  final pixels = Uint8List(w * h * 4);
+  for (var i = 0; i < pixels.length; i++) {
+    pixels[i] = (i & 3) == 3 ? 0xff : rnd.nextInt(256);
+  }
+  final done = Completer<ui.Image>();
+  ui.decodeImageFromPixels(pixels, w, h, ui.PixelFormat.rgba8888, done.complete);
+  final image = await done.future;
   return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
 }
 
@@ -81,6 +97,30 @@ void main() {
       expect(sniffBoardImage(p.bytes), 'image/png');
     });
 
+    test('a large PNG goes as it is, at its own size, but is decoded no wider than the page (review of #328)', () async {
+      final raw = await _png(4000, 1000);
+      final p = await prepareBoardImage(raw);
+      expect([p.contentType, p.width, p.height, identical(p.bytes, raw)], ['image/png', 4000, 1000, true]);
+      expect([p.image.width, p.image.height], [kBoardImageDrawEdge, 480]);
+    });
+
+    test('one over 8,000 px is decoded at the redraw size, never in full, and redrawn there', () async {
+      final p = await prepareBoardImage(await _png(9000, 90));
+      expect([p.contentType, p.width, p.height, p.image.width, p.image.height], ['image/png', 4000, 40, 4000, 40]);
+    });
+
+    // The review asked for a GIF whose PNG comes out over 10 MB. The engine
+    // cannot write a GIF, so this test uses the other way into the redraw: a
+    // PNG of noise over 10 MB, whose redrawn PNG is too. Both take the same path.
+    test('a picture whose still PNG would be over 10 MB is refused as too large', () async {
+      final raw = await _noisePng(2000, 2000);
+      expect(raw.length, greaterThan(kBoardImageMaxBytes));
+      await expectLater(
+        prepareBoardImage(raw),
+        throwsA(isA<ImageImportException>().having((e) => e.outcome, 'outcome', ImageImportOutcome.tooLarge)),
+      );
+    });
+
     test('a file that is not a picture, or a damaged one, is refused as not a picture', () async {
       final damaged = Uint8List.fromList([..._gif.sublist(0, 30), 0xff, 0xff, 0xff]);
       for (final raw in [Uint8List.fromList('<svg><script/></svg>'.codeUnits), damaged]) {
@@ -125,6 +165,9 @@ void main() {
       }
 
       expect(await outcome(const AppError(AppErrorKind.server, code: kAssetsOffCode)), ImageImportOutcome.imagesOff);
+      // A server from before PR-4: no such route, no code of ours (review of #328).
+      expect(await outcome(const AppError(AppErrorKind.notFound)), ImageImportOutcome.imagesOff);
+      expect(await outcome(const AppError(AppErrorKind.notFound, code: 'COMM.WHITEBOARD_NOT_FOUND')), ImageImportOutcome.failed);
       expect(await outcome(const AppError(AppErrorKind.unknown, code: 'COMM.WHITEBOARD_LIMIT')), ImageImportOutcome.tooLarge);
       expect(await outcome(const AppError(AppErrorKind.validation, code: 'COMM.WHITEBOARD_INVALID')), ImageImportOutcome.notAnImage);
       expect(await outcome(const AppError(AppErrorKind.network)), ImageImportOutcome.failed);
@@ -145,6 +188,7 @@ void main() {
       container = ProviderContainer(
         overrides: [
           whiteboardsRepositoryProvider.overrideWithValue(repo),
+          boardImageRetryProvider.overrideWithValue(const Duration(milliseconds: 30)),
           boardImageFetchProvider.overrideWithValue((url) async {
             fetched.add(url);
             final bytes = served[url];
@@ -195,6 +239,29 @@ void main() {
       expect(images().lookup('a1').status, BoardImageStatus.unavailable);
       expect(repo.urlsAsked, 1);
       expect(fetched, isEmpty);
+    });
+
+    test('an unavailable image is tried again after a wait, and comes (review of #328)', () async {
+      repo.urls = const [];
+      images().ensure([element]);
+      await settle();
+      expect(images().lookup('a1').status, BoardImageStatus.unavailable);
+      repo.urls = [BoardAsset(id: 'a1', url: 'https://s.test/fresh', expiresAt: DateTime.now().add(const Duration(minutes: 15)))];
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await settle();
+      expect(images().lookup('a1').status, BoardImageStatus.ready);
+      expect(fetched, ['https://s.test/fresh']);
+    });
+
+    test('an image is decoded no wider than the page, whatever its size (review of #328)', () async {
+      served['https://s.test/big'] = await _png(4000, 1000);
+      images().seed([BoardAsset(id: 'a1', url: 'https://s.test/big', expiresAt: DateTime.now().add(const Duration(minutes: 15)))]);
+      images().ensure([element]);
+      for (var i = 0; i < 200 && images().lookup('a1').status == BoardImageStatus.loading; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final image = images().lookup('a1').image!;
+      expect([image.width, image.height], [kBoardImageDrawEdge, 480]);
     });
   });
 

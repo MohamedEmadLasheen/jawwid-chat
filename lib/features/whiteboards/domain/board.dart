@@ -82,7 +82,7 @@ class BoardAsset {
 
 /// A board with its pages (GET /whiteboards/:id and every structural write).
 class BoardDetail {
-  const BoardDetail({required this.summary, required this.canEdit, required this.pages, this.assets = const []});
+  const BoardDetail({required this.summary, required this.canEdit, required this.pages, this.assets = const [], this.imagesSupported = false});
 
   final BoardSummary summary;
 
@@ -93,6 +93,11 @@ class BoardDetail {
   /// The board's ready images, signed (PR-4); empty where the server has none.
   final List<BoardAsset> assets;
 
+  /// Whether the server knows images at all: one from before PR-4 sends no
+  /// `assets` and has no routes to add one (review of #328). Whether they are
+  /// switched on here is only learned by asking (503 ASSETS_OFF).
+  final bool imagesSupported;
+
   String get id => summary.id;
   int get revision => summary.revision;
 
@@ -101,7 +106,13 @@ class BoardDetail {
       for (final p in (j['pages'] as List? ?? const []))
         if (p is Map) BoardPage.fromJson(Map<String, Object?>.from(p)),
     ]..sort((a, b) => a.position.compareTo(b.position));
-    return BoardDetail(summary: BoardSummary.fromJson(j), canEdit: j['canEdit'] == true, pages: pages, assets: BoardAsset.listFrom(j['assets']));
+    return BoardDetail(
+      summary: BoardSummary.fromJson(j),
+      canEdit: j['canEdit'] == true,
+      pages: pages,
+      assets: BoardAsset.listFrom(j['assets']),
+      imagesSupported: j.containsKey('assets'),
+    );
   }
 }
 
