@@ -45,6 +45,7 @@ export type Ctx = Pick<
   | 'stroke'
   | 'clip'
   | 'fillText'
+  | 'drawImage'
   | 'measureText'
   | 'setLineDash'
   | 'fillStyle'
@@ -59,11 +60,16 @@ export type Ctx = Pick<
   | 'direction'
 >
 
+/** Where one of the board's images stands for drawing. */
+export type ImageLookup = { status: 'ready'; source: CanvasImageSource } | { status: 'loading' } | { status: 'unavailable' }
+
 export interface DrawOptions {
   /** The verse's text, as checked against its reference (board.ts lookupVerse). */
   verse: (ref: VerseRef) => VerseLookup
-  /** The words on a box this viewer does not draw: a verse not ready, an image, a newer kind. */
-  label: (element: BoardElement, lookup?: VerseLookup) => string
+  /** PR-4: the board's images, loaded from their signed URLs. */
+  image?: (assetId: string) => ImageLookup
+  /** The words on a box this viewer does not draw: a verse or an image not ready, a newer kind. */
+  label: (element: BoardElement, lookup?: VerseLookup | ImageLookup) => string
 }
 
 export function drawPage(ctx: Ctx, page: BoardPage, opts: DrawOptions): void {
@@ -139,6 +145,11 @@ function drawElement(ctx: Ctx, e: BoardElement, dark: boolean, background: strin
     case 'verse': {
       const found = opts.verse(e.ref)
       if (found.status === 'ready') return drawVerse(ctx, e.rect, e.size, e.color, found.text)
+      return drawPlaceholder(ctx, e.rect, dark, opts.label(e, found))
+    }
+    case 'image': {
+      const found: ImageLookup = opts.image?.(e.assetId) ?? { status: 'unavailable' }
+      if (found.status === 'ready') return ctx.drawImage(found.source, e.rect.x, e.rect.y, e.rect.w, e.rect.h)
       return drawPlaceholder(ctx, e.rect, dark, opts.label(e, found))
     }
     case 'opaque':
