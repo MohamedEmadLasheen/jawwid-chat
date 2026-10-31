@@ -14,6 +14,9 @@ import type { TaskService } from '../../../src/tasks/task.service';
 import type { CalendarService } from '../../../src/calendar/calendar.service';
 import type { TrialService } from '../../../src/lessons/trial.service';
 import type { NewStudentEnrolmentService } from '../../../src/new-students/enrolment.service';
+import type { BillingService } from '../../../src/billing/billing.service';
+import type { PaymentsService } from '../../../src/billing/payments.service';
+import type { ParentRecordService } from '../../../src/parent-profile/parent-record.service';
 import type { LeaveService } from '../../../src/leave/leave.service';
 import type { DisciplineService } from '../../../src/discipline/discipline.service';
 import type { ParentFeedbackService } from '../../../src/teacher-file/parent-feedback.service';
@@ -51,6 +54,12 @@ describe('PD-44 DashboardController', () => {
   const trials = { dashboardCounts: jest.fn(async () => trialTiles) } as unknown as TrialService;
   const studentTiles = [dashboardTile('new_students.unassigned', 1)];
   const enrolment = { dashboardCounts: jest.fn(async () => studentTiles) } as unknown as NewStudentEnrolmentService;
+  const instalmentTiles = [dashboardTile('instalments.overdue', 3)];
+  const billing = { dashboardCounts: jest.fn(async () => instalmentTiles) } as unknown as BillingService;
+  const receiptTiles = [dashboardTile('receipts.pending', 2)];
+  const payments = { dashboardCounts: jest.fn(async () => receiptTiles) } as unknown as PaymentsService;
+  const parentTiles = [dashboardTile('parents.locked', 1)];
+  const parents = { dashboardCounts: jest.fn(async () => parentTiles) } as unknown as ParentRecordService;
   const leaveTiles = [dashboardTile('leave.pending', 2)];
   const leave = { dashboardCounts: jest.fn(async () => leaveTiles) } as unknown as LeaveService;
   const disciplineTiles = [dashboardTile('absences.open', 1), dashboardTile('lateness.open', 3)];
@@ -62,7 +71,7 @@ describe('PD-44 DashboardController', () => {
   const profileTiles = [dashboardTile('teacher_profiles.pending', 1)];
   const profiles = { dashboardCounts: jest.fn(async () => profileTiles) } as unknown as TeacherProfileService;
   const controller = new DashboardController(
-    conversations, cases, tasks, calendar, trials, enrolment,
+    conversations, cases, tasks, calendar, trials, enrolment, billing, payments, parents,
     leave, discipline, feedback, certificates, profiles,
   );
 
@@ -81,6 +90,10 @@ describe('PD-44 DashboardController', () => {
     expect((await controller.enrolmentSection('staff-1')).tiles).toEqual([...trialTiles, ...studentTiles]);
     expect(trials.dashboardCounts).toHaveBeenCalledWith('staff-1', expect.any(Date));
     expect(enrolment.dashboardCounts).toHaveBeenCalledWith('staff-1');
+    // PD-44 PR-5: three pages' tiles in one section; each page's only with its own key.
+    expect((await controller.billingSection('staff-1')).tiles).toEqual([...instalmentTiles, ...receiptTiles, ...parentTiles]);
+    expect((await controller.billingSection('staff-1', { permissions: new Set(['parents.view']) })).tiles).toEqual(parentTiles);
+    expect((await controller.billingSection('staff-1', { permissions: new Set(['billing.view']) })).tiles).toEqual([...instalmentTiles, ...receiptTiles]);
     // PD-44 PR-6: the Teacher Supervision page's sections, then Certificates, then Teacher Profiles.
     const supervisionTiles = [...leaveTiles, ...disciplineTiles, ...feedbackTiles];
     expect((await controller.teachersSection('staff-1')).tiles).toEqual([...supervisionTiles, ...certificateTiles, ...profileTiles]);
@@ -105,6 +118,7 @@ describe('PD-44 DashboardController', () => {
     expect(access('tasksSection')).toEqual({ kind: 'self' });
     expect(access('lessons')).toEqual({ kind: 'requires', anyOf: ['lessons.view', 'schedule.view'] });
     expect(access('enrolmentSection')).toEqual({ kind: 'requires', anyOf: ['trials.view', 'new_students.view'] });
+    expect(access('billingSection')).toEqual({ kind: 'requires', anyOf: ['billing.view', 'parents.view'] });
     expect(access('teachersSection')).toEqual({
       kind: 'requires',
       // Not certificates.view: the certificate keys open exactly the certificate routes (PD-41).

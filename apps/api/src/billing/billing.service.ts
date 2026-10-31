@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { FamilyInstalment } from '@prisma/client';
+import { Prisma, type FamilyInstalment } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
@@ -8,10 +8,11 @@ import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import type { BillingAccess } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
+import { ActorKind, SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
 import { mapStructureRefusal } from '../org/org-structure.service';
 import { todayIn } from '../leave/leave.service';
-import { billingAccessOf } from './billing-access';
+import { billingAccessOf, familyInScopeSql } from './billing-access';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
 import { day, invalid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
 import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-ledger.service';
@@ -802,8 +803,6 @@ export class BillingService {
 
   /** The families the viewer may see. */
   private familiesInScope(actor: Actor, access: BillingAccess, org: string): Promise<FamilyRow[]> {
-    const reach = access.scope === 'reach';
-    const owned = access.scope === 'owned';
     return this.prisma.$queryRaw<FamilyRow[]>`
       SELECT f.id, f.display_name AS family_name, pc.id AS parent_id,
              pc.name AS account_name, b.supervisor_id AS billing_supervisor_id
@@ -811,8 +810,67 @@ export class BillingService {
         LEFT JOIN chat.contact pc ON pc.id = f.primary_contact_id AND pc.family_id = f.id
         LEFT JOIN chat.family_billing_supervision b ON b.family_id = f.id
        WHERE f.organization_id = ${org}::uuid
-         AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)
-         AND (${!owned} OR chat.staff_owns_family(${actor.actorId}::uuid, f.id))`;
+         AND ${familyInScopeSql(actor.actorId, access.scope, Prisma.sql`f.id`)}`;
+  }
+
+  /**
+   * PD-44: the Dashboard's instalment tiles -- the Instalments page's own
+   * counts line (`list` with no filter), in one statement over the same
+   * families (familyInScopeSql), the same open rows (not paid, not voided)
+   * and statusOf's rule against the same academy day:
+   *
+   *   instalments.overdue     due before today
+   *   instalments.due         due today
+   *   instalments.unassigned  open, with no responsible supervisor (a child's
+   *                           supervisor for a child's row, the family's
+   *                           billing supervisor for the family's own)
+   *
+   * Anyone who reads no family's money gets no tile; non-staff are refused.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const reader = await this.readerOrNone(actorId);
+    if (!reader) return [];
+    const { actor, access } = reader;
+    const org = actor.organizationId as string;
+    const today = todayIn(await this.timeZone());
+    const [r] = await this.prisma.$queryRaw<Array<{ overdue: number; overdue_oldest: Date | null; due: number; unassigned: number }>>`
+      SELECT count(*) FILTER (WHERE x.due_date < ${today}::date)::int AS overdue,
+             min(x.due_date) FILTER (WHERE x.due_date < ${today}::date) AS overdue_oldest,
+             count(*) FILTER (WHERE x.due_date = ${today}::date)::int AS due,
+             count(*) FILTER (WHERE x.responsible IS NULL)::int AS unassigned
+        FROM (
+          SELECT i.due_date,
+                 CASE WHEN i.learner_id IS NOT NULL THEN ls.supervisor_id ELSE b.supervisor_id END AS responsible
+            FROM chat.family_instalment i
+            JOIN chat.family f ON f.id = i.family_id
+            LEFT JOIN chat.family_billing_supervision b ON b.family_id = f.id
+            LEFT JOIN chat.learner l ON l.id = i.learner_id AND l.family_id = f.id
+            LEFT JOIN chat.learner_supervision ls ON ls.learner_id = l.id
+           WHERE f.organization_id = ${org}::uuid
+             AND i.organization_id = ${org}::uuid
+             AND i.voided_at IS NULL
+             AND i.paid_on IS NULL
+             AND ${familyInScopeSql(actor.actorId, access.scope, Prisma.sql`f.id`)}
+        ) x`;
+    return [
+      dashboardTile('instalments.overdue', r?.overdue ?? 0, r?.overdue_oldest ?? null),
+      dashboardTile('instalments.due', r?.due ?? 0),
+      dashboardTile('instalments.unassigned', r?.unassigned ?? 0),
+    ];
+  }
+
+  /**
+   * PD-44: the reader, or null for staff who read no family's money (their
+   * Dashboard has no billing tile); anyone who is not staff is refused as
+   * the pages refuse them.
+   */
+  async readerOrNone(actorId: string): Promise<{ actor: Actor; access: BillingAccess } | null> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) {
+      throw new CommError(CommErrorCode.BILLING_DENIED, 'a family\'s money is the Operations department\'s');
+    }
+    const access = await this.accessOf(actor);
+    return access.scope === null ? null : { actor, access };
   }
 
   async requireFamily(actor: Actor, access: BillingAccess, familyId: string) {

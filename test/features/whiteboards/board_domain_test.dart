@@ -40,7 +40,7 @@ void main() {
   });
 
   group('a page document', () {
-    test('round-trips every MVP element, and keeps a verse (not drawn before PR-3) exactly as it came', () {
+    test('round-trips every MVP element, and keeps a kind it does not draw (an image before PR-4) exactly as it came', () {
       final verse = <String, Object?>{
         'id': 'v1',
         'kind': 'verse',
@@ -49,7 +49,10 @@ void main() {
         'toAyah': 7,
         'datasetId': 'tanzil-uthmani-1.1',
         'rangeSha256': 'a' * 64,
+        'transform': {'x': 260.0, 'y': 300.0, 'w': 1400.0, 'h': 420.0},
+        'style': {'size': 64.0, 'color': '#1b1b1b'},
       };
+      final image = <String, Object?>{'id': 'i1', 'kind': 'image', 'assetId': '3f2c1a9e-0b1d-4c2e-9f00-1234567890ab'};
       final page = BoardPage.fromJson({
         'id': 'p1',
         'position': 0,
@@ -91,15 +94,27 @@ void main() {
               text: 'ممتاز',
             ).toJson(),
             verse,
+            image,
           ],
         },
       });
       expect(page.layout, PageLayout.arabicLines);
       expect(page.background, PageBackground.cream);
-      expect(page.elements.map((e) => e.runtimeType), [InkElement, ShapeElement, LineElement, TextElement, StampElement, OpaqueElement]);
+      expect(page.elements.map((e) => e.runtimeType), [
+        InkElement,
+        ShapeElement,
+        LineElement,
+        TextElement,
+        StampElement,
+        VerseElement,
+        OpaqueElement,
+      ]);
       final again = BoardPage.fromJson({'id': 'p1', 'document': page.documentJson()});
       expect(again.documentJson(), page.documentJson());
-      expect((page.documentJson()['elements'] as List).last, verse);
+      final out = page.documentJson()['elements'] as List;
+      // The verse is a reference and its place: exactly the fields the server allows, no text.
+      expect(out[5], verse);
+      expect(out.last, image);
     });
 
     test('moving and scaling keep ids; a verse without a position is not moved', () {
@@ -107,7 +122,7 @@ void main() {
       final moved = s.translated(const Offset(5, -5)) as InkElement;
       expect(moved.id, 's1');
       expect(moved.points.first.offset, const Offset(15, 5));
-      const unplaced = OpaqueElement('v', {'id': 'v', 'kind': 'verse'});
+      const unplaced = OpaqueElement('v', {'id': 'v', 'kind': 'image'});
       expect(identical(unplaced.translated(const Offset(1, 1)), unplaced), isTrue);
     });
   });
@@ -191,5 +206,24 @@ void main() {
       expect(storedJsonBytes([1, 2, 3]), '[1, 2, 3]'.length);
       expect(storedJsonBytes(<String, Object?>{}), 2);
     });
+  });
+
+  test('a verse resizes as one: both sides and its type by the same factor', () {
+    final v = VerseElement(
+      id: 'v',
+      surah: 1,
+      fromAyah: 1,
+      toAyah: 7,
+      datasetId: 'd',
+      rangeSha256: 'a' * 64,
+      rect: const Rect.fromLTWH(100, 100, 1000, 400),
+      fontSize: 50,
+      color: const Color(0xFF000000),
+    );
+    final r = v.scaled(const Offset(100, 100), 1.5, 0.2) as VerseElement;
+    expect(r.rect, const Rect.fromLTWH(100, 100, 1500, 600));
+    expect(r.fontSize, 75);
+    // The type stays legible and bounded: 16..240.
+    expect((v.scaled(const Offset(100, 100), 0.01, 1) as VerseElement).fontSize, 16);
   });
 }

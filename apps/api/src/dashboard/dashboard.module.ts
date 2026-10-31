@@ -4,6 +4,8 @@ import { SupervisionCaseModule } from '../cases/supervision-case.module';
 import { TaskModule } from '../tasks/task.module';
 import { CalendarModule } from '../calendar/calendar.module';
 import { LessonModule } from '../lessons/lesson.module';
+import { BillingModule } from '../billing/billing.module';
+import { ParentRecordModule } from '../parent-profile/parent-record.module';
 import { LeaveModule } from '../leave/leave.module';
 import { DisciplineModule } from '../discipline/discipline.module';
 import { TeacherFileModule } from '../teacher-file/teacher-file.module';
@@ -18,7 +20,7 @@ import { DashboardController } from './dashboard.controller';
 @Module({
   imports: [
     CommunicationModule, SupervisionCaseModule, TaskModule, CalendarModule, LessonModule,
-    LeaveModule, DisciplineModule, TeacherFileModule, CertificateModule,
+    BillingModule, ParentRecordModule, LeaveModule, DisciplineModule, TeacherFileModule, CertificateModule,
   ],
   controllers: [DashboardController],
 })
