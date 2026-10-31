@@ -70,6 +70,19 @@ export class S3ObjectStorage implements ObjectStorage {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
+      // Bounded waits. The SDK's own defaults are no connect timeout and no
+      // response timeout, so a storage endpoint that accepts the connection and
+      // never answers held a request (and an agent socket) for minutes, three
+      // attempts over. Now: a connection in connectTimeoutMs, response headers
+      // in requestTimeoutMs, and a socket idle mid-body for requestTimeoutMs is
+      // destroyed -- each a TimeoutError -- at most maxAttempts times.
+      maxAttempts: config.maxAttempts ?? STORAGE_TIMEOUT_DEFAULTS.maxAttempts,
+      requestHandler: {
+        connectionTimeout: config.connectTimeoutMs ?? STORAGE_TIMEOUT_DEFAULTS.connectTimeoutMs,
+        requestTimeout: config.requestTimeoutMs ?? STORAGE_TIMEOUT_DEFAULTS.requestTimeoutMs,
+        throwOnRequestTimeout: true,
+        socketTimeout: config.requestTimeoutMs ?? STORAGE_TIMEOUT_DEFAULTS.requestTimeoutMs,
+      },
     });
   }
 
@@ -268,7 +281,22 @@ export interface S3StorageConfig {
   accessKeyId: string;
   secretAccessKey: string;
   signedUrlTtlSeconds: number;
+  /** TCP connect, per attempt. Default STORAGE_TIMEOUT_DEFAULTS.connectTimeoutMs. */
+  connectTimeoutMs?: number;
+  /** Response headers, and the longest a socket may idle mid-body, per attempt. */
+  requestTimeoutMs?: number;
+  /** Attempts per call, the first included (the SDK retries a TimeoutError). */
+  maxAttempts?: number;
 }
+
+/**
+ * Defaults, overridable by STORAGE_CONNECT_TIMEOUT_MS, STORAGE_REQUEST_TIMEOUT_MS
+ * and STORAGE_MAX_ATTEMPTS. Storage sits in the same region as the API, so a
+ * healthy connect is milliseconds; two attempts of 15 s keep a dead endpoint's
+ * worst case (about 31 s) near the API's own 30 s request budget instead of
+ * minutes.
+ */
+export const STORAGE_TIMEOUT_DEFAULTS = { connectTimeoutMs: 3_000, requestTimeoutMs: 15_000, maxAttempts: 2 } as const;
 
 /**
  * Key construction and validation live in `object-key.ts`, storage-agnostic,
