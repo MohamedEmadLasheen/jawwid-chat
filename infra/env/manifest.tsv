@@ -69,10 +69,13 @@ STORAGE_ACCESS_KEY	storage	yes	req	req	req
 STORAGE_SECRET_KEY	storage	yes	req	req	req
 STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
 # How long the S3 client waits (s3-object-storage.ts, STORAGE_TIMEOUT_DEFAULTS).
-# Optional everywhere: unset means 3000 ms to connect, 15000 ms for response
-# headers and for a socket idle mid-body, 2 attempts per call. A hung storage
-# endpoint then costs a request about 31 s instead of minutes. Out-of-range
-# values refuse to start (connect 100..60000, request 100..300000, attempts 1..5).
+# Optional everywhere: unset means 3000 ms to connect and 5000 ms to response
+# headers per attempt, 3 attempts (the SDK's own count, so 503 SlowDown keeps its
+# retries). A hung endpoint then costs a call -- or a media read, whose HEAD + GET
+# share one budget -- about 15 s instead of minutes. CopyObject has its own 60 s
+# per attempt. NOT a limit on a streamed body: a slow reader may pause a video
+# for as long as it likes. Out-of-range values refuse to start (connect
+# 100..60000, request 100..300000, attempts 1..5).
 STORAGE_CONNECT_TIMEOUT_MS	storage	no	opt	opt	opt
 STORAGE_REQUEST_TIMEOUT_MS	storage	no	opt	opt	opt
 STORAGE_MAX_ATTEMPTS	storage	no	opt	opt	opt
