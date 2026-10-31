@@ -14,6 +14,7 @@ import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { FIRST_LOGIN_MAILER, recoveryMail, sendWithin, type MailSender } from '../account-recovery/recovery-delivery';
 import type { Actor } from '../platform/types';
 import { AccountAdminScope } from '../platform/account-admin-scope';
+import { recordUse } from './family-access.service';
 
 export const ACCOUNT_AUDIT = {
   SUSPENDED: 'account.suspended',
@@ -180,7 +181,7 @@ export class AccountAdminService {
     // decision says which, for the logs). Every kind's acts include a reset.
     const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), 'reset_password', standing);
     if (!decision.allowed) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, decision.reason);
-    await this.requireInScope(actor, row);
+    await this.requireInScope(actor, row, 'view');
     await this.requireOwnedFamily(actor, standing, row);
     return this.summary(actor, row, standing, await this.managed(actor, row));
   }
@@ -392,16 +393,22 @@ export class AccountAdminService {
     const standing = await accountAdminStandingOf(this.prisma, actor);
     const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), act, standing);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-    await this.requireInScope(actor, row);
+    await this.requireInScope(actor, row, act);
     await this.requireOwnedFamily(actor, standing, row);
     return { row };
   }
 
-  /** TEACHER-011: an account outside the caller's scope (a teacher not theirs) reads as not found. */
-  private async requireInScope(actor: Actor, row: AccountRow) {
-    if (!(await this.scope.covers(actor, { kind: row.kind, teacherId: row.teacher?.id }))) {
-      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, "a teacher supervisor administers their own teachers' accounts only");
+  /**
+   * TEACHER-011 / ADMIN-002: an account outside the caller's scope (a teacher
+   * not theirs, a family they do not reach) reads as not found; one opened
+   * only by an exceptional grant is allowed, and this use is logged.
+   */
+  private async requireInScope(actor: Actor, row: AccountRow, act: string) {
+    const decision = await this.scope.decide(actor, { kind: row.kind, teacherId: row.teacher?.id, familyId: row.contacts[0]?.familyId });
+    if (!decision.allowed) {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'this account is outside your scope');
     }
+    if (decision.grant) await recordUse(this.audit, this.prisma, decision.grant, actor.actorId, act, row.id);
   }
 
   /**

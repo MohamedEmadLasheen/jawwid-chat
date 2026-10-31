@@ -69,6 +69,20 @@ async function call(token: string | null, method: string, path: string, body?: u
   return { status: r.status, code: json.error?.code, json };
 }
 
+/**
+ * ADMIN-002: an Operations member administers only the parent accounts of the
+ * families they reach -- a family with a child they supervise (or an active
+ * backup's). Fails loudly if the seed's plan ever moves the family away.
+ */
+function familyReachedBy(staff: { id: string }, index: number, via?: { id: string }): SeedManifest['families'][number] {
+  const family = m.families[index]!;
+  const supervisorId = (via ?? staff).id;
+  if (!family.children.some((c) => c.supervisorId === supervisorId)) {
+    throw new Error(`seed family ${index} has no child supervised by ${supervisorId}`);
+  }
+  return family;
+}
+
 const accountIdOf = async (subject: string) =>
   (await g.prisma.account.findUniqueOrThrow({ where: { subject }, select: { id: true } })).id;
 
@@ -302,7 +316,7 @@ describe('PD-21: acting as the person', () => {
 describe('PD-21: a support session ends', () => {
   it('on Exit: its token is refused at once, the record says how, and Exit is idempotent', async () => {
     const admin = (await login(m.supervisors[1]!.subject)).accessToken;
-    const opened = await start(admin, m.families[2]!.parent.subject);
+    const opened = await start(admin, familyReachedBy(m.supervisors[1]!, 13).parent.subject);
     const support = opened.json.accessToken as string;
     expect((await call(support, 'GET', '/me')).status).toBe(200);
 
@@ -320,7 +334,7 @@ describe('PD-21: a support session ends', () => {
 
   it('NOT when the administrator\'s own token is refreshed: it follows the rotated session', async () => {
     const adminLogin = await login(m.supervisors[1]!.subject);
-    const opened = await start(adminLogin.accessToken, m.families[8]!.parent.subject);
+    const opened = await start(adminLogin.accessToken, familyReachedBy(m.supervisors[1]!, 17).parent.subject);
     const support = opened.json.accessToken as string;
     const refreshed = await call(null, 'POST', '/auth/refresh', { refreshToken: adminLogin.refreshToken });
     expect(refreshed.status).toBe(200);
@@ -335,7 +349,7 @@ describe('PD-21: a support session ends', () => {
 
   it('with the administrator\'s own session: signing out ends it', async () => {
     const adminLogin = await login(m.supervisors[2]!.subject);
-    const opened = await start(adminLogin.accessToken, m.families[3]!.parent.subject);
+    const opened = await start(adminLogin.accessToken, familyReachedBy(m.supervisors[2]!, 10).parent.subject);
     const support = opened.json.accessToken as string;
     expect((await call(support, 'GET', '/me')).status).toBe(200);
     expect((await call(adminLogin.accessToken, 'POST', '/auth/logout', {})).status).toBe(200);
@@ -345,8 +359,9 @@ describe('PD-21: a support session ends', () => {
   it('with the administrator\'s account: suspending them ends it', async () => {
     const supervisor = m.supervisors[3] ?? m.supervisors[0]!;
     const adminLogin = await login(supervisor.subject);
-    const opened = await start(adminLogin.accessToken, m.families[4]!.parent.subject);
+    const opened = await start(adminLogin.accessToken, familyReachedBy(supervisor, 19).parent.subject);
     const support = opened.json.accessToken as string;
+    expect((await call(support, 'GET', '/me')).status).toBe(200);
     const owner = (await login(m.superAdmin.subject)).accessToken;
     expect((await call(owner, 'POST', `/admin/accounts/${await accountIdOf(supervisor.subject)}/suspend`, { reason: 'test' })).status).toBe(200);
     expect((await call(support, 'GET', '/me')).status).toBe(401);
@@ -354,9 +369,10 @@ describe('PD-21: a support session ends', () => {
   });
 
   it('when another one starts (one per administrator); only its administrator may re-token it; it has no refresh token', async () => {
-    const adminA = (await login(m.backups[0]!.subject)).accessToken;
-    const first = await start(adminA, m.families[5]!.parent.subject);
-    const second = await start(adminA, m.families[7]!.parent.subject);
+    // The seed's one active backup arrangement: backups[1] stands in for supervisors[2].
+    const adminA = (await login(m.backups[1]!.subject)).accessToken;
+    const first = await start(adminA, familyReachedBy(m.backups[1]!, 14, m.supervisors[2]!).parent.subject);
+    const second = await start(adminA, familyReachedBy(m.backups[1]!, 18, m.supervisors[2]!).parent.subject);
     expect((await call(first.json.accessToken as string, 'GET', '/me')).status).toBe(401);
     expect((await call(second.json.accessToken as string, 'GET', '/me')).status).toBe(200);
     const firstRow = await g.prisma.impersonationSession.findUniqueOrThrow({ where: { id: first.json.session.id as string } });

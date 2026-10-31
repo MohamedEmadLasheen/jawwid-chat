@@ -1264,6 +1264,26 @@ model SupervisorBackup {
 /// PD-33: a supervisor away, their backup covering for a window. Access is the
 /// backup link's activation; this row is the event, the routing input and the
 /// history (20261026130000).
+/// ADMIN-002: time-boxed, purpose-bound account administration over ONE family's parent accounts. SQL owns the DDL and the guard.
+model FamilyAccessGrant {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  familyId        String    @map("family_id") @db.Uuid
+  granteeId       String    @map("grantee_id") @db.Uuid
+  grantedBy       String    @map("granted_by") @db.Uuid
+  purpose         String
+  startsAt        DateTime  @default(now()) @map("starts_at") @db.Timestamptz
+  endsAt          DateTime  @map("ends_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy       String?   @map("revoked_by") @db.Uuid
+  revokeReason    String?   @map("revoke_reason")
+  expiryAuditedAt DateTime? @map("expiry_audited_at") @db.Timestamptz
+
+  @@map("family_access_grant")
+  @@schema("chat")
+}
+
 model SupervisorCover {
   id               String    @id @default(uuid()) @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid

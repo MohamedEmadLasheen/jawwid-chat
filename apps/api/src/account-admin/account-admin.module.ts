@@ -5,6 +5,8 @@ import { AccountAdminController } from './account-admin.controller';
 import { AccountAdminService } from './account-admin.service';
 import { ImpersonationController } from './impersonation.controller';
 import { ImpersonationService } from './impersonation.service';
+import { FamilyAccessController } from './family-access.controller';
+import { FamilyAccessService } from './family-access.service';
 
 /**
  * PD-21 account administration. PlatformModule is @Global (Prisma, audit,
@@ -14,7 +16,9 @@ import { ImpersonationService } from './impersonation.service';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [AccountAdminController, ImpersonationController],
-  providers: [AccountAdminService, ImpersonationService, { provide: FIRST_LOGIN_MAILER, useFactory: () => selectMailSender() }],
+  controllers: [AccountAdminController, ImpersonationController, FamilyAccessController],
+  // ADMIN-002: the worker's expiry sweep.
+  exports: [FamilyAccessService],
+  providers: [AccountAdminService, ImpersonationService, FamilyAccessService, { provide: FIRST_LOGIN_MAILER, useFactory: () => selectMailSender() }],
 })
 export class AccountAdminModule {}

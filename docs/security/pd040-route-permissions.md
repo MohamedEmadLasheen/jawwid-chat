@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-552 routes.
+555 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -28,6 +28,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/admin/accounts/:accountId/suspend` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.suspend` |
 | GET | `/api/v1/admin/conversations` | admin.inspect | `admin/admin.controller.ts#AdminController.conversations` |
 | GET | `/api/v1/admin/conversations/:id/messages` | admin.inspect | `admin/admin.controller.ts#AdminController.messages` |
+| GET | `/api/v1/admin/family-access-grants` | accounts.administer | `account-admin/family-access.controller.ts#FamilyAccessController.list` |
+| POST | `/api/v1/admin/family-access-grants` | accounts.administer | `account-admin/family-access.controller.ts#FamilyAccessController.grant` |
+| POST | `/api/v1/admin/family-access-grants/:grantId/revoke` | accounts.administer | `account-admin/family-access.controller.ts#FamilyAccessController.revoke` |
 | GET | `/api/v1/admin/impersonations` | self-service | `account-admin/impersonation.controller.ts#ImpersonationController.list` |
 | POST | `/api/v1/admin/impersonations` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.start` |
 | GET | `/api/v1/admin/impersonations/:id/actions` | self-service | `account-admin/impersonation.controller.ts#ImpersonationController.actions` |
