@@ -17,7 +17,7 @@ import { familyLoaded } from './BoardCanvas'
 const ROOT = resolve(__dirname, '../../../../..')
 const fixture = JSON.parse(readFileSync(resolve(ROOT, 'test/fixtures/whiteboards/page-every-kind.json'), 'utf8')) as {
   page: Record<string, unknown> & { document: { elements: Array<Record<string, unknown>> } }
-  expect: { drawOrder: string[]; notDrawn: string[]; points: Record<string, Array<[number, number, number]>> }
+  expect: { drawOrder: string[]; notDrawn: string[]; images: string[]; points: Record<string, Array<[number, number, number]>> }
   palette: Record<string, string>
   ayahs: AyahsAnswer
 }
@@ -94,7 +94,8 @@ describe('the shared fixture, read by the staff viewer', () => {
     for (let a = 1; a <= 7; a++) expect(drawn.join(' ')).toContain(`SYNTHETIC-${a} ۝${'٠١٢٣٤٥٦٧٨٩'[a]}`)
     expect(drawn).toContain('اقرأ الآيات مرتين')
     expect(drawn).toContain('ممتاز')
-    expect(drawn).toContain('LABEL:image:')
+    // No source given for the image: its box says so.
+    expect(drawn).toContain('LABEL:image:unavailable')
     // The verse in Amiri Quran, the rest in the board font.
     const verseCall = calls.find((c) => c.op === 'fillText' && String(c.args[0]).startsWith('SYNTHETIC'))!
     expect(String(verseCall.state.font)).toContain('Amiri Quran')
@@ -103,6 +104,19 @@ describe('the shared fixture, read by the staff viewer', () => {
     // The highlighter is translucent; the pen is not.
     const strokes = calls.filter((c) => c.op === 'stroke' && (c.state.strokeStyle === '#e53935' || c.state.strokeStyle === '#1b1b1b'))
     expect(strokes.find((c) => c.state.strokeStyle === '#e53935')?.state.globalAlpha).toBe(0.35)
+  })
+
+  it('draws an image from its source into its box (PR-4), and a labelled box while it loads', () => {
+    const source = { width: 40, height: 30 } as unknown as CanvasImageSource
+    const raw = fixture.page.document.elements.find((e) => e.id === fixture.expect.images[0])!
+    const loading = recorder()
+    drawPage(loading.ctx, page, { verse: () => ({ status: 'loading' }), image: (id) => (id === raw.assetId ? { status: 'loading' } : { status: 'unavailable' }), label })
+    expect(loading.texts()).toContain('LABEL:image:loading')
+    const drawn = recorder()
+    drawPage(drawn.ctx, page, { verse: () => ({ status: 'loading' }), image: () => ({ status: 'ready', source }), label })
+    const img = drawn.calls.find((c) => c.op === 'drawImage')!
+    expect(img.args).toEqual([source, raw.x, raw.y, raw.w, raw.h])
+    expect(drawn.texts().some((t) => t.startsWith('LABEL:image'))).toBe(false)
   })
 
   it('never draws a verse text that is not exactly its reference, and says why', () => {

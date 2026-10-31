@@ -16,7 +16,8 @@ import { RETENTION_KEYS, type BoardDetail } from './api'
 import { parsePage, type BoardElement, type BoardPage, type VerseLookup } from './board'
 import { BoardCanvas } from './BoardCanvas'
 import { ACTION, B, BASIS, useCopy } from './copy'
-import { useAccessLog, useBoardTeachers, useCopyBoard, useTeacherBoard, useVerseTexts } from './hooks'
+import { useAccessLog, useBoardImages, useBoardTeachers, useCopyBoard, useTeacherBoard, useVerseTexts } from './hooks'
+import type { ImageLookup } from './render'
 import './teacher-boards.css'
 
 /**
@@ -66,14 +67,17 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
   const shown = pages[Math.min(index, pages.length - 1)]
   const page = useMemo(() => (shown ? parsePage(shown as unknown as Record<string, unknown>) : null), [shown])
   const verse = useVerseTexts(page)
+  // Only the page on view's images are loaded, as its strokes are (review of #336).
+  const pageImages = useMemo(() => (page?.elements ?? []).flatMap((e) => (e.kind === 'image' ? [e.assetId] : [])), [page])
+  const image = useBoardImages(board.assets, pageImages)
   const directory = useBoardTeachers()
   const teacherName = directory.data?.teachers.find((t) => t.id === board.teacherId)?.name
   const [copying, setCopying] = useState(false)
 
   const label = useCallback(
-    (e: BoardElement, found?: VerseLookup) => {
+    (e: BoardElement, found?: VerseLookup | ImageLookup) => {
       if (e.kind === 'verse') return tx(found?.status === 'changed' ? B.verseChanged : found?.status === 'loading' ? B.verseLoading : B.verseUnavailable)
-      if (e.kind === 'opaque' && e.type === 'image') return tx(B.image)
+      if (e.kind === 'image') return tx(found?.status === 'loading' ? B.imageLoading : B.imageUnavailable)
       return tx(B.unknownKind, { kind: e.kind === 'opaque' ? e.type : e.kind })
     },
     [tx],
@@ -123,7 +127,7 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
       )}
       {page ? (
         <section className="tb-viewer">
-          <BoardCanvas page={page} verse={verse} label={label} ariaLabel={tx(B.canvasLabel, { n: index + 1, title: board.title })} />
+          <BoardCanvas page={page} verse={verse} image={image} label={label} ariaLabel={tx(B.canvasLabel, { n: index + 1, title: board.title })} />
           <PageText page={page} />
           <div className="tb-pager">
             <button type="button" className="btn btn--ghost btn--sm" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>

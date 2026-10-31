@@ -175,4 +175,64 @@ void main() {
       throwsA(isA<AppError>().having((e) => e.code, 'code', kAssetsOffCode)),
     );
   });
+
+  test('export (PR-4): one grant per page in order; compose sends every page and answers with the PDF bytes', () async {
+    server
+      ..on('POST', '/whiteboards/b1/exports/grant', [
+        const Reply.ok({
+          'pages': [
+            {'assetId': 'e0', 'upload': {'objectKey': 'whiteboard-uploads/o/b1/e0/u', 'uploadUrl': 'https://s.test/e0', 'headers': {'Content-Type': 'image/png'}}},
+            {'assetId': 'e1', 'upload': {'objectKey': 'whiteboard-uploads/o/b1/e1/u', 'uploadUrl': 'https://s.test/e1', 'headers': {'Content-Type': 'image/png'}}},
+          ],
+        }),
+      ])
+      ..on('POST', '/whiteboards/b1/exports/compose', [
+        const Reply(200, '%PDF-1.3 board', headers: {'content-type': 'application/pdf'}),
+      ]);
+    final repo = repository();
+    final grants = await repo.grantExport('b1', [111, 222]);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/exports/grant')!.body, {
+      'pages': [
+        {'byteSize': 111},
+        {'byteSize': 222},
+      ],
+    });
+    expect(grants.map((g) => g.assetId), ['e0', 'e1']);
+    final pdf = await repo.composeExport('b1', grants);
+    expect(String.fromCharCodes(pdf), '%PDF-1.3 board');
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/exports/compose')!.body, {
+      'pages': [
+        {'assetId': 'e0', 'objectKey': 'whiteboard-uploads/o/b1/e0/u'},
+        {'assetId': 'e1', 'objectKey': 'whiteboard-uploads/o/b1/e1/u'},
+      ],
+    });
+  });
+
+  test('a compose refusal\'s code reaches the caller, though the answer is read as bytes (review of #335)', () async {
+    final grants = [const ImageGrant(assetId: 'e0', objectKey: 'whiteboard-uploads/o/b1/e0/u', uploadUrl: 'https://s.test/e0', headers: {})];
+    for (final (status, code) in [
+      (409, 'COMM.WHITEBOARD_STATE'),
+      (409, 'COMM.WHITEBOARD_CONFLICT'),
+      (503, kAssetsOffCode),
+      (429, 'COMM.WHITEBOARD_LIMIT'),
+    ]) {
+      server.on('POST', '/whiteboards/b1/exports/compose', [Reply.commError(status, code)]);
+      await expectLater(repository().composeExport('b1', grants), throwsA(isA<AppError>().having((e) => e.code, 'code', code)), reason: code);
+    }
+  });
+
+  test('compose has its own, longer wait: it may queue behind the export workers (review of #335)', () async {
+    // Every other call gives up after the client's own receive timeout (here 300 ms).
+    HttpWhiteboardsRepository repo({Duration? compose}) => HttpWhiteboardsRepository(
+      client: buildApiClient(config: ApiConfig(baseUrl: server.baseUrl, receiveTimeout: const Duration(milliseconds: 300)), tokens: _NoTokens()),
+      composeTimeout: compose ?? kComposeTimeout,
+    );
+    expect(kComposeTimeout, greaterThanOrEqualTo(const Duration(seconds: 90)));
+    server
+      ..on('POST', '/whiteboards/b1/exports/grant', [const Reply(200, {'pages': []}, delay: Duration(milliseconds: 900))])
+      ..on('POST', '/whiteboards/b1/exports/compose', [const Reply(200, '%PDF-1.3 slow', headers: {'content-type': 'application/pdf'}, delay: Duration(milliseconds: 900))]);
+    await expectLater(repo().grantExport('b1', [1]), throwsA(isA<AppError>().having((e) => e.kind, 'kind', AppErrorKind.timeout)));
+    final pdf = await repo().composeExport('b1', const []);
+    expect(String.fromCharCodes(pdf), '%PDF-1.3 slow');
+  });
 }

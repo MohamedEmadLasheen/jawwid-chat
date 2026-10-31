@@ -321,6 +321,10 @@ Every endpoint above is already scoped for a supervisor, so adding them later is
 
 - **Managers:** `/dashboard`, the same URL, rebuilt (`features/dashboard/`). It moves from More to a top-level nav item. Chat stays the landing page (Q2).
 - **Super admin:** the Admin Portal's **Dashboard section** (`/admin/dashboard`, `DashboardView.tsx`). It gains the same sections **above** the existing inventory counts, which stay. `/dashboard` redirects the super admin there, so there is one Dashboard per person (Q7).
+> **As built (PR-8):**
+> - The sections live in `features/dashboard/ManagerDashboard.tsx` (`useDashboardSections` and `DashboardSections`). The managers' `/dashboard` and the Admin Portal's `DashboardView` both render them; in the Portal they sit above the existing inventory, which is unchanged.
+> - One Refresh refetches both. The Portal asks only for the sections the super admin's keys open, the same rule as for managers.
+> - `/dashboard` redirects the super admin to `/admin/dashboard`.
 - **The UI:** one shared component, `ManagerDashboard`, with one `Section` per endpoint and one `Tile` per tile key. It is driven by a small registry: tile key → Arabic/English label, link builder, and which number is the alert.
 
 ### 4.2 Layout
@@ -512,4 +516,3 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 - **No tile counts families without a supervisor, or backup links about to expire** (PR-7). No page lists either: the Children tab lists children, and backup links show their end date only on the Structure tab, unfiltered. A cover also sets its link's end date, so an "expiring" tile would count most covers twice.
 - **A child whose supervisor left still counts as supervised** (PR-7), as the Children tab shows it. `chat.learner_supervision` keeps the row, and nothing clears it when a supervisor leaves. Teachers are counted the other way: a supervisor who left supervises no one. The tile follows the page; fixing the rule is a separate change.
 - **The overdue and due-today tiles open the whole Instalment Payments list** (PR-5). That page has no status filter; it lists overdue first and counts both in its summary line, which the tiles equal.
-- **The super admin still opens `/dashboard` as a page of its own** (the same sections) until PR-8 moves them into the Admin Portal's Dashboard section and redirects.

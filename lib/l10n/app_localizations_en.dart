@@ -4734,6 +4734,44 @@ class L10nEn extends L10n {
   String get boardImageFailed => 'The picture couldn\'t be added. Try again.';
 
   @override
+  String get boardExportPng => 'Export this page as a picture (PNG)';
+
+  @override
+  String get boardExportPdf => 'Export the board as a PDF';
+
+  @override
+  String get boardExporting => 'Preparing the export…';
+
+  @override
+  String get boardExportSaved => 'Exported.';
+
+  @override
+  String get boardExportOff => 'Export isn\'t switched on yet.';
+
+  @override
+  String get boardExportBusy =>
+      'Many exports are being made right now. Try again in a minute.';
+
+  @override
+  String get boardExportInProgress =>
+      'You already have exports being made. Wait a few minutes, then try again.';
+
+  @override
+  String get boardExportExpired =>
+      'The export took too long and ran out. Export again.';
+
+  @override
+  String get boardExportTooLarge =>
+      'This board is too large to export in one go.';
+
+  @override
+  String get boardExportNotHere =>
+      'Export works in the browser. Open the board there to export it.';
+
+  @override
+  String get boardExportFailed => 'The export couldn\'t be made. Try again.';
+
+  @override
   String get boardDraftStale =>
       'You have changes from an earlier visit that were not saved, on pages that have changed since. Keep yours (they replace those pages) or discard them.';
 

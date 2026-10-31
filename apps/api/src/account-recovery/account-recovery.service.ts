@@ -21,14 +21,19 @@ import { RECOVERY_MAILER, RECOVERY_WHATSAPP, type RecoverySender } from './recov
  * parent who never signed up uses sign-up; staff and teachers go through an
  * administrator (PD-21) -- the database refuses them a self-service code.
  *
- * NO ENUMERATION. Both requests answer `{ ok: true }` whatever was typed, issue
- * nothing for an unknown address or phone, and SEND after answering, so neither
- * the answer nor its timing says an account exists. confirmByPhone() refuses
- * with the one RESET_CODE_INVALID and spends a comparable hash on every refusal.
+ * NO ENUMERATION. Both requests answer `{ ok: true }` whatever was typed and
+ * issue nothing for an unknown address or phone. Everything that depends on
+ * WHO was typed -- the lookup, the code issue (a hash and a write), the send --
+ * runs AFTER the answer, so its timing is the same for an account that exists
+ * and one that does not (QA 2026-10-31: the issue alone made a known e-mail
+ * answer in 46-87 ms against ~5 ms). confirmByPhone() refuses with the one
+ * RESET_CODE_INVALID and spends a comparable hash on every refusal.
  */
 @Injectable()
 export class AccountRecoveryService {
   private readonly log = new Logger('AccountRecovery');
+  /** Work after the answer, one request at a time: a second request sees the first one's code (the resend wait). */
+  private pending: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -45,27 +50,32 @@ export class AccountRecoveryService {
 
   async requestByEmail(rawEmail: string): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
+    // Input shape and configuration only: the same for every address.
     if (!email || !this.mailer.available) return { ok: true };
-    const [account] = await this.recoverable({ subject: email });
-    if (!account) return { ok: true };
-    const issued = await this.reset.issueRecovery({ accountId: account.id, organizationId: account.organizationId, channel: 'email' });
-    if (issued) this.later(`account ${account.id}: e-mail`, () => this.mailer.sendCode(email, issued.code, RESET_CODE_MINUTES));
+    this.afterAnswer('e-mail', async () => {
+      const [account] = await this.recoverable({ subject: email });
+      if (!account) return;
+      const issued = await this.reset.issueRecovery({ accountId: account.id, organizationId: account.organizationId, channel: 'email' });
+      if (issued) await this.mailer.sendCode(email, issued.code, RESET_CODE_MINUTES);
+    });
     return { ok: true };
   }
 
   async requestByPhone(rawPhone: string): Promise<{ ok: true }> {
     if (!this.whatsapp.available) return { ok: true };
-    const match = await this.phones.match(rawPhone);
-    const accounts = match ? await this.recoverable({ contactIds: match.contacts.map((c) => c.contactId) }) : [];
-    if (!match || accounts.length === 0) return { ok: true };
+    this.afterAnswer('whatsapp', async () => {
+      const match = await this.phones.match(rawPhone);
+      const accounts = match ? await this.recoverable({ contactIds: match.contacts.map((c) => c.contactId) }) : [];
+      if (!match || accounts.length === 0) return;
 
-    // One message to the phone; one code row per account that phone belongs to.
-    const code = newCode();
-    let sent = 0;
-    for (const a of accounts) {
-      if (await this.reset.issueRecovery({ accountId: a.id, organizationId: a.organizationId, channel: 'whatsapp', code })) sent++;
-    }
-    if (sent > 0) this.later(`accounts ${accounts.map((a) => a.id).join(',')}: whatsapp`, () => match.deliver((to) => this.whatsapp.sendCode(to, code, RESET_CODE_MINUTES)));
+      // One message to the phone; one code row per account that phone belongs to.
+      const code = newCode();
+      let sent = 0;
+      for (const a of accounts) {
+        if (await this.reset.issueRecovery({ accountId: a.id, organizationId: a.organizationId, channel: 'whatsapp', code })) sent++;
+      }
+      if (sent > 0) await match.deliver((to) => this.whatsapp.sendCode(to, code, RESET_CODE_MINUTES));
+    });
     return { ok: true };
   }
 
@@ -99,12 +109,16 @@ export class AccountRecoveryService {
     });
   }
 
-  /** After the answer: a provider's latency or failure must not reach the parent's response. */
-  private later(what: string, send: () => Promise<void>): void {
-    setImmediate(() => {
+  /**
+   * After the answer, in order: neither the lookup, the issue, a provider's
+   * latency nor a failure reaches the parent's response or its timing.
+   */
+  private afterAnswer(what: string, work: () => Promise<void>): void {
+    this.pending = this.pending
+      .then(() => new Promise<void>((r) => setImmediate(r)))
+      .then(work)
       // Never the message: an SMTP refusal quotes the recipient's address.
-      send().catch((e: unknown) => this.log.error(`recovery code not delivered (${what}): ${failureKind(e)}`));
-    });
+      .catch((e: unknown) => this.log.error(`recovery code not issued or delivered (${what}): ${failureKind(e)}`));
   }
 }
 

@@ -462,6 +462,11 @@ export class LessonService {
     const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
     if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    // The one read check every conversation route makes: someone who may not
+    // read the conversation is refused (403), not told it has no tickets. A
+    // reader who is not a member (staff in scope) still gets none to act on.
+    const read = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!read.allowed) throw new CommError(read.code, read.reason);
     if (!membership || conv.archivedAt) return { tickets: [] };
     const learnerIds = await this.learnersOf(conv);
     if (learnerIds.length === 0) return { tickets: [] };

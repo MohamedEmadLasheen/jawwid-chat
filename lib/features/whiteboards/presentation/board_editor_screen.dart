@@ -15,6 +15,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/board_editor_controller.dart';
+import '../application/board_export.dart';
 import '../application/board_image_import.dart';
 import '../application/boards_controller.dart';
 import '../data/board_images.dart';
@@ -213,7 +214,11 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
               if (editable) ...[
                 IconButton(tooltip: l10n.boardUndo, onPressed: s.canUndo ? _controller.undo : null, icon: const Icon(Icons.undo)),
                 IconButton(tooltip: l10n.boardRedo, onPressed: s.canRedo ? _controller.redo : null, icon: const Icon(Icons.redo)),
-                _BoardMenu(onDelete: () => _moveToTrash(context, s)),
+                _BoardMenu(
+                  onDelete: () => _moveToTrash(context, s),
+                  onExportPng: () => _exportPng(context, label),
+                  onExportPdf: () => _exportPdf(context, label),
+                ),
               ],
             ],
           ),
@@ -456,6 +461,82 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     }
   }
 
+  /// What a page is drawn with, as the editor draws it.
+  PageInk _pageInk(String Function(BoardElement) label) => PageInk(
+    verses: ref.read(verseCacheProvider.notifier).lookup,
+    images: ref.read(boardImagesProvider(widget.boardId).notifier).lookup,
+    label: label,
+  );
+
+  /// PR-4 (§4.6): the page on screen as a PNG, drawn here and saved here.
+  Future<void> _exportPng(BuildContext context, String Function(BoardElement) label) =>
+      _export(context, (s) async {
+        final ink = _pageInk(label);
+        await settleForExport([s.page], ink);
+        final png = await renderPagePng(s.page, ink);
+        return ref.read(exportSaverProvider)(png, exportName('${s.board.title} ${s.current + 1}', 'png'), 'image/png');
+      });
+
+  /// PR-4 (§4.6): every page drawn here, the PDF made by the server from them.
+  Future<void> _exportPdf(BuildContext context, String Function(BoardElement) label) =>
+      _export(context, (s) async {
+        final ink = _pageInk(label);
+        await settleForExport(s.pages, ink);
+        final pngs = [for (final p in s.pages) await renderPagePng(p, ink)];
+        final pdf = await exportPdf(ref.read(whiteboardsRepositoryProvider), ref.read(boardUploaderProvider), widget.boardId, pngs);
+        return ref.read(exportSaverProvider)(pdf, exportName(s.board.title, 'pdf'), 'application/pdf');
+      });
+
+  /// One export at a time (review of #335): a second tap while one is drawn
+  /// and sent would draw everything twice and take a second worker.
+  bool _exporting = false;
+
+  Future<void> _export(BuildContext context, Future<ExportOutcome> Function(EditorState s) run) async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    void say(String text) => messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+    if (_exporting) return;
+    // Nowhere to save it here: said before a page is drawn or the server asked.
+    if (!ref.read(exportHereProvider)) return say(l10n.boardExportNotHere);
+    final s = ref.read(boardEditorProvider(widget.boardId)).value;
+    if (s == null) return;
+    _exporting = true;
+    say(l10n.boardExporting);
+    ExportOutcome outcome;
+    try {
+      outcome = await run(s);
+    } on ExportException catch (e) {
+      outcome = e.outcome;
+    } on Object {
+      outcome = ExportOutcome.failed;
+    } finally {
+      _exporting = false;
+    }
+    if (!mounted) return;
+    switch (outcome) {
+      case ExportOutcome.cancelled:
+        messenger.hideCurrentSnackBar();
+      case ExportOutcome.saved:
+        say(l10n.boardExportSaved);
+      case ExportOutcome.exportsOff:
+        say(l10n.boardExportOff);
+      case ExportOutcome.busy:
+        say(l10n.boardExportBusy);
+      case ExportOutcome.inProgress:
+        say(l10n.boardExportInProgress);
+      case ExportOutcome.expired:
+        say(l10n.boardExportExpired);
+      case ExportOutcome.tooLarge:
+        say(l10n.boardExportTooLarge);
+      case ExportOutcome.notHere:
+        say(l10n.boardExportNotHere);
+      case ExportOutcome.failed:
+        say(l10n.boardExportFailed);
+    }
+  }
+
   Future<void> _rename(BuildContext context, EditorState s) async {
     final l10n = L10n.of(context);
     final title = await askBoardTitle(context, title: l10n.boardsRename, action: l10n.boardsSave, initial: s.board.title);
@@ -547,18 +628,28 @@ class _FailedBanner extends StatelessWidget {
 }
 
 class _BoardMenu extends StatelessWidget {
-  const _BoardMenu({required this.onDelete});
+  const _BoardMenu({required this.onDelete, required this.onExportPng, required this.onExportPdf});
 
   final VoidCallback onDelete;
+  final VoidCallback onExportPng;
+  final VoidCallback onExportPdf;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     return PopupMenuButton<String>(
       tooltip: l10n.boardMore,
-      itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text(l10n.boardsDelete))],
-      onSelected: (v) {
-        if (v == 'delete') onDelete();
+      itemBuilder: (_) => [
+        PopupMenuItem(value: 'png', child: Text(l10n.boardExportPng)),
+        PopupMenuItem(value: 'pdf', child: Text(l10n.boardExportPdf)),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: 'delete', child: Text(l10n.boardsDelete)),
+      ],
+      onSelected: (v) => switch (v) {
+        'png' => onExportPng(),
+        'pdf' => onExportPdf(),
+        'delete' => onDelete(),
+        _ => null,
       },
     );
   }
