@@ -22,6 +22,13 @@ export const SECTIONS: readonly SectionSpec[] = [
   { key: 'cases', title: { en: 'Escalation cases', ar: 'حالات التصعيد' }, requires: ['cases.view'] },
   { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
   { key: 'enrolment', title: { en: 'Trials and new students', ar: 'الحصص التجريبية والطلاب الجدد' }, requires: ['trials.view', 'new_students.view'] },
+  { key: 'billing', title: { en: 'Payments', ar: 'المدفوعات' }, requires: ['billing.view', 'parents.view'] },
+  {
+    key: 'teachers',
+    title: { en: 'Teachers', ar: 'المعلمون' },
+    // Not certificates.view alone: the route does not open on it (PD-41's Designer reaches only certificates).
+    requires: ['teacher_supervision.view', 'teacher_profiles.review'],
+  },
   // PD-47 PR-4: everyone's own tasks are self-service, so no key is needed;
   // the team, decision and super-admin tiles come only to whom they apply.
   { key: 'tasks', title: { en: 'Tasks', ar: 'المهام' }, requires: [] },
@@ -30,6 +37,8 @@ export const SECTIONS: readonly SectionSpec[] = [
 /** Today on the Schedule (its day view opens on today); the Teachers department's queue. */
 const TODAY = () => '/schedule?view=day'
 const NEEDS_ACTION = () => '/teachers/needs-action'
+/** A section of the Teacher Supervision page, which keeps its section (and filters) in the URL. */
+const SUPERVISION = (query: string) => () => `/teachers/supervision?${query}`
 
 export interface TileSpec {
   label: Bilingual
@@ -191,6 +200,93 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     icon: 'clock',
     backlog: false,
     href: () => '/trials/new-students?filter=waiting',
+  },
+  // PD-44 PR-5: the Instalment Payments page's lines, Payments' receipts, the Parents list's subscription filters.
+  'instalments.overdue': {
+    label: { en: 'Overdue instalments', ar: 'أقساط متأخرة' },
+    icon: 'clock',
+    backlog: true,
+    // The page lists overdue first and counts them in its summary line.
+    href: () => '/instalments',
+  },
+  'instalments.due': {
+    label: { en: 'Instalments due today', ar: 'أقساط مستحقة اليوم' },
+    icon: 'banknote',
+    backlog: false,
+    href: () => '/instalments',
+  },
+  'instalments.unassigned': {
+    label: { en: 'Instalments with no responsible supervisor', ar: 'أقساط بلا مشرف مسؤول' },
+    icon: 'users',
+    backlog: true,
+    href: () => '/instalments?responsible=none',
+  },
+  'receipts.pending': {
+    label: { en: 'Receipts awaiting review', ar: 'إيصالات تنتظر المراجعة' },
+    icon: 'approvals',
+    backlog: true,
+    href: () => '/payments',
+  },
+  'parents.locked': {
+    label: { en: 'Parents of a child with a locked subscription', ar: 'أولياء أمور لطفل اشتراكه مقفل' },
+    icon: 'lock',
+    backlog: true,
+    href: () => '/parents?access=locked',
+  },
+  'parents.grace': {
+    label: { en: 'Parents of a child in the grace period', ar: 'أولياء أمور لطفل في فترة السماح' },
+    icon: 'clock',
+    backlog: false,
+    href: () => '/parents?access=grace',
+  },
+  // PD-44 PR-6: the Teacher Supervision page's queues, the Certificates page's Pending tab, the credentials queue.
+  'leave.pending': {
+    label: { en: 'Leave requests waiting for a decision', ar: 'طلبات إجازة تنتظر القرار' },
+    icon: 'calendar',
+    backlog: true,
+    href: SUPERVISION('section=leave'),
+  },
+  'absences.open': {
+    label: { en: 'Absences waiting for a decision', ar: 'غيابات تنتظر القرار' },
+    icon: 'users',
+    backlog: true,
+    href: SUPERVISION('section=absences'),
+  },
+  'lateness.open': {
+    label: { en: 'Lateness waiting for a decision', ar: 'تأخيرات تنتظر القرار' },
+    icon: 'clock',
+    backlog: true,
+    href: SUPERVISION('section=lateness'),
+  },
+  'feedback.received': {
+    label: { en: 'New parent feedback', ar: 'آراء جديدة من أولياء الأمور' },
+    icon: 'conversations',
+    backlog: true,
+    href: SUPERVISION('section=feedback&status=received'),
+  },
+  'feedback.in_review': {
+    label: { en: 'Parent feedback in review', ar: 'آراء أولياء الأمور قيد المراجعة' },
+    icon: 'conversations',
+    backlog: false,
+    href: SUPERVISION('section=feedback&status=in_review'),
+  },
+  'certificates.student_requested': {
+    label: { en: 'Student certificates requested', ar: 'شهادات طلاب مطلوبة' },
+    icon: 'academy',
+    backlog: false,
+    href: () => '/certificates?category=student',
+  },
+  'certificates.teacher_requested': {
+    label: { en: 'Teacher certificates requested', ar: 'شهادات معلمين مطلوبة' },
+    icon: 'academy',
+    backlog: false,
+    href: () => '/certificates?category=teacher',
+  },
+  'teacher_profiles.pending': {
+    label: { en: 'Teacher credentials to review', ar: 'مؤهلات معلمين تنتظر المراجعة' },
+    icon: 'approvals',
+    backlog: true,
+    href: () => '/teacher-profiles',
   },
 }
 

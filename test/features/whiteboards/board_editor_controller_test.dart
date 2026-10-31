@@ -34,8 +34,10 @@ class FakeBoards implements WhiteboardsRepository {
   Completer<void>? hold;
   Object? createError;
   final List<String> trashed = [];
+  bool imagesSupported = false;
 
   BoardDetail detail() => BoardDetail(
+    imagesSupported: imagesSupported,
     summary: BoardSummary(id: 'b1', title: 'Board', state: BoardState.active, revision: revision, pageCount: 2, updatedAt: DateTime(2026)),
     canEdit: true,
     pages: [pages['p1']!, pages['p2']!],
@@ -257,6 +259,35 @@ void main() {
     await settleDraft();
     expect(state().draftNotKept, isTrue);
     await c.flush();
+  });
+
+  test('a picture lands on the page its upload started on, whichever is showing (review of #328)', () async {
+    final c = await open();
+    c.goTo(1);
+    const image = ImageElement(id: 'i1', assetId: 'a1', rect: Rect.fromLTWH(0, 0, 40, 30));
+    expect(c.addTo('p1', image), isTrue);
+    expect(state().current, 1);
+    expect(state().pages[0].elements.single, image);
+    expect(state().pages[1].elements, isEmpty);
+    c.goTo(0);
+    expect(state().canUndo, isTrue);
+    c.undo();
+    expect(state().page.elements, isEmpty);
+    expect(c.addTo('gone', image), isFalse);
+    await c.flush();
+  });
+
+  test('images are offered only where the server knows them, until it says they are off (review of #328)', () async {
+    final page = {'id': 'p1', 'position': 0, 'document': {'elements': <Object>[]}};
+    final board = {'id': 'b1', 'title': 'B', 'state': 'active', 'revision': 1, 'pageCount': 1, 'updatedAt': '2026-10-31T00:00:00Z', 'pages': [page]};
+    expect(BoardDetail.fromJson(board).imagesSupported, isFalse);
+    expect(BoardDetail.fromJson({...board, 'assets': <Object>[]}).imagesSupported, isTrue);
+
+    repo.imagesSupported = true;
+    final c = await open();
+    expect(state().imagesSupported, isTrue);
+    c.imagesOff();
+    expect(state().imagesSupported, isFalse);
   });
 
   test('sign-out clears every board draft on the device', () async {

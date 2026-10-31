@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -19,7 +19,18 @@ export function ParentFeedbackSection({ basePath }: { basePath: string }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const [category, setCategory] = useState<CategoryFilter>('all')
-  const [status, setStatus] = useState<StatusFilter>('all')
+  // PD-44: the status lives in the URL (?section=feedback&status=received), so a
+  // Dashboard tile opens the list it counted.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('status')
+  const status: StatusFilter = asked === 'received' || asked === 'in_review' || asked === 'resolved' ? asked : 'all'
+  const setStatus = (next: StatusFilter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('status')
+      else p.set('status', next)
+      return p
+    }, { replace: true })
   const list = useParentFeedback({ ...(category !== 'all' ? { category } : {}), ...(status !== 'all' ? { status } : {}) })
   const take = useTakeFeedback()
   // PD-26 amendment: an Operations supervisor sees the teacher's name, not a Teacher File link.

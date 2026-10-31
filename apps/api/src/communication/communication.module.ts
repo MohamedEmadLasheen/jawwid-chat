@@ -182,6 +182,8 @@ import { SeatController } from './seats/seat.controller';
     RealtimeRelay,
     // PD-17: the Parent and Student Profiles show and (for a parent) change photos.
     AvatarService,
+    // PD-44: the Dashboard's Teachers section counts the credentials review queue.
+    TeacherProfileService,
   ],
 })
 export class CommunicationModule {}

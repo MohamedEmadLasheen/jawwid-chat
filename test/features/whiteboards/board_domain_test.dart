@@ -124,6 +124,32 @@ void main() {
       expect(out.last, newer);
     });
 
+    test('an image keeps the fields this build does not know, through moves and scales (review of #328)', () {
+      final json = <String, Object?>{
+        'id': 'i1',
+        'kind': 'image',
+        'assetId': 'aaaaaaaa-0000-4000-8000-000000000001',
+        'x': 10.0,
+        'y': 20.0,
+        'w': 400.0,
+        'h': 300.0,
+        'z': 7,
+        'crop': {'x': 0.1, 'y': 0.0, 'w': 0.8, 'h': 1.0},
+        'style': {'border': 'gold', 'radius': 12},
+        'transform': [1, 0, 0, 1, 0, 0],
+      };
+      final image = BoardElement.fromJson(json) as ImageElement;
+      expect(image.toJson(), json);
+      final moved = image.translated(const Offset(5, 5)).scaled(Offset.zero, 2, 2).toJson();
+      expect(moved['rect'], isNull);
+      expect({'x': moved['x'], 'y': moved['y'], 'w': moved['w'], 'h': moved['h']}, {'x': 30.0, 'y': 50.0, 'w': 800.0, 'h': 600.0});
+      for (final key in ['z', 'crop', 'style', 'transform']) {
+        expect(moved[key], json[key], reason: key);
+      }
+      // A known field is never overwritten by a stale copy in the extras.
+      expect(moved['assetId'], json['assetId']);
+    });
+
     test('moving and scaling keep ids; a verse without a position is not moved', () {
       final s = ink('s1', const [Offset(10, 10), Offset(20, 20)]);
       final moved = s.translated(const Offset(5, -5)) as InkElement;

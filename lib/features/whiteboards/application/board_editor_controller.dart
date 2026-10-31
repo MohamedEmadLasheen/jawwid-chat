@@ -54,12 +54,17 @@ class EditorState {
     this.draftNotKept = false,
     this.notice,
     this.assets = const [],
+    this.imagesSupported = false,
   });
 
   final BoardSummary board;
 
   /// The board's images as the server last signed them (PR-4); the image cache takes them.
   final List<BoardAsset> assets;
+
+  /// Whether adding a picture is offered: the server knows images, and has
+  /// not said they are switched off here (review of #328).
+  final bool imagesSupported;
   final List<BoardPage> pages;
   final int current;
   final bool canEdit;
@@ -94,6 +99,7 @@ class EditorState {
     EditorNotice? notice,
     bool clearNotice = false,
     List<BoardAsset>? assets,
+    bool? imagesSupported,
   }) => EditorState(
     board: board ?? this.board,
     pages: pages ?? this.pages,
@@ -107,6 +113,7 @@ class EditorState {
     draftNotKept: draftNotKept ?? this.draftNotKept,
     notice: clearNotice ? null : (notice ?? this.notice),
     assets: assets ?? this.assets,
+    imagesSupported: imagesSupported ?? this.imagesSupported,
   );
 }
 
@@ -207,6 +214,7 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
       save: _dirty.isEmpty ? SaveStatus.saved : SaveStatus.dirty,
       draftStale: _stale.isNotEmpty,
       assets: detail.assets,
+      imagesSupported: detail.imagesSupported,
     );
   }
 
@@ -239,6 +247,26 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     final page = s.page;
     _history[page.id]!.push(elements);
     _replacePage(page.copyWith(elements: _history[page.id]!.present));
+  }
+
+  /// [element] added to page [pageId], whichever page is showing now: a
+  /// picture lands on the page its upload started on (review of #328). One
+  /// undo step on that page. False when the page is gone or the board is not
+  /// editable.
+  bool addTo(String pageId, BoardElement element) {
+    final s = _s;
+    final h = _history[pageId];
+    final page = s?.pages.where((p) => p.id == pageId).firstOrNull;
+    if (s == null || !s.canEdit || h == null || page == null) return false;
+    h.push([...h.present, element]);
+    _replacePage(page.copyWith(elements: h.present));
+    return true;
+  }
+
+  /// The server said images are switched off here: stop offering them.
+  void imagesOff() {
+    final s = _s;
+    if (s != null && s.imagesSupported) _set(s.copyWith(imagesSupported: false));
   }
 
   void undo() => _step((h) => h.undo());
