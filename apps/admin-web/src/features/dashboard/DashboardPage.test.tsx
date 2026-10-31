@@ -249,6 +249,17 @@ describe('the manager Dashboard', () => {
     expect(screen.getByRole('link', { name: /حالات تجاوزت موعدها/ })).toBeInTheDocument()
   })
 
+  it("the super admin's /dashboard is the Admin Portal's Dashboard: the same sections, above the inventory (PR-8)", async () => {
+    routes['/admin/overview'] = () => json({ error: { code: 'NOT_FOUND', message: 'not here' } }, 404)
+    open(makeStaff({ id: 'staff_root', role: 'super_admin', permissions: ['chat.use', 'cases.view'] }))
+    // One Dashboard per person (Q7): the Admin Portal's, which asks for its inventory too.
+    const waiting = await screen.findByRole('link', { name: /Chats waiting for our reply/ })
+    expect(waiting).toHaveAttribute('href', '/chat?view=waiting')
+    await waitFor(() => expect(requested()).toContain('/admin/overview'))
+    const nav = screen.getByRole('navigation')
+    expect(within(nav).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
+  })
+
   for (const role of ['manager', 'super_admin'] as StaffRole[]) {
     it(`never calls the retired on-duty routes (${role})`, async () => {
       open(makeStaff({ id: `staff_${role}`, role, permissions: ['chat.use', 'cases.view'] }))
