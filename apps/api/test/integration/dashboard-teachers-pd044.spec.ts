@@ -27,7 +27,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { PrismaService } from '@platform/prisma.service';
 import { PermissionService } from '@platform/permissions/permission.service';
 import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { LessonService } from '../../src/lessons/lesson.service';
@@ -45,14 +44,11 @@ import { CertificateService } from '../../src/certificates/certificate.service';
 import { CertificateTypeService } from '../../src/certificates/certificate-type.service';
 import type { DashboardTile } from '../../src/dashboard/dashboard-tile';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { statementCounter } from './statement-counter';
 
-const logged = new PrismaService({ log: [{ emit: 'event', level: 'query' }] });
-let statements = 0;
-(logged as unknown as { $on(event: 'query', cb: () => void): void }).$on('query', () => {
-  statements += 1;
-});
+const counter = statementCounter();
 
-const g = buildGraph(undefined, logged);
+const g = buildGraph(undefined, counter.prisma);
 const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
 const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
@@ -109,11 +105,7 @@ const all = async (actorId: string) => [
   ...(await profiles.dashboardCounts(actorId)),
 ];
 
-async function counted<T>(run: () => Promise<T>): Promise<{ result: T; n: number }> {
-  statements = 0;
-  const result = await run();
-  return { result, n: statements };
-}
+const counted = counter.counted;
 
 function plusDays(day: string, n: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
