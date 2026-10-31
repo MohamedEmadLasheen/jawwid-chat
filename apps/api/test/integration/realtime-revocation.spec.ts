@@ -1589,7 +1589,7 @@ const REDIS_URL = process.env.REALTIME_REVOCATION_REDIS_URL;
     return String(await probe().client('LIST')).includes(` name=rt009-node:${internals(n).uid} `);
   }
   const registered = async (n: Node) => (await leaseRemainingMs(n)) > 0;
-  const queueIdle = (n: Node) => (n.gateway as unknown as { queues: Map<string, unknown> }).queues.size === 0;
+  const queueIdle = (n: Node) => (n.gateway as unknown as { deliveries: { pendingKeys: number } }).deliveries.pendingKeys === 0;
 
   /** Node `n` silently drops every completion-barrier request -- and nothing else. */
   function dropFenceRequests(n: Node): { dropped: () => number; restore: () => void } {
@@ -1990,5 +1990,107 @@ const REDIS_URL = process.env.REALTIME_REVOCATION_REDIS_URL;
       await restoreLease(b);
     }
     await deliveredOnlyTo(a, groupId, p2OnB, [pOnB]);
+  });
+});
+
+describe('deliveries are ordered per conversation, not per node', () => {
+  afterEach(() => {
+    node.gateway.deliveryBarrier = undefined;
+  });
+
+  const event = (conversationId: string, messageId: string) =>
+    ({ conversationId, messageId, seq: '1' }) as never;
+
+  it('a delivery held in one conversation does not hold up another conversation', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    await p.subscribe(groupId);
+    await p.subscribe(directId);
+
+    const held = holdNextDelivery(node);
+    const inGroup = randomUUID();
+    const groupDelivery = node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, inGroup));
+    await held.reached; // the group's delivery is decided and parked before its emits
+    try {
+      const inDirect = randomUUID();
+      const directDelivery = node.gateway.toThread(directId, CommEvent.MESSAGE_CREATED, event(directId, inDirect));
+      await p.waitFor(CommEvent.MESSAGE_CREATED, inDirect); // arrives while the group is still held
+      await directDelivery;
+      expect(p.has(CommEvent.MESSAGE_CREATED, inGroup)).toBe(false);
+    } finally {
+      held.release();
+    }
+    await groupDelivery;
+    await p.waitFor(CommEvent.MESSAGE_CREATED, inGroup);
+  });
+
+  it('two deliveries to one person in two conversations, both in flight: a deactivation completes only after both, and neither conversation reaches them afterwards', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    const admin = await connect(node, (await login('staff')).accessToken);
+    await p.subscribe(groupId);
+    await p.subscribe(directId);
+    await p2.subscribe(groupId);
+    await admin.subscribe(directId);
+
+    // Park BOTH deliveries between decision and emit -- at the same time, which
+    // the old one-queue-per-node could never do.
+    let reached = 0;
+    const bothIn = deferred();
+    const release = deferred();
+    node.gateway.deliveryBarrier = async () => {
+      if (++reached === 2) {
+        node.gateway.deliveryBarrier = undefined;
+        bothIn.resolve();
+      }
+      await release.promise;
+    };
+    const inGroup = randomUUID();
+    const inDirect = randomUUID();
+    const deliveries = [
+      node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, inGroup)),
+      node.gateway.toThread(directId, CommEvent.MESSAGE_CREATED, event(directId, inDirect)),
+    ];
+    await bothIn.promise;
+
+    let updateReturned = false;
+    const deactivation = withoutPushes(node, () =>
+      prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`),
+    ).then(() => {
+      updateReturned = true;
+    });
+    await waitUntil(async () => updateReturned || (await lockWaiters()) > 0, 'deactivation returned or blocked');
+    expect(updateReturned).toBe(false); // held by BOTH in-flight deliveries' row locks
+
+    release.resolve();
+    await Promise.all(deliveries);
+    await deactivation;
+    await p2.waitFor(CommEvent.MESSAGE_CREATED, inGroup);
+    await admin.waitFor(CommEvent.MESSAGE_CREATED, inDirect);
+
+    // After it completed: nothing in either conversation reaches the deactivated parent.
+    await deliveredOnlyTo(node, groupId, p2, [p]);
+    await deliveredOnlyTo(node, directId, admin, [p]);
+  });
+
+  it('within one conversation a later event waits for the held one, and arrives after it', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    await p.subscribe(groupId);
+
+    const held = holdNextDelivery(node);
+    const first = randomUUID();
+    const second = randomUUID();
+    const deliveries = [node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, first))];
+    await held.reached;
+    deliveries.push(node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, second)));
+    await sleep(GRACE_MS);
+    expect(p.has(CommEvent.MESSAGE_CREATED, second)).toBe(false); // queued behind the held one
+    held.release();
+    await Promise.all(deliveries);
+    await p.waitFor(CommEvent.MESSAGE_CREATED, second);
+    const order = p.inbox
+      .filter((e) => e.event === CommEvent.MESSAGE_CREATED)
+      .map((e) => (e.payload as { messageId: string }).messageId)
+      .filter((m) => m === first || m === second);
+    expect(order).toEqual([first, second]);
   });
 });
