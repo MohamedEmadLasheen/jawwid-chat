@@ -10,6 +10,11 @@ import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
 import { BillingService } from '../billing/billing.service';
 import { PaymentsService } from '../billing/payments.service';
 import { ParentRecordService } from '../parent-profile/parent-record.service';
+import { LeaveService } from '../leave/leave.service';
+import { DisciplineService } from '../discipline/discipline.service';
+import { ParentFeedbackService } from '../teacher-file/parent-feedback.service';
+import { CertificateService } from '../certificates/certificate.service';
+import { TeacherProfileService } from '../communication/teacher-profile/teacher-profile.service';
 import { Requires, SelfService } from '../platform/permissions/route-access';
 import { dashboardSection, type DashboardSection, type DashboardTile } from './dashboard-tile';
 
@@ -35,6 +40,11 @@ export class DashboardController {
     private readonly billing: BillingService,
     private readonly payments: PaymentsService,
     private readonly parents: ParentRecordService,
+    private readonly leave: LeaveService,
+    private readonly discipline: DisciplineService,
+    private readonly feedback: ParentFeedbackService,
+    private readonly certificates: CertificateService,
+    private readonly profiles: TeacherProfileService,
   ) {}
 
   /** Chats waiting for a staff reply, in the caller's PD-8 scope. Links to /chat. */
@@ -122,6 +132,42 @@ export class DashboardController {
       ...(holds('billing.view') ? await this.billing.dashboardCounts(actorId) : []),
       ...(holds('billing.view') ? await this.payments.dashboardCounts(actorId) : []),
       ...(holds('parents.view') ? await this.parents.dashboardCounts(actorId) : []),
+    ];
+    return dashboardSection(tiles, now);
+  }
+
+  /**
+   * Teachers: the Teacher Supervision page's queues (teacher_supervision.view)
+   * -- leave waiting for a decision, open absences and lateness, new and
+   * in-review parent feedback -- each in the page's own scope (PD-35, and for
+   * Operations the PD-26 basis: teacher-level rows whole, rows about one child
+   * only for their own families); the Certificates page's pending requests
+   * per category (certificates.view, with one of the two keys below); the
+   * Teacher Profiles credentials queue (teacher_profiles.review). Links to
+   * /teachers/supervision?section=, /certificates?category= and
+   * /teacher-profiles.
+   *
+   * certificates.view alone does not open this route: the certificate keys
+   * open exactly the certificate routes (PD-41's Designer reaches nothing
+   * else, pd040-route-permissions.spec.ts), so the certificate tiles come to
+   * the Teachers department and the super admin, who hold a key below too.
+   */
+  @Requires('teacher_supervision.view', 'teacher_profiles.review')
+  @Get('teachers')
+  async teachersSection(
+    @ActorId() actorId: string,
+    @Req() request?: { permissions?: ReadonlySet<string> },
+  ): Promise<DashboardSection> {
+    const now = new Date();
+    const keys = request?.permissions;
+    const holds = (key: string) => !keys || keys.has(key);
+    const supervision = holds('teacher_supervision.view');
+    const tiles: DashboardTile[] = [
+      ...(supervision ? await this.leave.dashboardCounts(actorId) : []),
+      ...(supervision ? await this.discipline.dashboardCounts(actorId) : []),
+      ...(supervision ? await this.feedback.dashboardCounts(actorId) : []),
+      ...(holds('certificates.view') ? await this.certificates.dashboardCounts(actorId) : []),
+      ...(holds('teacher_profiles.review') ? await this.profiles.dashboardCounts(actorId) : []),
     ];
     return dashboardSection(tiles, now);
   }

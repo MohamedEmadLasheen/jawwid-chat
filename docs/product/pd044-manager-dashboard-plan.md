@@ -237,6 +237,14 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 ### 3.6 `GET /dashboard/teachers` · `@Requires('teacher_supervision.view')`
 
+> **As built (PR-6):** the route is `@Requires('teacher_supervision.view', 'teacher_profiles.review')`. Each tile equals the list its link opens, for the same caller:
+> - `leave.pending`: the Leave requests list (`state=requested`), in the page's scope (`pageRowsOf`). It is counted in one statement over the list's own predicate and capped at the list's 500.
+> - `absences.open` and `lateness.open`: the page's Absences and Lateness queues (`state=open`, `kind=absences` / `late`), not one `violations.open`. No page lists every open violation together. Both are found as the list finds them: one shared query, the same 500 candidates, then `standing()` and `visible()`. `capped` when the candidates reach 500.
+> - `feedback.received` and `feedback.in_review`: the page's statuses (there is no `new`). Each is the same shared query as the list, with the per-child visibility. The feedback section now reads `?status=` from the URL.
+> - `certificates.student_requested` and `certificates.teacher_requested`: each category's Pending tab, counted over `list`'s own `scopePredicate` in one statement. A category's tile comes only to whom the page shows that tab. They also need `certificates.view`, but that key alone does not open the route: the certificate keys open exactly the certificate routes, so PD-41's Designer reaches nothing new.
+> - `teacher_profiles.pending`: the credentials review queue (`/teacher-profiles`), one row per profile with a credential waiting. That queue is organization-wide, with no teacher scope, so the tile is too. It comes to whoever holds `teacher_profiles.review`, the Operations Manager included if their bundle grants it. The page decides, not this plan's table.
+> - Staff off a page get none of its tiles; anyone not staff is refused with that page's code.
+
 | Tile | Predicate | Scope |
 |---|---|---|
 | `leave.pending` | `teacher_leave_request` state `requested` (open index) | `TeacherScopeService.pageRowsOf` (`teacher-scope.ts:177`) |
