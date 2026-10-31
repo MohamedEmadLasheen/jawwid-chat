@@ -184,10 +184,38 @@ begin
   raise notice 'pass  D2 chat.support_case is absent';
 
   if exists (select 1 from information_schema.columns
-              where table_schema = 'chat' and column_name in ('thread_id', 'case_id')) then
-    raise exception 'FAIL: a thread_id/case_id column came back';
+              where table_schema = 'chat' and column_name = 'thread_id') then
+    raise exception 'FAIL: a thread_id column came back';
   end if;
-  raise notice 'pass  D3 no thread_id or case_id column anywhere in chat';
+  raise notice 'pass  D3a no thread_id column anywhere in chat';
+
+  -- PD-35 (supabase/migrations/20261026160007_chat_pd035_supervision_cases.sql)
+  -- added chat.supervision_case: a staff supervision record, not the C-3
+  -- support case, and never part of a conversation. Its own child tables carry
+  -- case_id, each a FOREIGN KEY to chat.supervision_case. That is the only
+  -- case_id allowed: one that references nothing (or anything else), or that
+  -- sits on a conversation/message table, is the removed case model coming back.
+  declare
+    offenders text;
+  begin
+    select string_agg(format('chat.%I.case_id', c.table_name), ', ' order by c.table_name)
+      into offenders
+      from information_schema.columns c
+     where c.table_schema = 'chat' and c.column_name = 'case_id'
+       and (c.table_name in ('conversation', 'conversation_member', 'message')
+            or to_regclass('chat.supervision_case') is null
+            or not exists (
+              select 1 from pg_constraint k
+                join pg_attribute a on a.attrelid = k.conrelid and a.attname = 'case_id'
+               where k.contype = 'f'
+                 and k.conrelid = format('chat.%I', c.table_name)::regclass
+                 and k.confrelid = to_regclass('chat.supervision_case')
+                 and k.conkey = array[a.attnum]));
+    if offenders is not null then
+      raise exception 'FAIL: a case_id column that is not a PD-35 supervision-case reference: %', offenders;
+    end if;
+  end;
+  raise notice 'pass  D3b every case_id in chat is a PD-35 chat.supervision_case foreign key; none on conversation/message';
 
   -- C-3: system events are carried by Task types, not by a new conversation
   -- type and not by a resurrected case type.
