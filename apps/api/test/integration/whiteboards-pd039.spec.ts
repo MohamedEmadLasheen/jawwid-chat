@@ -596,6 +596,36 @@ describe('PR-4: images and export', () => {
     expect(await code(asSupport(support, () => boards.grantExport(b.id, { pages: [{ byteSize: 10 }] }, t)))).toBe(CommErrorCode.WHITEBOARD_DENIED);
   });
 
+  it('a board read never fails for its images: off here, or not signable, it opens with none (review of #336)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Signed' }, t);
+    const { asset } = await addImage(b.id, t);
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(asset.id) }, t);
+    const mgr = staff(tmgr, 'manager');
+    expect((await boards.open(b.id, t)).assets.map((a) => a.id)).toEqual([asset.id]);
+    // Storage that cannot sign: the board, its pages and its log row, without the images.
+    const sign = jest.spyOn(g.storage, 'signedReadUrl').mockRejectedValue(new Error('storage misconfigured'));
+    try {
+      const before = (await log(b.id)).length;
+      const opened = await boards.open(b.id, t);
+      expect([opened.id, opened.pages.length, opened.assets]).toEqual([b.id, 1, []]);
+      expect((await boards.review(b.id, mgr)).assets).toEqual([]);
+      expect((await log(b.id)).length).toBe(before + 2);
+    } finally {
+      sign.mockRestore();
+    }
+    // Images switched off here: none signed at all.
+    await assetsSwitch(false);
+    const signs = jest.spyOn(g.storage, 'signedReadUrl');
+    try {
+      expect((await boards.open(b.id, t)).assets).toEqual([]);
+      expect((await boards.review(b.id, mgr)).assets).toEqual([]);
+      expect(signs).not.toHaveBeenCalled();
+    } finally {
+      signs.mockRestore();
+    }
+  });
+
   it('a copy takes its images to keys of the new board, and the pages name the copies', async () => {
     const t = teacher(s.teacherId);
     const b = await boards.create({ title: 'Original' }, t);

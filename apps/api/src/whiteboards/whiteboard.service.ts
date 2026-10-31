@@ -1279,6 +1279,26 @@ export class WhiteboardService {
     return this.assets.sign(board, rows);
   }
 
+  /**
+   * The images a board answer carries (review of #336): none while images are
+   * off here, and none if they cannot be signed -- the board is still served
+   * and its images show as unavailable. A board read never fails for them.
+   */
+  private async boardImages(tx: Tx, board: BoardRow): Promise<AssetView[]> {
+    if (!(await this.assetsEnabled())) return [];
+    const rows = await tx.$queryRaw<AssetRow[]>`
+      SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height
+        FROM chat.whiteboard_asset
+       WHERE board_id = ${board.id}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page')
+       ORDER BY created_at`;
+    try {
+      return await this.assets.sign(board, rows);
+    } catch (e) {
+      this.log.warn(`board ${board.id}: its images could not be signed; served without them: ${String(e)}`);
+      return [];
+    }
+  }
+
   /** §6.4: a teacher's images (all their boards, trash included), plus `adding`, within 300 MB. */
   private async assertAssetQuota(tx: Tx, teacherId: string, adding: number): Promise<void> {
     const [{ used }] = await tx.$queryRaw<Array<{ used: bigint }>>`
@@ -1296,10 +1316,14 @@ export class WhiteboardService {
    * verified (review of #305): both flags, or nothing.
    */
   private async assetsOn(): Promise<void> {
-    const [enabled, lifecycle] = await Promise.all([this.config.get('whiteboards.assets_enabled'), this.config.get('whiteboards.assets_lifecycle_verified')]);
-    if (enabled !== true || lifecycle !== true) {
+    if (!(await this.assetsEnabled())) {
       throw new CommError(CommErrorCode.WHITEBOARD_ASSETS_OFF, 'images and export are not switched on here yet', 503);
     }
+  }
+
+  private async assetsEnabled(): Promise<boolean> {
+    const [enabled, lifecycle] = await Promise.all([this.config.get('whiteboards.assets_enabled'), this.config.get('whiteboards.assets_lifecycle_verified')]);
+    return enabled === true && lifecycle === true;
   }
 
   private byteSize(value: unknown, field: string): number {
@@ -1321,7 +1345,7 @@ export class WhiteboardService {
     const pages = await tx.$queryRaw<PageRow[]>`
       SELECT id::text AS id, position, layout, background, document, updated_at
         FROM chat.whiteboard_page WHERE board_id = ${board.id}::uuid ORDER BY position`;
-    const assets = await this.signedImages(tx, board);
+    const assets = await this.boardImages(tx, board);
     return {
       assets,
       ...summary(board),
