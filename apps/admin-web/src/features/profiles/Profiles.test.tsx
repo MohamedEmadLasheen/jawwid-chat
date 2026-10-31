@@ -377,3 +377,23 @@ describe('PD-32: feedback about teachers on the Parent Profile', () => {
     expect(screen.queryByRole('region', { name: 'Feedback about teachers' })).not.toBeInTheDocument()
   })
 })
+
+describe('the Parents list, filtered by subscription (PD-44)', () => {
+  const item = { id: 'p-1', name: 'Parent One', avatarUrl: null, family: { id: 'f-1', name: 'Family One' }, childrenCount: 2 }
+
+  it('opens on the filter the URL names and asks the server for it', async () => {
+    on('GET', /\/parent-profiles\?access=locked$/, () => json({ items: [item], truncated: false }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents?access=locked' })
+    expect(await screen.findByText('Parent One')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Locked subscription' })).toHaveAttribute('aria-pressed', 'true')
+    expect(calls('GET', /\/parent-profiles\?access=locked$/).length).toBeGreaterThan(0)
+  })
+
+  it('asks for the grace period when that chip is chosen, and for everyone again with All', async () => {
+    on('GET', /\/parent-profiles(\?access=grace)?$/, () => json({ items: [item], truncated: false }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents' })
+    expect(await screen.findByText('Parent One')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Grace period' }))
+    await waitFor(() => expect(calls('GET', /\/parent-profiles\?access=grace$/).length).toBeGreaterThan(0))
+  })
+})

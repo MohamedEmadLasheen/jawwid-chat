@@ -19,11 +19,18 @@ export class ParentRecordController {
   /**
    * ?q= -- the parents this staff member may open. PD-45: ?location=missing --
    * those whose location is not complete; ?with=location -- each row's location.
+   * PD-44: ?access=locked|grace -- those with a child in that subscription state.
    */
   @Requires('parents.view')
   @Get()
-  list(@ActorId() actorId: string, @Query('q') q?: string, @Query('location') location?: string, @Query('with') withFields?: string) {
-    return this.parents.list(actorId, q, location, withFields);
+  list(
+    @ActorId() actorId: string,
+    @Query('q') q?: string,
+    @Query('location') location?: string,
+    @Query('with') withFields?: string,
+    @Query('access') access?: string,
+  ) {
+    return this.parents.list(actorId, q, location, withFields, access);
   }
 
   @Requires('parents.view')
