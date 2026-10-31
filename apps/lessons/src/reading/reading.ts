@@ -73,10 +73,14 @@ export interface ResolvedReading {
 export const STAGE_ID = /^[a-z][a-z0-9_]*$/;
 
 const FATHATAN = String.fromCodePoint(0x64b);
-/** A word's bare letters, with a tanween fath's carrier alif or alif maqsura dropped (كِتَابًا = كِتَابْ). */
+/**
+ * A word's bare letters, with a tanween fath's carrier alif or alif maqsura dropped, whether the
+ * fathatan is written before it (كِتَابًا) or on it (كِتَاباً): all three are كِتَابْ's letters.
+ */
 export function bare(word: string): string {
-  const w = word.endsWith(FATHATAN + 'ا') || word.endsWith(FATHATAN + 'ى') ? word.slice(0, -1) : word;
-  return lettersOf(w).join('');
+  const letters = lettersOf(word);
+  const carried = word.endsWith(FATHATAN + 'ا') || word.endsWith(FATHATAN + 'ى') || word.endsWith('ا' + FATHATAN) || word.endsWith('ى' + FATHATAN);
+  return (carried ? letters.slice(0, -1) : letters).join('');
 }
 const PUNCTUATION = new Set(['.', '،', '؟', '!', '؛']);
 
@@ -181,7 +185,9 @@ export function resolveReadingLesson(raw: unknown, lesson: number): ResolvedRead
         const s = byId.get(q.sentence);
         check(!!s && s.kind === 'sentence' && typeof q.blank === 'number');
         const ws = wordsOf(s.text)!;
-        check(Number.isInteger(q.blank) && q.blank >= 0 && q.blank < ws.length);
+        // The blank is the verb, word 0: "the blank's place" below is a token index, and it means "the same
+        // grammatical role" only for verb-first sentences (review of #292). Another role needs its own encoding.
+        check(q.blank === 0 && ws.length > 1);
         check(q.options.every(isWord));
         const right = q.options.flatMap((o, i) => (o === ws[q.blank] ? [i] : []));
         check(right.length === 1 && right[0] === q.answer); // exactly one option completes the sentence verbatim
