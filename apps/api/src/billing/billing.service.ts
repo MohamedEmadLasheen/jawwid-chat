@@ -14,12 +14,13 @@ import { todayIn } from '../leave/leave.service';
 import { billingAccessOf, familyInScopeSql } from './billing-access';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
-import { day, invalid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
+import { day, invalid, optionalUuid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
 import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-ledger.service';
 import { PaymentsReadService, type MoneyView } from './payments-read.service';
 import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 import { childSubscriptions, forParent } from './subscription-reads';
+import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const RESPONSIBLE = ['all', 'me', 'none'] as const;
@@ -463,16 +464,40 @@ export class BillingService {
     const reference = body.reference === undefined || body.reference === null || body.reference === ''
       ? null
       : requireText('reference', body.reference, 120);
+    // ADMIN-001: a replay answers before the "already paid" check the first submit made true.
+    const paymentKey = optionalUuid('paymentId', body.paymentId);
+    const samePayment = (p: { instalmentId: string | null; recordedBy: string | null; method: string; paidOn: Date; reference: string | null }) =>
+      p.instalmentId === inv.id && p.recordedBy === actor.actorId && p.method === method
+      && isoDay(p.paidOn) === paidOn && (p.reference ?? null) === reference;
+    if (paymentKey) {
+      const prior = await this.prisma.payment.findUnique({ where: { id: paymentKey } });
+      if (prior) {
+        assertReplay('payment', samePayment(prior));
+        return this.presentFamily(actor, access, inv.familyId);
+      }
+    }
     if (inv.paidOn || inv.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid or voided', 409);
     const ledger = this.requireLedger();
 
     const recorded = await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      if (paymentKey) {
+        await lockIdempotencyKey(tx, paymentKey);
+        const prior = await tx.payment.findUnique({ where: { id: paymentKey } });
+        if (prior) {
+          assertReplay('payment', samePayment(prior));
+          return null; // a concurrent duplicate: the first one wrote it
+        }
+      }
+      // Lock the instalment BEFORE reading what it still owes: two submits that
+      // arrive together (with no key, or different keys) must not both see it unpaid.
+      await tx.$queryRaw`SELECT id FROM chat.family_instalment WHERE id = ${inv.id}::uuid FOR UPDATE`;
       const paid = await ledger.standingSum(tx, { instalmentId: inv.id });
       const remaining = Number(inv.amountMinor) - paid;
       if (remaining <= 0) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already covered', 409);
       const learner = inv.learnerId ? await tx.learner.findUnique({ where: { id: inv.learnerId }, select: { name: true } }) : null;
       return ledger.record(tx, {
+        id: paymentKey ?? undefined,
         organizationId: inv.organizationId,
         familyId: inv.familyId,
         trialLessonId: null,
@@ -490,7 +515,7 @@ export class BillingService {
         auditReason: 'payment recorded',
       });
     }).catch((e) => { throw mapPaymentRefusal(e); });
-    await ledger.afterRecorded(recorded);
+    if (recorded) await ledger.afterRecorded(recorded);
     return this.presentFamily(actor, access, inv.familyId);
   }
 

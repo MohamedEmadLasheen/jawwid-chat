@@ -13,6 +13,7 @@ import { BillingService } from './billing.service';
 import { CheckoutService } from './checkout.service';
 import { PaymentLedger } from './payment-ledger.service';
 import { dateOnly, invalid, optionalText, optionalUuid, requireAmount, requireDate } from './validate';
+import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
 
 export const RECEIPT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
 export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
@@ -74,6 +75,18 @@ export class ParentPaymentsService {
     if (transferredOn > todayIn(await this.billing.timeZone())) throw invalid('transferredOn: not after today');
     const note = optionalText('note', body.note, 500);
 
+    // ADMIN-001: one uploaded file is one receipt (object_key is unique), so the
+    // file's key is this submit's idempotency key: the same submit again (a retry,
+    // a double tap) gets the first answer; another use of the file is refused.
+    const sameReceipt = (r: { familyId: string | null; uploadedBy: string | null; amountMinor: bigint; transferredOn: Date; note: string | null }) =>
+      r.familyId === contact.familyId && r.uploadedBy === contact.id && Number(r.amountMinor) === amountMinor
+      && isoDay(r.transferredOn) === transferredOn && (r.note ?? null) === (note ?? null);
+    const prior = await this.prisma.paymentReceipt.findUnique({ where: { objectKey } });
+    if (prior) {
+      assertReplay('receipt', sameReceipt(prior));
+      return this.billing.mine(actorId);
+    }
+
     // The file must be there, and be what storage was told it is.
     const stored = await this.storage.readHead(objectKey, 16);
     if (!stored) throw new CommError(CommErrorCode.BILLING_STATE, 'the receipt file has not been uploaded', 409);
@@ -93,6 +106,12 @@ export class ParentPaymentsService {
 
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      await lockIdempotencyKey(tx, objectKey);
+      const concurrent = await tx.paymentReceipt.findUnique({ where: { objectKey } });
+      if (concurrent) {
+        assertReplay('receipt', sameReceipt(concurrent));
+        return; // a concurrent duplicate: the first one wrote it
+      }
       const receipt = await tx.paymentReceipt.create({
         data: {
           organizationId: contact.organizationId,

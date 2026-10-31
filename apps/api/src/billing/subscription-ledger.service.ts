@@ -99,10 +99,12 @@ export class SubscriptionLedger {
     const reason = requireText('reason', body.reason, 500);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
-      await tx.learnerSubscription.update({
-        where: { id: row.id },
+      // ADMIN-001: two voids arriving together -- only one writes (and audits).
+      const changed = await tx.learnerSubscription.updateMany({
+        where: { id: row.id, voidedAt: null },
         data: { voidedAt: new Date(), voidedBy: actor.actorId, voidReason: reason },
       });
+      if (changed.count !== 1) throw new CommError(CommErrorCode.SUBSCRIPTION_STATE, 'this subscription is already voided', 409);
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'subscription.voided',

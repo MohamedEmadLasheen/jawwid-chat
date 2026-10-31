@@ -18,6 +18,7 @@ import { familyInScopeSql } from './billing-access';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
 import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
+import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
 import { formatMajor, minorDigits } from './money';
 import type { TrialFormPayer } from '../new-students/new-students.service';
 import {
@@ -265,6 +266,21 @@ export class PaymentsService {
     const requestId = optionalUuid('requestId', body.requestId);
     const instalmentId = optionalUuid('instalmentId', body.instalmentId);
     if (requestId && instalmentId) throw invalid('requestId or instalmentId, not both');
+    // ADMIN-001: the submit's idempotency key -- checked before anything that a
+    // first, successful submit changes (what is owed, whether it is paid).
+    const paymentKey = optionalUuid('paymentId', body.paymentId);
+    const sameManual = (p: Payment) =>
+      p.organizationId === actor.organizationId && p.familyId === family.id && p.recordedBy === actor.actorId
+      && p.method === method && Number(p.amountMinor) === amountMinor && isoDay(p.paidOn) === paidOn
+      && (p.reference ?? null) === (reference ?? null) && (p.requestId ?? null) === (requestId ?? null)
+      && (instalmentId === null || p.instalmentId === instalmentId);
+    if (paymentKey) {
+      const prior = await this.prisma.payment.findUnique({ where: { id: paymentKey } });
+      if (prior) {
+        assertReplay('payment', sameManual(prior));
+        return this.billing.presentFamily(actor, access, family.id);
+      }
+    }
 
     let learnerId = optionalUuid('learnerId', body.learnerId);
     let currency: string | null = body.currency === undefined || body.currency === null ? null : requireCurrency(body.currency);
@@ -298,7 +314,16 @@ export class PaymentsService {
 
     const recorded = await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      if (paymentKey) {
+        await lockIdempotencyKey(tx, paymentKey);
+        const prior = await tx.payment.findUnique({ where: { id: paymentKey } });
+        if (prior) {
+          assertReplay('payment', sameManual(prior));
+          return null; // a concurrent duplicate: the first one wrote it
+        }
+      }
       return this.ledger.record(tx, {
+        id: paymentKey ?? undefined,
         organizationId: actor.organizationId as string,
         familyId: family.id,
         trialLessonId: null,
@@ -316,7 +341,7 @@ export class PaymentsService {
         auditReason: method === 'cash' ? 'cash received' : 'bank transfer confirmed',
       });
     }).catch((e) => { throw mapPaymentRefusal(e); });
-    await this.ledger.afterRecorded(recorded);
+    if (recorded) await this.ledger.afterRecorded(recorded);
     return this.billing.presentFamily(actor, access, family.id);
   }
 
@@ -341,6 +366,10 @@ export class PaymentsService {
     }
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // ADMIN-001: two voids arriving together -- the second finds it voided.
+      await tx.$queryRaw`SELECT id FROM chat.payment WHERE id = ${payment.id}::uuid FOR UPDATE`;
+      const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, select: { voidedAt: true } });
+      if (fresh.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this payment is already voided', 409);
       await this.ledger.voidPayment(tx, payment, actor.actorId, reason);
     }).catch((e) => { throw mapPaymentRefusal(e); });
     return this.presentAfter(actor, access, payment);
@@ -352,6 +381,18 @@ export class PaymentsService {
     const payment = await this.requirePayment(actor, access, paymentId);
     const amountMinor = requireAmount('amountMinor', body.amountMinor);
     const reason = requireText('reason', body.reason, 500);
+    // ADMIN-001: a replay of this submit answers before the "left to refund"
+    // check (which the first one changed) and before any call to Stripe.
+    const refundKey = optionalUuid('refundId', body.refundId);
+    const sameRefund = (r: { paymentId: string; amountMinor: bigint; reason: string; recordedBy: string | null }) =>
+      r.paymentId === payment.id && Number(r.amountMinor) === amountMinor && r.reason === reason && r.recordedBy === actor.actorId;
+    if (refundKey) {
+      const prior = await this.prisma.paymentRefund.findUnique({ where: { id: refundKey } });
+      if (prior) {
+        assertReplay('refund', sameRefund(prior));
+        return this.presentAfter(actor, access, payment);
+      }
+    }
     if (payment.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'a voided payment is not refunded', 409);
     const refunded = Number((await this.prisma.paymentRefund.aggregate({ where: { paymentId: payment.id }, _sum: { amountMinor: true } }))._sum.amountMinor ?? 0n);
     if (refunded + amountMinor > Number(payment.amountMinor)) {
@@ -374,10 +415,19 @@ export class PaymentsService {
     }
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      if (refundKey) {
+        await lockIdempotencyKey(tx, refundKey);
+        const prior = await tx.paymentRefund.findUnique({ where: { id: refundKey } });
+        if (prior) {
+          assertReplay('refund', sameRefund(prior));
+          return; // a concurrent duplicate: the first one wrote it
+        }
+      }
       // The webhook may have recorded Stripe's refund already (unique id): then this is it.
       if (stripeRefundId && (await tx.paymentRefund.findUnique({ where: { stripeRefundId } }))) return;
       await tx.paymentRefund.create({
         data: {
+          ...(refundKey ? { id: refundKey } : {}),
           organizationId: payment.organizationId,
           paymentId: payment.id,
           amountMinor: BigInt(amountMinor),

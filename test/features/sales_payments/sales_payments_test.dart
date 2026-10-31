@@ -228,6 +228,32 @@ void main() {
       expect(within('sales-instalment-i2', find.text('تسجيل دفعة')), findsOneWidget);
     });
 
+    testWidgets('ADMIN-001: Save again after a dropped connection is the same payment (the same key); a new sheet is a new one', (tester) async {
+      tall(tester);
+      final repo = _Payments()
+        ..billing = family()
+        ..answer = family()
+        ..failRecords = 1;
+      await tester.pumpWidget(app(const FamilyBillingScreen(familyId: 'f1'), repo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('sales-record-i2')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('sales-record-save')));
+      await tester.pumpAndSettle(); // fails: the sheet stays open with the error
+      await tester.tap(find.byKey(const ValueKey('sales-record-save')));
+      await tester.pumpAndSettle(); // the retry succeeds
+      expect(repo.paymentKeys, hasLength(2));
+      expect(repo.paymentKeys[1], repo.paymentKeys[0]);
+
+      await tester.tap(find.byKey(const ValueKey('sales-record-i2')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('sales-record-save')));
+      await tester.pumpAndSettle();
+      expect(repo.paymentKeys, hasLength(3));
+      expect(repo.paymentKeys[2], isNot(repo.paymentKeys[0]));
+    });
+
     testWidgets('record a payment: today and the family\'s method by default; the answer replaces the list', (tester) async {
       tall(tester);
       final paid = family(instalments: [
@@ -259,6 +285,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repo.recorded, [('i2', today, BillingMethod.bankTransfer, 'TR-9')]);
+      expect(repo.paymentKeys.single, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
       expect(find.text('Paid Oct 22, 2026 · Bank transfer · recorded by فريق المبيعات · TR-9'), findsOneWidget);
       expect(find.byKey(const ValueKey('sales-instalment-i4')), findsNothing, reason: "the server's answer, not a local patch");
       expect(repo.familiesRead, ['f1'], reason: 'the write answered the body; no second read');
@@ -336,6 +363,10 @@ class _Payments implements SalesPaymentsRepository {
   final queries = <String>[];
   final familiesRead = <String>[];
   final recorded = <(String, DateTime, BillingMethod, String?)>[];
+  /// Every idempotency key a record attempt carried, a failed one included.
+  final paymentKeys = <String>[];
+  /// Fails this many record attempts first (a dropped connection), then answers.
+  int failRecords = 0;
   final voided = <(String, String)>[];
 
   @override
@@ -352,7 +383,18 @@ class _Payments implements SalesPaymentsRepository {
   }
 
   @override
-  Future<FamilyBilling> recordPayment(String instalmentId, {required DateTime paidOn, required BillingMethod method, String? reference}) async {
+  Future<FamilyBilling> recordPayment(
+    String instalmentId, {
+    required DateTime paidOn,
+    required BillingMethod method,
+    required String paymentId,
+    String? reference,
+  }) async {
+    paymentKeys.add(paymentId);
+    if (failRecords > 0) {
+      failRecords--;
+      throw const AppError(AppErrorKind.network, code: AppError.connectFailed);
+    }
     if (writeError != null) throw writeError!;
     recorded.add((instalmentId, paidOn, method, reference));
     return answer!;

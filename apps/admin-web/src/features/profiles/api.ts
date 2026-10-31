@@ -143,6 +143,8 @@ export interface NewFamilyPayment {
   instalmentId?: string
   learnerId?: string
   reference?: string
+  /** ADMIN-001: the form's idempotency key (one per opened form, resent on retry). */
+  paymentId: string
 }
 
 export interface StudentProfile {
@@ -189,7 +191,7 @@ export const profilesApi = {
   billing: (familyId: string) => api.get<FamilyBilling>(`${family(familyId)}/billing`),
   updateBilling: (familyId: string, body: BillingUpdate) => api.post<FamilyBilling>(`${family(familyId)}/billing`, body),
   createInstalments: (familyId: string, body: NewInstalments | CustomInstalments) => api.post<FamilyBilling>(`${family(familyId)}/instalments`, body),
-  recordPayment: (id: string, body: { paidOn: string; method: InstalmentPaymentMethod; reference?: string }) =>
+  recordPayment: (id: string, body: { paidOn: string; method: InstalmentPaymentMethod; reference?: string; paymentId: string }) =>
     api.post<FamilyBilling>(`/instalments/${encodeURIComponent(id)}/payment`, body),
   voidInstalment: (id: string, reason: string) => api.post<FamilyBilling>(`/instalments/${encodeURIComponent(id)}/void`, { reason }),
 
@@ -199,7 +201,7 @@ export const profilesApi = {
   cancelPaymentRequest: (id: string, reason: string) => api.post<FamilyBilling>(`/payment-requests/${encodeURIComponent(id)}/cancel`, { reason }),
   recordFamilyPayment: (familyId: string, body: NewFamilyPayment) => api.post<FamilyBilling>(`${family(familyId)}/payments`, body),
   voidPayment: (id: string, reason: string) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/void`, { reason }),
-  refundPayment: (id: string, body: { amountMinor: number; reason: string }) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/refunds`, body),
+  refundPayment: (id: string, body: { amountMinor: number; reason: string; refundId: string }) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/refunds`, body),
 
   student: (learnerId: string) => api.get<StudentProfile>(`/learners/${encodeURIComponent(learnerId)}/profile`),
 }

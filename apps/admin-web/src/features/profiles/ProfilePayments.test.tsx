@@ -22,6 +22,8 @@ import { chooseOption } from '@/test/select'
 vi.setConfig({ testTimeout: 20_000 })
 configure({ asyncUtilTimeout: 4_000 })
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
@@ -401,6 +403,7 @@ describe('PD-27 on the Parent Profile', () => {
       requestId: 'r-1',
       learnerId: 'k-1',
       reference: 'RB-77',
+      paymentId: expect.stringMatching(UUID),
     })
   })
 
@@ -422,6 +425,7 @@ describe('PD-27 on the Parent Profile', () => {
       amountMinor: 25000,
       paidOn: '2026-10-22',
       instalmentId: 'i-1',
+      paymentId: expect.stringMatching(UUID),
     })
   })
 
@@ -466,7 +470,38 @@ describe('PD-27 on the Parent Profile', () => {
     await userEvent.type(amount, '200')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Refund' }))
     await waitFor(() => expect(calls('POST', /\/payments\/pay-2\/refunds$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/payments\/pay-2\/refunds$/)[0])).toEqual({ amountMinor: 20000, reason: 'lesson cancelled' })
+    expect(bodyOf(calls('POST', /\/payments\/pay-2\/refunds$/)[0])).toEqual({ amountMinor: 20000, reason: 'lesson cancelled', refundId: expect.stringMatching(UUID) })
+  })
+
+  it('ADMIN-001: a retry of the same Record form resends the same key; a form opened again gets a new one', async () => {
+    serve(billing())
+    let first = true
+    on('POST', /\/families\/f-1\/payments$/, () => {
+      if (first) {
+        first = false
+        return json({ error: { code: 'INTERNAL', message: 'the connection dropped' } }, 503)
+      }
+      return json(billing())
+    })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
+    let dialog = screen.getByRole('dialog', { name: 'Record a payment' })
+    await userEvent.type(within(dialog).getByLabelText('Amount'), '75')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Record' }))
+    await waitFor(() => expect(calls('POST', /\/families\/f-1\/payments$/)).toHaveLength(1))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Record' })) // the retry
+    await waitFor(() => expect(calls('POST', /\/families\/f-1\/payments$/)).toHaveLength(2))
+    const [a, b] = calls('POST', /\/families\/f-1\/payments$/).map((c) => bodyOf(c).paymentId)
+    expect(a).toMatch(UUID)
+    expect(b).toBe(a)
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Record a payment' })).not.toBeInTheDocument())
+    await userEvent.click(await screen.findByRole('button', { name: 'Record a payment' }))
+    dialog = screen.getByRole('dialog', { name: 'Record a payment' })
+    await userEvent.type(within(dialog).getByLabelText('Amount'), '75')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Record' }))
+    await waitFor(() => expect(calls('POST', /\/families\/f-1\/payments$/)).toHaveLength(3))
+    expect(bodyOf(calls('POST', /\/families\/f-1\/payments$/)[2]).paymentId).not.toBe(a)
   })
 
   it('withholds Void on a payment whose instalment is fully paid (the instalment is voided instead)', async () => {
