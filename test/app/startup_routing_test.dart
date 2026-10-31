@@ -16,6 +16,7 @@ import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/conversations/application/chat_realtime.dart';
+import 'package:jawwid_chat/features/conversations/application/realtime_keeper.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/auth.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
@@ -61,6 +62,7 @@ void main() {
         // Routing only: live chat (and its periodic safety resync timer) has
         // its own suites, and a periodic timer would outlive the widget tree.
         chatRealtimeProvider.overrideWithValue(null),
+        realtimeKeeperProvider.overrideWithValue(null),
         authControllerProvider.overrideWith(
           () => AuthController(
             repository: auth,

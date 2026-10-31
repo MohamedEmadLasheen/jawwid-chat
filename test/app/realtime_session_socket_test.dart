@@ -4,6 +4,7 @@ import 'package:jawwid_chat/app/bootstrap.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/features/calls/application/call_session.dart';
 import 'package:jawwid_chat/features/conversations/application/chat_realtime.dart';
+import 'package:jawwid_chat/features/conversations/application/realtime_keeper.dart';
 
 /// The realtime transport belongs to ONE session.
 ///
@@ -13,6 +14,8 @@ import 'package:jawwid_chat/features/conversations/application/chat_realtime.dar
 /// silently dead until the app was restarted. The bootstrap now keys the
 /// socket on the signed-in account, exactly as the client is keyed.
 void main() {
+  // The keeper listens to the app's lifecycle.
+  TestWidgetsFlutterBinding.ensureInitialized();
   late ProviderContainer container;
 
   setUp(() async {
@@ -44,5 +47,20 @@ void main() {
 
     expect(identical(first, second), isFalse);
     expect(container.read(callRealtimeClientProvider), isNotNull);
+  });
+
+  test('each session gets its own realtime keeper; a sign-out stops it, with no try left waiting (PARENT-015)', () async {
+    expect(container.read(realtimeKeeperProvider), isNull);
+    await signIn();
+    final first = container.read(realtimeKeeperProvider)!;
+
+    await container.read(authControllerProvider.notifier).signOut();
+    expect(container.read(realtimeKeeperProvider), isNull);
+    expect(first.waiting, isFalse);
+
+    await signIn();
+    final second = container.read(realtimeKeeperProvider);
+    expect(second, isNotNull);
+    expect(identical(first, second), isFalse);
   });
 }
