@@ -114,7 +114,8 @@ it('a reader that stops reading: the API stops pulling from storage (memory stay
   await sleep(500);
   // Socket buffers on both sides, plus a stream highWaterMark or two -- not the object.
   expect(pulledWhilePaused).toBeLessThan(32 * MB);
-  expect(object.pulled).toBe(pulledWhilePaused);
+  // At most a socket buffer's worth trickles on (the kernel drains a little); nothing like the object.
+  expect(object.pulled - pulledWhilePaused).toBeLessThan(MB);
   abort();
   await until(() => object.closed);
 });
