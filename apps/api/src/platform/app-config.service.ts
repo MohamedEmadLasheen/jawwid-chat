@@ -167,6 +167,26 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.lesson_audio_read_actor': 60,
   /** initial hypothesis - PD-39 board writes (an autosave every ~2 s while drawing, plus page actions) per actor per window. */
   'abuse.throttle.whiteboard_write_actor': 240,
+  /**
+   * PD-39 PR-4: board images and PDF export. OFF until the environment's
+   * bucket exists with object versioning on (design §11.3, a hard
+   * precondition): an image kept without versioning has no backup. Turned on
+   * by an operator per environment, together with
+   * `whiteboards.assets_lifecycle_verified` below:
+   *   insert into chat.config (key, value, scope, description) values
+   *   ('whiteboards.assets_enabled', 'true'::jsonb, 'whiteboards', 'PD-39 images and export'),
+   *   ('whiteboards.assets_lifecycle_verified', 'true'::jsonb, 'whiteboards', 'lifecycle rule on whiteboard-uploads/ checked')
+   *   on conflict (key) do update set value = excluded.value;
+   */
+  'whiteboards.assets_enabled': false as boolean,
+  /**
+   * PD-39 PR-4 (review of #305): the operator's record that the bucket's
+   * lifecycle rule expiring `whiteboard-uploads/` after 1 day is in place and
+   * was checked. Images and export stay off until BOTH this and
+   * `whiteboards.assets_enabled` are true: an upload never confirmed is
+   * removed only by that rule.
+   */
+  'whiteboards.assets_lifecycle_verified': false as boolean,
   /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
   'abuse.realtime.frames_per_socket_per_minute': 600,
   /** PD-33: how many supervisors one backup may cover at the same time. */

@@ -11,7 +11,8 @@ import { complaintAbout, familiesOfComplaints } from '../teacher-file/complaint-
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
-import { CardKind } from '../communication/contracts/vocab';
+import { ActorKind, CardKind } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
@@ -102,21 +103,50 @@ export class DisciplineService {
 
     // PD-35: the violations of the teachers in the caller's scope.
     const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const { rows } = await this.listed(actor, page, { ...query, state });
+    return { violations: await this.dtos(rows) };
+  }
+
+  /**
+   * PD-44: the Dashboard's tiles for the Teacher Supervision page's two
+   * decision queues -- Absences (`kind=absences`) and Lateness (`kind=late`),
+   * each `state=open` -- as `list` finds them (listed: the same scope, the
+   * same 500 candidates, standing() and visible()), so each count is the
+   * list's length. `capped` when the candidates reached the list's limit.
+   * Staff off the page get no tile; non-staff are refused as there.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) return [];
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const tile = async (key: string, kind: keyof typeof KIND_FILTERS) => {
+      const { rows, candidates } = await this.listed(actor, page, { state: 'open', kind });
+      return dashboardTile(key, rows.length, rows[0]?.occurredAt ?? null, candidates >= LIST_LIMIT);
+    };
+    return [await tile('absences.open', 'absences'), await tile('lateness.open', 'late')];
+  }
+
+  /** What `list` shows: the page's scope, the filters, LIST_LIMIT candidates, then standing() and visible(). */
+  private async listed(
+    actor: Actor,
+    page: PageScope,
+    query: { state: string; month?: string; teacherId?: string; kind?: string },
+  ): Promise<{ rows: TeacherViolation[]; candidates: number }> {
     const scope = page.teachers;
     const where: Prisma.TeacherViolationWhereInput = {
       organizationId: actor.organizationId,
       ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
-      ...(state === 'open' ? { decision: null } : state === 'decided' ? { decision: { not: null } } : {}),
+      ...(query.state === 'open' ? { decision: null } : query.state === 'decided' ? { decision: { not: null } } : {}),
       ...(query.month ? { month: new Date(`${query.month}-01T00:00:00Z`) } : {}),
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
       ...(query.kind ? { kind: { in: [...KIND_FILTERS[query.kind as keyof typeof KIND_FILTERS]] } } : {}),
     };
-    const rows = await this.visible(page, await this.standing(await this.prisma.teacherViolation.findMany({
+    const found = await this.prisma.teacherViolation.findMany({
       where,
-      orderBy: state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
-      take: 500,
-    })));
-    return { violations: await this.dtos(rows) };
+      orderBy: query.state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
+      take: LIST_LIMIT,
+    });
+    return { rows: await this.visible(page, await this.standing(found)), candidates: found.length };
   }
 
   /** One teacher's month: the count that sets the next step, the violations, and their suspensions. */
@@ -694,13 +724,18 @@ export class DisciplineService {
   }
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) throw disciplineDenied();
+    return actor;
+  }
+
+  /** The supervisor, or null for staff off the page (PD-44: no tile); anyone not staff is refused. */
+  private async supervisorOrNone(actorId: string): Promise<Actor | null> {
     const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) throw disciplineDenied();
     // PD-26 amendment: the Teachers department, or an Operations supervisor for
     // the teachers of their families (narrowed below by the page scope).
-    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
-    }
-    return actor;
+    return (await this.supervision.pageAccess(actor)).canSupervise ? actor : null;
   }
 
   private async requireTeacher(actor: Actor, teacherId: string) {
@@ -814,4 +849,11 @@ async function closeLoginInTx(tx: Tx, teacherId: string, reason: string, actorId
     UPDATE chat.password_reset_code SET superseded_at = now()
      WHERE account_id = ${account.id}::uuid AND used_at IS NULL AND superseded_at IS NULL`;
   return { accountId: account.id, statusBefore: account.status, supersededCodes };
+}
+
+/** The violations list's page size; the Dashboard tiles flag `capped` at it (PD-44). */
+const LIST_LIMIT = 500;
+
+function disciplineDenied(): CommError {
+  return new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
 }

@@ -18,7 +18,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { PrismaService } from '@platform/prisma.service';
 import { TeacherScopeService } from '@platform/teacher-scope';
 import { conversationState } from '@communication/contracts/dto';
 import { ConversationState } from '@communication/contracts/vocab';
@@ -28,15 +27,12 @@ import { TeacherFileService } from '../../src/teacher-file/teacher-file.service'
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import type { DashboardTile } from '../../src/dashboard/dashboard-tile';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { statementCounter } from './statement-counter';
 
 // Query events on, so the N+1 guard can count what one request runs.
-const logged = new PrismaService({ log: [{ emit: 'event', level: 'query' }] });
-let statements = 0;
-(logged as unknown as { $on(event: 'query', cb: () => void): void }).$on('query', () => {
-  statements += 1;
-});
+const counter = statementCounter();
 
-const g = buildGraph(undefined, logged);
+const g = buildGraph(undefined, counter.prisma);
 const audit = new PrismaAuditService();
 const scope = new TeacherScopeService(g.prisma);
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit, undefined, undefined, scope);
@@ -67,12 +63,7 @@ async function code(p: Promise<unknown>): Promise<string> {
 const tileOf = (tiles: DashboardTile[], key: string) => tiles.find((t) => t.key === key);
 const keys = (tiles: DashboardTile[]) => tiles.map((t) => t.key).sort();
 
-/** How many statements `run` sends to the database. */
-async function counted<T>(run: () => Promise<T>): Promise<{ result: T; n: number }> {
-  statements = 0;
-  const result = await run();
-  return { result, n: statements };
-}
+const counted = counter.counted;
 
 // --- chats ------------------------------------------------------------------
 
