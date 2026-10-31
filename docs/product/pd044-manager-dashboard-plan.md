@@ -266,6 +266,18 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 ### 3.7 `GET /dashboard/structure` · `@Requires('org.manage')`
 
+> **As built (PR-7):** the route is `@Requires('org.view')`. That is the key the Organization page's lists ask for; `org.manage` is asked only by its writes. Three tiles, each equal to what the page shows the same person:
+> - `learners.unsupervised`: the Children tab's "Without a supervisor" filter. It goes through the same helper as `GET /org/learners` (`learnerList`): the same scope and the same 2000 rows taken before the filter. `capped` when the rows reach 2000.
+> - `teachers.unsupervised`: the Teachers tab's banner, `assignments().unassigned`, over the same rows (`teacherRows`) and the same rule (`isUnsupervised`).
+> - `covers.active`: the Structure tab's "covered by" badges. It counts the rows of `GET /org/covers?active=true` whose status is active (`statusOf`), so scheduled covers are not counted. It also needs `org.covers`, that list's own key.
+>
+> **Who gets which tile:**
+> - Each tile comes only to whom the page shows its tab: Children and covers to the super admin and the Operations Manager; Teachers to the super admin and the Teachers Manager.
+> - Other staff get none of them; anyone not staff is refused with the page's code.
+> - The tab and the Children filter now live in the URL (`?tab=`, `?filter=`).
+>
+> **Not built:** `families.without_supervisor` and `backups.expiring`, because no page lists them (§9.1).
+
 | Tile | Predicate | Who |
 |---|---|---|
 | `learners.unsupervised` | active learner with no live `learner_supervision` row | Operations Manager and super admin (the ones who see the unassigned, `org-structure.service.ts:160-168`) |
@@ -497,5 +509,7 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 - **The Chat list's "Waiting for a reply" shows at most the list's 200 most recent conversations, plus open mentions.** The tile's count is exact, so above 200 the two can differ. At today's scale no manager's scope reaches 200.
 - **No tile counts prospects without a booked trial** (PR-4). No page lists prospects; they appear only in the booking dialog's picker. A tile would link nowhere, so it waits for a prospects list.
 - **The trial and New Students tiles count what their pages list.** That is the Trials page's ±31-day default window (an awaiting trial older than 31 days is on neither) and the New Students page's 500 newest live forms. `capped` says when either limit is passed.
+- **No tile counts families without a supervisor, or backup links about to expire** (PR-7). No page lists either: the Children tab lists children, and backup links show their end date only on the Structure tab, unfiltered. A cover also sets its link's end date, so an "expiring" tile would count most covers twice.
+- **A child whose supervisor left still counts as supervised** (PR-7), as the Children tab shows it. `chat.learner_supervision` keeps the row, and nothing clears it when a supervisor leaves. Teachers are counted the other way: a supervisor who left supervises no one. The tile follows the page; fixing the rule is a separate change.
 - **The overdue and due-today tiles open the whole Instalment Payments list** (PR-5). That page has no status filter; it lists overdue first and counts both in its summary line, which the tiles equal.
 - **The super admin still opens `/dashboard` as a page of its own** (the same sections) until PR-8 moves them into the Admin Portal's Dashboard section and redirects.

@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { ObjectStorage } from '../communication/attachments/object-storage';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { NotificationService } from '../communication/notifications/notification.service';
+import { AppConfigService } from '../platform/app-config.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { PrismaService } from '../platform/prisma.service';
 import { currentImpersonationId } from '../platform/request-context';
@@ -10,13 +12,24 @@ import { ACADEMY_ZONE, canonicalZone, dayIn } from '../platform/time-zone';
 import { zonesOf } from '../platform/time-zone.service';
 import { OBJECT_STORAGE } from '../platform/tokens';
 import type { Actor } from '../platform/types';
+import { WhiteboardAssetService, keptKey, type AssetRow, type AssetView } from './whiteboard-asset.service';
 import { BACKGROUNDS, LAYOUTS, checkDocument } from './whiteboard-document';
+import { EXPORT_PAGE_MAX, EXPORT_PAGE_MAX_BYTES, EXPORT_TOTAL_MAX_BYTES } from './whiteboard-export';
+import { acquireExportSlot, runExportWorker } from './whiteboard-export-runner';
+import { BOARD_IMAGE_MAX_BYTES, BOARD_IMAGE_TYPES } from './whiteboard-image';
 
 /** §6.4, sized for 200 teachers (owner 2026-10-28). */
 export const BOARDS_PER_TEACHER = 200;
 export const PAGES_PER_BOARD = 50;
 /** Documents per teacher, in Postgres (§11.2). */
 export const DOCUMENT_BYTES_PER_TEACHER = 25 * 1024 * 1024;
+/** §6.4: images per board, and a teacher's images in object storage (boards in trash count until purged). */
+export const ASSETS_PER_BOARD = 60;
+export const ASSET_BYTES_PER_TEACHER = 300 * 1024 * 1024;
+/** §6.4: exports a teacher may have under way at once. */
+export const EXPORTS_IN_FLIGHT = 5;
+/** How many abandoned uploads one sweep takes; the next sweep takes the rest. */
+const ASSET_SWEEP_LIMIT = 200;
 /** How many due boards one sweep purges; the next sweep takes the rest. */
 const PURGE_BATCH = 50;
 /** A board whose objects could not be deleted waits 1 h, 2 h, 4 h ... up to 7 days behind the rest. */
@@ -24,7 +37,7 @@ const PURGE_RETRY_MAX_HOURS = 7 * 24;
 
 type Tx = Prisma.TransactionClient;
 type Basis = 'owner' | 'supervisor' | 'backup' | 'teachers_manager' | 'super_admin' | 'support_session';
-type Action = 'open' | 'list' | 'read_log' | 'trash' | 'restore' | 'copy';
+type Action = 'open' | 'list' | 'read_log' | 'trash' | 'restore' | 'copy' | 'export';
 interface Viewer {
   id: string;
   kind: 'teacher' | 'staff' | 'support_session';
@@ -79,7 +92,24 @@ export interface BoardDetail extends BoardSummary {
   /** False for every reader but the owning teacher (and for the owner in a support session). */
   canEdit: boolean;
   pages: Array<{ id: string; position: number; layout: string; background: string; document: unknown; updatedAt: string }>;
+  /** PR-4: the board's images, each with a short-lived signed URL (§6.3). */
+  assets: AssetView[];
 }
+
+/** A copy's images and the keys their copies get under the new board (planImageCopy). */
+interface ImagePlan {
+  boardId: string;
+  images: Array<AssetRow & { sha256: string | null }>;
+  renamed: Map<string, string>;
+  keys: string[];
+}
+
+/**
+ * How long a claim holds an asset row while its storage work runs outside any
+ * transaction (review of #305): longer than any confirm or export takes (an
+ * export's worker stops at 30 s), so only a holder that died loses it.
+ */
+const CLAIM_LEASE = Prisma.sql`interval '5 minutes'`;
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -103,7 +133,7 @@ function summary(b: BoardRow): BoardSummary {
 const notFound = () => new CommError(CommErrorCode.WHITEBOARD_NOT_FOUND, 'no such board');
 const invalid = (detail: string) => new CommError(CommErrorCode.WHITEBOARD_INVALID, detail, 422);
 /** `which` is named in `detail.limit` so a client can say which limit was hit. */
-const limit = (which: 'boards' | 'pages' | 'storage', message: string) => new CommError(CommErrorCode.WHITEBOARD_LIMIT, message, 409, { limit: which });
+const limit = (which: 'boards' | 'pages' | 'storage' | 'assets' | 'exports', message: string) => new CommError(CommErrorCode.WHITEBOARD_LIMIT, message, 409, { limit: which });
 const state = (detail: string) => new CommError(CommErrorCode.WHITEBOARD_STATE, detail, 409);
 
 /**
@@ -124,6 +154,8 @@ export function refusal(e: unknown): unknown {
 }
 
 /** The one size measure is the database's (chat.whiteboard_page.document_bytes); 413 like an oversized body. */
+const drawingsFull = () =>
+  limit('storage', `storage: a teacher's boards hold at most ${DOCUMENT_BYTES_PER_TEACHER / (1024 * 1024)} MB of drawings; delete boards you no longer need`);
 const pageTooLarge = () => new CommError(CommErrorCode.WHITEBOARD_LIMIT, 'page: a page holds at most 512 KB; add a page', 413, { limit: 'page' });
 
 /**
@@ -154,6 +186,8 @@ export class WhiteboardService {
     private readonly prisma: PrismaService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     private readonly notifications: NotificationService,
+    private readonly assets: WhiteboardAssetService,
+    private readonly config: AppConfigService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -217,13 +251,25 @@ export class WhiteboardService {
 
   async duplicate(boardId: string, actor: Actor): Promise<BoardDetail> {
     const { teacherId, organizationId } = this.writer(actor);
-    return this.write(async (tx) => {
+    const first = await this.read(async (tx) => {
+      const source = await this.ownBoard(tx, boardId, teacherId, organizationId);
+      if (source.state !== 'active') throw state('only a board in use can be duplicated');
+      await this.assertCopyFits(tx, teacherId, source.id);
+      return source;
+    });
+    const plan = await this.planImageCopy(first, organizationId);
+    const copy = await this.write(async (tx) => {
       await this.lockTeacher(tx, teacherId);
       const source = await this.ownBoard(tx, boardId, teacherId, organizationId);
       if (source.state !== 'active') throw state('only a board in use can be duplicated');
       await this.assertBoardRoom(tx, teacherId);
-      const copy = await this.copyBoard(tx, source, teacherId, organizationId, this.copyTitle(source.title));
+      const id = await this.copyBoard(tx, source, teacherId, organizationId, this.copyTitle(source.title), plan);
       await this.assertQuota(tx, teacherId);
+      return id;
+    });
+    await this.copyImageObjects(plan);
+    return this.write(async (tx) => {
+      await this.imagesCopied(tx, plan);
       return this.detail(tx, await this.ownBoard(tx, copy, teacherId, organizationId), true);
     });
   }
@@ -446,7 +492,7 @@ export class WhiteboardService {
   async copyToTeacher(boardId: string, body: Record<string, unknown>, actor: Actor): Promise<BoardSummary> {
     const target = this.uuid(body.teacherId, 'teacherId');
     if (currentImpersonationId()) throw new CommError(CommErrorCode.WHITEBOARD_DENIED, 'a support session never copies a board');
-    return this.write(async (tx) => {
+    const check = async (tx: Tx) => {
       const source = await this.readableBoard(tx, boardId, actor);
       const basis = await this.readerBasis(tx, actor, source.teacher_id);
       if (source.state !== 'retained') throw state("only a departed teacher's board is copied to another teacher");
@@ -454,15 +500,346 @@ export class WhiteboardService {
         SELECT id::text AS id FROM chat.teacher
          WHERE id = ${target}::uuid AND organization_id = ${source.organization_id}::uuid AND is_active AND left_at IS NULL`;
       if (!teacher) throw invalid('teacherId: an active teacher of this organization');
+      return { source, basis };
+    };
+    // Authorized before a single object is copied; checked again with the rows.
+    const first = await this.read(async (tx) => {
+      const { source } = await check(tx);
+      await this.assertCopyFits(tx, target, source.id);
+      return source;
+    });
+    const plan = await this.planImageCopy(first, first.organization_id);
+    const copy = await this.write(async (tx) => {
+      const { source } = await check(tx);
       await this.lockTeacher(tx, target);
       await this.assertBoardRoom(tx, target);
-      const copy = await this.copyBoard(tx, source, target, source.organization_id, source.title);
+      const id = await this.copyBoard(tx, source, target, source.organization_id, source.title, plan);
       await this.assertQuota(tx, target);
+      return id;
+    });
+    await this.copyImageObjects(plan);
+    return this.write(async (tx) => {
+      const { source, basis } = await check(tx);
+      await this.imagesCopied(tx, plan);
+      // Logged once the copy is whole: its images are where its pages say.
       await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target });
       const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
       return summary(row);
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Images and export (PR-4, §4.4, §4.6, §6.3): off until the bucket is ready
+  // ---------------------------------------------------------------------------
+
+  /**
+   * A signed PUT for one image of the teacher's board, for a key the server
+   * chose: the client never names one. The asset waits as `pending` for an
+   * hour; only a confirm makes it something a page may name.
+   */
+  async grantImage(boardId: string, body: Record<string, unknown>, actor: Actor) {
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
+    const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
+    if (body.kind !== undefined && body.kind !== 'image') throw invalid('kind: image (PDF pages are not imported yet)');
+    if (typeof body.contentType !== 'string' || !(BOARD_IMAGE_TYPES as readonly string[]).includes(body.contentType)) {
+      throw invalid(`contentType: one of ${BOARD_IMAGE_TYPES.join(', ')}`);
+    }
+    const contentType = body.contentType;
+    const byteSize = this.byteSize(body.byteSize, 'byteSize');
+    const assetId = randomUUID();
+    return this.write(async (tx) => {
+      await this.lockTeacher(tx, teacherId);
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      if (board.state !== 'active') throw state('restore the board first');
+      const [{ n }] = await tx.$queryRaw<Array<{ n: number }>>`
+        SELECT count(*)::int AS n FROM chat.whiteboard_asset WHERE board_id = ${board.id}::uuid AND kind IN ('image', 'pdf_page')`;
+      if (Number(n) >= ASSETS_PER_BOARD) throw limit('assets', `images: at most ${ASSETS_PER_BOARD} on one board`);
+      await this.assertAssetQuota(tx, teacherId, byteSize);
+      await tx.$executeRaw`
+        INSERT INTO chat.whiteboard_asset (id, board_id, kind, object_key, content_type, byte_size, expires_at)
+        VALUES (${assetId}::uuid, ${board.id}::uuid, 'image', ${keptKey(board.organization_id, board.id, assetId)},
+                ${contentType}, ${byteSize}, now() + interval '1 hour')`;
+      const upload = await this.assets.grant(board.organization_id, board.id, assetId, contentType, byteSize);
+      return { assetId, upload };
+    });
+  }
+
+  /**
+   * The upload copied to the image's own key and inspected THERE (type, end,
+   * size, a still image, at most 8,000 px): only then is it `ready`. Replaying
+   * a confirm answers the ready image again.
+   */
+  async confirmImage(boardId: string, assetId: string, body: Record<string, unknown>, actor: Actor): Promise<{ asset: AssetView; replayed?: true }> {
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
+    const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
+    const id = this.uuid(assetId, 'assetId');
+    const token = randomUUID();
+    // 1. Claim the row in a short transaction (review of #305): no database
+    //    connection is held while storage is read.
+    const claimed = await this.write(async (tx) => {
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      const [row] = await tx.$queryRaw<Array<AssetRow & { state: string; expired: boolean; held: boolean }>>`
+        SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height, state,
+               (expires_at IS NOT NULL AND expires_at <= now()) AS expired,
+               (state = 'claimed' AND claimed_until > now()) AS held
+          FROM chat.whiteboard_asset WHERE id = ${id}::uuid AND board_id = ${board.id}::uuid AND kind = 'image'
+           FOR UPDATE`;
+      if (!row) throw new CommError(CommErrorCode.WHITEBOARD_NOT_FOUND, 'no such image on this board');
+      if (row.state === 'ready') return { board, row, ready: true };
+      if (row.held) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this image is being added; try again in a moment', 409);
+      // Pending, or a claim whose lease ran out (a confirm that took too long, or
+      // whose caller went away): either may be claimed again by a retry.
+      if (row.expired) throw state('the upload expired; add the image again');
+      if (!this.assets.isUploadOf(body.objectKey, board.organization_id, board.id, row.id)) throw invalid('objectKey: the upload this image was granted');
+      await tx.$executeRaw`
+        UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
+         WHERE id = ${row.id}::uuid`;
+      return { board, row, ready: false };
+    });
+    const { board, row } = claimed;
+    if (claimed.ready) return { asset: (await this.assets.sign(board, [row]))[0] as AssetView, replayed: true };
+    // 2. The bytes copied to the kept key and checked there, outside any transaction.
+    let pinned: Awaited<ReturnType<WhiteboardAssetService['pin']>>;
+    try {
+      pinned = await this.assets.pin(body.objectKey as string, row.object_key, { contentType: row.content_type, byteSize: Number(row.byte_size) });
+    } catch (e) {
+      await this.releaseClaim(token);
+      throw e;
+    }
+    // 3. Finish in a short transaction: only while this claim still holds the row.
+    const [ready] = await this.prisma.$queryRaw<AssetRow[]>`
+      UPDATE chat.whiteboard_asset
+         SET state = 'ready', sha256 = ${pinned.sha256}, width = ${pinned.width}, height = ${pinned.height},
+             expires_at = NULL, claim_token = NULL, claimed_until = NULL
+       WHERE id = ${row.id}::uuid AND claim_token = ${token}::uuid AND claimed_until > now()
+      RETURNING id::text AS id, kind, object_key, content_type, byte_size, width, height`;
+    // A claim that ran out is the sweep's (or the next confirm's): its kept bytes are theirs to settle.
+    if (!ready) throw state('adding the image took too long; add it again');
+    await this.assets.deleteQuietly([body.objectKey as string]);
+    return { asset: (await this.assets.sign(board, [ready]))[0] as AssetView };
+  }
+
+  /** A claim given back: the row is pending again (and swept when it runs out). */
+  private async releaseClaim(token: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE chat.whiteboard_asset SET state = 'pending', claim_token = NULL, claimed_until = NULL
+       WHERE claim_token = ${token}::uuid`.catch((e) => this.log.warn(`claim ${token} not released: ${String(e)}`));
+  }
+
+  /**
+   * The board's images signed again (a signed URL lives 15 minutes). The
+   * owner, or a support session reading the board; logged as an open (§10 1c).
+   */
+  async imageUrls(boardId: string, actor: Actor): Promise<{ assets: AssetView[] }> {
+    const { teacherId, organizationId } = this.teacher(actor);
+    // Off with the rest of images (review of #325): nothing is signed while they are.
+    await this.assetsOn();
+    const support = currentImpersonationId();
+    return this.read(async (tx) => {
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      await this.record(tx, board, support ? await this.operatorOf(tx, support) : { id: teacherId, kind: 'teacher', basis: 'owner' }, 'open', { what: 'images' });
+      await this.readOnly(tx);
+      return { assets: await this.signedImages(tx, board) };
+    });
+  }
+
+  /**
+   * §4.6: a PDF export starts with a signed PUT per page, for the PNG the
+   * client draws of it (the one renderer). The pages of one export share one
+   * expiry, which is how compose knows them as one; at most 5 exports may be
+   * under way per teacher.
+   */
+  async grantExport(boardId: string, body: Record<string, unknown>, actor: Actor) {
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
+    const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
+    if (!Array.isArray(body.pages) || body.pages.length < 1 || body.pages.length > PAGES_PER_BOARD) {
+      throw invalid(`pages: 1-${PAGES_PER_BOARD} entries of {byteSize}`);
+    }
+    const sizes = body.pages.map((p, i) => {
+      const size = (p as Record<string, unknown> | null)?.byteSize;
+      if (typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > EXPORT_PAGE_MAX_BYTES) {
+        throw invalid(`pages[${i}].byteSize: an export page is 1-${EXPORT_PAGE_MAX_BYTES} bytes (at most ${EXPORT_PAGE_MAX.width} x ${EXPORT_PAGE_MAX.height} px)`);
+      }
+      return size;
+    });
+    if (sizes.reduce((a, b) => a + b, 0) > EXPORT_TOTAL_MAX_BYTES) throw invalid(`pages: one export is at most ${EXPORT_TOTAL_MAX_BYTES / (1024 * 1024)} MB`);
+    return this.write(async (tx) => {
+      await this.lockTeacher(tx, teacherId);
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      if (board.state !== 'active') throw state('restore the board first');
+      if (sizes.length > Number(board.page_count)) throw invalid(`pages: the board has ${board.page_count}`);
+      const [{ n }] = await tx.$queryRaw<Array<{ n: number }>>`
+        SELECT count(DISTINCT a.expires_at)::int AS n
+          FROM chat.whiteboard_asset a JOIN chat.whiteboard w ON w.id = a.board_id
+         WHERE w.teacher_id = ${teacherId}::uuid AND a.kind = 'export_page' AND a.state IN ('pending', 'claimed') AND a.expires_at > now()`;
+      if (Number(n) >= EXPORTS_IN_FLIGHT) throw limit('exports', `exports: at most ${EXPORTS_IN_FLIGHT} at once; wait for one to finish`);
+      const pages: Array<{ assetId: string; upload: Awaited<ReturnType<WhiteboardAssetService['grant']>> }> = [];
+      for (const byteSize of sizes) {
+        const assetId = randomUUID();
+        // now() is the transaction's: every page of this export gets the same expiry.
+        await tx.$executeRaw`
+          INSERT INTO chat.whiteboard_asset (id, board_id, kind, object_key, content_type, byte_size, expires_at)
+          VALUES (${assetId}::uuid, ${board.id}::uuid, 'export_page', ${keptKey(board.organization_id, board.id, assetId)},
+                  'image/png', ${byteSize}, now() + interval '1 hour')`;
+        pages.push({ assetId, upload: await this.assets.grant(board.organization_id, board.id, assetId, 'image/png', byteSize) });
+      }
+      return { pages };
+    });
+  }
+
+  /**
+   * The export's PNGs, each checked like an image, laid out as a PDF with the
+   * Quran text's credit when the board carries a verse (§4.3). Logged as
+   * 'export'. Nothing of it is kept: the PDF goes back in the answer, and the
+   * pages are deleted.
+   */
+  async composeExport(boardId: string, body: Record<string, unknown>, actor: Actor): Promise<{ pdf: Buffer; fileName: string }> {
+    // Who is asking first: staff and support sessions are refused as such, whatever the switch says.
+    const { teacherId, organizationId } = this.writer(actor);
+    await this.assetsOn();
+    if (!Array.isArray(body.pages) || body.pages.length < 1 || body.pages.length > PAGES_PER_BOARD) {
+      throw invalid(`pages: 1-${PAGES_PER_BOARD} entries of {assetId, objectKey}, in page order`);
+    }
+    const asked = body.pages.map((p, i) => {
+      const item = (p ?? {}) as Record<string, unknown>;
+      return { id: this.uuid(item.assetId, `pages[${i}].assetId`), objectKey: item.objectKey };
+    });
+    if (new Set(asked.map((a) => a.id)).size !== asked.length) throw invalid('pages: each page once');
+    const ids = asked.map((a) => a.id);
+    const token = randomUUID();
+    // A worker slot first (review of #311): a burst is turned away (429) before
+    // any page is read, not after reading up to 64 MB each.
+    const releaseSlot = await acquireExportSlot();
+    try {
+      return await this.composeClaimed({ boardId, teacherId, organizationId }, asked, ids, token);
+    } finally {
+      releaseSlot();
+    }
+  }
+
+  private async composeClaimed(
+    where: { boardId: string; teacherId: string; organizationId: string },
+    asked: Array<{ id: string; objectKey: unknown }>,
+    ids: string[],
+    token: string,
+  ): Promise<{ pdf: Buffer; fileName: string }> {
+    const { boardId, teacherId, organizationId } = where;
+    // 1. Claim the whole export in a short transaction (review of #305).
+    const { board, rows, credit } = await this.write(async (tx) => {
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      if (board.state !== 'active') throw state('restore the board first');
+      // An export's pages share one expiry to the microsecond (its grant's now()).
+      // Compared in SQL: a JS Date keeps milliseconds only, so the same instant
+      // read back and sent again would no longer equal the stored value.
+      const rows = await tx.$queryRaw<Array<AssetRow & { batch: string; expired: boolean; state: string; held: boolean }>>`
+        SELECT a.id::text AS id, a.kind, a.object_key, a.content_type, a.byte_size, a.width, a.height, a.state,
+               a.expires_at::text AS batch, a.expires_at <= now() AS expired, (a.state = 'claimed' AND a.claimed_until > now()) AS held
+          FROM chat.whiteboard_asset a
+         WHERE a.board_id = ${board.id}::uuid AND a.kind = 'export_page' AND a.id = ANY(${ids}::uuid[])
+           FOR UPDATE`;
+      const first = rows[0];
+      if (rows.some((r) => r.held)) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this export is being made; wait for it', 409);
+      const [{ n }] = first
+        ? await tx.$queryRaw<Array<{ n: number }>>`
+            SELECT count(*)::int AS n FROM chat.whiteboard_asset
+             WHERE board_id = ${board.id}::uuid AND kind = 'export_page' AND state = 'pending'
+               AND expires_at = (SELECT expires_at FROM chat.whiteboard_asset WHERE id = ${first.id}::uuid)`
+        : [{ n: 0 }];
+      if (rows.length !== asked.length || !first || rows.some((r) => r.state !== 'pending' || r.batch !== first.batch) || Number(n) !== asked.length) {
+        throw invalid('pages: every page of one export, each once');
+      }
+      if (first.expired) throw state('the export expired; export again');
+      for (const a of asked) {
+        if (!this.assets.isUploadOf(a.objectKey, board.organization_id, board.id, a.id)) throw invalid('pages: an objectKey is not the upload its page was granted');
+      }
+      await tx.$executeRaw`
+        UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
+         WHERE id = ANY(${ids}::uuid[])`;
+      const credits = await tx.$queryRaw<Array<{ attribution: string }>>`
+        SELECT DISTINCT d.attribution
+          FROM chat.whiteboard_page p
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.document -> 'elements', '[]'::jsonb)) e
+          JOIN chat.quran_dataset d ON d.id = e ->> 'datasetId'
+         WHERE p.board_id = ${board.id}::uuid AND e ->> 'kind' = 'verse'`;
+      return { board, rows, credit: credits.length ? `Quran text: ${credits.map((c) => c.attribution).join('; ')}` : null };
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const kept: string[] = [];
+    let finished = false;
+    try {
+      // 2. Pinned, checked, decoded and laid out with no transaction open.
+      const pngs: Buffer[] = [];
+      for (const a of asked) {
+        const row = byId.get(a.id) as AssetRow;
+        const pinned = await this.assets.pin(a.objectKey as string, row.object_key, { contentType: 'image/png', byteSize: Number(row.byte_size) }, EXPORT_PAGE_MAX);
+        kept.push(row.object_key);
+        pngs.push(pinned.bytes);
+      }
+      const pdf = await runExportWorker({ title: board.title, pages: pngs, credit });
+      // 3. Finish in a short transaction, only while this claim holds every page.
+      await this.write(async (tx) => {
+        const gone = await tx.$executeRaw`
+          DELETE FROM chat.whiteboard_asset WHERE id = ANY(${ids}::uuid[]) AND claim_token = ${token}::uuid AND claimed_until > now()`;
+        if (gone !== asked.length) throw state('making the export took too long; export again');
+        await this.record(tx, board, { id: teacherId, kind: 'teacher', basis: 'owner' }, 'export', { pages: String(asked.length) });
+      });
+      finished = true;
+      return { pdf, fileName: exportFileName(board.title) };
+    } finally {
+      // Nothing of an export is kept: its pages, pinned or not, and its uploads; and a
+      // failed export's rows go with them (the sweep takes any this misses).
+      await this.assets.deleteQuietly([...kept, ...asked.map((a) => a.objectKey as string)]);
+      if (!finished) {
+        await this.prisma.$executeRaw`DELETE FROM chat.whiteboard_asset WHERE claim_token = ${token}::uuid`.catch((e) => this.log.warn(`export claim ${token} not cleared: ${String(e)}`));
+      }
+    }
+  }
+
+  /**
+   * The worker: uploads granted but never confirmed (and export pages never
+   * composed) an hour on, and claims whose holder died, are removed -- the
+   * kept-key object if a confirm got that far, then the row. Each row is
+   * claimed first, so a confirm or an export in progress is never swept; its
+   * object is deleted outside any transaction; and a row whose object cannot
+   * be deleted backs off on its own (1 min, 2, 4 ... up to a day) instead of
+   * holding up the rest (review of #305). Upload objects are the bucket
+   * lifecycle rule's (`whiteboard-uploads/`), as no grant's key is kept.
+   */
+  async sweepAbandonedAssets(): Promise<number> {
+    const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.whiteboard_asset
+       WHERE ((state = 'pending' AND expires_at <= now()) OR (state = 'claimed' AND claimed_until <= now()))
+         AND (sweep_retry_at IS NULL OR sweep_retry_at <= now())
+       ORDER BY coalesce(claimed_until, expires_at) LIMIT ${ASSET_SWEEP_LIMIT}`;
+    let swept = 0;
+    for (const { id } of due) {
+      const token = randomUUID();
+      const [claimed] = await this.prisma.$queryRaw<Array<{ object_key: string }>>`
+        UPDATE chat.whiteboard_asset SET state = 'claimed', claim_token = ${token}::uuid, claimed_until = now() + ${CLAIM_LEASE}
+         WHERE id = ${id}::uuid
+           AND ((state = 'pending' AND expires_at <= now()) OR (state = 'claimed' AND claimed_until <= now()))
+           AND (sweep_retry_at IS NULL OR sweep_retry_at <= now())
+        RETURNING object_key`;
+      if (!claimed) continue; // confirmed, claimed or swept meanwhile
+      try {
+        await this.storage.delete(claimed.object_key);
+        swept += await this.prisma.$executeRaw`DELETE FROM chat.whiteboard_asset WHERE id = ${id}::uuid AND claim_token = ${token}::uuid`;
+      } catch (e) {
+        this.log.warn(`abandoned board upload ${id} not swept; it waits: ${e instanceof Error ? e.message : String(e)}`);
+        await this.prisma.$executeRaw`
+          UPDATE chat.whiteboard_asset
+             SET claimed_until = now(), sweep_attempts = sweep_attempts + 1,
+                 sweep_retry_at = now() + make_interval(mins => LEAST(1440, power(2, LEAST(sweep_attempts, 11)))::int)
+           WHERE id = ${id}::uuid AND claim_token = ${token}::uuid`.catch(() => undefined);
+      }
+    }
+    return swept;
+  }
+
+
 
   // ---------------------------------------------------------------------------
   // The worker: purge (§10 4d, 4a) and the retention notice (4c)
@@ -688,30 +1065,161 @@ export class WhiteboardService {
       SELECT COALESCE(sum(p.document_bytes), 0)::bigint AS used
         FROM chat.whiteboard_page p JOIN chat.whiteboard w ON w.id = p.board_id
        WHERE w.teacher_id = ${teacherId}::uuid`;
-    if (Number(used) > DOCUMENT_BYTES_PER_TEACHER) {
-      throw limit('storage', `storage: a teacher's boards hold at most ${DOCUMENT_BYTES_PER_TEACHER / (1024 * 1024)} MB of drawings; delete boards you no longer need`);
+    if (Number(used) > DOCUMENT_BYTES_PER_TEACHER) throw drawingsFull();
+  }
+
+  /**
+   * The ready images a copy will take, and the ids and keys their copies get
+   * under the new board (whose id is chosen here). No storage call: the
+   * objects are copied only once their rows exist (copyImageObjects).
+   */
+  private async planImageCopy(source: BoardRow, organizationId: string): Promise<ImagePlan> {
+    const images = await this.prisma.$queryRaw<Array<AssetRow & { sha256: string | null }>>`
+      SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height, sha256
+        FROM chat.whiteboard_asset
+       WHERE board_id = ${source.id}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page')
+       ORDER BY created_at, id`;
+    const boardId = randomUUID();
+    const renamed = new Map(images.map((a) => [a.id, randomUUID()]));
+    const keys = images.map((a) => keptKey(organizationId, boardId, renamed.get(a.id) as string));
+    return { boardId, images, renamed, keys };
+  }
+
+  /**
+   * The copy's objects, written AFTER their rows (review of #325): every object
+   * a copy writes has a `pending` row with an expiry, so nothing can be left in
+   * storage that no sweep finds -- a crash between the two leaves rows the
+   * abandoned-upload sweep removes, objects and all. If the copying fails here,
+   * the new board is taken back at once: its rows, and what was copied.
+   */
+  private async copyImageObjects(plan: ImagePlan): Promise<void> {
+    if (plan.images.length === 0) return;
+    try {
+      await this.assets.copyAll(plan.images.map((a, i) => ({ from: a.object_key, to: plan.keys[i] as string })));
+    } catch (e) {
+      // copyAll has deleted what it copied; the rows go with the board.
+      await this.prisma.$executeRaw`DELETE FROM chat.whiteboard WHERE id = ${plan.boardId}::uuid`.catch((err) =>
+        this.log.warn(`unfinished copy ${plan.boardId} not taken back (the sweep will clear its images): ${String(err)}`),
+      );
+      throw e;
+    }
+  }
+
+  /** The copy's images are in storage: they become ready (and stop expiring). */
+  private async imagesCopied(tx: Tx, plan: ImagePlan): Promise<void> {
+    if (plan.images.length === 0) return;
+    const n = await tx.$executeRaw`
+      UPDATE chat.whiteboard_asset SET state = 'ready', expires_at = NULL
+       WHERE board_id = ${plan.boardId}::uuid AND state = 'pending'`;
+    if (n !== plan.images.length) throw state('the copy took too long; copy the board again');
+  }
+
+  /**
+   * Before a single object is copied (review of #305): the copy would fit the
+   * receiving teacher's board, drawing and image limits. The transaction that
+   * writes the rows checks all of them again.
+   */
+  private async assertCopyFits(tx: Tx, teacherId: string, sourceId: string): Promise<void> {
+    await this.assertBoardRoom(tx, teacherId);
+    const [{ docs, images, used }] = await tx.$queryRaw<Array<{ docs: bigint; images: bigint; used: bigint }>>`
+      SELECT (SELECT COALESCE(sum(document_bytes), 0) FROM chat.whiteboard_page WHERE board_id = ${sourceId}::uuid)::bigint AS docs,
+             (SELECT COALESCE(sum(byte_size), 0) FROM chat.whiteboard_asset
+               WHERE board_id = ${sourceId}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page'))::bigint AS images,
+             (SELECT COALESCE(sum(p.document_bytes), 0) FROM chat.whiteboard_page p JOIN chat.whiteboard w ON w.id = p.board_id
+               WHERE w.teacher_id = ${teacherId}::uuid)::bigint AS used`;
+    if (Number(used) + Number(docs) > DOCUMENT_BYTES_PER_TEACHER) throw drawingsFull();
+    await this.assertAssetQuota(tx, teacherId, Number(images));
+  }
+
+
+
+  /**
+   * A new board of `teacherId` (id `plan.boardId`) with the source's pages
+   * and rows for its images, `pending` until copyImageObjects has copied them (§10 4a): the pages name
+   * the copies, so the new board never points at the old one's objects. An
+   * image added to the source since the plan refuses the copy (it would be
+   * missing). Unconfirmed uploads and exports are not copied.
+   */
+  private async copyBoard(tx: Tx, source: BoardRow, teacherId: string, organizationId: string, title: string, plan: ImagePlan): Promise<string> {
+    const lessonId = teacherId === source.teacher_id ? source.lesson_id : null;
+    const [{ id }] = await tx.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO chat.whiteboard (id, organization_id, teacher_id, lesson_id, title)
+      VALUES (${plan.boardId}::uuid, ${organizationId}::uuid, ${teacherId}::uuid, ${lessonId}::uuid, ${title})
+      RETURNING id::text AS id`;
+    const now = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM chat.whiteboard_asset
+       WHERE board_id = ${source.id}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page')`;
+    if (now.some((a) => !plan.renamed.has(a.id))) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'the board changed while it was being copied; try again', 409);
+    if (plan.images.length === 0) {
+      await tx.$executeRaw`
+        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
+        SELECT ${id}::uuid, position, layout, background, document
+          FROM chat.whiteboard_page WHERE board_id = ${source.id}::uuid`;
+      return id;
+    }
+    const pages = await tx.$queryRaw<Array<{ position: number; layout: string; background: string; document: { v: number; elements: Array<Record<string, unknown>> } }>>`
+      SELECT position, layout, background, document FROM chat.whiteboard_page WHERE board_id = ${source.id}::uuid`;
+    for (const p of pages) {
+      const elements = (p.document?.elements ?? []).map((e) =>
+        e.kind === 'image' && typeof e.assetId === 'string' && plan.renamed.has(e.assetId.toLowerCase()) ? { ...e, assetId: plan.renamed.get(e.assetId.toLowerCase()) } : e,
+      );
+      await tx.$executeRaw`
+        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
+        VALUES (${id}::uuid, ${p.position}, ${p.layout}, ${p.background}, ${JSON.stringify({ ...p.document, elements })}::jsonb)`;
+    }
+    for (const [i, a] of plan.images.entries()) {
+      const to = plan.renamed.get(a.id) as string;
+      await tx.$executeRaw`
+        INSERT INTO chat.whiteboard_asset (id, board_id, kind, object_key, content_type, byte_size, sha256, width, height, state, expires_at)
+        VALUES (${to}::uuid, ${id}::uuid, ${a.kind}, ${plan.keys[i]}, ${a.content_type}, ${a.byte_size}, ${a.sha256}, ${a.width}, ${a.height},
+                'pending', now() + interval '1 hour')`;
+    }
+    await this.assertAssetQuota(tx, teacherId, 0);
+    return id;
+  }
+
+  /**
+   * The board's ready images, signed: only ever for a board the caller has
+   * just been authorized for (open, review, a write of their own), by the
+   * board's own id (§6.3).
+   */
+  private async signedImages(tx: Tx | PrismaService, board: BoardRow): Promise<AssetView[]> {
+    const rows = await tx.$queryRaw<AssetRow[]>`
+      SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height
+        FROM chat.whiteboard_asset
+       WHERE board_id = ${board.id}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page')
+       ORDER BY created_at`;
+    return this.assets.sign(board, rows);
+  }
+
+  /** §6.4: a teacher's images (all their boards, trash included), plus `adding`, within 300 MB. */
+  private async assertAssetQuota(tx: Tx, teacherId: string, adding: number): Promise<void> {
+    const [{ used }] = await tx.$queryRaw<Array<{ used: bigint }>>`
+      SELECT COALESCE(sum(a.byte_size), 0)::bigint AS used
+        FROM chat.whiteboard_asset a JOIN chat.whiteboard w ON w.id = a.board_id
+       WHERE w.teacher_id = ${teacherId}::uuid AND a.kind IN ('image', 'pdf_page')`;
+    if (Number(used) + adding > ASSET_BYTES_PER_TEACHER) {
+      throw limit('storage', `storage: a teacher's boards hold at most ${ASSET_BYTES_PER_TEACHER / (1024 * 1024)} MB of images; delete boards you no longer need`);
     }
   }
 
   /**
-   * A new board of `teacherId` with the source's pages. Images come with the
-   * asset routes (PR-4): until then no board has any, and a copy of one that
-   * has is refused rather than made with broken references.
+   * PR-4 is off until the environment's bucket and its versioning exist
+   * (§11.3) AND the operator has recorded the uploads' lifecycle rule as
+   * verified (review of #305): both flags, or nothing.
    */
-  private async copyBoard(tx: Tx, source: BoardRow, teacherId: string, organizationId: string, title: string): Promise<string> {
-    const [{ n }] = await tx.$queryRaw<Array<{ n: number }>>`
-      SELECT count(*)::int AS n FROM chat.whiteboard_asset WHERE board_id = ${source.id}::uuid`;
-    if (Number(n) > 0) throw state('a board with images cannot be copied yet');
-    const lessonId = teacherId === source.teacher_id ? source.lesson_id : null;
-    const [{ id }] = await tx.$queryRaw<Array<{ id: string }>>`
-      INSERT INTO chat.whiteboard (organization_id, teacher_id, lesson_id, title)
-      VALUES (${organizationId}::uuid, ${teacherId}::uuid, ${lessonId}::uuid, ${title})
-      RETURNING id::text AS id`;
-    await tx.$executeRaw`
-      INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
-      SELECT ${id}::uuid, position, layout, background, document
-        FROM chat.whiteboard_page WHERE board_id = ${source.id}::uuid`;
-    return id;
+  private async assetsOn(): Promise<void> {
+    const [enabled, lifecycle] = await Promise.all([this.config.get('whiteboards.assets_enabled'), this.config.get('whiteboards.assets_lifecycle_verified')]);
+    if (enabled !== true || lifecycle !== true) {
+      throw new CommError(CommErrorCode.WHITEBOARD_ASSETS_OFF, 'images and export are not switched on here yet', 503);
+    }
+  }
+
+  private byteSize(value: unknown, field: string): number {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > BOARD_IMAGE_MAX_BYTES) {
+      throw invalid(`${field}: 1-${BOARD_IMAGE_MAX_BYTES} bytes`);
+    }
+    return value;
   }
 
   /** Makes room at `position` by moving the pages from there on down by one. */
@@ -726,7 +1234,9 @@ export class WhiteboardService {
     const pages = await tx.$queryRaw<PageRow[]>`
       SELECT id::text AS id, position, layout, background, document, updated_at
         FROM chat.whiteboard_page WHERE board_id = ${board.id}::uuid ORDER BY position`;
+    const assets = await this.signedImages(tx, board);
     return {
+      assets,
       ...summary(board),
       teacherId: board.teacher_id,
       canEdit: canEdit && board.state === 'active',
@@ -836,3 +1346,9 @@ const BOARD_SELECT = Prisma.sql`
          w.retained_until, w.created_at, w.updated_at,
          (SELECT count(*)::int FROM chat.whiteboard_page p WHERE p.board_id = w.id) AS page_count
     FROM chat.whiteboard w`;
+
+/** "Al-Fatihah review.pdf": the title, safe in a Content-Disposition header. */
+export function exportFileName(title: string): string {
+  const safe = title.replace(/[^\p{L}\p{N} ._-]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return `${safe || 'board'}.pdf`;
+}

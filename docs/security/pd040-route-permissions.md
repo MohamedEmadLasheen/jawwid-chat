@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-544 routes.
+550 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -161,6 +161,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/dashboard/chats` | chat.use | `dashboard/dashboard.controller.ts#DashboardController.chats` |
 | GET | `/api/v1/dashboard/enrolment` | trials.view | new_students.view | `dashboard/dashboard.controller.ts#DashboardController.enrolmentSection` |
 | GET | `/api/v1/dashboard/lessons` | lessons.view | schedule.view | `dashboard/dashboard.controller.ts#DashboardController.lessons` |
+| GET | `/api/v1/dashboard/structure` | org.view | `dashboard/dashboard.controller.ts#DashboardController.structureSection` |
 | GET | `/api/v1/dashboard/tasks` | self-service | `dashboard/dashboard.controller.ts#DashboardController.tasksSection` |
 | GET | `/api/v1/dashboard/teachers` | teacher_supervision.view | teacher_profiles.review | `dashboard/dashboard.controller.ts#DashboardController.teachersSection` |
 | POST | `/api/v1/discipline/complaints/:id/uphold` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.uphold` |
@@ -548,7 +549,12 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.list` |
 | POST | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.create` |
 | GET | `/api/v1/whiteboards/:id` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.open` |
+| GET | `/api/v1/whiteboards/:id/assets` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.imageUrls` |
+| POST | `/api/v1/whiteboards/:id/assets/:assetId/confirm` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.confirmImage` |
+| POST | `/api/v1/whiteboards/:id/assets/grant` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.grantImage` |
 | POST | `/api/v1/whiteboards/:id/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicate` |
+| POST | `/api/v1/whiteboards/:id/exports/compose` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.composeExport` |
+| POST | `/api/v1/whiteboards/:id/exports/grant` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.grantExport` |
 | POST | `/api/v1/whiteboards/:id/pages` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.addPage` |
 | POST | `/api/v1/whiteboards/:id/pages/:pageId` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.savePage` |
 | POST | `/api/v1/whiteboards/:id/pages/:pageId/delete` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.deletePage` |

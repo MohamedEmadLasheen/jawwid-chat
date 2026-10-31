@@ -24,7 +24,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { PrismaService } from '@platform/prisma.service';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
@@ -35,14 +34,11 @@ import { OrgStructureService } from '../../src/org/org-structure.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import type { DashboardTile } from '../../src/dashboard/dashboard-tile';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { statementCounter } from './statement-counter';
 
-const logged = new PrismaService({ log: [{ emit: 'event', level: 'query' }] });
-let statements = 0;
-(logged as unknown as { $on(event: 'query', cb: () => void): void }).$on('query', () => {
-  statements += 1;
-});
+const counter = statementCounter();
 
-const g = buildGraph(undefined, logged);
+const g = buildGraph(undefined, counter.prisma);
 const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
@@ -85,11 +81,7 @@ const tileOf = (tiles: DashboardTile[], key: string) => tiles.find((t) => t.key 
 const keys = (tiles: DashboardTile[]) => tiles.map((t) => t.key).sort();
 const both = async (actorId: string) => [...(await trials.dashboardCounts(actorId)), ...(await enrolment.dashboardCounts(actorId))];
 
-async function counted<T>(run: () => Promise<T>): Promise<{ result: T; n: number }> {
-  statements = 0;
-  const result = await run();
-  return { result, n: statements };
-}
+const counted = counter.counted;
 
 async function department(kind: string, staffIds: string[]) {
   const [{ id }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
