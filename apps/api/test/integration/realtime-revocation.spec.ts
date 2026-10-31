@@ -1992,3 +1992,56 @@ const REDIS_URL = process.env.REALTIME_REVOCATION_REDIS_URL;
     await deliveredOnlyTo(a, groupId, p2OnB, [pOnB]);
   });
 });
+
+describe('deliveries are ordered per conversation, not per node', () => {
+  afterEach(() => {
+    node.gateway.deliveryBarrier = undefined;
+  });
+
+  const event = (conversationId: string, messageId: string) =>
+    ({ conversationId, messageId, seq: '1' }) as never;
+
+  it('a delivery held in one conversation does not hold up another conversation', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    await p.subscribe(groupId);
+    await p.subscribe(directId);
+
+    const held = holdNextDelivery(node);
+    const inGroup = randomUUID();
+    const groupDelivery = node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, inGroup));
+    await held.reached; // the group's delivery is decided and parked before its emits
+    try {
+      const inDirect = randomUUID();
+      const directDelivery = node.gateway.toThread(directId, CommEvent.MESSAGE_CREATED, event(directId, inDirect));
+      await p.waitFor(CommEvent.MESSAGE_CREATED, inDirect); // arrives while the group is still held
+      await directDelivery;
+      expect(p.has(CommEvent.MESSAGE_CREATED, inGroup)).toBe(false);
+    } finally {
+      held.release();
+    }
+    await groupDelivery;
+    await p.waitFor(CommEvent.MESSAGE_CREATED, inGroup);
+  });
+
+  it('within one conversation a later event waits for the held one, and arrives after it', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    await p.subscribe(groupId);
+
+    const held = holdNextDelivery(node);
+    const first = randomUUID();
+    const second = randomUUID();
+    const deliveries = [node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, first))];
+    await held.reached;
+    deliveries.push(node.gateway.toThread(groupId, CommEvent.MESSAGE_CREATED, event(groupId, second)));
+    await sleep(GRACE_MS);
+    expect(p.has(CommEvent.MESSAGE_CREATED, second)).toBe(false); // queued behind the held one
+    held.release();
+    await Promise.all(deliveries);
+    await p.waitFor(CommEvent.MESSAGE_CREATED, second);
+    const order = p.inbox
+      .filter((e) => e.event === CommEvent.MESSAGE_CREATED)
+      .map((e) => (e.payload as { messageId: string }).messageId)
+      .filter((m) => m === first || m === second);
+    expect(order).toEqual([first, second]);
+  });
+});
