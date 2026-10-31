@@ -229,10 +229,17 @@ begin
   end if;
   raise notice 'pass  D4 task carries the PRD §7.6 vocabulary (C-3 system-event carrier)';
 
-  -- C-1: exactly four conversation types, no fifth. Targets the named type
-  -- constraint rather than "any constraint mentioning student_group" -- the
-  -- learner_id check mentions it too, and matching whichever came back first
-  -- made this assertion depend on catalogue ordering.
+  -- C-1: the four PRD conversation types, plus exactly the ones a later product
+  -- decision added, each with its own shape constraint -- and nothing else:
+  --   teacher_supervision  20261013150000_chat_staff_profile.sql
+  --   family_group         20261015120000_chat_pd008_org_structure.sql (PD-8)
+  --   trial_group          20261019130000_chat_pd011_trial_group.sql (PD-11 T4)
+  --   department_room      20261027100000_chat_pd035_department_rooms.sql (PD-35)
+  -- A new type needs its own decision and a line here; it is never a reason to
+  -- widen the pattern. Targets the named type constraint rather than "any
+  -- constraint mentioning student_group" -- the learner_id check mentions it
+  -- too, and matching whichever came back first made this assertion depend on
+  -- catalogue ordering.
   if not exists (
     select 1 from pg_constraint
      where conrelid = 'chat.conversation'::regclass
@@ -247,10 +254,10 @@ begin
     select 1 from pg_constraint
      where conrelid = 'chat.conversation'::regclass
        and conname = 'conversation_type_check'
-       and pg_get_constraintdef(oid) ~ '''(?!direct|student_group|class_group|official)[a-z_]+''') then
-    raise exception 'FAIL: conversation.type carries a fifth type (C-1 forbids one)';
+       and pg_get_constraintdef(oid) ~ '''(?!(?:direct|student_group|class_group|official|teacher_supervision|family_group|trial_group|department_room)'')[a-z_]+''') then
+    raise exception 'FAIL: conversation.type carries a type no product decision added (C-1)';
   end if;
-  raise notice 'pass  D5 conversation.type is exactly the four PRD types (C-1)';
+  raise notice 'pass  D5 conversation.type is the four PRD types plus exactly the decided ones (C-1)';
 end $$;
 
 rollback;
