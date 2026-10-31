@@ -1307,7 +1307,7 @@ AuditEntryDto { id: string, actorId: string|null, action, entity, entityId, befo
 
 ```
 AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole: string|null,
-                    familyName: string|null, children: string[], status: 'provisioned'|'active'|'suspended'|'deactivated',
+                    familyName: string|null, familyId: string|null, children: string[], status: 'provisioned'|'active'|'suspended'|'deactivated',
                     hasLogin: boolean, lockedUntil: string|null, lastLoginAt: string|null,
                     allowed: { resetPassword, suspend, reactivate, impersonate, signOut } }   // advisory; decided again per action
 ```
@@ -1340,7 +1340,7 @@ FamilyAccessGrantDto { id, family: { id, name }, grantee: { id, name }, grantedB
 
 A grant opens account administration (and a support session) of ONE family's parent accounts to one Operations staff member — nothing else; PD-8 access is untouched. Permission: `accounts.administer`, then the service: the Operations Manager or the super admin grants and revokes; the grantee is live Operations staff of the same organization, never the grantor; at most 7 days (`chat.family_access_grant`, the same rules in its trigger). Active while not revoked and `startsAt ≤ now < endsAt`, checked on every read — expiry needs no job. The parent is not notified.
 
-**GET /admin/family-access-grants** — `{ grants }`: a grantor, the organization's grants live or ended in the last 30 days (newest first, at most 200); anyone else, their own active grants.
+**GET /admin/family-access-grants** — `{ grants, canGrant, grantees? }`: a grantor (`canGrant: true`), the organization's grants live or ended in the last 30 days (newest first, at most 200), and `grantees` — the live Operations staff who may receive a grant, never the grantor; anyone else, their own active grants and no `grantees`.
 
 **POST /admin/family-access-grants** — Request `{ familyId, granteeId, purpose (1–500), hours? (1–168, default 24) }`. Response `201 FamilyAccessGrantDto`. Errors: `COMM.ACCOUNT_ADMIN_DENIED` 403 (not a grantor) · `COMMON.VALIDATION` 400 (self, not Operations staff, unknown family, purpose, hours).
 
