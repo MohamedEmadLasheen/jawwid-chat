@@ -105,14 +105,15 @@ describe('statement timeout', () => {
       timed, {} as never, {} as never, {} as never, {} as never,
       { get: async () => 1 } as never, {} as never, {} as never,
     );
-    const during: string[] = [];
+    const during: number[] = [];
     const after = await timed.$transaction(async (tx) => {
       // The caller's transaction, observed at the moment the materializer's statement runs.
       const spy = {
         $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
           if (strings.join('?').includes('materialize_lessons')) {
-            const [{ v }] = await tx.$queryRawUnsafe<Array<{ v: string }>>(`SELECT current_setting('statement_timeout') AS v`);
-            during.push(v);
+            // pg_settings gives milliseconds (SHOW would say "2min").
+            const [{ ms }] = await tx.$queryRawUnsafe<Array<{ ms: number }>>(`SELECT setting::int AS ms FROM pg_settings WHERE name = 'statement_timeout'`);
+            during.push(ms);
           }
           return (tx.$queryRaw as (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown>)(strings, ...values);
         },
@@ -121,7 +122,7 @@ describe('statement timeout', () => {
       const [{ v }] = await tx.$queryRawUnsafe<Array<{ v: string }>>(`SELECT current_setting('statement_timeout') AS v`);
       return v;
     }, { timeout: 30_000 });
-    expect(during).toEqual([`${MATERIALIZE_STATEMENT_TIMEOUT_MS / 1000}s`]);
+    expect(during).toEqual([MATERIALIZE_STATEMENT_TIMEOUT_MS]);
     expect(after).toBe('500ms');
     // And on its own (no caller transaction) it still completes.
     await expect(scheduling.materialize()).resolves.toBeGreaterThanOrEqual(0);
