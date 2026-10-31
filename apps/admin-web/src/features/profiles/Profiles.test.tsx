@@ -244,7 +244,13 @@ describe('the Parent Profile', () => {
     await userEvent.type(within(dialog).getByLabelText('Reference'), 'TRX-99')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }))
     await waitFor(() => expect(calls('POST', /\/instalments\/i-1\/payment$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/instalments\/i-1\/payment$/)[0])).toEqual({ paidOn: '2026-10-21', method: 'bank_transfer', reference: 'TRX-99' })
+    expect(bodyOf(calls('POST', /\/instalments\/i-1\/payment$/)[0])).toEqual({
+      paidOn: '2026-10-21',
+      method: 'bank_transfer',
+      reference: 'TRX-99',
+      // ADMIN-001: the form's idempotency key.
+      paymentId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+    })
 
     await userEvent.click(within(first).getByRole('button', { name: 'Void' }))
     dialog = screen.getByRole('dialog', { name: 'Void: Autumn term' })
