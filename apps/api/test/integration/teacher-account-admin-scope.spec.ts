@@ -34,12 +34,20 @@ import { SupervisionConversationService } from '../../src/supervision/supervisio
 import { CardPoster } from '../../src/supervision/card-poster';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TeacherSupervisorService } from '../../src/teacher-supervisors/teacher-supervisor.service';
+import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
+import { TeacherOnboardingService } from '../../src/teacher-file/teacher-onboarding.service';
+import { LessonService } from '../../src/lessons/lesson.service';
+import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { TrialService } from '../../src/lessons/trial.service';
+import { NewStudentsService } from '../../src/new-students/new-students.service';
+import type { MailSender } from '../../src/account-recovery/recovery-delivery';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
 const identity = new PrismaIdentityService(g.prisma);
-const auth = new AuthService(g.prisma, identity, audit);
+// With authz: a support session is re-decided on every request (without it, every one is refused).
+const auth = new AuthService(g.prisma, identity, audit, undefined, g.authz);
 const accounts = new AccountAdminService(g.prisma, g.authz, auth, new PasswordResetService(g.prisma, auth, audit), audit);
 const impersonation = new ImpersonationService(g.prisma, g.authz, auth, identity, audit);
 const scope = new TeacherScopeService(g.prisma);
@@ -47,6 +55,15 @@ const supervisionChats = new SupervisionConversationService(g.prisma, g.authz, g
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const trialGroups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
 const supervisors = new TeacherSupervisorService(g.prisma, g.conversations, new SeatPolicyRegistry(), scope, supervisionChats, trialGroups, audit);
+const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
+const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, trialGroups, new NewStudentsService(g.prisma));
+const mailer: MailSender = { available: true, send: async () => undefined };
+const onboarding = new TeacherOnboardingService(
+  g.prisma, new TeacherFileService(g.prisma, g.authz, g.conversations, audit, scope), supervisionChats,
+  new PasswordResetService(g.prisma, auth, audit), auth, lessons, trials, mailer, g.notifications, scope,
+);
+const PASSWORD = 'teacher-011-review-password-1';
 
 jest.setTimeout(120_000);
 
@@ -202,3 +219,79 @@ describe('TEACHER-011: strict scope off', () => {
     expect((await accounts.get(await actor(ola), acct.c)).allowed.resetPassword).toBe(true);
   });
 });
+
+describe("TEACHER-011 review (#356): support sessions, single sessions, reassignment", () => {
+  beforeEach(async () => {
+    await strict(true);
+  });
+
+  /** Ola signed in: the administrator context a support session needs. */
+  async function olaSignedIn() {
+    await auth.setPassword(own.ola!, PASSWORD);
+    const subject = (await g.prisma.account.findUniqueOrThrow({ where: { id: own.ola! } })).subject;
+    const pair = await auth.login(subject, PASSWORD);
+    return { actor: await actor(ola), accountId: own.ola!, sessionId: pair.sessionId };
+  }
+  const reassignD = () => supervisors.assign(tmgr, s.newTeacherId, { supervisorId: heba });
+
+  it("a support session on her teacher is refused, and ended on record, at the first request after the teacher leaves her scope", async () => {
+    const admin = await olaSignedIn();
+    const support = await impersonation.start(admin, { accountId: acct.d, reason: 'support' });
+    expect(await auth.authenticate(support.accessToken)).not.toBeNull();
+    await reassignD();
+    expect(await auth.authenticate(support.accessToken)).toBeNull();
+    const row = await g.prisma.impersonationSession.findUniqueOrThrow({ where: { id: support.session.id } });
+    expect(row.endedAt).not.toBeNull();
+  });
+
+  it('a fresh support token after the teacher leaves her scope is refused', async () => {
+    const admin = await olaSignedIn();
+    const support = await impersonation.start(admin, { accountId: acct.d, reason: 'support' });
+    await reassignD();
+    expect([CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, CommErrorCode.IMPERSONATION_ENDED]).toContain(
+      await code(impersonation.token(admin, support.session.id)),
+    );
+  });
+
+  it("revoking one session of a teacher outside her scope is refused, and the session lives on", async () => {
+    await auth.setPassword(acct.c, PASSWORD);
+    const subject = (await g.prisma.account.findUniqueOrThrow({ where: { id: acct.c } })).subject;
+    const teacherSession = await auth.login(subject, PASSWORD);
+    expect(
+      await code(accounts.revokeSession(await actor(ola), own.ola!, acct.c, teacherSession.sessionId, { reason: 'qa' })),
+    ).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+    expect(await auth.authenticate(teacherSession.accessToken)).not.toBeNull();
+  });
+
+  it("a reassigned teacher leaves the old supervisor's list and acts, and joins the new one's", async () => {
+    expect(await listed(ola)).toEqual(['teacher_d']);
+    await reassignD();
+    expect(await listed(ola)).toEqual([]);
+    expect(await code(accounts.issuePasswordReset(await actor(ola), own.ola!, acct.d, { reason: 'qa' }))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+    expect(await listed(heba)).toEqual(['teacher_c', 'teacher_d']);
+  });
+});
+
+describe("TEACHER-011 review (#356): teacher onboarding codes under strict scope", () => {
+  beforeEach(async () => {
+    await strict(true);
+  });
+  const refused = [CommErrorCode.TEACHER_FILE_NOT_FOUND, CommErrorCode.TEACHER_ONBOARDING_DENIED];
+
+  it("a supervisor gives no sign-in, changes no sign-in e-mail and re-issues no code for a teacher outside her scope", async () => {
+    const before = await g.prisma.account.findUniqueOrThrow({ where: { id: acct.c }, select: { subject: true } });
+    const codesBefore = await g.prisma.passwordResetCode.count({ where: { accountId: acct.c } });
+    // teacher_c is Heba's; teacher_e is nobody's (both have a sign-in, so give-sign-in is tried on a fresh one too).
+    expect(refused).toContain(await code(onboarding.changeSignIn(ola, s.teacherId, { email: `x-${randomUUID()}@acct.test`, reason: 'qa' })));
+    expect(refused).toContain(await code(onboarding.reissue(ola, s.teacherId, { reason: 'qa' })));
+    expect(refused).toContain(await code(onboarding.reissue(ola, s.unrelatedTeacherId, { reason: 'qa' })));
+    const fresh = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.teacher (id, name, is_active) values ($1::uuid, 'teacher_f', true)`, fresh);
+    expect(refused).toContain(await code(onboarding.giveSignIn(ola, fresh, { email: `f-${randomUUID()}@acct.test`, reason: 'qa' })));
+    // Nothing changed.
+    expect((await g.prisma.account.findUniqueOrThrow({ where: { id: acct.c }, select: { subject: true } })).subject).toBe(before.subject);
+    expect(await g.prisma.passwordResetCode.count({ where: { accountId: acct.c } })).toBe(codesBefore);
+    expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: fresh }, select: { accountId: true } })).toEqual({ accountId: null });
+  });
+});
+
