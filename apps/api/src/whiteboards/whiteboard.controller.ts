@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, StreamableFile, UseFilters } from '@nestjs/common';
 import { CurrentActor } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
@@ -123,6 +123,63 @@ export class WhiteboardController {
   deletePage(@Param('id') id: string, @Param('pageId') pageId: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
     return this.boards.deletePage(id, pageId, body ?? {}, actor);
   }
+
+  // PR-4: images and export (§4.4, §4.6, §6.3). Each answers 503
+  // COMM.WHITEBOARD_ASSETS_OFF until `whiteboards.assets_enabled` is on.
+
+  /** A signed PUT for one image, for a key the server chose. */
+  @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @Post(':id/assets/grant')
+  @HttpCode(201)
+  grantImage(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
+    return this.boards.grantImage(id, body ?? {}, actor);
+  }
+
+  /** The upload checked and kept: only then may a page name the image. */
+  @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @Post(':id/assets/:assetId/confirm')
+  @HttpCode(200)
+  confirmImage(@Param('id') id: string, @Param('assetId') assetId: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
+    return this.boards.confirmImage(id, assetId, body ?? {}, actor);
+  }
+
+  /** The board's images signed again (a URL lives 15 minutes). */
+  @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @Get(':id/assets')
+  @Header('Cache-Control', 'private, no-store')
+  imageUrls(@Param('id') id: string, @CurrentActor() actor: Actor) {
+    return this.boards.imageUrls(id, actor);
+  }
+
+  /** A signed PUT per page for a PDF export. */
+  @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @Post(':id/exports/grant')
+  @HttpCode(201)
+  grantExport(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
+    return this.boards.grantExport(id, body ?? {}, actor);
+  }
+
+  /** The PDF itself, composed from the uploaded pages; nothing of it is kept. */
+  @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @Post(':id/exports/compose')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async composeExport(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
+    const { pdf, fileName } = await this.boards.composeExport(id, body ?? {}, actor);
+    return new StreamableFile(pdf, { type: 'application/pdf', length: pdf.length, disposition: contentDisposition(fileName) });
+  }
+}
+
+/** An ASCII fallback name and the real one (RFC 6266 / 5987): an Arabic title stays Arabic. */
+export function contentDisposition(fileName: string): string {
+  const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 }
 
 /**

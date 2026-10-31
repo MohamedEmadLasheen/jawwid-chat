@@ -508,7 +508,7 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    // PD-39: boards past their trash or retention time, and the retention notice.
+    // PD-39: boards past their trash or retention time, uploads never confirmed, and the retention notice.
     if (Date.now() >= nextWhiteboardSweep) {
       draining = true;
       try {
@@ -516,6 +516,11 @@ async function bootstrap(): Promise<void> {
         if (swept.failed > 0) log.warn(`whiteboard purge: ${swept.purged} purged, ${swept.failed} left for the next sweep`);
       } catch (e) {
         report(log, 'whiteboard purge', 'whiteboards.purge', e);
+      }
+      try {
+        await whiteboards.sweepAbandonedAssets();
+      } catch (e) {
+        report(log, 'whiteboard upload sweep', 'whiteboards.uploads', e);
       }
       try {
         await whiteboards.retentionNotices();

@@ -293,6 +293,16 @@ The rule: **verse text is never typed, OCR'd, generated or edited by anyone at J
   which it already uses for certificates. The verse attribution goes in the footer when a
   verse is present. The result is a board asset with a 10-minute signed URL, and is purged
   after 24 h. Vector PDF is not planned: a second renderer would drift from the first.
+- **As built (PR-4a).** `POST /whiteboards/:id/exports/compose` answers with the PDF itself
+  (`application/pdf`, `Content-Disposition: attachment`) instead of storing it: the storage
+  seam has no server-side write, and nothing of an export needs to outlive the request. The
+  uploaded page PNGs are deleted as soon as the PDF is made; an export never composed is
+  swept an hour on. It is logged `export`.
+- **Hardened (review of #305).** Each page must be at most 1920 × 1080 px and 8 MB, and one
+  export at most 64 MB. Every page is fully **decoded** before the PDF library sees it: chunk
+  CRCs, an 8-bit RGB/RGBA image, an inflate capped at the size the header promises, and a
+  valid filter byte on every row. The decode and pdfkit both run in a **worker thread** with a
+  256 MB heap and a 30 s limit, so a parser fault ends the worker, never the API.
 
 ### 4.7 What "built-in" versus "teacher-made" means
 
@@ -508,6 +518,25 @@ never enough to read an object.**
   - The key namespace test is structural (exactly four segments), not `startsWith`.
 - **References.** A page document may name only `ready` asset ids of **the same board**.
   The page save refuses others (403, not 500).
+- **As built (PR-4a).**
+  - The grant's key is `whiteboard-uploads/<org>/<board>/<asset>/<random>`; the kept key is
+    `whiteboards/<org>/<board>/<asset>` (the table's key-shape check). Confirm takes the
+    upload key back and accepts it only if it is exactly that asset's upload (five
+    segments, structural), then copies, inspects (type, format end, still image, at most
+    8,000 px) and deletes the upload. No grant can name a kept key.
+  - An upload never confirmed is never signed. Its row (and any kept copy) is swept an
+    hour on; the upload object itself needs a bucket **lifecycle rule expiring
+    `whiteboard-uploads/` after 1 day**, added with the bucket's versioning (#191).
+  - Everything is behind **two** `chat.config` flags, both default off: the feature,
+    `whiteboards.assets_enabled`, and the operator's record that the lifecycle rule is in
+    place, `whiteboards.assets_lifecycle_verified`. Nothing works until both are on.
+  - Confirm and compose hold their asset rows (`FOR UPDATE`) while they read and check
+    storage, so a second confirm waits and then answers the ready image. The sweep takes
+    only rows that are still pending, past their expiry and not held (`SKIP LOCKED`), and
+    confirm re-checks the expiry in its own update.
+  - A copy copies its objects to the new board's keys **before** its transaction, and
+    deletes them if the rows fail. No storage call runs inside a transaction except
+    confirm's and compose's own pinning.
 
 ### 6.4 Limits (configuration, with these defaults)
 
