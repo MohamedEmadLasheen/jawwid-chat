@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/errors/app_error.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/board.dart';
 import '../domain/board_page.dart';
@@ -41,6 +42,43 @@ abstract interface class WhiteboardsRepository {
   Future<BoardDetail> deletePage(String boardId, String pageId, int revision);
 
   Future<BoardDetail> reorderPages(String boardId, int revision, List<String> pageIds);
+
+  /// PR-4 (design §6.3): a signed PUT for one image, for a key the server
+  /// chose. Answers 503 `COMM.WHITEBOARD_ASSETS_OFF` where images are off.
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize});
+
+  /// The upload checked and kept by the server; only then may a page name it.
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey);
+
+  /// The board's images signed again (a signed URL lives about 15 minutes).
+  Future<List<BoardAsset>> imageUrls(String boardId);
+}
+
+/// The API's answer where images and export are not switched on (503).
+const String kAssetsOffCode = 'COMM.WHITEBOARD_ASSETS_OFF';
+
+/// What an image grant answers: the asset's id, and where and how to PUT its bytes.
+class ImageGrant {
+  const ImageGrant({required this.assetId, required this.objectKey, required this.uploadUrl, required this.headers});
+
+  final String assetId;
+
+  /// The upload's key, handed back on confirm; the server checks it is this asset's.
+  final String objectKey;
+  final String uploadUrl;
+  final Map<String, String> headers;
+
+  factory ImageGrant.fromJson(Map<String, Object?> j) {
+    final upload = j['upload'];
+    final u = upload is Map ? upload : const {};
+    final headers = u['headers'];
+    return ImageGrant(
+      assetId: j['assetId'] as String? ?? '',
+      objectKey: u['objectKey'] as String? ?? '',
+      uploadUrl: u['uploadUrl'] as String? ?? '',
+      headers: {if (headers is Map) for (final e in headers.entries) '${e.key}': '${e.value}'},
+    );
+  }
 }
 
 /// The build with no boards server: refuses rather than answering "no boards".
@@ -76,6 +114,12 @@ class NoWhiteboardsRepository implements WhiteboardsRepository {
   Future<BoardDetail> deletePage(String boardId, String pageId, int revision) async => _none();
   @override
   Future<BoardDetail> reorderPages(String boardId, int revision, List<String> pageIds) async => _none();
+  @override
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async => _none();
+  @override
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey) async => _none();
+  @override
+  Future<List<BoardAsset>> imageUrls(String boardId) async => _none();
 }
 
 /// Overridden with the HTTP implementation by the real composition root.
@@ -162,6 +206,21 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
   @override
   Future<BoardDetail> reorderPages(String boardId, int revision, List<String> pageIds) async =>
       BoardDetail.fromJson(await _post('/whiteboards/$boardId/pages/order', {'revision': revision, 'pageIds': pageIds}));
+
+  @override
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async =>
+      ImageGrant.fromJson(await _post('/whiteboards/$boardId/assets/grant', {'kind': 'image', 'contentType': contentType, 'byteSize': byteSize}));
+
+  @override
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey) async {
+    final asset = BoardAsset.fromJson((await _post('/whiteboards/$boardId/assets/$assetId/confirm', {'objectKey': objectKey}))['asset']);
+    if (asset == null) throw const FormatException('the confirm answer names no image');
+    return asset;
+  }
+
+  @override
+  Future<List<BoardAsset>> imageUrls(String boardId) async =>
+      BoardAsset.listFrom((await _client.get<Map<String, Object?>>('/whiteboards/$boardId/assets')).data?['assets']);
 }
 
 // ---------------------------------------------------------------------------
@@ -434,4 +493,16 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
     final byId = {for (final p in b.pages) p.id: p};
     return _put(boardId, _with(b.summary), [for (final id in pageIds) byId[id]!]);
   }
+
+  // No storage behind the debug fixtures: images answer as a server with them switched off.
+  static Never _assetsOff() => throw const AppError(AppErrorKind.server, code: kAssetsOffCode);
+
+  @override
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async => _assetsOff();
+
+  @override
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey) async => _assetsOff();
+
+  @override
+  Future<List<BoardAsset>> imageUrls(String boardId) async => const [];
 }
