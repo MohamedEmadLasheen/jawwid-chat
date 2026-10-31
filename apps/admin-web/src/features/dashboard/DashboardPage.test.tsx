@@ -240,6 +240,25 @@ describe('the manager Dashboard', () => {
     )
   })
 
+  it('shows the Organization section: children and teachers without a supervisor, covers under way (PR-7)', async () => {
+    routes['/dashboard/structure'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [tile('learners.unsupervised', 2), tile('teachers.unsupervised', 3), tile('covers.active', 1)],
+      })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['org.view', 'org.covers'] }))
+    const section = await screen.findByRole('region', { name: 'Organization' })
+    const children = await within(section).findByRole('link', { name: /Children without a supervisor/ })
+    expect(children).toHaveAttribute('href', '/organization?tab=children&filter=unassigned')
+    expect(children).toHaveClass('dash-tile--alert')
+    const teachers = within(section).getByRole('link', { name: /Teachers without a supervisor/ })
+    expect(teachers).toHaveAttribute('href', '/organization?tab=teachers')
+    expect(teachers).toHaveClass('dash-tile--alert')
+    const away = within(section).getByRole('link', { name: /Supervisors away, covered by a backup/ })
+    expect(away).toHaveAttribute('href', '/organization?tab=structure')
+    expect(away).not.toHaveClass('dash-tile--alert')
+  })
+
   it('is Arabic first: Arabic labels and digits, right to left', async () => {
     open(MANAGER, 'ar')
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()
