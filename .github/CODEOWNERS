@@ -1,42 +1,31 @@
-# Every path below needs @MohamedEmadLasheen's approval (ruleset "Require review
-# from Code Owners"). A PR that changes approvals may not change the code that
-# checks them (scripts/lessons/verify-approvals.mjs PROTECTED).
+# Narrow Code Owners (owner decision 2026-10-31): only the genuinely sensitive
+# files need @MohamedEmadLasheen's review. Everything else merges on the six
+# required CI checks and the department head's review.
+# A PR that changes approvals may not change the code that checks them
+# (scripts/lessons/verify-approvals.mjs PROTECTED).
 
-# Repository security, CI, release gates, deployment
-/.github/                                      @MohamedEmadLasheen
+# Code Owners, CI and deployment workflows, and the CI release gates
+/.github/CODEOWNERS                            @MohamedEmadLasheen
+/.github/workflows/                            @MohamedEmadLasheen
 /scripts/qa/                                   @MohamedEmadLasheen
-/scripts/infra/                                @MohamedEmadLasheen
-/infra/                                        @MohamedEmadLasheen
-/.do/                                          @MohamedEmadLasheen
-/docker-compose.yml                            @MohamedEmadLasheen
-/apps/api/Dockerfile                           @MohamedEmadLasheen
-/apps/admin-web/Dockerfile                     @MohamedEmadLasheen
-/apps/admin-web/infra-nginx/                   @MohamedEmadLasheen
 
-# API security: sign-in, tokens, permissions, policies
-/apps/api/src/platform/                        @MohamedEmadLasheen
-/apps/api/src/main.ts                          @MohamedEmadLasheen
-
-# Database: migrations, rollbacks, security tests, the migration runner
-/supabase/migrations/                          @MohamedEmadLasheen
-/db/                                           @MohamedEmadLasheen
-/scripts/db/                                   @MohamedEmadLasheen
-
-# The Quran text: the verified dataset, its pins, loading and display
+# The Quran text: the verified dataset, its pins, how it is loaded, served and drawn
 /data/quran/                                   @MohamedEmadLasheen
+/scripts/db/load-quran.py                      @MohamedEmadLasheen
+/scripts/db/load-quran.sh                      @MohamedEmadLasheen
 /apps/api/src/quran/                           @MohamedEmadLasheen
-/assets/fonts/                                 @MohamedEmadLasheen
-/lib/features/whiteboards/data/quran_text_repository.dart    @MohamedEmadLasheen
-/lib/features/whiteboards/presentation/verse_picker.dart     @MohamedEmadLasheen
+/apps/lessons/quran-pin.json                   @MohamedEmadLasheen
+/apps/lessons/src/quran/                       @MohamedEmadLasheen
+/apps/lessons/src/audio/                       @MohamedEmadLasheen
+/apps/lessons/src/fonts/AmiriQuran.ttf         @MohamedEmadLasheen
+/assets/fonts/AmiriQuran.ttf                   @MohamedEmadLasheen
 
-# Audio: Quran recitation and the lesson voice-over
-/apps/api/src/lesson-audio/                    @MohamedEmadLasheen
-/apps/api/src/cli/ingest-quran-audio.ts        @MohamedEmadLasheen
-/apps/api/src/cli/ingest-lesson-audio.ts       @MohamedEmadLasheen
-
-# Lesson content, approvals, signing, checkers, and what families can open
-/apps/lessons/                                 @MohamedEmadLasheen
+# Lesson content and its approval: content files, approvals, signing, the checkers
+/apps/lessons/src/content/                     @MohamedEmadLasheen
+/apps/lessons/src/play/                        @MohamedEmadLasheen
+/apps/lessons/src/arabic/                      @MohamedEmadLasheen
+/apps/lessons/src/reading/                     @MohamedEmadLasheen
+/apps/lessons/src/islamic/                     @MohamedEmadLasheen
 /apps/api/src/lesson-content/                  @MohamedEmadLasheen
-/apps/api/src/materials/                       @MohamedEmadLasheen
-/lib/features/materials/                       @MohamedEmadLasheen
+/apps/api/src/lesson-audio/                    @MohamedEmadLasheen
 /scripts/lessons/                              @MohamedEmadLasheen
