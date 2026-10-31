@@ -97,6 +97,7 @@ whatever these say.
 | `DATABASE_URL` | **yes** | req | req | req |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | no | opt | req | req |
 | `DATABASE_POOL_MAX` | no | opt | req | req |
+| `DATABASE_WORKER_POOL_MAX` | no | opt | req | req |
 
 ### Redis
 

@@ -120,6 +120,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${DATABASE_POOL_MAX}
+      - key: DATABASE_WORKER_POOL_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_WORKER_POOL_MAX}
       - key: REDIS_URL
         scope: RUN_TIME
         type: SECRET
@@ -489,6 +493,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${DATABASE_POOL_MAX}
+      - key: DATABASE_WORKER_POOL_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_WORKER_POOL_MAX}
       - key: REDIS_URL
         scope: RUN_TIME
         type: SECRET

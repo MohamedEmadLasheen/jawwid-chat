@@ -30,12 +30,13 @@ REQUEST_TIMEOUT_MS	application	no	opt	req	req
 SHUTDOWN_GRACE_MS	application	no	opt	req	req
 DATABASE_URL	database	yes	req	req	req
 DATABASE_STATEMENT_TIMEOUT_MS	database	no	opt	req	req
-# DATABASE_POOL_MAX is CONSUMED by apps/api/src/platform/database-pool.ts: the
-# Prisma pool size of EACH process (the API and the worker), added to
-# DATABASE_URL as connection_limit. The 1 GiB managed database has 22 usable
-# connections; at 5, a deploy that briefly runs old and new side by side uses 20.
-# Unset locally means Prisma's default (CPUs x 2 + 1).
+# DATABASE_POOL_MAX and DATABASE_WORKER_POOL_MAX are CONSUMED by
+# apps/api/src/platform/database-pool.ts: the Prisma pool of the API process and
+# of the worker process, added to DATABASE_URL as connection_limit. The 1 GiB
+# managed database has 22 usable connections; at 7 + 3, a deploy that briefly
+# runs old and new side by side uses 20. Unset locally means Prisma's default.
 DATABASE_POOL_MAX	database	no	opt	req	req
+DATABASE_WORKER_POOL_MAX	database	no	opt	req	req
 REDIS_URL	redis	yes	req	req	req
 QUEUE_PREFIX	redis	no	req	req	req
 WORKER_CONCURRENCY	redis	no	opt	opt	req

@@ -6,7 +6,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { Test } from '@nestjs/testing';
-import { DATABASE_POOL_DEFAULTS, pooledDatabaseUrl } from '../../../src/platform/database-pool';
+import { DATABASE_POOL_DEFAULTS, pooledDatabaseUrl, setDatabasePoolRole } from '../../../src/platform/database-pool';
+import { ActorScopedDatabase } from '../../../src/platform/actor-database';
 import { PrismaService } from '../../../src/platform/prisma.service';
 
 const URL_ = 'postgresql://chat:pw@db.example:25060/jawwid?sslmode=require';
@@ -29,11 +30,21 @@ describe('pooledDatabaseUrl', () => {
     }
   });
 
-  it('both deploy workflows set it within the 1 GiB plan (22 usable): 2 processes x 2 during a deploy <= 20', () => {
+  it('the worker reads its own variable; the API reads DATABASE_POOL_MAX', () => {
+    const env = { DATABASE_POOL_MAX: '7', DATABASE_WORKER_POOL_MAX: '3' };
+    expect(params(pooledDatabaseUrl(URL_, env, 'api')).get('connection_limit')).toBe('7');
+    expect(params(pooledDatabaseUrl(URL_, env, 'worker')).get('connection_limit')).toBe('3');
+    expect(params(pooledDatabaseUrl(URL_, { DATABASE_POOL_MAX: '7' }, 'worker')).has('connection_limit')).toBe(false);
+    expect(() => pooledDatabaseUrl(URL_, { DATABASE_WORKER_POOL_MAX: '0' }, 'worker')).toThrow('DATABASE_WORKER_POOL_MAX');
+  });
+
+  it('both deploy workflows fit the 1 GiB plan (22 usable): (API + worker) x 2 during a deploy <= 20, API larger', () => {
     for (const wf of ['deploy-staging.yml', 'deploy-production.yml']) {
       const text = readFileSync(`${__dirname}/../../../../../.github/workflows/${wf}`, 'utf8');
-      const value = Number(/DATABASE_POOL_MAX: '(\d+)'/.exec(text)?.[1]);
-      expect([wf, 2 * 2 * value <= 20]).toEqual([wf, true]);
+      const api = Number(/DATABASE_POOL_MAX: '(\d+)'/.exec(text)?.[1]);
+      const worker = Number(/DATABASE_WORKER_POOL_MAX: '(\d+)'/.exec(text)?.[1]);
+      expect([wf, api, worker]).toEqual([wf, 7, 3]);
+      expect([wf, 2 * (api + worker) <= 20]).toEqual([wf, true]);
     }
   });
 
@@ -78,6 +89,28 @@ describe('PrismaService', () => {
     const prisma = moduleRef.get(PrismaService);
     expect(params(urlOf(prisma)).get('connection_limit')).toBe('7');
     expect(params(urlOf(prisma)).get('pool_timeout')).toBe('10');
+  });
+
+  it('in the worker (setDatabasePoolRole), Nest builds it with the worker pool', async () => {
+    process.env.DATABASE_URL = URL_;
+    process.env.DATABASE_POOL_MAX = '7';
+    process.env.DATABASE_WORKER_POOL_MAX = '3';
+    setDatabasePoolRole('worker');
+    try {
+      const prisma = (await Test.createTestingModule({ providers: [PrismaService] }).compile()).get(PrismaService);
+      expect(params(urlOf(prisma)).get('connection_limit')).toBe('3');
+    } finally {
+      setDatabasePoolRole('api');
+      delete process.env.DATABASE_WORKER_POOL_MAX;
+    }
+  });
+
+  it('ActorScopedDatabase\'s second client (DATABASE_APP_URL) is pooled by the same budget, not left unbounded', () => {
+    process.env.DATABASE_POOL_MAX = '7';
+    const scoped = new ActorScopedDatabase({} as PrismaService, 'postgresql://chat_app:pw@db.example:25060/jawwid');
+    const client = (scoped as unknown as { client: PrismaService }).client;
+    expect(params(urlOf(client)).get('connection_limit')).toBe('7');
+    expect(params(urlOf(client)).get('pool_timeout')).toBe('10');
   });
 
   it('a caller that names its own datasource keeps it', () => {
