@@ -198,7 +198,7 @@ jobs:
           SHUTDOWN_GRACE_MS: '15000'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
-          DATABASE_POOL_MAX: '20'
+          DATABASE_POOL_MAX: '5'  # per process (API, worker); database-pool.ts has the 22-connection budget
           REDIS_URL: ${{ secrets.REDIS_URL }}
           QUEUE_PREFIX: jawwid-chat-production
           WORKER_CONCURRENCY: '10'
