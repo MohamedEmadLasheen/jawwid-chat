@@ -428,6 +428,18 @@ describe('5b. complaints from the parent app (PD-32)', () => {
 })
 
 describe('6. parent feedback (PD-32)', () => {
+  it('opens on the status the URL names, so a Dashboard tile opens the list it counted (PD-44)', async () => {
+    on('GET', /\/parent-feedback\?status=received$/, () => json({ canWrite: true, feedback: [feedback()] }))
+    on('GET', /\/parent-feedback\?status=in_review$/, () => json({ canWrite: true, feedback: [] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=feedback&status=received' })
+    expect(await screen.findByText('The teacher is patient and kind.')).toBeInTheDocument()
+    const status = screen.getByRole('group', { name: 'Status' })
+    expect(within(status).getByRole('button', { name: 'Received' })).toHaveAttribute('aria-pressed', 'true')
+    expect(calls('GET', /\/parent-feedback\?status=received$/).length).toBeGreaterThan(0)
+    await userEvent.click(within(status).getByRole('button', { name: 'In review' }))
+    await waitFor(() => expect(calls('GET', /\/parent-feedback\?status=in_review$/).length).toBeGreaterThan(0))
+  })
+
   it('lists every piece of feedback, filters by type and status, takes one and resolves praise with a reply', async () => {
     on('GET', /\/parent-feedback$/, () =>
       json({

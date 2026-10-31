@@ -53,9 +53,13 @@ class EditorState {
     this.draftStale = false,
     this.draftNotKept = false,
     this.notice,
+    this.assets = const [],
   });
 
   final BoardSummary board;
+
+  /// The board's images as the server last signed them (PR-4); the image cache takes them.
+  final List<BoardAsset> assets;
   final List<BoardPage> pages;
   final int current;
   final bool canEdit;
@@ -89,6 +93,7 @@ class EditorState {
     bool? draftNotKept,
     EditorNotice? notice,
     bool clearNotice = false,
+    List<BoardAsset>? assets,
   }) => EditorState(
     board: board ?? this.board,
     pages: pages ?? this.pages,
@@ -101,6 +106,7 @@ class EditorState {
     draftStale: draftStale ?? this.draftStale,
     draftNotKept: draftNotKept ?? this.draftNotKept,
     notice: clearNotice ? null : (notice ?? this.notice),
+    assets: assets ?? this.assets,
   );
 }
 
@@ -200,6 +206,7 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
       canEdit: detail.canEdit,
       save: _dirty.isEmpty ? SaveStatus.saved : SaveStatus.dirty,
       draftStale: _stale.isNotEmpty,
+      assets: detail.assets,
     );
   }
 
@@ -475,7 +482,7 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     final local = {for (final p in s.pages) p.id: p};
     final pages = [for (final p in detail.pages) local[p.id]?.copyWith(position: p.position, savedAt: p.savedAt) ?? p];
     final current = (select ?? s.current).clamp(0, pages.length - 1);
-    _set(_withHistory(s.copyWith(board: detail.summary, pages: pages, current: current, save: SaveStatus.saved, clearFailure: true)));
+    _set(_withHistory(s.copyWith(board: detail.summary, pages: pages, current: current, save: SaveStatus.saved, clearFailure: true, assets: detail.assets)));
   }
 
   Future<bool> addPage() {

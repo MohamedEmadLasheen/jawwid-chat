@@ -4802,6 +4802,32 @@ class L10nAr extends L10n {
   String get boardVerseChanged => 'تغيّر نص الآية، أعد إدراجها';
 
   @override
+  String get boardToolImage => 'صورة';
+
+  @override
+  String get boardImageAdding => 'جارٍ إضافة الصورة…';
+
+  @override
+  String get boardImageLoading => 'جارٍ تحميل الصورة…';
+
+  @override
+  String get boardImageUnavailable => 'الصورة غير متاحة';
+
+  @override
+  String get boardImageOff => 'لم تُفعَّل الصور في السبورات بعد.';
+
+  @override
+  String get boardImageTooLarge =>
+      'هذه الصورة كبيرة جدًا. استخدم صورة أصغر من 10 ميغابايت، أو صورًا أقل في هذه السبورة.';
+
+  @override
+  String get boardImageNotImage =>
+      'هذا الملف ليس صورة يمكن للسبورة عرضها. استخدم PNG أو JPEG أو WebP.';
+
+  @override
+  String get boardImageFailed => 'تعذّرت إضافة الصورة. حاول مرة أخرى.';
+
+  @override
   String get boardDraftStale =>
       'لديك تغييرات من زيارة سابقة لم تُحفظ، على صفحات تغيّرت منذ ذلك الحين. احتفظ بتغييراتك (تحلّ محلّ تلك الصفحات) أو تجاهلها.';
 
