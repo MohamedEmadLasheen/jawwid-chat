@@ -105,7 +105,20 @@ function useBillingWrite<V>(familyId: string, fn: (v: V) => Promise<FamilyBillin
 }
 
 export function useUpdateBilling(familyId: string) {
-  return useBillingWrite(familyId, (body: BillingUpdate) => profilesApi.updateBilling(familyId, body))
+  const qc = useQueryClient()
+  const write = useBillingWrite(familyId, (body: BillingUpdate) => profilesApi.updateBilling(familyId, body))
+  // ADMIN-007: refused because someone else changed them first -- show what they are now.
+  return {
+    ...write,
+    mutate: (body: BillingUpdate, opts?: Parameters<typeof write.mutate>[1]) =>
+      write.mutate(body, {
+        ...opts,
+        onError: (...args) => {
+          void qc.invalidateQueries({ queryKey: profileKeys.billing(familyId) })
+          opts?.onError?.(...args)
+        },
+      }),
+  }
 }
 
 export function useCreateInstalments(familyId: string) {

@@ -81,6 +81,8 @@ export interface FamilyBilling {
   currency: string | null
   /** The family's plan: 1, 3, 6 or 12 months. */
   planMonths: number | null
+  /** ADMIN-007: the version of the three settings above, sent back with an edit of them. */
+  settingsVersion: string
   instalments: TimelineInstalment[]
   totals: Array<{ currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>
   canRecord: boolean
@@ -95,7 +97,10 @@ export interface FamilyBilling {
   cardAvailable: boolean
 }
 
-export type BillingUpdate = Partial<{ paymentMethod: PaymentMethod | null; currency: string | null; planMonths: number | null }>
+export type BillingUpdate = Partial<{ paymentMethod: PaymentMethod | null; currency: string | null; planMonths: number | null }> & {
+  /** ADMIN-007: the settingsVersion the edit was made from; a stale one is refused (409). */
+  version?: string
+}
 
 export interface NewInstalments {
   label: string

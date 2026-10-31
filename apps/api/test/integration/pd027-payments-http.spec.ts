@@ -655,3 +655,57 @@ describe('ADMIN-001: money is recorded once per submit', () => {
     expect(await g.prisma.auditLog.count({ where: { action: 'payment.voided', entityId: f.id } })).toBe(1);
   });
 });
+
+/**
+ * ADMIN-007: two staff editing one family's billing settings at once used to
+ * be last-write-wins, and the audit's before-image was read before the
+ * transaction, so it could name values the edit never overwrote.
+ */
+describe('ADMIN-007: billing settings edits are versioned', () => {
+  it('two edits from the same version at once: one wins, the other is 409 with the current settings; the audit names the true before and after', async () => {
+    const { f } = familyOf(26);
+    const first = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED', paymentMethod: 'invoice' });
+    expect(first.status).toBe(201);
+    const version = first.json.settingsVersion as string;
+    expect(version).toEqual(expect.any(String));
+
+    const [a, b] = await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { paymentMethod: 'bank_transfer', version }),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/billing`, { currency: 'EGP', version }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([201, 409]);
+    const lost = a.status === 409 ? a : b;
+    const won = a.status === 409 ? b : a;
+    expect(lost.code).toBe(CommErrorCode.BILLING_STATE);
+    // The refusal carries what the settings are now (the winner's), with their version.
+    expect((lost.json.error as any)?.detail?.current).toMatchObject({
+      paymentMethod: won.json.paymentMethod, currency: won.json.currency, settingsVersion: won.json.settingsVersion,
+    });
+
+    // Exactly one change was recorded, and its before/after are the real ones.
+    const rows = await g.prisma.auditLog.findMany({ where: { action: 'family.billing_set', entityId: f.id }, orderBy: { id: 'asc' } });
+    expect(rows).toHaveLength(2); // the initial set, and the one winner
+    const winner = rows[1]!;
+    expect(winner.before).toEqual({ paymentMethod: 'invoice', currency: 'AED', planMonths: null });
+    expect(winner.after).toMatchObject({ paymentMethod: won.json.paymentMethod, currency: won.json.currency });
+
+    // A stale version afterwards is refused too; the current one goes through.
+    expect((await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { planMonths: 3, version })).status).toBe(409);
+    expect((await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { planMonths: 3, version: won.json.settingsVersion })).status).toBe(201);
+  });
+
+  it('an edit with no version (an older client) is still serialized and audited with the true before-image', async () => {
+    const { f } = familyOf(27);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'EGP' }),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/billing`, { currency: 'SAR' }),
+    ]);
+    const rows = await g.prisma.auditLog.findMany({ where: { action: 'family.billing_set', entityId: f.id }, orderBy: { id: 'asc' } });
+    expect(rows).toHaveLength(3);
+    // Each before is the previous after: no edit claims to have overwritten a value it never saw.
+    expect((rows[1]!.before as any).currency).toBe('AED');
+    expect((rows[2]!.before as any).currency).toBe((rows[1]!.after as any).currency);
+  });
+});

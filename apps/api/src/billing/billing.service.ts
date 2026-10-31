@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Prisma, type FamilyInstalment } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -21,6 +21,16 @@ import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 import { childSubscriptions, forParent } from './subscription-reads';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+
+/**
+ * ADMIN-007: a family's billing settings (method, currency, plan) as one
+ * opaque version. An edit names the version it was made from; if the settings
+ * changed since, it is refused (409) with what they are now -- not silently
+ * overwritten. Content-based: two editors who set the same values never clash.
+ */
+export function billingSettingsVersion(s: { paymentMethod: string | null; currency: string | null; planMonths: number | null }): string {
+  return createHash('sha256').update(JSON.stringify([s.paymentMethod, s.currency, s.planMonths])).digest('base64url').slice(0, 16);
+}
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const RESPONSIBLE = ['all', 'me', 'none'] as const;
@@ -282,13 +292,21 @@ export class BillingService {
       planMonths = v as number | null;
     }
     if (Object.keys(next).length === 0 && planMonths === undefined) return this.presentFamily(actor, access, family.id);
+    const version = body.version === undefined || body.version === null ? undefined : requireText('version', body.version, 64);
 
-    const [before, beforeFamily] = await Promise.all([
-      this.prisma.familyBilling.findUnique({ where: { familyId: family.id } }),
-      this.prisma.family.findUniqueOrThrow({ where: { id: family.id }, select: { subscriptionPlanMonths: true } }),
-    ]);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // ADMIN-007: one edit of a family's settings at a time, and the audit's
+      // before-image is what this edit really overwrites -- read here, under the lock.
+      await tx.$queryRaw`SELECT id FROM chat.family WHERE id = ${family.id}::uuid FOR UPDATE`;
+      const before = await tx.familyBilling.findUnique({ where: { familyId: family.id } });
+      const beforeFamily = await tx.family.findUniqueOrThrow({ where: { id: family.id }, select: { subscriptionPlanMonths: true } });
+      const current = { paymentMethod: before?.paymentMethod ?? null, currency: before?.currency ?? null, planMonths: beforeFamily.subscriptionPlanMonths };
+      if (version !== undefined && version !== billingSettingsVersion(current)) {
+        throw new CommError(CommErrorCode.BILLING_STATE, 'these billing settings were changed since you opened them', 409, {
+          current: { ...current, settingsVersion: billingSettingsVersion(current) },
+        });
+      }
       if (Object.keys(next).length > 0) {
         await tx.familyBilling.upsert({
           where: { familyId: family.id },
@@ -308,12 +326,8 @@ export class BillingService {
         action: 'family.billing_set',
         entity: 'family',
         entityId: family.id,
-        before: {
-          paymentMethod: before?.paymentMethod ?? null,
-          currency: before?.currency ?? null,
-          planMonths: beforeFamily.subscriptionPlanMonths,
-        },
-        after: { ...next, ...(planMonths !== undefined ? { planMonths } : {}) },
+        before: current,
+        after: { ...current, ...next, ...(planMonths !== undefined ? { planMonths } : {}) },
         reason: 'set on the Parent Profile',
       });
     });
@@ -584,6 +598,10 @@ export class BillingService {
       paymentMethod: (billing?.paymentMethod ?? null) as FamilyPaymentMethod | null,
       currency: billing?.currency ?? null,
       planMonths: family.subscriptionPlanMonths,
+      // ADMIN-007: send it back with an edit of these three.
+      settingsVersion: billingSettingsVersion({
+        paymentMethod: billing?.paymentMethod ?? null, currency: billing?.currency ?? null, planMonths: family.subscriptionPlanMonths,
+      }),
       instalments: timeline,
       totals: totalsOf(timeline),
       // Operations and Sales record (PD-17); the client hides nothing the server would refuse.

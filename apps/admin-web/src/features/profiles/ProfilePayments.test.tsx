@@ -174,6 +174,7 @@ function billing(over: Partial<FamilyBilling> = {}): FamilyBilling {
     paymentMethod: 'bank_transfer',
     currency: 'AED',
     planMonths: 3,
+    settingsVersion: 'sv-1',
     instalments: [instalment()],
     totals: [{ currency: 'AED', paidMinor: 50000, outstandingMinor: 100000, overdueMinor: 100000 }],
     canRecord: true,

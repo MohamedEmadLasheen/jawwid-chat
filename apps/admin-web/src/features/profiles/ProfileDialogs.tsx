@@ -184,6 +184,8 @@ export function EditBillingDialog({ billing, onClose }: { billing: FamilyBilling
     if ((method || null) !== billing.paymentMethod) body.paymentMethod = (method || null) as PaymentMethod | null
     if ((currency || null) !== billing.currency) body.currency = currency || null
     if (Object.keys(body).length === 0) return onClose()
+    // ADMIN-007: made from what this dialog was opened on; a later change by someone else wins a 409.
+    body.version = billing.settingsVersion
     save.mutate(body, { onSuccess: onClose })
   }
   return (
