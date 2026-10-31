@@ -194,14 +194,15 @@ jobs:
           PORT: '3000'
           LOG_LEVEL: info
           CORS_ALLOWED_ORIGINS: ${{ vars.PRODUCTION_CORS_ALLOWED_ORIGINS }}
-          REQUEST_TIMEOUT_MS: '30000'
+          REQUEST_TIMEOUT_MS: ${{ vars.REQUEST_TIMEOUT_MS }}
           SHUTDOWN_GRACE_MS: '15000'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
-          DATABASE_POOL_MAX: '20'
+          DATABASE_POOL_MAX: '7'         # the API's pool; database-pool.ts has the 22-connection budget
+          DATABASE_WORKER_POOL_MAX: '3'  # the worker's pool
           REDIS_URL: ${{ secrets.REDIS_URL }}
           QUEUE_PREFIX: jawwid-chat-production
-          WORKER_CONCURRENCY: '10'
+          WORKER_CONCURRENCY: ${{ vars.WORKER_CONCURRENCY }}
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
           RESET_CODE_HASH_SECRET: ${{ secrets.RESET_CODE_HASH_SECRET }}
@@ -213,6 +214,9 @@ jobs:
           STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
           STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
           STORAGE_SIGNED_URL_TTL_SECONDS: '300'
+          STORAGE_CONNECT_TIMEOUT_MS: ${{ vars.STORAGE_CONNECT_TIMEOUT_MS }}
+          STORAGE_REQUEST_TIMEOUT_MS: ${{ vars.STORAGE_REQUEST_TIMEOUT_MS }}
+          STORAGE_MAX_ATTEMPTS: ${{ vars.STORAGE_MAX_ATTEMPTS }}
           STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
           MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL }}
           MATERIALS_SITE_BASE_URL: ${{ vars.MATERIALS_SITE_BASE_URL }}

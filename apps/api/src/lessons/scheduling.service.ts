@@ -63,6 +63,8 @@ export const CLOCK_SHIFT_EVENT = 'lesson_clock_shift';
  * lesson sweep's five minutes would be work for nothing.
  */
 const CLOCK_SHIFT_SWEEP_MS = 3_600_000;
+/** The materializer's own statement limit (it opts out of DATABASE_STATEMENT_TIMEOUT_MS). */
+export const MATERIALIZE_STATEMENT_TIMEOUT_MS = 120_000;
 /** failure_code of a warning cancelled because it no longer holds -- and may be revived. */
 const CLOCK_SHIFT_GONE = 'CLOCK_SHIFT_GONE';
 
@@ -1048,9 +1050,23 @@ export class SchedulingService {
 
   async materialize(db: Pick<Tx, '$queryRaw'> = this.prisma): Promise<number> {
     const weeks = Number(await this.config.get('lesson.materialize_weeks'));
-    const rows = await db.$queryRaw<Array<{ n: number }>>`
-      SELECT chat.materialize_lessons(now(), now() + make_interval(weeks => ${weeks}::int)) AS n`;
-    return Number(rows[0]?.n ?? 0);
+    // ONE statement over every standing slot of the academy for `weeks` weeks:
+    // the one query whose cost grows with the whole school, so it opts out of
+    // DATABASE_STATEMENT_TIMEOUT_MS (database-pool.ts) with a transaction-local
+    // limit of its own, and gives a caller's transaction its own limit back.
+    const run = async (tx: Pick<Tx, '$queryRaw'>): Promise<number> => {
+      await tx.$queryRaw`SELECT set_config('statement_timeout', ${`${MATERIALIZE_STATEMENT_TIMEOUT_MS}ms`}, true)`;
+      const rows = await tx.$queryRaw<Array<{ n: number }>>`
+        SELECT chat.materialize_lessons(now(), now() + make_interval(weeks => ${weeks}::int)) AS n`;
+      return Number(rows[0]?.n ?? 0);
+    };
+    if (db !== this.prisma) {
+      const [{ before }] = await db.$queryRaw<Array<{ before: string }>>`SELECT current_setting('statement_timeout') AS before`;
+      const n = await run(db);
+      await db.$queryRaw`SELECT set_config('statement_timeout', ${before}, true)`;
+      return n;
+    }
+    return this.prisma.$transaction((tx) => run(tx), { timeout: MATERIALIZE_STATEMENT_TIMEOUT_MS + 10_000 });
   }
 
   /**
