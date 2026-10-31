@@ -7,6 +7,9 @@ import { TaskService } from '../tasks/task.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { TrialService } from '../lessons/trial.service';
 import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
+import { OrgStructureService } from '../org/org-structure.service';
+import { SupervisorCoverService } from '../org/supervisor-cover.service';
+import { TeacherSupervisorService } from '../teacher-supervisors/teacher-supervisor.service';
 import { Requires, SelfService } from '../platform/permissions/route-access';
 import { dashboardSection, type DashboardSection, type DashboardTile } from './dashboard-tile';
 
@@ -29,6 +32,9 @@ export class DashboardController {
     private readonly calendar: CalendarService,
     private readonly trials: TrialService,
     private readonly enrolment: NewStudentEnrolmentService,
+    private readonly org: OrgStructureService,
+    private readonly supervisors: TeacherSupervisorService,
+    private readonly covers: SupervisorCoverService,
   ) {}
 
   /** Chats waiting for a staff reply, in the caller's PD-8 scope. Links to /chat. */
@@ -92,6 +98,32 @@ export class DashboardController {
     const tiles: DashboardTile[] = [
       ...(holds('trials.view') ? await this.trials.dashboardCounts(actorId, now) : []),
       ...(holds('new_students.view') ? await this.enrolment.dashboardCounts(actorId) : []),
+    ];
+    return dashboardSection(tiles, now);
+  }
+
+  /**
+   * Organization: the Organization page's Children tab ("Without a
+   * supervisor"), its Teachers tab (the unassigned banner) and the Structure
+   * tab's covers under way. Each service decides who sees its tab: Children
+   * and covers the super admin and the Operations Manager, Teachers the super
+   * admin and the Teachers Manager. The page's own key, org.view (org.manage
+   * is asked only by its writes); covers also need org.covers, the key of
+   * GET /org/covers. Links to /organization?tab=children|teachers|structure.
+   */
+  @Requires('org.view')
+  @Get('structure')
+  async structureSection(
+    @ActorId() actorId: string,
+    @Req() request?: { permissions?: ReadonlySet<string> },
+  ): Promise<DashboardSection> {
+    const now = new Date();
+    const keys = request?.permissions;
+    const holds = (key: string) => !keys || keys.has(key);
+    const tiles: DashboardTile[] = [
+      ...(await this.org.dashboardCounts(actorId)),
+      ...(await this.supervisors.dashboardCounts(actorId)),
+      ...(holds('org.covers') ? await this.covers.dashboardCounts(actorId) : []),
     ];
     return dashboardSection(tiles, now);
   }

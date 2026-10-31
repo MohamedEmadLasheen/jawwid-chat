@@ -22,6 +22,8 @@ export const SECTIONS: readonly SectionSpec[] = [
   { key: 'cases', title: { en: 'Escalation cases', ar: 'حالات التصعيد' }, requires: ['cases.view'] },
   { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
   { key: 'enrolment', title: { en: 'Trials and new students', ar: 'الحصص التجريبية والطلاب الجدد' }, requires: ['trials.view', 'new_students.view'] },
+  // The Organization page's own key (its lists ask org.view; org.manage is only its writes').
+  { key: 'structure', title: { en: 'Organization', ar: 'الهيكل التنظيمي' }, requires: ['org.view'] },
   // PD-47 PR-4: everyone's own tasks are self-service, so no key is needed;
   // the team, decision and super-admin tiles come only to whom they apply.
   { key: 'tasks', title: { en: 'Tasks', ar: 'المهام' }, requires: [] },
@@ -191,6 +193,25 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     icon: 'clock',
     backlog: false,
     href: () => '/trials/new-students?filter=waiting',
+  },
+  // PD-44 PR-7: the Organization page's Children and Teachers tabs, and the Structure tab's covers.
+  'learners.unsupervised': {
+    label: { en: 'Children without a supervisor', ar: 'أطفال بلا مشرف' },
+    icon: 'users',
+    backlog: true,
+    href: () => '/organization?tab=children&filter=unassigned',
+  },
+  'teachers.unsupervised': {
+    label: { en: 'Teachers without a supervisor', ar: 'معلمون بلا مشرف' },
+    icon: 'academy',
+    backlog: true,
+    href: () => '/organization?tab=teachers',
+  },
+  'covers.active': {
+    label: { en: 'Supervisors away, covered by a backup', ar: 'مشرفون في إجازة يغطيهم البديل' },
+    icon: 'users',
+    backlog: false,
+    href: () => '/organization?tab=structure',
   },
 }
 

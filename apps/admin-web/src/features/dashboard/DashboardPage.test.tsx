@@ -150,7 +150,8 @@ describe('the manager Dashboard', () => {
   })
 
   it('an account no section key opens still has its own Tasks (PD-47: self-service), and nothing else is asked for', async () => {
-    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['org.view'] }))
+    // stories.view opens no section (org.view did until PR-7 gave the Organization section that key).
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['stories.view'] }))
     await waitFor(() => expect(requested().filter((p) => p.startsWith('/dashboard/'))).toEqual(['/dashboard/tasks']))
   })
 

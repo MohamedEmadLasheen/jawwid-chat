@@ -4,6 +4,8 @@ import { SupervisionCaseModule } from '../cases/supervision-case.module';
 import { TaskModule } from '../tasks/task.module';
 import { CalendarModule } from '../calendar/calendar.module';
 import { LessonModule } from '../lessons/lesson.module';
+import { OrgStructureModule } from '../org/org-structure.module';
+import { TeacherSupervisorModule } from '../teacher-supervisors/teacher-supervisor.module';
 import { DashboardController } from './dashboard.controller';
 
 /**
@@ -12,7 +14,10 @@ import { DashboardController } from './dashboard.controller';
  * Nothing imports this module, so no cycle.
  */
 @Module({
-  imports: [CommunicationModule, SupervisionCaseModule, TaskModule, CalendarModule, LessonModule],
+  imports: [
+    CommunicationModule, SupervisionCaseModule, TaskModule, CalendarModule, LessonModule,
+    OrgStructureModule, TeacherSupervisorModule,
+  ],
   controllers: [DashboardController],
 })
 export class DashboardModule {}
