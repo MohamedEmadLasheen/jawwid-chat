@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/error_presenter.dart';
+import '../../../core/media/media_picker.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
@@ -262,7 +262,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                             }),
                             onDelete: _deleteSelection,
                             onVerse: () => _insertVerse(context),
-                            onImage: () => _insertImage(context),
+                            onImage: s.imagesSupported ? () => _insertImage(context) : null,
                             onLayout: _controller.setLayout,
                             onBackground: _controller.setBackground,
                           )
@@ -403,30 +403,46 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   }
 
   /// PR-4 (§4.4): a picture from the device, checked and uploaded, then placed
-  /// in the middle of the page. Every way it can fail says so plainly.
+  /// in the middle of the page it was started on. Every way it can fail says
+  /// so plainly.
+  ///
+  /// After each await the screen may be gone (the teacher left mid-upload):
+  /// `mounted` is checked before `ref` is touched again, and a picture that
+  /// is then not placed is let go (review of #328).
   Future<void> _insertImage(BuildContext context) async {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
     void say(String text) => messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(text)));
+    PreparedImage? prepared;
     try {
       final picked = await ref.read(mediaPickerProvider).pickImage();
       if (picked == null || !mounted) return;
+      final pageId = ref.read(boardEditorProvider(widget.boardId)).value?.page.id;
+      if (pageId == null) return;
       say(l10n.boardImageAdding);
-      final prepared = await prepareBoardImage(await XFile(picked.filePath).readAsBytes());
-      final asset = await uploadBoardImage(
-        ref.read(whiteboardsRepositoryProvider),
-        ref.read(boardUploaderProvider),
-        widget.boardId,
-        prepared,
-      );
-      final s = ref.read(boardEditorProvider(widget.boardId)).value;
-      if (!mounted || s == null) return;
+      final bytes = await ref.read(boardImageBytesProvider)(picked.filePath);
+      if (!mounted) return;
+      prepared = await prepareBoardImage(bytes);
+      if (!mounted) return;
+      final asset = await uploadBoardImage(ref.read(whiteboardsRepositoryProvider), ref.read(boardUploaderProvider), widget.boardId, prepared);
+      if (!mounted) return;
       ref.read(boardImagesProvider(widget.boardId).notifier).remember(asset, prepared.image);
-      _controller.commit([...s.page.elements, placeBoardImage(asset.id, prepared.width, prepared.height)]);
+      final placed = prepared;
+      prepared = null; // the board's images hold it now
+      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height));
       messenger.hideCurrentSnackBar();
+    } on MediaPickException catch (e) {
+      say(switch (e.reason) {
+        MediaPickFailure.permissionDenied => l10n.attachmentPermissionDenied,
+        MediaPickFailure.tooLarge => l10n.boardImageTooLarge,
+        MediaPickFailure.typeNotAllowed => l10n.boardImageNotImage,
+        MediaPickFailure.unsupported => l10n.attachmentUnsupported,
+        MediaPickFailure.failed => l10n.boardImageFailed,
+      });
     } on ImageImportException catch (e) {
+      if (e.outcome == ImageImportOutcome.imagesOff && mounted) _controller.imagesOff();
       say(switch (e.outcome) {
         ImageImportOutcome.imagesOff => l10n.boardImageOff,
         ImageImportOutcome.tooLarge => l10n.boardImageTooLarge,
@@ -435,6 +451,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       });
     } on Object {
       say(l10n.boardImageFailed);
+    } finally {
+      prepared?.image.dispose();
     }
   }
 
@@ -579,7 +597,8 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
-  final VoidCallback onImage;
+  /// Null where the server has no images (or said they are off): no button.
+  final VoidCallback? onImage;
   final ValueChanged<PageLayout> onLayout;
   final ValueChanged<PageBackground> onBackground;
 
@@ -632,7 +651,7 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
-      IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),

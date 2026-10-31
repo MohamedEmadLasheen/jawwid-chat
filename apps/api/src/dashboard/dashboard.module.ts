@@ -10,6 +10,8 @@ import { LeaveModule } from '../leave/leave.module';
 import { DisciplineModule } from '../discipline/discipline.module';
 import { TeacherFileModule } from '../teacher-file/teacher-file.module';
 import { CertificateModule } from '../certificates/certificate.module';
+import { OrgStructureModule } from '../org/org-structure.module';
+import { TeacherSupervisorModule } from '../teacher-supervisors/teacher-supervisor.module';
 import { DashboardController } from './dashboard.controller';
 
 /**
@@ -21,6 +23,7 @@ import { DashboardController } from './dashboard.controller';
   imports: [
     CommunicationModule, SupervisionCaseModule, TaskModule, CalendarModule, LessonModule,
     BillingModule, ParentRecordModule, LeaveModule, DisciplineModule, TeacherFileModule, CertificateModule,
+    OrgStructureModule, TeacherSupervisorModule,
   ],
   controllers: [DashboardController],
 })
