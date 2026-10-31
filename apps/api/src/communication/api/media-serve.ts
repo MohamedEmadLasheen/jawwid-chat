@@ -97,17 +97,35 @@ export async function serveAuthorizedMedia(
   // in memory, not all of it; and when the reader goes away it destroys the
   // source, which aborts the storage GET instead of reading the rest for nobody.
   // A streamed body only comes from remote storage, served through Express,
-  // whose Response is an http.ServerResponse -- a Writable.
+  // whose Response is an http.ServerResponse -- a Writable. Anything else is a
+  // wiring error, said out loud rather than swallowed below.
+  const out = res as unknown as Writable;
+  if (!isWritable(out)) {
+    destroySource(object.body);
+    throw new Error('media-serve: a streamed body needs a Writable response');
+  }
   try {
-    await pipeline(object.body, res as unknown as Writable);
+    await pipeline(object.body, out);
   } catch (e) {
-    // The status line is gone, so there is nothing left to answer: pipeline has
-    // already destroyed both ends. A reader leaving early is ordinary (seeking,
-    // closing the viewer); anything else is storage failing mid-body.
+    // The status line is gone, so there is nothing left to answer: end both
+    // ends (pipeline normally has already) so neither the reader nor the
+    // storage socket is left hanging. A reader leaving early is ordinary
+    // (seeking, closing the viewer); anything else is storage failing mid-body.
+    if (!out.destroyed) out.destroy();
+    destroySource(object.body);
     if ((e as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') {
       log.warn(`media ${kind}/${id}: stream ended early: ${(e as Error).message}`);
     }
   }
+}
+
+function isWritable(w: Writable): boolean {
+  return typeof w?.on === 'function' && typeof w.write === 'function' && typeof w.destroy === 'function';
+}
+
+function destroySource(body: AsyncIterable<Uint8Array>): void {
+  const stream = body as { destroyed?: boolean; destroy?: () => void };
+  if (typeof stream.destroy === 'function' && !stream.destroyed) stream.destroy();
 }
 
 const log = new Logger('MediaServe');

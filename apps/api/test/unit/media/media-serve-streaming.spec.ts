@@ -41,14 +41,15 @@ class CountingObject extends Readable {
 let server: Server;
 let object: CountingObject;
 let served: Promise<void>;
+/** What storage.read answers; by default the whole `object`. */
+let read: (rangeHeader?: string | string[]) => Promise<unknown>;
+let cacheControl: string | undefined;
 
 function deps(): MediaServeDeps {
   return {
     signer: { verify: () => true } as unknown as MediaServeDeps['signer'],
     prisma: {} as MediaServeDeps['prisma'],
-    storage: {
-      read: async () => ({ mimeType: 'video/mp4', size: object.total, range: null, body: object }),
-    } as unknown as MediaServeDeps['storage'],
+    storage: { read: (_key: string, range?: string | string[]) => read(range) } as unknown as MediaServeDeps['storage'],
   };
 }
 
@@ -61,10 +62,14 @@ function express(res: ServerResponse): ResponseLike {
 }
 
 beforeEach(async () => {
+  read = async () => ({ mimeType: 'video/mp4', size: object.total, range: null, body: object });
+  cacheControl = undefined;
   server = createServer((req, res) => {
-    served = serveAuthorizedMedia(deps(), 'attachments', 'a1', 'original', 'actor', '0', 'sig', req, express(res), async () => ({
-      objectKey: 'k',
-    }));
+    served = serveAuthorizedMedia(
+      deps(), 'attachments', 'a1', 'original', 'actor', '0', 'sig', req, express(res),
+      async () => ({ objectKey: 'k' }),
+      ...(cacheControl ? [cacheControl] : []),
+    );
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 });
@@ -73,9 +78,9 @@ afterEach(async () => {
   await new Promise<void>((r) => server.close(() => r()));
 });
 
-function request(): Promise<{ res: IncomingMessage; abort: () => void }> {
+function request(headers: Record<string, string> = {}): Promise<{ res: IncomingMessage; abort: () => void }> {
   return new Promise((resolve, reject) => {
-    const req = get({ host: '127.0.0.1', port: (server.address() as AddressInfo).port, path: '/' }, (res) =>
+    const req = get({ host: '127.0.0.1', port: (server.address() as AddressInfo).port, path: '/', headers }, (res) =>
       resolve({ res, abort: () => req.destroy() }),
     );
     req.on('error', () => {});
@@ -139,4 +144,68 @@ it('storage failing mid-body ends the response instead of throwing after the sta
   object.destroy(new Error('storage connection reset'));
   await expect(served).resolves.toBeUndefined();
   expect(await ended).not.toBe('end'); // incomplete: the client can tell it did not get the object
+});
+
+it('a range is served 206 with Content-Range / Content-Length of the range, and the default Cache-Control', async () => {
+  object = new CountingObject(64 * 1024);
+  let asked: string | string[] | undefined;
+  read = async (range) => {
+    asked = range;
+    return { mimeType: 'video/mp4', size: 10 * MB, range: { start: 1000, end: 1000 + 64 * 1024 - 1 }, body: object };
+  };
+  const { res } = await request({ range: 'bytes=1000-66535' });
+  let received = 0;
+  for await (const chunk of res) received += (chunk as Buffer).length;
+  await served;
+  expect(asked).toBe('bytes=1000-66535'); // the reader's Range reaches storage as sent
+  expect(res.statusCode).toBe(206);
+  expect(res.headers['content-range']).toBe(`bytes 1000-${1000 + 64 * 1024 - 1}/${10 * MB}`);
+  expect(res.headers['content-length']).toBe(String(64 * 1024));
+  expect(res.headers['accept-ranges']).toBe('bytes');
+  expect(res.headers['cache-control']).toBe('private, no-store');
+  expect(res.headers['x-content-type-options']).toBe('nosniff');
+  expect(received).toBe(64 * 1024);
+});
+
+it("a kind's own Cache-Control is sent as given", async () => {
+  object = new CountingObject(64 * 1024);
+  cacheControl = 'private, max-age=300';
+  const { res } = await request();
+  res.resume();
+  await new Promise((r) => res.once('end', r));
+  expect(res.headers['cache-control']).toBe('private, max-age=300');
+});
+
+it('a reader that leaves while storage is still answering: the storage stream is destroyed the moment it arrives', async () => {
+  object = new CountingObject(256 * MB);
+  let answer!: () => void;
+  const storageAnswered = new Promise<void>((r) => (answer = r));
+  let reached!: () => void;
+  const readStarted = new Promise<void>((r) => (reached = r));
+  read = async () => {
+    reached();
+    await storageAnswered; // HEAD/GET still in flight
+    return { mimeType: 'video/mp4', size: object.total, range: null, body: object };
+  };
+  const port = (server.address() as AddressInfo).port;
+  const req = get({ host: '127.0.0.1', port, path: '/' });
+  req.on('error', () => {});
+  await readStarted;
+  req.destroy(); // gone before a single header was sent
+  await sleep(100);
+  answer();
+  await until(() => object.closed);
+  expect(object.destroyed).toBe(true);
+  expect(object.pulled).toBeLessThan(4 * MB);
+  await expect(served).resolves.toBeUndefined();
+});
+
+it('a streamed body with a response that is not a Writable is a loud wiring error, and the storage stream is released', async () => {
+  object = new CountingObject(8 * MB);
+  const fake = { status: () => fake, setHeader: () => {}, send: () => {}, write: () => true, end: () => {} };
+  await expect(
+    serveAuthorizedMedia(deps(), 'attachments', 'a1', 'original', 'actor', '0', 'sig', { headers: {} }, fake as never, async () => ({ objectKey: 'k' })),
+  ).rejects.toThrow('Writable');
+  await until(() => object.closed);
+  expect(object.destroyed).toBe(true);
 });
