@@ -13,39 +13,6 @@ const Size kBoardPageSize = Size(1920, 1080);
 ///
 /// The JSON shape is the client's own (the server checks ids, kinds, sizes,
 /// verses and images only: apps/api/src/whiteboards/whiteboard-document.ts).
-/// An image on the page (PR-4, design §4.4): it NAMES an asset of this board
-/// -- never a key or a URL, which the server refuses in a document -- and the
-/// board signs that asset's URL for whoever may read the board. It scales as
-/// one, keeping its proportions.
-class ImageElement extends BoardElement {
-  const ImageElement({required String id, required this.assetId, required this.rect}) : super(id);
-
-  final String assetId;
-  final Rect rect;
-
-  @override
-  String get kind => 'image';
-
-  @override
-  Rect get bounds => rect;
-
-  ImageElement withRect(Rect next) => ImageElement(id: id, assetId: assetId, rect: next);
-
-  @override
-  BoardElement translated(Offset delta) => withRect(rect.shift(delta));
-
-  @override
-  BoardElement scaled(Offset anchor, double sx, double sy) {
-    final k = sx.abs().clamp(0.05, 20).toDouble();
-    return withRect(
-      Rect.fromLTWH(anchor.dx + (rect.left - anchor.dx) * k, anchor.dy + (rect.top - anchor.dy) * k, rect.width * k, rect.height * k),
-    );
-  }
-
-  @override
-  Map<String, Object?> toJson() => {'id': id, 'kind': kind, 'assetId': assetId, ..._rectJson(rect)};
-}
-
 /// A kind this build does not draw -- anything newer than it, or malformed --
 /// is kept as an [OpaqueElement] and saved back exactly as it came.
 sealed class BoardElement {
@@ -134,6 +101,7 @@ sealed class BoardElement {
             id: id,
             assetId: asset.toLowerCase(),
             rect: Rect.fromLTWH(_num(json['x'], 0), _num(json['y'], 0), _num(json['w'], 400), _num(json['h'], 300)),
+            extra: ImageElement.extraOf(json),
           );
         case 'stamp':
           return StampElement(
@@ -462,6 +430,54 @@ class VerseElement extends BoardElement {
     'transform': _rectJson(rect),
     'style': {'size': _round(fontSize), 'color': _hex(color)},
   };
+}
+
+/// An image on the page (PR-4, design §4.4): it NAMES an asset of this board
+/// -- never a key or a URL, which the server refuses in a document -- and the
+/// board signs that asset's URL for whoever may read the board. It scales as
+/// one, keeping its proportions.
+///
+/// Fields this build does not know (a newer client's `z`, `crop`, `style` ...)
+/// are kept in [extra] and written back unchanged (review of #328): before
+/// images were drawn they were kept whole, and drawing them must not start
+/// stripping what a newer client wrote.
+class ImageElement extends BoardElement {
+  const ImageElement({required String id, required this.assetId, required this.rect, this.extra = const {}}) : super(id);
+
+  final String assetId;
+  final Rect rect;
+
+  /// Every field of the element's JSON this build does not read, as it came.
+  final Map<String, Object?> extra;
+
+  static const _known = {'id', 'kind', 'assetId', 'x', 'y', 'w', 'h'};
+
+  static Map<String, Object?> extraOf(Map<String, Object?> json) => Map.unmodifiable({
+    for (final e in json.entries)
+      if (!_known.contains(e.key)) e.key: e.value,
+  });
+
+  @override
+  String get kind => 'image';
+
+  @override
+  Rect get bounds => rect;
+
+  ImageElement withRect(Rect next) => ImageElement(id: id, assetId: assetId, rect: next, extra: extra);
+
+  @override
+  BoardElement translated(Offset delta) => withRect(rect.shift(delta));
+
+  @override
+  BoardElement scaled(Offset anchor, double sx, double sy) {
+    final k = sx.abs().clamp(0.05, 20).toDouble();
+    return withRect(
+      Rect.fromLTWH(anchor.dx + (rect.left - anchor.dx) * k, anchor.dy + (rect.top - anchor.dy) * k, rect.width * k, rect.height * k),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() => {...extra, 'id': id, 'kind': kind, 'assetId': assetId, ..._rectJson(rect)};
 }
 
 /// A kind this build does not draw (anything newer, or malformed). Kept and saved back exactly as it came; it moves only
