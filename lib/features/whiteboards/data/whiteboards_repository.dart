@@ -138,10 +138,15 @@ class NoWhiteboardsRepository implements WhiteboardsRepository {
 /// Overridden with the HTTP implementation by the real composition root.
 final whiteboardsRepositoryProvider = Provider<WhiteboardsRepository>((ref) => const NoWhiteboardsRepository());
 
+/// How long a compose may take: the server may queue it behind its two export
+/// workers, longer than any other call's wait (review of #335).
+const Duration kComposeTimeout = Duration(seconds: 90);
+
 class HttpWhiteboardsRepository implements WhiteboardsRepository {
-  HttpWhiteboardsRepository({required ApiClient client}) : _client = client;
+  HttpWhiteboardsRepository({required ApiClient client, this.composeTimeout = kComposeTimeout}) : _client = client;
 
   final ApiClient _client;
+  final Duration composeTimeout;
 
   Future<Map<String, Object?>> _post(String path, [Map<String, Object?>? data]) async =>
       (await _client.post<Map<String, Object?>>(path, data: data ?? const {})).data ?? const {};
@@ -252,7 +257,8 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
       data: {
         'pages': [for (final p in pages) {'assetId': p.assetId, 'objectKey': p.objectKey}],
       },
-      options: Options(responseType: ResponseType.bytes),
+      // A refusal's body comes back as bytes too: the error mapper decodes it.
+      options: Options(responseType: ResponseType.bytes, receiveTimeout: composeTimeout),
     );
     return Uint8List.fromList(r.data ?? const []);
   }

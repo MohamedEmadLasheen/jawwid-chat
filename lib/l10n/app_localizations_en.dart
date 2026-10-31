@@ -4753,6 +4753,14 @@ class L10nEn extends L10n {
       'Many exports are being made right now. Try again in a minute.';
 
   @override
+  String get boardExportInProgress =>
+      'You already have exports being made. Wait a few minutes, then try again.';
+
+  @override
+  String get boardExportExpired =>
+      'The export took too long and ran out. Export again.';
+
+  @override
   String get boardExportTooLarge =>
       'This board is too large to export in one go.';
 

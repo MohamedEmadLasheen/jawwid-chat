@@ -487,14 +487,22 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         return ref.read(exportSaverProvider)(pdf, exportName(s.board.title, 'pdf'), 'application/pdf');
       });
 
+  /// One export at a time (review of #335): a second tap while one is drawn
+  /// and sent would draw everything twice and take a second worker.
+  bool _exporting = false;
+
   Future<void> _export(BuildContext context, Future<ExportOutcome> Function(EditorState s) run) async {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
     void say(String text) => messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(text)));
+    if (_exporting) return;
+    // Nowhere to save it here: said before a page is drawn or the server asked.
+    if (!ref.read(exportHereProvider)) return say(l10n.boardExportNotHere);
     final s = ref.read(boardEditorProvider(widget.boardId)).value;
     if (s == null) return;
+    _exporting = true;
     say(l10n.boardExporting);
     ExportOutcome outcome;
     try {
@@ -503,6 +511,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       outcome = e.outcome;
     } on Object {
       outcome = ExportOutcome.failed;
+    } finally {
+      _exporting = false;
     }
     if (!mounted) return;
     switch (outcome) {
@@ -514,6 +524,10 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         say(l10n.boardExportOff);
       case ExportOutcome.busy:
         say(l10n.boardExportBusy);
+      case ExportOutcome.inProgress:
+        say(l10n.boardExportInProgress);
+      case ExportOutcome.expired:
+        say(l10n.boardExportExpired);
       case ExportOutcome.tooLarge:
         say(l10n.boardExportTooLarge);
       case ExportOutcome.notHere:

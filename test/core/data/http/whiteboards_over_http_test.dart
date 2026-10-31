@@ -207,4 +207,32 @@ void main() {
       ],
     });
   });
+
+  test('a compose refusal\'s code reaches the caller, though the answer is read as bytes (review of #335)', () async {
+    final grants = [const ImageGrant(assetId: 'e0', objectKey: 'whiteboard-uploads/o/b1/e0/u', uploadUrl: 'https://s.test/e0', headers: {})];
+    for (final (status, code) in [
+      (409, 'COMM.WHITEBOARD_STATE'),
+      (409, 'COMM.WHITEBOARD_CONFLICT'),
+      (503, kAssetsOffCode),
+      (429, 'COMM.WHITEBOARD_LIMIT'),
+    ]) {
+      server.on('POST', '/whiteboards/b1/exports/compose', [Reply.commError(status, code)]);
+      await expectLater(repository().composeExport('b1', grants), throwsA(isA<AppError>().having((e) => e.code, 'code', code)), reason: code);
+    }
+  });
+
+  test('compose has its own, longer wait: it may queue behind the export workers (review of #335)', () async {
+    // Every other call gives up after the client's own receive timeout (here 300 ms).
+    HttpWhiteboardsRepository repo({Duration? compose}) => HttpWhiteboardsRepository(
+      client: buildApiClient(config: ApiConfig(baseUrl: server.baseUrl, receiveTimeout: const Duration(milliseconds: 300)), tokens: _NoTokens()),
+      composeTimeout: compose ?? kComposeTimeout,
+    );
+    expect(kComposeTimeout, greaterThanOrEqualTo(const Duration(seconds: 90)));
+    server
+      ..on('POST', '/whiteboards/b1/exports/grant', [const Reply(200, {'pages': []}, delay: Duration(milliseconds: 900))])
+      ..on('POST', '/whiteboards/b1/exports/compose', [const Reply(200, '%PDF-1.3 slow', headers: {'content-type': 'application/pdf'}, delay: Duration(milliseconds: 900))]);
+    await expectLater(repo().grantExport('b1', [1]), throwsA(isA<AppError>().having((e) => e.kind, 'kind', AppErrorKind.timeout)));
+    final pdf = await repo().composeExport('b1', const []);
+    expect(String.fromCharCodes(pdf), '%PDF-1.3 slow');
+  });
 }

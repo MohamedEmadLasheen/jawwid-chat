@@ -8197,6 +8197,18 @@ abstract class L10n {
   /// **'Many exports are being made right now. Try again in a minute.'**
   String get boardExportBusy;
 
+  /// PD-39 whiteboard export: 409 the teacher's own exports in flight (five at most), or this one already being made.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have exports being made. Wait a few minutes, then try again.'**
+  String get boardExportInProgress;
+
+  /// PD-39 whiteboard export: 409 COMM.WHITEBOARD_STATE, the export's pages expired before compose.
+  ///
+  /// In en, this message translates to:
+  /// **'The export took too long and ran out. Export again.'**
+  String get boardExportExpired;
+
   /// PD-39 whiteboard export: over the export limits.
   ///
   /// In en, this message translates to:

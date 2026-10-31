@@ -24,8 +24,10 @@ import '../presentation/board_painter.dart';
 /// the Quran text's credit when a verse is on the board -- and comes back in
 /// the answer; nothing of it is kept on the server.
 
-/// How an export ended, for the teacher.
-enum ExportOutcome { saved, cancelled, exportsOff, busy, tooLarge, notHere, failed }
+/// How an export ended, for the teacher. [inProgress]: the teacher's own
+/// exports already in flight (five at most); [busy]: the server's workers are
+/// all taken; [expired]: the export took over an hour and must be made again.
+enum ExportOutcome { saved, cancelled, exportsOff, busy, inProgress, expired, tooLarge, notHere, failed }
 
 class ExportException implements Exception {
   const ExportException(this.outcome);
@@ -80,26 +82,72 @@ Future<void> settleForExport(Iterable<BoardPage> pages, PageInk ink, {Duration l
   }
 }
 
+/// How often compose is asked when the server's workers are all taken.
+const int kComposeTries = 4;
+
 /// The whole board as a PDF, made by the server from [pngs] (page order).
-Future<Uint8List> exportPdf(WhiteboardsRepository repo, AttachmentUploader uploads, String boardId, List<Uint8List> pngs) async {
+///
+/// A compose turned away because the workers are busy (429) is asked again
+/// with the SAME grants, after the server's Retry-After or a growing wait
+/// (review of #335): new grants would leave these pending for an hour,
+/// counting toward the teacher's five exports in flight.
+Future<Uint8List> exportPdf(
+  WhiteboardsRepository repo,
+  AttachmentUploader uploads,
+  String boardId,
+  List<Uint8List> pngs, {
+  Future<void> Function(Duration) wait = _wait,
+}) async {
+  final List<ImageGrant> grants;
   try {
-    final grants = await repo.grantExport(boardId, [for (final p in pngs) p.length]);
+    grants = await repo.grantExport(boardId, [for (final p in pngs) p.length]);
     if (grants.length != pngs.length) throw const ExportException(ExportOutcome.failed);
     for (var i = 0; i < pngs.length; i++) {
       await uploads.put(grants[i].uploadUrl, bytes: pngs[i], headers: grants[i].headers);
     }
-    return await repo.composeExport(boardId, grants);
   } on ExportException {
     rethrow;
   } on AppError catch (e) {
-    if (e.code == kAssetsOffCode) throw const ExportException(ExportOutcome.exportsOff);
-    if (e.kind == AppErrorKind.rateLimited) throw const ExportException(ExportOutcome.busy);
-    if (e.code == 'COMM.WHITEBOARD_LIMIT') throw const ExportException(ExportOutcome.tooLarge);
-    throw const ExportException(ExportOutcome.failed);
+    throw ExportException(_grantRefusal(e));
   } on Object {
     throw const ExportException(ExportOutcome.failed);
   }
+  for (var attempt = 1; ; attempt++) {
+    try {
+      return await repo.composeExport(boardId, grants);
+    } on AppError catch (e) {
+      if (e.kind == AppErrorKind.rateLimited && attempt < kComposeTries) {
+        await wait(e.retryAfter ?? Duration(seconds: 2 << attempt));
+        continue;
+      }
+      throw ExportException(_composeRefusal(e));
+    } on Object {
+      throw const ExportException(ExportOutcome.failed);
+    }
+  }
 }
+
+Future<void> _wait(Duration d) => Future<void>.delayed(d);
+
+/// The grant's refusals, as #325 sends them: 409 LIMIT is the teacher's five
+/// exports in flight; 422 INVALID a board over the export's size.
+ExportOutcome _grantRefusal(AppError e) => switch (e) {
+  AppError(code: kAssetsOffCode) => ExportOutcome.exportsOff,
+  AppError(kind: AppErrorKind.rateLimited) => ExportOutcome.busy,
+  AppError(code: 'COMM.WHITEBOARD_LIMIT') => ExportOutcome.inProgress,
+  AppError(code: 'COMM.WHITEBOARD_INVALID') => ExportOutcome.tooLarge,
+  _ => ExportOutcome.failed,
+};
+
+/// Compose's refusals: 409 STATE is an export that ran out ("export again");
+/// 409 CONFLICT one already being made.
+ExportOutcome _composeRefusal(AppError e) => switch (e) {
+  AppError(code: kAssetsOffCode) => ExportOutcome.exportsOff,
+  AppError(kind: AppErrorKind.rateLimited) => ExportOutcome.busy,
+  AppError(code: 'COMM.WHITEBOARD_STATE') => ExportOutcome.expired,
+  AppError(code: 'COMM.WHITEBOARD_CONFLICT') => ExportOutcome.inProgress,
+  _ => ExportOutcome.failed,
+};
 
 /// "Al-Fatihah review" -> "Al-Fatihah review.pdf": the board's title, safe as a file name.
 String exportName(String title, String extension) {
@@ -116,16 +164,25 @@ typedef ExportSaver = Future<ExportOutcome> Function(Uint8List bytes, String nam
 /// The saver the editor uses (tests put a recorder in its place).
 final exportSaverProvider = Provider<ExportSaver>((ref) => saveExport);
 
+/// Whether this build has somewhere to put an export: the browser, or a
+/// desktop's save dialog. Asked BEFORE anything is drawn or sent (review of
+/// #335): elsewhere an export would take a worker and an audit row for a
+/// file never saved.
+bool canSaveExportHere() =>
+    kIsWeb ||
+    defaultTargetPlatform == TargetPlatform.macOS ||
+    defaultTargetPlatform == TargetPlatform.windows ||
+    defaultTargetPlatform == TargetPlatform.linux;
+
+final exportHereProvider = Provider<bool>((ref) => canSaveExportHere());
+
 Future<ExportOutcome> saveExport(Uint8List bytes, String name, String mimeType) async {
   final file = XFile.fromData(bytes, mimeType: mimeType, name: name);
   if (kIsWeb) {
     await file.saveTo(name); // the browser downloads it
     return ExportOutcome.saved;
   }
-  final desktop = defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.windows ||
-      defaultTargetPlatform == TargetPlatform.linux;
-  if (!desktop) return ExportOutcome.notHere;
+  if (!canSaveExportHere()) return ExportOutcome.notHere;
   final where = await selector.getSaveLocation(suggestedName: name);
   if (where == null) return ExportOutcome.cancelled;
   await file.saveTo(where.path);

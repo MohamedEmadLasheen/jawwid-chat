@@ -4846,6 +4846,14 @@ class L10nAr extends L10n {
   String get boardExportBusy => 'يجري الآن تصدير كثير. حاول بعد دقيقة.';
 
   @override
+  String get boardExportInProgress =>
+      'لديك عمليات تصدير قيد التجهيز. انتظر بضع دقائق ثم حاول مرة أخرى.';
+
+  @override
+  String get boardExportExpired =>
+      'استغرق التصدير وقتًا طويلًا وانتهت مهلته. صدِّر مرة أخرى.';
+
+  @override
   String get boardExportTooLarge =>
       'هذه السبورة أكبر من أن تُصدَّر دفعة واحدة.';
 
