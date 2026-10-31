@@ -248,3 +248,48 @@ describe('GET /dashboard/structure -- children and teachers without a supervisor
     expect(large.n).toBe(small.n);
   });
 });
+
+describe('a supervisor who left supervises no one', () => {
+  /** admin_b (s.otherAdminId) supervises family_x's learner_m, then leaves; the row is kept. */
+  async function departedSupervisor(): Promise<void> {
+    await exec(`update chat.learner_supervision set supervisor_id = $2::uuid where learner_id = $1::uuid`, s.secondLearnerId, s.otherAdminId);
+    await exec(`update chat.staff set is_active = false, left_at = now() where id = $1::uuid`, s.otherAdminId);
+  }
+  const reaches = async (staffId: string) =>
+    (await g.prisma.$queryRawUnsafe<Array<{ basis: string | null }>>(
+      `select chat.staff_reaches_family($1::uuid, $2::uuid) as basis`, staffId, s.familyId,
+    ))[0]?.basis ?? null;
+
+  it("lists the child without a supervisor, on the Children tab and in the tile -- the row is kept", async () => {
+    expect(tileOf(await all(s.managerId), 'learners.unsupervised')?.count).toBe(0);
+    await departedSupervisor();
+    const unassigned = (await org.learners(s.managerId, { unassigned: true })).learners.map((l) => l.learnerId);
+    expect(unassigned).toEqual([s.secondLearnerId]);
+    expect(tileOf(await all(s.managerId), 'learners.unsupervised')?.count).toBe(1);
+    await expectParity(s.managerId);
+    await expectParity(superId);
+    // No data is deleted: the supervision row stays, for history and a later reassignment.
+    const [{ n }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `select count(*)::int as n from chat.learner_supervision where learner_id = $1::uuid and supervisor_id = $2::uuid`,
+      s.secondLearnerId, s.otherAdminId,
+    );
+    expect(n).toBe(1);
+  });
+
+  it('the departed supervisor reaches the family no more; the manager and an active backup keep it until it is reassigned', async () => {
+    // obak_c backs admin_b up, the link active from an hour ago for a week (PD-8).
+    await exec(
+      `insert into chat.supervisor_backup (organization_id, primary_id, backup_id, activated_at, active_until)
+       values (chat.default_organization_id(), $1::uuid, $2::uuid, now() - interval '1 hour', now() + interval '7 days')`,
+      s.otherAdminId, obak,
+    );
+    expect(await reaches(s.otherAdminId)).toBeNull(); // learner_m is not theirs yet
+    await departedSupervisor();
+    // staff_reaches_family refuses whoever is not live -- the scope is unchanged (no migration).
+    expect(await reaches(s.otherAdminId)).toBeNull();
+    // Continuity: the Operations manager and the active backup still reach the family through the kept row.
+    expect(await reaches(s.managerId)).toBe('manager');
+    expect(await reaches(obak)).toBe('backup');
+  });
+});
+
