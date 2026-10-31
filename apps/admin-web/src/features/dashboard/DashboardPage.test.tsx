@@ -267,6 +267,38 @@ describe('the manager Dashboard', () => {
     expect(within(section).getByRole('link', { name: /Parents of a child in the grace period/ })).toHaveAttribute('href', '/parents?access=grace')
   })
 
+  it('shows the Teachers section: the Teacher Supervision sections, certificates and credentials (PR-6)', async () => {
+    routes['/dashboard/teachers'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('leave.pending', 2),
+          tile('absences.open', 1),
+          tile('lateness.open', 3),
+          tile('feedback.received', 4),
+          tile('feedback.in_review', 1),
+          tile('certificates.student_requested', 2),
+          tile('certificates.teacher_requested', 1),
+          tile('teacher_profiles.pending', 1),
+        ],
+      })
+    open(makeStaff({ id: 'staff_tmgr', role: 'manager', permissions: ['teacher_supervision.view', 'certificates.view', 'teacher_profiles.review'] }))
+    const section = await screen.findByRole('region', { name: 'Teachers' })
+    const link = (name: RegExp) => within(section).getByRole('link', { name })
+    const leave = await within(section).findByRole('link', { name: /Leave requests waiting for a decision/ })
+    expect(leave).toHaveAttribute('href', '/teachers/supervision?section=leave')
+    expect(leave).toHaveClass('dash-tile--alert')
+    expect(link(/Absences waiting for a decision/)).toHaveAttribute('href', '/teachers/supervision?section=absences')
+    expect(link(/Lateness waiting for a decision/)).toHaveAttribute('href', '/teachers/supervision?section=lateness')
+    const received = link(/New parent feedback/)
+    expect(received).toHaveAttribute('href', '/teachers/supervision?section=feedback&status=received')
+    expect(received).toHaveClass('dash-tile--alert')
+    expect(link(/Parent feedback in review/)).toHaveAttribute('href', '/teachers/supervision?section=feedback&status=in_review')
+    expect(link(/Student certificates requested/)).toHaveAttribute('href', '/certificates?category=student')
+    expect(link(/Teacher certificates requested/)).toHaveAttribute('href', '/certificates?category=teacher')
+    expect(link(/Teacher credentials to review/)).toHaveAttribute('href', '/teacher-profiles')
+  })
+
   it('is Arabic first: Arabic labels and digits, right to left', async () => {
     open(MANAGER, 'ar')
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()
