@@ -127,7 +127,8 @@ beforeEach(async () => {
   await supervisors.assign(tmgr, s.teacherId, { supervisorId: heba });
   await supervisors.assign(tmgr, s.newTeacherId, { supervisorId: ola });
   acct = { c: await teacherAccount(s.teacherId), d: await teacherAccount(s.newTeacherId), e: await teacherAccount(s.unrelatedTeacherId) };
-  own = { heba: await staffAccount(heba), ola: await staffAccount(ola), tmgr: await staffAccount(tmgr), superId: await staffAccount(superId) };
+  // The super admin's account is bound only by the bootstrap procedure; no test here needs it.
+  own = { heba: await staffAccount(heba), ola: await staffAccount(ola), tmgr: await staffAccount(tmgr) };
 });
 
 describe('TEACHER-011: teacher accounts under strict scope', () => {
