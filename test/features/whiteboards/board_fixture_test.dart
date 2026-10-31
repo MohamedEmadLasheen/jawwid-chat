@@ -24,7 +24,14 @@ void main() {
     expect(page.elements.map((e) => e.id), raw.map((e) => e['id']));
     for (final (i, e) in page.elements.indexed) {
       final notDrawn = (expected['notDrawn']! as List).contains(e.id);
-      expect(e is OpaqueElement, notDrawn, reason: '${e.id} is ${e.runtimeType}');
+      final image = (expected['images']! as List).contains(e.id);
+      // An image (PR-4) is read as one wherever this build draws images, and is
+      // otherwise kept as it came; either way its kind and JSON are the fixture's.
+      if (image) {
+        expect(e.kind, 'image', reason: e.id);
+      } else {
+        expect(e is OpaqueElement, notDrawn, reason: '${e.id} is ${e.runtimeType}');
+      }
       expect(e.toJson(), raw[i], reason: e.id);
     }
   });
