@@ -75,6 +75,12 @@ async function monthOf(id: string): Promise<string> {
   return academyMonth((await g.prisma.lesson.findUniqueOrThrow({ where: { id }, select: { startsAt: true } })).startsAt);
 }
 
+/** The teacher's month for each month these lessons start in (one, or two across a boundary). */
+async function teacherMonths(ids: string[]) {
+  const months = [...new Set(await Promise.all(ids.map(monthOf)))];
+  return Promise.all(months.map((m) => stats.teacher(tsupId, s.teacherId, m)));
+}
+
 /** The teacher's month summary over every month these lessons start in -- summed when they differ. */
 async function summaryOver(ids: string[]) {
   const months = [...new Set(await Promise.all(ids.map(monthOf)))];
@@ -176,7 +182,7 @@ describe('1. the supervisor\'s excuse cards', () => {
     const id = await lesson(-HOUR);
     await lessons.absence(s.teacherId, id, {});
     await lessons.lateExcuse(s.ownerId, id, { reason: 'power cut' });
-    const month = await stats.teacher(tsupId, s.teacherId, await thisMonth());
+    const month = await stats.teacher(tsupId, s.teacherId, await monthOf(id));
     expect(month.summary.studentNoShow).toBe(0);
     expect(month.summary.studentExcuses).toEqual({ total: 1, beforeStart: 0, afterStart: 1 });
     expect(month.summary.totalScheduled).toBe(1);
@@ -300,7 +306,7 @@ describe('4. deleting a report', () => {
     const dto = await lessons.get(tsupId, id);
     expect(dto.outcome).toBe('held');
     expect(dto.report?.messageId).toBe(all[1].id);
-    expect((await stats.teacher(tsupId, s.teacherId, await thisMonth())).summary.conducted).toBe(1);
+    expect((await stats.teacher(tsupId, s.teacherId, await monthOf(id))).summary.conducted).toBe(1);
   });
 
   it('leave unsent: the card leaves the chat and the lesson leaves every statistic; it is final', async () => {
@@ -315,14 +321,22 @@ describe('4. deleting a report', () => {
     const dto = await lessons.get(tsupId, id);
     expect(dto.outcome).toBe('voided');
     expect(dto.report?.deletedAt).not.toBeNull();
-    const month = await stats.teacher(tsupId, s.teacherId, await thisMonth());
-    expect(month.summary.totalScheduled).toBe(1);
-    expect(month.summary.conducted).toBe(1);
-    expect(month.summary.pending.total).toBe(0);
-    expect(month.reports.reports).toBe(1);
-    const list = await stats.teachers(tsupId, await thisMonth());
-    expect(list.teachers.find((t) => t.teacher.id === s.teacherId)?.summary.totalScheduled).toBe(1);
-    expect((await stats.progress(s.parentId, s.learnerId)).thisMonth.attended).toBe(1);
+    // In each lesson's own month: near midnight on the 1st, -2 h and -1 h straddle two.
+    const months = await teacherMonths([kept, id]);
+    const total = (f: (m: (typeof months)[number]) => number) => months.reduce((n, m) => n + f(m), 0);
+    expect(total((m) => m.summary.totalScheduled)).toBe(1);
+    expect(total((m) => m.summary.conducted)).toBe(1);
+    expect(total((m) => m.summary.pending.total)).toBe(0);
+    expect(total((m) => m.reports.reports)).toBe(1);
+    let listed = 0;
+    for (const m of months) {
+      const list = await stats.teachers(tsupId, m.month);
+      listed += list.teachers.find((t) => t.teacher.id === s.teacherId)?.summary.totalScheduled ?? 0;
+    }
+    expect(listed).toBe(1);
+    // The parent's view counts the CURRENT month only: the kept lesson is in it unless it fell in the last one.
+    const keptNow = (await monthOf(kept)) === (await thisMonth());
+    expect((await stats.progress(s.parentId, s.learnerId)).thisMonth.attended).toBe(keptNow ? 1 : 0);
 
     expect(await code(records.correct(tsupId, id, { outcome: 'held', reason: 'undo' }))).toBe(CommErrorCode.LESSON_STATE);
     expect(await code(records.deleteReport(tsupId, id, { reason: 'again', resend: false }))).toBe(CommErrorCode.LESSON_STATE);
@@ -362,7 +376,7 @@ describe('5. corrections', () => {
     expect(row.after).toMatchObject({ outcome: 'held' });
     expect(row.actorId).toBe(s.ownerId);
 
-    const month = await stats.teacher(tsupId, s.teacherId, await thisMonth());
+    const month = await stats.teacher(tsupId, s.teacherId, await monthOf(id));
     expect(month.summary.studentNoShow).toBe(0);
     expect(month.summary.conducted).toBe(1);
     const events = await g.prisma.outboxEvent.findMany({ where: { type: 'lesson.closed' }, orderBy: { createdAt: 'asc' } });
@@ -379,7 +393,7 @@ describe('5. corrections', () => {
     expect(all[0].deletedForAll).toBe(true);
     expect(all[1].card?.kind).toBe('lesson_corrected');
     expect(JSON.stringify(all[1].card?.payload)).not.toContain('parent called');
-    const month = await stats.teacher(tsupId, s.teacherId, await thisMonth());
+    const month = await stats.teacher(tsupId, s.teacherId, await monthOf(id));
     expect(month.summary.conducted).toBe(0);
     expect(month.summary.studentExcuses.afterStart).toBe(1);
     expect(month.reports.reports).toBe(0);
@@ -479,15 +493,15 @@ describe('7. the month in numbers', () => {
     const pendingReport = await lesson(-3 * HOUR);
     const before = await lesson(4 * HOUR);
     const teacherEx = await lesson(5 * HOUR);
-    await lesson(6 * HOUR); // upcoming
+    const upcoming = await lesson(6 * HOUR);
     await lessons.report(s.teacherId, held, REPORT);
     await lessons.absence(s.teacherId, noShow, {});
     await lessons.lateExcuse(s.ownerId, lateExcused, { reason: 'r' });
     await lessons.apology(s.parentId, before, { reason: 'travel' });
     await lessons.teacherApology(s.teacherId, teacherEx, { reason: 'ill' });
-    void pendingReport;
 
-    const { summary } = await stats.teacher(tsupId, s.teacherId, await thisMonth());
+    // -6 h .. +6 h: on a month's first or last hours these straddle two months.
+    const summary = await summaryOver([held, noShow, lateExcused, pendingReport, before, teacherEx, upcoming]);
     expect(summary).toMatchObject({
       totalScheduled: 7,
       conducted: 1,
@@ -553,7 +567,7 @@ describe('8. two children, one teacher, one group', () => {
     const inFamily = await cards(conv.id);
     expect(inFamily).toHaveLength(1);
     expect(inFamily[0].card?.payload).toMatchObject({ learnerName: 'learner_m' });
-    const { summary } = await stats.teacher(tsupId, s.teacherId, await thisMonth());
+    const summary = await summaryOver([mine, theirs]);
     expect(summary.conducted).toBe(2);
   });
 });
