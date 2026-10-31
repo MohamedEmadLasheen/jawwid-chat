@@ -270,6 +270,19 @@ jobs:
               print(f'dist/index.html has {b}')
           sys.exit(1 if bad else 0)
           PY
+      - name: Every verse is drawn in Amiri Quran (headless Chromium, the production build)
+        # PD-49 P0: a fallback font once drew the Name wrongly. Asserts the face is loaded, every
+        # verse element's computed font, and a shaping probe; no pixel goldens. Chromium only.
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:render
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lessons-quran-render-${{ github.sha }}
+          path: apps/lessons/test-results
+          if-no-files-found: warn
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
           name: lessons-dist-${{ github.sha }}

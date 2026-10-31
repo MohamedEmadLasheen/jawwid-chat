@@ -4771,4 +4771,7 @@ class L10nEn extends L10n {
   String photoPositionLabel(String position, String count) {
     return 'Photo $position of $count';
   }
+
+  @override
+  String get chatDraftLabel => 'Draft:';
 }

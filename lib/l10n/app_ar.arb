@@ -1827,5 +1827,6 @@
   "pickerNoMatches": "لا توجد نتائج مطابقة",
   "materialsAgeLabel": "العمر",
   "photoLabel": "صورة",
-  "photoPositionLabel": "الصورة {position} من {count}"
+  "photoPositionLabel": "الصورة {position} من {count}",
+  "chatDraftLabel": "مسودة:"
 }
