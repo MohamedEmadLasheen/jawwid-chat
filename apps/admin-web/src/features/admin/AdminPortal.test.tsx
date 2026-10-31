@@ -232,7 +232,7 @@ describe('Dashboard', () => {
     )
     renderWithProviders(<AppRoutes />, { staff: { ...superAdmin, permissions: ['chat.use'] }, route: '/admin/dashboard' })
     const chats = await screen.findByRole('region', { name: 'Chats' })
-    expect(within(chats).getByRole('link', { name: /Chats waiting for our reply/ })).toHaveAttribute('href', '/chat?view=waiting')
+    expect(await within(chats).findByRole('link', { name: /Chats waiting for our reply/ })).toHaveAttribute('href', '/chat?view=waiting')
     const attention = await screen.findByRole('region', { name: 'Needs attention' })
     // The sections come first; the inventory stays below them.
     expect(chats.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

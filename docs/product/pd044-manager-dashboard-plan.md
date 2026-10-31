@@ -294,6 +294,10 @@ Every endpoint above is already scoped for a supervisor, so adding them later is
 
 - **Managers:** `/dashboard`, the same URL, rebuilt (`features/dashboard/`). It moves from More to a top-level nav item. Chat stays the landing page (Q2).
 - **Super admin:** the Admin Portal's **Dashboard section** (`/admin/dashboard`, `DashboardView.tsx`). It gains the same sections **above** the existing inventory counts, which stay. `/dashboard` redirects the super admin there, so there is one Dashboard per person (Q7).
+> **As built (PR-8):**
+> - The sections live in `features/dashboard/ManagerDashboard.tsx` (`useDashboardSections` and `DashboardSections`). The managers' `/dashboard` and the Admin Portal's `DashboardView` both render them; in the Portal they sit above the existing inventory, which is unchanged.
+> - One Refresh refetches both. The Portal asks only for the sections the super admin's keys open, the same rule as for managers.
+> - `/dashboard` redirects the super admin to `/admin/dashboard`.
 - **The UI:** one shared component, `ManagerDashboard`, with one `Section` per endpoint and one `Tile` per tile key. It is driven by a small registry: tile key → Arabic/English label, link builder, and which number is the alert.
 
 ### 4.2 Layout
@@ -482,4 +486,3 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 - **The Chat list's "Waiting for a reply" shows at most the list's 200 most recent conversations, plus open mentions.** The tile's count is exact, so above 200 the two can differ. At today's scale no manager's scope reaches 200.
 - **No tile counts prospects without a booked trial** (PR-4). No page lists prospects; they appear only in the booking dialog's picker. A tile would link nowhere, so it waits for a prospects list.
 - **The trial and New Students tiles count what their pages list.** That is the Trials page's ±31-day default window (an awaiting trial older than 31 days is on neither) and the New Students page's 500 newest live forms. `capped` says when either limit is passed.
-- **The super admin still opens `/dashboard` as a page of its own** (the same sections) until PR-8 moves them into the Admin Portal's Dashboard section and redirects.
