@@ -20,6 +20,11 @@ export function useTeacherBoards(teacherId: string | null) {
   })
 }
 
+/** The pickers' teachers, under a whiteboard key (not the supervision directory's). Names only: not logged. */
+export function useBoardTeachers() {
+  return useQuery({ queryKey: teacherBoardsKeys.teachers, queryFn: teacherBoardsApi.teachers, staleTime: 60_000, retry: false })
+}
+
 export function useTeacherBoard(boardId: string) {
   return useQuery({ queryKey: teacherBoardsKeys.board(boardId), queryFn: () => teacherBoardsApi.board(boardId), ...LOGGED })
 }

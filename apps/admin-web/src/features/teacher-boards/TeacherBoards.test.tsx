@@ -80,16 +80,18 @@ beforeEach(() => {
   )
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
   on('GET', /\/lessons\/access$/, () => json({ lessonManager: true }))
-  on('GET', /\/teacher-supervision\/directory$/, () =>
+  // The pickers' source is under a whiteboard key (review of #327), not the supervision directory.
+  on('GET', /\/teacher-boards\/teachers$/, () =>
     json({
-      basis: 'teachers',
-      access: { canWriteSupervision: true, canViewFinance: false },
       teachers: [
-        { id: T1, name: 'Teacher One', isActive: false, away: null },
-        { id: T2, name: 'Teacher Two', isActive: true, away: null },
-        { id: T3, name: 'Teacher Three', isActive: true, away: null },
+        { id: T1, name: 'Teacher One', isActive: false },
+        { id: T2, name: 'Teacher Two', isActive: true },
+        { id: T3, name: 'Teacher Three', isActive: true },
       ],
-      supervisors: [],
+      copyTargets: [
+        { id: T2, name: 'Teacher Two' },
+        { id: T3, name: 'Teacher Three' },
+      ],
     }),
   )
   on('GET', /\/teacher-boards\?teacherId=/, () => json([summary({ state: 'retained', retainedUntil: '2027-10-01T00:00:00.000Z' })]))
@@ -102,8 +104,9 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-const supervisor = makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin', permissions: ['whiteboards.view', 'teacher_supervision.view'] })
-const manager = makeStaff({ id: 'm-1', name: 'Manager One', role: 'manager', permissions: ['whiteboards.view', 'whiteboards.retention', 'teacher_supervision.view'] })
+// Whiteboard keys only: a PD-40 role with no supervision key still gets its pickers (review of #327).
+const supervisor = makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin', permissions: ['whiteboards.view'] })
+const manager = makeStaff({ id: 'm-1', name: 'Manager One', role: 'manager', permissions: ['whiteboards.view', 'whiteboards.retention'] })
 const noKey = makeStaff({ id: 'x-1', name: 'Staff One', role: 'admin', permissions: ['teacher_supervision.view'] })
 
 const writes = () => fetchMock.mock.calls.filter(([, i]) => ((i as RequestInit)?.method ?? 'GET') !== 'GET')
@@ -113,8 +116,10 @@ describe('PD-39 staff board viewer', () => {
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/boards' })
     const nav = await screen.findByRole('navigation', { name: 'Teachers' })
     expect(within(nav).getByRole('link', { name: 'Boards' })).toHaveAttribute('aria-current', 'page')
-    // Nothing is asked for before a teacher is chosen: a listing is logged.
-    expect(calls('GET', /\/teacher-boards/)).toHaveLength(0)
+    // No board is listed before a teacher is chosen: a listing is logged. (The
+    // teacher names come first, from /teacher-boards/teachers, which logs nothing.)
+    expect(calls('GET', /\/teacher-boards\?/)).toHaveLength(0)
+    expect(calls('GET', /\/teacher-boards\/teachers$/)).toHaveLength(1)
     const picker = await screen.findByRole('combobox', { name: 'Teacher' })
     await waitFor(() => expect(picker).toBeEnabled())
     expect((await optionsOf(userEvent, picker)).map((o) => o.label)).toContain('Teacher One (left)')

@@ -6,9 +6,8 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
-import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
 import { B, useCopy } from './copy'
-import { useTeacherBoards } from './hooks'
+import { useBoardTeachers, useTeacherBoards } from './hooks'
 import './teacher-boards.css'
 
 /**
@@ -23,7 +22,7 @@ export function TeacherBoardsPage({ basePath }: { basePath: string }) {
   const { date } = useI18n()
   const [params, setParams] = useSearchParams()
   const teacherId = params.get('teacher')
-  const directory = useSupervisionDirectory()
+  const directory = useBoardTeachers()
   const boards = useTeacherBoards(teacherId)
   const teachers = directory.data?.teachers ?? []
   const forbidden = boards.error instanceof ApiError && (boards.error.isNotFound || boards.error.isForbidden)

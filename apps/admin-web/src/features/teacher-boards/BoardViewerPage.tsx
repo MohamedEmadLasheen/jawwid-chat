@@ -10,14 +10,13 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { EmptyState, ErrorState, QueryBoundary } from '@/shared/components/States'
 import { TeachersTabs } from '@/features/supervision/TeachersTabs'
-import { useSupervisionDirectory } from '@/features/teacher-files/hooks'
 import type { Pair } from '@/features/organization/copy'
 import { newIdempotencyKey } from '@/core/api/client'
 import { RETENTION_KEYS, type BoardDetail } from './api'
 import { parsePage, type BoardElement, type BoardPage, type VerseLookup } from './board'
 import { BoardCanvas } from './BoardCanvas'
 import { ACTION, B, BASIS, useCopy } from './copy'
-import { useAccessLog, useBoardImages, useCopyBoard, useTeacherBoard, useVerseTexts } from './hooks'
+import { useAccessLog, useBoardImages, useBoardTeachers, useCopyBoard, useTeacherBoard, useVerseTexts } from './hooks'
 import type { ImageLookup } from './render'
 import './teacher-boards.css'
 
@@ -69,7 +68,7 @@ function Viewer({ board, basePath }: { board: BoardDetail; basePath: string }) {
   const page = useMemo(() => (shown ? parsePage(shown as unknown as Record<string, unknown>) : null), [shown])
   const verse = useVerseTexts(page)
   const image = useBoardImages(board.assets)
-  const directory = useSupervisionDirectory()
+  const directory = useBoardTeachers()
   const teacherName = directory.data?.teachers.find((t) => t.id === board.teacherId)?.name
   const [copying, setCopying] = useState(false)
 
@@ -210,12 +209,13 @@ function AccessHistory({ boardId }: { boardId: string }) {
 function CopyDialog({ board, onClose }: { board: BoardDetail; onClose: () => void }) {
   const tx = useCopy()
   const { date, t } = useI18n()
-  const directory = useSupervisionDirectory()
+  const directory = useBoardTeachers()
   const copy = useCopyBoard(board.id)
   const [target, setTarget] = useState('')
   // One key per intended copy: a retry (a double click, a lost answer) answers the same copy.
   const key = useMemo(() => newIdempotencyKey(), [target])
-  const active = (directory.data?.teachers ?? []).filter((t) => t.isActive && t.id !== board.teacherId)
+  // Only the server's copy targets: the organization's active teachers, for who may copy.
+  const active = (directory.data?.copyTargets ?? []).filter((t) => t.id !== board.teacherId)
   const chosen = active.find((t) => t.id === target)
   return (
     <Dialog

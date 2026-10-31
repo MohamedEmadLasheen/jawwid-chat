@@ -371,6 +371,36 @@ export class WhiteboardService {
   // ---------------------------------------------------------------------------
 
   /**
+   * The pickers' source (review of #327): the teachers whose boards this staff
+   * member may read -- exactly chat.staff_supervised_teacher_ids, the scope
+   * every staff read here uses -- departed ones included (their boards are
+   * kept). `copyTargets` (the organization's active teachers) only for the
+   * Teachers Manager and the super admin, who copy a departed teacher's
+   * boards; null for everyone else. Names only: nothing of a board.
+   */
+  async boardTeachers(actor: Actor): Promise<{ teachers: Array<{ id: string; name: string; isActive: boolean }>; copyTargets: Array<{ id: string; name: string }> | null }> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) throw notFound();
+    const teachers = await this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean }>>`
+      SELECT t.id::text AS id, t.name, (t.is_active AND t.left_at IS NULL) AS active
+        FROM chat.teacher t
+       WHERE t.organization_id = ${actor.organizationId}::uuid
+         AND t.id IN (SELECT x FROM chat.staff_supervised_teacher_ids(${actor.actorId}::uuid, now()) x)
+       ORDER BY t.name, t.id`;
+    const [{ manager }] = await this.prisma.$queryRaw<Array<{ manager: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM chat.department d
+                      WHERE d.kind = 'teachers' AND d.manager_id = ${actor.actorId}::uuid
+                        AND d.organization_id = ${actor.organizationId}::uuid) AS manager`;
+    const copies = actor.staffRole === StaffRole.SUPER_ADMIN || manager;
+    const copyTargets = copies
+      ? await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+          SELECT id::text AS id, name FROM chat.teacher
+           WHERE organization_id = ${actor.organizationId}::uuid AND is_active AND left_at IS NULL
+           ORDER BY name, id`
+      : null;
+    return { teachers: teachers.map((t) => ({ id: t.id, name: t.name, isActive: t.active })), copyTargets };
+  }
+
+  /**
    * A teacher's boards in use and kept, for a reader of that teacher. A listing
    * names the boards, so each one named is logged ('list'), as an open is.
    */
@@ -453,14 +483,24 @@ export class WhiteboardService {
       const basis = await this.readerBasis(tx, actor, source.teacher_id);
       if (key !== null) {
         // A retry of the same copy (review of #304): the copy it made, never a second one.
-        // The target's lock serializes two retries in flight; the log row is the record.
-        await this.lockTeacher(tx, target);
-        const [done] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT}
-          WHERE w.id = (SELECT (l.detail ->> 'toBoardId')::uuid FROM chat.whiteboard_access_log l
-                         WHERE l.board_id = ${source.id}::uuid AND l.action = 'copy'
-                           AND l.viewer_id = ${actor.actorId}::uuid AND l.detail ->> 'idempotencyKey' = ${key}
-                         ORDER BY l.id DESC LIMIT 1)`;
-        if (done) return summary(done);
+        // A key is this staff member's own (the log row's viewer), names ONE target
+        // (review of #327: another teacher under the same key is a 409, never the
+        // first teacher's copy), and is locked as such, so two requests in flight
+        // with it are taken one after the other whatever teacher they name.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'whiteboard-copy:' + actor.actorId + ':' + key}))`;
+        const [earlier] = await tx.$queryRaw<Array<{ to_board: string | null; to_teacher: string | null }>>`
+          SELECT l.detail ->> 'toBoardId' AS to_board, l.detail ->> 'toTeacherId' AS to_teacher
+            FROM chat.whiteboard_access_log l
+           WHERE l.board_id = ${source.id}::uuid AND l.action = 'copy'
+             AND l.viewer_id = ${actor.actorId}::uuid AND l.detail ->> 'idempotencyKey' = ${key}
+           ORDER BY l.id DESC LIMIT 1`;
+        if (earlier) {
+          if (earlier.to_teacher !== target) {
+            throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this Idempotency-Key was used to copy the board to another teacher; use a new key', 409);
+          }
+          const [done] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${earlier.to_board}::uuid`;
+          if (done) return summary(done);
+        }
       }
       if (source.state !== 'retained') throw state("only a departed teacher's board is copied to another teacher");
       const [teacher] = await tx.$queryRaw<Array<{ id: string }>>`

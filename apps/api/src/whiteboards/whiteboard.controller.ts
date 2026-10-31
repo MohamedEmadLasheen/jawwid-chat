@@ -144,6 +144,18 @@ export class TeacherBoardsController {
     return this.boards.teacherBoards(teacherId, actor);
   }
 
+  /**
+   * The teachers whose boards the caller may read -- the same scope as every
+   * read here (review of #327) -- and, for whoever may copy a departed
+   * teacher's board, the active teachers it may be copied to. Before `:id`.
+   */
+  @Requires('whiteboards.view', 'whiteboards.retention')
+  @Get('teachers')
+  @Header('Cache-Control', 'private, no-store')
+  teachers(@CurrentActor() actor: Actor) {
+    return this.boards.boardTeachers(actor);
+  }
+
   @Requires('whiteboards.view', 'whiteboards.retention')
   @Get(':id')
   @Header('Cache-Control', 'private, no-store')
