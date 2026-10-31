@@ -20,6 +20,7 @@ import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/conversations/application/chat_realtime.dart';
+import 'package:jawwid_chat/features/conversations/application/realtime_keeper.dart';
 import 'package:jawwid_chat/features/messages/data/message_marks_repository.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
@@ -55,6 +56,7 @@ void main() {
         realtimeSocketProvider.overrideWithValue(SilentRealtimeSocket()),
         realtimeTokenProvider.overrideWithValue(_NoTokens()),
         chatRealtimeProvider.overrideWithValue(null),
+        realtimeKeeperProvider.overrideWithValue(null),
         // Marks routes present, so a long press offers "Select messages".
         messageMarksRepositoryProvider.overrideWithValue(const _Marks()),
         authControllerProvider.overrideWith(
