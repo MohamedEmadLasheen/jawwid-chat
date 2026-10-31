@@ -237,6 +237,7 @@ class HttpMessageRepository implements MessageRepository {
       uploadUrl,
       bytes: bytes,
       headers: _stringHeaders(grant?['headers']),
+      expiresAt: DateTime.tryParse(grant?['expiresAt'] as String? ?? ''),
     );
 
     return objectKey;
