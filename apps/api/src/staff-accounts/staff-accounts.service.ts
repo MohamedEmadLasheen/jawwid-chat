@@ -374,7 +374,23 @@ export class StaffAccountsService {
   }
 
   /** The checklist a role is made from: every key, its page, risk, and whether it goes in roles and may be delegated. */
-  permissions(): { permissions: Array<{ key: string; page: string; action: string; label: { en: string; ar: string }; risk: string; delegable: boolean; inRoles: boolean }> } {
+  /**
+   * The catalogue the role editor builds from. TEACHER-004: for whoever manages
+   * staff accounts or roles (staff_accounts.view, access_roles.manage -- the
+   * route's own keys; the super admin holds every key), never a teacher, a
+   * parent or a supervisor: PermissionGuard lets non-staff through to the
+   * service, so the service decides.
+   */
+  async permissions(
+    actor: Actor,
+  ): Promise<{ permissions: Array<{ key: string; page: string; action: string; label: { en: string; ar: string }; risk: string; delegable: boolean; inRoles: boolean }> }> {
+    requireStaff(actor);
+    if (actor.staffRole !== StaffRole.SUPER_ADMIN) {
+      const held = (await this.access.profileOf(actor)).permissions;
+      if (!held.has('staff_accounts.view') && !held.has('access_roles.manage')) {
+        throw denied('the permission catalogue is for whoever manages staff accounts or access roles');
+      }
+    }
     return {
       permissions: PERMISSIONS.map((p) => ({
         key: p.key,
