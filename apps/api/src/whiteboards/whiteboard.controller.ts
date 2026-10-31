@@ -147,6 +147,7 @@ export class WhiteboardController {
 
   /** The board's images signed again (a URL lives 15 minutes). */
   @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
   @Get(':id/assets')
   @Header('Cache-Control', 'private, no-store')
   imageUrls(@Param('id') id: string, @CurrentActor() actor: Actor) {
