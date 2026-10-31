@@ -6,8 +6,10 @@
  * across several awaits. Two guarantees, and only these:
  *
  *   - ORDER per key: tasks with the same key run one after another, in the
- *     order they were queued, so two events of one conversation can never
- *     overtake each other across those awaits.
+ *     order they were queued, so two events of one conversation (or for one
+ *     actor) can never overtake each other across those awaits. A task may
+ *     name several keys -- one delivery to several actors -- and is then
+ *     ordered within each of them.
  *   - A BOUND per node: at most `concurrency` tasks run at once, whatever their
  *     keys, so deliveries take at most that many pool connections.
  *
@@ -31,23 +33,31 @@ export class DeliveryQueue {
     if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('DeliveryQueue: concurrency must be a positive integer');
   }
 
-  /** Runs `task` after every earlier task of `key`, in a free slot. Never rejects: failures go to onError. */
-  run(key: string, task: () => Promise<void>): Promise<void> {
-    const previous = this.tails.get(key) ?? Promise.resolve();
-    const next = previous
+  /**
+   * Runs `task` after every earlier task of each of its keys, in a free slot,
+   * and before every later one. One delivery to several actors names all of
+   * them: it waits for each actor's earlier deliveries, and each actor's later
+   * ones wait for it. (Tasks only ever wait on earlier tasks, so there is no
+   * cycle to deadlock on.) Never rejects: failures go to onError.
+   */
+  run(keys: string | readonly string[], task: () => Promise<void>): Promise<void> {
+    const named = [...new Set(typeof keys === 'string' ? [keys] : keys)];
+    const label = named[0] ?? '';
+    const earlier = named.map((k) => this.tails.get(k)).filter((p): p is Promise<void> => p !== undefined);
+    const next = Promise.all(earlier)
       .then(() => this.inSlot(task))
       .catch((e) => {
         // Reporting must never break the chain: a throw here would reject
-        // `next`, and every later task of this key would be skipped for good.
+        // `next`, and every later task of these keys would be skipped for good.
         try {
-          this.onError(key, e);
+          this.onError(label, e);
         } catch {
-          /* the failure is already lost; the key keeps moving */
+          /* the failure is already lost; the keys keep moving */
         }
       });
-    this.tails.set(key, next);
+    for (const k of named) this.tails.set(k, next);
     void next.then(() => {
-      if (this.tails.get(key) === next) this.tails.delete(key);
+      for (const k of named) if (this.tails.get(k) === next) this.tails.delete(k);
     });
     return next;
   }

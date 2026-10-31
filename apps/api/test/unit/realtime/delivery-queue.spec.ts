@@ -115,6 +115,79 @@ describe('DeliveryQueue', () => {
     expect(done).toEqual(['next']);
   });
 
+  describe('a task addressed to several keys (one delivery to several actors)', () => {
+    it('waits for the earlier tasks of EVERY key it names, and later tasks of each key wait for it', async () => {
+      const q = queue(4);
+      const done: string[] = [];
+      const a = deferred();
+      const b = deferred();
+      const runs = [
+        q.run('actor:a', async () => { await a.promise; done.push('a1'); }),
+        q.run('actor:b', async () => { await b.promise; done.push('b1'); }),
+        q.run(['actor:a', 'actor:b'], async () => { done.push('ab'); }),
+        q.run('actor:a', async () => { done.push('a2'); }),
+        q.run('actor:b', async () => { done.push('b2'); }),
+      ];
+      await tick();
+      a.resolve();
+      await tick();
+      expect(done).toEqual(['a1']); // 'ab' still waits for b1; a2 waits for 'ab'
+      b.resolve();
+      await Promise.all(runs);
+      expect(done.indexOf('ab')).toBeGreaterThan(done.indexOf('a1'));
+      expect(done.indexOf('ab')).toBeGreaterThan(done.indexOf('b1'));
+      expect(done.indexOf('a2')).toBeGreaterThan(done.indexOf('ab'));
+      expect(done.indexOf('b2')).toBeGreaterThan(done.indexOf('ab'));
+    });
+
+    it('two actors run side by side: a stalled one does not hold up the other', async () => {
+      const q = queue(2);
+      const stalled = deferred();
+      let bDelivered = false;
+      const a = q.run(['actor:a'], () => stalled.promise);
+      await q.run(['actor:b'], async () => { bDelivered = true; });
+      expect(bDelivered).toBe(true);
+      stalled.resolve();
+      await a;
+    });
+
+    it('one actor stays strictly in order across single- and multi-actor deliveries', async () => {
+      const q = queue(4);
+      const seen: number[] = [];
+      const slow = deferred();
+      const runs = [
+        q.run(['actor:a', 'actor:c'], async () => { await slow.promise; seen.push(1); }),
+        q.run(['actor:a'], async () => { seen.push(2); }),
+        q.run(['actor:b', 'actor:a'], async () => { await tick(); seen.push(3); }),
+        q.run('actor:a', async () => { seen.push(4); }),
+      ];
+      await tick();
+      expect(seen).toEqual([]);
+      slow.resolve();
+      await Promise.all(runs);
+      expect(seen).toEqual([1, 2, 3, 4]);
+    });
+
+    it('a duplicate key or an empty list is harmless; every key is forgotten afterwards', async () => {
+      const q = queue(2);
+      await q.run(['actor:a', 'actor:a'], async () => {});
+      await q.run([], async () => {});
+      await tick();
+      expect(q.pendingKeys).toBe(0);
+    });
+
+    it('a failure (and a throwing reporter) does not block any of its keys', async () => {
+      const q = new DeliveryQueue(2, () => { throw new Error('reporter broke'); });
+      const done: string[] = [];
+      await q.run(['actor:a', 'actor:b'], async () => { throw new Error('lock timeout'); });
+      await Promise.all([
+        q.run('actor:a', async () => { done.push('a'); }),
+        q.run('actor:b', async () => { done.push('b'); }),
+      ]);
+      expect(done.sort()).toEqual(['a', 'b']);
+    });
+  });
+
   it('forgets a key once its queue is empty', async () => {
     const q = queue(2);
     await q.run('conversation:a', async () => {});

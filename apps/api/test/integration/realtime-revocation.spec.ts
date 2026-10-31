@@ -2072,6 +2072,52 @@ describe('deliveries are ordered per conversation, not per node', () => {
     await deliveredOnlyTo(node, directId, admin, [p]);
   });
 
+  it('actor-addressed: a delivery held for one actor does not hold up another actor', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+
+    const held = holdNextDelivery(node);
+    const toParent = randomUUID();
+    const first = node.gateway.toUsers([ids.parent], CommEvent.MESSAGE_CREATED, event(groupId, toParent));
+    await held.reached; // the parent's delivery is decided and parked before its emits
+    try {
+      const toParent2 = randomUUID();
+      const second = node.gateway.toUsers([ids.parent2], CommEvent.MESSAGE_CREATED, event(groupId, toParent2));
+      await p2.waitFor(CommEvent.MESSAGE_CREATED, toParent2); // arrives while the parent's is still held
+      await second;
+      expect(p.has(CommEvent.MESSAGE_CREATED, toParent)).toBe(false);
+    } finally {
+      held.release();
+    }
+    await first;
+    await p.waitFor(CommEvent.MESSAGE_CREATED, toParent);
+  });
+
+  it('actor-addressed: one actor\'s events stay in order, also when a later one names that actor among others', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+
+    const held = holdNextDelivery(node);
+    const first = randomUUID();
+    const second = randomUUID();
+    const deliveries = [node.gateway.toUsers([ids.parent], CommEvent.MESSAGE_CREATED, event(groupId, first))];
+    await held.reached;
+    deliveries.push(node.gateway.toUsers([ids.parent2, ids.parent], CommEvent.MESSAGE_CREATED, event(groupId, second)));
+    await sleep(GRACE_MS);
+    // Queued behind the parent's held delivery -- for parent2 too, since it is one delivery.
+    expect(p.has(CommEvent.MESSAGE_CREATED, second)).toBe(false);
+    expect(p2.has(CommEvent.MESSAGE_CREATED, second)).toBe(false);
+    held.release();
+    await Promise.all(deliveries);
+    await p.waitFor(CommEvent.MESSAGE_CREATED, second);
+    await p2.waitFor(CommEvent.MESSAGE_CREATED, second);
+    const order = p.inbox
+      .filter((e) => e.event === CommEvent.MESSAGE_CREATED)
+      .map((e) => (e.payload as { messageId: string }).messageId)
+      .filter((m) => m === first || m === second);
+    expect(order).toEqual([first, second]);
+  });
+
   it('within one conversation a later event waits for the held one, and arrives after it', async () => {
     const p = await connect(node, (await login('parent')).accessToken);
     await p.subscribe(groupId);

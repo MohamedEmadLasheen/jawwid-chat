@@ -172,11 +172,12 @@ function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
  * deliveryConcurrency() at once per node: each holds a short row-locking
  * transaction (see ConversationService.withDeliveryLocks), so this bounds them
  * to that many pool connections (a third of DATABASE_POOL_MAX). Actor-addressed
- * events share one queue, as before. See delivery-queue.ts.
+ * events (calls, approvals, stories, presence, tasks) are ordered PER ACTOR: one
+ * delivery to several actors is ordered within each of theirs. See delivery-queue.ts.
  */
 const deliveryKey = {
   conversation: (conversationId: string) => `conversation:${conversationId}`,
-  actors: 'actors',
+  actor: (actorId: string) => `actor:${actorId}`,
 };
 
 /** The rows a revocation of any of these sockets' recipients would UPDATE. */
@@ -1050,7 +1051,7 @@ export class RealtimeGateway
    * can never reorder two events of the same conversation; different keys run
    * side by side, DELIVERY_CONCURRENCY at most.
    */
-  private serialize(key: string, task: () => Promise<void>): Promise<void> {
+  private serialize(key: string | readonly string[], task: () => Promise<void>): Promise<void> {
     return this.deliveries.run(key, task);
   }
 
@@ -1175,7 +1176,7 @@ export class RealtimeGateway
    * re-decided here.
    */
   async deliverToActorsLocally(actorIds: readonly string[], event: string, payload: unknown): Promise<void> {
-    await this.serialize(deliveryKey.actors, () => this.fenced(async (permitted) => {
+    await this.serialize(actorIds.map(deliveryKey.actor), () => this.fenced(async (permitted) => {
       const sockets = this.localSocketsIn(actorIds.map(room.actor));
       if (sockets.length === 0) return;
       await this.conversations.withDeliveryLocks(lockScopeOf(sockets), async (stillHeld) => {
