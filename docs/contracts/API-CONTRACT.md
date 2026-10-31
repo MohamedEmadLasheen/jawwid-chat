@@ -1314,6 +1314,8 @@ AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole
 
 Permission (every route): `AuthorizationService.canAdministerAccount`, same organization. PD-40 narrowed it (`apps/api/src/platform/account-admin-policy.ts`). A parent account is administered by the super admin and the Operations department; Sales may reset and sign out only. A teacher account is administered by the super admin and the Teachers department. A staff account is administered only by the super admin, and never the super admin's account or the caller's own. `GET /admin/accounts` lists only the kinds the caller administers and names them in `administers`. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
 
+**Scope by account (`apps/api/src/platform/account-admin-scope.ts`), after the department rule.** A teacher account follows the caller's PD-35 teacher scope (TEACHER-011). A parent account (ADMIN-002): an Operations member — supervisor, backup, cover staff — administers only the families they reach (`chat.staff_reaches_family`), or one family an active grant opens to them (§3.10a-1); the Operations Manager and the super admin, every family; Sales, its own rule. Out of scope is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404 on every route, and the list leaves it out; a support session is re-decided on every request.
+
 **GET /admin/accounts** — Query: `q?` (the person's, the family's or a child's name), `kind?` (`family`|`teacher`|`staff`; staff for the super admin only). Response: `{ accounts: AccountSummaryDto[], truncated }`, at most 100, never the caller's own nor the super admin's.
 
 **GET /admin/accounts/:accountId** — Response: `AccountSummaryDto`; an account the caller may not administer is `404`.
@@ -1328,6 +1330,23 @@ Permission (every route): `AuthorizationService.canAdministerAccount`, same orga
 - **GET /admin/accounts/:accountId/sessions** — `{ sessions: SessionDto[] }` (see §3.1a; `current` always false).
 - **POST /admin/accounts/:accountId/sessions/:sessionId/revoke** — Request `{ reason }`. `200 { ok: true }`. Reason stored as `signed out by an administrator: <reason>`; audit `session.revoked`. A session not of this account: `COMM.SESSION_NOT_FOUND` 404.
 - **POST /admin/accounts/:accountId/sessions/revoke-all** — Request `{ reason }`. `200 { revoked }`. Every session, a support session included (as a suspension does); the account stays active. RT-009 barrier as for suspend.
+
+#### 3.10a-1 Exceptional family access (`family-access.controller.ts`) — EXISTS (ADMIN-002)
+
+```
+FamilyAccessGrantDto { id, family: { id, name }, grantee: { id, name }, grantedBy: { id, name }, purpose,
+                       startsAt, endsAt, revokedAt: string|null, status: 'active'|'ended'|'revoked' }
+```
+
+A grant opens account administration (and a support session) of ONE family's parent accounts to one Operations staff member — nothing else; PD-8 access is untouched. Permission: `accounts.administer`, then the service: the Operations Manager or the super admin grants and revokes; the grantee is live Operations staff of the same organization, never the grantor; at most 7 days (`chat.family_access_grant`, the same rules in its trigger). Active while not revoked and `startsAt ≤ now < endsAt`, checked on every read — expiry needs no job. The parent is not notified.
+
+**GET /admin/family-access-grants** — `{ grants }`: a grantor, the organization's grants live or ended in the last 30 days (newest first, at most 200); anyone else, their own active grants.
+
+**POST /admin/family-access-grants** — Request `{ familyId, granteeId, purpose (1–500), hours? (1–168, default 24) }`. Response `201 FamilyAccessGrantDto`. Errors: `COMM.ACCOUNT_ADMIN_DENIED` 403 (not a grantor) · `COMMON.VALIDATION` 400 (self, not Operations staff, unknown family, purpose, hours).
+
+**POST /admin/family-access-grants/:grantId/revoke** — Request `{ reason }`. Response `200 FamilyAccessGrantDto`. The grantor, the Operations Manager or the super admin. Errors: `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404 · `COMM.ACCOUNT_ADMIN_STATE` 409 (already ended or revoked).
+
+Audit (entity `family_access_grant`; every row carries the authorizer `grantedBy`, the accessor `granteeId`/`accessorId`, the reason = the purpose, and the window `startsAt`/`endsAt`): `family_access.granted`; `family_access.used` once per act under the grant (`act`, `accountId`); `family_access.revoked` and `family_access.expired` (the worker's sweep, once per grant, `FAMILY_ACCESS_SWEEP_MS`) with the actual `endedAt`.
 
 ### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-21)
 
