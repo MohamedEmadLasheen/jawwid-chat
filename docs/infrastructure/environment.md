@@ -87,7 +87,7 @@ whatever these say.
 | `PORT` | no | req | req | req |
 | `LOG_LEVEL` | no | opt | req | req |
 | `CORS_ALLOWED_ORIGINS` | no | req | req | req |
-| `REQUEST_TIMEOUT_MS` | no | opt | req | req |
+| `REQUEST_TIMEOUT_MS` | no | opt | opt | opt |
 | `SHUTDOWN_GRACE_MS` | no | opt | req | req |
 
 ### Database
@@ -105,7 +105,7 @@ whatever these say.
 |---|---|---|---|---|
 | `REDIS_URL` | **yes** | req | req | req |
 | `QUEUE_PREFIX` | no | req | req | req |
-| `WORKER_CONCURRENCY` | no | opt | req | req |
+| `WORKER_CONCURRENCY` | no | opt | opt | opt |
 
 ### Auth
 

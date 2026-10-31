@@ -6,16 +6,20 @@
  */
 import { readFileSync } from 'node:fs';
 import { Test } from '@nestjs/testing';
-import { DATABASE_POOL_DEFAULTS, pooledDatabaseUrl, setDatabasePoolRole } from '../../../src/platform/database-pool';
+import { DATABASE_POOL_DEFAULTS, pooledDatabaseUrl, setDatabasePoolRole, statementTimeoutMs } from '../../../src/platform/database-pool';
+import { cliPrismaClient } from '../../../src/cli/cli-prisma';
 import { ActorScopedDatabase } from '../../../src/platform/actor-database';
 import { PrismaService } from '../../../src/platform/prisma.service';
 
 const URL_ = 'postgresql://chat:pw@db.example:25060/jawwid?sslmode=require';
 const params = (url: string | undefined) => new URL(url!).searchParams;
+/** The URL the engine will connect with (Prisma keeps the constructor's datasourceUrl here). */
+const urlOf = (p: unknown) =>
+  (p as { _engineConfig: { overrideDatasources: { db?: { url?: string } } } })._engineConfig.overrideDatasources.db?.url;
 
 describe('pooledDatabaseUrl', () => {
   it('DATABASE_POOL_MAX sets the size; the wait for a connection is always 10 s', () => {
-    expect(DATABASE_POOL_DEFAULTS).toEqual({ poolTimeoutSeconds: 10 });
+    expect(DATABASE_POOL_DEFAULTS).toEqual({ poolTimeoutSeconds: 10, cliConnectionLimit: 2 });
     const p = params(pooledDatabaseUrl(URL_, { DATABASE_POOL_MAX: '5' }));
     expect(p.get('connection_limit')).toBe('5');
     expect(p.get('pool_timeout')).toBe('10');
@@ -64,6 +68,59 @@ describe('pooledDatabaseUrl', () => {
     expect(() => pooledDatabaseUrl(URL_, { DATABASE_POOL_MAX: v })).toThrow('DATABASE_POOL_MAX');
   });
 
+  describe('statement timeout (DATABASE_STATEMENT_TIMEOUT_MS)', () => {
+    it('API and worker sessions get -c statement_timeout=N in the URL options', () => {
+      for (const role of ['api', 'worker'] as const) {
+        expect(params(pooledDatabaseUrl(URL_, { DATABASE_STATEMENT_TIMEOUT_MS: '15000' }, role)).get('options')).toBe('-c statement_timeout=15000');
+      }
+    });
+
+    it('unset or 0: no limit is added (a laptop, CI, or the escape hatch)', () => {
+      expect(params(pooledDatabaseUrl(URL_, {})).has('options')).toBe(false);
+      expect(params(pooledDatabaseUrl(URL_, { DATABASE_STATEMENT_TIMEOUT_MS: '0' })).has('options')).toBe(false);
+      expect(statementTimeoutMs({})).toBe(0);
+    });
+
+    it("a URL that already carries options keeps the operator's own", () => {
+      const own = `${URL_}&options=-c%20search_path%3Dchat`;
+      expect(params(pooledDatabaseUrl(own, { DATABASE_STATEMENT_TIMEOUT_MS: '15000' })).getAll('options')).toEqual(['-c search_path=chat']);
+    });
+
+    it.each(['-1', '1.5', 'soon', '600001'])('refuses DATABASE_STATEMENT_TIMEOUT_MS=%s at startup', (v) => {
+      expect(() => pooledDatabaseUrl(URL_, { DATABASE_STATEMENT_TIMEOUT_MS: v })).toThrow('DATABASE_STATEMENT_TIMEOUT_MS');
+    });
+
+    it('both deploy workflows set 15000', () => {
+      for (const wf of ['deploy-staging.yml', 'deploy-production.yml']) {
+        const text = readFileSync(`${__dirname}/../../../../../.github/workflows/${wf}`, 'utf8');
+        expect([wf, /DATABASE_STATEMENT_TIMEOUT_MS: '(\d+)'/.exec(text)?.[1]]).toEqual([wf, '15000']);
+      }
+    });
+  });
+
+  describe("the 'cli' role", () => {
+    it('a pool of 2 and NO statement timeout, whatever the API and worker get', () => {
+      const env = { DATABASE_POOL_MAX: '7', DATABASE_WORKER_POOL_MAX: '3', DATABASE_STATEMENT_TIMEOUT_MS: '15000' };
+      const p = params(pooledDatabaseUrl(URL_, env, 'cli'));
+      expect(p.get('connection_limit')).toBe('2');
+      expect(p.has('options')).toBe(false);
+      expect(p.get('pool_timeout')).toBe('10');
+    });
+
+    it('cliPrismaClient opens the database through it', () => {
+      const saved = { ...process.env };
+      process.env.DATABASE_STATEMENT_TIMEOUT_MS = '15000';
+      process.env.DATABASE_POOL_MAX = '7';
+      try {
+        const url = urlOf(cliPrismaClient(URL_));
+        expect(params(url).get('connection_limit')).toBe('2');
+        expect(params(url).has('options')).toBe(false);
+      } finally {
+        process.env = saved;
+      }
+    });
+  });
+
   it('no DATABASE_URL: nothing is invented', () => {
     expect(pooledDatabaseUrl(undefined, {})).toBeUndefined();
   });
@@ -78,9 +135,6 @@ describe('PrismaService', () => {
     }
   });
 
-  /** The URL the engine will connect with (Prisma keeps the constructor's datasourceUrl here). */
-  const urlOf = (p: PrismaService) =>
-    (p as unknown as { _engineConfig: { overrideDatasources: { db?: { url?: string } } } })._engineConfig.overrideDatasources.db?.url;
 
   it('Nest builds it with the pooled URL (no constructor argument to inject)', async () => {
     process.env.DATABASE_URL = URL_;

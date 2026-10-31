@@ -9,6 +9,7 @@
  */
 import { cpus } from 'node:os';
 import { PrismaService } from '../../src/platform/prisma.service';
+import { MATERIALIZE_STATEMENT_TIMEOUT_MS, SchedulingService } from '../../src/lessons/scheduling.service';
 
 const PRISMA_DEFAULT_POOL = cpus().length * 2 + 1;
 const N = PRISMA_DEFAULT_POOL + 1;
@@ -56,3 +57,73 @@ it(`${N} transactions open at once all get a connection (pool = DATABASE_POOL_MA
   const pids = new Set(results.map((r) => (r as PromiseFulfilledResult<number>).value));
   expect(pids.size).toBe(N); // N distinct backends, all at once
 }, 30_000);
+
+/**
+ * DATABASE_STATEMENT_TIMEOUT_MS reaches every API/worker session (URL options),
+ * cuts a runaway statement, leaves a long transaction of short statements alone,
+ * and the lesson materializer -- the one academy-wide statement -- runs under
+ * its own limit and hands the caller's limit back.
+ */
+describe('statement timeout', () => {
+  let timed: PrismaService;
+  const savedTimeout = process.env.DATABASE_STATEMENT_TIMEOUT_MS;
+
+  beforeAll(async () => {
+    process.env.DATABASE_STATEMENT_TIMEOUT_MS = '500';
+    timed = new PrismaService();
+    await timed.$connect();
+  });
+  afterAll(async () => {
+    await timed?.$disconnect();
+    if (savedTimeout === undefined) delete process.env.DATABASE_STATEMENT_TIMEOUT_MS;
+    else process.env.DATABASE_STATEMENT_TIMEOUT_MS = savedTimeout;
+  });
+
+  it('is set on the session', async () => {
+    const [{ statement_timeout }] = await timed.$queryRawUnsafe<Array<{ statement_timeout: string }>>('SHOW statement_timeout');
+    expect(statement_timeout).toBe('500ms');
+  });
+
+  it('a slow statement is cancelled with a clear error (SQLSTATE 57014)', async () => {
+    const started = Date.now();
+    const error = await timed.$executeRawUnsafe('SELECT pg_sleep(3)').then(() => null, (e: Error) => e);
+    expect(String(error?.message)).toMatch(/57014|statement timeout/);
+    expect(Date.now() - started).toBeLessThan(2_500);
+  });
+
+  it('a normal transaction of short statements is unaffected, though it lasts longer than the limit', async () => {
+    const n = await timed.$transaction(async (tx) => {
+      for (let i = 0; i < 4; i++) await tx.$executeRawUnsafe('SELECT pg_sleep(0.2)'); // 800 ms > 500 ms in total
+      const [{ one }] = await tx.$queryRawUnsafe<Array<{ one: number }>>('SELECT 1 AS one');
+      return one;
+    }, { timeout: 10_000 });
+    expect(n).toBe(1);
+  });
+
+  it('the materializer runs under its own limit and gives a caller\'s transaction its limit back', async () => {
+    const scheduling = new SchedulingService(
+      timed, {} as never, {} as never, {} as never, {} as never,
+      { get: async () => 1 } as never, {} as never, {} as never,
+    );
+    const during: string[] = [];
+    const after = await timed.$transaction(async (tx) => {
+      // The caller's transaction, observed at the moment the materializer's statement runs.
+      const spy = {
+        $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+          if (strings.join('?').includes('materialize_lessons')) {
+            const [{ v }] = await tx.$queryRawUnsafe<Array<{ v: string }>>(`SELECT current_setting('statement_timeout') AS v`);
+            during.push(v);
+          }
+          return (tx.$queryRaw as (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown>)(strings, ...values);
+        },
+      };
+      await scheduling.materialize(spy as never);
+      const [{ v }] = await tx.$queryRawUnsafe<Array<{ v: string }>>(`SELECT current_setting('statement_timeout') AS v`);
+      return v;
+    }, { timeout: 30_000 });
+    expect(during).toEqual([`${MATERIALIZE_STATEMENT_TIMEOUT_MS / 1000}s`]);
+    expect(after).toBe('500ms');
+    // And on its own (no caller transaction) it still completes.
+    await expect(scheduling.materialize()).resolves.toBeGreaterThanOrEqual(0);
+  });
+});
