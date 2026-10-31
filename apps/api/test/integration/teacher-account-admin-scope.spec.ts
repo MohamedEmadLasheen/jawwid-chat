@@ -4,14 +4,15 @@
  * teacher routes do under the strict switch.
  *
  * The Teachers department: tmgr manages it; heba supervises teacher_c and
- * ola teacher_d; teacher_e is nobody's. bak backs ola up -- the link
- * dormant, then active. With strict scope ON:
+ * ola teacher_d; teacher_e is nobody's; bak is the department's backup
+ * supervisor (coverage role). With strict scope ON:
  *
  *   list      GET /admin/accounts lists only the caller's teachers
  *   get       another's teacher reads as not found
  *   acts      reset, suspend, reactivate, sign-out and impersonation outside
  *             the scope are refused as not found; inside, allowed and audited
- *   backup    an active backup reaches the primary's teacher; a dormant one not
+ *   backup    a Teachers backup or coverage member reaches no teacher (PD-8
+ *             backup links are Operations-only), as on the Teacher Files
  *   manager   the Teachers Manager and the super admin stay organization-wide
  *   off       strict scope OFF: every Teachers-department member, as before
  *
@@ -87,8 +88,14 @@ async function staffAccount(staffId: string): Promise<string> {
   return a.id;
 }
 
-const listed = async (who: string) =>
-  (await accounts.list(await actor(who), { kind: 'teacher' })).accounts.map((a) => a.name).sort();
+/** The teacher accounts this run made that `who` is listed (chat.account outlives the harness's truncate). */
+const listed = async (who: string) => {
+  const mine = new Set(Object.values(acct));
+  return (await accounts.list(await actor(who), { kind: 'teacher' })).accounts
+    .filter((a) => mine.has(a.accountId))
+    .map((a) => a.name)
+    .sort();
+};
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -173,20 +180,14 @@ describe('TEACHER-011: teacher accounts under strict scope', () => {
     expect(rows.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("an active backup reaches the primary's teacher; a dormant one does not", async () => {
-    const org = (await g.prisma.staff.findUniqueOrThrow({ where: { id: ola } })).organizationId;
-    const [{ id: link }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `insert into chat.supervisor_backup (organization_id, primary_id, backup_id) values ($1::uuid, $2::uuid, $3::uuid) returning id::text as id`,
-      org, ola, bak,
-    );
+  it("a Teachers-department backup or coverage member reaches no teacher's account -- as on the Teacher Files", async () => {
+    // PD-8 backup links are the Operations department's only (teacher-supervisor-pd035 pins it):
+    // a Teachers backup supervisor has no teacher of their own under strict scope.
     expect(await listed(bak)).toEqual([]);
-    expect(await code(accounts.get(await actor(bak), acct.d))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
-    await g.prisma.$executeRawUnsafe(
-      `update chat.supervisor_backup set activated_at = now() - interval '1 hour', active_until = now() + interval '7 days' where id = $1::uuid`,
-      link,
-    );
-    expect(await listed(bak)).toEqual(['teacher_d']);
-    expect((await accounts.get(await actor(bak), acct.d)).allowed.resetPassword).toBe(true);
+    const b = await actor(bak);
+    for (const target of [acct.c, acct.d, acct.e]) {
+      expect(await code(accounts.get(b, target))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+    }
   });
 
   it('the Teachers Manager and the super admin act on any teacher', async () => {
