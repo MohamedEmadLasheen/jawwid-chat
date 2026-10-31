@@ -3,6 +3,7 @@ import { CommunicationModule } from '../communication/communication.module';
 import { LessonModule } from '../lessons/lesson.module';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
+import { LessonAudienceService } from './lesson-audience.service';
 import { WorkPatternService } from './work-pattern.service';
 
 /**
@@ -13,7 +14,8 @@ import { WorkPatternService } from './work-pattern.service';
 @Module({
   imports: [CommunicationModule, LessonModule],
   controllers: [CalendarController],
-  providers: [CalendarService, WorkPatternService],
+  // PD-46: LessonAudienceService registers itself with the outbox worker.
+  providers: [CalendarService, WorkPatternService, LessonAudienceService],
   // PD-44: the Dashboard's Lessons section counts through CalendarService.
   exports: [CalendarService],
 })
