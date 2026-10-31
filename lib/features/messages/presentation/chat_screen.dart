@@ -38,9 +38,11 @@ import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
+import '../application/drafts_controller.dart';
 import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
+import '../data/draft_store.dart';
 import '../data/message_search_repository.dart';
 import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
@@ -1065,6 +1067,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     );
   }
 
+  /// PD-37: this chat's saved draft, for the composer to put back. Watches
+  /// only whether the drafts have loaded, so the screen rebuilds once, not on
+  /// every keystroke.
+  Draft? _savedDraft() {
+    if (!ref.watch(draftsProvider.select((d) => d.hasValue))) return null;
+    return ref.read(draftsProvider).value?[widget.conversationId];
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -1256,8 +1266,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
-            // PD-37: "typing…" -- a read-only chat says nothing.
+            // PD-37: "typing…" (a read-only chat says nothing), and the unsent
+            // text kept as this chat's draft.
+            // Keyed by the account: a switch with this chat open starts an
+            // empty field with the NEW account's draft, never the last one's text.
+            key: ValueKey(('composer', ref.watch(principalIdProvider))),
+            initialDraft: _savedDraft(),
             onDraftChanged: _typingSender?.typed,
+            onDraft: (draft) => ref.read(draftsProvider.notifier).set(widget.conversationId, draft),
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,
@@ -1404,38 +1420,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                   enabled: canActOn(message) && !_selecting && !widget.isReadOnly,
                   onReply: () => setState(() => _replyingTo = _previewOf(message)),
                   child: MessageBubble(
-                  key: _messageKeys.putIfAbsent(key, GlobalKey.new),
-                  message: message,
-                  showAuthor: showAuthor,
-                  reserveSenderColumn: fromSomeoneElse,
-                  replyTo: reply,
-                  highlight: _highlightTerm,
-                  isHighlighted: _highlightedKey == key ||
-                      (message.id != null && _selected.contains(message.id)),
-                  onRetry: message.canRetry
-                      ? () => controller.retry(message.clientMessageId)
-                      : null,
-                  onDiscard: message.canRetry
-                      ? () => controller.discard(message.clientMessageId)
-                      : null,
-                  // Absent rather than inert on a message nothing can be done
-                  // to, so a long press there is a no-op the user feels once
-                  // instead of an empty sheet they have to dismiss.
-                  onLongPress: !canActOn(message)
-                      ? null
-                      : _selecting
-                          ? () => _toggleSelected(message)
-                          : () => _onLongPress(message),
-                  onTap: _selecting ? () => _toggleSelected(message) : null,
-                  onTapReply: reply == null
-                      ? null
-                      : () => _jumpToMessage(reply.messageId, state),
-                  onToggleReaction: message.id == null
-                      ? null
-                      : (emoji) =>
-                          _guard(() => controller.toggleReaction(message, emoji)),
-                  onOpenAttachment: (attachment) =>
-                      _openAttachment(message, attachment),
+                    key: _messageKeys.putIfAbsent(key, GlobalKey.new),
+                    message: message,
+                    showAuthor: showAuthor,
+                    reserveSenderColumn: fromSomeoneElse,
+                    replyTo: reply,
+                    highlight: _highlightTerm,
+                    isHighlighted: _highlightedKey == key ||
+                        (message.id != null && _selected.contains(message.id)),
+                    onRetry: message.canRetry
+                        ? () => controller.retry(message.clientMessageId)
+                        : null,
+                    onDiscard: message.canRetry
+                        ? () => controller.discard(message.clientMessageId)
+                        : null,
+                    // Absent rather than inert on a message nothing can be done
+                    // to, so a long press there is a no-op the user feels once
+                    // instead of an empty sheet they have to dismiss.
+                    onLongPress: !canActOn(message)
+                        ? null
+                        : _selecting
+                            ? () => _toggleSelected(message)
+                            : () => _onLongPress(message),
+                    onTap: _selecting ? () => _toggleSelected(message) : null,
+                    onTapReply: reply == null
+                        ? null
+                        : () => _jumpToMessage(reply.messageId, state),
+                    onToggleReaction: message.id == null
+                        ? null
+                        : (emoji) =>
+                            _guard(() => controller.toggleReaction(message, emoji)),
+                    onOpenAttachment: (attachment) =>
+                        _openAttachment(message, attachment),
                   ),
                 ),
               ],

@@ -10,6 +10,7 @@
 /apps/lessons/src/content/quran-content.ts @MohamedEmadLasheen
 /apps/lessons/src/play/mechanics.ts @MohamedEmadLasheen
 /apps/lessons/src/play/signed.ts @MohamedEmadLasheen
+/apps/lessons/src/fonts/AmiriQuran.ttf @MohamedEmadLasheen
 /scripts/lessons/verify-approvals.mjs @MohamedEmadLasheen
 /scripts/lessons/check-quran-content.py @MohamedEmadLasheen
 /scripts/qa/guards.sh @MohamedEmadLasheen
