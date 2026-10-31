@@ -22,6 +22,7 @@ export const SECTIONS: readonly SectionSpec[] = [
   { key: 'cases', title: { en: 'Escalation cases', ar: 'حالات التصعيد' }, requires: ['cases.view'] },
   { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
   { key: 'enrolment', title: { en: 'Trials and new students', ar: 'الحصص التجريبية والطلاب الجدد' }, requires: ['trials.view', 'new_students.view'] },
+  { key: 'billing', title: { en: 'Payments', ar: 'المدفوعات' }, requires: ['billing.view', 'parents.view'] },
   // PD-47 PR-4: everyone's own tasks are self-service, so no key is needed;
   // the team, decision and super-admin tiles come only to whom they apply.
   { key: 'tasks', title: { en: 'Tasks', ar: 'المهام' }, requires: [] },
@@ -191,6 +192,44 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     icon: 'clock',
     backlog: false,
     href: () => '/trials/new-students?filter=waiting',
+  },
+  // PD-44 PR-5: the Instalment Payments page's lines, Payments' receipts, the Parents list's subscription filters.
+  'instalments.overdue': {
+    label: { en: 'Overdue instalments', ar: 'أقساط متأخرة' },
+    icon: 'clock',
+    backlog: true,
+    // The page lists overdue first and counts them in its summary line.
+    href: () => '/instalments',
+  },
+  'instalments.due': {
+    label: { en: 'Instalments due today', ar: 'أقساط مستحقة اليوم' },
+    icon: 'banknote',
+    backlog: false,
+    href: () => '/instalments',
+  },
+  'instalments.unassigned': {
+    label: { en: 'Instalments with no responsible supervisor', ar: 'أقساط بلا مشرف مسؤول' },
+    icon: 'users',
+    backlog: true,
+    href: () => '/instalments?responsible=none',
+  },
+  'receipts.pending': {
+    label: { en: 'Receipts awaiting review', ar: 'إيصالات تنتظر المراجعة' },
+    icon: 'approvals',
+    backlog: true,
+    href: () => '/payments',
+  },
+  'parents.locked': {
+    label: { en: 'Parents of a child with a locked subscription', ar: 'أولياء أمور لطفل اشتراكه مقفل' },
+    icon: 'lock',
+    backlog: true,
+    href: () => '/parents?access=locked',
+  },
+  'parents.grace': {
+    label: { en: 'Parents of a child in the grace period', ar: 'أولياء أمور لطفل في فترة السماح' },
+    icon: 'clock',
+    backlog: false,
+    href: () => '/parents?access=grace',
   },
 }
 

@@ -13,6 +13,7 @@ import { ParentPhoneDirectory } from './parent-phone-directory';
   controllers: [ParentRecordController],
   // PD-25: the forgot-e-mail flow finds a parent by the phone on file, here.
   providers: [ParentRecordService, ParentPhoneDirectory],
-  exports: [ParentPhoneDirectory],
+  // PD-44: the Dashboard's Payments section counts the Parents list's filters.
+  exports: [ParentPhoneDirectory, ParentRecordService],
 })
 export class ParentRecordModule {}
