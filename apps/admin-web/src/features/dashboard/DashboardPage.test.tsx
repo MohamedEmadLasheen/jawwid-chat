@@ -241,6 +241,65 @@ describe('the manager Dashboard', () => {
     )
   })
 
+  it('shows the Payments section: instalments, receipts and locked subscriptions (PR-5)', async () => {
+    routes['/dashboard/billing'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('instalments.overdue', 3),
+          tile('instalments.due', 1),
+          tile('instalments.unassigned', 2),
+          tile('receipts.pending', 4),
+          tile('parents.locked', 2),
+          tile('parents.grace', 1),
+        ],
+      })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['billing.view', 'parents.view'] }))
+    const section = await screen.findByRole('region', { name: 'Payments' })
+    const overdue = await within(section).findByRole('link', { name: /Overdue instalments/ })
+    expect(overdue).toHaveAttribute('href', '/instalments')
+    expect(overdue).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Instalments due today/ })).toHaveAttribute('href', '/instalments')
+    expect(within(section).getByRole('link', { name: /Instalments with no responsible supervisor/ })).toHaveAttribute('href', '/instalments?responsible=none')
+    expect(within(section).getByRole('link', { name: /Receipts awaiting review/ })).toHaveAttribute('href', '/payments')
+    const locked = within(section).getByRole('link', { name: /Parents of a child with a locked subscription/ })
+    expect(locked).toHaveAttribute('href', '/parents?access=locked')
+    expect(locked).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Parents of a child in the grace period/ })).toHaveAttribute('href', '/parents?access=grace')
+  })
+
+  it('shows the Teachers section: the Teacher Supervision sections, certificates and credentials (PR-6)', async () => {
+    routes['/dashboard/teachers'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('leave.pending', 2),
+          tile('absences.open', 1),
+          tile('lateness.open', 3),
+          tile('feedback.received', 4),
+          tile('feedback.in_review', 1),
+          tile('certificates.student_requested', 2),
+          tile('certificates.teacher_requested', 1),
+          tile('teacher_profiles.pending', 1),
+        ],
+      })
+    open(makeStaff({ id: 'staff_tmgr', role: 'manager', permissions: ['teacher_supervision.view', 'certificates.view', 'teacher_profiles.review'] }))
+    const section = await screen.findByRole('region', { name: 'Teachers' })
+    const link = (name: RegExp) => within(section).getByRole('link', { name })
+    const leave = await within(section).findByRole('link', { name: /Leave requests waiting for a decision/ })
+    expect(leave).toHaveAttribute('href', '/teachers/supervision?section=leave')
+    expect(leave).toHaveClass('dash-tile--alert')
+    expect(link(/Absences waiting for a decision/)).toHaveAttribute('href', '/teachers/supervision?section=absences')
+    expect(link(/Lateness waiting for a decision/)).toHaveAttribute('href', '/teachers/supervision?section=lateness')
+    const received = link(/New parent feedback/)
+    expect(received).toHaveAttribute('href', '/teachers/supervision?section=feedback&status=received')
+    expect(received).toHaveClass('dash-tile--alert')
+    expect(link(/Parent feedback in review/)).toHaveAttribute('href', '/teachers/supervision?section=feedback&status=in_review')
+    expect(link(/Student certificates requested/)).toHaveAttribute('href', '/certificates?category=student')
+    expect(link(/Teacher certificates requested/)).toHaveAttribute('href', '/certificates?category=teacher')
+    expect(link(/Teacher credentials to review/)).toHaveAttribute('href', '/teacher-profiles')
+  })
+
   it('shows the Organization section: children and teachers without a supervisor, covers under way (PR-7)', async () => {
     routes['/dashboard/structure'] = () =>
       json({

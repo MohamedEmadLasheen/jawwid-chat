@@ -439,8 +439,9 @@ class MessagesController extends Notifier<MessagesState> {
         entry.clientMessageId,
         DateTime.now(),
         // A policy refusal or a validation failure will fail identically forever, so it is
-        // parked for an explicit retry instead of being re-attempted (§3).
-        retryable: failure.isTransient,
+        // parked for an explicit retry instead of being re-attempted (§3). So is an upload
+        // that ran out of time: an automatic retry would re-send the whole file at once.
+        retryable: failure.isTransient && failure.code != AppError.uploadTimeout,
         failureCode: failure.code,
       );
 

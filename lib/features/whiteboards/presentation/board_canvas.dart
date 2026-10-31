@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../design/tokens.dart';
+import '../data/board_images.dart';
 import '../domain/board_elements.dart';
 import '../domain/board_page.dart';
 import '../domain/stroke_points.dart';
@@ -43,6 +44,8 @@ class BoardCanvas extends StatefulWidget {
     this.view,
     this.verses,
     this.versesVersion,
+    this.images,
+    this.imagesVersion,
   });
 
   final BoardPage page;
@@ -63,6 +66,10 @@ class BoardCanvas extends StatefulWidget {
   /// The verses' texts (the open board's verse cache), and what changes when one does.
   final VerseSource? verses;
   final Object? versesVersion;
+
+  /// The board's images (the open board's image cache), and what changes when one arrives.
+  final BoardImageSource? images;
+  final Object? imagesVersion;
 
   @override
   State<BoardCanvas> createState() => BoardCanvasState();
@@ -566,6 +573,8 @@ class BoardCanvasState extends State<BoardCanvas> {
                                   placeholderLabel: widget.placeholderLabel,
                                   verses: widget.verses,
                                   versesVersion: widget.versesVersion,
+                                  images: widget.images,
+                                  imagesVersion: widget.imagesVersion,
                                 ),
                                 foregroundPainter: _OverlayPainter(
                                   live: _drag == _Drag.draw && _live.isNotEmpty

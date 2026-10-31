@@ -125,4 +125,54 @@ void main() {
     expect(server.lastRequestTo('POST', '/whiteboards/b1/pages/order')!.body, {'revision': 4, 'pageIds': ['p2', 'p1']});
     expect((await repo.deletePage('b1', 'p2', 5)).revision, 6);
   });
+
+  test('images (PR-4): grant, confirm and re-sign use the API paths; the board answer carries its images', () async {
+    const asset = {
+      'id': 'A1B2C3D4-0000-4000-8000-000000000001',
+      'kind': 'image',
+      'contentType': 'image/png',
+      'width': 40,
+      'height': 30,
+      'byteSize': 1234,
+      'url': 'https://storage.example.test/whiteboards/x?sig=1',
+      'expiresAt': '2026-10-29T10:15:00.000Z',
+    };
+    server
+      ..on('GET', '/whiteboards/b1', [Reply.ok({...board(), 'assets': [asset]})])
+      ..on('POST', '/whiteboards/b1/assets/grant', [
+        const Reply.ok({
+          'assetId': 'a1',
+          'upload': {
+            'objectKey': 'whiteboard-uploads/o/b1/a1/u',
+            'uploadUrl': 'https://storage.example.test/up?sig=2',
+            'method': 'PUT',
+            'headers': {'Content-Type': 'image/png'},
+            'expiresAt': '2026-10-29T10:15:00.000Z',
+          },
+        }),
+      ])
+      ..on('POST', '/whiteboards/b1/assets/a1/confirm', [const Reply.ok({'asset': asset})])
+      ..on('GET', '/whiteboards/b1/assets', [const Reply.ok({'assets': [asset]})]);
+    final repo = repository();
+    final opened = await repo.open('b1');
+    expect(opened.assets.single.id, 'a1b2c3d4-0000-4000-8000-000000000001');
+    expect(opened.assets.single.url, asset['url']);
+
+    final grant = await repo.grantImage('b1', contentType: 'image/png', byteSize: 1234);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/assets/grant')!.body, {'kind': 'image', 'contentType': 'image/png', 'byteSize': 1234});
+    expect([grant.assetId, grant.objectKey, grant.uploadUrl, grant.headers], ['a1', 'whiteboard-uploads/o/b1/a1/u', 'https://storage.example.test/up?sig=2', {'Content-Type': 'image/png'}]);
+
+    final kept = await repo.confirmImage('b1', 'a1', grant.objectKey);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/assets/a1/confirm')!.body, {'objectKey': 'whiteboard-uploads/o/b1/a1/u'});
+    expect([kept.width, kept.height], [40, 30]);
+    expect((await repo.imageUrls('b1')).single.url, asset['url']);
+  });
+
+  test('images switched off: the API\'s 503 COMM.WHITEBOARD_ASSETS_OFF reaches the caller intact', () async {
+    server.on('POST', '/whiteboards/b1/assets/grant', [Reply.commError(503, kAssetsOffCode)]);
+    await expectLater(
+      repository().grantImage('b1', contentType: 'image/png', byteSize: 10),
+      throwsA(isA<AppError>().having((e) => e.code, 'code', kAssetsOffCode)),
+    );
+  });
 }

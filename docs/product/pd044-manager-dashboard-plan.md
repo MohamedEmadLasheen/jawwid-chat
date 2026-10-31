@@ -213,6 +213,13 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 ### 3.5 `GET /dashboard/billing` · `@Requires('billing.view')`
 
+> **As built (PR-5):** the route is `@Requires('billing.view', 'parents.view')`. The tiles are `instalments.overdue`, `instalments.due`, `instalments.unassigned` and `receipts.pending` (with `billing.view`), and `parents.locked` and `parents.grace` (with `parents.view`). Changes from the table below:
+> - **Who:** every Instalment Payments viewer, in that page's own scope (`billingAccessOf`: `all`, `reach` or `owned`), not only `all`. The reach and owned rules are one SQL predicate (`familyInScopeSql`), shared by the page's family list and the counts, so `reach` costs one statement, not a per-family loop. Teachers get no tile.
+> - **Instalment links:** the page has no status filter; it lists overdue first and states the counts in its summary line, so `overdue` and `due` link to `/instalments`. `unassigned` links to `/instalments?responsible=none`, the page's existing filter, now read from the URL.
+> - **Locked and grace** are counted as the Parents list shows them: parents (not learners) of a family with a child in that state, through the new `/parents?access=locked|grace` filter. The count is capped at that list's 200 rows. No `subscriptions.view` check: the Parents page's own key decides.
+> - **The state is computed now** (`chat.compute_learner_access`, as enforcement computes it), not read from the stored `chat.learner_access` row, so an instalment overdue at midnight shows at once. The filter and the tile are one statement each; the tile computes each child of the families in scope once.
+> - **`receipts.pending`** is capped at the receipts list's 200 rows, with `capped` above it. Its scope is the shared predicate, equivalent to the list's two-step family filter.
+
 | Tile | Predicate | Who |
 |---|---|---|
 | `instalments.overdue` · `instalments.due` · `instalments.unassigned` | The SQL form of `statusOf` (`billing.service.ts`), on the open-rows index `(organization_id, due_date)` | `decideBillingAccess` = `all`: super admin, Operations Manager, Sales |
@@ -221,7 +228,7 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 - **Cost:** one statement for instalments and one for receipts and access states together.
 - **`reach` callers:** an Operations supervisor would hit the per-family `staff_reaches_family` loop (`billing.service.ts:804`). Supervisors are not in v1 (Q1). If they are added later, this section gets a set-based reach query first.
-- **Stored lock state can lag** the live value until the next refresh or sweep. This matches what the parent's app enforces (the stored row), so the tile states the same truth.
+- **Lock state is computed now** (as built): enforcement reads `chat.compute_learner_access`, not the stored row, and so do the filter and the tile.
 - **Lives in:** `BillingService.counts` and `PaymentsService.counts`.
 - **Links:**
   - `/instalments?status=overdue`: PR-5 adds the parameter;
@@ -229,6 +236,14 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
   - locked and grace: **no page lists locked children today.** PR-5 adds a "Locked / grace" filter to the Parents page (`/parents?access=locked`; `apps/admin-web/src/features/profiles/ParentsPage.tsx` already reads search params), each row opening the student profile where payments and exceptions are recorded (Q5).
 
 ### 3.6 `GET /dashboard/teachers` · `@Requires('teacher_supervision.view')`
+
+> **As built (PR-6):** the route is `@Requires('teacher_supervision.view', 'teacher_profiles.review')`. Each tile equals the list its link opens, for the same caller:
+> - `leave.pending`: the Leave requests list (`state=requested`), in the page's scope (`pageRowsOf`). It is counted in one statement over the list's own predicate and capped at the list's 500.
+> - `absences.open` and `lateness.open`: the page's Absences and Lateness queues (`state=open`, `kind=absences` / `late`), not one `violations.open`. No page lists every open violation together. Both are found as the list finds them: one shared query, the same 500 candidates, then `standing()` and `visible()`. `capped` when the candidates reach 500.
+> - `feedback.received` and `feedback.in_review`: the page's statuses (there is no `new`). Each is the same shared query as the list, with the per-child visibility. The feedback section now reads `?status=` from the URL.
+> - `certificates.student_requested` and `certificates.teacher_requested`: each category's Pending tab, counted over `list`'s own `scopePredicate` in one statement. A category's tile comes only to whom the page shows that tab. They also need `certificates.view`, but that key alone does not open the route: the certificate keys open exactly the certificate routes, so PD-41's Designer reaches nothing new.
+> - `teacher_profiles.pending`: the credentials review queue (`/teacher-profiles`), one row per profile with a credential waiting. That queue is organization-wide, with no teacher scope, so the tile is too. It comes to whoever holds `teacher_profiles.review`, the Operations Manager included if their bundle grants it. The page decides, not this plan's table.
+> - Staff off a page get none of its tiles; anyone not staff is refused with that page's code.
 
 | Tile | Predicate | Scope |
 |---|---|---|
@@ -496,4 +511,5 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 - **The trial and New Students tiles count what their pages list.** That is the Trials page's ±31-day default window (an awaiting trial older than 31 days is on neither) and the New Students page's 500 newest live forms. `capped` says when either limit is passed.
 - **No tile counts families without a supervisor, or backup links about to expire** (PR-7). No page lists either: the Children tab lists children, and backup links show their end date only on the Structure tab, unfiltered. A cover also sets its link's end date, so an "expiring" tile would count most covers twice.
 - **A child whose supervisor left still counts as supervised** (PR-7), as the Children tab shows it. `chat.learner_supervision` keeps the row, and nothing clears it when a supervisor leaves. Teachers are counted the other way: a supervisor who left supervises no one. The tile follows the page; fixing the rule is a separate change.
+- **The overdue and due-today tiles open the whole Instalment Payments list** (PR-5). That page has no status filter; it lists overdue first and counts both in its summary line, which the tiles equal.
 - **The super admin still opens `/dashboard` as a page of its own** (the same sections) until PR-8 moves them into the Admin Portal's Dashboard section and redirects.

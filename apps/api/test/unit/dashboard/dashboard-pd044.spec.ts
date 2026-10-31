@@ -14,6 +14,14 @@ import type { TaskService } from '../../../src/tasks/task.service';
 import type { CalendarService } from '../../../src/calendar/calendar.service';
 import type { TrialService } from '../../../src/lessons/trial.service';
 import type { NewStudentEnrolmentService } from '../../../src/new-students/enrolment.service';
+import type { BillingService } from '../../../src/billing/billing.service';
+import type { PaymentsService } from '../../../src/billing/payments.service';
+import type { ParentRecordService } from '../../../src/parent-profile/parent-record.service';
+import type { LeaveService } from '../../../src/leave/leave.service';
+import type { DisciplineService } from '../../../src/discipline/discipline.service';
+import type { ParentFeedbackService } from '../../../src/teacher-file/parent-feedback.service';
+import type { CertificateService } from '../../../src/certificates/certificate.service';
+import type { TeacherProfileService } from '@communication/teacher-profile/teacher-profile.service';
 import type { OrgStructureService } from '../../../src/org/org-structure.service';
 import type { SupervisorCoverService } from '../../../src/org/supervisor-cover.service';
 import type { TeacherSupervisorService } from '../../../src/teacher-supervisors/teacher-supervisor.service';
@@ -49,13 +57,32 @@ describe('PD-44 DashboardController', () => {
   const trials = { dashboardCounts: jest.fn(async () => trialTiles) } as unknown as TrialService;
   const studentTiles = [dashboardTile('new_students.unassigned', 1)];
   const enrolment = { dashboardCounts: jest.fn(async () => studentTiles) } as unknown as NewStudentEnrolmentService;
+  const instalmentTiles = [dashboardTile('instalments.overdue', 3)];
+  const billing = { dashboardCounts: jest.fn(async () => instalmentTiles) } as unknown as BillingService;
+  const receiptTiles = [dashboardTile('receipts.pending', 2)];
+  const payments = { dashboardCounts: jest.fn(async () => receiptTiles) } as unknown as PaymentsService;
+  const parentTiles = [dashboardTile('parents.locked', 1)];
+  const parents = { dashboardCounts: jest.fn(async () => parentTiles) } as unknown as ParentRecordService;
+  const leaveTiles = [dashboardTile('leave.pending', 2)];
+  const leave = { dashboardCounts: jest.fn(async () => leaveTiles) } as unknown as LeaveService;
+  const disciplineTiles = [dashboardTile('absences.open', 1), dashboardTile('lateness.open', 3)];
+  const discipline = { dashboardCounts: jest.fn(async () => disciplineTiles) } as unknown as DisciplineService;
+  const feedbackTiles = [dashboardTile('feedback.received', 1), dashboardTile('feedback.in_review', 0)];
+  const feedback = { dashboardCounts: jest.fn(async () => feedbackTiles) } as unknown as ParentFeedbackService;
+  const certificateTiles = [dashboardTile('certificates.student_requested', 1)];
+  const certificates = { dashboardCounts: jest.fn(async () => certificateTiles) } as unknown as CertificateService;
+  const profileTiles = [dashboardTile('teacher_profiles.pending', 1)];
+  const profiles = { dashboardCounts: jest.fn(async () => profileTiles) } as unknown as TeacherProfileService;
   const learnerTiles = [dashboardTile('learners.unsupervised', 2)];
   const org = { dashboardCounts: jest.fn(async () => learnerTiles) } as unknown as OrgStructureService;
   const teacherTiles = [dashboardTile('teachers.unsupervised', 3)];
   const supervisors = { dashboardCounts: jest.fn(async () => teacherTiles) } as unknown as TeacherSupervisorService;
   const coverTiles = [dashboardTile('covers.active', 1)];
   const covers = { dashboardCounts: jest.fn(async () => coverTiles) } as unknown as SupervisorCoverService;
-  const controller = new DashboardController(conversations, cases, tasks, calendar, trials, enrolment, org, supervisors, covers);
+  const controller = new DashboardController(
+    conversations, cases, tasks, calendar, trials, enrolment, billing, payments, parents,
+    leave, discipline, feedback, certificates, profiles, org, supervisors, covers,
+  );
 
   it('serves each section from the owning page\'s service, unchanged', async () => {
     const chats = await controller.chats('staff-1');
@@ -72,9 +99,26 @@ describe('PD-44 DashboardController', () => {
     expect((await controller.enrolmentSection('staff-1')).tiles).toEqual([...trialTiles, ...studentTiles]);
     expect(trials.dashboardCounts).toHaveBeenCalledWith('staff-1', expect.any(Date));
     expect(enrolment.dashboardCounts).toHaveBeenCalledWith('staff-1');
+    // PD-44 PR-5: three pages' tiles in one section; each page's only with its own key.
+    expect((await controller.billingSection('staff-1')).tiles).toEqual([...instalmentTiles, ...receiptTiles, ...parentTiles]);
+    expect((await controller.billingSection('staff-1', { permissions: new Set(['parents.view']) })).tiles).toEqual(parentTiles);
+    expect((await controller.billingSection('staff-1', { permissions: new Set(['billing.view']) })).tiles).toEqual([...instalmentTiles, ...receiptTiles]);
+    // PD-44 PR-6: the Teacher Supervision page's sections, then Certificates, then Teacher Profiles.
+    const supervisionTiles = [...leaveTiles, ...disciplineTiles, ...feedbackTiles];
+    expect((await controller.teachersSection('staff-1')).tiles).toEqual([...supervisionTiles, ...certificateTiles, ...profileTiles]);
+    for (const svc of [leave, discipline, feedback, certificates, profiles]) expect(svc.dashboardCounts).toHaveBeenCalledWith('staff-1');
     // PD-44 PR-7: the Organization page's tabs -- Children, Teachers, then the Structure tab's covers.
     expect((await controller.structureSection('staff-1')).tiles).toEqual([...learnerTiles, ...teacherTiles, ...coverTiles]);
     for (const svc of [org, supervisors, covers]) expect(svc.dashboardCounts).toHaveBeenCalledWith('staff-1');
+  });
+
+  it('the Teachers section asks each page only with that page\'s own key', async () => {
+    const only = async (key: string) => (await controller.teachersSection('staff-1', { permissions: new Set([key]) })).tiles;
+    expect(await only('teacher_supervision.view')).toEqual([...leaveTiles, ...disciplineTiles, ...feedbackTiles]);
+    expect(await only('certificates.view')).toEqual(certificateTiles);
+    const both = (await controller.teachersSection('staff-1', { permissions: new Set(['teacher_profiles.review', 'certificates.view']) })).tiles;
+    expect(both).toEqual([...certificateTiles, ...profileTiles]);
+    expect(await only('teacher_profiles.review')).toEqual(profileTiles);
   });
 
   it('the Organization section counts covers only with the covers key', async () => {
@@ -92,6 +136,12 @@ describe('PD-44 DashboardController', () => {
     expect(access('tasksSection')).toEqual({ kind: 'self' });
     expect(access('lessons')).toEqual({ kind: 'requires', anyOf: ['lessons.view', 'schedule.view'] });
     expect(access('enrolmentSection')).toEqual({ kind: 'requires', anyOf: ['trials.view', 'new_students.view'] });
+    expect(access('billingSection')).toEqual({ kind: 'requires', anyOf: ['billing.view', 'parents.view'] });
+    expect(access('teachersSection')).toEqual({
+      kind: 'requires',
+      // Not certificates.view: the certificate keys open exactly the certificate routes (PD-41).
+      anyOf: ['teacher_supervision.view', 'teacher_profiles.review'],
+    });
     // The Organization page's own key (its lists ask org.view), not org.manage, which only its writes ask.
     expect(access('structureSection')).toEqual({ kind: 'requires', anyOf: ['org.view'] });
   });

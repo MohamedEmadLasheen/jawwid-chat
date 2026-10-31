@@ -1,20 +1,25 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/providers.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/board_editor_controller.dart';
+import '../application/board_image_import.dart';
 import '../application/boards_controller.dart';
+import '../data/board_images.dart';
 import '../data/quran_text_repository.dart';
+import '../data/whiteboards_repository.dart';
 import '../domain/board_elements.dart';
 import '../domain/board_page.dart';
 import 'board_canvas.dart';
@@ -151,8 +156,15 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     // draws them too); the cache's identity changes when one arrives.
     final versesVersion = ref.watch(verseCacheProvider);
     final verseCache = ref.read(verseCacheProvider.notifier);
+    // The board's images: signed with the board, decoded once each (PR-4).
+    final imagesVersion = ref.watch(boardImagesProvider(widget.boardId));
+    final images = ref.read(boardImagesProvider(widget.boardId).notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) verseCache.ensure(s.pages.expand((p) => p.elements));
+      if (!mounted) return;
+      verseCache.ensure(s.pages.expand((p) => p.elements));
+      images
+        ..seed(s.assets)
+        ..ensure(s.pages.expand((p) => p.elements));
     });
     String label(BoardElement e) => switch (e) {
       VerseElement() => switch (verseCache.lookup(e).status) {
@@ -160,6 +172,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         VerseStatus.unavailable => l10n.boardVerseUnavailable,
         _ => l10n.boardVerseLoading,
       },
+      ImageElement() => images.lookup(e.assetId).status == BoardImageStatus.unavailable ? l10n.boardImageUnavailable : l10n.boardImageLoading,
       _ => l10n.boardElementUnknown,
     };
     final canvas = BoardCanvas(
@@ -174,6 +187,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       placeholderLabel: label,
       verses: verseCache.lookup,
       versesVersion: versesVersion,
+      images: images.lookup,
+      imagesVersion: imagesVersion,
     );
     return CallbackShortcuts(
       bindings: {
@@ -247,6 +262,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                             }),
                             onDelete: _deleteSelection,
                             onVerse: () => _insertVerse(context),
+                            onImage: () => _insertImage(context),
                             onLayout: _controller.setLayout,
                             onBackground: _controller.setBackground,
                           )
@@ -279,7 +295,15 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                   },
                 ),
               ),
-              _PageBar(state: s, editable: editable, verses: verseCache.lookup, versesVersion: versesVersion, placeholderLabel: label),
+              _PageBar(
+                state: s,
+                editable: editable,
+                verses: verseCache.lookup,
+                versesVersion: versesVersion,
+                images: images.lookup,
+                imagesVersion: imagesVersion,
+                placeholderLabel: label,
+              ),
             ],
           ),
         ),
@@ -376,6 +400,42 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
     ref.read(verseCacheProvider.notifier).remember(verse, picked.text);
     _controller.commit([...s.page.elements, verse]);
+  }
+
+  /// PR-4 (§4.4): a picture from the device, checked and uploaded, then placed
+  /// in the middle of the page. Every way it can fail says so plainly.
+  Future<void> _insertImage(BuildContext context) async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    void say(String text) => messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+    try {
+      final picked = await ref.read(mediaPickerProvider).pickImage();
+      if (picked == null || !mounted) return;
+      say(l10n.boardImageAdding);
+      final prepared = await prepareBoardImage(await XFile(picked.filePath).readAsBytes());
+      final asset = await uploadBoardImage(
+        ref.read(whiteboardsRepositoryProvider),
+        ref.read(boardUploaderProvider),
+        widget.boardId,
+        prepared,
+      );
+      final s = ref.read(boardEditorProvider(widget.boardId)).value;
+      if (!mounted || s == null) return;
+      ref.read(boardImagesProvider(widget.boardId).notifier).remember(asset, prepared.image);
+      _controller.commit([...s.page.elements, placeBoardImage(asset.id, prepared.width, prepared.height)]);
+      messenger.hideCurrentSnackBar();
+    } on ImageImportException catch (e) {
+      say(switch (e.outcome) {
+        ImageImportOutcome.imagesOff => l10n.boardImageOff,
+        ImageImportOutcome.tooLarge => l10n.boardImageTooLarge,
+        ImageImportOutcome.notAnImage => l10n.boardImageNotImage,
+        _ => l10n.boardImageFailed,
+      });
+    } on Object {
+      say(l10n.boardImageFailed);
+    }
   }
 
   Future<void> _rename(BuildContext context, EditorState s) async {
@@ -502,6 +562,7 @@ class _ToolPanel extends StatelessWidget {
     required this.onStamp,
     required this.onDelete,
     required this.onVerse,
+    required this.onImage,
     required this.onLayout,
     required this.onBackground,
   });
@@ -518,6 +579,7 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
+  final VoidCallback onImage;
   final ValueChanged<PageLayout> onLayout;
   final ValueChanged<PageBackground> onBackground;
 
@@ -570,6 +632,7 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
+      IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
@@ -705,12 +768,22 @@ class _ZoomControls extends StatelessWidget {
 
 /// The page strip: thumbnails, and add / duplicate / delete / move a page.
 class _PageBar extends ConsumerWidget {
-  const _PageBar({required this.state, required this.editable, this.verses, this.versesVersion, this.placeholderLabel});
+  const _PageBar({
+    required this.state,
+    required this.editable,
+    this.verses,
+    this.versesVersion,
+    this.images,
+    this.imagesVersion,
+    this.placeholderLabel,
+  });
 
   final EditorState state;
   final bool editable;
   final VerseSource? verses;
   final Object? versesVersion;
+  final BoardImageSource? images;
+  final Object? imagesVersion;
   final String Function(BoardElement element)? placeholderLabel;
 
   @override
@@ -753,6 +826,8 @@ class _PageBar extends ConsumerWidget {
                             page: state.pages[i],
                             verses: verses,
                             versesVersion: versesVersion,
+                            images: images,
+                            imagesVersion: imagesVersion,
                             placeholderLabel: placeholderLabel,
                           ),
                         ),
