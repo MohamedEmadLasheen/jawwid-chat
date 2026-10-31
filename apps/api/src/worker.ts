@@ -27,6 +27,7 @@ import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
+import { setDatabasePoolRole } from './platform/database-pool';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -195,6 +196,8 @@ function report(log: Logger, what: string, route: string, e: unknown): void {
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
 
+  // Its own, smaller pool (DATABASE_WORKER_POOL_MAX): set before Nest builds PrismaService.
+  setDatabasePoolRole('worker');
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger,

@@ -35,6 +35,7 @@ import { ActionScope, actionRateLimitKey, configInteger } from '../../platform/a
 import { RATE_LIMIT_STORE, RateLimitStore } from '../../platform/auth/login-rate-limit';
 import { AppConfigService, COMMUNICATION_CONFIG_DEFAULTS } from '../../platform/app-config.service';
 import { FrameBudget } from './frame-budget';
+import { DeliveryQueue, deliveryConcurrency } from './delivery-queue';
 import {
   RealtimeRevocationHub,
   RevocationUnconfirmedError,
@@ -167,11 +168,17 @@ function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 /**
- * One delivery at a time per node: each holds a short row-locking transaction
- * (see ConversationService.withDeliveryLocks), and a single queue bounds that to
- * one connection and preserves event order.
+ * Deliveries run one at a time PER CONVERSATION (event order) and at most
+ * deliveryConcurrency() at once per node: each holds a short row-locking
+ * transaction (see ConversationService.withDeliveryLocks), so this bounds them
+ * to that many pool connections (a third of DATABASE_POOL_MAX). Actor-addressed
+ * events (calls, approvals, stories, presence, tasks) are ordered PER ACTOR: one
+ * delivery to several actors is ordered within each of theirs. See delivery-queue.ts.
  */
-const DELIVERY_QUEUE = 'delivery';
+const deliveryKey = {
+  conversation: (conversationId: string) => `conversation:${conversationId}`,
+  actor: (actorId: string) => `actor:${actorId}`,
+};
 
 /** The rows a revocation of any of these sockets' recipients would UPDATE. */
 function lockScopeOf(sockets: readonly AuthedSocket[], conversationId?: string) {
@@ -252,7 +259,10 @@ export class RealtimeGateway
   private readonly log = new Logger(RealtimeGateway.name);
   private sweep?: ReturnType<typeof setInterval>;
   private sweeping = false;
-  private readonly queues = new Map<string, Promise<void>>();
+  private readonly deliveries = new DeliveryQueue(deliveryConcurrency(), (key, e) => {
+    realtimeMetrics.deliveryFailed++;
+    this.log.error(`realtime delivery failed (${key.split(':')[0]}): ${(e as Error | undefined)?.name ?? typeof e}`);
+  });
 
   // RT-009 completion barrier (see NODE_FENCE).
   private fenceGeneration = 0;
@@ -1038,19 +1048,11 @@ export class RealtimeGateway
 
   /**
    * One delivery at a time per key on this node, so the per-check awaits below
-   * can never reorder two events of the same conversation.
+   * can never reorder two events of the same conversation; different keys run
+   * side by side, DELIVERY_CONCURRENCY at most.
    */
-  private serialize(key: string, task: () => Promise<void>): Promise<void> {
-    const previous = this.queues.get(key) ?? Promise.resolve();
-    const next = previous.then(task).catch((e) => {
-      realtimeMetrics.deliveryFailed++;
-      this.log.error(`realtime delivery failed (${key}): ${(e as Error).name}`);
-    });
-    this.queues.set(key, next);
-    void next.then(() => {
-      if (this.queues.get(key) === next) this.queues.delete(key);
-    });
-    return next;
+  private serialize(key: string | readonly string[], task: () => Promise<void>): Promise<void> {
+    return this.deliveries.run(key, task);
   }
 
   /**
@@ -1075,7 +1077,7 @@ export class RealtimeGateway
     audience?: DeliveryAudience,
   ): Promise<void> {
     const name = room.conversation(conversationId);
-    await this.serialize(DELIVERY_QUEUE, () => this.fenced(async (permitted) => {
+    await this.serialize(deliveryKey.conversation(conversationId), () => this.fenced(async (permitted) => {
       const sockets = this.localSocketsIn([name]).filter((x) => x.id !== exceptSocketId);
       if (sockets.length === 0) return;
       await this.conversations.withDeliveryLocks(lockScopeOf(sockets, conversationId), async (stillHeld) => {
@@ -1174,7 +1176,7 @@ export class RealtimeGateway
    * re-decided here.
    */
   async deliverToActorsLocally(actorIds: readonly string[], event: string, payload: unknown): Promise<void> {
-    await this.serialize(DELIVERY_QUEUE, () => this.fenced(async (permitted) => {
+    await this.serialize(actorIds.map(deliveryKey.actor), () => this.fenced(async (permitted) => {
       const sockets = this.localSocketsIn(actorIds.map(room.actor));
       if (sockets.length === 0) return;
       await this.conversations.withDeliveryLocks(lockScopeOf(sockets), async (stillHeld) => {

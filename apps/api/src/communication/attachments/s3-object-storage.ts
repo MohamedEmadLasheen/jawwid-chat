@@ -55,10 +55,15 @@ export class S3ObjectStorage implements ObjectStorage {
   private readonly client: S3Client;
   private readonly bucket: string;
   private readonly ttl: number;
+  /** The most HEAD + GET of one read() may wait for response headers, all attempts included. */
+  private readonly readBudgetMs: number;
 
   constructor(config: S3StorageConfig) {
     this.bucket = config.bucket;
     this.ttl = config.signedUrlTtlSeconds;
+    const requestTimeoutMs = config.requestTimeoutMs ?? STORAGE_TIMEOUT_DEFAULTS.requestTimeoutMs;
+    const maxAttempts = config.maxAttempts ?? STORAGE_TIMEOUT_DEFAULTS.maxAttempts;
+    this.readBudgetMs = requestTimeoutMs * maxAttempts;
     this.client = new S3Client({
       region: config.region,
       endpoint: config.endpoint,
@@ -69,6 +74,25 @@ export class S3ObjectStorage implements ObjectStorage {
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
+      },
+      // Bounded waits. The SDK's own defaults are no connect timeout and no
+      // response timeout, so a storage endpoint that accepts the connection and
+      // never answers held a request (and an agent socket) for minutes. Now each
+      // attempt must connect within connectTimeoutMs and have its response
+      // headers within requestTimeoutMs (a TimeoutError otherwise), and the
+      // standard retry strategy makes at most maxAttempts -- three, so a 503
+      // SlowDown still gets the SDK's usual two retries.
+      //
+      // Deliberately NO socket idle timeout: it would also fire while a slow
+      // reader back-pressures a streamed body (media-serve pauses the storage
+      // stream), cutting a paused video. And smithy only arms it after a 3 s
+      // delay for values >= 6 s, clearing the pending arm when headers arrive,
+      // so for streamed bodies it would protect nothing anyway.
+      maxAttempts,
+      requestHandler: {
+        connectionTimeout: config.connectTimeoutMs ?? STORAGE_TIMEOUT_DEFAULTS.connectTimeoutMs,
+        requestTimeout: requestTimeoutMs,
+        throwOnRequestTimeout: true,
       },
     });
   }
@@ -188,6 +212,9 @@ export class S3ObjectStorage implements ObjectStorage {
           Key: assertSafeObjectKey(targetKey),
           CopySource: `${this.bucket}/${source.split('/').map(encodeURIComponent).join('/')}`,
         }),
+        // Storage copies the bytes before it answers: a 100 MB video may well
+        // take longer than requestTimeoutMs to produce headers.
+        { requestTimeout: STORAGE_COPY_REQUEST_TIMEOUT_MS },
       );
       return true;
     } catch (error) {
@@ -231,28 +258,47 @@ export class S3ObjectStorage implements ObjectStorage {
    */
   async read(objectKey: string, rangeHeader?: string | string[]): Promise<StoredObject | 'unsatisfiable' | null> {
     const Key = assertSafeObjectKey(objectKey);
-    let size: number;
-    let mimeType: string;
-    try {
-      const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key }));
-      size = Number(head.ContentLength ?? 0);
-      mimeType = head.ContentType ?? 'application/octet-stream';
-    } catch (error) {
-      if (isNotFound(error)) return null;
-      throw error;
-    }
-    const range = parseByteRange(rangeHeader, size);
-    if (range === 'unsatisfiable') return 'unsatisfiable';
-    const got = await this.client.send(
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key,
-        ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
-      }),
+    // ONE budget for the HEAD and the GET together (retries included), so a
+    // read costs no more than a single call would: without it a hung endpoint
+    // cost the pair twice the per-call worst case. Cleared once the GET's
+    // headers are in -- the body then streams for as long as the reader reads.
+    const deadline = new AbortController();
+    const timer = setTimeout(
+      () => deadline.abort(Object.assign(new Error(`object storage: no answer to a read within ${this.readBudgetMs} ms`), { name: 'TimeoutError' })),
+      this.readBudgetMs,
     );
-    const body = got.Body as unknown as AsyncIterable<Uint8Array> | undefined;
-    if (!body) return null;
-    return { mimeType, size, range, body };
+    const signal = { abortSignal: deadline.signal };
+    try {
+      let size: number;
+      let mimeType: string;
+      try {
+        const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key }), signal);
+        size = Number(head.ContentLength ?? 0);
+        mimeType = head.ContentType ?? 'application/octet-stream';
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
+      const range = parseByteRange(rangeHeader, size);
+      if (range === 'unsatisfiable') return 'unsatisfiable';
+      const got = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key,
+          ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
+        }),
+        signal,
+      );
+      const body = got.Body as unknown as AsyncIterable<Uint8Array> | undefined;
+      if (!body) return null;
+      return { mimeType, size, range, body };
+    } catch (error) {
+      // The SDK reports our deadline as its own AbortError; say what happened.
+      if (deadline.signal.aborted) throw deadline.signal.reason;
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** Releases the underlying HTTP handler. */
@@ -268,7 +314,27 @@ export interface S3StorageConfig {
   accessKeyId: string;
   secretAccessKey: string;
   signedUrlTtlSeconds: number;
+  /** TCP connect, per attempt. Default STORAGE_TIMEOUT_DEFAULTS.connectTimeoutMs. */
+  connectTimeoutMs?: number;
+  /** Response headers, per attempt (CopyObject: STORAGE_COPY_REQUEST_TIMEOUT_MS). */
+  requestTimeoutMs?: number;
+  /** Attempts per call, the first included (the SDK retries a TimeoutError). */
+  maxAttempts?: number;
 }
+
+/**
+ * Defaults, overridable by STORAGE_CONNECT_TIMEOUT_MS, STORAGE_REQUEST_TIMEOUT_MS
+ * and STORAGE_MAX_ATTEMPTS. Storage sits in the same region as the API, so a
+ * healthy connect is milliseconds and response headers well under a second.
+ * Three attempts of 5 s put a dead endpoint's worst case at about 15 s per call
+ * -- and per read(), whose HEAD + GET share one budget -- inside the API's own
+ * 30 s request budget, instead of minutes. Not a bound on a streamed BODY: see
+ * the constructor.
+ */
+export const STORAGE_TIMEOUT_DEFAULTS = { connectTimeoutMs: 3_000, requestTimeoutMs: 5_000, maxAttempts: 3 } as const;
+
+/** CopyObject answers only once storage has copied the bytes; per attempt. */
+export const STORAGE_COPY_REQUEST_TIMEOUT_MS = 60_000;
 
 /**
  * Key construction and validation live in `object-key.ts`, storage-agnostic,

@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { ObjectStorage } from './object-storage';
 import { SignedLocalObjectStorage } from './object-storage';
-import { S3ObjectStorage, type S3StorageConfig } from './s3-object-storage';
+import { S3ObjectStorage, STORAGE_TIMEOUT_DEFAULTS, type S3StorageConfig } from './s3-object-storage';
 import {
   LOCAL_PUBLIC_BASE_URL_VAR,
   resolveLocalPublicBaseUrl,
@@ -133,7 +133,8 @@ export function selectObjectStorage(
 
   logger.log(
     `object storage: S3-compatible, bucket "${config.bucket}", region ` +
-      `"${config.region}", signed URL TTL ${config.signedUrlTtlSeconds}s`,
+      `"${config.region}", signed URL TTL ${config.signedUrlTtlSeconds}s, timeouts ` +
+      `connect ${config.connectTimeoutMs}ms / request ${config.requestTimeoutMs}ms x ${config.maxAttempts} attempts`,
   );
   return { storage: new S3ObjectStorage(config), kind: 's3' };
 }
@@ -180,7 +181,21 @@ export function readS3Config(env: NodeJS.ProcessEnv = process.env): S3StorageCon
     accessKeyId: env.STORAGE_ACCESS_KEY!.trim(),
     secretAccessKey: env.STORAGE_SECRET_KEY!.trim(),
     signedUrlTtlSeconds: ttl,
+    connectTimeoutMs: boundedInt(env, 'STORAGE_CONNECT_TIMEOUT_MS', STORAGE_TIMEOUT_DEFAULTS.connectTimeoutMs, 100, 60_000),
+    requestTimeoutMs: boundedInt(env, 'STORAGE_REQUEST_TIMEOUT_MS', STORAGE_TIMEOUT_DEFAULTS.requestTimeoutMs, 100, 300_000),
+    maxAttempts: boundedInt(env, 'STORAGE_MAX_ATTEMPTS', STORAGE_TIMEOUT_DEFAULTS.maxAttempts, 1, 5),
   };
+}
+
+/** An optional integer variable within [min, max]; unset or blank means the default. */
+function boundedInt(env: NodeJS.ProcessEnv, name: string, fallback: number, min: number, max: number): number {
+  const raw = (env[name] ?? '').trim();
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return n;
 }
 
 /** Exported for the tests and for error messages. */

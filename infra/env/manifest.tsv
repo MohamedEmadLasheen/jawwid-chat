@@ -30,7 +30,13 @@ REQUEST_TIMEOUT_MS	application	no	opt	req	req
 SHUTDOWN_GRACE_MS	application	no	opt	req	req
 DATABASE_URL	database	yes	req	req	req
 DATABASE_STATEMENT_TIMEOUT_MS	database	no	opt	req	req
+# DATABASE_POOL_MAX and DATABASE_WORKER_POOL_MAX are CONSUMED by
+# apps/api/src/platform/database-pool.ts: the Prisma pool of the API process and
+# of the worker process, added to DATABASE_URL as connection_limit. The 1 GiB
+# managed database has 22 usable connections; at 7 + 3, a deploy that briefly
+# runs old and new side by side uses 20. Unset locally means Prisma's default.
 DATABASE_POOL_MAX	database	no	opt	req	req
+DATABASE_WORKER_POOL_MAX	database	no	opt	req	req
 REDIS_URL	redis	yes	req	req	req
 QUEUE_PREFIX	redis	no	req	req	req
 WORKER_CONCURRENCY	redis	no	opt	opt	req
@@ -68,6 +74,17 @@ STORAGE_BUCKET	storage	no	req	req	req
 STORAGE_ACCESS_KEY	storage	yes	req	req	req
 STORAGE_SECRET_KEY	storage	yes	req	req	req
 STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
+# How long the S3 client waits (s3-object-storage.ts, STORAGE_TIMEOUT_DEFAULTS).
+# Optional everywhere: unset means 3000 ms to connect and 5000 ms to response
+# headers per attempt, 3 attempts (the SDK's own count, so 503 SlowDown keeps its
+# retries). A hung endpoint then costs a call -- or a media read, whose HEAD + GET
+# share one budget -- about 15 s instead of minutes. CopyObject has its own 60 s
+# per attempt. NOT a limit on a streamed body: a slow reader may pause a video
+# for as long as it likes. Out-of-range values refuse to start (connect
+# 100..60000, request 100..300000, attempts 1..5).
+STORAGE_CONNECT_TIMEOUT_MS	storage	no	opt	opt	opt
+STORAGE_REQUEST_TIMEOUT_MS	storage	no	opt	opt	opt
+STORAGE_MAX_ATTEMPTS	storage	no	opt	opt	opt
 STORAGE_SIGNING_SECRET	storage	yes	req	req	req
 # RT-037 (2026-10-14): attachment and story media links point at THIS API's
 # access-checked media route. The base is MEDIA_PUBLIC_BASE_URL when set (the
@@ -91,6 +108,11 @@ STORAGE_PUBLIC_BASE_URL	storage	no	opt	opt	opt
 OUTBOX_POLL_MS	worker	no	opt	opt	opt
 OUTBOX_BATCH_SIZE	worker	no	opt	opt	opt
 OUTBOX_IDLE_BACKOFF_MS	worker	no	opt	opt	opt
+# How many realtime deliveries one API node runs at once (delivery-queue.ts):
+# each holds a pool connection, so unset means a third of DATABASE_POOL_MAX
+# (at least 1; 2 when that is unset too). Order within a conversation holds at
+# any value. 1..16; anything else refuses to start.
+REALTIME_DELIVERY_CONCURRENCY	worker	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_IMAGE	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VIDEO	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VOICE	storage	no	opt	opt	opt
