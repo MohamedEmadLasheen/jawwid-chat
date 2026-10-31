@@ -97,6 +97,7 @@ whatever these say.
 | `DATABASE_URL` | **yes** | req | req | req |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | no | opt | req | req |
 | `DATABASE_POOL_MAX` | no | opt | req | req |
+| `DATABASE_WORKER_POOL_MAX` | no | opt | req | req |
 
 ### Redis
 
@@ -127,6 +128,9 @@ whatever these say.
 | `STORAGE_ACCESS_KEY` | **yes** | req | req | req |
 | `STORAGE_SECRET_KEY` | **yes** | req | req | req |
 | `STORAGE_SIGNED_URL_TTL_SECONDS` | no | opt | req | req |
+| `STORAGE_CONNECT_TIMEOUT_MS` | no | opt | opt | opt |
+| `STORAGE_REQUEST_TIMEOUT_MS` | no | opt | opt | opt |
+| `STORAGE_MAX_ATTEMPTS` | no | opt | opt | opt |
 | `STORAGE_SIGNING_SECRET` | **yes** | req | req | req |
 | `STORAGE_LOCAL_ROOT` | no | opt | opt | opt |
 | `STORAGE_PUBLIC_BASE_URL` | no | opt | opt | opt |
