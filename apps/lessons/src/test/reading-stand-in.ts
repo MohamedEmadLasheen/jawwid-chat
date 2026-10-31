@@ -28,7 +28,8 @@ export function readingStandIn(): ReadingLesson {
     passages: [{ id: 'passage-001', title: { text: 'الْقِطَّةُ', review: null }, sentences: ['sentences-002'] }],
     quiz: [
       { id: 'q1', kind: 'vowel', stage: 'fatha', options: ['بِتِ', 'بَتَ'], answer: 1, review: null },
-      { id: 'q2', kind: 'missing', sentence: 'sentences-001', blank: 1, options: ['الْوَلَدُ', 'الْقِطَّةُ'], answer: 0, review: null },
+      // The verb blanked; the wrong option sits elsewhere (not in the verb's place, not last) in another sentence.
+      { id: 'q2', kind: 'missing', sentence: 'sentences-001', blank: 0, options: ['أَكَلَ', 'الْقِطَّةُ'], answer: 0, review: null },
     ],
   };
 }

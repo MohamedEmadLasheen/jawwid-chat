@@ -124,6 +124,66 @@ void main() {
     });
   }
 
+  group('past the edge with nowhere to go', () {
+    testWidgets('the last photo stays zoomed and stays put', (tester) async {
+      await open(tester);
+      await drag(tester, -width(tester) * 0.6);
+      await drag(tester, -width(tester) * 0.6);
+      expect(find.text('3 / 3'), findsOneWidget);
+      await doubleTap(tester);
+      await drag(tester, -width(tester) * 1.6); // pans to the edge, then on past it
+      expect(find.text('3 / 3'), findsOneWidget);
+      expect(zoomOf(tester).value.getMaxScaleOnAxis(), greaterThan(1.01), reason: 'the zoom is not thrown away');
+    });
+
+    testWidgets('the first photo, dragged back past its edge: the same', (tester) async {
+      await open(tester);
+      await doubleTap(tester);
+      await drag(tester, width(tester) * 1.6);
+      expect(find.text('1 / 3'), findsOneWidget);
+      expect(zoomOf(tester).value.getMaxScaleOnAxis(), greaterThan(1.01));
+    });
+
+    testWidgets('a single photo: the same', (tester) async {
+      await open(tester, of: const [Attachment(id: 'p1', kind: MessageKind.image)]);
+      await doubleTap(tester);
+      await drag(tester, -width(tester) * 1.6);
+      expect(zoomOf(tester).value.getMaxScaleOnAxis(), greaterThan(1.01));
+    });
+  });
+
+  testWidgets('carried on past the edge: the page turns FIRST, then the photo it left goes back to its size',
+      (tester) async {
+    await open(tester);
+    await doubleTap(tester);
+    // Drag to the edge and past it, then let go -- without settling.
+    final gesture = await tester.startGesture(middle(tester));
+    final by = -width(tester) * 1.6;
+    final steps = (by.abs() / 6).ceil();
+    for (var i = 0; i < steps; i++) {
+      await gesture.moveBy(Offset(by / steps, 0));
+      await tester.pump(const Duration(milliseconds: 8));
+    }
+    await gesture.up();
+    // Past the halfway point (where the counter changes), not yet settled.
+    // Frame by frame, as the device draws it: one long jump is a single frame, and an
+    // animation's first frame only records when it started.
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.text('2 / 3'), findsOneWidget, reason: 'the page is past halfway');
+
+    double maxScale() => tester
+        .widgetList<InteractiveViewer>(find.byType(InteractiveViewer))
+        .map((v) => v.transformationController!.value.getMaxScaleOnAxis())
+        .reduce((a, b) => a > b ? a : b);
+    expect(maxScale(), greaterThan(1.01), reason: 'the leaving photo is still zoomed while the page moves');
+
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 3'), findsOneWidget);
+    expect(maxScale(), closeTo(1, 0.01), reason: 'and at its size once the page has settled');
+  });
+
   group('zoomed in', () {
     testWidgets('a drag moves the photo, and the pages hold still', (tester) async {
       await open(tester);
