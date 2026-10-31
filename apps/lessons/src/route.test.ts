@@ -22,4 +22,12 @@ describe('route', () => {
       expect(route(bad)).toEqual({ kind: 'not-found' });
     }
   });
+
+  it('maps /lessons/islamic/lesson-N for the topic lessons on the engine only (batch 1)', () => {
+    for (const n of [8, 9, 10, 11, 20]) expect(route(`/lessons/islamic/lesson-${n}`)).toEqual({ kind: 'islamic', lesson: n });
+    expect(route('/lessons/islamic/lesson-20/')).toEqual({ kind: 'islamic', lesson: 20 });
+    for (const bad of ['/lessons/islamic/lesson-1', '/lessons/islamic/lesson-12', '/lessons/islamic/lesson-08', '/lessons/islamic/lesson-200']) {
+      expect(route(bad)).toEqual({ kind: 'not-found' });
+    }
+  });
 });

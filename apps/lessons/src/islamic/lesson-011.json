@@ -1,0 +1,281 @@
+{
+ "lesson": 11,
+ "kind": "topic",
+ "fiqh": false,
+ "title": {
+  "text": "أمانة النبي ﷺ",
+  "review": null
+ },
+ "review": {
+  "status": "pending",
+  "by": null,
+  "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 src/lessons/islamic/lesson-11, read as text from the quarantined copy, never built or run). Quran by reference only; every hadith held; everything pending the Teachers department (and a qualified scholar for any fiqh)."
+ },
+ "provenance": {
+  "source": "jawwid-lessons @ c231532, src/lessons/islamic/lesson-11 (read as text, never built or run)",
+  "sha256": {
+   "src/lessons/islamic/lesson-11/components/core/SlideRegistry.ts": "36d5923ff104fd28dc58b12b3d05e97539e02aed95eb0ffc53cd8cddc7420b3e",
+   "src/lessons/islamic/lesson-11/components/core/importSlide.ts": "b9c7f56208a6d9f5d1681baae8283414823e1d166fe580b6863d9b838bd0f6bc",
+   "src/lessons/islamic/lesson-11/pages/Index.tsx": "d41f59a46eaec3a9c3d1ef60ae872b8bcf39f6dddd52ae55e42403be9ac70ee9",
+   "src/lessons/islamic/lesson-11/pages/slides/CoverSlide.tsx": "527aa4da82e5286eb068a551e77818e8cac0e1ee0084a7b99537b241326a4d09",
+   "src/lessons/islamic/lesson-11/pages/slides/EndSlide.tsx": "13ab95138e7f1388957c3fe9e17ac24ab3662aa3f24b13a73f4d5b3e2b2c81a5",
+   "src/lessons/islamic/lesson-11/pages/slides/LessonPart1Slide.tsx": "b20235532c36b156967e71be617904911f1e5d6b879c0662ba541acf642a8044",
+   "src/lessons/islamic/lesson-11/pages/slides/LessonPart2Slide.tsx": "6777e926f3a44e491cc9d2812eb1d2149ec8ed6f979b84d116552b84efb24212",
+   "src/lessons/islamic/lesson-11/pages/slides/QuizMatchingSlide.tsx": "159238c4097318361c1da6d8db3035ed8b0b244f213aae2d539536b3446d8564",
+   "src/lessons/islamic/lesson-11/pages/slides/QuizMultipleChoiceSlide.tsx": "7944bb9d73e70fbeabb07634c196ff78fa29efd404622145c9f96317eeff89c2",
+   "src/lessons/islamic/lesson-11/pages/slides/QuizOrderSlide.tsx": "4e9da961c5f0d0c6acbb5c6e05fc6748397c42122827ec119cb41a3474b1ffbc",
+   "src/lessons/islamic/lesson-11/pages/slides/QuizTrueFalseSlide.tsx": "d2bc36363490d3c6a6334d408015ce8f458648ff78fdc538e18a9760fedb72b6",
+   "src/lessons/islamic/lesson-11/pages/slides/WelcomeSlide.tsx": "de31e9aa8b235a7b89a63348fbf06e85268e79a2b6db6e8bf101e69ad5a45418"
+  }
+ },
+ "retiredIds": [],
+ "sections": [
+  {
+   "id": "welcome",
+   "title": {
+    "text": "مرحباً",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "welcome-001",
+     "kind": "text",
+     "text": "اليوم سنتعلم معاً عن صفة عظيمة من صفات نبينا محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "welcome-002",
+     "kind": "text",
+     "text": "سنتعرف على أمانة النبي ﷺ وكيف كان الناس يثقون به ويأتمنونه على أموالهم وأشيائهم الثمينة",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "laqab",
+   "title": {
+    "text": "لقب النبي ﷺ",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "laqab-001",
+     "kind": "text",
+     "text": "كان نبينا محمد ﷺ قبل بعثته يلقب بـ الصادق الأمين",
+     "review": null
+    },
+    {
+     "id": "laqab-002",
+     "kind": "text",
+     "text": "لأنه كان صادقاً في كلامه وأميناً في تعامله ﷺ",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "thiqa",
+   "title": {
+    "text": "ثقة الناس بالنبي ﷺ",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "thiqa-001",
+     "kind": "text",
+     "text": "كان الناس يحفظون أموالهم و أشياءهم الثمينة عند النبي محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "thiqa-002",
+     "kind": "text",
+     "text": "لأنهم كانوا يعرفون أنه أمين لا يخون أحداً",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "hijra",
+   "title": {
+    "text": "أمانة النبي ﷺ عند الهجرة",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "hijra-001",
+     "kind": "text",
+     "text": "ولما أراد النبي ﷺ الهجرة من مكة إلى المدينة، رغم أن أهل مكة آذوه وحاربوه، إلا أنه لم يضيع أماناتهم!",
+     "review": null
+    },
+    {
+     "id": "hijra-002",
+     "kind": "text",
+     "text": "طلب من ابن عمه علي بن أبي طالب رضي الله عنه أن يبقى في مكة ليرد الأمانات إلى أصحابها",
+     "review": null
+    },
+    {
+     "id": "hijra-003",
+     "kind": "text",
+     "text": "بماذا كان يلقب النبي ﷺ قبل بعثته؟ ولماذا؟",
+     "review": null
+    },
+    {
+     "id": "hijra-004",
+     "kind": "text",
+     "text": "كان يلقب بـ (الصادق الأمين)؛ لأن الناس كانوا يأتمنونه على أموالهم وأشيائهم الثمينة ليحفظها لهم.",
+     "review": null
+    },
+    {
+     "id": "hijra-005",
+     "kind": "text",
+     "text": "كيف ظهرت أمانة النبي ﷺ عند الهجرة؟",
+     "review": null
+    },
+    {
+     "id": "hijra-006",
+     "kind": "text",
+     "text": "رغم أن أهل مكة آذوه، إلا أنه لم يضيع أماناتهم، بل طلب من ابن عمه علي بن أبي طالب رضي الله عنه أن يبقى في مكة ليرد الأمانات إلى أصحابها.",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "summary",
+   "title": {
+    "text": "النهاية",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "summary-001",
+     "kind": "text",
+     "text": "تعلمنا اليوم أن نبينا محمد ﷺ كان الصادق الأمين",
+     "review": null
+    },
+    {
+     "id": "summary-002",
+     "kind": "text",
+     "text": "وأنه ﷺ حافظ على أمانات الناس حتى عند الهجرة",
+     "review": null
+    }
+   ]
+  }
+ ],
+ "quiz": [
+  {
+   "id": "q1",
+   "kind": "truefalse",
+   "statement": "كان النبي ﷺ يلقب بالصادق الأمين قبل بعثته",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q2",
+   "kind": "truefalse",
+   "statement": "ترك النبي ﷺ أمانات الناس عندما هاجر من مكة",
+   "answer": false,
+   "review": null
+  },
+  {
+   "id": "q3",
+   "kind": "truefalse",
+   "statement": "طلب النبي ﷺ من علي بن أبي طالب رد الأمانات لأصحابها",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q4",
+   "kind": "truefalse",
+   "statement": "كان الناس يخافون أن يتركوا أموالهم عند النبي ﷺ",
+   "answer": false,
+   "review": null
+  },
+  {
+   "id": "q5",
+   "kind": "choose",
+   "question": "بماذا كان يلقب النبي ﷺ قبل بعثته؟",
+   "options": [
+    "الشجاع المقدام",
+    "الصادق الأمين",
+    "الكريم الحليم"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q6",
+   "kind": "choose",
+   "question": "من الذي طلب منه النبي ﷺ رد الأمانات عند الهجرة؟",
+   "options": [
+    "أبو بكر الصديق",
+    "عمر بن الخطاب",
+    "علي بن أبي طالب"
+   ],
+   "answer": 2,
+   "review": null
+  },
+  {
+   "id": "q7",
+   "kind": "choose",
+   "question": "لماذا كان الناس يحفظون أموالهم عند النبي ﷺ؟",
+   "options": [
+    "لأنه كان غنياً",
+    "لأنه كان أميناً وصادقاً",
+    "لأنه كان قوياً"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q8",
+   "kind": "choose",
+   "question": "لقب النبي ﷺ قبل البعثة",
+   "options": [
+    "المدينة المنورة",
+    "الصادق الأمين",
+    "أموالهم وأشياءهم الثمينة",
+    "علي بن أبي طالب"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q9",
+   "kind": "choose",
+   "question": "من ردّ الأمانات عند الهجرة",
+   "options": [
+    "المدينة المنورة",
+    "الصادق الأمين",
+    "أموالهم وأشياءهم الثمينة",
+    "علي بن أبي طالب"
+   ],
+   "answer": 3,
+   "review": null
+  },
+  {
+   "id": "q10",
+   "kind": "choose",
+   "question": "هاجر النبي ﷺ من مكة إلى",
+   "options": [
+    "المدينة المنورة",
+    "الصادق الأمين",
+    "أموالهم وأشياءهم الثمينة",
+    "علي بن أبي طالب"
+   ],
+   "answer": 0,
+   "review": null
+  },
+  {
+   "id": "q11",
+   "kind": "choose",
+   "question": "كان الناس يحفظون عند النبي ﷺ",
+   "options": [
+    "المدينة المنورة",
+    "الصادق الأمين",
+    "أموالهم وأشياءهم الثمينة",
+    "علي بن أبي طالب"
+   ],
+   "answer": 2,
+   "review": null
+  }
+ ]
+}

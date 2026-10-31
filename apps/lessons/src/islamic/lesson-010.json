@@ -1,0 +1,148 @@
+{
+ "lesson": 10,
+ "kind": "topic",
+ "fiqh": false,
+ "title": {
+  "text": "صِدْقُهُ ﷺ",
+  "review": null
+ },
+ "review": {
+  "status": "pending",
+  "by": null,
+  "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 src/lessons/islamic/lesson-10, read as text from the quarantined copy, never built or run). Quran by reference only; every hadith held; everything pending the Teachers department (and a qualified scholar for any fiqh)."
+ },
+ "provenance": {
+  "source": "jawwid-lessons @ c231532, src/lessons/islamic/lesson-10 (read as text, never built or run)",
+  "sha256": {
+   "src/lessons/islamic/lesson-10/components/core/SlideRegistry.ts": "36d5923ff104fd28dc58b12b3d05e97539e02aed95eb0ffc53cd8cddc7420b3e",
+   "src/lessons/islamic/lesson-10/components/core/importSlide.ts": "b9c7f56208a6d9f5d1681baae8283414823e1d166fe580b6863d9b838bd0f6bc",
+   "src/lessons/islamic/lesson-10/pages/Index.tsx": "81c7c45ec0d53625c333177e705fb35ccb882f1837382db903800ed13c22fbb4",
+   "src/lessons/islamic/lesson-10/pages/slides/CoverSlide.tsx": "3c7fda4563748071a4e8bfde306a4a9d6c4a80b2ffe38eb6dcc01d1ee2eedf67",
+   "src/lessons/islamic/lesson-10/pages/slides/EndSlide.tsx": "5a9b717b703f64b69d142c7bb94445844c9019064d736b229dd13cae1a7b4a1f",
+   "src/lessons/islamic/lesson-10/pages/slides/LessonContentSlide.tsx": "d1063fa7cee1170471ff15bcba3946011c1a11b262560f3681bf943a51ff1169",
+   "src/lessons/islamic/lesson-10/pages/slides/QuizMatching.tsx": "ed033a2b1f07c85e98840a5cec7eddbb528a06f72c5ef36c6185326fada55beb",
+   "src/lessons/islamic/lesson-10/pages/slides/QuizMultipleChoice.tsx": "087fc6dc2dbae432e97520224cf0560b983ec79704dcd7134f931b8662b1aa96",
+   "src/lessons/islamic/lesson-10/pages/slides/QuizOrdering.tsx": "af571e065bced8d94ae4dff9236cdb0598796b1bc3084d9cf3bcfe3dca52e458",
+   "src/lessons/islamic/lesson-10/pages/slides/QuizTrueFalse.tsx": "a55430d5447d32cfb0fa5507f1601052bbd8819fa6c681d10fd9cdc1d9da6063",
+   "src/lessons/islamic/lesson-10/pages/slides/WelcomeSlide.tsx": "23bda081a37d4ad45c192b6d158799498bd972bbed630f62d9990b618db95e8a"
+  }
+ },
+ "retiredIds": [],
+ "sections": [
+  {
+   "id": "welcome",
+   "title": {
+    "text": "مرحباً",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "welcome-001",
+     "kind": "text",
+     "text": "اليوم سنتعلم معاً درساً رائعاً عن صِدْقُ نبينا محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "welcome-002",
+     "kind": "text",
+     "text": "سنعرف كيف كان النبي ﷺ صادقاً أميناً وكيف شهد له قومه بالصدق",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "sidquh",
+   "title": {
+    "text": "صِدْقُهُ ﷺ",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "sidquh-001",
+     "kind": "text",
+     "text": "لَمَّا أَمَرَ اللهُ تَعَالَى نَبِيَّنَا مُحَمَّدًا ﷺ أَنْ يَدْعُوَ أَقَارِبَهُ إلَى عِبَادَةِ اللهِ وَحْدَهُ، صَعِدَ جَبَلَ الصَّفَا فِي مَكَّةَ الْمُكَرَّمَةِ، وَنَادَى أَقَارِبَهُ.",
+     "review": null
+    },
+    {
+     "id": "sidquh-002",
+     "kind": "text",
+     "text": "فَلَمَّا جَاءُوا سَأَلَهُمْ رَسُولُ اللهِ ﷺ: لَوْ أَنَّهُ أَخْبَرَهُمْ بِأَنَّ خَيْلًا بِالْوَادِي تُرِيدُ أَنْ تَهْجُمَ عَلَيْهِمْ، فَهَلْ سَيُصَدِّقُونَهُ؟",
+     "review": "CHECK: retells in indirect speech the Prophet’s ﷺ words from a hadith the lesson does not cite; a teacher checks it against the held hadith"
+    },
+    {
+     "id": "sidquh-003",
+     "kind": "hadith",
+     "source": "not stated",
+     "text": "قالوا: نَعَمْ، مَا جَرَّبْنَا عَلَيْكَ كَذِبًا!!",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "sidquh-004",
+     "kind": "hadith",
+     "source": "not stated",
+     "text": "فقال ﷺ: فَإنِّي نَذِيرٌ لَكُمْ بَيْنَ يَدَيْ عَذَابٍ شَدِيدٍ",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    }
+   ]
+  }
+ ],
+ "quiz": [
+  {
+   "id": "q1",
+   "kind": "choose",
+   "question": "ماذا فعل النبي ﷺ عندما أمره الله أن يدعو أقاربه؟",
+   "options": [
+    "ذهب إلى المدينة",
+    "صعد جبل الصفا ونادى أقاربه",
+    "أرسل رسائل لهم"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q2",
+   "kind": "choose",
+   "question": "أين صعد النبي ﷺ لينادي أقاربه؟",
+   "options": [
+    "جبل أُحُد",
+    "جبل الصفا",
+    "جبل النور"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q3",
+   "kind": "choose",
+   "question": "ماذا قال قومه عندما سألهم هل يصدقونه؟",
+   "options": [
+    "لا نصدقك",
+    "نعم، ما جربنا عليك كذباً",
+    "لا نعرف"
+   ],
+   "answer": 1,
+   "review": "CHECK: quotes the words of the held hadith (sidquh-003); a teacher clears it with that hadith"
+  },
+  {
+   "id": "q4",
+   "kind": "truefalse",
+   "statement": "صعد النبي ﷺ جبل الصفا لينادي أقاربه",
+   "answer": true,
+   "review": null
+  },
+  {
+   "id": "q5",
+   "kind": "truefalse",
+   "statement": "قال قومه: جربنا عليك الكذب",
+   "answer": false,
+   "review": "CHECK: quotes the words of the held hadith (sidquh-003); a teacher clears it with that hadith"
+  },
+  {
+   "id": "q6",
+   "kind": "truefalse",
+   "statement": "أمر الله النبي ﷺ أن يدعو أقاربه إلى عبادة الله وحده",
+   "answer": true,
+   "review": null
+  }
+ ]
+}

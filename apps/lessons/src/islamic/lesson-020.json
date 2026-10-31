@@ -1,0 +1,373 @@
+{
+ "lesson": 20,
+ "kind": "topic",
+ "fiqh": false,
+ "title": {
+  "text": "محمد ﷺ نبيي",
+  "review": null
+ },
+ "review": {
+  "status": "pending",
+  "by": null,
+  "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 src/lessons/islamic/lesson-20, read as text from the quarantined copy, never built or run). Quran by reference only; every hadith held; everything pending the Teachers department (and a qualified scholar for any fiqh)."
+ },
+ "provenance": {
+  "source": "jawwid-lessons @ c231532, src/lessons/islamic/lesson-20 (read as text, never built or run)",
+  "sha256": {
+   "src/lessons/islamic/lesson-20/components/LessonSlides.tsx": "002bd49a749510c63c7fa304a84145e394542edc6d91970e7f8bffb20e4b1dee",
+   "src/lessons/islamic/lesson-20/components/QuizSlides.tsx": "6a6459da4cf557f6055acb777e7b9e56ae0573c92e59265aef366227f96053b4",
+   "src/lessons/islamic/lesson-20/pages/Index.tsx": "2868617c61f1344630508def87f0bc95b10315ab1779e6228eb8bce5ed10359c",
+   "src/lessons/islamic/lesson-20/components/LessonUI.tsx": "7540dc75253195e7a9b4b26be05458fbe31fe3b629b50f4afc1bdd73ab579c5b"
+  }
+ },
+ "retiredIds": [],
+ "sections": [
+  {
+   "id": "welcome",
+   "title": {
+    "text": "السلام عليكم ورحمة الله!",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "welcome-001",
+     "kind": "text",
+     "text": "أهلًا بكم يا أحبائي في درس جديد من دروس أكاديمية جَوِّد!",
+     "review": null
+    },
+    {
+     "id": "welcome-002",
+     "kind": "text",
+     "text": "اليوم سنتعلم عن أعظم إنسان خلقه الله...",
+     "review": null
+    },
+    {
+     "id": "welcome-003",
+     "kind": "text",
+     "text": "نبينا محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "welcome-004",
+     "kind": "text",
+     "text": "السلام عليكم ورحمة الله وبركاته! أهلًا بكم يا أحبائي في درس جديد. اليوم سنتعرف على نبينا الحبيب محمد صلى الله عليه وسلم.",
+     "review": "CHECK: the old slide's voice-over script note (shown on the slide under a microphone icon); keep it as narration or drop it"
+    }
+   ]
+  },
+  {
+   "id": "objectives",
+   "title": {
+    "text": "أهداف الدرس",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "objectives-001",
+     "kind": "text",
+     "text": "أن يعرف الطالب اسم النبي ﷺ ونسبه",
+     "review": null
+    },
+    {
+     "id": "objectives-002",
+     "kind": "text",
+     "text": "أن يعرف أن النبي ﷺ أُرسل للناس جميعًا",
+     "review": null
+    },
+    {
+     "id": "objectives-003",
+     "kind": "text",
+     "text": "أن يعرف أن النبي ﷺ عبد الله ورسوله وخاتم الأنبياء",
+     "review": null
+    },
+    {
+     "id": "objectives-004",
+     "kind": "text",
+     "text": "أن يحب النبي ﷺ ويطيعه",
+     "review": null
+    },
+    {
+     "id": "objectives-005",
+     "kind": "text",
+     "text": "أن يعرف فضل الصلاة على النبي ﷺ",
+     "review": null
+    },
+    {
+     "id": "objectives-006",
+     "kind": "text",
+     "text": "هيا بنا نتعلم عن نبينا الحبيب!",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "my_prophet",
+   "title": {
+    "text": "محمد ﷺ نبيي",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "my_prophet-001",
+     "kind": "text",
+     "text": "نبيي محمد ﷺ ابن عبد الله بن عبد المطلب",
+     "review": null
+    },
+    {
+     "id": "my_prophet-002",
+     "kind": "text",
+     "text": "أرسل الله نبينا محمدًا ﷺ إلى الناس جميعًا يدعوهم إلى الإسلام.",
+     "review": null
+    },
+    {
+     "id": "my_prophet-003",
+     "kind": "quran",
+     "surah": 7,
+     "from": 158,
+     "to": 158,
+     "review": null
+    },
+    {
+     "id": "my_prophet-004",
+     "kind": "text",
+     "text": "أنزل الله على نبينا محمد ﷺ القرآن الكريم",
+     "review": null
+    },
+    {
+     "id": "my_prophet-005",
+     "kind": "text",
+     "text": "نبينا محمد ﷺ أُرسل للناس جميعًا، ليس لقوم واحد فقط!",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "servant_messenger",
+   "title": {
+    "text": "محمد ﷺ عبد الله ورسوله",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "servant_messenger-001",
+     "kind": "text",
+     "text": "نبيي محمد ﷺ عبد من عباد الله",
+     "review": null
+    },
+    {
+     "id": "servant_messenger-002",
+     "kind": "quran",
+     "surah": 18,
+     "from": 1,
+     "to": 1,
+     "review": null
+    },
+    {
+     "id": "servant_messenger-003",
+     "kind": "text",
+     "text": "نبيي محمد ﷺ أفضل البشر",
+     "review": null
+    },
+    {
+     "id": "servant_messenger-004",
+     "kind": "text",
+     "text": "نبيي محمد ﷺ آخر الأنبياء",
+     "review": null
+    },
+    {
+     "id": "servant_messenger-005",
+     "kind": "quran",
+     "surah": 33,
+     "from": 40,
+     "to": 40,
+     "review": null
+    },
+    {
+     "id": "servant_messenger-006",
+     "kind": "text",
+     "text": "محمد ﷺ هو خاتم الأنبياء والمرسلين، لا نبي بعده!",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "dhikr",
+   "title": {
+    "text": "ذكر الصباح والمساء",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "dhikr-001",
+     "kind": "text",
+     "text": "نقول هذا الذكر ثلاث مرات صباحًا وثلاث مرات مساءً:",
+     "review": null
+    },
+    {
+     "id": "dhikr-002",
+     "kind": "hadith",
+     "source": "رواه أحمد وأبو داود (no number stated)",
+     "text": "مَا مِنْ عَبْدٍ مُسْلِمٍ يَقُولُ حِينَ يُصْبِحُ وَحِينَ يُمْسِي ثَلَاثَ مَرَّاتٍ: رَضِيتُ بِاللهِ رَبًّا، وَبِالْإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا، إِلَّا كَانَ حَقًّا عَلَى اللهِ أَنْ يُرْضِيَهُ يَوْمَ الْقِيَامَةِ",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "dhikr-003",
+     "kind": "text",
+     "text": "رَضِيتُ بِاللهِ رَبًّا وَبِالْإِسْلَامِ دِينًا وَبِمُحَمَّدٍ ﷺ نَبِيًّا",
+     "review": "CHECK: the dhikr is the wording of the held hadith above; check it together with that hadith"
+    },
+    {
+     "id": "dhikr-004",
+     "kind": "text",
+     "text": "هيا نحفظ هذا الذكر ونقوله كل صباح ومساء!",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "love_obey",
+   "title": {
+    "text": "أحب نبيي ﷺ وأطيعه",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "love_obey-001",
+     "kind": "text",
+     "text": "أحب رسول الله ﷺ",
+     "review": null
+    },
+    {
+     "id": "love_obey-002",
+     "kind": "text",
+     "text": "أحب نبيي محمدًا ﷺ",
+     "review": null
+    },
+    {
+     "id": "love_obey-003",
+     "kind": "text",
+     "text": "آمنت برسالة نبيي محمد ﷺ",
+     "review": null
+    },
+    {
+     "id": "love_obey-004",
+     "kind": "text",
+     "text": "أطيع نبيي محمد ﷺ ولا أعصيه",
+     "review": null
+    },
+    {
+     "id": "love_obey-005",
+     "kind": "text",
+     "text": "من أطاع الرسول ﷺ دخل الجنة",
+     "review": null
+    },
+    {
+     "id": "love_obey-006",
+     "kind": "quran",
+     "surah": 4,
+     "from": 13,
+     "to": 13,
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "salawat",
+   "title": {
+    "text": "ماذا نقول عندما يُذكر النبي؟",
+    "review": null
+   },
+   "blocks": [
+    {
+     "id": "salawat-001",
+     "kind": "text",
+     "text": "صلى الله عليه وسلم ﷺ",
+     "review": null
+    },
+    {
+     "id": "salawat-002",
+     "kind": "quran",
+     "surah": 33,
+     "from": 56,
+     "to": 56,
+     "review": null
+    },
+    {
+     "id": "salawat-003",
+     "kind": "hadith",
+     "source": "رواه مسلم (no number stated)",
+     "text": "مَنْ صَلَّى عَلَيَّ صَلَاةً وَاحِدَةً، صَلَّى الله عَلَيْهِ عَشْرَ صَلَوَاتٍ، وَحَطَّ عَنْهُ عَشْرَ خَطِيئَاتٍ",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "salawat-004",
+     "kind": "hadith",
+     "source": "رواه الترمذي (no number stated)",
+     "text": "الْبَخِيلُ مَنْ ذُكِرْتُ عِنْدَهُ، ثُمَّ لَمْ يُصَلِّ عَلَيَّ",
+     "review": "HADITH: held until a verified hadith source is approved; a teacher checks its wording, source and grade"
+    },
+    {
+     "id": "salawat-005",
+     "kind": "text",
+     "text": "لا تكن بخيلًا! صلِّ على النبي ﷺ كلما ذُكر اسمه!",
+     "review": "CHECK: a practice ruling (salawat every time he is mentioned) resting on the held hadith above; a qualified scholar confirms the wording"
+    }
+   ]
+  }
+ ],
+ "quiz": [
+  {
+   "id": "q1",
+   "kind": "choose",
+   "question": "من هو نبينا؟",
+   "options": [
+    "إبراهيم عليه السلام",
+    "محمد ﷺ ابن عبد الله بن عبد المطلب",
+    "موسى عليه السلام",
+    "عيسى عليه السلام"
+   ],
+   "answer": 1,
+   "review": null
+  },
+  {
+   "id": "q2",
+   "kind": "truefalse",
+   "statement": "النبي ﷺ أُرسل إلى العرب فقط",
+   "answer": false,
+   "review": null
+  },
+  {
+   "id": "q3",
+   "kind": "choose",
+   "question": "ماذا أنزل الله على نبينا محمد ﷺ؟",
+   "options": [
+    "القرآن الكريم",
+    "التوراة",
+    "الإنجيل",
+    "الزبور"
+   ],
+   "answer": 0,
+   "review": null
+  },
+  {
+   "id": "q4",
+   "kind": "choose",
+   "question": "ماذا نقول عندما يُذكر النبي ﷺ؟",
+   "options": [
+    "سبحان الله",
+    "الحمد لله",
+    "صلى الله عليه وسلم",
+    "لا حول ولا قوة إلا بالله"
+   ],
+   "answer": 2,
+   "review": null
+  },
+  {
+   "id": "q5",
+   "kind": "truefalse",
+   "statement": "من أطاع الرسول ﷺ دخل الجنة",
+   "answer": true,
+   "review": null
+  }
+ ]
+}
