@@ -91,6 +91,11 @@ STORAGE_PUBLIC_BASE_URL	storage	no	opt	opt	opt
 OUTBOX_POLL_MS	worker	no	opt	opt	opt
 OUTBOX_BATCH_SIZE	worker	no	opt	opt	opt
 OUTBOX_IDLE_BACKOFF_MS	worker	no	opt	opt	opt
+# How many realtime deliveries one API node runs at once (delivery-queue.ts):
+# each holds a pool connection, so unset means a third of DATABASE_POOL_MAX
+# (at least 1; 2 when that is unset too). Order within a conversation holds at
+# any value. 1..16; anything else refuses to start.
+REALTIME_DELIVERY_CONCURRENCY	worker	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_IMAGE	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VIDEO	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VOICE	storage	no	opt	opt	opt

@@ -35,7 +35,7 @@ import { ActionScope, actionRateLimitKey, configInteger } from '../../platform/a
 import { RATE_LIMIT_STORE, RateLimitStore } from '../../platform/auth/login-rate-limit';
 import { AppConfigService, COMMUNICATION_CONFIG_DEFAULTS } from '../../platform/app-config.service';
 import { FrameBudget } from './frame-budget';
-import { DeliveryQueue } from './delivery-queue';
+import { DeliveryQueue, deliveryConcurrency } from './delivery-queue';
 import {
   RealtimeRevocationHub,
   RevocationUnconfirmedError,
@@ -169,12 +169,11 @@ function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 
 /**
  * Deliveries run one at a time PER CONVERSATION (event order) and at most
- * DELIVERY_CONCURRENCY at once per node: each holds a short row-locking
+ * deliveryConcurrency() at once per node: each holds a short row-locking
  * transaction (see ConversationService.withDeliveryLocks), so this bounds them
- * to that many pool connections (of DATABASE_POOL_MAX). Actor-addressed events
- * share one queue, as before. See delivery-queue.ts.
+ * to that many pool connections (a third of DATABASE_POOL_MAX). Actor-addressed
+ * events share one queue, as before. See delivery-queue.ts.
  */
-const DELIVERY_CONCURRENCY = 2;
 const deliveryKey = {
   conversation: (conversationId: string) => `conversation:${conversationId}`,
   actors: 'actors',
@@ -259,9 +258,9 @@ export class RealtimeGateway
   private readonly log = new Logger(RealtimeGateway.name);
   private sweep?: ReturnType<typeof setInterval>;
   private sweeping = false;
-  private readonly deliveries = new DeliveryQueue(DELIVERY_CONCURRENCY, (key, e) => {
+  private readonly deliveries = new DeliveryQueue(deliveryConcurrency(), (key, e) => {
     realtimeMetrics.deliveryFailed++;
-    this.log.error(`realtime delivery failed (${key.split(':')[0]}): ${(e as Error).name}`);
+    this.log.error(`realtime delivery failed (${key.split(':')[0]}): ${(e as Error | undefined)?.name ?? typeof e}`);
   });
 
   // RT-009 completion barrier (see NODE_FENCE).

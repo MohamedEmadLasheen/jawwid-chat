@@ -4,7 +4,7 @@
  * waiting on a row lock (up to its 5 s lock_timeout) held up every
  * conversation on that node.
  */
-import { DeliveryQueue } from '@communication/realtime/delivery-queue';
+import { DeliveryQueue, deliveryConcurrency } from '@communication/realtime/delivery-queue';
 
 function deferred() {
   let resolve!: () => void;
@@ -105,6 +105,16 @@ describe('DeliveryQueue', () => {
     expect(errors).toHaveLength(1);
   });
 
+  it('a reporter that throws cannot poison the key: the next task still runs', async () => {
+    const q = new DeliveryQueue(1, () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'name')");
+    });
+    const done: string[] = [];
+    await expect(q.run('conversation:a', async () => { throw undefined; })).resolves.toBeUndefined();
+    await q.run('conversation:a', async () => { done.push('next'); });
+    expect(done).toEqual(['next']);
+  });
+
   it('forgets a key once its queue is empty', async () => {
     const q = queue(2);
     await q.run('conversation:a', async () => {});
@@ -115,5 +125,47 @@ describe('DeliveryQueue', () => {
   it('refuses a zero or fractional bound', () => {
     expect(() => new DeliveryQueue(0, () => {})).toThrow();
     expect(() => new DeliveryQueue(1.5, () => {})).toThrow();
+  });
+});
+
+describe('deliveryConcurrency', () => {
+  it('a third of the API pool, at least 1: 7 -> 2 (the deploy value), 3 -> 1, 1 -> 1, 12 -> 4', () => {
+    expect(deliveryConcurrency({ DATABASE_POOL_MAX: '7' })).toBe(2);
+    expect(deliveryConcurrency({ DATABASE_POOL_MAX: '3' })).toBe(1);
+    expect(deliveryConcurrency({ DATABASE_POOL_MAX: '1' })).toBe(1);
+    expect(deliveryConcurrency({ DATABASE_POOL_MAX: '12' })).toBe(4);
+  });
+
+  it('never more than the pool can spare: for every pool size, at most a third', () => {
+    for (let pool = 1; pool <= 50; pool++) {
+      const n = deliveryConcurrency({ DATABASE_POOL_MAX: String(pool) });
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n <= Math.max(1, pool / 3)).toBe(true);
+    }
+  });
+
+  it('REALTIME_DELIVERY_CONCURRENCY overrides it; nothing set means 2', () => {
+    expect(deliveryConcurrency({ DATABASE_POOL_MAX: '7', REALTIME_DELIVERY_CONCURRENCY: '1' })).toBe(1);
+    expect(deliveryConcurrency({})).toBe(2);
+    for (const bad of ['0', '17', '1.5', 'many']) {
+      expect(() => deliveryConcurrency({ REALTIME_DELIVERY_CONCURRENCY: bad })).toThrow('REALTIME_DELIVERY_CONCURRENCY');
+    }
+  });
+
+  it('the bound it returns is the bound a DeliveryQueue keeps', async () => {
+    const q = new DeliveryQueue(deliveryConcurrency({ DATABASE_POOL_MAX: '7' }), () => {});
+    let running = 0;
+    let peak = 0;
+    const gates = Array.from({ length: 5 }, deferred);
+    const runs = gates.map((g, i) => q.run(`conversation:${i}`, async () => {
+      running++;
+      peak = Math.max(peak, running);
+      await g.promise;
+      running--;
+    }));
+    await tick();
+    gates.forEach((g) => g.resolve());
+    await Promise.all(runs);
+    expect(peak).toBe(2);
   });
 });

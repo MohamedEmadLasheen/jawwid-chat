@@ -36,7 +36,15 @@ export class DeliveryQueue {
     const previous = this.tails.get(key) ?? Promise.resolve();
     const next = previous
       .then(() => this.inSlot(task))
-      .catch((e) => this.onError(key, e));
+      .catch((e) => {
+        // Reporting must never break the chain: a throw here would reject
+        // `next`, and every later task of this key would be skipped for good.
+        try {
+          this.onError(key, e);
+        } catch {
+          /* the failure is already lost; the key keeps moving */
+        }
+      });
     this.tails.set(key, next);
     void next.then(() => {
       if (this.tails.get(key) === next) this.tails.delete(key);
@@ -62,4 +70,23 @@ export class DeliveryQueue {
       else this.running--;
     }
   }
+}
+
+/**
+ * How many deliveries a node runs at once. Each holds one pool connection for
+ * its transaction, so it is a share of the API's pool: a third of
+ * DATABASE_POOL_MAX (7 -> 2), at least 1, leaving the rest to HTTP requests.
+ * REALTIME_DELIVERY_CONCURRENCY overrides it (1..16); with neither set (a
+ * laptop, CI) it is 2.
+ */
+export function deliveryConcurrency(env: NodeJS.ProcessEnv = process.env): number {
+  const explicit = (env.REALTIME_DELIVERY_CONCURRENCY ?? '').trim();
+  if (explicit) {
+    const n = Number(explicit);
+    if (!Number.isInteger(n) || n < 1 || n > 16) throw new Error('REALTIME_DELIVERY_CONCURRENCY must be an integer from 1 to 16');
+    return n;
+  }
+  const pool = Number((env.DATABASE_POOL_MAX ?? '').trim());
+  if (Number.isInteger(pool) && pool > 0) return Math.max(1, Math.floor(pool / 3));
+  return 2;
 }
