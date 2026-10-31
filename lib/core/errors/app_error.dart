@@ -125,6 +125,11 @@ class AppError implements Exception {
   static const connectFailed = 'connect_failed';
   static const connectTimeout = 'connect_timeout';
 
+  /// An attachment's bytes did not finish sending within the time sized for them
+  /// (`uploadSendTimeout`). Retrying at once re-sends the whole file on the same
+  /// slow link, so the message outbox parks it for an explicit retry.
+  static const uploadTimeout = 'upload_timeout';
+
   @override
   String toString() => 'AppError(${kind.name}${code == null ? '' : ', $code'})';
 }

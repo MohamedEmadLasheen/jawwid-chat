@@ -17,7 +17,6 @@ abstract interface class AttachmentUploader {
     String uploadUrl, {
     required Uint8List bytes,
     required Map<String, String> headers,
-    DateTime? expiresAt,
   });
 }
 
@@ -27,29 +26,23 @@ const uploadMinSendTimeout = Duration(seconds: 60);
 /// The slowest uplink an upload is sized for: 1 Mbps.
 const uploadAssumedBytesPerSecond = 125000;
 
-/// The ceiling when the grant gives no expiry: the default signed-URL lifetime
-/// (STORAGE_SIGNED_URL_TTL_SECONDS = 300).
-const uploadMaxSendTimeout = Duration(minutes: 5);
+/// A ceiling that only stops an upload that is not moving at all. Deliberately
+/// NOT the signed URL's lifetime: S3, Spaces and R2 check a presigned URL's
+/// expiry when the request starts, so an upload already under way may run past it.
+const uploadMaxSendTimeout = Duration(minutes: 30);
 
-/// How long sending [byteSize] bytes may take: long enough at 1 Mbps, never
-/// under [uploadMinSendTimeout], and never past the signed URL's lifetime
-/// ([expiresAt] when the grant names it, else [uploadMaxSendTimeout]).
+/// How long sending [byteSize] bytes may take: the time 1 Mbps needs, within
+/// [uploadMinSendTimeout]..[uploadMaxSendTimeout].
 ///
 /// One fixed 60 s used to bound the whole body, so a 100 MB video failed on
 /// any uplink under about 13 Mbps.
-Duration uploadSendTimeout(int byteSize, {DateTime? expiresAt, DateTime? now}) {
+Duration uploadSendTimeout(int byteSize) {
   final needed = Duration(milliseconds: (byteSize * 1000 / uploadAssumedBytesPerSecond).ceil());
-  final remaining = expiresAt?.difference(now ?? DateTime.now());
-  var cap = remaining != null && remaining > Duration.zero ? remaining : uploadMaxSendTimeout;
-  if (cap < uploadMinSendTimeout) cap = uploadMinSendTimeout;
   if (needed < uploadMinSendTimeout) return uploadMinSendTimeout;
-  return needed > cap ? cap : needed;
+  return needed > uploadMaxSendTimeout ? uploadMaxSendTimeout : needed;
 }
 
 class DioAttachmentUploader implements AttachmentUploader {
-  /// The AppError code of an upload whose body did not finish sending in time.
-  static const uploadTimeoutCode = 'upload_timeout';
-
   DioAttachmentUploader({Dio? dio, Duration timeout = uploadMinSendTimeout})
       : _dio = dio ??
             Dio(
@@ -67,9 +60,8 @@ class DioAttachmentUploader implements AttachmentUploader {
     String uploadUrl, {
     required Uint8List bytes,
     required Map<String, String> headers,
-    DateTime? expiresAt,
   }) async {
-    final sendTimeout = uploadSendTimeout(bytes.length, expiresAt: expiresAt);
+    final sendTimeout = uploadSendTimeout(bytes.length);
     try {
       await _dio.put<void>(
         uploadUrl,
@@ -91,11 +83,12 @@ class DioAttachmentUploader implements AttachmentUploader {
       rethrow;
     } catch (error) {
       if (error is DioException && error.type == DioExceptionType.sendTimeout) {
-        // Still a timeout (retryable, same message to the user); the code and
-        // detail say which one, and how long it was given.
+        // Still a timeout (same message to the user); the code says it was
+        // the upload, so the outbox parks it rather than re-sending the whole
+        // file straight away, and the detail says how long it was given.
         throw AppError(
           AppErrorKind.timeout,
-          code: uploadTimeoutCode,
+          code: AppError.uploadTimeout,
           debugDetail: 'sending ${bytes.length} bytes took longer than ${sendTimeout.inSeconds} s',
         );
       }
