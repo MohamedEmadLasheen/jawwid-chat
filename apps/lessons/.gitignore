@@ -2,3 +2,8 @@ node_modules/
 dist/
 # Generated in CI from data/quran/ by scripts/lessons/build-quran-snapshot.py, never committed.
 public/data/
+# Playwright's output (CI uploads it as an artifact).
+test-results/
+playwright-report/
+# Written by the lessons-release plugin on every build (src/content/release.ts); CI checks it.
+release-manifest.json

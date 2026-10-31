@@ -8166,6 +8166,24 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Age'**
   String get materialsAgeLabel;
+
+  /// PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get photoLabel;
+
+  /// PD-37: which photo of the message is on screen, read by a screen reader. Positions, not counts: no noun follows either number, so there is no plural agreement to make.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo {position} of {count}'**
+  String photoPositionLabel(String position, String count);
+
+  /// PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's "Draft:").
+  ///
+  /// In en, this message translates to:
+  /// **'Draft:'**
+  String get chatDraftLabel;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

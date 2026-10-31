@@ -3204,5 +3204,11 @@
   "pickerNoMatches": "No matches",
   "@pickerNoMatches": {"description": "A list picker whose search matched nothing."},
   "materialsAgeLabel": "Age",
-  "@materialsAgeLabel": {"description": "The age filter on the child materials library; names the picker and its sheet."}
+  "@materialsAgeLabel": {"description": "The age filter on the child materials library; names the picker and its sheet."},
+  "photoLabel": "Photo",
+  "@photoLabel": {"description": "PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one."},
+  "photoPositionLabel": "Photo {position} of {count}",
+  "@photoPositionLabel": {"description": "PD-37: which photo of the message is on screen, read by a screen reader. Positions, not counts: no noun follows either number, so there is no plural agreement to make.", "placeholders": {"position": {"type": "String"}, "count": {"type": "String"}}},
+  "chatDraftLabel": "Draft:",
+  "@chatDraftLabel": {"description": "PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's \"Draft:\")."}
 }

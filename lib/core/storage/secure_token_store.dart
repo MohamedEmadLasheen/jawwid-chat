@@ -16,18 +16,19 @@ abstract interface class TokenStore {
   Future<void> clear();
 }
 
+/// The device keychain, configured once for everything this app keeps there.
+const _keychain = FlutterSecureStorage(
+  // Defaults on Android 11+ of this plugin are AES-GCM data encryption with
+  // RSA-OAEP key wrapping in the platform keystore.
+  aOptions: AndroidOptions(),
+  // Readable only after first unlock, and never migrated to a new device.
+  iOptions: IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+  ),
+);
+
 class SecureTokenStore implements TokenStore {
-  SecureTokenStore({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              // Defaults on Android 11+ of this plugin are AES-GCM data encryption with
-              // RSA-OAEP key wrapping in the platform keystore.
-              aOptions: AndroidOptions(),
-              // Readable only after first unlock, and never migrated to a new device.
-              iOptions: IOSOptions(
-                accessibility: KeychainAccessibility.first_unlock_this_device,
-              ),
-            );
+  SecureTokenStore({FlutterSecureStorage? storage}) : _storage = storage ?? _keychain;
 
   static const _accessKey = 'jawwid.access_token';
   static const _refreshKey = 'jawwid.refresh_token';
@@ -92,4 +93,33 @@ class InMemoryTokenStore implements TokenStore {
 
   @override
   Future<void> clear() async => _session = null;
+}
+
+/// PD-37: the keychain for anything else this app must keep as carefully as
+/// its tokens -- a child's unsent chat drafts. Through this file, so the
+/// keychain keeps ONE door to audit (auth_token_leakage_test). Same options:
+/// this device only, never in a backup, readable after first unlock.
+abstract interface class DeviceKeychain {
+  Future<String?> read(String key);
+  Future<void> write(String key, String value);
+  Future<void> delete(String key);
+
+  /// Every key this app holds there -- to clear one family of them.
+  Future<Iterable<String>> keys();
+}
+
+class SecureDeviceKeychain implements DeviceKeychain {
+  const SecureDeviceKeychain();
+
+  @override
+  Future<String?> read(String key) => _keychain.read(key: key);
+
+  @override
+  Future<void> write(String key, String value) => _keychain.write(key: key, value: value);
+
+  @override
+  Future<void> delete(String key) => _keychain.delete(key: key);
+
+  @override
+  Future<Iterable<String>> keys() async => (await _keychain.readAll()).keys;
 }

@@ -1817,5 +1817,8 @@
   "boardSaveFirst": "يجب حفظ تغييراتك أولًا. حاول مرة أخرى عندما تظهر عبارة «محفوظ».",
   "pickerSearchHint": "اكتب للبحث",
   "pickerNoMatches": "لا توجد نتائج مطابقة",
-  "materialsAgeLabel": "العمر"
+  "materialsAgeLabel": "العمر",
+  "photoLabel": "صورة",
+  "photoPositionLabel": "الصورة {position} من {count}",
+  "chatDraftLabel": "مسودة:"
 }

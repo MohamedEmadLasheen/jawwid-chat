@@ -25,6 +25,7 @@ import { LessonRecordService } from '../../src/lessons/lesson-record.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { StatsService } from '../../src/lessons/stats.service';
 import { EnrollmentService } from '../../src/lessons/enrollment.service';
+import { monthOf as academyMonth, sumCounts } from '../support/academy-month';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -67,6 +68,17 @@ async function cards(conversationId = groupId) {
 async function thisMonth(): Promise<string> {
   const [{ m }] = await g.prisma.$queryRawUnsafe<Array<{ m: string }>>(`select to_char(now() at time zone '${TZ}', 'YYYY-MM') as m`);
   return m;
+}
+
+/** The month (stats.zone) a lesson starts in. */
+async function monthOf(id: string): Promise<string> {
+  return academyMonth((await g.prisma.lesson.findUniqueOrThrow({ where: { id }, select: { startsAt: true } })).startsAt);
+}
+
+/** The teacher's month summary over every month these lessons start in -- summed when they differ. */
+async function summaryOver(ids: string[]) {
+  const months = [...new Set(await Promise.all(ids.map(monthOf)))];
+  return sumCounts(await Promise.all(months.map(async (m) => (await stats.teacher(tsupId, s.teacherId, m)).summary)));
 }
 
 /** Move an OPEN lesson into the past, so it can be reported (a fixture, not a product path). */
@@ -442,17 +454,20 @@ describe('6. make-ups after any apology', () => {
     const regular = await lesson(-3 * HOUR);
     await lessons.report(s.teacherId, regular, REPORT);
 
-    let month = await stats.teacher(tsupId, s.teacherId, await thisMonth());
-    expect(month.summary.makeups).toEqual({ completed: 0, scheduled: 1, total: 1 });
-    expect(month.summary.completed).toEqual({ regular: 1, makeup: 0, total: 1 });
+    // Each figure in its own lesson's month: on a month's last day the make-up (+28 h)
+    // is next month's, and near midnight on the 1st the regular one (-3 h) is last month's.
+    const ids = [missed, makeup, regular];
+    let month = await summaryOver(ids);
+    expect(month.makeups).toEqual({ completed: 0, scheduled: 1, total: 1 });
+    expect(month.completed).toEqual({ regular: 1, makeup: 0, total: 1 });
 
     await moveToPast(makeup, -HOUR);
     await lessons.report(s.teacherId, makeup, REPORT);
-    month = await stats.teacher(tsupId, s.teacherId, await thisMonth());
-    expect(month.summary.makeups).toEqual({ completed: 1, scheduled: 0, total: 1 });
-    expect(month.summary.completed).toEqual({ regular: 1, makeup: 1, total: 2 });
-    expect(month.summary.conducted).toBe(2);
-    expect(month.summary.teacherExcuses).toBe(1);
+    month = await summaryOver(ids);
+    expect(month.makeups).toEqual({ completed: 1, scheduled: 0, total: 1 });
+    expect(month.completed).toEqual({ regular: 1, makeup: 1, total: 2 });
+    expect(month.conducted).toBe(2);
+    expect(month.teacherExcuses).toBe(1);
   });
 });
 
