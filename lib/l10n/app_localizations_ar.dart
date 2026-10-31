@@ -4894,4 +4894,7 @@ class L10nAr extends L10n {
   String photoPositionLabel(String position, String count) {
     return 'الصورة $position من $count';
   }
+
+  @override
+  String get chatDraftLabel => 'مسودة:';
 }

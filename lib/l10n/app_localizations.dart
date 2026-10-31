@@ -8280,6 +8280,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Photo {position} of {count}'**
   String photoPositionLabel(String position, String count);
+
+  /// PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's "Draft:").
+  ///
+  /// In en, this message translates to:
+  /// **'Draft:'**
+  String get chatDraftLabel;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
