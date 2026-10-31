@@ -13,7 +13,40 @@ const Size kBoardPageSize = Size(1920, 1080);
 ///
 /// The JSON shape is the client's own (the server checks ids, kinds, sizes,
 /// verses and images only: apps/api/src/whiteboards/whiteboard-document.ts).
-/// A kind this build does not draw -- an image before PR-4, anything newer --
+/// An image on the page (PR-4, design §4.4): it NAMES an asset of this board
+/// -- never a key or a URL, which the server refuses in a document -- and the
+/// board signs that asset's URL for whoever may read the board. It scales as
+/// one, keeping its proportions.
+class ImageElement extends BoardElement {
+  const ImageElement({required String id, required this.assetId, required this.rect}) : super(id);
+
+  final String assetId;
+  final Rect rect;
+
+  @override
+  String get kind => 'image';
+
+  @override
+  Rect get bounds => rect;
+
+  ImageElement withRect(Rect next) => ImageElement(id: id, assetId: assetId, rect: next);
+
+  @override
+  BoardElement translated(Offset delta) => withRect(rect.shift(delta));
+
+  @override
+  BoardElement scaled(Offset anchor, double sx, double sy) {
+    final k = sx.abs().clamp(0.05, 20).toDouble();
+    return withRect(
+      Rect.fromLTWH(anchor.dx + (rect.left - anchor.dx) * k, anchor.dy + (rect.top - anchor.dy) * k, rect.width * k, rect.height * k),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() => {'id': id, 'kind': kind, 'assetId': assetId, ..._rectJson(rect)};
+}
+
+/// A kind this build does not draw -- anything newer than it, or malformed --
 /// is kept as an [OpaqueElement] and saved back exactly as it came.
 sealed class BoardElement {
   const BoardElement(this.id);
@@ -93,6 +126,14 @@ sealed class BoardElement {
             rect: Rect.fromLTWH(_num(transform['x'], 0), _num(transform['y'], 0), _num(transform['w'], 1400), _num(transform['h'], 200)),
             fontSize: _num(style['size'], 64),
             color: _color(style['color']),
+          );
+        case 'image':
+          final asset = json['assetId'];
+          if (asset is! String || asset.isEmpty) break;
+          return ImageElement(
+            id: id,
+            assetId: asset.toLowerCase(),
+            rect: Rect.fromLTWH(_num(json['x'], 0), _num(json['y'], 0), _num(json['w'], 400), _num(json['h'], 300)),
           );
         case 'stamp':
           return StampElement(
@@ -423,7 +464,7 @@ class VerseElement extends BoardElement {
   };
 }
 
-/// A kind this build does not draw (an image before PR-4, or anything newer). Kept and saved back exactly as it came; it moves only
+/// A kind this build does not draw (anything newer, or malformed). Kept and saved back exactly as it came; it moves only
 /// when it carries x/y/w/h, and it is shown as a labelled box.
 class OpaqueElement extends BoardElement {
   const OpaqueElement(super.id, this.json);

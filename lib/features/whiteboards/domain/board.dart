@@ -51,15 +51,47 @@ class BoardSummary {
   );
 }
 
+/// One of a board's images as the server signs it (PR-4, design §6.3): the
+/// URL is a short-lived bearer link to exactly this image, never a key.
+class BoardAsset {
+  const BoardAsset({required this.id, required this.url, required this.expiresAt, this.width, this.height, this.contentType});
+
+  final String id;
+  final String url;
+  final DateTime expiresAt;
+  final int? width;
+  final int? height;
+  final String? contentType;
+
+  static BoardAsset? fromJson(Object? j) {
+    if (j is! Map || j['id'] is! String || j['url'] is! String) return null;
+    return BoardAsset(
+      id: (j['id'] as String).toLowerCase(),
+      url: j['url'] as String,
+      expiresAt: _date(j['expiresAt']) ?? DateTime.now(),
+      width: (j['width'] as num?)?.toInt(),
+      height: (j['height'] as num?)?.toInt(),
+      contentType: j['contentType'] as String?,
+    );
+  }
+
+  static List<BoardAsset> listFrom(Object? j) => [
+    for (final a in (j is List ? j : const [])) ?BoardAsset.fromJson(a),
+  ];
+}
+
 /// A board with its pages (GET /whiteboards/:id and every structural write).
 class BoardDetail {
-  const BoardDetail({required this.summary, required this.canEdit, required this.pages});
+  const BoardDetail({required this.summary, required this.canEdit, required this.pages, this.assets = const []});
 
   final BoardSummary summary;
 
   /// The server's word: false for any reader but the owning teacher.
   final bool canEdit;
   final List<BoardPage> pages;
+
+  /// The board's ready images, signed (PR-4); empty where the server has none.
+  final List<BoardAsset> assets;
 
   String get id => summary.id;
   int get revision => summary.revision;
@@ -69,7 +101,7 @@ class BoardDetail {
       for (final p in (j['pages'] as List? ?? const []))
         if (p is Map) BoardPage.fromJson(Map<String, Object?>.from(p)),
     ]..sort((a, b) => a.position.compareTo(b.position));
-    return BoardDetail(summary: BoardSummary.fromJson(j), canEdit: j['canEdit'] == true, pages: pages);
+    return BoardDetail(summary: BoardSummary.fromJson(j), canEdit: j['canEdit'] == true, pages: pages, assets: BoardAsset.listFrom(j['assets']));
   }
 }
 

@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { Writable } from 'node:stream';
+import { Transform, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { CommError } from '../../platform/errors';
 import { actorIsLive } from '../../platform/liveness';
@@ -22,7 +22,19 @@ export interface MediaServeDeps {
   signer: MediaUrlSigner;
   prisma: PrismaService;
   storage: ObjectStorage;
+  /** How long storage may send nothing while the reader is waiting for bytes. Default MEDIA_STALL_TIMEOUT_MS. */
+  stallMs?: number;
 }
+
+/**
+ * A storage body that goes silent mid-stream while the READER is waiting is
+ * ended after this long. The storage client bounds only the connection and the
+ * response headers (s3-object-storage.ts): a body that stops arriving would
+ * otherwise hold the response open until the viewer gave up. Time the reader
+ * spends not reading (a paused video: the response is back-pressured) never
+ * counts.
+ */
+export const MEDIA_STALL_TIMEOUT_MS = 30_000;
 
 /**
  * RT-037 -- the ONE implementation behind every access-checked media link
@@ -104,8 +116,9 @@ export async function serveAuthorizedMedia(
     destroySource(object.body);
     throw new Error('media-serve: a streamed body needs a Writable response');
   }
+  const stall = stallWatchdog(out, deps.stallMs ?? MEDIA_STALL_TIMEOUT_MS);
   try {
-    await pipeline(object.body, out);
+    await pipeline(object.body, stall.tap, out);
   } catch (e) {
     // The status line is gone, so there is nothing left to answer: end both
     // ends (pipeline normally has already) so neither the reader nor the
@@ -116,7 +129,37 @@ export async function serveAuthorizedMedia(
     if ((e as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') {
       log.warn(`media ${kind}/${id}: stream ended early: ${(e as Error).message}`);
     }
+  } finally {
+    stall.stop();
   }
+}
+
+/**
+ * A pass-through between storage and the response that notes when bytes last
+ * arrived, and destroys the stream (so pipeline ends both ends) once storage
+ * has sent nothing for `stallMs` while the response could take more. While
+ * the response is back-pressured the reader is the slow side, and the clock
+ * is held.
+ */
+function stallWatchdog(out: Writable, stallMs: number): { tap: Transform; stop: () => void } {
+  let lastByteAt = Date.now();
+  const tap = new Transform({
+    transform(chunk, _enc, done) {
+      lastByteAt = Date.now();
+      done(null, chunk);
+    },
+  });
+  const timer = setInterval(() => {
+    if (out.writableNeedDrain || tap.writableNeedDrain || tap.readableLength > 0) {
+      lastByteAt = Date.now(); // waiting on the reader, not on storage
+      return;
+    }
+    if (Date.now() - lastByteAt >= stallMs) {
+      tap.destroy(Object.assign(new Error(`storage sent nothing for ${stallMs} ms`), { name: 'TimeoutError' }));
+    }
+  }, Math.max(10, Math.min(1_000, Math.floor(stallMs / 4))));
+  timer.unref?.();
+  return { tap, stop: () => clearInterval(timer) };
 }
 
 function isWritable(w: Writable): boolean {

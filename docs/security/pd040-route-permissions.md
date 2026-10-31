@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-549 routes.
+551 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -161,7 +161,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/dashboard/chats` | chat.use | `dashboard/dashboard.controller.ts#DashboardController.chats` |
 | GET | `/api/v1/dashboard/enrolment` | trials.view | new_students.view | `dashboard/dashboard.controller.ts#DashboardController.enrolmentSection` |
 | GET | `/api/v1/dashboard/lessons` | lessons.view | schedule.view | `dashboard/dashboard.controller.ts#DashboardController.lessons` |
+| GET | `/api/v1/dashboard/structure` | org.view | `dashboard/dashboard.controller.ts#DashboardController.structureSection` |
 | GET | `/api/v1/dashboard/tasks` | self-service | `dashboard/dashboard.controller.ts#DashboardController.tasksSection` |
+| GET | `/api/v1/dashboard/teachers` | teacher_supervision.view | teacher_profiles.review | `dashboard/dashboard.controller.ts#DashboardController.teachersSection` |
 | POST | `/api/v1/discipline/complaints/:id/uphold` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.uphold` |
 | GET | `/api/v1/discipline/violations` | teacher_supervision.view | `discipline/discipline.controller.ts#DisciplineController.list` |
 | POST | `/api/v1/discipline/violations/:id/decide` | teacher_supervision.record | `discipline/discipline.controller.ts#DisciplineController.decide` |
