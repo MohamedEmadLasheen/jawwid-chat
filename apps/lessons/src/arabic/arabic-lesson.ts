@@ -1,6 +1,7 @@
 import type { ResolvedQuiz } from '../content/lesson-content';
 import { HARAKA, MADD, POSITIONS, TANWEEN, has, isLetter, isPhrase, isWord, positions, sukunOnMadd, uncountedMadd, type Haraka, type LetterUnit, type Madd, type Position, type Tanween } from './letters';
 import { POSITION_LABEL, askContains, askPosition } from './ui-text';
+import { isWithheld } from '../content/release';
 
 /**
  * An Arabic letters lesson (PD-29 P0-5): units (a letter, the hamza with its
@@ -131,6 +132,8 @@ function isLesson(x: unknown): x is ArabicLesson {
 }
 
 export function resolveArabicLesson(raw: unknown, lesson: number): ResolvedArabicLesson | null {
+  // A pending file reaches a family build only as a stub (release.ts): the lesson is under review.
+  if (isWithheld(raw)) return { units: [], quiz: [], held: 0, approved: false };
   if (!isLesson(raw) || raw.lesson !== lesson || raw.finalMark !== 'sukun') return null;
   const approved = raw.review.status === 'approved';
   let held = 0;
