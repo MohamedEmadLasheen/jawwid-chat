@@ -240,6 +240,33 @@ describe('the manager Dashboard', () => {
     )
   })
 
+  it('shows the Payments section: instalments, receipts and locked subscriptions (PR-5)', async () => {
+    routes['/dashboard/billing'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('instalments.overdue', 3),
+          tile('instalments.due', 1),
+          tile('instalments.unassigned', 2),
+          tile('receipts.pending', 4),
+          tile('parents.locked', 2),
+          tile('parents.grace', 1),
+        ],
+      })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['billing.view', 'parents.view'] }))
+    const section = await screen.findByRole('region', { name: 'Payments' })
+    const overdue = await within(section).findByRole('link', { name: /Overdue instalments/ })
+    expect(overdue).toHaveAttribute('href', '/instalments')
+    expect(overdue).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Instalments due today/ })).toHaveAttribute('href', '/instalments')
+    expect(within(section).getByRole('link', { name: /Instalments with no responsible supervisor/ })).toHaveAttribute('href', '/instalments?responsible=none')
+    expect(within(section).getByRole('link', { name: /Receipts awaiting review/ })).toHaveAttribute('href', '/payments')
+    const locked = within(section).getByRole('link', { name: /Parents of a child with a locked subscription/ })
+    expect(locked).toHaveAttribute('href', '/parents?access=locked')
+    expect(locked).toHaveClass('dash-tile--alert')
+    expect(within(section).getByRole('link', { name: /Parents of a child in the grace period/ })).toHaveAttribute('href', '/parents?access=grace')
+  })
+
   it('is Arabic first: Arabic labels and digits, right to left', async () => {
     open(MANAGER, 'ar')
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()

@@ -213,6 +213,13 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 ### 3.5 `GET /dashboard/billing` · `@Requires('billing.view')`
 
+> **As built (PR-5):** the route is `@Requires('billing.view', 'parents.view')`. The tiles are `instalments.overdue`, `instalments.due`, `instalments.unassigned` and `receipts.pending` (with `billing.view`), and `parents.locked` and `parents.grace` (with `parents.view`). Changes from the table below:
+> - **Who:** every Instalment Payments viewer, in that page's own scope (`billingAccessOf`: `all`, `reach` or `owned`), not only `all`. The reach and owned rules are one SQL predicate (`familyInScopeSql`), shared by the page's family list and the counts, so `reach` costs one statement, not a per-family loop. Teachers get no tile.
+> - **Instalment links:** the page has no status filter; it lists overdue first and states the counts in its summary line, so `overdue` and `due` link to `/instalments`. `unassigned` links to `/instalments?responsible=none`, the page's existing filter, now read from the URL.
+> - **Locked and grace** are counted as the Parents list shows them: parents (not learners) of a family with a child in that state, through the new `/parents?access=locked|grace` filter. The count is capped at that list's 200 rows. No `subscriptions.view` check: the Parents page's own key decides.
+> - **The state is computed now** (`chat.compute_learner_access`, as enforcement computes it), not read from the stored `chat.learner_access` row, so an instalment overdue at midnight shows at once. The filter and the tile are one statement each; the tile computes each child of the families in scope once.
+> - **`receipts.pending`** is capped at the receipts list's 200 rows, with `capped` above it. Its scope is the shared predicate, equivalent to the list's two-step family filter.
+
 | Tile | Predicate | Who |
 |---|---|---|
 | `instalments.overdue` · `instalments.due` · `instalments.unassigned` | The SQL form of `statusOf` (`billing.service.ts`), on the open-rows index `(organization_id, due_date)` | `decideBillingAccess` = `all`: super admin, Operations Manager, Sales |
@@ -221,7 +228,7 @@ A tile the caller's basis does not cover is **absent** from `tiles`. If no tile 
 
 - **Cost:** one statement for instalments and one for receipts and access states together.
 - **`reach` callers:** an Operations supervisor would hit the per-family `staff_reaches_family` loop (`billing.service.ts:804`). Supervisors are not in v1 (Q1). If they are added later, this section gets a set-based reach query first.
-- **Stored lock state can lag** the live value until the next refresh or sweep. This matches what the parent's app enforces (the stored row), so the tile states the same truth.
+- **Lock state is computed now** (as built): enforcement reads `chat.compute_learner_access`, not the stored row, and so do the filter and the tile.
 - **Lives in:** `BillingService.counts` and `PaymentsService.counts`.
 - **Links:**
   - `/instalments?status=overdue`: PR-5 adds the parameter;
@@ -486,3 +493,4 @@ PR-3 to PR-7 are independent of each other once PR-2 is in. The order above is a
 - **The Chat list's "Waiting for a reply" shows at most the list's 200 most recent conversations, plus open mentions.** The tile's count is exact, so above 200 the two can differ. At today's scale no manager's scope reaches 200.
 - **No tile counts prospects without a booked trial** (PR-4). No page lists prospects; they appear only in the booking dialog's picker. A tile would link nowhere, so it waits for a prospects list.
 - **The trial and New Students tiles count what their pages list.** That is the Trials page's ±31-day default window (an awaiting trial older than 31 days is on neither) and the New Students page's 500 newest live forms. `capped` says when either limit is passed.
+- **The overdue and due-today tiles open the whole Instalment Payments list** (PR-5). That page has no status filter; it lists overdue first and counts both in its summary line, which the tiles equal.
