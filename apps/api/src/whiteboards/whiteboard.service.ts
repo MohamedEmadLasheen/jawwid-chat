@@ -417,6 +417,36 @@ export class WhiteboardService {
   // ---------------------------------------------------------------------------
 
   /**
+   * The pickers' source (review of #327): the teachers whose boards this staff
+   * member may read -- exactly chat.staff_supervised_teacher_ids, the scope
+   * every staff read here uses -- departed ones included (their boards are
+   * kept). `copyTargets` (the organization's active teachers) only for the
+   * Teachers Manager and the super admin, who copy a departed teacher's
+   * boards; null for everyone else. Names only: nothing of a board.
+   */
+  async boardTeachers(actor: Actor): Promise<{ teachers: Array<{ id: string; name: string; isActive: boolean }>; copyTargets: Array<{ id: string; name: string }> | null }> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) throw notFound();
+    const teachers = await this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean }>>`
+      SELECT t.id::text AS id, t.name, (t.is_active AND t.left_at IS NULL) AS active
+        FROM chat.teacher t
+       WHERE t.organization_id = ${actor.organizationId}::uuid
+         AND t.id IN (SELECT x FROM chat.staff_supervised_teacher_ids(${actor.actorId}::uuid, now()) x)
+       ORDER BY t.name, t.id`;
+    const [{ manager }] = await this.prisma.$queryRaw<Array<{ manager: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM chat.department d
+                      WHERE d.kind = 'teachers' AND d.manager_id = ${actor.actorId}::uuid
+                        AND d.organization_id = ${actor.organizationId}::uuid) AS manager`;
+    const copies = actor.staffRole === StaffRole.SUPER_ADMIN || manager;
+    const copyTargets = copies
+      ? await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+          SELECT id::text AS id, name FROM chat.teacher
+           WHERE organization_id = ${actor.organizationId}::uuid AND is_active AND left_at IS NULL
+           ORDER BY name, id`
+      : null;
+    return { teachers: teachers.map((t) => ({ id: t.id, name: t.name, isActive: t.active })), copyTargets };
+  }
+
+  /**
    * A teacher's boards in use and kept, for a reader of that teacher. A listing
    * names the boards, so each one named is logged ('list'), as an open is.
    */
@@ -489,43 +519,100 @@ export class WhiteboardService {
    * §10 4a: a departed teacher's board, given to an active teacher as a new
    * board of their own. The original is unchanged and keeps its 12 months.
    */
-  async copyToTeacher(boardId: string, body: Record<string, unknown>, actor: Actor): Promise<BoardSummary> {
+  async copyToTeacher(boardId: string, body: Record<string, unknown>, actor: Actor, idempotencyKey?: string): Promise<BoardSummary> {
     const target = this.uuid(body.teacherId, 'teacherId');
     if (currentImpersonationId()) throw new CommError(CommErrorCode.WHITEBOARD_DENIED, 'a support session never copies a board');
-    const check = async (tx: Tx) => {
+    const key = idempotencyKey === undefined || idempotencyKey === '' ? null : idempotencyKey;
+    if (key !== null && (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))) throw invalid('Idempotency-Key: 1-200 visible characters');
+    // Who may read this board: asked again in each of the three steps below.
+    const authorize = async (tx: Tx) => {
       const source = await this.readableBoard(tx, boardId, actor);
       const basis = await this.readerBasis(tx, actor, source.teacher_id);
+      return { source, basis };
+    };
+    // A retry of the same copy (review of #304): the copy it made, never a second one.
+    // A key is this staff member's own (the log row's viewer), names ONE target
+    // (review of #327: another teacher under the same key is a 409, never the
+    // first teacher's copy), and is locked as such, so requests in flight with
+    // it are taken one after the other, step by step, whatever teacher they name.
+    const earlier = async (tx: Tx, source: BoardRow): Promise<BoardSummary | null> => {
+      if (key === null) return null;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'whiteboard-copy:' + actor.actorId + ':' + key}))`;
+      const [row] = await tx.$queryRaw<Array<{ to_board: string | null; to_teacher: string | null }>>`
+        SELECT l.detail ->> 'toBoardId' AS to_board, l.detail ->> 'toTeacherId' AS to_teacher
+          FROM chat.whiteboard_access_log l
+         WHERE l.board_id = ${source.id}::uuid AND l.action = 'copy'
+           AND l.viewer_id = ${actor.actorId}::uuid AND l.detail ->> 'idempotencyKey' = ${key}
+         ORDER BY l.id DESC LIMIT 1`;
+      if (!row) return null;
+      if (row.to_teacher !== target) {
+        throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'this Idempotency-Key was used to copy the board to another teacher; use a new key', 409);
+      }
+      const [done] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${row.to_board}::uuid`;
+      return done ? summary(done) : null;
+    };
+    const check = async (tx: Tx, source: BoardRow) => {
       if (source.state !== 'retained') throw state("only a departed teacher's board is copied to another teacher");
       const [teacher] = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id::text AS id FROM chat.teacher
          WHERE id = ${target}::uuid AND organization_id = ${source.organization_id}::uuid AND is_active AND left_at IS NULL`;
       if (!teacher) throw invalid('teacherId: an active teacher of this organization');
-      return { source, basis };
     };
-    // Authorized before a single object is copied; checked again with the rows.
+    // Authorized, and a retry answered, before a single object is copied; checked again with the rows.
     const first = await this.read(async (tx) => {
-      const { source } = await check(tx);
+      const { source } = await authorize(tx);
+      const done = await earlier(tx, source);
+      if (done) return { done };
+      await check(tx, source);
       await this.assertCopyFits(tx, target, source.id);
-      return source;
+      return { source };
     });
-    const plan = await this.planImageCopy(first, first.organization_id);
-    const copy = await this.write(async (tx) => {
-      const { source } = await check(tx);
+    if (first.done) return first.done;
+    const plan = await this.planImageCopy(first.source as BoardRow, (first.source as BoardRow).organization_id);
+    const rows = await this.write(async (tx) => {
+      const { source } = await authorize(tx);
+      const done = await earlier(tx, source);
+      if (done) return { done };
+      await check(tx, source);
       await this.lockTeacher(tx, target);
       await this.assertBoardRoom(tx, target);
       const id = await this.copyBoard(tx, source, target, source.organization_id, source.title, plan);
       await this.assertQuota(tx, target);
-      return id;
+      return { id };
     });
+    if (rows.done) return rows.done;
+    const copy = rows.id as string;
     await this.copyImageObjects(plan);
-    return this.write(async (tx) => {
-      const { source, basis } = await check(tx);
-      await this.imagesCopied(tx, plan);
-      // Logged once the copy is whole: its images are where its pages say.
-      await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target });
-      const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
-      return summary(row);
-    });
+    let out: { done?: BoardSummary; made?: BoardSummary };
+    try {
+      out = await this.write(async (tx) => {
+        const { source, basis } = await authorize(tx);
+        // Another request with this key finished its copy while these objects were copied: that one stands.
+        const done = await earlier(tx, source);
+        if (done) return { done };
+        await this.imagesCopied(tx, plan);
+        // Logged once the copy is whole: its images are where its pages say.
+        await this.record(tx, source, { id: actor.actorId, kind: 'staff', basis }, 'copy', { toBoardId: copy, toTeacherId: target, ...(key !== null ? { idempotencyKey: key } : {}) });
+        const [row] = await tx.$queryRaw<BoardRow[]>`${BOARD_SELECT} WHERE w.id = ${copy}::uuid`;
+        return { made: summary(row) };
+      });
+    } catch (e) {
+      await this.takeBackCopy(plan);
+      throw e;
+    }
+    if (out.done) {
+      await this.takeBackCopy(plan);
+      return out.done;
+    }
+    return out.made as BoardSummary;
+  }
+
+  /** A copy that was not logged (another request's stands, or the last step failed): its board and objects go. */
+  private async takeBackCopy(plan: ImagePlan): Promise<void> {
+    await this.prisma.$executeRaw`DELETE FROM chat.whiteboard WHERE id = ${plan.boardId}::uuid`.catch((err) =>
+      this.log.warn(`unfinished copy ${plan.boardId} not taken back (the sweep will clear its images): ${String(err)}`),
+    );
+    await this.assets.deleteQuietly(plan.keys);
   }
 
   // ---------------------------------------------------------------------------
@@ -1192,6 +1279,26 @@ export class WhiteboardService {
     return this.assets.sign(board, rows);
   }
 
+  /**
+   * The images a board answer carries (review of #336): none while images are
+   * off here, and none if they cannot be signed -- the board is still served
+   * and its images show as unavailable. A board read never fails for them.
+   */
+  private async boardImages(tx: Tx, board: BoardRow): Promise<AssetView[]> {
+    if (!(await this.assetsEnabled())) return [];
+    const rows = await tx.$queryRaw<AssetRow[]>`
+      SELECT id::text AS id, kind, object_key, content_type, byte_size, width, height
+        FROM chat.whiteboard_asset
+       WHERE board_id = ${board.id}::uuid AND state = 'ready' AND kind IN ('image', 'pdf_page')
+       ORDER BY created_at`;
+    try {
+      return await this.assets.sign(board, rows);
+    } catch (e) {
+      this.log.warn(`board ${board.id}: its images could not be signed; served without them: ${String(e)}`);
+      return [];
+    }
+  }
+
   /** §6.4: a teacher's images (all their boards, trash included), plus `adding`, within 300 MB. */
   private async assertAssetQuota(tx: Tx, teacherId: string, adding: number): Promise<void> {
     const [{ used }] = await tx.$queryRaw<Array<{ used: bigint }>>`
@@ -1209,10 +1316,14 @@ export class WhiteboardService {
    * verified (review of #305): both flags, or nothing.
    */
   private async assetsOn(): Promise<void> {
-    const [enabled, lifecycle] = await Promise.all([this.config.get('whiteboards.assets_enabled'), this.config.get('whiteboards.assets_lifecycle_verified')]);
-    if (enabled !== true || lifecycle !== true) {
+    if (!(await this.assetsEnabled())) {
       throw new CommError(CommErrorCode.WHITEBOARD_ASSETS_OFF, 'images and export are not switched on here yet', 503);
     }
+  }
+
+  private async assetsEnabled(): Promise<boolean> {
+    const [enabled, lifecycle] = await Promise.all([this.config.get('whiteboards.assets_enabled'), this.config.get('whiteboards.assets_lifecycle_verified')]);
+    return enabled === true && lifecycle === true;
   }
 
   private byteSize(value: unknown, field: string): number {
@@ -1234,7 +1345,7 @@ export class WhiteboardService {
     const pages = await tx.$queryRaw<PageRow[]>`
       SELECT id::text AS id, position, layout, background, document, updated_at
         FROM chat.whiteboard_page WHERE board_id = ${board.id}::uuid ORDER BY position`;
-    const assets = await this.signedImages(tx, board);
+    const assets = await this.boardImages(tx, board);
     return {
       assets,
       ...summary(board),

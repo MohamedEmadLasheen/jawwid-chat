@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, StreamableFile, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, HttpCode, Param, Post, Query, StreamableFile, UseFilters } from '@nestjs/common';
 import { CurrentActor } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
@@ -201,6 +201,18 @@ export class TeacherBoardsController {
     return this.boards.teacherBoards(teacherId, actor);
   }
 
+  /**
+   * The teachers whose boards the caller may read -- the same scope as every
+   * read here (review of #327) -- and, for whoever may copy a departed
+   * teacher's board, the active teachers it may be copied to. Before `:id`.
+   */
+  @Requires('whiteboards.view', 'whiteboards.retention')
+  @Get('teachers')
+  @Header('Cache-Control', 'private, no-store')
+  teachers(@CurrentActor() actor: Actor) {
+    return this.boards.boardTeachers(actor);
+  }
+
   @Requires('whiteboards.view', 'whiteboards.retention')
   @Get(':id')
   @Header('Cache-Control', 'private, no-store')
@@ -219,7 +231,7 @@ export class TeacherBoardsController {
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
   @Post(':id/copy')
   @HttpCode(201)
-  copy(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
-    return this.boards.copyToTeacher(id, body ?? {}, actor);
+  copy(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor, @Headers('idempotency-key') key?: string) {
+    return this.boards.copyToTeacher(id, body ?? {}, actor, key);
   }
 }

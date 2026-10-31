@@ -366,6 +366,63 @@ describe('§10 4a, 4c: a teacher who leaves', () => {
     await exec(`update chat.teacher set is_active = true, left_at = null where id = $1::uuid`, s.teacherId);
     expect(await boards.list(t)).toEqual([expect.objectContaining({ id: b.id, state: 'active', retainedUntil: null })]);
   });
+
+  it('a copy retried with the same key is the same copy: two clicks, or a lost answer, never make two', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Once' }, t);
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const mgr = staff(tmgr, 'manager');
+    const [first, second] = await Promise.all([
+      boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-1'),
+      boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-1'),
+    ]);
+    expect(second.id).toBe(first.id);
+    const third = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-1');
+    expect(third.id).toBe(first.id);
+    expect((await boards.list(teacher(s.newTeacherId))).filter((x) => x.title === 'Once')).toHaveLength(1);
+    expect((await log(b.id)).filter((r) => r.action === 'copy')).toHaveLength(1);
+    // A new key is a new copy, as asked.
+    const another = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-2');
+    expect(another.id).not.toBe(first.id);
+  });
+
+  it('a key names one copy: reused for another teacher it is refused, and it is never another staff member\'s (review of #327)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Keyed' }, t);
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const mgr = staff(tmgr, 'manager');
+    const first = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'key-x');
+    // The same key for a different teacher: 409, and no copy for them.
+    expect(await code(boards.copyToTeacher(b.id, { teacherId: s.unrelatedTeacherId }, mgr, 'key-x'))).toBe(CommErrorCode.WHITEBOARD_CONFLICT);
+    expect((await boards.list(teacher(s.unrelatedTeacherId))).filter((x) => x.title === 'Keyed')).toHaveLength(0);
+    // The same key from another staff member is their own request: a copy of their own, never the first one's answer.
+    const theirs = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, staff(sa, 'super_admin'), 'key-x');
+    expect(theirs.id).not.toBe(first.id);
+    expect((await log(b.id)).filter((r) => r.action === 'copy').map((r) => r.viewer_id).sort()).toEqual([sa, tmgr].sort());
+  });
+});
+
+describe('the staff pickers (review of #327)', () => {
+  it("lists exactly the teachers a staff member may read, departed ones too; copy targets only for who copies", async () => {
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const sup = await boards.boardTeachers(staff(tsup, 'admin'));
+    expect(sup.teachers).toEqual([{ id: s.teacherId, name: expect.any(String), isActive: false }]);
+    expect(sup.copyTargets).toBeNull();
+    // In the department but supervising nobody here: nothing.
+    expect((await boards.boardTeachers(staff(tsup2, 'admin'))).teachers).toEqual([]);
+    for (const who of [staff(tmgr, 'manager'), staff(sa, 'super_admin')]) {
+      const seen = await boards.boardTeachers(who);
+      expect(seen.teachers.map((t) => t.id)).toContain(s.teacherId);
+      const targets = seen.copyTargets!.map((t) => t.id);
+      expect(targets).toContain(s.newTeacherId);
+      expect(targets).not.toContain(s.teacherId);
+    }
+    // Every teacher listed is one whose boards that staff member can open.
+    for (const t of (await boards.boardTeachers(staff(tmgr, 'manager'))).teachers) {
+      await expect(boards.teacherBoards(t.id, staff(tmgr, 'manager'))).resolves.toEqual(expect.any(Array));
+    }
+    expect(await code(boards.boardTeachers(teacher(s.teacherId)))).toBe(CommErrorCode.WHITEBOARD_NOT_FOUND);
+  });
 });
 
 describe('limits and concurrency', () => {
@@ -537,6 +594,36 @@ describe('PR-4: images and export', () => {
     const support = await supportSession();
     expect(await code(asSupport(support, () => boards.grantImage(b.id, { contentType: 'image/png', byteSize: 10 }, t)))).toBe(CommErrorCode.WHITEBOARD_DENIED);
     expect(await code(asSupport(support, () => boards.grantExport(b.id, { pages: [{ byteSize: 10 }] }, t)))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+  });
+
+  it('a board read never fails for its images: off here, or not signable, it opens with none (review of #336)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Signed' }, t);
+    const { asset } = await addImage(b.id, t);
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(asset.id) }, t);
+    const mgr = staff(tmgr, 'manager');
+    expect((await boards.open(b.id, t)).assets.map((a) => a.id)).toEqual([asset.id]);
+    // Storage that cannot sign: the board, its pages and its log row, without the images.
+    const sign = jest.spyOn(g.storage, 'signedReadUrl').mockRejectedValue(new Error('storage misconfigured'));
+    try {
+      const before = (await log(b.id)).length;
+      const opened = await boards.open(b.id, t);
+      expect([opened.id, opened.pages.length, opened.assets]).toEqual([b.id, 1, []]);
+      expect((await boards.review(b.id, mgr)).assets).toEqual([]);
+      expect((await log(b.id)).length).toBe(before + 2);
+    } finally {
+      sign.mockRestore();
+    }
+    // Images switched off here: none signed at all.
+    await assetsSwitch(false);
+    const signs = jest.spyOn(g.storage, 'signedReadUrl');
+    try {
+      expect((await boards.open(b.id, t)).assets).toEqual([]);
+      expect((await boards.review(b.id, mgr)).assets).toEqual([]);
+      expect(signs).not.toHaveBeenCalled();
+    } finally {
+      signs.mockRestore();
+    }
   });
 
   it('a copy takes its images to keys of the new board, and the pages name the copies', async () => {
@@ -838,5 +925,47 @@ describe('PR-4: images and export', () => {
       SELECT count(*)::int AS pending FROM chat.whiteboard_asset WHERE board_id = ${copy.id}::uuid AND (state <> 'ready' OR expires_at IS NOT NULL)`;
     expect(Number(pending)).toBe(0);
     expect(copy.assets).toHaveLength(2);
+  });
+
+  it('two copies to a teacher with one key at once, images and all: one stands, the other is taken back with its objects (#326 + #327)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Raced' }, t);
+    const { asset } = await addImage(b.id, t);
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(asset.id) }, t);
+    await exec(`update chat.teacher set is_active = false, left_at = now() where id = $1::uuid`, s.teacherId);
+    const mgr = staff(tmgr, 'manager');
+    const assets = (boards as unknown as { assets: WhiteboardAssetService }).assets;
+    const real = assets.copyAll.bind(assets);
+    // The first request's objects are copied, then it waits: the second runs start to end meanwhile.
+    const firstKeys: string[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let copied!: () => void;
+    const firstCopied = new Promise<void>((r) => (copied = r));
+    let calls = 0;
+    const spy = jest.spyOn(assets, 'copyAll').mockImplementation(async (pairs) => {
+      if (calls++ > 0) return real(pairs);
+      firstKeys.push(...pairs.map((p) => p.to));
+      const out = await real(pairs);
+      copied();
+      await held;
+      return out;
+    });
+    let first, second;
+    try {
+      const slow = boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'race');
+      await firstCopied;
+      second = await boards.copyToTeacher(b.id, { teacherId: s.newTeacherId }, mgr, 'race');
+      release();
+      first = await slow;
+    } finally {
+      spy.mockRestore();
+    }
+    expect(calls).toBe(2);
+    expect(first.id).toBe(second.id);
+    expect((await log(b.id)).filter((r) => r.action === 'copy')).toHaveLength(1);
+    expect((await boards.list(teacher(s.newTeacherId))).filter((x) => x.title === 'Raced')).toHaveLength(1);
+    expect(firstKeys).toHaveLength(1);
+    for (const key of firstKeys) expect(await blobs.get(key)).toBeNull();
   });
 });

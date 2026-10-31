@@ -160,6 +160,18 @@ describe('who reaches which route', () => {
     expect([otherTeacher.status, otherTeacher.code]).toEqual([404, 'COMM.WHITEBOARD_NOT_FOUND']);
   });
 
+  it('GET /teacher-boards/teachers answers a whiteboard-key holder, before /:id (review of #327)', async () => {
+    const r = await http(m.teachersManager.subject, 'GET', '/teacher-boards/teachers');
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.json.teachers)).toBe(true);
+    expect(Array.isArray(r.json.copyTargets)).toBe(true);
+    const sup = await http(m.teacherSupervisors[0]!.subject, 'GET', '/teacher-boards/teachers');
+    expect([sup.status, sup.json.copyTargets]).toEqual([200, null]);
+    expect(sup.json.teachers.map((t: { id: string }) => t.id)).toContain(owner().id);
+    // A teacher is never a staff reader.
+    expect((await http(owner().subject, 'GET', '/teacher-boards/teachers')).status).toBeGreaterThanOrEqual(403);
+  });
+
   it("another organization's teacher, Teachers Manager and super admin get 404", async () => {
     const b = await newBoard();
     expect((await http(other.teachers[0]!.subject, 'GET', `/whiteboards/${b.id}`)).status).toBe(404);
