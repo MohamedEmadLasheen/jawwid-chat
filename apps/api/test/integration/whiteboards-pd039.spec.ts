@@ -590,6 +590,53 @@ describe('PR-4: images and export', () => {
     expect((await snapshot(b.id))!.assets).toBe(0);
   });
 
+  it('an export given up on is released: its pages and uploads go, and it no longer counts toward the five in flight (review of #335)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Given up' }, t);
+    const page = png(64, 36);
+    const batches: Array<Array<{ assetId: string; objectKey: string }>> = [];
+    for (let i = 0; i < 5; i++) {
+      const grant = await boards.grantExport(b.id, { pages: [{ byteSize: page.length }] }, t);
+      const pages = grant.pages.map((p) => ({ assetId: p.assetId, objectKey: p.upload.objectKey }));
+      for (const p of pages) await blobs.put(p.objectKey, 'image/png', page);
+      batches.push(pages);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(await code(boards.grantExport(b.id, { pages: [{ byteSize: page.length }] }, t))).toBe(CommErrorCode.WHITEBOARD_LIMIT);
+    const first = batches[0]!;
+    expect(await boards.releaseExport(b.id, { pages: first }, t)).toEqual({ released: 1 });
+    for (const p of first) expect(await blobs.get(p.objectKey)).toBeNull();
+    const [{ n }] = await g.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM chat.whiteboard_asset WHERE id = ANY(${first.map((p) => p.assetId)}::uuid[])`;
+    expect(Number(n)).toBe(0);
+    // Released twice: the same answer, nothing more to release.
+    expect(await boards.releaseExport(b.id, { pages: first }, t)).toEqual({ released: 0 });
+    // A slot is free again; the other four exports are untouched.
+    await boards.grantExport(b.id, { pages: [{ byteSize: page.length }] }, t);
+    for (const p of batches[1]!) expect(await blobs.get(p.objectKey)).not.toBeNull();
+  });
+
+  it('only the board\'s own teacher releases its exports: another teacher gets 404, staff are refused, and no other key is ever deleted', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Mine' }, t);
+    const page = png(64, 36);
+    const grant = await boards.grantExport(b.id, { pages: [{ byteSize: page.length }] }, t);
+    const pages = grant.pages.map((p) => ({ assetId: p.assetId, objectKey: p.upload.objectKey }));
+    await blobs.put(pages[0]!.objectKey, 'image/png', page);
+    expect(await code(boards.releaseExport(b.id, { pages }, teacher(s.unrelatedTeacherId)))).toBe(CommErrorCode.WHITEBOARD_NOT_FOUND);
+    expect(await code(boards.releaseExport(b.id, { pages }, staff(tmgr, 'manager')))).toBe(CommErrorCode.WHITEBOARD_DENIED);
+    expect(await blobs.get(pages[0]!.objectKey)).not.toBeNull();
+    // A key that is not this page's own upload is never deleted, whatever the client sends.
+    const { asset } = await addImage(b.id, t);
+    const kept = `whiteboards/${org}/${b.id}/${asset.id}`;
+    expect(await boards.releaseExport(b.id, { pages: [{ assetId: pages[0]!.assetId, objectKey: kept }] }, t)).toEqual({ released: 1 });
+    expect(await blobs.get(kept)).not.toBeNull();
+    // An image's row is not an export page: never released.
+    expect(await boards.releaseExport(b.id, { pages: [{ assetId: asset.id, objectKey: kept }] }, t)).toEqual({ released: 0 });
+    expect((await boards.open(b.id, t)).assets.map((a) => a.id)).toEqual([asset.id]);
+    expect(await code(boards.releaseExport(b.id, { pages: 'all' }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+  });
+
   it('a damaged export page is refused, by number, and the API goes on (review of #305, P0)', async () => {
     const t = teacher(s.teacherId);
     const b = await boards.create({ title: 'Broken' }, t);

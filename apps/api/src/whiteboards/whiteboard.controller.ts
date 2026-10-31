@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, StreamableFile, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query, StreamableFile, UseFilters } from '@nestjs/common';
 import { CurrentActor } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
@@ -161,6 +161,15 @@ export class WhiteboardController {
   @HttpCode(201)
   grantExport(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
     return this.boards.grantExport(id, body ?? {}, actor);
+  }
+
+  /** An export given up on: its pages and uploads deleted, so it stops counting as in flight. */
+  @NotForStaff()
+  @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @Delete(':id/exports')
+  @HttpCode(200)
+  releaseExport(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
+    return this.boards.releaseExport(id, body ?? {}, actor);
   }
 
   /** The PDF itself, composed from the uploaded pages; nothing of it is kept. */

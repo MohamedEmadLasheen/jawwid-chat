@@ -691,6 +691,41 @@ export class WhiteboardService {
   }
 
   /**
+   * An export the client gave up on (review of #335): its pages, granted and
+   * never composed, deleted now -- rows and uploads -- so they stop counting
+   * toward the teacher's exports in flight for the rest of their hour. Only
+   * `pending` export pages of the teacher's own board go: a page being
+   * composed (claimed), or anything that is not an export page, is left
+   * alone; and an upload key is deleted only if it is that page's own.
+   * Idempotent: what is already gone is simply not counted. Not behind the
+   * images switch: letting go is always allowed.
+   */
+  async releaseExport(boardId: string, body: Record<string, unknown>, actor: Actor): Promise<{ released: number }> {
+    // Who is asking first: staff and support sessions are refused as such.
+    const { teacherId, organizationId } = this.writer(actor);
+    if (!Array.isArray(body.pages) || body.pages.length < 1 || body.pages.length > PAGES_PER_BOARD) {
+      throw invalid(`pages: 1-${PAGES_PER_BOARD} entries of {assetId, objectKey}`);
+    }
+    const asked = body.pages.map((p, i) => {
+      const item = (p ?? {}) as Record<string, unknown>;
+      return { id: this.uuid(item.assetId, `pages[${i}].assetId`), objectKey: item.objectKey };
+    });
+    const { board, gone } = await this.write(async (tx) => {
+      const board = await this.ownBoard(tx, boardId, teacherId, organizationId, false);
+      const gone = await tx.$queryRaw<Array<{ id: string; object_key: string }>>`
+        DELETE FROM chat.whiteboard_asset
+         WHERE board_id = ${board.id}::uuid AND kind = 'export_page' AND state = 'pending'
+           AND id = ANY(${asked.map((a) => a.id)}::uuid[])
+        RETURNING id::text AS id, object_key`;
+      return { board, gone };
+    });
+    const released = new Set(gone.map((g) => g.id));
+    const uploads = asked.filter((a) => released.has(a.id) && this.assets.isUploadOf(a.objectKey, board.organization_id, board.id, a.id));
+    await this.assets.deleteQuietly([...gone.map((g) => g.object_key), ...uploads.map((a) => a.objectKey as string)]);
+    return { released: gone.length };
+  }
+
+  /**
    * The export's PNGs, each checked like an image, laid out as a PDF with the
    * Quran text's credit when the board carries a verse (§4.3). Logged as
    * 'export'. Nothing of it is kept: the PDF goes back in the answer, and the
