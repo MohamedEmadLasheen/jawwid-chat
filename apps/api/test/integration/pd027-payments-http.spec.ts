@@ -585,7 +585,11 @@ describe('ADMIN-001: money is recorded once per submit', () => {
       http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
       http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
     ]);
-    expect([a.status, b.status]).toEqual([201, 201]);
+    // The one that finds the other still in progress is told so at once (409, #358
+    // re-review); one that arrives after it finished is a replay (201).
+    const second = [a, b].find((r) => r.status !== 201);
+    expect([a, b].filter((r) => r.status === 201).length).toBeGreaterThanOrEqual(1);
+    if (second) expect({ status: second.status, code: second.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
     expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
     expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
     const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { ...body, amountMinor: 3001 });
