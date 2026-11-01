@@ -388,3 +388,75 @@ describe('PD-23: an administrator ends an account\'s sessions', () => {
     );
   });
 });
+
+describe('TEACHER-023: a signed-in account changes its own password', () => {
+  const NEW = 'teacher-023-new-password';
+
+  async function change(token: string, currentPassword: string, newPassword: string) {
+    return call(token, 'POST', '/auth/password/change', { currentPassword, newPassword });
+  }
+
+  /** Sets PASSWORD back, so the rest of this file signs in as before. */
+  async function restore(subject: string) {
+    await g.prisma.accountCredential.update({
+      where: { accountId: await accountIdOf(subject) },
+      data: { passwordHash: await hashPassword(PASSWORD), failedAttempts: 0, lockedUntil: null },
+    });
+  }
+
+  it('a teacher: the current password proves it; every OTHER session ends, this one stays; audited', async () => {
+    const subject = m.teachers[3]!.subject;
+    const here = await login(subject, ios);
+    const elsewhere = await login(subject, web);
+    expect((await call(elsewhere.accessToken, 'GET', '/me')).status).toBe(200);
+
+    const r = await change(here.accessToken, PASSWORD, NEW);
+    expect([r.status, r.json.ok]).toEqual([200, true]);
+
+    expect((await call(here.accessToken, 'GET', '/me')).status).toBe(200);
+    expect((await call(elsewhere.accessToken, 'GET', '/me')).status).toBe(401);
+    expect((await login(subject, ios)).status).toBe(401);
+    const fresh = await fetch(`${base}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: subject, password: NEW, ...ios }),
+    });
+    expect(fresh.status).toBe(200);
+
+    const accountId = await accountIdOf(subject);
+    const rows = await g.prisma.$queryRaw<Array<{ after: { revokedSessions: number; kept: string } }>>`
+      select after from chat.audit_log where action = 'account.password_changed' and entity_id = ${accountId}::uuid`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.after).toEqual({ revokedSessions: 1, kept: here.session.id });
+    await restore(subject);
+  });
+
+  it('a wrong current password is 401 and changes nothing; a too-short new one is refused', async () => {
+    const subject = m.teachers[4]!.subject;
+    const token = (await login(subject, ios)).accessToken;
+    const wrong = await change(token, 'not-the-password', NEW);
+    expect([wrong.status, wrong.code]).toEqual([401, 'AUTH.INVALID_CREDENTIALS']);
+    const short = await change(token, PASSWORD, 'abc');
+    expect([short.status, short.code]).toEqual([400, 'AUTH.PASSWORD_TOO_WEAK']);
+    expect((await login(subject, ios)).status).toBe(200);
+  });
+
+  it('any role: a parent and a staff member change theirs too', async () => {
+    for (const subject of [m.families[6]!.parent.subject, m.supervisors[3]!.subject]) {
+      const token = (await login(subject, web)).accessToken;
+      expect((await change(token, PASSWORD, NEW)).status).toBe(200);
+      await restore(subject);
+    }
+  });
+
+  it('guessing the current password is rate-limited like a login (last: it spends the source budget)', async () => {
+    const subject = m.teachers[5]!.subject;
+    const token = (await login(subject, ios)).accessToken;
+    let status = 0;
+    let code: string | undefined;
+    for (let i = 0; i < 30 && status !== 429; i++) {
+      ({ status, code } = await change(token, `guess-${i}`, NEW));
+    }
+    expect([status, code]).toEqual([429, 'COMMON.RATE_LIMITED']);
+  });
+});

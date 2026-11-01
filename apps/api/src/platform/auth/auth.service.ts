@@ -22,6 +22,7 @@ import {
   verifyAccessToken,
 } from './jwt';
 import { hashPassword, spendComparableTime, verifyPassword } from './password';
+import { isPasswordLengthAcceptable } from './password-policy';
 import { subjectHash } from './subject-hash';
 import { clientOfPlatform, sessionPolicyFor, sessionWindow, type SessionClient } from './session-policy';
 import { AccountAdminScope } from '../account-admin-scope';
@@ -40,7 +41,12 @@ export const AUTH_EVENT = {
 export const AUDIT_ACTION = {
   SESSION_CREATED: 'session.created',
   SESSION_REVOKED: 'session.revoked',
+  /** TEACHER-023: a signed-in account changed its own password. */
+  PASSWORD_CHANGED: 'account.password_changed',
 } as const;
+
+/** TEACHER-023: why the account's other sessions ended. */
+export const PASSWORD_CHANGED_REASON = 'password changed by the account holder';
 
 /** Lockout policy. Beside the credential row, not in Redis: a lockout that
  *  disappears when the cache restarts is not a lockout. */
@@ -1071,6 +1077,62 @@ export class AuthService {
     });
     // RT-009: the sockets of exactly those sessions -- not the account's, which
     // would also end the device that asked.
+    if (ids.length > 0) this.revocation.disconnectSessions(ids);
+    await this.revocation.confirmRevoked();
+    return ids.length;
+  }
+
+  /**
+   * TEACHER-023: a signed-in account changes its own password -- any role, the
+   * same length rule as everywhere (password-policy.ts).
+   *
+   * The CURRENT password is proven first: a session left open on a shared
+   * device must not be enough to take the account. A wrong one is
+   * INVALID_CREDENTIALS (401), and the caller is rate-limited like a login
+   * (AuthController). On success every OTHER session of the account ends --
+   * whoever else held it is out -- and this one stays. One audit row records it.
+   */
+  async changePassword(
+    accountId: string,
+    keepSessionId: string,
+    actorId: string,
+    current: string,
+    next: string,
+  ): Promise<number> {
+    if (!isPasswordLengthAcceptable(next)) throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
+    const credential = await this.prisma.accountCredential.findUnique({ where: { accountId } });
+    if (!credential || !(await verifyPassword(current, credential.passwordHash))) {
+      throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
+    }
+    // OUTSIDE the transaction: Argon2id must not hold a pooled connection.
+    const passwordHash = await hashPassword(next);
+    const ids = await this.prisma.$transaction(async (tx) => {
+      await tx.accountCredential.update({
+        where: { accountId },
+        data: { passwordHash, passwordChangedAt: new Date(), failedAttempts: 0, lockedUntil: null },
+      });
+      const live = await tx.session.findMany({
+        where: { accountId, revokedAt: null, impersonationId: null, id: { not: keepSessionId } },
+        select: { id: true },
+      });
+      const targets = live.map((row) => row.id);
+      if (targets.length > 0) {
+        await tx.session.updateMany({
+          where: { id: { in: targets }, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: PASSWORD_CHANGED_REASON, revokedBy: accountId },
+        });
+      }
+      await this.audit.audit(tx, {
+        actorId,
+        action: AUDIT_ACTION.PASSWORD_CHANGED,
+        entity: 'account',
+        entityId: accountId,
+        after: { revokedSessions: targets.length, kept: keepSessionId },
+        reason: PASSWORD_CHANGED_REASON,
+      });
+      return targets;
+    });
+    // RT-009: the sockets of exactly those sessions, not this device's.
     if (ids.length > 0) this.revocation.disconnectSessions(ids);
     await this.revocation.confirmRevoked();
     return ids.length;

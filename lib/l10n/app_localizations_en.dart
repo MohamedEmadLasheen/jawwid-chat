@@ -2850,7 +2850,27 @@ class L10nEn extends L10n {
   String get resetFinish => 'Set password';
 
   @override
-  String get recoveryOpen => 'Trouble signing in?';
+  String get recoveryOpen => 'Parents: trouble signing in?';
+
+  @override
+  String get signInStaffResetHint =>
+      'Teachers and staff: ask your supervisor for a reset code.';
+
+  @override
+  String get changePasswordTitle => 'Change password';
+
+  @override
+  String get changePasswordCurrentLabel => 'Current password';
+
+  @override
+  String get changePasswordWrongCurrent => 'That is not your current password.';
+
+  @override
+  String get changePasswordAction => 'Change password';
+
+  @override
+  String get changePasswordDone =>
+      'Password changed. You were signed out on your other devices.';
 
   @override
   String get recoveryTitle => 'Get back into your account';

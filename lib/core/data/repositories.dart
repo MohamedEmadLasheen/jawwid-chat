@@ -385,6 +385,25 @@ abstract interface class PasswordResetRepository {
   Future<void> complete({required String username, required String code, required String password});
 }
 
+/// TEACHER-023: a signed-in account (any role) changes its own password. On the
+/// AUTHENTICATED client: the current password is proven, and the server ends every OTHER
+/// session of the account and keeps this one.
+abstract interface class PasswordChangeRepository {
+  /// `POST /auth/password/change`. A refusal is an AppError with the server's code
+  /// (`AUTH.INVALID_CREDENTIALS` for a wrong current password, `AUTH.PASSWORD_TOO_WEAK`,
+  /// `COMMON.RATE_LIMITED`).
+  Future<void> change({required String currentPassword, required String newPassword});
+}
+
+/// The build with no account server (fixtures, tests that do not override it).
+class NoPasswordChangeRepository implements PasswordChangeRepository {
+  const NoPasswordChangeRepository();
+
+  @override
+  Future<void> change({required String currentPassword, required String newPassword}) =>
+      throw UnsupportedError('no account server in this build');
+}
+
 /// The build with no reset server (fixtures, tests that do not override it).
 class NoPasswordResetRepository implements PasswordResetRepository {
   const NoPasswordResetRepository();
