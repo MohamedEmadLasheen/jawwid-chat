@@ -61,6 +61,10 @@ abstract interface class WhiteboardsRepository {
 
   /// The PDF, made by the server from the uploaded pages; nothing of it is kept there.
   Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages);
+
+  /// An export given up on: its pages and uploads deleted on the server, so it
+  /// stops counting toward the teacher's exports in flight (review of #335).
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages);
 }
 
 /// The API's answer where images and export are not switched on (503).
@@ -133,6 +137,8 @@ class NoWhiteboardsRepository implements WhiteboardsRepository {
   Future<List<ImageGrant>> grantExport(String boardId, List<int> pageByteSizes) async => _none();
   @override
   Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages) async => _none();
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async => _none();
 }
 
 /// Overridden with the HTTP implementation by the real composition root.
@@ -261,6 +267,13 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
       options: Options(responseType: ResponseType.bytes, receiveTimeout: composeTimeout),
     );
     return Uint8List.fromList(r.data ?? const []);
+  }
+
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async {
+    await _client.delete<Object?>('/whiteboards/$boardId/exports', data: {
+      'pages': [for (final p in pages) {'assetId': p.assetId, 'objectKey': p.objectKey}],
+    });
   }
 }
 
@@ -552,4 +565,7 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
 
   @override
   Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages) async => _assetsOff();
+
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async {}
 }

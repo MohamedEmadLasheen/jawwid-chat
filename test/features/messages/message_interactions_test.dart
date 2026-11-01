@@ -195,7 +195,8 @@ void main() {
       expect(queued.id, isNull);
 
       await controller.deleteForMe(queued);
-      expect(read().log.byClientId(clientId)!.isDeleted, isTrue);
+      // Nobody else ever saw it: it leaves no "deleted" bubble behind (PARENT-005).
+      expect(read().log.byClientId(clientId), isNull);
     });
   });
 

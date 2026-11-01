@@ -593,11 +593,17 @@ export class AuthService {
       await accountAdminStandingOf(this.prisma, staff),
     );
     if (!decision.allowed) return refuse('the administrator may no longer open this account');
-    // TEACHER-011: a teacher account, only while the teacher stays in the administrator's scope.
+    // TEACHER-011 / ADMIN-002: a teacher or parent account, only while it stays in the
+    // administrator's scope -- a grant that ran out ends the support session here.
     if (target.kind === 'teacher') {
       const teacher = await this.prisma.teacher.findUnique({ where: { accountId: target.id }, select: { id: true } });
       if (!(await new AccountAdminScope(this.prisma).covers(staff, { kind: target.kind, teacherId: teacher?.id }))) {
         return refuse('the teacher is no longer in the administrator\'s scope');
+      }
+    } else if (target.kind === 'family') {
+      const contact = await this.prisma.contact.findFirst({ where: { accountId: target.id }, select: { familyId: true } });
+      if (!(await new AccountAdminScope(this.prisma).covers(staff, { kind: target.kind, familyId: contact?.familyId }))) {
+        return refuse('the family is no longer in the administrator\'s scope');
       }
     }
     return { id: row.id, staffId: row.staffId, staffAccountId: row.staffAccountId };

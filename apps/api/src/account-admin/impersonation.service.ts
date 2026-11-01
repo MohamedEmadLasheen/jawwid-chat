@@ -10,6 +10,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import type { Actor } from '../platform/types';
 import { AccountAdminScope } from '../platform/account-admin-scope';
+import { recordUse } from './family-access.service';
 
 export const IMPERSONATION_AUDIT = {
   STARTED: 'impersonation.started',
@@ -94,7 +95,7 @@ export class ImpersonationService {
     const target = UUID.test(accountId)
       ? await this.prisma.account.findUnique({
           where: { id: accountId },
-          select: { id: true, organizationId: true, kind: true, subject: true, isActive: true, status: true, staff: { select: { id: true, role: true } }, teacher: { select: { id: true } } },
+          select: { id: true, organizationId: true, kind: true, subject: true, isActive: true, status: true, staff: { select: { id: true, role: true } }, teacher: { select: { id: true } }, contacts: { select: { familyId: true }, take: 1 } },
         })
       : null;
     if (!target) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such account');
@@ -105,9 +106,12 @@ export class ImpersonationService {
       await accountAdminStandingOf(this.prisma, admin.actor),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-    if (!(await this.scope.covers(admin.actor, { kind: target.kind, teacherId: target.teacher?.id }))) {
-      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, "a teacher supervisor opens their own teachers' accounts only");
+    const inScope = await this.scope.decide(admin.actor, { kind: target.kind, teacherId: target.teacher?.id, familyId: target.contacts[0]?.familyId });
+    if (!inScope.allowed) {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'this account is outside your scope');
     }
+    // ADMIN-002: a support session opened under an exceptional grant is a use of it. No notice to the parent.
+    if (inScope.grant) await recordUse(this.audit, this.prisma, inScope.grant, admin.actor.actorId, 'support_session', target.id);
 
     // Only an account that could sign in itself: a support session never
     // reaches what the person could not.
@@ -271,7 +275,7 @@ export class ImpersonationService {
     // Re-decided: the administrator may have lost the right since it started.
     const target = await this.prisma.account.findUniqueOrThrow({
       where: { id: row.targetAccountId },
-      select: { id: true, organizationId: true, kind: true, teacher: { select: { id: true } } },
+      select: { id: true, organizationId: true, kind: true, teacher: { select: { id: true } }, contacts: { select: { familyId: true }, take: 1 } },
     });
     const decision = this.authz.canAdministerAccount(
       admin.actor,
@@ -280,8 +284,8 @@ export class ImpersonationService {
       await accountAdminStandingOf(this.prisma, admin.actor),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-    if (!(await this.scope.covers(admin.actor, { kind: target.kind, teacherId: target.teacher?.id }))) {
-      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, "a teacher supervisor opens their own teachers' accounts only");
+    if (!(await this.scope.covers(admin.actor, { kind: target.kind, teacherId: target.teacher?.id, familyId: target.contacts[0]?.familyId }))) {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'this account is outside your scope');
     }
     return row;
   }

@@ -235,4 +235,14 @@ void main() {
     final pdf = await repo().composeExport('b1', const []);
     expect(String.fromCharCodes(pdf), '%PDF-1.3 slow');
   });
+
+  test('an export given up on is released: DELETE /exports with every page (review of #335)', () async {
+    server.on('DELETE', '/whiteboards/b1/exports', [const Reply.ok({'released': 1})]);
+    await repository().releaseExport('b1', [const ImageGrant(assetId: 'e0', objectKey: 'whiteboard-uploads/o/b1/e0/u', uploadUrl: 'https://s.test/e0', headers: {})]);
+    expect(server.lastRequestTo('DELETE', '/whiteboards/b1/exports')!.body, {
+      'pages': [
+        {'assetId': 'e0', 'objectKey': 'whiteboard-uploads/o/b1/e0/u'},
+      ],
+    });
+  });
 }
