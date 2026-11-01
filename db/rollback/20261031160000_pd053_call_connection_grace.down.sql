@@ -1,4 +1,4 @@
--- Roll back 20261031160000_chat_pd055_call_connection_grace (CHATSCHED-013 dropped calls).
+-- Roll back 20261031160000_chat_pd053_call_connection_grace (CHATSCHED-013 dropped calls).
 --
 -- Drops the end reason, the interruption mark and the connected-time columns.
 -- Durations already written stay as they are (connected time). The config key,
@@ -7,7 +7,7 @@
 -- first. Roll back the API release with it: CallService and
 -- MediaPresenceService read these columns.
 --
---   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261031160000_pd055_call_connection_grace.down.sql
+--   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261031160000_pd053_call_connection_grace.down.sql
 
 delete from chat.notification where rule_key = 'call_connection_lost';
 delete from chat.notification_rule where key = 'call_connection_lost';

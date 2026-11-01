@@ -1,4 +1,4 @@
--- PD-55 / CHATSCHED-013 (owner-approved 2026-10-31): a call that drops is given 60 s
+-- PD-53 / CHATSCHED-013 (owner-approved 2026-10-31): a call that drops is given 60 s
 -- to come back, then ends as `connection_lost`; its duration is connected time.
 --
 -- Owner's requirements, and where each lives:
@@ -16,7 +16,7 @@
 --
 -- Additive. The backfill only labels rows that are already ended, from their
 -- own outcome; nothing about a call's history changes. Rollback:
--- db/rollback/20261031160000_pd055_call_connection_grace.down.sql
+-- db/rollback/20261031160000_pd053_call_connection_grace.down.sql
 --
 -- Idempotent (G-19).
 
