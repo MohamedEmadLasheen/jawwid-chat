@@ -15,7 +15,7 @@ import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
+import { CallEndReason, CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -29,6 +29,26 @@ import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERS
  */
 /** Default and maximum page size for account-scoped call history. */
 const DEFAULT_HISTORY_PAGE = 30;
+
+/**
+ * CHATSCHED-013: a call's duration at the moment it ends, in SQL against the
+ * row being ended (alias `c`), on the database's clock.
+ *
+ * CONNECTED TIME when the call ever had two people in the media room: the
+ * closed spans (`connected_seconds`) plus the one still open, so a drop and
+ * the wait for a rejoin are not counted. A call that never reached two in the
+ * room -- or an environment that receives no LiveKit webhooks -- keeps the
+ * locked rule: from `answered_at` (accepting is the act being timed), and 0
+ * when nobody answered.
+ */
+const DURATION_AT_END = Prisma.sql`
+  case
+    when c.connected_seconds > 0 or c.connected_since is not null
+      then c.connected_seconds + coalesce(greatest(0, round(extract(epoch from (now() - c.connected_since))))::int, 0)
+    when c.answered_at is not null
+      then greatest(0, round(extract(epoch from (now() - c.answered_at))))::int
+    else 0
+  end`;
 const MAX_HISTORY_PAGE = 100;
 
 /**
@@ -586,6 +606,7 @@ export class CallService {
           durationSeconds: 0,
         },
       });
+      await tx.$executeRaw`update chat.call set end_reason = ${CallEndReason.DECLINED} where id = ${callId}::uuid and status = 'ended'`;
 
       // NOTHING ELSE IS STAMPED. Only the decliner's `left_at` was written, above.
       // The other participants keep whatever their rows already said: `joined_at`
@@ -688,23 +709,22 @@ export class CallService {
       if (locked.status === CallStatus.ENDED) return;
 
       const now = new Date();
-      const resolved = locked.answeredAt ? CallOutcome.ANSWERED : CallOutcome.MISSED;
-      // Duration is measured from `answered_at`, the application answer, and
-      // deliberately NOT from `media_joined_at`: accepting is the act being
-      // timed, and a slow media join does not shorten the call.
-      const duration = locked.answeredAt
-        ? Math.max(0, Math.round((now.getTime() - locked.answeredAt.getTime()) / 1000))
-        : 0;
+      // Duration is connected time when both sides reached the room (the gap
+      // of a drop is not counted, CHATSCHED-013), else measured from
+      // `answered_at` -- the application answer -- as before: see DURATION_AT_END.
+      const [ended] = await tx.$queryRaw<Array<{ outcome: string; duration: number }>>`
+        update chat.call c
+           set status = 'ended',
+               ended_at = ${now},
+               outcome = case when c.answered_at is null then 'missed' else 'answered' end,
+               end_reason = ${CallEndReason.HUNG_UP},
+               duration_seconds = ${DURATION_AT_END},
+               interrupted_at = null
+         where c.id = ${callId}::uuid
+        returning outcome, duration_seconds as duration`;
+      const resolved = ended!.outcome;
+      const duration = ended!.duration;
 
-      await tx.call.update({
-        where: { id: callId },
-        data: {
-          status: CallStatus.ENDED,
-          endedAt: now,
-          outcome: resolved,
-          durationSeconds: duration,
-        },
-      });
       await tx.callParticipant.updateMany({
         where: { callId, leftAt: null },
         data: { leftAt: now },
@@ -714,13 +734,14 @@ export class CallService {
         conversationId: call.conversationId,
         outcome: resolved,
         durationSeconds: duration,
+        reason: CallEndReason.HUNG_UP,
       });
       await this.audit.event(tx, {
         familyId: call.familyId,
         actorKind: actor.kind,
         actorId: actor.actorId,
         type: 'call_ended',
-        payload: { callId, outcome: resolved, durationSeconds: duration },
+        payload: { callId, outcome: resolved, durationSeconds: duration, reason: CallEndReason.HUNG_UP },
       });
     });
   }
@@ -786,6 +807,7 @@ export class CallService {
            set status = 'ended',
                ended_at = now(),
                outcome = 'missed',
+               end_reason = 'ring_timeout',
                duration_seconds = 0
          where id in (
            select id from chat.call
@@ -812,6 +834,7 @@ export class CallService {
           conversationId: call.conversation_id,
           outcome: CallOutcome.MISSED,
           durationSeconds: 0,
+          reason: CallEndReason.RING_TIMEOUT,
         });
 
         await this.audit.event(tx, {
@@ -828,6 +851,94 @@ export class CallService {
       }
       return expired.length;
     });
+  }
+
+  /**
+   * CHATSCHED-013: end the calls that dropped and were not rejoined within
+   * the grace (owner: 60 s), as `connection_lost`; and take out a group
+   * member who dropped and did not come back while the rest carried on.
+   *
+   * The same shape as expireRingingCalls, for the same reasons: one statement
+   * claims and transitions, on the database's clock, so it is safe on every
+   * worker at once. A REJOIN RACING IT settles on one outcome: the media join
+   * locks the call row (MediaPresenceService) before it clears
+   * `interrupted_at`, and this statement's inner select takes rows `for update
+   * skip locked` -- so either the rejoin commits first and the row no longer
+   * matches, or this commits first and the rejoin finds the call ended.
+   * Never both.
+   *
+   * Duration is connected time: the gap since the drop is not counted.
+   */
+  async endInterruptedCalls(limit = 200): Promise<number> {
+    const graceSeconds = await this.config.get('call.reconnect_grace_seconds');
+
+    return this.prisma.$transaction(async (tx) => {
+      const ended = await tx.$queryRaw<
+        Array<{ id: string; conversation_id: string; family_id: string | null; outcome: string; duration: number }>
+      >`
+        update chat.call c
+           set status = 'ended',
+               ended_at = now(),
+               outcome = case when c.answered_at is null then 'missed' else 'answered' end,
+               end_reason = ${CallEndReason.CONNECTION_LOST},
+               duration_seconds = ${DURATION_AT_END}
+         where c.id in (
+           select id from chat.call
+            where status = 'active'
+              and interrupted_at < now() - make_interval(secs => ${graceSeconds}::double precision)
+            order by interrupted_at
+            limit ${limit}
+            for update skip locked
+         )
+        returning c.id, c.conversation_id, c.family_id, c.outcome, c.duration_seconds as duration`;
+
+      for (const call of ended) {
+        await tx.callParticipant.updateMany({
+          where: { callId: call.id, leftAt: null },
+          data: { leftAt: new Date() },
+        });
+        await this.outbox.enqueue(tx, CommEvent.CALL_ENDED, {
+          callId: call.id,
+          conversationId: call.conversation_id,
+          outcome: call.outcome,
+          durationSeconds: call.duration,
+          reason: CallEndReason.CONNECTION_LOST,
+        });
+        await this.audit.event(tx, {
+          familyId: call.family_id,
+          actorKind: SYSTEM_ACTOR.kind,
+          actorId: null,
+          type: 'call_ended',
+          payload: { callId: call.id, outcome: call.outcome, durationSeconds: call.duration, reason: CallEndReason.CONNECTION_LOST },
+        });
+      }
+
+      // A group member who dropped while the call carried on, and did not come
+      // back: out of the call, as a hang-up would have left them.
+      await tx.$executeRaw`
+        update chat.call_participant p
+           set left_at = now()
+          from chat.call c
+         where c.id = p.call_id
+           and c.status = 'active'
+           and p.left_at is null
+           and p.media_joined_at is not null
+           and p.media_left_at is not null
+           and p.media_left_at < now() - make_interval(secs => ${graceSeconds}::double precision)`;
+
+      if (ended.length > 0) {
+        this.log.log(`connection grace ended ${ended.length} call(s) after ${graceSeconds}s`);
+      }
+      return ended.length;
+    });
+  }
+
+  /** The end reason of each call, for history (CHATSCHED-013). */
+  private async endReasons(ids: string[]): Promise<Map<string, string | null>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; end_reason: string | null }>>`
+      select id::text as id, end_reason from chat.call where id = any(${ids}::uuid[])`;
+    return new Map(rows.map((r) => [r.id, r.end_reason]));
   }
 
   /** Call history. Scoped to conversations the actor may read. */
@@ -853,7 +964,8 @@ export class CallService {
         c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
       ),
     );
-    return calls.map((c) => this.toHistoryRow(c, directory));
+    const reasons = await this.endReasons(calls.map((c) => c.id));
+    return calls.map((c) => this.toHistoryRow(c, directory, reasons.get(c.id) ?? null));
   }
 
   /**
@@ -953,8 +1065,9 @@ export class CallService {
       ),
     );
 
+    const reasons = await this.endReasons(page.map((c) => c.id));
     return {
-      items: page.map((c) => this.toHistoryRow(c, directory)),
+      items: page.map((c) => this.toHistoryRow(c, directory, reasons.get(c.id) ?? null)),
       nextCursor:
         calls.length > limit && last ? encodeHistoryCursor(last.startedAt, last.id) : null,
     };
@@ -1004,6 +1117,7 @@ export class CallService {
   private toHistoryRow(
     call: Call & { participants: CallParticipant[] },
     directory?: ResolvedActors,
+    endReason: string | null = null,
   ): {
     id: string;
     conversationId: string;
@@ -1014,6 +1128,8 @@ export class CallService {
     startedAt: string;
     endedAt: string | null;
     durationSeconds: number | null;
+    /** CHATSCHED-013: why it ended (hung_up | declined | ring_timeout | connection_lost); null while live. */
+    endReason: string | null;
     participants: {
       actorId: string;
       actorKind: string;
@@ -1038,6 +1154,7 @@ export class CallService {
       startedAt: call.startedAt.toISOString(),
       endedAt: call.endedAt?.toISOString() ?? null,
       durationSeconds: call.durationSeconds,
+      endReason,
       participants: call.participants.map((p) => ({
         actorId: p.actorId,
         actorKind: p.actorKind,

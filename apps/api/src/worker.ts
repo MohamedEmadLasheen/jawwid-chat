@@ -356,6 +356,14 @@ async function bootstrap(): Promise<void> {
         // The calls it did not expire are still ringing and still match.
         report(log, 'call sweep', 'calls.expireRinging', e);
       }
+      // CHATSCHED-013: a call that dropped and was not rejoined within the
+      // grace ends as connection_lost. Same single-statement claim, so it is
+      // safe on every replica and against a rejoin racing it.
+      try {
+        await calls.endInterruptedCalls();
+      } catch (e) {
+        report(log, 'call sweep', 'calls.endInterrupted', e);
+      }
     }
 
     // Lessons from regular times, their reminders and (hourly, inside the

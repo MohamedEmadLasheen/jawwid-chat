@@ -627,17 +627,62 @@ void main() {
       expect(calls.endCalls, isEmpty);
     });
 
-    test('A11b. a second drop stops retrying rather than looping', () async {
+    test('A11b. a drop that does not recover keeps rejoining, on a growing wait, until the SERVER ends the call (CHATSCHED-013)',
+        () async {
       final container = await liveOutgoing();
+      // The room never comes back by itself.
+      room.announceConnected = false;
+      room.announcePublished = false;
 
       room.drop();
       await settle();
       room.drop();
       await settle();
-
-      expect(room.connects, hasLength(2), reason: 'no retry storm');
+      // The first rejoin went at once; the next waits (1 s), not a storm.
+      expect(room.connects, hasLength(2));
       expect(stateOf(container).phase, CallUiPhase.reconnecting);
       expect(stateOf(container).failure, CallUiFailure.network);
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await settle();
+      expect(room.connects, hasLength(3), reason: 'still inside the server\'s grace: tried again');
+
+      // The server's 60 s ran out: connection lost, and no more rejoining.
+      room.drop();
+      await settle();
+      socket.emit(CallEventNames.ended, Frames.ended(durationSeconds: 42, reason: 'connection_lost'));
+      await settle();
+      final ended = stateOf(container);
+      expect([ended.phase, ended.outcome, ended.endReason, ended.duration], [CallUiPhase.ended, CallOutcome.answered, CallEndReason.connectionLost, const Duration(seconds: 42)]);
+      final tries = room.connects.length;
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      await settle();
+      expect(room.connects, hasLength(tries), reason: 'an ended call is never rejoined');
+      expect(calls.endCalls, isEmpty, reason: 'the client never ended it: the server did');
+    });
+
+    test('CHATSCHED-013: the other side dropped -- shown as waiting for them, cleared when they are back', () async {
+      final container = await liveOutgoing();
+      final until = DateTime.now().add(const Duration(seconds: 60));
+      socket.emit(CallEventNames.interrupted, Frames.interrupted(until: until));
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.live, reason: 'our own media is fine');
+      expect(stateOf(container).interruptedUntil?.isAtSameMomentAs(until.toUtc()), isTrue);
+      socket.emit(CallEventNames.resumed, Frames.participant());
+      await settle();
+      expect(stateOf(container).interruptedUntil, isNull);
+      expect(stateOf(container).phase, CallUiPhase.live);
+    });
+
+    test('CHATSCHED-013: a rejoin that finds the call already over (offline past the grace) ends it as connection lost', () async {
+      final container = await liveOutgoing();
+      room.announceConnected = false;
+      room.announcePublished = false;
+      calls.tokenError = refusal(WireErrors.callAlreadyEnded);
+      room.drop();
+      await settle();
+      final ended = stateOf(container);
+      expect([ended.phase, ended.endReason], [CallUiPhase.ended, CallEndReason.connectionLost]);
+      expect(calls.endCalls, isEmpty);
     });
 
     test('A12. an unreachable room fails, and offers a retry', () async {

@@ -324,13 +324,19 @@ abstract final class Frames {
     String conversationId = 'conv_1',
     String outcome = 'answered',
     int? durationSeconds = 0,
+    String? reason,
   }) =>
       {
         'callId': callId,
         'conversationId': conversationId,
         'outcome': outcome,
         'durationSeconds': durationSeconds,
+        'reason': ?reason,
       };
+
+  /// CHATSCHED-013: `call.interrupted`, with the server's deadline.
+  static Map<String, Object?> interrupted({String callId = 'call_1', String conversationId = 'conv_1', required DateTime until}) =>
+      {'callId': callId, 'conversationId': conversationId, 'until': until.toUtc().toIso8601String()};
 }
 
 /// A signed-in session, for the common case.

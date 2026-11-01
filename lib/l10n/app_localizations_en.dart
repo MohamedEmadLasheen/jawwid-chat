@@ -310,6 +310,16 @@ class L10nEn extends L10n {
   String get callReconnecting => 'Reconnecting…';
 
   @override
+  String get callWaitingForReconnect =>
+      'Connection lost. Waiting for them to reconnect…';
+
+  @override
+  String get callEndedConnectionLost => 'Call ended: the connection was lost';
+
+  @override
+  String get callHistoryConnectionLost => 'Connection lost';
+
+  @override
   String get callAccept => 'Accept';
 
   @override

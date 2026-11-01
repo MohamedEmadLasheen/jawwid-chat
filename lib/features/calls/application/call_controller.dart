@@ -16,6 +16,7 @@ import '../data/scheduled_call_repository.dart';
 import '../domain/scheduled_call.dart';
 import 'call_media_providers.dart';
 import 'call_session.dart';
+import 'media_rejoiner.dart';
 
 /// What the interface is showing. PRESENTATION ONLY.
 ///
@@ -91,6 +92,8 @@ class CallUiState {
     this.outcome,
     this.duration,
     this.failure,
+    this.endReason,
+    this.interruptedUntil,
   });
 
   final CallUiPhase phase;
@@ -135,6 +138,14 @@ class CallUiState {
 
   final CallUiFailure? failure;
 
+  /// CHATSCHED-013: why the call ended, from the server's `call.ended` (or
+  /// [CallEndReason.connectionLost] when a rejoin found the call already over).
+  final CallEndReason? endReason;
+
+  /// CHATSCHED-013: the call dropped below two in the room; the server ends it
+  /// at this moment unless somebody rejoins first. Null while connected.
+  final DateTime? interruptedUntil;
+
   bool get isTerminal => phase == CallUiPhase.ended || phase == CallUiPhase.failed;
 
   /// Whether a call is on screen at all.
@@ -159,6 +170,9 @@ class CallUiState {
     Duration? duration,
     CallUiFailure? failure,
     bool clearFailure = false,
+    CallEndReason? endReason,
+    DateTime? interruptedUntil,
+    bool clearInterrupted = false,
   }) {
     return CallUiState(
       phase: phase ?? this.phase,
@@ -174,6 +188,8 @@ class CallUiState {
       outcome: outcome ?? this.outcome,
       duration: duration ?? this.duration,
       failure: clearFailure ? null : (failure ?? this.failure),
+      endReason: endReason ?? this.endReason,
+      interruptedUntil: clearInterrupted ? null : (interruptedUntil ?? this.interruptedUntil),
     );
   }
 }
@@ -194,8 +210,10 @@ class CallUiState {
 ///   * a media participant leaving the room — presence, not lifecycle (W5)
 ///   * our own media connection dropping    — that is [CallUiPhase.reconnecting]
 ///   * a participant disappearing
-///   * a timer of any kind                  — there is no timer in this file, and
-///     an ACTIVE call has no deadline in the current contract (W6 carry-forward)
+///   * a timer of any kind                  — the only timer here retries OUR media
+///     join; it never ends a call. A drop's deadline is the SERVER's
+///     (CHATSCHED-013: `call.interrupted` names it, `call.ended` with
+///     `connection_lost` keeps it), and is only ever shown here
 ///
 /// Terminality arrives from exactly two places: the server's `call.ended` /
 /// `call.declined` events, and a successful terminal request we ourselves made.
@@ -232,10 +250,16 @@ class CallController extends Notifier<CallUiState> {
   /// follows is not mistaken for a drop.
   bool _leavingMedia = false;
 
-  /// One media retry per call, then stop. The same bounded shape W2 settled on
-  /// for credential renewal: a client that retries forever turns one failure into
-  /// a storm, and a user who is told "reconnecting" indefinitely is being lied to.
-  bool _mediaRetryUsed = false;
+  /// CHATSCHED-013 (owner): after a drop, keep rejoining (MediaRejoiner: at
+  /// once, then on a growing wait) until the media is back or the SERVER ends
+  /// the call -- 60 s after the drop, as connection lost. It used to try once
+  /// and then say "reconnecting" for ever. Bounded by the server's grace, not
+  /// by a count: the call itself is what stops it.
+  late final MediaRejoiner _rejoiner = MediaRejoiner(() {
+    final callId = state.callId;
+    if (!_alive || state.isTerminal || callId == null) return;
+    unawaited(_media?.connect(callId: callId));
+  });
 
   /// True between a drop and audio coming back.
   ///
@@ -280,6 +304,7 @@ class CallController extends Notifier<CallUiState> {
     unawaited(_native?.start());
 
     ref.onDispose(() {
+      _rejoiner.stop();
       unawaited(_eventSub?.cancel());
       _eventSub = null;
       unawaited(_nativeSub?.cancel());
@@ -695,10 +720,20 @@ class CallController extends Notifier<CallUiState> {
         if (callId != state.callId) return;
         _goTerminal(outcome: CallOutcome.declined);
 
-      case CallEnded(:final callId, :final outcome, :final duration):
+      case CallEnded(:final callId, :final outcome, :final duration, :final reason):
         if (callId != state.callId) return;
         // The authority on the outcome, even for a state it did not create.
-        _goTerminal(outcome: outcome, duration: duration, authoritative: true);
+        _goTerminal(outcome: outcome, duration: duration, reason: reason, authoritative: true);
+
+      case CallInterrupted(:final callId, :final until):
+        // CHATSCHED-013: shown ("waiting for them to reconnect"), never acted
+        // on: the server keeps the deadline and sends `call.ended` at it.
+        if (callId != state.callId || state.isTerminal) return;
+        state = state.copyWith(interruptedUntil: until);
+
+      case CallResumed(:final callId):
+        if (callId != state.callId || state.isTerminal) return;
+        state = state.copyWith(clearInterrupted: true);
     }
   }
 
@@ -777,14 +812,16 @@ class CallController extends Notifier<CallUiState> {
   void _goTerminal({
     required CallOutcome? outcome,
     Duration? duration,
+    CallEndReason? reason,
     bool authoritative = false,
   }) {
+    _rejoiner.stop();
     if (state.phase == CallUiPhase.ended) {
       // Already terminal: no second navigation and no second teardown. An
       // authoritative event may still fill in what the server knows and we did
-      // not — the outcome, and the duration it derived from `answered_at`.
+      // not — the outcome, the reason, and the duration it derived.
       if (authoritative) {
-        state = state.copyWith(outcome: outcome, duration: duration);
+        state = state.copyWith(outcome: outcome, duration: duration, endReason: reason);
       }
       return;
     }
@@ -806,7 +843,9 @@ class CallController extends Notifier<CallUiState> {
       phase: CallUiPhase.ended,
       outcome: outcome,
       duration: duration,
+      endReason: reason,
       clearFailure: true,
+      clearInterrupted: true,
     );
     unawaited(_teardownMedia());
   }
@@ -842,31 +881,41 @@ class CallController extends Notifier<CallUiState> {
 
       case CallMediaPhase.live:
         _rejoining = false;
+        _rejoiner.stop();
         next = next.copyWith(phase: CallUiPhase.live, clearFailure: true);
 
       case CallMediaPhase.failed:
-        next = next.copyWith(
-          phase: CallUiPhase.failed,
-          failure: _classifyMedia(snapshot.failure),
-        );
+        final failure = _classifyMedia(snapshot.failure);
+        if (_rejoining && failure == CallUiFailure.notAllowed) {
+          // CHATSCHED-013: the rejoin was refused a token -- the call ended while
+          // we were away (a phone offline past the grace never hears
+          // `call.ended`). Over, as connection lost; the outcome stays the
+          // server's to say.
+          _goTerminal(outcome: state.outcome, reason: CallEndReason.connectionLost);
+          return;
+        }
+        if (_rejoining) {
+          // Still inside the server's grace as far as we know: try again.
+          next = next.copyWith(phase: CallUiPhase.reconnecting, failure: CallUiFailure.network);
+          state = next;
+          _rejoiner.schedule();
+          return;
+        }
+        next = next.copyWith(phase: CallUiPhase.failed, failure: failure);
 
       case CallMediaPhase.disconnected:
         if (_leavingMedia) return;
         // A DROP IS NOT AN ENDING. W4 does not retry — deliberately, so that no
-        // second lifecycle lives in the media layer — so the retry is here, once.
-        if (!_mediaRetryUsed) {
-          _mediaRetryUsed = true;
-          _rejoining = true;
-          next = next.copyWith(phase: CallUiPhase.reconnecting);
-          state = next;
-          final callId = state.callId;
-          if (callId != null) unawaited(_media?.connect(callId: callId));
-          return;
-        }
+        // second lifecycle lives in the media layer — so the retry is here: until
+        // the media is back or the server ends the call (CHATSCHED-013).
+        _rejoining = true;
         next = next.copyWith(
           phase: CallUiPhase.reconnecting,
-          failure: CallUiFailure.network,
+          failure: _rejoiner.attempts == 0 ? null : CallUiFailure.network,
         );
+        state = next;
+        _rejoiner.schedule();
+        return;
 
       case CallMediaPhase.idle:
       case CallMediaPhase.disconnecting:

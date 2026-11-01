@@ -130,7 +130,7 @@ beforeEach(async () => {
   s = await seed(g.prisma);
   g.coverage.onDutyId = s.ownerId;
   g.config.invalidate();
-  presence = new MediaPresenceService(g.prisma, new OutboxService());
+  presence = new MediaPresenceService(g.prisma, new OutboxService(), g.config);
 });
 
 // =========================================================================

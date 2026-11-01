@@ -376,6 +376,7 @@ describe('11/12/13. what a history row may carry', () => {
       [
         'conversationId',
         'durationSeconds',
+        'endReason', // CHATSCHED-013: why it ended (connection_lost vs hung_up ...)
         'endedAt',
         'id',
         'initiatorId',

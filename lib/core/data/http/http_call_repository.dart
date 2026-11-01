@@ -172,6 +172,7 @@ class HttpCallRepository implements CallRepository {
       outcome: outcome,
       isGroup: row['type'] == Wire.callTypeGroup,
       duration: seconds is int ? Duration(seconds: seconds) : null,
+      connectionLost: row['endReason'] == 'connection_lost',
     );
   }
 
