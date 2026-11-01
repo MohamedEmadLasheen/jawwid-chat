@@ -18,7 +18,7 @@ import { familyInScopeSql } from './billing-access';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
 import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
-import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+import { WEBHOOK_REFUND_REASON, assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
 import { formatMajor, minorDigits } from './money';
 import type { TrialFormPayer } from '../new-students/new-students.service';
 import {
@@ -36,6 +36,8 @@ import {
 const RECEIPT_STATUSES = ['pending', 'approved', 'rejected'] as const;
 /** The receipts list's page size; the Dashboard tile caps at it too (PD-44). */
 const RECEIPTS_LIMIT = 200;
+/** A refund's transaction spans its Stripe call (20 s timeout, 2 retries). */
+const REFUND_TRANSACTION_TIMEOUT_MS = 90_000;
 const DEFAULT_EXPIRY_DAYS = 14;
 const INVOICE_LINK_TTL_SECONDS = 5 * 60;
 
@@ -284,25 +286,23 @@ export class PaymentsService {
 
     let learnerId = optionalUuid('learnerId', body.learnerId);
     let currency: string | null = body.currency === undefined || body.currency === null ? null : requireCurrency(body.currency);
-    let owed: number | null = null;
+    // What the payment is towards. Its state and what it still owes are read
+    // only inside the transaction, under its row lock and after the replay
+    // check (#358 review): read here, two submits at once could both see it
+    // owed, and a retry of a submit that just completed it would be refused.
     let request: PaymentRequest | null = null;
     if (requestId) {
       request = await this.prisma.paymentRequest.findFirst({ where: { id: requestId, familyId: family.id } });
       if (!request) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment request not found');
-      if (request.cancelledAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this request is cancelled', 409);
-      owed = Number(request.amountMinor) - (await this.ledger.standingSum(this.prisma, { requestId: request.id }));
       learnerId = request.learnerId ?? learnerId;
       currency = request.currency;
     }
     if (instalmentId) {
       const inst = await this.prisma.familyInstalment.findFirst({ where: { id: instalmentId, familyId: family.id } });
       if (!inst) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'instalment not found');
-      if (inst.paidOn || inst.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid or voided', 409);
-      owed = Number(inst.amountMinor) - (await this.ledger.standingSum(this.prisma, { instalmentId: inst.id }));
       learnerId = inst.learnerId ?? learnerId;
       currency = inst.currency;
     }
-    if (owed !== null && amountMinor > owed) throw invalid(`amountMinor: at most what is still owed (${owed})`);
     if (!currency) currency = (await this.prisma.familyBilling.findUnique({ where: { familyId: family.id } }))?.currency ?? null;
     if (!currency) throw invalid('currency: set the family\'s currency, or send one');
     let childName: string | null = null;
@@ -322,6 +322,20 @@ export class PaymentsService {
           return null; // a concurrent duplicate: the first one wrote it
         }
       }
+      let owed: number | null = null;
+      if (request) {
+        await tx.$queryRaw`SELECT id FROM chat.payment_request WHERE id = ${request.id}::uuid FOR UPDATE`;
+        const fresh = await tx.paymentRequest.findUniqueOrThrow({ where: { id: request.id }, select: { cancelledAt: true, amountMinor: true } });
+        if (fresh.cancelledAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this request is cancelled', 409);
+        owed = Number(fresh.amountMinor) - (await this.ledger.standingSum(tx, { requestId: request.id }));
+      }
+      if (instalmentId) {
+        await tx.$queryRaw`SELECT id FROM chat.family_instalment WHERE id = ${instalmentId}::uuid FOR UPDATE`;
+        const fresh = await tx.familyInstalment.findUniqueOrThrow({ where: { id: instalmentId }, select: { paidOn: true, voidedAt: true, amountMinor: true } });
+        if (fresh.paidOn || fresh.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid or voided', 409);
+        owed = Number(fresh.amountMinor) - (await this.ledger.standingSum(tx, { instalmentId }));
+      }
+      if (owed !== null && amountMinor > owed) throw invalid(`amountMinor: at most what is still owed (${owed})`);
       return this.ledger.record(tx, {
         id: paymentKey ?? undefined,
         organizationId: actor.organizationId as string,
@@ -375,56 +389,68 @@ export class PaymentsService {
     return this.presentAfter(actor, access, payment);
   }
 
-  /** { amountMinor, reason } -- a card payment is refunded through Stripe. */
+  /** { amountMinor, reason, refundId? } -- a card payment is refunded through Stripe. */
   async refund(actorId: string, paymentId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.requireVerifier(actorId);
     const payment = await this.requirePayment(actor, access, paymentId);
     const amountMinor = requireAmount('amountMinor', body.amountMinor);
     const reason = requireText('reason', body.reason, 500);
-    // ADMIN-001: a replay of this submit answers before the "left to refund"
-    // check (which the first one changed) and before any call to Stripe.
     const refundKey = optionalUuid('refundId', body.refundId);
-    const sameRefund = (r: { paymentId: string; amountMinor: bigint; reason: string; recordedBy: string | null }) =>
-      r.paymentId === payment.id && Number(r.amountMinor) === amountMinor && r.reason === reason && r.recordedBy === actor.actorId;
-    if (refundKey) {
-      const prior = await this.prisma.paymentRefund.findUnique({ where: { id: refundKey } });
-      if (prior) {
-        assertReplay('refund', sameRefund(prior));
-        return this.presentAfter(actor, access, payment);
-      }
-    }
-    if (payment.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'a voided payment is not refunded', 409);
-    const refunded = Number((await this.prisma.paymentRefund.aggregate({ where: { paymentId: payment.id }, _sum: { amountMinor: true } }))._sum.amountMinor ?? 0n);
-    if (refunded + amountMinor > Number(payment.amountMinor)) {
-      throw new CommError(CommErrorCode.BILLING_STATE, `at most ${Number(payment.amountMinor) - refunded} is left to refund`, 409);
-    }
+    // A row under this key is a replay: the same payment, amount and recorder,
+    // and the same reason -- unless the row is the one Stripe's webhook wrote
+    // for our own call (the recording transaction was lost), which names Stripe.
+    const sameRefund = (r: { paymentId: string; amountMinor: bigint; reason: string; recordedBy: string | null; stripeRefundId: string | null }) =>
+      r.paymentId === payment.id && Number(r.amountMinor) === amountMinor && r.recordedBy === actor.actorId
+      && (r.reason === reason || (r.stripeRefundId !== null && r.reason.startsWith(WEBHOOK_REFUND_REASON)));
 
-    let stripeRefundId: string | null = null;
-    if (payment.method === 'card') {
-      if (!this.stripe.checkoutAvailable) {
-        throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not configured on this deployment', 503);
-      }
-      if (!payment.stripePaymentIntentId) throw new CommError(CommErrorCode.BILLING_STATE, 'this card payment has no Stripe payment to refund', 409);
-      try {
-        const r = await this.stripe.refund(payment.stripePaymentIntentId, amountMinor, `refund:${payment.id}:${refunded}:${amountMinor}`);
-        stripeRefundId = r.id;
-      } catch (e) {
-        this.log.warn(`stripe refund refused: ${(e as Error).name}`);
-        throw new CommError(CommErrorCode.BILLING_STATE, 'Stripe did not accept the refund; check the payment in the Stripe Dashboard', 409);
-      }
-    }
+    // ADMIN-001 (#358 review): ONE transaction, locked before anything is read.
+    // The key lock serializes a submit with its retries; the payment's row lock
+    // (the one chat.guard_payment_refund takes) serializes every refund of this
+    // payment and holds Stripe's webhook back until this refund is recorded.
+    // Under both: the replay check, then "left to refund", then Stripe, keyed
+    // by the client's refundId -- so a retry can never become a second refund.
+    // Stripe is called inside the transaction; its client times out at 20 s
+    // with 2 retries, hence the long timeout.
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      if (refundKey) await lockIdempotencyKey(tx, refundKey);
+      await tx.$queryRaw`SELECT id FROM chat.payment WHERE id = ${payment.id}::uuid FOR UPDATE`;
       if (refundKey) {
-        await lockIdempotencyKey(tx, refundKey);
         const prior = await tx.paymentRefund.findUnique({ where: { id: refundKey } });
         if (prior) {
           assertReplay('refund', sameRefund(prior));
-          return; // a concurrent duplicate: the first one wrote it
+          return; // already recorded: by the first submit, or by Stripe's webhook for it
         }
       }
-      // The webhook may have recorded Stripe's refund already (unique id): then this is it.
-      if (stripeRefundId && (await tx.paymentRefund.findUnique({ where: { stripeRefundId } }))) return;
+      const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, select: { voidedAt: true, amountMinor: true } });
+      if (fresh.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'a voided payment is not refunded', 409);
+      const refunded = Number((await tx.paymentRefund.aggregate({ where: { paymentId: payment.id }, _sum: { amountMinor: true } }))._sum.amountMinor ?? 0n);
+      if (refunded + amountMinor > Number(fresh.amountMinor)) {
+        throw new CommError(CommErrorCode.BILLING_STATE, `at most ${Number(fresh.amountMinor) - refunded} is left to refund`, 409);
+      }
+
+      let stripeRefundId: string | null = null;
+      if (payment.method === 'card') {
+        if (!this.stripe.checkoutAvailable) {
+          throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not configured on this deployment', 503);
+        }
+        if (!payment.stripePaymentIntentId) throw new CommError(CommErrorCode.BILLING_STATE, 'this card payment has no Stripe payment to refund', 409);
+        try {
+          const r = await this.stripe.refund(
+            payment.stripePaymentIntentId as string,
+            amountMinor,
+            refundKey ? `refund:${refundKey}` : `refund:${payment.id}:${refunded}:${amountMinor}`,
+            // The webhook records Stripe's refund under the same key if this transaction is lost.
+            refundKey ? { refundId: refundKey, recordedBy: actor.actorId } : {},
+          );
+          stripeRefundId = r.id;
+        } catch (e) {
+          this.log.warn(`stripe refund refused: ${(e as Error).name}`);
+          throw new CommError(CommErrorCode.BILLING_STATE, 'Stripe did not accept the refund; check the payment in the Stripe Dashboard', 409);
+        }
+        // An earlier attempt whose recording was lost may have been recorded by the webhook: then this is it.
+        if (await tx.paymentRefund.findUnique({ where: { stripeRefundId } })) return;
+      }
       await tx.paymentRefund.create({
         data: {
           ...(refundKey ? { id: refundKey } : {}),
@@ -444,7 +470,7 @@ export class PaymentsService {
         after: { paymentId: payment.id, amountMinor, currency: payment.currency, stripeRefundId },
         reason,
       });
-    }).catch((e) => { throw mapPaymentRefusal(e); });
+    }, { maxWait: 10_000, timeout: REFUND_TRANSACTION_TIMEOUT_MS }).catch((e) => { throw mapPaymentRefusal(e); });
     return this.presentAfter(actor, access, payment);
   }
 

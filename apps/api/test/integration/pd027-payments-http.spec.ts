@@ -657,6 +657,107 @@ describe('ADMIN-001: money is recorded once per submit', () => {
 });
 
 /**
+ * #358 review: a duplicate CARD refund could reach Stripe twice -- the replay
+ * check and the refunded sum were read outside the lock, which was taken only
+ * after the Stripe call, whose key was not the client's refundId. And a manual
+ * payment checked what was owed outside its transaction.
+ */
+describe('ADMIN-001: a card refund reaches Stripe once per refundId; a manual payment never overpays', () => {
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  const cardPaid = async (i: number) => {
+    const { f } = familyOf(i);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'subscription', label: 'Monthly', amountMinor: 30000,
+    })).json.request;
+    await webhook(stripe.completedEvent(stripe.complete(await payByCard(tokenOf(req.link)))));
+    const card = (await http(m.superAdmin.subject, 'GET', `/families/${f.id}/billing`)).json.payments.find((p: any) => p.method === 'card');
+    const intent = (await g.prisma.payment.findUniqueOrThrow({ where: { id: card.id } })).stripePaymentIntentId as string;
+    const calls = () => stripe.refundCalls.filter((c) => c.paymentIntentId === intent);
+    return { f, paymentId: card.id as string, intent, calls };
+  };
+  afterEach(() => { stripe.onRefund = null; });
+
+  it('sent twice at once with one refundId: ONE Stripe call, keyed by the refundId; a replay later calls Stripe never again', async () => {
+    const { paymentId, calls } = await cardPaid(10);
+    const body = { amountMinor: 3000, reason: 'one lesson not held', refundId: randomUUID() };
+    stripe.onRefund = () => sleep(400); // a slow Stripe: both submits are in flight together
+    const answers = await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
+      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
+    ]);
+    expect(answers.map((r) => r.status)).toEqual([201, 201]);
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]).toMatchObject({ amountMinor: 3000, idempotencyKey: `refund:${body.refundId}`, metadata: { refundId: body.refundId } });
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    expect(calls()).toHaveLength(1);
+    expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, amountMinor: true } }))
+      .toEqual([{ id: body.refundId, amountMinor: 3000n }]);
+  });
+
+  it('Stripe\'s webhook arriving while the refund is being recorded: one row, under the refundId, so a replay finds it and calls Stripe never again', async () => {
+    const { paymentId, calls } = await cardPaid(11);
+    const body = { amountMinor: 5000, reason: 'two lessons not held', refundId: randomUUID() };
+    let delivered: Promise<{ json: any }> | null = null;
+    stripe.onRefund = async (r) => {
+      // Stripe tells the webhook before it answers the API call.
+      delivered = webhook(stripe.refundEvent(r.paymentIntentId, r.id, r.amountMinor, undefined, r.metadata));
+      await Promise.race([delivered, sleep(1500)]);
+    };
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    await delivered;
+    stripe.onRefund = null;
+    expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, recordedBy: true } }))
+      .toEqual([{ id: body.refundId, recordedBy: m.superAdmin.id }]);
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    expect(calls()).toHaveLength(1);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+  });
+
+  it('a refund Stripe made but only the webhook recorded (our transaction lost) is recorded under the refundId; the replay is answered, Stripe not called', async () => {
+    const { paymentId, intent, calls } = await cardPaid(12);
+    const body = { amountMinor: 4000, reason: 'a lesson not held', refundId: randomUUID() };
+    // Our call reached Stripe, then the recording transaction died; Stripe's webhook still arrives.
+    const made = await stripe.refund(intent, 4000, `refund:${body.refundId}`, { refundId: body.refundId, recordedBy: m.superAdmin.id });
+    expect((await webhook(stripe.refundEvent(intent, made.id, 4000, undefined, { refundId: body.refundId, recordedBy: m.superAdmin.id }))).json.outcome)
+      .toBe('refund_recorded');
+    expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, recordedBy: true, stripeRefundId: true } }))
+      .toEqual([{ id: body.refundId, recordedBy: m.superAdmin.id, stripeRefundId: made.id }]);
+    const replay = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body);
+    expect(replay.status).toBe(201);
+    expect(calls()).toHaveLength(1); // only the one call above
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+    // A refundId in Stripe's metadata that is not a uuid, or a stranger as recorder, is not trusted.
+    const other = await stripe.refund(intent, 1000, 'refund:dashboard', { refundId: 'not-a-uuid', recordedBy: randomUUID() });
+    expect((await webhook(stripe.refundEvent(intent, other.id, 1000, undefined, { refundId: 'not-a-uuid', recordedBy: randomUUID() }))).json.outcome)
+      .toBe('refund_recorded');
+    expect(await g.prisma.paymentRefund.findUniqueOrThrow({ where: { stripeRefundId: other.id }, select: { recordedBy: true } }))
+      .toEqual({ recordedBy: null });
+  });
+
+  it('two different submits for the whole of one instalment at once: one is recorded, the other refused -- never overpaid', async () => {
+    const { f, supervisor } = familyOf(13);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Term', items: [{ amountMinor: 9000, dueDate: '2026-11-01' }, { amountMinor: 9000, dueDate: '2026-12-01' }],
+    });
+    const [first, second] = plan.json.instalments as any[];
+    const pay = (instalmentId: string, paymentId: string = randomUUID()) => http(supervisor.subject, 'POST', `/families/${f.id}/payments`, {
+      method: 'cash', amountMinor: 9000, paidOn: today(), instalmentId, paymentId,
+    });
+    const answers = await Promise.all([pay(first.id), pay(first.id)]);
+    expect(answers.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await g.prisma.payment.count({ where: { instalmentId: first.id } })).toBe(1);
+    // The same submit twice at once is one payment and two good answers, never "already paid".
+    const key = randomUUID();
+    const same = await Promise.all([pay(second.id, key), pay(second.id, key)]);
+    expect(same.map((r) => r.status)).toEqual([201, 201]);
+    expect(await g.prisma.payment.findMany({ where: { instalmentId: second.id }, select: { id: true } })).toEqual([{ id: key }]);
+    expect((await pay(second.id, key)).status).toBe(201);
+  });
+});
+
+/**
  * ADMIN-007: two staff editing one family's billing settings at once used to
  * be last-write-wins, and the audit's before-image was read before the
  * transaction, so it could name values the edit never overwrote.

@@ -26,6 +26,14 @@ export function assertReplay(what: 'payment' | 'refund' | 'receipt', same: boole
   if (!same) throw new CommError(CommErrorCode.BILLING_STATE, `this ${what} id was already used for a different ${what}`, 409);
 }
 
+/**
+ * The reason Stripe's webhook writes on a refund it learned of
+ * (CheckoutService.recordStripeRefund). A refund our API asked for, whose
+ * recording transaction was lost, is written by the webhook under the
+ * client's refundId with this reason -- still a replay of that submit.
+ */
+export const WEBHOOK_REFUND_REASON = 'refunded in Stripe';
+
 /** A date column as YYYY-MM-DD. */
 export function isoDay(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
