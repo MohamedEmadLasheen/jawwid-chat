@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Prisma, type NotificationItem } from '@prisma/client';
+import { Prisma, type Notification, type NotificationItem } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { IDENTITY_SERVICE, REALTIME_PUBLISHER } from '../../platform/tokens';
@@ -7,7 +7,7 @@ import type { IdentityService } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent } from '../contracts/events';
 import { ActorKind, NotificationStatus } from '../contracts/vocab';
-import { NotificationService } from './notification.service';
+import { NotificationService, type ScheduledDeliveryListener } from './notification.service';
 import { QuietHoursService } from './quiet-hours.service';
 import { catalogEntry, severityOf, type NotificationCategory } from './notification-catalog';
 import { ACADEMY_ZONE } from '../../platform/time-zone';
@@ -67,6 +67,9 @@ export interface MessageEmitInput {
 
 const DAY_MS = 86_400_000;
 
+/** Delivery rows the Center never adopts: messages have their own entries; a ringing call is live, not a record. */
+const LIVE_ONLY_EVENTS = ['message_published', 'call_started', 'group_call_started'];
+
 /**
  * PD-34: the notification pipeline.
  *
@@ -84,7 +87,7 @@ const DAY_MS = 86_400_000;
  * failure is logged by the caller and never undoes the change that caused it.
  */
 @Injectable()
-export class NotificationPipeline {
+export class NotificationPipeline implements ScheduledDeliveryListener {
   private readonly log = new Logger(NotificationPipeline.name);
 
   constructor(
@@ -94,7 +97,10 @@ export class NotificationPipeline {
     private readonly config: AppConfigService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
-  ) {}
+  ) {
+    // ADMIN-011: a producer not on the pipeline still gets its Center entry at once.
+    this.notifications.onScheduled(this);
+  }
 
   // ------------------------------------------------------------------
   // Emit
@@ -159,6 +165,7 @@ export class NotificationPipeline {
         scheduledAt: pushAt,
         // Already applied above, with the academy default for someone who never chose.
         respectQuietHours: false,
+        entryWritten: true,
       });
       if (deliveryId) await this.link(deliveryId, item.id, input.reviveCancelled ?? false, pushAt);
     }
@@ -664,20 +671,43 @@ export class NotificationPipeline {
   }
 
   /**
-   * Adopts delivery rows written by producers not yet on the pipeline (calls,
-   * stories, payment received / rejected, PD-30) into Center entries once they
-   * are sent -- so the Center is complete without editing their code. A row
-   * still waiting is left alone: it may yet be cancelled.
+   * ADMIN-011: a delivery row a producer not yet on the pipeline (stories,
+   * payment received / rejected, PD-30, cover and onboarding notices) just
+   * scheduled becomes its Center entry NOW, whatever its push does after --
+   * every parent without a device token used to see it only once five retries
+   * had failed, about 15 minutes late. A row scheduled for later (a reminder)
+   * is left to adoptLegacy once it is due: until then it may yet be cancelled.
+   */
+  async scheduled(deliveryId: string, intendedAt: Date): Promise<void> {
+    const now = new Date();
+    if (intendedAt.getTime() > now.getTime()) return;
+    const n = await this.prisma.notification.findUnique({ where: { id: deliveryId } });
+    if (!n || n.itemId || LIVE_ONLY_EVENTS.includes(n.eventType) || n.status === NotificationStatus.CANCELLED) return;
+    // Announced by announceDue on the worker's next tick, as every entry is.
+    await this.adoptRow(n, intendedAt);
+  }
+
+  /**
+   * The backstop for scheduled(): adopts delivery rows written by producers
+   * not yet on the pipeline (calls, stories, payment received / rejected,
+   * PD-30) into Center entries once they are due -- sent, failed, or waiting
+   * on a retry after a failed push (however far the retry moved it) -- so the
+   * Center is complete without editing their code. A row not yet due is left
+   * alone: it may yet be cancelled.
    */
   async adoptLegacy(now = new Date(), batch = 200): Promise<number> {
+    const since = new Date(now.getTime() - 2 * DAY_MS);
     const rows = await this.prisma.notification.findMany({
       where: {
         itemId: null,
-        eventType: { notIn: ['message_published', 'call_started', 'group_call_started'] },
-        scheduledAt: { lte: now, gt: new Date(now.getTime() - 2 * DAY_MS) },
+        eventType: { notIn: LIVE_ONLY_EVENTS },
         OR: [
-          { status: { in: [NotificationStatus.SENT, NotificationStatus.DELIVERED, NotificationStatus.OPENED, NotificationStatus.FAILED] } },
-          { status: NotificationStatus.SCHEDULED, failureCode: { not: null } },
+          {
+            scheduledAt: { lte: now, gt: since },
+            status: { in: [NotificationStatus.SENT, NotificationStatus.DELIVERED, NotificationStatus.OPENED, NotificationStatus.FAILED] },
+          },
+          // An attempt was made, so it was due; its retry time says nothing about when it was meant.
+          { status: NotificationStatus.SCHEDULED, failureCode: { not: null }, createdAt: { gt: since } },
         ],
       },
       orderBy: { scheduledAt: 'asc' },
@@ -685,34 +715,40 @@ export class NotificationPipeline {
     });
     let adopted = 0;
     for (const n of rows) {
-      const entry = catalogEntry(n.ruleKey, n.eventType);
-      const subjectId = subjectOf(n.dedupeKey);
-      const refs = compact({ conversationId: n.conversationId, familyId: n.familyId });
-      const item = await this.upsertItem({
-        organizationId: n.organizationId,
-        dedupeKey: n.dedupeKey,
-        recipientId: n.recipientId,
-        ruleKey: n.ruleKey,
-        ruleVersion: entry.version,
-        eventType: n.eventType,
-        category: entry.category,
-        severity: severityOf(n.priority),
-        basis: null,
-        subjectType: null,
-        subjectId,
-        refs,
-        action: entry.action ? { kind: entry.action, ...refs } : null,
-        templateKey: entry.inbox,
-        locale: n.locale === 'en' ? 'en' : 'ar',
-        variables: (n.variables ?? {}) as Record<string, unknown>,
-        pushState: 'scheduled',
-        visibleAt: n.sentAt ?? n.scheduledAt,
-      }, false);
-      if (!item) continue;
-      await this.prisma.notification.updateMany({ where: { id: n.id, itemId: null }, data: { itemId: item.id } });
-      adopted += 1;
+      const waiting = n.status === NotificationStatus.SCHEDULED;
+      if (await this.adoptRow(n, n.sentAt ?? (waiting ? now : n.scheduledAt))) adopted += 1;
     }
     return adopted;
+  }
+
+  /** One delivery row's Center entry (idempotent on its dedupe key), linked to it. */
+  private async adoptRow(n: Notification, visibleAt: Date): Promise<boolean> {
+    const entry = catalogEntry(n.ruleKey, n.eventType);
+    const subjectId = subjectOf(n.dedupeKey);
+    const refs = compact({ conversationId: n.conversationId, familyId: n.familyId });
+    const item = await this.upsertItem({
+      organizationId: n.organizationId,
+      dedupeKey: n.dedupeKey,
+      recipientId: n.recipientId,
+      ruleKey: n.ruleKey,
+      ruleVersion: entry.version,
+      eventType: n.eventType,
+      category: entry.category,
+      severity: severityOf(n.priority),
+      basis: null,
+      subjectType: null,
+      subjectId,
+      refs,
+      action: entry.action ? { kind: entry.action, ...refs } : null,
+      templateKey: entry.inbox,
+      locale: n.locale === 'en' ? 'en' : 'ar',
+      variables: (n.variables ?? {}) as Record<string, unknown>,
+      pushState: 'scheduled',
+      visibleAt,
+    }, false);
+    if (!item) return false;
+    await this.prisma.notification.updateMany({ where: { id: n.id, itemId: null }, data: { itemId: item.id } });
+    return true;
   }
 
   /** Retention: delivery rows after notification.delivery_retention_days, entries after item_retention_days. */
@@ -878,6 +914,7 @@ export class NotificationPipeline {
       },
       scheduledAt,
       respectQuietHours: false,
+      entryWritten: true,
     });
     // Linked: a mention that closes before it goes (MENTION_CLOSED) or a person
     // who leaves (AUDIENCE) withdraws the entry with the push.

@@ -3790,6 +3790,14 @@ notification is rendered in the recipient's own zone; teachers follow their phon
 9. **Retention.** Pushes are kept 90 days, entries 365
    (`notification.delivery_retention_days`, `notification.item_retention_days`).
 
+**Producers not yet on the pipeline** (payments, stories, PD-30, cover and
+onboarding notices) write only a delivery row. Its Center entry is written when
+the row is scheduled for now, whatever the push does after (ADMIN-011, 2026-11-01:
+it used to wait for the push to be sent or to fail five times, about 15 minutes
+for anyone without a device token). A row scheduled for later is adopted by the
+worker once it is due, and a row waiting on a retry after a failed push is adopted
+at once.
+
 **Not changed.** Call pushes (W7/W8, closed): the dispatcher, routing, templates
 and VoIP gate are untouched; a sent missed call is adopted into the Center by the
 worker. Android push still needs the Firebase project (owner/infra).
