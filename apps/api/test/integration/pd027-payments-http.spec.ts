@@ -678,15 +678,22 @@ describe('ADMIN-001: a card refund reaches Stripe once per refundId; a manual pa
   };
   afterEach(() => { stripe.onRefund = null; });
 
-  it('sent twice at once with one refundId: ONE Stripe call, keyed by the refundId; a replay later calls Stripe never again', async () => {
+  it('sent twice at once with one refundId: ONE Stripe call, keyed by the refundId; the second is told at once it is in progress; a replay later calls Stripe never again', async () => {
     const { paymentId, calls } = await cardPaid(10);
     const body = { amountMinor: 3000, reason: 'one lesson not held', refundId: randomUUID() };
-    stripe.onRefund = () => sleep(400); // a slow Stripe: both submits are in flight together
-    const answers = await Promise.all([
-      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
-      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
-    ]);
-    expect(answers.map((r) => r.status)).toEqual([201, 201]);
+    stripe.onRefund = () => sleep(2500); // a slow Stripe: the first submit is still in it
+    const timed = async () => {
+      const t0 = Date.now();
+      const r = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body);
+      return { ...r, ms: Date.now() - t0 };
+    };
+    const first = timed();
+    await sleep(300);
+    const second = await timed();
+    // Refused without waiting for the first (no connection held behind a lock).
+    expect({ status: second.status, code: second.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(second.ms).toBeLessThan(1500);
+    expect((await first).status).toBe(201);
     expect(calls()).toHaveLength(1);
     expect(calls()[0]).toMatchObject({ amountMinor: 3000, idempotencyKey: `refund:${body.refundId}`, metadata: { refundId: body.refundId } });
     expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
@@ -697,15 +704,17 @@ describe('ADMIN-001: a card refund reaches Stripe once per refundId; a manual pa
 
   it('Stripe\'s webhook arriving while the refund is being recorded: one row, under the refundId, so a replay finds it and calls Stripe never again', async () => {
     const { paymentId, calls } = await cardPaid(11);
-    const body = { amountMinor: 5000, reason: 'two lessons not held', refundId: randomUUID() };
-    let delivered: Promise<{ json: any }> | null = null;
+    // Over half the payment: the webhook's own insert would exceed it (20000 + 20000 > 30000).
+    const body = { amountMinor: 20000, reason: 'most lessons not held', refundId: randomUUID() };
+    let delivered: Promise<{ status: number; json: any }> | null = null;
     stripe.onRefund = async (r) => {
       // Stripe tells the webhook before it answers the API call.
       delivered = webhook(stripe.refundEvent(r.paymentIntentId, r.id, r.amountMinor, undefined, r.metadata));
       await Promise.race([delivered, sleep(1500)]);
     };
     expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
-    await delivered;
+    // The webhook waited for the payment's lock, then found the refund: an answer, never a 500.
+    expect((await delivered!).status).toBe(200);
     stripe.onRefund = null;
     expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, recordedBy: true } }))
       .toEqual([{ id: body.refundId, recordedBy: m.superAdmin.id }]);
@@ -733,6 +742,45 @@ describe('ADMIN-001: a card refund reaches Stripe once per refundId; a manual pa
       .toBe('refund_recorded');
     expect(await g.prisma.paymentRefund.findUniqueOrThrow({ where: { stripeRefundId: other.id }, select: { recordedBy: true } }))
       .toEqual({ recordedBy: null });
+  });
+
+  it('another refund of the same payment while one is in Stripe is refused after the lock timeout, not held for the whole call', async () => {
+    const { paymentId } = await cardPaid(14);
+    stripe.onRefund = () => sleep(8000);
+    const first = http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { amountMinor: 1000, reason: 'a lesson not held', refundId: randomUUID() });
+    await sleep(300);
+    const t0 = Date.now();
+    const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { amountMinor: 1000, reason: 'another lesson', refundId: randomUUID() });
+    const ms = Date.now() - t0;
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(ms).toBeGreaterThanOrEqual(4500);
+    expect(ms).toBeLessThan(7000);
+    expect((await first).status).toBe(201);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+  }, 30_000);
+
+  it('a NEW Stripe refund carrying a refundId already recorded (Stripe\'s 24 h key expired) is recorded as its own row, never dropped', async () => {
+    const { paymentId, intent } = await cardPaid(15);
+    const body = { amountMinor: 2000, reason: 'a lesson not held', refundId: randomUUID() };
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    const later = await stripe.refund(intent, 2000, `refund:${body.refundId}:after-expiry`, { refundId: body.refundId, recordedBy: m.superAdmin.id });
+    const answer = await webhook(stripe.refundEvent(intent, later.id, 2000, undefined, { refundId: body.refundId, recordedBy: m.superAdmin.id }));
+    expect({ status: answer.status, outcome: answer.json.outcome }).toEqual({ status: 200, outcome: 'refund_recorded' });
+    const rows = await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, stripeRefundId: true }, orderBy: { createdAt: 'asc' } });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.id).toBe(body.refundId);
+    expect(rows[1]).toMatchObject({ stripeRefundId: later.id });
+    expect(rows[1]!.id).not.toBe(body.refundId);
+  });
+
+  it('Stripe refusing a reused key with other parameters (as real Stripe does) records nothing', async () => {
+    const { paymentId, intent } = await cardPaid(16);
+    const refundId = randomUUID();
+    // Stripe made 4000 under this key; nothing was recorded (no webhook yet).
+    await stripe.refund(intent, 4000, `refund:${refundId}`, { refundId, recordedBy: m.superAdmin.id });
+    const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { amountMinor: 4500, reason: 'x', refundId });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(0);
   });
 
   it('two different submits for the whole of one instalment at once: one is recorded, the other refused -- never overpaid', async () => {

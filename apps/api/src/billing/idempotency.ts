@@ -21,6 +21,23 @@ export async function lockIdempotencyKey(tx: Tx, key: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`billing:${key}`}, 0))`;
 }
 
+/**
+ * The same lock, without waiting: false while another transaction holds it.
+ * For a submit whose transaction spans a slow outside call (a Stripe refund):
+ * a retry is told at once that the first is in progress instead of holding a
+ * pool connection behind the lock for the whole call.
+ */
+export async function tryLockIdempotencyKey(tx: Tx, key: string): Promise<boolean> {
+  const [row] = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(hashtextextended(${`billing:${key}`}, 0)) AS locked`;
+  return row?.locked === true;
+}
+
+/** A Postgres lock wait that hit `lock_timeout` (55P03). */
+export function isLockTimeout(e: unknown): boolean {
+  const err = e as { code?: string; meta?: { code?: string }; message?: string };
+  return err?.meta?.code === '55P03' || err?.code === '55P03' || /lock timeout/i.test(String(err?.message ?? ''));
+}
+
 /** A stored row under this id: the same request (a replay) or a refusal. */
 export function assertReplay(what: 'payment' | 'refund' | 'receipt', same: boolean): void {
   if (!same) throw new CommError(CommErrorCode.BILLING_STATE, `this ${what} id was already used for a different ${what}`, 409);

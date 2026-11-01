@@ -18,7 +18,7 @@ import { familyInScopeSql } from './billing-access';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
 import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
-import { WEBHOOK_REFUND_REASON, assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+import { WEBHOOK_REFUND_REASON, assertReplay, isLockTimeout, isoDay, lockIdempotencyKey, tryLockIdempotencyKey } from './idempotency';
 import { formatMajor, minorDigits } from './money';
 import type { TrialFormPayer } from '../new-students/new-students.service';
 import {
@@ -410,11 +410,21 @@ export class PaymentsService {
     // Under both: the replay check, then "left to refund", then Stripe, keyed
     // by the client's refundId -- so a retry can never become a second refund.
     // Stripe is called inside the transaction; its client times out at 20 s
-    // with 2 retries, hence the long timeout.
+    // with 2 retries, hence the long timeout. So nothing WAITS behind it
+    // holding a pool connection: a retry of this submit is refused at once
+    // (try-lock), another refund of this payment after 5 s (lock_timeout).
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
-      if (refundKey) await lockIdempotencyKey(tx, refundKey);
-      await tx.$queryRaw`SELECT id FROM chat.payment WHERE id = ${payment.id}::uuid FOR UPDATE`;
+      if (refundKey && !(await tryLockIdempotencyKey(tx, refundKey))) {
+        throw new CommError(CommErrorCode.BILLING_STATE, 'this refund is already in progress; refresh in a moment', 409);
+      }
+      await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
+      try {
+        await tx.$queryRaw`SELECT id FROM chat.payment WHERE id = ${payment.id}::uuid FOR UPDATE`;
+      } catch (e) {
+        if (isLockTimeout(e)) throw new CommError(CommErrorCode.BILLING_STATE, 'another refund of this payment is in progress; refresh in a moment', 409);
+        throw e;
+      }
       if (refundKey) {
         const prior = await tx.paymentRefund.findUnique({ where: { id: refundKey } });
         if (prior) {
@@ -443,8 +453,14 @@ export class PaymentsService {
             // The webhook records Stripe's refund under the same key if this transaction is lost.
             refundKey ? { refundId: refundKey, recordedBy: actor.actorId } : {},
           );
+          // A refund under this key that is not this one (a mismatched Stripe answer) is never recorded as it.
+          if (r.amountMinor !== amountMinor) {
+            this.log.error(`stripe refund ${r.id}: answered ${r.amountMinor}, asked ${amountMinor}; not recorded`);
+            throw new CommError(CommErrorCode.BILLING_STATE, 'Stripe answered a different refund; check the payment in the Stripe Dashboard', 409);
+          }
           stripeRefundId = r.id;
         } catch (e) {
+          if (e instanceof CommError) throw e;
           this.log.warn(`stripe refund refused: ${(e as Error).name}`);
           throw new CommError(CommErrorCode.BILLING_STATE, 'Stripe did not accept the refund; check the payment in the Stripe Dashboard', 409);
         }

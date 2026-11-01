@@ -24,7 +24,7 @@ export class FakeStripe implements StripeGateway {
   readonly refundCalls: Array<{ paymentIntentId: string; amountMinor: number; idempotencyKey: string; metadata: Record<string, string> }> = [];
   /** Runs inside a refund call, after Stripe made the refund and before it answers (a webhook arriving early, a slow network). */
   onRefund: ((refund: { id: string; paymentIntentId: string; amountMinor: number; metadata: Record<string, string> }) => Promise<void>) | null = null;
-  private readonly refundsByKey = new Map<string, RefundResult>();
+  private readonly refundsByKey = new Map<string, { result: RefundResult; params: string }>();
   readonly expired: string[] = [];
   /** The next createCheckout fails as real Stripe refuses a request (a StripeInvalidRequestError). */
   failNextCheckout: Error | null = null;
@@ -71,12 +71,21 @@ export class FakeStripe implements StripeGateway {
   /** As Stripe: the same idempotency key answers the same refund and makes no new one. */
   async refund(paymentIntentId: string, amountMinor: number, idempotencyKey: string, metadata: Record<string, string> = {}): Promise<RefundResult> {
     this.refundCalls.push({ paymentIntentId, amountMinor, idempotencyKey, metadata });
+    const params = JSON.stringify({ paymentIntentId, amountMinor, metadata });
     const known = this.refundsByKey.get(idempotencyKey);
-    if (known) return known;
+    if (known) {
+      // Real Stripe: a key reused with other parameters is an error, not the old answer.
+      if (known.params !== params) {
+        throw Object.assign(new Error('Keys for idempotent requests can only be used with the same parameters they were first used with.'), {
+          type: 'StripeIdempotencyError', statusCode: 400,
+        });
+      }
+      return known.result;
+    }
     const id = `re_test_${++this.n}`;
     this.refunds.push({ id, paymentIntentId, amountMinor });
     const result = { id, amountMinor, status: 'succeeded' };
-    this.refundsByKey.set(idempotencyKey, result);
+    this.refundsByKey.set(idempotencyKey, { result, params });
     if (this.onRefund) await this.onRefund({ id, paymentIntentId, amountMinor, metadata });
     return result;
   }
