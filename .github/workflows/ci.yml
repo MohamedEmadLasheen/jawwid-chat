@@ -131,6 +131,10 @@ jobs:
         # from the verified dataset.
         run: bash scripts/qa/guards.sh lessons-supply-chain
 
+      - name: PD-56 · the app icon and launch image are Jawwid's, never Flutter's template; the 1024 icon is opaque
+        # The App Store and Google Play reject the template artwork (PR-G).
+        run: bash scripts/qa/guards.sh app-icons
+
       - name: Every gate in scripts/qa/guards.sh runs in CI
         # Anti-drift: fails if guards.sh defines a gate this job never calls.
         run: bash scripts/qa/guards.sh ci-wiring
