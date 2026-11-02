@@ -192,6 +192,22 @@ describe('PD-40 S4: roles', () => {
     // Without a session at all, as before.
     expect((await call(null, 'GET', '/admin/permissions')).status).toBe(401);
   });
+
+  it('ADMIN-005: the access-role list follows the same rule -- a teacher, a parent and Operations and Teachers supervisors get 403', async () => {
+    expect((await as(m.operationsManager.subject, 'GET', '/admin/access-roles')).status).toBe(200);
+    expect((await as(m.teachersManager.subject, 'GET', '/admin/access-roles')).status).toBe(200);
+    expect((await as(m.superAdmin.subject, 'GET', '/admin/access-roles')).status).toBe(200);
+    for (const [who, subject] of [
+      ['teacher', m.teachers[0]!.subject],
+      ['parent', m.families[0]!.parent.subject],
+      ['operations supervisor', m.supervisors[0]!.subject],
+      ['teacher supervisor', m.teacherSupervisors[0]!.subject],
+    ] as const) {
+      const r = await as(subject, 'GET', '/admin/access-roles');
+      expect({ who, status: r.status, roles: r.json.roles }).toEqual({ who, status: 403, roles: undefined });
+    }
+    expect((await call(null, 'GET', '/admin/access-roles')).status).toBe(401);
+  });
 });
 
 describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {
