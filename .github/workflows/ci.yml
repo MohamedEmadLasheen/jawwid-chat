@@ -125,6 +125,9 @@ jobs:
         # refused to staff by PermissionGuard; this fails the build first.
         run: bash scripts/qa/guards.sh pd040-routes
 
+      - name: PD-46 · chat.lesson is written only through LessonWriter
+        run: bash scripts/qa/guards.sh lesson-writer
+
       - name: The lessons engine's supply chain (exact pins, registry + integrity, no install scripts, no markers, nothing from outside)
         # apps/lessons is written from scratch; the old lessons repo was infected
         # through its build config. Also proves the Quran snapshot builds only

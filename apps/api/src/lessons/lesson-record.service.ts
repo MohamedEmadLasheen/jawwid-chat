@@ -129,18 +129,15 @@ export class LessonRecordService {
           if (report.messageId) await this.retractCard(tx, report.messageId, actor, reason);
         }
 
-        const updated = await tx.lesson.update({
-          where: { id: lesson.id },
-          data: {
-            outcome: to,
-            // admin_cancelled must name its reason; every other correction's
-            // reason is internal and lives on the correction row.
-            outcomeNote: to === LessonOutcome.ADMIN_CANCELLED ? reason : null,
-            excuseCategory: categoryAfterCorrection(lesson.outcome, to, lesson.excuseCategory),
-            outcomeByKind: ActorKind.STAFF,
-            outcomeBy: actor.actorId,
-            outcomeAt: new Date(),
-          },
+        const updated = await this.lessons.writer.update(tx, 'outcome', lesson.id, {
+          outcome: to,
+          // admin_cancelled must name its reason; every other correction's
+          // reason is internal and lives on the correction row.
+          outcomeNote: to === LessonOutcome.ADMIN_CANCELLED ? reason : null,
+          excuseCategory: categoryAfterCorrection(lesson.outcome, to, lesson.excuseCategory),
+          outcomeByKind: ActorKind.STAFF,
+          outcomeBy: actor.actorId,
+          outcomeAt: new Date(),
         });
 
         if (to === LessonOutcome.HELD) {
@@ -261,10 +258,7 @@ export class LessonRecordService {
               correctedBy: actor.actorId,
             },
           });
-          const updated = await tx.lesson.update({
-            where: { id: lesson.id },
-            data: { outcome: LessonOutcome.VOIDED, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
-          });
+          const updated = await this.lessons.writer.update(tx, 'outcome', lesson.id, { outcome: LessonOutcome.VOIDED, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
           await this.lessons.emitClosed(tx, updated, true);
         }
         await this.audit.audit(tx, {

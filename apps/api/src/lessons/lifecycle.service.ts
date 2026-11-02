@@ -325,6 +325,8 @@ export class LifecycleService {
         for (const plan of plans) {
           const { learner } = plan;
           const lang = await this.lessons.languageOf({ learner: { familyId: learner.familyId } });
+          // The SQL writer's lesson changes are noted by the database and announced
+          // by the sweep (PD-46); PR-2b announces them here, by id.
           const rows = await tx.$queryRaw<Array<{ conversation_id: string; removed_teacher_id: string }>>`
             SELECT conversation_id::text, removed_teacher_id::text
               FROM chat.transfer_learner(${learner.id}::uuid, ${toTeacher.id}::uuid, ${opts.reasonCode},
@@ -690,15 +692,12 @@ export class LifecycleService {
          AND (l.starts_at AT TIME ZONE ${zone})::date >= ${from}::date
          AND (${until}::date IS NULL OR (l.starts_at AT TIME ZONE ${zone})::date < ${until}::date)`;
     if (ids.length === 0) return;
-    await tx.lesson.updateMany({
-      where: { id: { in: ids.map((r) => r.id) } },
-      data: {
-        outcome: LessonOutcome.SUSPENDED,
-        outcomeNote: 'study paused',
-        outcomeByKind: ActorKind.STAFF,
-        outcomeBy: actor.actorId,
-        outcomeAt: new Date(),
-      },
+    await this.lessons.writer.updateMany(tx, 'paused', { id: { in: ids.map((r) => r.id) } }, {
+      outcome: LessonOutcome.SUSPENDED,
+      outcomeNote: 'study paused',
+      outcomeByKind: ActorKind.STAFF,
+      outcomeBy: actor.actorId,
+      outcomeAt: new Date(),
     });
     for (const r of ids) await cancelReminders(tx, r.id);
     // A make-up paused with the rest: the card that owed it re-reads it.

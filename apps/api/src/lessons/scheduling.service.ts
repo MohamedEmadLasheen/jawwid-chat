@@ -26,6 +26,7 @@ import { localDate, readerClockShifts, weeklyStartsAround } from '../platform/ti
 import { zonesOf } from '../platform/time-zone.service';
 import {
   LESSON_INCLUDE,
+  cardKey,
   MAKEUP_CAUSES,
   TEACHER_MAKEUP_CAUSES,
   LessonService,
@@ -38,6 +39,7 @@ import {
   textField,
   type Tx,
 } from './lesson.service';
+import { LessonWriter } from './lesson-writer';
 
 export type WeeklySlot = { weekday: number; startMinute: number; durationMinutes: number };
 
@@ -581,24 +583,22 @@ export class SchedulingService {
     const lang = await this.lessons.languageOf(lesson);
     const makeup = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const created = await tx.lesson.create({
-          data: {
-            organizationId: lesson.organizationId,
-            learnerId: lesson.learnerId,
-            teacherId: lesson.teacherId,
-            kind: LessonKind.MAKEUP,
-            makeupFor: lesson.id,
-            startsAt,
-            endsAt: new Date(startsAt.getTime() + duration * 60_000),
-            createdByKind: actor.kind === ActorKind.CONTACT ? 'contact' : actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff',
-            createdBy: actor.actorId,
-          },
-          include: LESSON_INCLUDE,
-        }).then(learnerLesson);
+        const created = await this.lessons.writer.create(tx, 'created', {
+          organizationId: lesson.organizationId,
+          learnerId: lesson.learnerId,
+          teacherId: lesson.teacherId,
+          kind: LessonKind.MAKEUP,
+          makeupFor: lesson.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + duration * 60_000),
+          createdByKind: actor.kind === ActorKind.CONTACT ? 'contact' : actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff',
+          createdBy: actor.actorId,
+        }, LESSON_INCLUDE).then(learnerLesson);
         await this.lessons.postCard(
           tx, created, actor, CardKind.LESSON_MAKEUP_BOOKED,
           { ...this.lessons.cardBase(created), makeupFor: lesson.id, missedStartsAt: lesson.startsAt.toISOString(), missedOutcome: lesson.outcome },
           lang,
+          { idempotencyKey: cardKey(created, 'created') },
         );
         await this.lessons.announceOwedCard(tx, lesson.id);
         await this.audit.audit(tx, {
@@ -732,35 +732,35 @@ export class SchedulingService {
           if (await this.familyMovedChain(lesson, tx)) throw stateError(MOVE_REFUSALS.family_already_moved);
           if ((await this.familyMovesThisMonth(lesson.learnerId, tx)) >= familyLimit) throw stateError(MOVE_REFUSALS.family_monthly_limit);
         }
-        const closed = await tx.lesson.updateMany({
-          where: { id: lesson.id, outcome: null, teacherId: lesson.teacherId },
-          data: { outcome: LessonOutcome.RESCHEDULED, outcomeNote: 'moved to another time', outcomeByKind: by, outcomeBy: actor.actorId, outcomeAt: new Date() },
-        });
-        if (closed.count !== 1) throw stateError('this lesson changed meanwhile; open it again');
+        const closed = await this.lessons.writer.updateMany(
+          tx, 'moved',
+          { id: lesson.id, outcome: null, teacherId: lesson.teacherId },
+          { outcome: LessonOutcome.RESCHEDULED, outcomeNote: 'moved to another time', outcomeByKind: by, outcomeBy: actor.actorId, outcomeAt: new Date() },
+        );
+        if (closed.length !== 1) throw stateError('this lesson changed meanwhile; open it again');
         await cancelReminders(tx, lesson.id);
         // The new row only, not LESSON_INCLUDE: that is 8 round trips while the
         // learner and (next) the group are locked, and the card needs nothing a
         // fresh lesson has but its own columns and the names it shares with the
         // lesson it replaces (TEACHER-027). The caller reads it whole after commit.
-        const row = await tx.lesson.create({
-          data: {
-            organizationId: lesson.organizationId,
-            learnerId: lesson.learnerId,
-            teacherId: lesson.teacherId,
-            kind: lesson.kind,
-            makeupFor: lesson.makeupFor,
-            movedFrom: lesson.id,
-            startsAt,
-            endsAt: new Date(startsAt.getTime() + duration * 60_000),
-            createdByKind: by,
-            createdBy: actor.actorId,
-          },
+        const row = await this.lessons.writer.create(tx, 'moved', {
+          organizationId: lesson.organizationId,
+          learnerId: lesson.learnerId,
+          teacherId: lesson.teacherId,
+          kind: lesson.kind,
+          makeupFor: lesson.makeupFor,
+          movedFrom: lesson.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + duration * 60_000),
+          createdByKind: by,
+          createdBy: actor.actorId,
         });
         const created = { ...row, learnerId: lesson.learnerId, learner: lesson.learner, teacher: lesson.teacher };
         await this.lessons.postCard(
           tx, created, actor, CardKind.LESSON_MOVED,
           { ...this.lessons.cardBase(created), previousStartsAt: lesson.startsAt.toISOString(), movedBy: movedByOf(by) },
           lang,
+          { idempotencyKey: cardKey(created, 'moved') },
         );
         // A moved make-up: the card that owed it now reads the new time.
         if (created.kind === LessonKind.MAKEUP && created.makeupFor) await this.lessons.announceOwedCard(tx, created.makeupFor);
@@ -906,18 +906,20 @@ export class SchedulingService {
       : null;
     const lesson = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const created = await tx.lesson.create({
-          data: {
-            organizationId: row.organizationId,
-            learnerId: row.learnerId,
-            teacherId: row.teacherId,
-            kind: stranded?.kind === LessonKind.MAKEUP ? LessonKind.MAKEUP : LessonKind.REGULAR,
-            makeupFor: stranded?.kind === LessonKind.MAKEUP ? stranded.makeupFor : null,
-            startsAt,
-            endsAt: new Date(startsAt.getTime() + duration * 60_000),
-            createdBy: actor.actorId,
-          },
-        });
+        const created = await this.lessons.writer.create(tx, 'created', {
+          organizationId: row.organizationId,
+          learnerId: row.learnerId,
+          teacherId: row.teacherId,
+          kind: stranded?.kind === LessonKind.MAKEUP ? LessonKind.MAKEUP : LessonKind.REGULAR,
+          makeupFor: stranded?.kind === LessonKind.MAKEUP ? stranded.makeupFor : null,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + duration * 60_000),
+          createdBy: actor.actorId,
+        }, LESSON_INCLUDE).then(learnerLesson);
+        // CHATSCHED-001: the weekly lesson the teacher could not take has a time
+        // again; the family hears it like any added lesson.
+        await this.lessons.postCard(tx, created, actor, CardKind.LESSON_SCHEDULED, this.lessons.cardBase(created),
+          await this.lessons.languageOf(created), { idempotencyKey: cardKey(created, 'created') });
         await tx.lessonBlockedOccurrence.update({
           where: { id: row.id },
           data: { resolution: 'scheduled', resolvedBy: actor.actorId, resolvedAt: new Date(), lessonId: created.id },
@@ -1118,7 +1120,7 @@ export class SchedulingService {
         refs: { lessonId: lesson.id, learnerId: lesson.learnerId },
         skipPast: true,
       });
-      await this.prisma.lesson.update({ where: { id: lesson.id }, data: { remindersScheduledAt: new Date() } });
+      await LessonWriter.markRemindersScheduled(this.prisma, lesson.id);
     }
     return due.length;
   }
@@ -1296,15 +1298,12 @@ export class SchedulingService {
            AND l.starts_at > now()
            AND l.starts_at >= (${from}::date::timestamp AT TIME ZONE ${timezone})`;
       if (moved.length > 0) {
-        await tx.lesson.updateMany({
-          where: { id: { in: moved.map((m) => m.id) } },
-          data: {
-            outcome: LessonOutcome.RESCHEDULED,
-            outcomeNote: 'regular times changed',
-            outcomeByKind: ActorKind.STAFF,
-            outcomeBy: actor.actorId,
-            outcomeAt: new Date(),
-          },
+        await this.lessons.writer.updateMany(tx, 'moved', { id: { in: moved.map((m) => m.id) } }, {
+          outcome: LessonOutcome.RESCHEDULED,
+          outcomeNote: 'regular times changed',
+          outcomeByKind: ActorKind.STAFF,
+          outcomeBy: actor.actorId,
+          outcomeAt: new Date(),
         });
         for (const m of moved) await cancelReminders(tx, m.id);
       }
