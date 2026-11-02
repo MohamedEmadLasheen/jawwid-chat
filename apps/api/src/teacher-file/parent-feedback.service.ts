@@ -215,11 +215,14 @@ export class ParentFeedbackService {
   }
 
   /**
-   * PD-44: the Dashboard's feedback tiles -- `list({ status })`'s length for
-   * `received` (new, nobody has taken it) and `in_review`, found as `list`
-   * finds them (listed: the same scope, the same 500 candidates, the same
-   * per-child visibility). `capped` when the candidates reached the limit.
-   * Staff off the page get no tile; non-staff are refused as there.
+   * PD-44: the Dashboard's feedback tiles -- the parents' suggestions only
+   * (PD-52: complaints and praise have their own flows), `list({ status,
+   * category: 'suggestion' })`'s length for `received` (new, nobody has taken
+   * it) and `in_review`, found as `list` finds them (listed: the same scope,
+   * the same 500 candidates, the same per-child visibility) -- the Attendance
+   * page's Suggestions view the tiles open. `capped` when the candidates
+   * reached the limit. Staff off the page, or without the suggestions' page,
+   * get no tile; non-staff are refused as there.
    */
   async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
     // The page's own gate: it refuses a parent or a teacher outright; staff off the page get no tile.
@@ -232,13 +235,10 @@ export class ParentFeedbackService {
       throw e;
     }
     const page = await this.files.teacherScope.pageRowsOf(gate.actor);
-    // PD-52 (review of #374): as `list` does, only the categories on a page the caller holds.
-    const keys = await this.files.keysOf(gate.actor);
-    const readable = FEEDBACK_CATEGORIES.filter((c) => feedbackKeyAllows(c, 'read', keys));
+    // PD-52 (review of #374): as `list` does, only on a page the caller holds -- the suggestions' (page A).
+    if (!feedbackKeyAllows('suggestion', 'read', await this.files.keysOf(gate.actor))) return [];
     const tile = async (status: 'received' | 'in_review') => {
-      const listed = await this.listed(gate.actor, page, { status });
-      const candidates = listed.candidates;
-      const rows = listed.rows.filter((r) => readable.includes(r.category as FeedbackCategory));
+      const { rows, candidates } = await this.listed(gate.actor, page, { status, category: 'suggestion' });
       const oldest = rows.length ? rows[rows.length - 1]!.createdAt : null;
       return dashboardTile(`feedback.${status}`, rows.length, oldest, candidates >= LIST_LIMIT);
     };
