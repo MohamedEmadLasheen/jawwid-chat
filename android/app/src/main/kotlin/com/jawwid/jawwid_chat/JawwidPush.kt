@@ -10,6 +10,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Store blocker S-05: what Android shows for a push while the app is closed,
@@ -47,8 +49,18 @@ object JawwidPush {
 
     private val CALL_EVENTS = setOf("call_started", "group_call_started")
 
-    /** How long the ring stays up if nothing answers or ends it (the server's own ring is shorter). */
-    private const val RING_TIMEOUT_MS = 60_000L
+    /**
+     * How long the ring stays up if nothing answers or ends it: the server's
+     * `call.ring_timeout_seconds` (45 s, its default) -- after that the call is
+     * missed there, and a ring still on this screen would be a dead one. The
+     * FCM TTL of a call push (fcm.provider.ts) is the same 45 s.
+     */
+    private const val RING_TIMEOUT_MS = 45_000L
+
+    /** A decline older than the ring is moot: the call is over on the server. */
+    private const val PENDING_DECLINE_MAX_AGE_MS = RING_TIMEOUT_MS
+    private const val PREFS = "jawwid_push"
+    private const val KEY_PENDING_DECLINES = "pending_declines"
 
     /** Set by MainActivity while it is resumed: a message notification is not drawn over the live chat. */
     @Volatile
@@ -117,7 +129,17 @@ object JawwidPush {
             .setTimeoutAfter(RING_TIMEOUT_MS)
             .setContentIntent(open)
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, decline, answer))
-        if (mayUseFullScreenIntent(context)) builder.setFullScreenIntent(open, true)
+            // ALWAYS. A CallStyle notification must have a full-screen intent (or come
+            // from a foreground service): without one, Android 12+ throws
+            // IllegalArgumentException from notify() and nothing rings at all. Where
+            // the app may not use full-screen intents (Android 14+, the user or Play
+            // revoked it), the system itself downgrades the request to a heads-up
+            // notification -- still with Answer and Decline.
+            .setFullScreenIntent(open, true)
+            // Lock screen (#408 review): the caller's name is not shown to whoever
+            // holds the phone; the public version says only "Incoming call".
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion(context, CHANNEL_CALLS, R.string.call_incoming))
 
         notify(context, notificationId(callId), builder)
     }
@@ -139,21 +161,21 @@ object JawwidPush {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(open)
+            // Android shows a notification's full text on the lock screen by default,
+            // unlike iOS: a message preview stays behind the unlock.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion(context, CHANNEL_MESSAGES, R.string.message_new))
         // One per conversation: a second message replaces the first rather than stacking.
         notify(context, (data["conversationId"] ?: data["notificationId"] ?: "jawwid").hashCode(), builder)
     }
 
-    /**
-     * Android 14+: the full-screen intent is a special permission granted only
-     * to calling and alarm apps, and revocable by the user. Below 14 the
-     * manifest declaration is enough. Without it the ring is a heads-up
-     * notification, which still has Answer and Decline.
-     */
-    private fun mayUseFullScreenIntent(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT < 34) return true
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
-        return manager.canUseFullScreenIntent()
-    }
+    /** What the lock screen shows instead: the app's name and a generic line, nothing more. */
+    private fun publicVersion(context: Context, channel: String, text: Int) =
+        NotificationCompat.Builder(context, channel)
+            .setSmallIcon(R.drawable.ic_stat_jawwid)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(text))
+            .build()
 
     private fun notify(context: Context, id: Int, builder: NotificationCompat.Builder) {
         val manager = NotificationManagerCompat.from(context)
@@ -163,6 +185,8 @@ object JawwidPush {
             manager.notify(id, builder.build())
         } catch (e: SecurityException) {
             // The permission was revoked between the check and the post.
+        } catch (e: IllegalArgumentException) {
+            // A malformed notification must never take the messaging service down.
         }
     }
 
@@ -203,21 +227,60 @@ object JawwidPush {
         }
     }
 
-    /** Decline from the notification: off the screen now, to the server through Flutter. */
+    /**
+     * Decline from the notification: off the screen now, to the server through
+     * Flutter. With an engine running (the app in the background) it is sent at
+     * once. With the app killed it is PERSISTED (#408 review: memory dies with
+     * the receiver's process) and sent the moment Dart is ready -- unless the
+     * ring is over by then, when the server has already recorded the call.
+     */
     fun onDecline(context: Context, callId: String, conversationId: String?) {
         cancelCall(context, callId)
         val args = mapOf("callId" to callId, "conversationId" to conversationId)
-        deliver("onIncoming", args)
-        deliver("onDecline", args)
+        if (callChannel != null) {
+            deliver("onIncoming", args)
+            deliver("onDecline", args)
+        } else {
+            persistDecline(context, callId, conversationId)
+        }
     }
 
-    /** Dart said `ready`: flush what waited for it. */
     @Synchronized
-    fun attach(channel: MethodChannel) {
+    private fun persistDecline(context: Context, callId: String, conversationId: String?) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val list = JSONArray(prefs.getString(KEY_PENDING_DECLINES, "[]"))
+        list.put(JSONObject().put("callId", callId).put("conversationId", conversationId ?: JSONObject.NULL).put("at", System.currentTimeMillis()))
+        prefs.edit().putString(KEY_PENDING_DECLINES, list.toString()).apply()
+    }
+
+    /** The persisted declines still inside the ring, oldest first; the store is emptied. */
+    @Synchronized
+    private fun takePendingDeclines(context: Context): List<Map<String, String?>> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_PENDING_DECLINES, null) ?: return emptyList()
+        prefs.edit().remove(KEY_PENDING_DECLINES).apply()
+        val now = System.currentTimeMillis()
+        val out = mutableListOf<Map<String, String?>>()
+        val list = JSONArray(raw)
+        for (i in 0 until list.length()) {
+            val o = list.getJSONObject(i)
+            if (now - o.optLong("at", 0) > PENDING_DECLINE_MAX_AGE_MS) continue
+            out.add(mapOf("callId" to o.getString("callId"), "conversationId" to if (o.isNull("conversationId")) null else o.getString("conversationId")))
+        }
+        return out
+    }
+
+    /** Dart said `ready`: flush what waited for it, persisted declines included. */
+    @Synchronized
+    fun attach(context: Context, channel: MethodChannel) {
         callChannel = channel
         val queued = pending.toList()
         pending.clear()
         for ((method, args) in queued) channel.invokeMethod(method, args)
+        for (args in takePendingDeclines(context)) {
+            channel.invokeMethod("onIncoming", args)
+            channel.invokeMethod("onDecline", args)
+        }
     }
 
     @Synchronized
