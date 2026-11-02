@@ -5,6 +5,7 @@ import { TeacherFileController } from './teacher-file.controller';
 import { TeacherSupervisionController } from './teacher-supervision.controller';
 import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
+import { TeacherLessonReportsService } from './teacher-lesson-reports.service';
 import { ParentFeedbackController } from './parent-feedback.controller';
 import { ParentFeedbackService } from './parent-feedback.service';
 import { SupervisionModule } from '../supervision/supervision.module';
@@ -39,6 +40,7 @@ import { TeacherRecordsService } from './teacher-records.service';
   providers: [
     TeacherFileService,
     TeacherPayrollService,
+    TeacherLessonReportsService,
     ParentFeedbackService,
     TeacherEvaluationService,
     TeacherOnboardingService,

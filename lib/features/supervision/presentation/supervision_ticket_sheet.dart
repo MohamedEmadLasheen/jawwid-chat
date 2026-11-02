@@ -229,7 +229,12 @@ class _CertificateRequestFormState extends ConsumerState<CertificateRequestForm>
       final l10n = L10n.of(context);
       setState(() {
         _sending = false;
-        _error = e is AppError && e.code == 'COMM.CERTIFICATE_NOT_FOUND' ? l10n.ticketNoLongerAllowed : l10n.ticketFailed;
+        // TEACHER-025: the server refuses the same certificate twice; say so, not "try again".
+        _error = switch (e) {
+          AppError(code: 'COMM.CERTIFICATE_NOT_FOUND') => l10n.ticketNoLongerAllowed,
+          AppError(code: 'COMM.CERTIFICATE_DUPLICATE') => l10n.certificateAlreadySuggested,
+          _ => l10n.ticketFailed,
+        };
       });
     }
   }

@@ -6,8 +6,9 @@ Owner: AI #7 · Date: 2026-09-05 · Encryption and restore corrected, re-drilled
 
 | Data | Method | Frequency | Retention | Status |
 |---|---|---|---|---|
-| Postgres (authoritative state) | Managed provider continuous backup + PITR | continuous | 7–30 days | **not provisioned** |
-| Postgres (portable copy) | `scripts/infra/backup-db.sh` (`pg_dump -Fc`, encrypted) | before every deploy; nightly | 30 days | **implemented and drilled** |
+| Postgres (authoritative state) | DigitalOcean Managed PostgreSQL: daily backups + point-in-time recovery | daily + continuous WAL | 7 days (DO's documented window; record the actual one, §6) | **provider feature: confirm it is on for the production cluster** |
+| Postgres (portable copy, pre-deploy) | `scripts/infra/backup-db.sh` (`pg_dump -Fc`, encrypted), GitHub artifact | before every deploy | 30 days | **implemented and drilled** |
+| Postgres (portable copy, off-site) | `backup-db.sh` + `scripts/infra/backup-offsite.sh` to a dedicated Spaces bucket (`.github/workflows/backup-weekly.yml`) | weekly (Sun 02:17 UTC) | 8 weeks | **scheduled; first real run needs the `backup` Environment** (§3b) |
 | Object storage | Bucket versioning + lifecycle (`scripts/infra/storage-versioning.sh`) | continuous | deleted or overwritten objects: 30 days | **scripted and enforced; no bucket exists yet** (§1a) |
 | Redis | Not backed up by design | — | — | — |
 | Secrets | Secret store's own durability | — | — | not provisioned |
@@ -56,13 +57,24 @@ restart, and `noeviction` so it cannot silently drop pending work. If Redis is
 lost, queued jobs are lost — which is why jobs must be reconstructible from the
 database outbox (AI #2). **Redis must never be the source of truth.**
 
-## 2. Two layers, on purpose
+## 2. Three layers, on purpose
 
-The provider's continuous backup is the primary line: it supports point-in-time
-recovery and is what a real disaster uses. The `pg_dump` copy exists because a
-provider snapshot cannot be restored onto a laptop to answer "what did this
-table look like on Tuesday", and because a compromise of the provider account
-takes its snapshots with it.
+1. **The provider's backups** are the primary line. DigitalOcean Managed
+   PostgreSQL takes a **daily backup** and keeps the WAL for **point-in-time
+   recovery over the last 7 days**, both on by default for a managed cluster
+   (confirm them on the production cluster, §8). Restoring creates a **new cluster** at the
+   chosen moment (control panel or `doctl databases create --restore-from-cluster-name
+   … --restore-from-timestamp …`), and `DATABASE_URL` then moves to it. This is
+   what a real disaster uses.
+2. **The pre-deploy dump**: an encrypted `pg_dump` before every migration, kept
+   30 days as a workflow artifact. It is the way back from a migration.
+3. **The weekly off-site dump** (§3b): the same encrypted dump every Sunday,
+   whether or not anyone deployed, stored in Spaces for 8 weeks.
+
+The `pg_dump` copies exist because a provider snapshot cannot be restored onto a
+laptop to answer "what did this table look like on Tuesday", and because a
+compromise of the database account takes its snapshots with it (the Spaces copy
+is under a different key).
 
 ## 3. Taking a backup
 
@@ -159,6 +171,64 @@ openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -iter <iter> \
   schema does. A `--no-privileges` archive restores into a database the
   application cannot read (§4.2).
 - Every file written is mode `600`.
+
+### 3b. The weekly off-site copy
+
+`.github/workflows/backup-weekly.yml`, every Sunday at 02:17 UTC (and on demand,
+"Run workflow"), from `main` only, in its **own** GitHub Environment, `backup`:
+
+1. refuses to start unless every secret and variable below is set -- a
+   scheduled job that silently skips is a backup nobody knows is missing;
+2. `backup-db.sh --schema chat` with `APP_ENV=production` and
+   `PG_IMAGE=postgres:17-alpine` (the runner's own `pg_dump` is 16, and
+   `pg_dump` refuses a newer server): encrypted in the pipe, exactly as §3;
+3. `backup-offsite.sh upload`: only `.dump.enc` with its `.hmac` and `.sha256`
+   is accepted (a plaintext `.dump` is refused), stored under
+   `s3://$BACKUP_BUCKET/backups/weekly/<YYYY-MM-DD>/`, and each object is read
+   back and its size compared;
+4. `backup-offsite.sh prune`: removes weekly prefixes older than 56 days, and
+   nothing outside `backups/weekly/`.
+
+**Setting it up (owner, once).**
+
+1. **A dedicated Spaces bucket** (e.g. `jawwid-backups`, same region), and a
+   **Spaces access key limited to that bucket**. Never the application's key: a
+   Spaces key is not prefix-scoped, and the app's key is held by every API
+   instance, so a compromise of it could delete every backup. The script has no
+   fallback to `STORAGE_*`.
+2. **A read-only database role**, used only by this job (run once as the admin
+   user, with a generated password kept in the password manager):
+
+   ```sql
+   CREATE ROLE jawwid_backup LOGIN PASSWORD '<generated>' BYPASSRLS;
+   GRANT USAGE ON SCHEMA chat TO jawwid_backup;
+   GRANT SELECT ON ALL TABLES IN SCHEMA chat TO jawwid_backup;
+   GRANT SELECT ON ALL SEQUENCES IN SCHEMA chat TO jawwid_backup;
+   ALTER DEFAULT PRIVILEGES FOR ROLE <migration owner> IN SCHEMA chat
+     GRANT SELECT ON TABLES TO jawwid_backup;
+   ALTER DEFAULT PRIVILEGES FOR ROLE <migration owner> IN SCHEMA chat
+     GRANT SELECT ON SEQUENCES TO jawwid_backup;
+   ```
+
+   `BYPASSRLS` is needed because `pg_dump` refuses tables whose row-level
+   security would hide rows; it is **read**: the role can change nothing. (The
+   migration already depends on BYPASSRLS being grantable on this provider,
+   `scripts/db/preflight-role-capability.sh`.)
+3. **The GitHub Environment `backup`**: no required reviewers (otherwise every
+   Sunday waits for one), deployment branches limited to `main`, and only:
+
+   | | |
+   |---|---|
+   | secret `BACKUP_DATABASE_URL` | the `jawwid_backup` DSN, `sslmode=require` |
+   | secret `BACKUP_ENCRYPTION_PASSPHRASE` | the same passphrase as the deploys (§3), so one key restores every archive |
+   | secrets `BACKUP_SPACES_ACCESS_KEY`, `BACKUP_SPACES_SECRET_KEY` | the bucket-limited key from step 1 |
+   | variables `BACKUP_BUCKET`, `BACKUP_SPACES_ENDPOINT`, `BACKUP_SPACES_REGION` | the bucket from step 1 |
+
+4. Run the workflow once by hand, then the §5a drill from that copy.
+
+No credential is in the repository. `scripts/qa/check-backup-offsite.sh` (CI
+guard `backup-offsite`) holds the upload, retention and own-key contract with the
+AWS CLI stubbed.
 
 ## 4. Restoring
 
@@ -270,6 +340,27 @@ the suites, row-count and ACL parity, and `chat_app` reading the copy.
 `scripts/qa/check-backup-encryption.sh` runs the encryption contract without a
 database in the guards job.
 
+### 5a. Restoring the weekly off-site copy (drill)
+
+Once a quarter, and once before launch, from the newest weekly copy, into a
+scratch database that is **not** production:
+
+```bash
+export BACKUP_SPACES_ENDPOINT=... BACKUP_SPACES_REGION=... BACKUP_BUCKET=... \
+       BACKUP_SPACES_ACCESS_KEY=... BACKUP_SPACES_SECRET_KEY=...   # the backup bucket's key
+scripts/infra/backup-offsite.sh list                         # the weekly dates held
+DAY=2026-11-08; mkdir -p drill && cd drill
+AWS_ACCESS_KEY_ID=$BACKUP_SPACES_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$BACKUP_SPACES_SECRET_KEY \
+AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
+  aws --endpoint-url "$BACKUP_SPACES_ENDPOINT" s3 cp --recursive "s3://$BACKUP_BUCKET/backups/weekly/$DAY/" .
+cd .. && BACKUP_ENCRYPTION_PASSPHRASE=... \
+  scripts/infra/restore-db.sh --file drill/<name>.dump.enc --into postgresql://.../scratch --schema chat
+```
+
+Then the §5 checklist, items 1–7, against the scratch database, and record the
+date, the copy restored and the result in §5. Delete `drill/` afterwards: it is
+every family's messages, encrypted, and the key must not sit beside it.
+
 ## 6. Objectives
 
 | Environment | RPO | RTO |
@@ -311,7 +402,13 @@ rather than assumed.
 - An encrypted archive is streamed into `pg_restore` through a pipe, so
   parallel restore (`pg_restore -j`) is not available. Restore is sequential;
   fine at today's size, worth measuring before it is not.
-- No provider backups exist, because no managed database exists.
+- The provider's daily backups and 7-day PITR are DigitalOcean defaults; that
+  they are on for the production cluster, and the actual window, must be read
+  from the cluster before launch.
+- The weekly off-site job has not run against production yet: it needs the
+  `backup` Environment, the read-only role and the backup bucket's key (§3b),
+  and its first run is the first real proof.
+  The §5a drill from it has not been run.
 - Retention, PITR window and restore speed are unmeasured.
 - Object storage versioning is scripted and enforced, but no bucket exists yet,
   and the provider's expiry of noncurrent versions is unproven until

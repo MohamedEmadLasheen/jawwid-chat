@@ -17,9 +17,20 @@ import PDFDocument from 'pdfkit';
 
 /** A page in points: the board's 16:9 page, and a strip under it for the credit. */
 export const EXPORT_PAGE = { width: 960, height: 540, footer: 22 } as const;
+/** PD-55: a tall page (9:16) gets an upright PDF page, with the same strip. */
+export const EXPORT_PAGE_TALL = { width: 540, height: 960, footer: 22 } as const;
 
-/** An export page is the board's own page at most: 1920 x 1080 px (review of #305, P1). */
+/** An export page is the board's own page at most: 1920 x 1080 px (review of #305, P1)... */
 export const EXPORT_PAGE_MAX = { width: 1920, height: 1080 } as const;
+/** ...or 1080 x 1920 px for a tall page (PD-55). */
+export const EXPORT_PAGE_MAX_TALL = { width: 1080, height: 1920 } as const;
+/** The box both fit in: what an upload is decoded against before checkExportPng's exact test. */
+export const EXPORT_PAGE_BOUND = { width: 1920, height: 1920 } as const;
+
+/** Within a wide page's frame or a tall page's -- never a 1920 x 1920 square. */
+export function fitsExportPage(width: number, height: number): boolean {
+  return (width <= EXPORT_PAGE_MAX.width && height <= EXPORT_PAGE_MAX.height) || (width <= EXPORT_PAGE_MAX_TALL.width && height <= EXPORT_PAGE_MAX_TALL.height);
+}
 /** An export page's file, and all of one export's pages together. */
 export const EXPORT_PAGE_MAX_BYTES = 8 * 1024 * 1024;
 export const EXPORT_TOTAL_MAX_BYTES = 64 * 1024 * 1024;
@@ -36,7 +47,7 @@ export interface ExportInput {
 
 /**
  * An export page DECODED, not just read: every chunk and its CRC, an 8-bit
- * RGB or RGBA image, not interlaced, at most 1920 x 1080, whose image data
+ * RGB or RGBA image, not interlaced, at most 1920 x 1080 (1080 x 1920 tall), whose image data
  * inflates to exactly the size its header promises (never more -- the
  * inflate is capped) with a valid filter on every row, and IEND last. Only a
  * PNG this accepts is given to pdfkit. Returns why it is refused, or its size.
@@ -65,8 +76,10 @@ export function checkExportPng(b: Buffer): { width: number; height: number } | {
         return refuse('an export page is an 8-bit RGB or RGBA PNG, not interlaced');
       }
       header = { width: data.readUInt32BE(0), height: data.readUInt32BE(4), channels: color === 6 ? 4 : 3 };
-      if (header.width < 1 || header.height < 1 || header.width > EXPORT_PAGE_MAX.width || header.height > EXPORT_PAGE_MAX.height) {
-        return refuse(`an export page is at most ${EXPORT_PAGE_MAX.width} x ${EXPORT_PAGE_MAX.height} px`);
+      if (header.width < 1 || header.height < 1 || !fitsExportPage(header.width, header.height)) {
+        return refuse(
+          `an export page is at most ${EXPORT_PAGE_MAX.width} x ${EXPORT_PAGE_MAX.height} px (${EXPORT_PAGE_MAX_TALL.width} x ${EXPORT_PAGE_MAX_TALL.height} for a tall page)`,
+        );
       }
     } else if (type === 'IDAT') {
       idat.push(data);
@@ -96,9 +109,8 @@ export function checkExportPng(b: Buffer): { width: number; height: number } | {
 }
 
 export function composeBoardPdf(input: ExportInput): Promise<Buffer> {
-  const { width, height, footer } = EXPORT_PAGE;
   const doc = new PDFDocument({
-    size: [width, height + footer],
+    size: [EXPORT_PAGE.width, EXPORT_PAGE.height + EXPORT_PAGE.footer],
     margin: 0,
     autoFirstPage: false,
     info: { Title: input.title, Producer: 'Jawwid', Creator: 'Jawwid whiteboard' },
@@ -111,7 +123,10 @@ export function composeBoardPdf(input: ExportInput): Promise<Buffer> {
     doc.on('error', reject);
   });
   input.pages.forEach((png, i) => {
-    doc.addPage();
+    // A checked PNG's size is in its header: taller than wide is a tall page, laid out upright.
+    const tall = png.readUInt32BE(20) > png.readUInt32BE(16);
+    const { width, height, footer } = tall ? EXPORT_PAGE_TALL : EXPORT_PAGE;
+    doc.addPage({ size: [width, height + footer], margin: 0 });
     doc.image(png, 0, 0, { fit: [width, height], align: 'center', valign: 'center' });
     doc.font('plex').fontSize(9).fillColor('#5C6B69');
     if (input.credit) doc.text(input.credit, 12, height + 6, { width: width - 80, lineBreak: false });

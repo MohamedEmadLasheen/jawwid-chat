@@ -152,6 +152,8 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   feedback: { en: 'Parent feedback', ar: 'ملاحظة وليّ أمر' },
   schedule_change: { en: 'New lesson times', ar: 'طلب مواعيد جديدة' },
   makeup_owed: { en: 'Make-up owed', ar: 'حصة تعويضية مستحقة' },
+  family_without_account: { en: 'Parent deleted their account', ar: 'وليّ أمر حذف حسابه' },
+  teacher_account_deleted: { en: 'Teacher deleted their account', ar: 'معلم حذف حسابه' },
   group_admin_absent: { en: 'Group without an admin', ar: 'مجموعة بلا مشرف' },
 }
 
@@ -187,6 +189,14 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   feedback: { en: 'Answer a parent about {teacher}: {learner}', ar: 'أجب وليّ الأمر بشأن {teacher}: {learner}' },
   schedule_change: { en: 'Decide on new lesson times: {learner}', ar: 'قرّر بشأن المواعيد الجديدة: {learner}' },
   makeup_owed: { en: 'Make sure a lesson is made up: {learner}, {when}', ar: 'تأكّد من تعويض الحصة: {learner}، {when}' },
+  family_without_account: {
+    en: 'A family has nobody who can sign in: {family}, {count} children',
+    ar: 'عائلة بلا أحد يمكنه تسجيل الدخول: {family}، {count} من الأبناء',
+  },
+  teacher_account_deleted: {
+    en: 'A teacher deleted their account: record their departure',
+    ar: 'معلم حذف حسابه: سجّل مغادرته',
+  },
   group_admin_absent: {
     en: 'Add an admin to the group: {group} (the teacher and parents cannot write until then)',
     ar: 'أضف مشرفًا إلى المجموعة: {group} (لا يستطيع المعلم وأولياء الأمور الكتابة حتى ذلك الحين)',

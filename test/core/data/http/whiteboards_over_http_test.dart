@@ -51,7 +51,7 @@ void main() {
         'teacherId': 't1',
         'canEdit': true,
         'pages': [
-          {'id': 'p2', 'position': 1, 'layout': 'grid', 'background': 'cream', 'document': {'v': 1, 'elements': []}, 'updatedAt': '2026-10-29T10:00:00.000Z'},
+          {'id': 'p2', 'position': 1, 'layout': 'grid', 'background': 'cream', 'shape': 'tall', 'document': {'v': 1, 'elements': []}, 'updatedAt': '2026-10-29T10:00:00.000Z'},
           {'id': 'p1', 'position': 0, 'layout': 'arabic_lines', 'background': 'white', 'document': {'v': 1, 'elements': []}, 'updatedAt': '2026-10-29T10:00:00.000Z'},
         ],
       };
@@ -64,6 +64,8 @@ void main() {
     expect(b.summary.state, BoardState.active);
     expect(b.pages.map((p) => p.id), ['p1', 'p2']);
     expect(b.pages.first.layout, PageLayout.arabicLines);
+    // PD-55: a page the API sends without a shape (from before it) is wide.
+    expect(b.pages.map((p) => p.shape), [PageShape.wide, PageShape.tall]);
   });
 
   test('the autosave posts the page document, layout and background with the revision', () async {
@@ -85,6 +87,8 @@ void main() {
     expect(body['revision'], 3);
     expect(body['layout'], 'ruled');
     expect(body['background'], 'green');
+    // PD-55: always said, so the server can refuse a tall page saved by an app that does not know it.
+    expect(body['shape'], 'wide');
     expect(body['document'], {
       'v': 1,
       'elements': [page.elements.single.toJson()],
@@ -121,6 +125,8 @@ void main() {
     final repo = repository();
     await repo.addPage('b1', 3, position: 1, layout: PageLayout.grid);
     expect(server.lastRequestTo('POST', '/whiteboards/b1/pages')!.body, {'revision': 3, 'position': 1, 'layout': 'grid'});
+    await repo.addPage('b1', 3, shape: PageShape.tall);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/pages')!.body, {'revision': 3, 'shape': 'tall'});
     await repo.reorderPages('b1', 4, ['p2', 'p1']);
     expect(server.lastRequestTo('POST', '/whiteboards/b1/pages/order')!.body, {'revision': 4, 'pageIds': ['p2', 'p1']});
     expect((await repo.deletePage('b1', 'p2', 5)).revision, 6);

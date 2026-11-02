@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_account_deletion_repository.dart';
 import '../core/data/http/http_account_recovery_repository.dart';
 import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_billing_repository.dart';
@@ -298,6 +299,8 @@ List<Override> _httpOverrides() {
     passwordChangeRepositoryProvider.overrideWithValue(
       HttpPasswordChangeRepository(client: client, tokens: tokenStore),
     ),
+    // PD-56: delete your own account, on the same authenticated client.
+    accountDeletionRepositoryProvider.overrideWithValue(HttpAccountDeletionRepository(client: client)),
     accountCallHistoryProvider.overrideWithValue(
       // Named after the OTHER participant, so the viewer's own id is read per call.
       HttpAccountCallHistory(client: client, viewerActorId: session.actorId),

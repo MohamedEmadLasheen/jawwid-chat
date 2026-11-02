@@ -39,6 +39,8 @@ export type ElementKind = (typeof ELEMENT_KINDS)[number];
 /** The page rulings; PD-55 adds 'dotted' (migration 20261102120000). */
 export const LAYOUTS = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines', 'dotted'] as const;
 export const BACKGROUNDS = ['white', 'cream', 'grey', 'green', 'dark'] as const;
+/** PD-55: a page's frame -- wide 1920 x 1080 or tall 1080 x 1920 page units (migration 20261102230000). */
+export const SHAPES = ['wide', 'tall'] as const;
 
 const ELEMENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
