@@ -143,8 +143,9 @@ describe('a change of teacher, and back', () => {
     expect(weekly.length).toBeGreaterThanOrEqual(3);
     const [apologised, absent, moved] = weekly;
     await lessons.teacherApology(s.teacherId, apologised.id, { reason: 'medical appointment' });
-    // An absence is recorded after the start; a future one is set directly (synthetic).
-    await g.prisma.$executeRawUnsafe(`update chat.lesson set outcome = 'student_no_show' where id = $1::uuid`, absent.id);
+    // The learner's absence, excused ahead (a no-show can only be recorded after
+    // the start, and only future occurrences are ever re-created).
+    await lessons.apology(s.parentId, absent.id, { reason: 'travelling' });
     const offer = await scheduling.moveSlots(tsupId, moved.id);
     await scheduling.moveLesson(tsupId, moved.id, { startsAt: offer.slots.find((x) => !weekly.some((w) => w.startsAt.toISOString() === x)) });
 
