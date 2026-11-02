@@ -152,7 +152,7 @@ verified.
 | # | Gate | Status |
 |---|---|---|
 | G-36 | CI runs typecheck, unit, security and migration validation on every push | **PASS (partial)** — `.github/workflows/ci.yml`: fast release-gate guards (G-18/G-20/G-31..35), API typecheck+unit, Admin Web typecheck+tests, migration apply + idempotency. Integration job self-skips until specs exist; no linter configured in any package yet. |
-| G-37 | Every component's toolchain installed and its tests executable in CI (Flutter/Dart still absent) | **FAIL** |
+| G-37 | Every component's toolchain installed and its tests executable in CI (Flutter job added by CI-001: `Mobile · Flutter analyze + tests`; passes once green on main and made a required check) | **PENDING** |
 | G-38 | Full E2E suite green (`test-plan.md` §20) | UNVERIFIED |
 | **G-45** | Branch reconciliation complete; one migration lineage; no silently-divergent schema objects | **FAIL — JC-010.** Two `chat.event_log` definitions; `create table if not exists` hides the conflict and it surfaces only at runtime. `docs/release/branch-reconciliation.md`. |
 | G-39 | Zero open P0; zero open critical P1 | **FAIL — 5 open P0 (JC-001/002/003/009/010), 2 open P1 (JC-007/008)** |

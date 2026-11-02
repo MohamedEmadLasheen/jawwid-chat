@@ -89,7 +89,8 @@ describe('navigation lists what a role may open', () => {
     for (const role of ROLES) {
       // PD-41: Certificates waits for GET /certificates/access.
       // PD-48: Lesson audio waits for GET /lesson-audio/access.
-      const certs = (a: string) => a === 'certificates' || a === 'lesson-audio'
+      // PD-52: Attendance & complaints waits for GET /teacher-records/access.
+      const certs = (a: string) => a === 'certificates' || a === 'lesson-audio' || a === 'teacher-attendance' || a === 'teacher-grants'
       expect(navAreas(role)).toEqual(
         visibleAreas(role).filter(
           (a) => a !== 'teachers' && a !== 'trials' && a !== 'teacher-profiles' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a),
@@ -100,8 +101,10 @@ describe('navigation lists what a role may open', () => {
       expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
       expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role).filter((a) => a !== 'lesson-audio'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true })).toEqual(visibleAreas(role).filter((a) => a !== 'lesson-audio' && a !== 'teacher-attendance' && a !== 'teacher-grants'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true })).toEqual(visibleAreas(role).filter((a) => a !== 'teacher-attendance' && a !== 'teacher-grants'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true, teacherAttendance: true })).toEqual(visibleAreas(role).filter((a) => a !== 'teacher-grants'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true })).toEqual(visibleAreas(role))
     }
   })
 

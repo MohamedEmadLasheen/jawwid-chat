@@ -108,7 +108,8 @@ export class ImpersonationService {
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     const inScope = await this.scope.decide(admin.actor, { kind: target.kind, teacherId: target.teacher?.id, familyId: target.contacts[0]?.familyId });
     if (!inScope.allowed) {
-      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'this account is outside your scope');
+      // Word for word what an absent account says: out of scope is not told apart from absent.
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such account');
     }
     // ADMIN-002: a support session opened under an exceptional grant is a use of it. No notice to the parent.
     if (inScope.grant) await recordUse(this.audit, this.prisma, inScope.grant, admin.actor.actorId, 'support_session', target.id);
@@ -285,7 +286,8 @@ export class ImpersonationService {
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     if (!(await this.scope.covers(admin.actor, { kind: target.kind, teacherId: target.teacher?.id, familyId: target.contacts[0]?.familyId }))) {
-      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'this account is outside your scope');
+      // Word for word what an absent account says: out of scope is not told apart from absent.
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such account');
     }
     return row;
   }

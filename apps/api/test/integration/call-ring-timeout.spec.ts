@@ -368,6 +368,8 @@ describe('L/M/N — transactional guarantees', () => {
       conversationId,
       outcome: 'missed',
       durationSeconds: 0,
+      // CHATSCHED-013: an ending says why.
+      reason: 'ring_timeout',
     });
   });
 

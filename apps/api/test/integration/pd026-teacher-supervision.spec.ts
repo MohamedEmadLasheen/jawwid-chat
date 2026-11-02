@@ -32,6 +32,7 @@ import { TeacherFileService } from '../../src/teacher-file/teacher-file.service'
 import { TeacherPayrollService } from '../../src/teacher-file/teacher-payroll.service';
 import { SupervisionService } from '../../src/lessons/supervision.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { leaveFromToday } from './calendar-safe';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -314,25 +315,28 @@ describe('3. a decided deduction is priced from the default', () => {
 });
 
 describe('4. away', () => {
+  /** Away from today, for `days` days -- cut at 31 December: a leave never crosses a year. */
   async function onLeave(days: number) {
-    const req = await leave.request(s.teacherId, { firstDay: today, lastDay: plusDays(today, days - 1), reason: 'family' });
+    const span = leaveFromToday(today, days);
+    const req = await leave.request(s.teacherId, { firstDay: span.firstDay, lastDay: span.lastDay, reason: 'family' });
     await leave.approve(tmgrId, req.request.id, { cancelCollidingLessons: true });
+    return span;
   }
 
   it('leave: the overview has a blank balance but still the leave; staff and the parent read leave until its last day', async () => {
-    await onLeave(3);
+    const span = await onLeave(3);
     const row = (await leave.overview(tsupId)).teachers.find((t) => t.id === s.teacherId);
-    expect(row).toMatchObject({ allowance: null, balance: null, used: 3, away: { kind: 'leave', until: plusDays(today, 2) } });
-    expect((await files.list(tsupId)).teachers.find((t) => t.id === s.teacherId)?.away).toEqual({ kind: 'leave', until: plusDays(today, 2) });
-    expect([...(await g.conversations.teachersAway([s.teacherId], false)).values()]).toEqual([{ kind: 'leave', until: plusDays(today, 2) }]);
+    expect(row).toMatchObject({ allowance: null, balance: null, used: span.days, away: { kind: 'leave', until: span.lastDay } });
+    expect((await files.list(tsupId)).teachers.find((t) => t.id === s.teacherId)?.away).toEqual({ kind: 'leave', until: span.lastDay });
+    expect([...(await g.conversations.teachersAway([s.teacherId], false)).values()]).toEqual([{ kind: 'leave', until: span.lastDay }]);
   });
 
   it('a transfer to a teacher on leave is refused, naming the day they are back', async () => {
-    await onLeave(2);
+    const span = await onLeave(2);
     const other = s.secondLearnerId;
     const err = await lifecycle.transfer(tmgrId, other, { toTeacherId: s.teacherId, reason: 'schedule_fit' }).catch((e) => e);
     expect(err).toBeInstanceOf(CommError);
-    expect([err.code, err.message]).toEqual([CommErrorCode.LESSON_STATE, `teacher_c is on leave until ${plusDays(today, 1)}; choose another teacher`]);
+    expect([err.code, err.message]).toEqual([CommErrorCode.LESSON_STATE, `teacher_c is on leave until ${span.lastDay}; choose another teacher`]);
   });
 
   it('a suspension reads "suspended" to staff and "away" to a parent; a plain day off does not block a transfer', async () => {
