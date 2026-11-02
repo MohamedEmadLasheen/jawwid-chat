@@ -48,6 +48,8 @@ object JawwidPush {
     /** Shared with call_presentation.dart. */
     const val CALL_CHANNEL_NAME = "jawwid/call_native"
 
+    private const val TAG = "JawwidPush"
+
     private val CALL_EVENTS = setOf("call_started", "group_call_started")
 
     /**
@@ -218,6 +220,9 @@ object JawwidPush {
         val callId = intent?.getStringExtra(EXTRA_CALL_ID) ?: return
         val conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID)
         val args = mapOf("callId" to callId, "conversationId" to conversationId)
+        // One line, no ids beyond the call's own (it authorizes nothing): what the
+        // CI emulator test (android-ring) reads to prove Answer reached the bridge.
+        android.util.Log.i(TAG, "call intent ${intent.action?.substringAfterLast('.')} handed to the call bridge")
         when (intent.action) {
             ACTION_ANSWER -> {
                 cancelCall(context, callId)
