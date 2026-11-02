@@ -123,7 +123,12 @@ export interface ResolvedAudience {
  * 2. EVERY CLAUSE IS VALIDATED UNDER THE AUTHOR'S OWN SCOPE. Holding the
  *    publisher role is necessary and not sufficient. A clause naming a family,
  *    teacher, contact or conversation outside the author's organization is
- *    refused, so a forged or copied id reaches nobody.
+ *    refused, so a forged or copied id reaches nobody. A clause that singles
+ *    out ONE family -- the family, one of its contacts, or its student group --
+ *    must also be a family the author reaches as staff (chat.staff_reaches_family:
+ *    the super admin every family, others their own, backup and cover ones;
+ *    ADMIN-003), so no publisher can single out another supervisor's family.
+ *    The broadcast clauses (all families, a segment) are unchanged.
  *
  * ## Why refusal is loud
  *
@@ -275,7 +280,7 @@ export class StoryAudienceResolver {
           where: { id: clause.refId!, ...(org ? { organizationId: org } : {}) },
           select: { id: true },
         });
-        if (!family) throw this.outOfScope('family', clause.refId!);
+        if (!family || !(await this.reaches(author, family.id))) throw this.outOfScope('family', clause.refId!);
         return this.contactsWhere(
           { familyId: family.id, ...(org ? { organizationId: org } : {}) },
           clause.kind,
@@ -311,7 +316,7 @@ export class StoryAudienceResolver {
           },
           select: { id: true, familyId: true },
         });
-        if (!contact) throw this.outOfScope('contact', clause.refId!);
+        if (!contact || !(await this.reaches(author, contact.familyId))) throw this.outOfScope('contact', clause.refId!);
         return {
           recipients: [
             {
@@ -339,7 +344,10 @@ export class StoryAudienceResolver {
           },
           select: { id: true, familyId: true },
         });
-        if (!conversation) throw this.outOfScope('conversation', clause.refId!);
+        // A student group is one family's; a class group names none and is unchanged.
+        if (!conversation || (conversation.familyId && !(await this.reaches(author, conversation.familyId)))) {
+          throw this.outOfScope('conversation', clause.refId!);
+        }
 
         const members = await this.prisma.conversationMember.findMany({
           where: {
@@ -369,6 +377,17 @@ export class StoryAudienceResolver {
           400,
         );
     }
+  }
+
+  /**
+   * ADMIN-003: whether the author reaches this family as staff, at this moment.
+   * Out of reach reads exactly as nonexistent (the same refusal): it tells the
+   * author nothing about another supervisor's families.
+   */
+  private async reaches(author: Actor, familyId: string): Promise<boolean> {
+    const [row] = await this.prisma.$queryRaw<Array<{ reach: string | null }>>`
+      SELECT chat.staff_reaches_family(${author.actorId}::uuid, ${familyId}::uuid, now()) AS reach`;
+    return row?.reach !== null && row?.reach !== undefined;
   }
 
   /**
