@@ -12,7 +12,7 @@ import type { PrismaService } from '../platform/prisma.service';
  */
 export async function familiesOfComplaints(
   prisma: PrismaService,
-  entries: ReadonlyArray<{ id: string; parentFeedbackId: string | null; conversationId: string | null }>,
+  entries: ReadonlyArray<{ id: string; parentFeedbackId: string | null; conversationId: string | null; familyId?: string | null }>,
 ): Promise<Map<string, string | null>> {
   const feedbackIds = entries.map((e) => e.parentFeedbackId).filter((x): x is string => !!x);
   const conversationIds = entries.map((e) => e.conversationId).filter((x): x is string => !!x);
@@ -25,6 +25,8 @@ export async function familiesOfComplaints(
   return new Map(
     entries.map((e) => [
       e.id,
+      // PD-52: a complaint that names its family says so itself.
+      e.familyId ??
       (e.parentFeedbackId ? ofFeedback.get(e.parentFeedbackId) : undefined) ??
         (e.conversationId ? ofConversation.get(e.conversationId) : undefined) ??
         null,
@@ -40,9 +42,12 @@ export async function familiesOfComplaints(
  * Operations-only caller sees.
  */
 export function complaintAbout(
-  entry: { id: string; complaintSource: string | null },
+  entry: { id: string; complaintSource: string | null; learnerId?: string | null; familyId?: string | null },
   familyOf: ReadonlyMap<string, string | null>,
-): { familyId: string | null } | null {
+): { learnerId?: string | null; familyId: string | null } | null {
+  // PD-52: a complaint that names its student or family is about them, whatever its source.
+  if (entry.learnerId) return { learnerId: entry.learnerId, familyId: entry.familyId ?? null };
+  if (entry.familyId) return { familyId: entry.familyId };
   if (entry.complaintSource === 'management') return null;
   return { familyId: familyOf.get(entry.id) ?? null };
 }
