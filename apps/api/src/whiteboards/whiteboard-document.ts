@@ -36,7 +36,8 @@ const STRING_MAX_CHARS = 400_000;
 export const ELEMENT_KINDS = ['stroke', 'highlight', 'shape', 'line', 'arrow', 'text', 'stamp', 'image', 'verse'] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
-export const LAYOUTS = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines'] as const;
+/** The page rulings; PD-55 adds 'dotted' (migration 20261102120000). */
+export const LAYOUTS = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines', 'dotted'] as const;
 export const BACKGROUNDS = ['white', 'cream', 'grey', 'green', 'dark'] as const;
 
 const ELEMENT_ID = /^[A-Za-z0-9_-]{1,64}$/;

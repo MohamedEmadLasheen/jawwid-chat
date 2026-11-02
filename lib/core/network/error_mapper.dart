@@ -72,6 +72,7 @@ abstract final class ErrorMapper {
       _kindFor(response.statusCode, code),
       code: code,
       retryAfter: _retryAfterOf(response),
+      detail: _detailOf(response.data),
     );
   }
 
@@ -169,6 +170,15 @@ abstract final class ErrorMapper {
 
     final flat = body['code'] ?? body['error_code'] ?? nested;
     return flat is String && flat.isNotEmpty ? flat : null;
+  }
+
+  /// The communication engine's `error.detail`, when it is an object; null otherwise.
+  static Map<String, Object?>? _detailOf(Object? body) {
+    if (body is List<int>) body = _jsonOf(body);
+    if (body is! Map) return null;
+    final nested = body['error'];
+    final detail = nested is Map ? nested['detail'] : null;
+    return detail is Map ? Map<String, Object?>.from(detail) : null;
   }
 
   static Object? _jsonOf(List<int> bytes) {

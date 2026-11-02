@@ -22,7 +22,8 @@ export function violationWhat(v: Violation, tx: ReturnType<typeof useCopy>): str
 }
 
 /** One violation: what happened (and whose lesson, when), its step this month, and the decision or the Decide button. */
-export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide: () => void; extra?: ReactNode }) {
+/** `onDecide` absent: the reader may not decide (PD-52), and no Decide button is offered. */
+export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: () => void; extra?: ReactNode }) {
   const tx = useCopy()
   const { dateTime, date } = useI18n()
   // A lesson has a time; an absence with no lesson is a day (PD-26).
@@ -52,9 +53,12 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide: (
         </div>
       </td>
       <td>
-        <Badge tone={STEP_TONE[v.step] ?? 'neutral'} dot>
-          {tx(D.stepOf, { n: v.step })}
-        </Badge>
+        {/* PD-52 PR-5: Sales reads no step. */}
+        {v.step !== null && (
+          <Badge tone={STEP_TONE[v.step] ?? 'neutral'} dot>
+            {tx(D.stepOf, { n: v.step })}
+          </Badge>
+        )}
       </td>
       <td>
         {v.decision ? (
@@ -71,10 +75,12 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide: (
           </div>
         ) : (
           <div className="dc-cell">
-            <span className="dc-muted">{tx(D.suggested, { d: tx(DECISION_LABEL[v.suggestedDecision]) })}</span>
-            <button type="button" className="btn btn--primary btn--sm" onClick={onDecide}>
-              {tx(D.decide)}
-            </button>
+            {v.suggestedDecision && <span className="dc-muted">{tx(D.suggested, { d: tx(DECISION_LABEL[v.suggestedDecision]) })}</span>}
+            {onDecide && (
+              <button type="button" className="btn btn--primary btn--sm" onClick={onDecide}>
+                {tx(D.decide)}
+              </button>
+            )}
           </div>
         )}
       </td>

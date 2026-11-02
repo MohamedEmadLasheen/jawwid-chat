@@ -28,6 +28,8 @@ import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
+import { LessonEvents } from './lessons/lesson-events';
+import { setDatabasePoolRole } from './platform/database-pool';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -153,6 +155,13 @@ const CASE_DUE_SWEEP_MS = 10 * 60_000;
 const TASK_SWEEP_MS = 60_000;
 
 /**
+ * PD-46 §3.2: how often lesson changes made outside the lesson writer
+ * (chat.lesson_change_unannounced -- weekly materialization, a raw SQL update)
+ * are announced. A missed writer shows up this late, never silently.
+ */
+const LESSON_ANNOUNCE_SWEEP_MS = Number(process.env.LESSON_ANNOUNCE_SWEEP_MS ?? 60_000);
+
+/**
  * PD-35 B6: how often the department rooms are healed against the structure
  * (a member deactivated, anything changed outside OrgStructureService). Access
  * never waits for it: chat.department_room_party is read live.
@@ -203,6 +212,8 @@ function report(log: Logger, what: string, route: string, e: unknown): void {
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
 
+  // Its own, smaller pool (DATABASE_WORKER_POOL_MAX): set before Nest builds PrismaService.
+  setDatabasePoolRole('worker');
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger,
@@ -222,6 +233,7 @@ async function bootstrap(): Promise<void> {
   const seats = app.get(ConversationSeatService);
   const cases = app.get(SupervisionCaseService);
   const tasks = app.get(TaskService);
+  const lessonEvents = app.get(LessonEvents);
   const departmentRooms = app.get(DepartmentRoomService);
   const whiteboards = app.get(WhiteboardService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
@@ -282,6 +294,7 @@ async function bootstrap(): Promise<void> {
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
   let nextTaskSweep = 0;
+  let nextLessonAnnounceSweep = 0;
   let lastTaskIssues = 0;
   let nextRoomSweep = 0;
   let nextWhiteboardSweep = 0;
@@ -365,6 +378,14 @@ async function bootstrap(): Promise<void> {
         // Same rule as the drain: a failed sweep is retried on the next pass.
         // The calls it did not expire are still ringing and still match.
         report(log, 'call sweep', 'calls.expireRinging', e);
+      }
+      // CHATSCHED-013: a call that dropped and was not rejoined within the
+      // grace ends as connection_lost. Same single-statement claim, so it is
+      // safe on every replica and against a rejoin racing it.
+      try {
+        await calls.endInterruptedCalls();
+      } catch (e) {
+        report(log, 'call sweep', 'calls.endInterrupted', e);
       }
     }
 
@@ -501,6 +522,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCaseDueSweep = Date.now() + CASE_DUE_SWEEP_MS;
+      }
+    }
+
+    // PD-46: announce the lesson changes nobody announced (the safety net).
+    if (Date.now() >= nextLessonAnnounceSweep) {
+      draining = true;
+      try {
+        const announced = await lessonEvents.announceUnannounced();
+        if (announced.lessons > 0) log.log(`lesson changes announced late (outside the writer): ${announced.lessons}`);
+      } catch (e) {
+        report(log, 'lesson announce sweep', 'lessons.announce', e);
+      } finally {
+        draining = false;
+        nextLessonAnnounceSweep = Date.now() + LESSON_ANNOUNCE_SWEEP_MS;
       }
     }
 

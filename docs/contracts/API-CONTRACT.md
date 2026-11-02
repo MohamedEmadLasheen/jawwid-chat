@@ -860,7 +860,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 | POST | `/teacher-profiles/certificates/:id/decide` | `{ approved, note? }` | Reviewers only, never on their own; rejecting needs a `note`. |
 | GET | `/teacher-profiles/certificates/:id/download` | none | `{ url }`: a `GET /media/teacher-certificates/:id` link bound to the caller, the owning teacher or a reviewer, re-decided on every request (RT-037). |
 
-**Reviewers:** admin, coverage, manager and the super admin (`AuthorizationService.canReviewTeacherProfile`, mirrored by `chat.current_can_review_teacher_profile()`), same organization.
+**Reviewers:** the super admin and the Teachers department — its manager, and its supervisors for the teachers in their PD-35 scope (TEACHER-API-001, ADMIN-006). Same organization. The role check (`AuthorizationService.canReviewTeacherProfile`: admin, coverage, manager, super admin) comes first, then the department (`TeacherScopeService.pageBases`) and the scope. Sales and Operations get `TEACHER_PROFILE_CANNOT_REVIEW` 403 on the queue, a decision and the file link; the Dashboard shows them no credentials tile. The RT-037 media route still answers 404 to anyone who may not read a file. Follow-up: the SQL mirror `chat.current_can_review_teacher_profile()` still admits every admin, coverage and manager role, and needs a migration to follow.
 
 **Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`, `_NOT_UPLOADED`.
 
@@ -1307,7 +1307,7 @@ AuditEntryDto { id: string, actorId: string|null, action, entity, entityId, befo
 
 ```
 AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole: string|null,
-                    familyName: string|null, children: string[], status: 'provisioned'|'active'|'suspended'|'deactivated',
+                    familyName: string|null, familyId: string|null, children: string[], status: 'provisioned'|'active'|'suspended'|'deactivated',
                     hasLogin: boolean, lockedUntil: string|null, lastLoginAt: string|null,
                     allowed: { resetPassword, suspend, reactivate, impersonate, signOut } }   // advisory; decided again per action
 ```
@@ -1340,13 +1340,13 @@ FamilyAccessGrantDto { id, family: { id, name }, grantee: { id, name }, grantedB
 
 A grant opens account administration (and a support session) of ONE family's parent accounts to one Operations staff member — nothing else; PD-8 access is untouched. Permission: `accounts.administer`, then the service: the Operations Manager or the super admin grants and revokes; the grantee is live Operations staff of the same organization, never the grantor; at most 7 days (`chat.family_access_grant`, the same rules in its trigger). Active while not revoked and `startsAt ≤ now < endsAt`, checked on every read — expiry needs no job. The parent is not notified.
 
-**GET /admin/family-access-grants** — `{ grants }`: a grantor, the organization's grants live or ended in the last 30 days (newest first, at most 200); anyone else, their own active grants.
+**GET /admin/family-access-grants** — `{ grants, canGrant, grantees? }`: a grantor (`canGrant: true`), the organization's grants live or ended in the last 30 days (newest first, at most 200), and `grantees` — the live Operations staff who may receive a grant, never the grantor; anyone else, their own active grants and no `grantees`.
 
 **POST /admin/family-access-grants** — Request `{ familyId, granteeId, purpose (1–500), hours? (1–168, default 24) }`. Response `201 FamilyAccessGrantDto`. Errors: `COMM.ACCOUNT_ADMIN_DENIED` 403 (not a grantor) · `COMMON.VALIDATION` 400 (self, not Operations staff, unknown family, purpose, hours).
 
-**POST /admin/family-access-grants/:grantId/revoke** — Request `{ reason }`. Response `200 FamilyAccessGrantDto`. The grantor, the Operations Manager or the super admin. Errors: `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404 · `COMM.ACCOUNT_ADMIN_STATE` 409 (already ended or revoked).
+**POST /admin/family-access-grants/:grantId/revoke** — Request `{ reason }`. Response `200 FamilyAccessGrantDto`. The grantor, the Operations Manager or the super admin. A conditional update on the database's clock: of two revokes at once one wins, the other is the 409. Errors: `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404 · `COMM.ACCOUNT_ADMIN_STATE` 409 (already ended or revoked).
 
-Audit (entity `family_access_grant`; every row carries the authorizer `grantedBy`, the accessor `granteeId`/`accessorId`, the reason = the purpose, and the window `startsAt`/`endsAt`): `family_access.granted`; `family_access.used` once per act under the grant (`act`, `accountId`); `family_access.revoked` and `family_access.expired` (the worker's sweep, once per grant, `FAMILY_ACCESS_SWEEP_MS`) with the actual `endedAt`.
+Audit (entity `family_access_grant`; every row carries the authorizer `grantedBy`, the accessor `granteeId`/`accessorId`, the reason = the purpose, and the window `startsAt`/`endsAt`): `family_access.granted`; `family_access.used` once per act under the grant (`act`, `accountId`) — and once per request per grant whose family an Accounts list showed (`act: 'list'`, `accountIds`); `family_access.revoked` and `family_access.expired` (the worker's sweep, once per grant, `FAMILY_ACCESS_SWEEP_MS`) with the actual `endedAt`.
 
 ### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-21)
 
@@ -1367,7 +1367,7 @@ Every route runs on the **administrator's own** token. Permission: `canAdministe
 **GET /admin/impersonations** (`?accountId=`) — the record: the super admin's whole organization, anyone else their own; newest first, at most 100. **GET /admin/impersonations/:id/actions** — its trail: `{ session, actions: [{ method, route, status, at }] }` (route templates; never a body).
 
 **On the support token** (the account's own routes, as that person):
-- every request re-checks the support session (not ended or expired), the administrator's own session, account and permission — any of them gone ends it (`401`);
+- every request re-checks the support session (not ended or expired), the administrator's own session, account, permission and scope (a grant revoked or run out) — any of them gone ends it (`401`), with an `impersonation.ended` audit row (`after.endedBy: 'system'`, the reason) as Exit writes (ADMIN-013);
 - reads are allowed and send no receipt; writes only from the allowlist (`SupportSessionInterceptor`: sending a message, the person's own profile / photos / teacher profile / leave requests, star, delete-for-me, chat preferences) — anything else `COMM.SUPPORT_SESSION_FORBIDDEN` 403;
 - every request is recorded in `chat.impersonation_action`; every audit row written carries `impersonation_id`; every message sent carries it and is served with `MessageDto.sentBySupport: true`;
 - `POST /auth/refresh` has nothing to present; `POST /auth/logout` is refused; the realtime gateway refuses the token.

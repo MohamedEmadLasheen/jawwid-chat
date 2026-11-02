@@ -6,11 +6,15 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { TeacherScopeService, pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { TeacherScopeService, pageRowVisible, scopeCovers, type PageScope, type TeacherScope } from '../platform/teacher-scope';
 import { complaintAbout, familiesOfComplaints, familyOfConversation } from './complaint-family';
 import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
-import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
-import { decidePd012StaffAccess } from '../platform/pd012-policy';
+import { NO_TEACHER_FILE_ACCESS, OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
+import { NO_PD012_ACCESS, decidePd012StaffAccess } from '../platform/pd012-policy';
+import { PermissionService } from '../platform/permissions/permission.service';
+import { OutboxService } from '../communication/outbox/outbox.service';
+import { CommEvent } from '../communication/contracts/events';
+import { entryKeyAllows, type RecordsBasis } from '../platform/teacher-records-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind, ConversationType, StaffRole } from '../communication/contracts/vocab';
@@ -33,6 +37,8 @@ export const TeacherFileEntryKind = {
 } as const;
 export type TeacherFileEntryKind = (typeof TeacherFileEntryKind)[keyof typeof TeacherFileEntryKind];
 const KINDS: ReadonlySet<string> = new Set(Object.values(TeacherFileEntryKind));
+/** PD-52: the correction of a complaint or testimonial (TeacherRecordsService writes it, never addEntry). */
+export const ENTRY_VOID = 'entry_void';
 /** PD-26: where a complaint staff record came from. */
 const COMPLAINT_SOURCES: ReadonlySet<string> = new Set(['management', 'parent']);
 /** PD-32: and, to filter by, a complaint a parent filed in the app (never recorded by staff). */
@@ -65,6 +71,7 @@ type DayOff = Prisma.TeacherDayOffGetPayload<object>;
 @Injectable()
 export class TeacherFileService {
   readonly teacherScope: TeacherScopeService;
+  private readonly permissions: PermissionService;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -74,8 +81,13 @@ export class TeacherFileService {
     // PD-35: which teachers a Teachers-department member works on. Never a
     // department-wide default: a construction without it reads the real switch.
     @Optional() teacherScope?: TeacherScopeService,
+    // PD-52: the caller's keys, for the per-write checks (review of #369).
+    @Optional() permissions?: PermissionService,
+    // PD-52 (plan §7): a complaint that names a family tells who follows it up.
+    @Optional() private readonly outbox: OutboxService = new OutboxService(),
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
+    this.permissions = permissions ?? new PermissionService(prisma);
   }
 
   // ------------------------------------------------------------------
@@ -233,14 +245,14 @@ export class TeacherFileService {
    * Teacher File (source, handler, follow-ups, the action taken, the status)
    * with the teacher's name -- the Supervision page's Complaints section.
    */
-  async complaints(actorId: string, query: { from?: string; status?: string }) {
+  async complaints(actorId: string, query: { from?: string; status?: string; voided?: string }) {
     // PD-26 amendment: the page's list -- an Operations supervisor reads their families' teachers'.
-    const { actor, access } = await this.pageGate(actorId, (a) => a.onPage);
+    const { actor, access, page } = await this.recordsGate(actorId, (a) => a.onPage);
     if (query.from !== undefined && !COMPLAINT_FILTER_SOURCES.has(query.from)) {
       throw invalid('from', 'must be management, parent or parent_app');
     }
+    if (query.voided !== undefined && query.voided !== 'include') throw invalid('voided', 'must be include');
     const org = actor.organizationId as string;
-    const page = await this.teacherScope.pageRowsOf(actor);
     const scope = page.teachers;
     const found = await this.prisma.teacherSupervisionEntry.findMany({
       where: {
@@ -287,7 +299,9 @@ export class TeacherFileService {
         const teacherId = teacherOf.get(c.id) as string;
         return { ...c, teacher: { id: teacherId, name: teacherName.get(teacherId) ?? '' } };
       })
-      .filter((c) => !query.status || c.status === query.status);
+      .filter((c) => !query.status || c.status === query.status)
+      // PD-52: a voided complaint shows only when asked for (`voided=include`).
+      .filter((c) => query.voided === 'include' || c.voided === null);
     return { access: publicAccess(access), complaints: shaped };
   }
 
@@ -360,6 +374,9 @@ export class TeacherFileService {
       sourceMessageId?: unknown;
       source?: unknown;
       handledBy?: unknown;
+      learnerId?: unknown;
+      familyId?: unknown;
+      prospectId?: unknown;
     },
   ) {
     // PD-26 amendment: on the page an Operations supervisor writes complaints,
@@ -367,11 +384,15 @@ export class TeacherFileService {
     // Teacher File's monthly comments or days off. Decided per teacher (re-review
     // of #175, NIT-B): the Teachers department's rights only for a teacher in its
     // own scope, whatever else the caller holds.
-    const { actor } = await this.pageGate(actorId, (a) => a.canWriteSupervision);
-    const teacher = await this.requireTeacher(actor, teacherId, 'page');
-    const page = await this.teacherScope.pageRowsOf(actor);
+    const { actor, basis, page } = await this.recordsGate(actorId, (a) => a.canWriteSupervision);
+    const teacher = await this.requireTeacherIn(actor, teacherId, page.teachers);
     const whole = scopeCovers(page.whole, teacher.id);
     if (!whole && !(typeof body.kind === 'string' && OPERATIONS_ENTRY_KINDS.has(body.kind))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this change to a Teacher File is not yours to make');
+    }
+    // PD-52 PR-5: Sales files a complaint and follows one up; it never resolves one.
+    const sales = basis === 'sales';
+    if (sales && body.kind !== TeacherFileEntryKind.COMPLAINT && body.kind !== TeacherFileEntryKind.COMPLAINT_FOLLOWUP) {
       throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this change to a Teacher File is not yours to make');
     }
 
@@ -379,6 +400,10 @@ export class TeacherFileService {
       throw invalid('kind', `must be one of ${[...KINDS].join(', ')}`);
     }
     const kind = body.kind as TeacherFileEntryKind;
+    // PD-52 (review of #369): the route admits any of the page's keys; each kind needs its own.
+    if (!entryKeyAllows(kind, await this.keysOf(actor))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this change to a Teacher File is not yours to make');
+    }
     if (kind === TeacherFileEntryKind.DAY_OFF || kind === TeacherFileEntryKind.DAY_OFF_CANCELLATION) {
       return this.dayOff(actor, teacher, kind, body);
     }
@@ -400,7 +425,7 @@ export class TeacherFileService {
       case TeacherFileEntryKind.COMPLAINT_FOLLOWUP:
         data.refersTo = requireUuid('refersTo', body.refersTo);
         // P2-4: another family's complaint is not the caller's to follow up.
-        if (!(await this.complaintVisible(actor, teacher.id, data.refersTo))) {
+        if (!(await this.complaintVisible(page, teacher.id, data.refersTo))) {
           throw new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'complaint not found');
         }
         break;
@@ -409,7 +434,9 @@ export class TeacherFileService {
         // (the writer, unless another Teachers department supervisor is named;
         // the database refuses anyone else).
         data.complaintSource = staffComplaintSource(body);
-        data.handledBy = body.handledBy === undefined || body.handledBy === null ? actor.actorId : requireUuid('handledBy', body.handledBy);
+        // PD-52 PR-5: Sales never handles a complaint; the Teachers department takes it.
+        if (sales && body.handledBy !== undefined && body.handledBy !== null) throw invalid('handledBy', 'a complaint Sales files is handled by the Teachers department');
+        data.handledBy = sales ? null : body.handledBy === undefined || body.handledBy === null ? actor.actorId : requireUuid('handledBy', body.handledBy);
         if (body.sourceConversationId !== undefined && body.sourceConversationId !== null) {
           data.conversationId = await this.readableSource(actor, body.sourceConversationId);
           if (body.sourceMessageId !== undefined && body.sourceMessageId !== null) {
@@ -418,10 +445,15 @@ export class TeacherFileService {
         } else if (body.sourceMessageId !== undefined && body.sourceMessageId !== null) {
           throw invalid('sourceMessageId', 'needs sourceConversationId');
         }
+        // PD-52: the student and family (or trial family) it is about, when known.
+        Object.assign(data, await this.aboutOf(actor, body, whole, page));
+        // PD-52 PR-5: Sales records nothing about the teacher alone.
+        if (sales && !data.learnerId && !data.trialProspectId) throw invalid('learnerId', 'name the student or the trial family the complaint is about');
         // P2-4 / P2-A: on an Operations-only teacher, a parent's complaint names the
         // conversation with one of the caller's own families it came from -- so the
-        // family it is about is known, and is theirs. Management's needs none.
-        if (!whole && data.complaintSource !== 'management') {
+        // family it is about is known, and is theirs. Management's needs none, and
+        // neither does one that names one of the caller's own students (PD-52).
+        if (!whole && data.complaintSource !== 'management' && !data.familyId && !data.trialProspectId) {
           const family = data.conversationId ? await familyOfConversation(this.prisma, data.conversationId) : null;
           if (!family || !page.familyIds.has(family)) {
             throw invalid('sourceConversationId', "a parent's complaint names the conversation with one of your families it came from");
@@ -433,6 +465,19 @@ export class TeacherFileService {
     const entry = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const row = await tx.teacherSupervisionEntry.create({ data });
+      // PD-52 (plan §7): a staff complaint about a family's child is announced to
+      // the teacher's supervisor and the child's supervisors (never its author).
+      if (kind === TeacherFileEntryKind.COMPLAINT && data.familyId) {
+        await this.outbox.enqueue(tx, CommEvent.TEACHER_COMPLAINT_RECEIVED, {
+          organizationId: teacher.organizationId,
+          teacherId: teacher.id,
+          entryId: row.id,
+          feedbackId: null,
+          learnerId: data.learnerId ?? null,
+          familyId: data.familyId,
+          recordedBy: actor.actorId,
+        });
+      }
       // PD-32: a follow-up or a resolution on a parent's app complaint is what the
       // parent reads as "in review" / "resolved" -- never its text.
       if (data.refersTo && (kind === TeacherFileEntryKind.COMPLAINT_FOLLOWUP || kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION)) {
@@ -510,8 +555,10 @@ export class TeacherFileService {
   /** Shared with TeacherPayrollService: the access decision runs before any teacher lookup. */
   async gate(actorId: string, needs: (a: TeacherFileAccess) => boolean) {
     const actor = await this.conversations.requireActor(actorId);
+    // No organization: refused before any query (review of #374).
+    if (!actor.organizationId) throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'the Teacher File is for staff of an organization');
     const access = this.authz.teacherFileAccess(actor, {
-      organizationId: actor.organizationId ?? '',
+      organizationId: actor.organizationId,
       teachersDepartmentRole: await this.teachersDepartmentRole(actor),
     });
     if (!needs(access)) {
@@ -609,6 +656,29 @@ export class TeacherFileService {
        ORDER BY s.name`;
   }
 
+  /**
+   * PD-52: what the teacher-records pages' access answer is decided from -- the
+   * caller's basis and their department rights BEFORE the basis adjusts them
+   * (decideTeacherRecordsAccess applies it, as pageGate does). Never throws.
+   */
+  async recordsInputs(actor: Actor) {
+    // No organization: no basis and no rights, and no query (review of #374).
+    if (!actor.organizationId) {
+      return { basis: null as RecordsBasis | null, pd012: NO_PD012_ACCESS, file: NO_TEACHER_FILE_ACCESS };
+    }
+    const teachersRole = await this.teachersDepartmentRole(actor);
+    return {
+      basis: ((await this.teacherScope.pageBasis(actor)) ?? ((await this.teacherScope.salesBasis(actor)) ? 'sales' : null)) as RecordsBasis | null,
+      pd012: decidePd012StaffAccess(actor, teachersRole),
+      file: this.authz.teacherFileAccess(actor, { organizationId: actor.organizationId, teachersDepartmentRole: teachersRole }),
+    };
+  }
+
+  /** PD-52: the caller's PD-40 keys (chat.staff_access_profile), for the pages' per-write checks. */
+  async keysOf(actor: Actor): Promise<ReadonlySet<string>> {
+    return (await this.permissions.profileOf(actor)).permissions;
+  }
+
   private async teachersDepartmentRole(actor: Actor): Promise<TeachersDepartmentRole> {
     if (actor.kind !== ActorKind.STAFF || !actor.organizationId) return null;
     const dept = await this.prisma.department.findFirst({
@@ -627,25 +697,35 @@ export class TeacherFileService {
    * (teacherFilePageAccess). Callers narrow by teacherScope.pageScopeOf.
    */
   /**
-   * PD-52: what the teacher-records pages' access answer is decided from -- the
-   * caller's basis and their department rights BEFORE the basis adjusts them
-   * (decideTeacherRecordsAccess applies it, as pageGate does). Never throws.
+   * PD-52 PR-5: the gate of the routes the teacher-records pages share with
+   * PD-26 -- pageGate for its bases, and Sales (plan §5.4), which reads and
+   * writes the page's rows about the children and trials in its reach and
+   * nothing of the Teacher File. `page` is the caller's rows either way.
    */
-  async recordsInputs(actor: Actor) {
-    const teachersRole = await this.teachersDepartmentRole(actor);
-    return {
-      basis: await this.teacherScope.pageBasis(actor),
-      pd012: decidePd012StaffAccess(actor, teachersRole),
-      file: this.authz.teacherFileAccess(actor, { organizationId: actor.organizationId ?? '', teachersDepartmentRole: teachersRole }),
-    };
+  async recordsGate(actorId: string, needs: (a: TeacherFilePageAccess) => boolean) {
+    const actor = await this.conversations.requireActor(actorId);
+    if ((await this.teacherScope.pageBasis(actor)) !== null) {
+      const gate = await this.pageGate(actorId, needs);
+      return { ...gate, basis: gate.basis as RecordsBasis | null, page: await this.teacherScope.pageRowsOf(actor) };
+    }
+    if (await this.teacherScope.salesBasis(actor)) {
+      const access: TeacherFilePageAccess = { canView: false, canEditPersonal: false, canWriteSupervision: true, canViewFinance: false, onPage: true };
+      if (!needs(access)) throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this change to a Teacher File is not yours to make');
+      return { actor, access, basis: 'sales' as RecordsBasis | null, page: await this.teacherScope.salesRowsOf(actor) };
+    }
+    throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'the teacher-records pages are for the Teachers department, Operations and Sales');
   }
 
   async pageGate(actorId: string, needs: (a: TeacherFilePageAccess) => boolean) {
     const actor = await this.conversations.requireActor(actorId);
+    // No organization: refused before any query (review of #374).
+    if (!actor.organizationId) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'the Teacher Supervision page is for the Teachers department and Operations');
+    }
     const basis = await this.teacherScope.pageBasis(actor);
     const access = teacherFilePageAccess(
       this.authz.teacherFileAccess(actor, {
-        organizationId: actor.organizationId ?? '',
+        organizationId: actor.organizationId,
         teachersDepartmentRole: await this.teachersDepartmentRole(actor),
       }),
       basis,
@@ -663,9 +743,8 @@ export class TeacherFileService {
    * Teacher File; the same for every basis, so the page asks one route.
    */
   async directory(actorId: string) {
-    const { actor, access, basis } = await this.pageGate(actorId, (a) => a.onPage);
+    const { actor, access, basis, page } = await this.recordsGate(actorId, (a) => a.onPage);
     const org = actor.organizationId as string;
-    const page = await this.teacherScope.pageRowsOf(actor);
     const scope = page.teachers;
     const teachers = await this.prisma.teacher.findMany({
       where: { organizationId: org, ...(scope.all ? {} : { id: { in: [...scope.teacherIds] } }) },
@@ -673,7 +752,8 @@ export class TeacherFileService {
       orderBy: { name: 'asc' },
     });
     const away = await this.awayToday(teachers.map((t) => t.id));
-    const handlers = await this.supervisors(org);
+    // PD-52 PR-5: Sales hands every complaint to the Teachers department; it names no handler.
+    const handlers = basis === 'sales' ? [] : await this.supervisors(org);
     if (basis === 'operations' && !handlers.some((h) => h.id === actor.actorId)) {
       handlers.push({ id: actor.actorId, name: actor.displayName });
     }
@@ -690,7 +770,7 @@ export class TeacherFileService {
       })),
       supervisors: handlers,
       // The caller's own families' student groups, to name where a parent's complaint came from.
-      familyChats: await this.familyChats(page),
+      familyChats: basis === 'sales' ? [] : await this.familyChats(page),
     };
   }
 
@@ -700,10 +780,11 @@ export class TeacherFileService {
    * fields a picker shows; the caller's page scope decides which teachers.
    */
   async heldLessons(actorId: string, teacherId: string, kind: unknown) {
-    const { actor } = await this.pageGate(actorId, (a) => a.onPage);
+    const { actor, basis, page } = await this.recordsGate(actorId, (a) => a.onPage);
     if (kind !== 'trial' && kind !== 'regular') throw invalid('kind', 'must be trial or regular');
-    const teacher = await this.requireTeacher(actor, teacherId, 'page');
-    const page = await this.teacherScope.pageRowsOf(actor);
+    // PD-52 PR-5: Sales records lateness on trials only.
+    if (basis === 'sales' && kind !== 'trial') return { lessons: [] };
+    const teacher = await this.requireTeacherIn(actor, teacherId, page.teachers);
     const now = Date.now();
     const held = await this.prisma.lesson.findMany({
       where: {
@@ -712,12 +793,13 @@ export class TeacherFileService {
         startsAt: { gte: new Date(now - 14 * 86_400_000), lte: new Date(now) },
         ...(kind === 'trial' ? { kind: 'trial' } : { kind: { not: 'trial' } }),
       },
-      select: { id: true, startsAt: true, learnerId: true, learner: { select: { name: true } }, prospect: { select: { displayName: true } } },
+      select: { id: true, startsAt: true, learnerId: true, prospectId: true, learner: { select: { name: true } }, prospect: { select: { displayName: true } } },
       orderBy: { startsAt: 'desc' },
       take: 200,
     });
     // P2-4: an Operations supervisor sees their own families' lessons only (a trial is nobody's family yet).
-    const rows = held.filter((l) => pageRowVisible(page, teacher.id, { learnerId: l.learnerId }));
+    // PD-52 PR-5: Sales, the trials it reads.
+    const rows = held.filter((l) => pageRowVisible(page, teacher.id, { learnerId: l.learnerId, prospectId: l.prospectId }));
     return {
       lessons: rows.map((l) => ({
         id: l.id,
@@ -740,13 +822,74 @@ export class TeacherFileService {
       .sort((a, b) => a.learnerName.localeCompare(b.learnerName));
   }
 
+  /**
+   * PD-52: who a complaint, testimonial or grant is about -- `learnerId` (its
+   * family follows), `familyId`, or a trial family `prospectId`. Each optional.
+   * Of an Operations-only teacher, only the caller's own students and families,
+   * refused exactly like an unknown id; the database re-checks all of it, and
+   * that the teacher teaches or taught that child
+   * (chat.guard_teacher_supervision_entry_about).
+   */
+  async aboutOf(
+    actor: Actor,
+    body: { learnerId?: unknown; familyId?: unknown; prospectId?: unknown },
+    whole: boolean,
+    page: PageScope,
+  ): Promise<{ learnerId?: string; familyId?: string; trialProspectId?: string }> {
+    const given = (v: unknown) => v !== undefined && v !== null;
+    const out: { learnerId?: string; familyId?: string; trialProspectId?: string } = {};
+    if (given(body.learnerId)) {
+      const id = requireUuid('learnerId', body.learnerId);
+      const learner = await this.prisma.learner.findUnique({ where: { id }, select: { id: true, familyId: true, organizationId: true } });
+      if (!learner || learner.organizationId !== actor.organizationId || (!whole && !page.learnerIds.has(learner.id))) {
+        throw invalid('learnerId', 'is not a student you can record about');
+      }
+      if (given(body.familyId) && requireUuid('familyId', body.familyId) !== learner.familyId) {
+        throw invalid('familyId', "is not the student's family");
+      }
+      out.learnerId = learner.id;
+      out.familyId = learner.familyId;
+    } else if (given(body.familyId)) {
+      const id = requireUuid('familyId', body.familyId);
+      const family = await this.prisma.family.findUnique({ where: { id }, select: { id: true, organizationId: true } });
+      if (!family || family.organizationId !== actor.organizationId || (!whole && !page.familyIds.has(family.id))) {
+        throw invalid('familyId', 'is not a family you can record about');
+      }
+      out.familyId = family.id;
+    }
+    if (given(body.prospectId)) {
+      if (out.familyId) throw invalid('prospectId', 'a record is about a family or a trial family, not both');
+      // A trial family is named by the Teachers department and the super admin
+      // (chat.is_lesson_manager, the database's rule), or -- PD-52 PR-5 -- by
+      // Sales, for a trial it reads (its rows carry `prospectIds`; checked
+      // below). Anyone else is refused here first so the caller reads why
+      // (review of #374). No organization: not allowed, and no query (an empty
+      // id would fail the uuid cast).
+      const ok =
+        !!actor.organizationId &&
+        (
+          await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS ok`
+        )[0]?.ok === true;
+      if (!(whole && ok) && !page.prospectIds) {
+        throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'a trial family is named only by the Teachers department, the super admin and Sales');
+      }
+      const id = requireUuid('prospectId', body.prospectId);
+      const prospect = await this.prisma.trialProspect.findUnique({ where: { id }, select: { id: true, organizationId: true } });
+      if (!prospect || prospect.organizationId !== actor.organizationId || (!whole && !page.prospectIds?.has(prospect.id))) {
+        throw invalid('prospectId', 'is not a trial family you can record about');
+      }
+      out.trialProspectId = prospect.id;
+    }
+    return out;
+  }
+
   /** Is this complaint (by id) about `teacherId`, and may the caller see it (P2-4)? */
-  private async complaintVisible(actor: Actor, teacherId: string, complaintId: string): Promise<boolean> {
-    const page = await this.teacherScope.pageRowsOf(actor);
+  private async complaintVisible(page: PageScope, teacherId: string, complaintId: string): Promise<boolean> {
     if (scopeCovers(page.whole, teacherId)) return true;
     const root = await this.prisma.teacherSupervisionEntry.findFirst({
       where: { id: complaintId, teacherId, kind: TeacherFileEntryKind.COMPLAINT },
-      select: { id: true, parentFeedbackId: true, conversationId: true, complaintSource: true },
+      select: { id: true, parentFeedbackId: true, conversationId: true, complaintSource: true, learnerId: true, familyId: true, trialProspectId: true },
     });
     if (!root) return false;
     return pageRowVisible(page, teacherId, complaintAbout(root, await familiesOfComplaints(this.prisma, [root])));
@@ -809,6 +952,15 @@ export class TeacherFileService {
     };
   }
 
+  /** The teacher, if in `scope` (PD-52: the teacher-records rows, Sales' included); otherwise not found. */
+  async requireTeacherIn(actor: Actor, teacherId: string, scope: TeacherScope) {
+    const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
+    if (!isUuid(teacherId)) throw notFound;
+    const teacher = await this.prisma.teacher.findUnique({ where: { id: teacherId } });
+    if (!teacher || teacher.organizationId !== actor.organizationId || !scopeCovers(scope, teacher.id)) throw notFound;
+    return teacher;
+  }
+
   async requireTeacher(actor: Actor, teacherId: string, scope: 'file' | 'page' = 'file') {
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
@@ -824,7 +976,7 @@ export class TeacherFileService {
    * can read that conversation: the link must never become a way to learn that
    * a conversation exists. Refused exactly like an unknown id.
    */
-  private async readableSource(actor: Actor, value: unknown): Promise<string> {
+  async readableSource(actor: Actor, value: unknown): Promise<string> {
     const id = requireUuid('sourceConversationId', value);
     const refused = invalid('sourceConversationId', 'is not a conversation you can read');
     const conversation = await this.conversations.requireConversation(id).catch(() => null);
@@ -931,9 +1083,12 @@ export function shapeTimeline(
 ) {
   const resolutionOf = new Map<string, Entry>();
   const followUpsOf = new Map<string, Entry[]>();
+  const voidOf = new Map<string, Entry>();
   for (const e of entries) {
     if (!e.refersTo) continue;
     if (e.kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION) resolutionOf.set(e.refersTo, e);
+    // PD-52: a void is the correction of the complaint, not one of its follow-ups.
+    else if (e.kind === ENTRY_VOID) voidOf.set(e.refersTo, e);
     else followUpsOf.set(e.refersTo, [...(followUpsOf.get(e.refersTo) ?? []), e]);
   }
   // An app complaint (PD-32) has no staff author: its parent is in `parentFeedback`.
@@ -957,6 +1112,11 @@ export function shapeTimeline(
         action,
         status: complaintStatus(!!r, action),
         resolution: r ? brief(r) : null,
+        // PD-52: the student and family it is about, when it names them.
+        learnerId: e.learnerId,
+        familyId: e.familyId,
+        // PD-52: entered by mistake -- the reason, who and when. Hidden from lists by default.
+        voided: voidOf.has(e.id) ? brief(voidOf.get(e.id) as Entry) : null,
       };
     });
 
@@ -1055,6 +1215,9 @@ export function mapTimelineRefusal(e: unknown): unknown {
   ) {
     if (/teacher_day_off_once_per_day|teacherId_day|\(teacher_id, day\)/.test(text)) {
       return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'that day off is already recorded', 409);
+    }
+    if (/teacher_supervision_entry_one_void/.test(text)) {
+      return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'that record is already voided', 409);
     }
     if (/teacher_supervision_entry_one_resolution/.test(text) || (code === 'P2002' && !/complaint_entry_id/.test(text))) {
       return new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'that complaint already has a resolution', 409);

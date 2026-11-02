@@ -47,6 +47,7 @@ import '../data/message_search_repository.dart';
 import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
 import 'chat_theme_sheet.dart';
+import 'chat_video_screen.dart';
 import 'forward_sheet.dart';
 import 'media_viewer.dart';
 import 'message_actions.dart';
@@ -430,6 +431,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       picked = switch (source) {
         AttachmentSource.camera => await picker.captureImage(),
         AttachmentSource.photo => await picker.pickImage(),
+        AttachmentSource.video => await picker.pickVideo(),
+        AttachmentSource.recordVideo => await picker.recordVideo(),
         AttachmentSource.file => await picker.pickFile(),
       };
     } on MediaPickException catch (failure) {
@@ -497,12 +500,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   void _sayPickFailed(MediaPickFailure reason, AttachmentSource source) {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final isCamera = source == AttachmentSource.camera;
+    final isCamera = source == AttachmentSource.camera || source == AttachmentSource.recordVideo;
 
     final text = switch (reason) {
-      MediaPickFailure.permissionDenied => isCamera
-          ? l10n.cameraPermissionDenied
-          : l10n.attachmentPermissionDenied,
+      // Recording a video needs the camera AND the microphone: name both.
+      MediaPickFailure.permissionDenied => source == AttachmentSource.recordVideo
+          ? l10n.videoRecordPermissionDenied
+          : isCamera
+              ? l10n.cameraPermissionDenied
+              : l10n.attachmentPermissionDenied,
       MediaPickFailure.tooLarge => l10n.attachmentTooLarge,
       MediaPickFailure.typeNotAllowed => l10n.attachmentTypeNotAllowed,
       MediaPickFailure.unsupported =>
@@ -1022,6 +1028,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       return;
     }
 
+    // CHATSCHED-010: a video plays here, in the app; Safari could not play it and
+    // showed its signed URL.
+    if (attachment.kind == MessageKind.video && attachment.url != null) {
+      await showChatVideo(context, url: attachment.url!, title: attachment.fileName);
+      return;
+    }
+
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final url = attachment.url;
@@ -1045,7 +1058,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
 
   void _openFirstAttachment(Message message) {
     final first = message.attachments.firstWhereOrNull(
-      (a) => a.kind == MessageKind.image || a.kind == MessageKind.file,
+      (a) => a.kind == MessageKind.image || a.kind == MessageKind.file || a.kind == MessageKind.video,
     );
     if (first != null) _openAttachment(message, first);
   }
@@ -1452,6 +1465,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                             _guard(() => controller.toggleReaction(message, emoji)),
                     onOpenAttachment: (attachment) =>
                         _openAttachment(message, attachment),
+                    // PARENT-017: a sending video shows how far it is, and can be taken back.
+                    uploadProgress: state.uploadProgress[message.clientMessageId],
+                    onCancelUpload: message.isPending && message.id == null
+                        ? () => controller.cancelUpload(message.clientMessageId)
+                        : null,
                   ),
                 ),
               ],

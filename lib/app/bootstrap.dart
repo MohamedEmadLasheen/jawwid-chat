@@ -14,6 +14,7 @@ import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_parent_signup_repository.dart';
+import '../core/data/http/http_password_change_repository.dart';
 import '../core/data/http/http_password_reset_repository.dart';
 import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_sales_payments_repository.dart';
@@ -53,6 +54,7 @@ import '../features/messages/data/receipt_repository.dart';
 import '../features/messages/data/typing_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
+import '../features/rewards/data/rewards_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
@@ -247,6 +249,8 @@ List<Override> _httpOverrides() {
     whiteboardsRepositoryProvider.overrideWithValue(
       HttpWhiteboardsRepository(client: client),
     ),
+    // PD-55: rewards during a lesson (every route 404 until rewards.enabled is on).
+    rewardsRepositoryProvider.overrideWithValue(HttpRewardsRepository(client: client)),
     // PD-39 PR-3: the verified Quran text (the shared dataset), for verses on a board.
     quranTextRepositoryProvider.overrideWithValue(
       HttpQuranTextRepository(client: client),
@@ -289,6 +293,10 @@ List<Override> _httpOverrides() {
     // every live session on the account.
     callRepositoryProvider.overrideWithValue(
       HttpCallRepository(client: client),
+    ),
+    // TEACHER-023: change your own password, on the same authenticated client.
+    passwordChangeRepositoryProvider.overrideWithValue(
+      HttpPasswordChangeRepository(client: client, tokens: tokenStore),
     ),
     accountCallHistoryProvider.overrideWithValue(
       // Named after the OTHER participant, so the viewer's own id is read per call.

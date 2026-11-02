@@ -37,6 +37,8 @@ function clock(seconds: number): string {
 
 /** The words for an outcome the SERVER named, from this side of the call. */
 export function endedText(state: CallState, copy: CallCopy): string {
+  // CHATSCHED-013: a drop nobody came back from says so, whatever the outcome.
+  if (state.endReason === 'connection_lost') return copy.endedConnectionLost
   if (state.outcome === 'missed') return state.direction === 'incoming' ? copy.missedIncoming : copy.noAnswer
   if (state.outcome === 'declined') return copy.outcome.declined ?? copy.endedNoOutcome
   if (state.outcome) return copy.outcome[state.outcome] ?? copy.endedNoOutcome
@@ -56,6 +58,7 @@ function statusText(state: CallState, copy: CallCopy): string {
     case 'reconnecting':
       return copy.reconnecting
     case 'live':
+      if (state.interruptedUntil !== null) return copy.waitingForReconnect
       return state.remoteAudio ? copy.live : copy.waitingForAudio
     case 'ended':
       return endedText(state, copy)

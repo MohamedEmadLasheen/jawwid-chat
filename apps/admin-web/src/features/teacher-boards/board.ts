@@ -14,10 +14,10 @@
 export const PAGE_WIDTH = 1920
 export const PAGE_HEIGHT = 1080
 
-export type Layout = 'plain' | 'ruled' | 'narrow_ruled' | 'grid' | 'arabic_lines'
+export type Layout = 'plain' | 'ruled' | 'narrow_ruled' | 'grid' | 'arabic_lines' | 'dotted'
 export type Background = 'white' | 'cream' | 'grey' | 'green' | 'dark'
 
-const LAYOUTS: readonly Layout[] = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines']
+const LAYOUTS: readonly Layout[] = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines', 'dotted']
 const BACKGROUNDS: readonly Background[] = ['white', 'cream', 'grey', 'green', 'dark']
 
 /** The portal's BoardPalette (lib/design/tokens.dart); the fixture pins both. */
@@ -50,8 +50,14 @@ export interface Rect {
   h: number
 }
 
-export type StampKind = 'star' | 'check' | 'heart' | 'thumbsUp' | 'excellentAr' | 'wellDoneAr' | 'excellentEn' | 'wellDoneEn'
-const STAMPS: readonly StampKind[] = ['star', 'check', 'heart', 'thumbsUp', 'excellentAr', 'wellDoneAr', 'excellentEn', 'wellDoneEn']
+export type StampKind =
+  | 'star' | 'check' | 'heart' | 'thumbsUp' | 'excellentAr' | 'wellDoneAr' | 'excellentEn' | 'wellDoneEn'
+  // PD-55: the reward tray's stickers, and a praise stamp carrying any words.
+  | 'medal' | 'trophy' | 'rocket' | 'sun' | 'rainbow' | 'crown' | 'balloon' | 'praise'
+const STAMPS: readonly StampKind[] = [
+  'star', 'check', 'heart', 'thumbsUp', 'excellentAr', 'wellDoneAr', 'excellentEn', 'wellDoneEn',
+  'medal', 'trophy', 'rocket', 'sun', 'rainbow', 'crown', 'balloon', 'praise',
+]
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle'
 const SHAPES: readonly ShapeKind[] = ['rect', 'ellipse', 'triangle']
 
@@ -59,7 +65,8 @@ export type BoardElement =
   | { kind: 'ink'; id: string; highlight: boolean; points: StrokePoint[]; color: string; width: number }
   | { kind: 'shape'; id: string; shape: ShapeKind; rect: Rect; stroke: string; fill: string | null; width: number }
   | { kind: 'line'; id: string; arrow: boolean; bothEnds: boolean; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
-  | { kind: 'text'; id: string; text: string; rect: Rect; size: number; color: string }
+  /** PD-55: `bold` and `rotation` (radians, about the box's centre) are optional; a PD-39 text has neither. */
+  | { kind: 'text'; id: string; text: string; rect: Rect; size: number; color: string; bold: boolean; rotation: number }
   | { kind: 'stamp'; id: string; stamp: StampKind; rect: Rect; color: string; text: string | null }
   | { kind: 'verse'; id: string; ref: VerseRef; rect: Rect; size: number; color: string }
   /** PR-4: an image names its board asset; the board answer signs its URL. */
@@ -157,7 +164,16 @@ export function parseElement(j: Json): BoardElement {
         width: num(j.width, 4),
       }
     case 'text':
-      return { kind: 'text', id, text: typeof j.text === 'string' ? j.text : '', rect: rectOf(j, 300, 60), size: num(j.size, 48), color: color(j.color) }
+      return {
+        kind: 'text',
+        id,
+        text: typeof j.text === 'string' ? j.text : '',
+        rect: rectOf(j, 300, 60),
+        size: num(j.size, 48),
+        color: color(j.color),
+        bold: j.bold === true,
+        rotation: num(j.rotation, 0),
+      }
     case 'stamp':
       return {
         kind: 'stamp',

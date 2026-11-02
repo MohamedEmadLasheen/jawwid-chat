@@ -65,6 +65,7 @@ export function ComplaintItem({
   complaint: c,
   teacherName,
   canWrite,
+  canDecide = true,
   onFollowUp,
   onResolve,
   onUphold,
@@ -74,6 +75,8 @@ export function ComplaintItem({
   /** Shown when the list spans teachers. */
   teacherName?: string
   canWrite: boolean
+  /** PD-52 PR-5: false for Sales -- it follows a complaint up; taking, replying, upholding and resolving are not its. */
+  canDecide?: boolean
   onFollowUp: () => void
   onResolve: () => void
   onUphold: () => void
@@ -140,22 +143,22 @@ export function ComplaintItem({
       )}
       {canWrite && (
         <div className="tf-entry__actions">
-          {feedback && !c.handledBy && (
+          {canDecide && feedback && !c.handledBy && (
             <button type="button" className="btn btn--primary btn--sm" disabled={take.isPending} onClick={() => take.mutate(feedback.id)}>
               {tx(F.take)}
             </button>
           )}
-          {feedback && (
+          {canDecide && feedback && (
             <button type="button" className="btn btn--sm" onClick={() => setReplying(true)}>
               {feedback.response ? tx(F.changeReply) : tx(F.reply)}
             </button>
           )}
-          {status === 'open' && (
+          {canDecide && status === 'open' && (
             <button type="button" className="btn btn--sm" onClick={onUphold}>
               {tx(T.uphold)}
             </button>
           )}
-          {status === 'upheld' && onDecide && (
+          {canDecide && status === 'upheld' && onDecide && (
             <button type="button" className="btn btn--primary btn--sm" onClick={onDecide}>
               {tx(T.decideAction)}
             </button>
@@ -165,9 +168,11 @@ export function ComplaintItem({
               <button type="button" className="btn btn--ghost btn--sm" onClick={onFollowUp}>
                 {tx(T.followUp)}
               </button>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={onResolve}>
-                {tx(T.resolve)}
-              </button>
+              {canDecide && (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={onResolve}>
+                  {tx(T.resolve)}
+                </button>
+              )}
             </>
           )}
         </div>

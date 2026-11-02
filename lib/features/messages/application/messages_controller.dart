@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/data/http/attachment_uploader.dart' show UploadCancel;
 import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/error_mapper.dart';
@@ -24,9 +25,14 @@ class MessagesState {
     this.initialError,
     this.olderError,
     this.isOffline = false,
+    this.uploadProgress = const {},
   });
 
   final MessageLog log;
+
+  /// PARENT-017: how far each uploading attachment has gone, 0..1, by client
+  /// message id. Absent while it waits or once it is sent.
+  final Map<String, double> uploadProgress;
   final bool isLoadingInitial;
   final bool isLoadingOlder;
 
@@ -50,8 +56,10 @@ class MessagesState {
     bool clearInitialError = false,
     bool clearOlderError = false,
     bool? isOffline,
+    Map<String, double>? uploadProgress,
   }) {
     return MessagesState(
+      uploadProgress: uploadProgress ?? this.uploadProgress,
       log: log ?? this.log,
       isLoadingInitial: isLoadingInitial ?? this.isLoadingInitial,
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
@@ -100,6 +108,9 @@ class MessagesController extends Notifier<MessagesState> {
   /// staging copy. Deleting it on send is how an app removes a photo the user
   /// still has. So this map exists only so a retry can find the bytes again.
   final _pendingAttachmentFiles = <String, String>{};
+
+  /// PARENT-017: the cancel handle of each upload in flight, by client message id.
+  final _uploadCancels = <String, UploadCancel>{};
 
   Timer? _drainTimer;
 
@@ -332,6 +343,7 @@ class MessagesController extends Notifier<MessagesState> {
           fileName: attachment.fileName,
           mimeType: attachment.mimeType,
           byteSize: attachment.byteSize,
+          durationMs: attachment.duration?.inMilliseconds,
         ),
       ],
     );
@@ -411,15 +423,24 @@ class MessagesController extends Notifier<MessagesState> {
         final attachment = outbound.pendingAttachment;
 
         uploading = true;
-        final uploaded = note != null
-            ? await _messages.uploadVoiceNote(
-                conversationId: conversationId,
-                note: note,
-              )
-            : await _messages.uploadAttachment(
-                conversationId: conversationId,
-                attachment: attachment!,
-              );
+        final cancel = _uploadCancels[entry.clientMessageId] = UploadCancel();
+        final UploadedAttachment uploaded;
+        try {
+          uploaded = note != null
+              ? await _messages.uploadVoiceNote(
+                  conversationId: conversationId,
+                  note: note,
+                )
+              : await _messages.uploadAttachment(
+                  conversationId: conversationId,
+                  attachment: attachment!,
+                  onProgress: (sent, total) => _progress(entry.clientMessageId, sent, total),
+                  cancel: cancel,
+                );
+        } finally {
+          _uploadCancels.remove(entry.clientMessageId);
+          if (_alive) _clearProgress(entry.clientMessageId);
+        }
         if (!_alive) return;
         uploading = false;
         outbound = outbound.withUploaded(uploaded);
@@ -440,6 +461,8 @@ class MessagesController extends Notifier<MessagesState> {
     } catch (error) {
       final failure = ErrorMapper.map(error);
       if (!_alive) return;
+      // PARENT-017: a cancelled upload was discarded by cancelUpload; nothing failed.
+      if (failure.code == AppError.uploadCancelled) return;
 
       _outbox.markFailed(
         entry.clientMessageId,
@@ -499,6 +522,27 @@ class MessagesController extends Notifier<MessagesState> {
   /// The user abandoned a message that was never sent: it leaves the queue AND the chat
   /// (no "deleted" ghost: nobody else ever saw it), and what waited behind it goes
   /// (PARENT-005).
+  /// PARENT-017: stop a sending attachment's upload and take the message back.
+  /// Before its upload starts it is simply discarded.
+  void cancelUpload(String clientMessageId) {
+    _uploadCancels.remove(clientMessageId)?.cancel();
+    discard(clientMessageId);
+  }
+
+  /// Progress at whole percents only: a 100 MB video must not rebuild the chat
+  /// for every 64 KB chunk.
+  void _progress(String clientMessageId, int sent, int total) {
+    if (!_alive || total <= 0) return;
+    final value = (sent * 100 ~/ total) / 100;
+    if (state.uploadProgress[clientMessageId] == value) return;
+    state = state.copyWith(uploadProgress: {...state.uploadProgress, clientMessageId: value});
+  }
+
+  void _clearProgress(String clientMessageId) {
+    if (!state.uploadProgress.containsKey(clientMessageId)) return;
+    state = state.copyWith(uploadProgress: {...state.uploadProgress}..remove(clientMessageId));
+  }
+
   void discard(String clientMessageId) {
     _outbox.discard(clientMessageId);
     _pendingBodies.remove(clientMessageId);

@@ -233,6 +233,17 @@ const LATER: readonly Later[] = [
       ),
     ),
   },
+  {
+    // PD-52 PR-5 (owner §11 b): Sales records on both pages, never decides.
+    migration: '20261031190000_chat_pd052_sales_basis.sql',
+    tag: 'pd052sales',
+    permissions: [],
+    bundles: (['manager', 'supervisor'] as const).flatMap((tier) =>
+      (['teacher_attendance.record', 'teacher_attendance.view', 'teacher_grants.record', 'teacher_grants.view'] as const).map(
+        (key) => [tier, 'sales', key] as const,
+      ),
+    ),
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

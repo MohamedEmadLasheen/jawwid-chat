@@ -64,7 +64,11 @@ export const callApi = {
   token: (callId: string) => api.post<MediaToken>(`${call(callId)}/token`),
   accept: (callId: string) => api.post<{ ok: boolean }>(`${call(callId)}/accept`),
   decline: (callId: string) => api.post<{ ok: boolean }>(`${call(callId)}/decline`),
-  end: (callId: string) => api.post<{ ok: boolean }>(`${call(callId)}/end`),
+  // No outcome, ever. The one thing a client may say is that it gave up
+  // rejoining (CHATSCHED-013, review 2 of #367): the server then ends a live
+  // call as connection lost.
+  end: (callId: string, opts?: { connectionLost?: boolean }) =>
+    api.post<{ ok: boolean }>(`${call(callId)}/end`, opts?.connectionLost ? { reason: 'connection_lost' } : undefined),
   /** PD-13: join a scheduled call or a call link. The server decides start vs accept. */
   joinScheduled: (scheduledCallId: string) =>
     api.post<ScheduledJoin>(`/scheduled-calls/${encodeURIComponent(scheduledCallId)}/join`),

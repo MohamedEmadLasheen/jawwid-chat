@@ -198,6 +198,12 @@ const SALES_MEMBER = k(
   // Sales: a case is opened and owned only by Teachers or Operations).
   'lessons.view',
   'cases.view',
+  // PD-52 PR-5 (owner §11 b): the teacher-records pages, about the trials it
+  // reads and the families it owns -- recording, never deciding.
+  'teacher_attendance.view',
+  'teacher_attendance.record',
+  'teacher_grants.view',
+  'teacher_grants.record',
 );
 
 const BUNDLES: Readonly<Record<string, readonly PermissionKey[]>> = {

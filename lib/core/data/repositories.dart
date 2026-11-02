@@ -13,6 +13,7 @@ import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
 import '../../shared/models/work_task.dart';
+import 'http/attachment_uploader.dart' show UploadCancel;
 
 /// One page of a cursor-paginated list (§19).
 class Page<T> {
@@ -182,10 +183,15 @@ class CallHistoryEntry {
     required this.isGroup,
     this.duration,
     this.direction,
+    this.connectionLost = false,
   });
 
   final String id;
   final String conversationId;
+
+  /// CHATSCHED-013: the call ended because the connection was lost (the server's
+  /// `endReason`), not because anybody hung up.
+  final bool connectionLost;
 
   /// A display name — "Jawwid", "Mr. Ahmed". Never a phone number (§36).
   final String title;
@@ -230,11 +236,12 @@ class PendingAttachment {
     required this.mimeType,
     required this.byteSize,
     this.fileName,
+    this.duration,
   });
 
   final String filePath;
 
-  /// [MessageKind.image] or [MessageKind.file]. Never voice — that is
+  /// [MessageKind.image], [MessageKind.video] or [MessageKind.file]. Never voice — that is
   /// [PendingVoiceNote] — and never text or system.
   final MessageKind kind;
 
@@ -244,6 +251,19 @@ class PendingAttachment {
   /// What the user will see on a file bubble. Null for a photo, which is shown
   /// rather than named.
   final String? fileName;
+
+  /// PARENT-017: a video's length, read from the file when the picker could.
+  /// Sent as the attachment's `durationMs`; the bubble shows it.
+  final Duration? duration;
+
+  PendingAttachment withDuration(Duration? value) => PendingAttachment(
+        filePath: filePath,
+        kind: kind,
+        mimeType: mimeType,
+        byteSize: byteSize,
+        fileName: fileName,
+        duration: value,
+      );
 }
 
 /// An attachment whose bytes are already in storage, addressed by the object key
@@ -385,6 +405,26 @@ abstract interface class PasswordResetRepository {
   Future<void> complete({required String username, required String code, required String password});
 }
 
+/// TEACHER-023: a signed-in account (any role) changes its own password. On the
+/// AUTHENTICATED client: the current password is proven, and the server ends every OTHER
+/// session of the account and keeps this one.
+abstract interface class PasswordChangeRepository {
+  /// `POST /auth/password/change`. A refusal is an AppError with the server's code
+  /// (`AUTH.INVALID_CREDENTIALS` for a wrong current password, `AUTH.PASSWORD_TOO_WEAK`,
+  /// `AUTH.PASSWORD_UNCHANGED`, `COMMON.RATE_LIMITED` -- also while the account is locked).
+  /// Success rotates this device's session; the new token pair is stored before it returns.
+  Future<void> change({required String currentPassword, required String newPassword});
+}
+
+/// The build with no account server (fixtures, tests that do not override it).
+class NoPasswordChangeRepository implements PasswordChangeRepository {
+  const NoPasswordChangeRepository();
+
+  @override
+  Future<void> change({required String currentPassword, required String newPassword}) =>
+      throw UnsupportedError('no account server in this build');
+}
+
 /// The build with no reset server (fixtures, tests that do not override it).
 class NoPasswordResetRepository implements PasswordResetRepository {
   const NoPasswordResetRepository();
@@ -511,9 +551,14 @@ abstract interface class MessageRepository {
   /// Kept as its own method rather than folded into the voice one: the two take
   /// different descriptions of what is on disk, and the voice path is covered by
   /// its own suite that has no business changing because photos arrived.
+  ///
+  /// [onProgress] reports the bytes sent to storage (PARENT-017: a sending
+  /// video shows it); [cancel] stops the transfer.
   Future<UploadedAttachment> uploadAttachment({
     required String conversationId,
     required PendingAttachment attachment,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   });
 
   /// [conversationId] is part of the route, not a convenience: every message
@@ -723,7 +768,7 @@ abstract interface class CallRepository {
   /// accepting one on 2026-09-27 -- a participant naming their own call history
   /// is false history through the front door -- so the parameter is gone rather
   /// than left here to be rediscovered and silently ignored.
-  Future<void> end({required String callId});
+  Future<void> end({required String callId, bool connectionLost = false});
 
   /// `GET /calls/history/:conversationId`.
   ///

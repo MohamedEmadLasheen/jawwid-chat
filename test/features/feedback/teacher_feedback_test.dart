@@ -211,6 +211,134 @@ void main() {
     expect(find.text('المعلّم: أ. يوسف'), findsOneWidget);
   });
 
+  /// The parent's own profile, a child's card with the feedback entry and its shortcuts.
+  Widget profile(FakeFeedbackRepository repo, {Locale locale = const Locale('en')}) => ProviderScope(
+        overrides: [
+          feedbackRepositoryProvider.overrideWithValue(repo),
+          profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
+          currentRoleProvider.overrideWithValue(UserRole.parent),
+          principalIdProvider.overrideWithValue('parent_1'),
+        ],
+        child: MaterialApp(
+          locale: locale,
+          theme: JawwidTheme.light(isArabic: locale.languageCode == 'ar'),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: const [
+            L10n.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: const MyProfileScreen(),
+        ),
+      );
+
+  ChoiceChip chip(WidgetTester tester, String category) =>
+      tester.widget<ChoiceChip>(find.byKey(ValueKey('feedback-category-$category')));
+
+  for (final (key, kind) in const [('praise', FeedbackCategory.praise), ('problem', FeedbackCategory.complaint)]) {
+    testWidgets('PD-52: the "$key" shortcut on a child\'s card opens the one form on its kind, and sends it', (tester) async {
+      final repo = FakeFeedbackRepository(children: const [FeedbackChild(learnerId: 'learner-1', name: 'Ahmad', teacherName: 'Ustadh Yusuf')]);
+      await tester.pumpWidget(profile(repo));
+      await tester.pumpAndSettle();
+
+      final shortcut = find.byKey(ValueKey('feedback-$key-learner-1'));
+      await tester.ensureVisible(shortcut);
+      await tester.pumpAndSettle();
+      await tester.tap(shortcut);
+      await tester.pumpAndSettle();
+
+      // The form, its kind already chosen -- and only that one.
+      expect(chip(tester, kind.name).selected, isTrue);
+      for (final other in FeedbackCategory.values.where((c) => c != kind)) {
+        expect(chip(tester, other.name).selected, isFalse);
+      }
+      await tester.enterText(find.byKey(const ValueKey('feedback-body')), 'Words for the school.');
+      await tester.tap(find.byKey(const ValueKey('feedback-submit')));
+      await tester.pumpAndSettle();
+      expect(repo.submitted.single.category, kind);
+      expect(repo.submitted.single.learnerId, 'learner-1');
+      expect(find.text('Thank you. Your feedback has reached the administration.'), findsOneWidget);
+    });
+  }
+
+  testWidgets('PD-52 (review of #391): the card unmounted while the form is open -- sending still refreshes and thanks', (tester) async {
+    final repo = FakeFeedbackRepository(children: const [FeedbackChild(learnerId: 'learner-1', name: 'Ahmad', teacherName: 'Ustadh Yusuf')]);
+    final showCard = ValueNotifier(true);
+    final container = ProviderContainer(overrides: [
+      feedbackRepositoryProvider.overrideWithValue(repo),
+      currentRoleProvider.overrideWithValue(UserRole.parent),
+      principalIdProvider.overrideWithValue('parent_1'),
+    ]);
+    addTearDown(container.dispose);
+    // Keep the list alive so a refresh after the send is observable.
+    container.listen(myFeedbackProvider, (_, _) {});
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('en'),
+          theme: JawwidTheme.light(isArabic: false),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: const [
+            L10n.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showCard,
+              builder: (_, show, _) =>
+                  show ? const TeacherFeedbackEntry(learnerId: 'learner-1', childName: 'Ahmad') : const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect((await container.read(myFeedbackProvider.future)).items, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('feedback-praise-learner-1')));
+    await tester.pumpAndSettle();
+    // The profile rebuilds under the open form and the card is gone.
+    showCard.value = false;
+    await tester.pumpAndSettle();
+    expect(find.byType(TeacherFeedbackEntry, skipOffstage: false), findsNothing);
+
+    await tester.enterText(find.byKey(const ValueKey('feedback-body')), 'Words for the school.');
+    await tester.tap(find.byKey(const ValueKey('feedback-submit')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(repo.submitted, hasLength(1));
+    expect(find.text('Thank you. Your feedback has reached the administration.'), findsOneWidget);
+    expect((await container.read(myFeedbackProvider.future)).items, hasLength(1));
+  });
+
+  testWidgets('PD-52: a shortcut only preselects -- the parent may still choose another kind', (tester) async {
+    final repo = FakeFeedbackRepository(children: const [FeedbackChild(learnerId: 'learner-1', name: 'Ahmad', teacherName: 'Ustadh Yusuf')]);
+    await tester.pumpWidget(profile(repo));
+    await tester.pumpAndSettle();
+    final shortcut = find.byKey(const ValueKey('feedback-problem-learner-1'));
+    await tester.ensureVisible(shortcut);
+    await tester.pumpAndSettle();
+    await tester.tap(shortcut);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('feedback-category-suggestion')));
+    await tester.enterText(find.byKey(const ValueKey('feedback-body')), 'A thought.');
+    await tester.tap(find.byKey(const ValueKey('feedback-submit')));
+    await tester.pumpAndSettle();
+    expect(repo.submitted.single.category, FeedbackCategory.suggestion);
+  });
+
+  testWidgets('PD-52: the shortcuts read in Arabic', (tester) async {
+    final repo = FakeFeedbackRepository(children: const [FeedbackChild(learnerId: 'learner-1', name: 'أحمد', teacherName: 'أ. يوسف')]);
+    await tester.pumpWidget(profile(repo, locale: const Locale('ar')));
+    await tester.pumpAndSettle();
+    expect(find.text('الثناء على المعلّم'), findsWidgets);
+    expect(find.text('الإبلاغ عن مشكلة'), findsWidgets);
+  });
+
   test('the wire Item parses, and a row missing what the screen needs is dropped', () {
     final parsed = parseFeedbackItem({
       'id': 'f1',

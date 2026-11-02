@@ -112,6 +112,7 @@ class HttpAccountCallHistory implements AccountCallHistoryRepository {
       outcome: outcome,
       isGroup: row['type'] == Wire.callTypeGroup,
       duration: seconds is int ? Duration(seconds: seconds) : null,
+      connectionLost: row['endReason'] == 'connection_lost',
       direction: _direction(row),
     );
   }

@@ -1,4 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { OutboxService } from '../communication/outbox/outbox.service';
+import { CommEvent } from '../communication/contracts/events';
 import type { ParentFeedback, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -11,6 +13,7 @@ import { currentImpersonationId } from '../platform/request-context';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { TeacherFileService, mapTimelineRefusal } from './teacher-file.service';
+import { feedbackKeyAllows } from '../platform/teacher-records-policy';
 
 export const FEEDBACK_CATEGORIES = ['praise', 'suggestion', 'complaint'] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
@@ -52,6 +55,8 @@ export class ParentFeedbackService {
     private readonly conversations: ConversationService,
     private readonly files: TeacherFileService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-52 (plan §7): who follows a complaint or praise up is told.
+    @Optional() private readonly outbox: OutboxService = new OutboxService(),
   ) {}
 
   // ------------------------------------------------------------------
@@ -135,9 +140,10 @@ export class ParentFeedbackService {
             body: text,
           },
         });
+        let entryId: string | null = null;
         if (category === 'complaint') {
           // PD-26's queue: a complaint with no staff author and no handler yet.
-          await tx.teacherSupervisionEntry.create({
+          ({ id: entryId } = await tx.teacherSupervisionEntry.create({
             data: {
               organizationId: contact.organizationId,
               teacherId,
@@ -146,6 +152,21 @@ export class ParentFeedbackService {
               complaintSource: 'parent_app',
               parentFeedbackId: created.id,
             },
+            select: { id: true },
+          }));
+        }
+        // PD-52 (plan §7): a complaint tells its follow-up people and praise the
+        // teacher's supervisor, through the outbox (committed with the feedback).
+        // A suggestion is not announced.
+        if (category === 'complaint' || category === 'praise') {
+          await this.outbox.enqueue(tx, category === 'complaint' ? CommEvent.TEACHER_COMPLAINT_RECEIVED : CommEvent.TEACHER_PRAISE_RECEIVED, {
+            organizationId: contact.organizationId,
+            teacherId,
+            entryId,
+            feedbackId: created.id,
+            learnerId: learner.id,
+            familyId: contact.familyId,
+            recordedBy: null,
           });
         }
         // The parent is not staff (audit_log.actor_id names staff). The text stays
@@ -181,17 +202,27 @@ export class ParentFeedbackService {
     if (query.category !== undefined && !(FEEDBACK_CATEGORIES as readonly string[]).includes(query.category)) {
       throw invalid('category: must be praise, suggestion or complaint');
     }
+    // PD-52 (review of #369): praise is page B's, a complaint or suggestion page A's.
+    const keys = await this.files.keysOf(actor);
+    const readable = FEEDBACK_CATEGORIES.filter((c) => feedbackKeyAllows(c, 'read', keys));
+    if (query.category !== undefined ? !readable.includes(query.category as FeedbackCategory) : readable.length === 0) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this feedback is on a page you do not hold');
+    }
     const page = await this.files.teacherScope.pageRowsOf(actor);
     const { rows } = await this.listed(actor, page, query);
-    return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(rows) };
+    const shown = rows.filter((r) => readable.includes(r.category as FeedbackCategory));
+    return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(shown) };
   }
 
   /**
-   * PD-44: the Dashboard's feedback tiles -- `list({ status })`'s length for
-   * `received` (new, nobody has taken it) and `in_review`, found as `list`
-   * finds them (listed: the same scope, the same 500 candidates, the same
-   * per-child visibility). `capped` when the candidates reached the limit.
-   * Staff off the page get no tile; non-staff are refused as there.
+   * PD-44: the Dashboard's feedback tiles -- the parents' suggestions only
+   * (PD-52: complaints and praise have their own flows), `list({ status,
+   * category: 'suggestion' })`'s length for `received` (new, nobody has taken
+   * it) and `in_review`, found as `list` finds them (listed: the same scope,
+   * the same 500 candidates, the same per-child visibility) -- the Attendance
+   * page's Suggestions view the tiles open. `capped` when the candidates
+   * reached the limit. Staff off the page, or without the suggestions' page,
+   * get no tile; non-staff are refused as there.
    */
   async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
     // The page's own gate: it refuses a parent or a teacher outright; staff off the page get no tile.
@@ -204,12 +235,36 @@ export class ParentFeedbackService {
       throw e;
     }
     const page = await this.files.teacherScope.pageRowsOf(gate.actor);
+    // PD-52 (review of #374): as `list` does, only on a page the caller holds -- the suggestions' (page A).
+    if (!feedbackKeyAllows('suggestion', 'read', await this.files.keysOf(gate.actor))) return [];
     const tile = async (status: 'received' | 'in_review') => {
-      const { rows, candidates } = await this.listed(gate.actor, page, { status });
+      const { rows, candidates } = await this.listed(gate.actor, page, { status, category: 'suggestion' });
       const oldest = rows.length ? rows[rows.length - 1]!.createdAt : null;
       return dashboardTile(`feedback.${status}`, rows.length, oldest, candidates >= LIST_LIMIT);
     };
     return [await tile('received'), await tile('in_review')];
+  }
+
+  /**
+   * PD-52: the parents' praise, read in place for the Grants & Testimonials
+   * page -- never copied into a testimonial. Scoped as `list` is (the caller's
+   * teachers; of an Operations-only teacher, their own learners), shaped as
+   * the Parent feedback list shows it.
+   */
+  async praise(actor: Actor, page: PageScope, query: { teacherId?: string; from?: Date; to?: Date }) {
+    const scope = page.teachers;
+    if (query.teacherId && !scopeCovers(scope, query.teacherId)) return [];
+    const found = await this.prisma.parentFeedback.findMany({
+      where: {
+        organizationId: actor.organizationId as string,
+        category: 'praise',
+        ...(query.teacherId ? { teacherId: query.teacherId } : scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
+        ...(query.from || query.to ? { createdAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? { lt: query.to } : {}) } } : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: LIST_LIMIT,
+    });
+    return this.forStaff(found.filter((f) => pageRowVisible(page, f.teacherId, { learnerId: f.learnerId })));
   }
 
   /**
@@ -238,6 +293,10 @@ export class ParentFeedbackService {
   async take(actorId: string, id: string) {
     const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
+    // PD-52 (review of #369): praise needs teacher_grants.record, anything else teacher_attendance.decide.
+    if (!feedbackKeyAllows(row.category, 'write', await this.files.keysOf(actor))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this feedback is on a page you do not hold');
+    }
     await this.write(async (tx) => {
       if (row.category === 'complaint') {
         await tx.teacherSupervisionEntry.updateMany({
@@ -266,6 +325,10 @@ export class ParentFeedbackService {
   async reply(actorId: string, id: string, body: Record<string, unknown>) {
     const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
+    // PD-52 (review of #369): praise needs teacher_grants.record, anything else teacher_attendance.decide.
+    if (!feedbackKeyAllows(row.category, 'write', await this.files.keysOf(actor))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this feedback is on a page you do not hold');
+    }
     if (typeof body.response !== 'string' || body.response.trim().length === 0) throw invalid('response: is required');
     const response = body.response.trim();
     if (response.length > BODY_MAX) throw invalid(`response: must be at most ${BODY_MAX} characters`);

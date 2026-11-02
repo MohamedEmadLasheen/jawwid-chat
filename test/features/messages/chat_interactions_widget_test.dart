@@ -9,20 +9,43 @@ import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
+import 'package:jawwid_chat/core/data/http/attachment_uploader.dart' show UploadCancel;
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/media/attachment_opener.dart';
 import 'package:jawwid_chat/core/media/media_picker.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
+import 'package:jawwid_chat/features/messages/presentation/chat_video_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
+import '../stories/fake_story_video_player.dart';
 import 'fake_voice_devices.dart';
 
 /// A picker that hands back whatever the test says, without a platform channel.
 class _FakeMediaPicker implements MediaPicker {
+  PendingAttachment? video;
+  PendingAttachment? recording;
+  int videoCalls = 0;
+  int recordCalls = 0;
+
+  @override
+  Future<PendingAttachment?> pickVideo() async {
+    videoCalls++;
+    if (failure != null) throw failure!;
+    return video;
+  }
+
+  @override
+  Future<PendingAttachment?> recordVideo() async {
+    recordCalls++;
+    if (failure != null) throw failure!;
+    return recording;
+  }
+
   PendingAttachment? image;
   PendingAttachment? capture;
   PendingAttachment? file;
@@ -70,6 +93,7 @@ class _FakeAttachmentOpener implements AttachmentOpener {
 /// through the real chat screen.
 void main() {
   late FakeBackend backend;
+  final videoPlayer = FakeStoryVideoPlayer();
   late FakeVoiceRecorder recorder;
   late FakeVoicePlayer player;
   late _FakeMediaPicker picker;
@@ -109,7 +133,7 @@ void main() {
     if (scratch.existsSync()) scratch.deleteSync(recursive: true);
   });
 
-  Widget harness({Locale locale = const Locale('en')}) {
+  Widget harness({Locale locale = const Locale('en'), MessageRepository? messages}) {
     return ProviderScope(
       overrides: [
         currentRoleProvider.overrideWithValue(UserRole.parent),
@@ -117,10 +141,11 @@ void main() {
         voicePlayerProvider.overrideWithValue(player),
         mediaPickerProvider.overrideWithValue(picker),
         attachmentOpenerProvider.overrideWithValue(opener),
+        storyVideoPlayerFactoryProvider.overrideWithValue(() => videoPlayer),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider
-            .overrideWithValue(FakeMessageRepository(backend)),
+            .overrideWithValue(messages ?? FakeMessageRepository(backend)),
       ],
       child: MaterialApp(
         locale: locale,
@@ -274,7 +299,7 @@ void main() {
   });
 
   group('the attach menu', () {
-    testWidgets('offers exactly Camera, Photo and File, in that order',
+    testWidgets('offers exactly Camera, Photo, Video, Record video and File, in that order',
         (tester) async {
       await tester.pumpWidget(harness());
       await tester.pumpAndSettle();
@@ -284,17 +309,125 @@ void main() {
 
       expect(find.text('Camera'), findsOneWidget);
       expect(find.text('Photo'), findsOneWidget);
+      expect(find.text('Video'), findsOneWidget);
+      expect(find.text('Record video'), findsOneWidget);
       expect(find.text('File'), findsOneWidget);
       // The menu is a shortcut, and one that grows past a glance has stopped
-      // being one. Three, and no fourth.
+      // being one. PARENT-017 added the two video entries, and nothing else.
       expect(find.text('Location'), findsNothing);
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.byType(ListTile), findsNWidgets(5));
 
       // Camera first: the commonest reason to attach anything is something in
-      // front of you now.
+      // front of you now. The two videos sit beside the photos.
       double y(String label) => tester.getCenter(find.text(label)).dy;
       expect(y('Camera'), lessThan(y('Photo')));
-      expect(y('Photo'), lessThan(y('File')));
+      expect(y('Photo'), lessThan(y('Video')));
+      expect(y('Video'), lessThan(y('Record video')));
+      expect(y('Record video'), lessThan(y('File')));
+    });
+
+    testWidgets('PARENT-017: a library video is previewed, uploaded and shown as a video with its length',
+        (tester) async {
+      final file = File('${scratch.path}/clip.mov')..writeAsBytesSync(List<int>.filled(4096, 7));
+      picker.video = PendingAttachment(
+        filePath: file.path,
+        kind: MessageKind.video,
+        mimeType: 'video/quicktime',
+        byteSize: 4096,
+        fileName: 'clip.mov',
+        duration: const Duration(seconds: 42),
+      );
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Video'));
+      await tester.pumpAndSettle();
+
+      expect(picker.videoCalls, 1);
+      expect(picker.recordCalls, 0);
+      expect(find.text('Send this?'), findsOneWidget, reason: 'a video is confirmed before it is sent');
+      await tester.tap(find.byIcon(Icons.send).last);
+      await tester.pumpAndSettle();
+
+      final sent = backend.since(backend.listConversations().first.id, afterSequence: -1).where((m) => m.kind == MessageKind.video);
+      expect(sent, hasLength(1));
+      expect(sent.single.attachments.single.durationMs, 42000);
+      expect(find.byKey(const ValueKey('video-attachment')), findsOneWidget);
+      expect(find.text('Video · 0:42'), findsOneWidget);
+    });
+
+    testWidgets('PARENT-017: Record video opens the camera recorder, not the library',
+        (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Record video'));
+      await tester.pumpAndSettle();
+      expect(picker.recordCalls, 1);
+      expect(picker.videoCalls, 0);
+    });
+
+    testWidgets('PARENT-017: a refused camera or microphone for a recording names both',
+        (tester) async {
+      picker.failure = const MediaPickException(MediaPickFailure.permissionDenied);
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Record video'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('the camera and the microphone'), findsOneWidget);
+    });
+
+    testWidgets('PARENT-017: an over-size video is refused before anything is sent',
+        (tester) async {
+      picker.failure = const MediaPickException(MediaPickFailure.tooLarge);
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      final before = backend.since(backend.listConversations().first.id, afterSequence: -1).length;
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Video'));
+      await tester.pumpAndSettle();
+      expect(find.text('Send this?'), findsNothing);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(backend.since(backend.listConversations().first.id, afterSequence: -1).length, before);
+    });
+
+    testWidgets('PARENT-017: a sending video shows its progress and can be cancelled',
+        (tester) async {
+      final slow = _SlowUploads(backend);
+      picker.video = PendingAttachment(
+        filePath: '${scratch.path}/big.mp4',
+        kind: MessageKind.video,
+        mimeType: 'video/mp4',
+        byteSize: 1000,
+        fileName: 'big.mp4',
+      );
+      await tester.pumpWidget(harness(messages: slow));
+      await tester.pumpAndSettle();
+      final before = backend.since(backend.listConversations().first.id, afterSequence: -1).length;
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Video'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.send).last);
+      await tester.pump();
+      await tester.pump();
+
+      final spinner = tester.widget<CircularProgressIndicator>(find.byKey(const ValueKey('video-upload-progress')));
+      expect(spinner.value, 0.4);
+      expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == 'Sending… 40%'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('video-upload-cancel')));
+      await tester.pumpAndSettle();
+      expect(slow.cancelled, isTrue);
+      expect(find.byKey(const ValueKey('video-attachment')), findsNothing, reason: 'the message is taken back');
+      expect(find.byType(SnackBar), findsNothing, reason: 'a cancel is not a failure');
+      expect(backend.since(backend.listConversations().first.id, afterSequence: -1).length, before);
     });
 
     testWidgets('a captured photo goes through the same preview and pipeline',
@@ -514,6 +647,37 @@ void main() {
     });
   });
 
+  group('a video (CHATSCHED-010)', () {
+    testWidgets('is a video tile, and plays in the app: no external launch', (tester) async {
+      final onDisk = File('${scratch.path}${Platform.pathSeparator}Recitation.mp4')
+        ..writeAsBytesSync(List<int>.filled(4096, 1));
+      picker.file = PendingAttachment(
+        filePath: onDisk.path,
+        kind: MessageKind.video,
+        mimeType: 'video/mp4',
+        byteSize: 4096,
+        fileName: 'Recitation.mp4',
+      );
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('video-attachment')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('video-attachment')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatVideoScreen), findsOneWidget);
+      expect(videoPlayer.loaded, hasLength(1));
+      expect(opener.opened, isEmpty, reason: 'Safari could not play it and showed the signed URL');
+    });
+  });
+
   group('opening a file', () {
     testWidgets('hands over the backend signed URL, never a storage key',
         (tester) async {
@@ -711,4 +875,24 @@ void main() {
       expect(find.text('ملف'), findsOneWidget);
     });
   });
+}
+
+/// PARENT-017: an upload that reports 40% and then waits until it is cancelled.
+class _SlowUploads extends FakeMessageRepository {
+  _SlowUploads(super.backend);
+
+  bool cancelled = false;
+
+  @override
+  Future<UploadedAttachment> uploadAttachment({
+    required String conversationId,
+    required PendingAttachment attachment,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
+  }) async {
+    onProgress?.call(400, 1000);
+    await cancel!.whenCancelled;
+    cancelled = true;
+    throw const AppError(AppErrorKind.unknown, code: AppError.uploadCancelled);
+  }
 }

@@ -38,9 +38,18 @@ class MessageBubble extends StatelessWidget {
     this.onTapReply,
     this.onToggleReaction,
     this.onOpenAttachment,
+    this.uploadProgress,
+    this.onCancelUpload,
     this.isHighlighted = false,
     this.highlight,
   });
+
+  /// PARENT-017: how far this message's attachment has uploaded, 0..1, while
+  /// it uploads; null otherwise.
+  final double? uploadProgress;
+
+  /// PARENT-017: stops a sending video's upload and takes the message back.
+  final VoidCallback? onCancelUpload;
 
   final Message message;
 
@@ -131,7 +140,11 @@ class MessageBubble extends StatelessWidget {
         .where((a) => a.kind == MessageKind.image)
         .toList(growable: false);
     final documents = message.attachments
-        .where((a) => a.kind == MessageKind.file || a.kind == MessageKind.video)
+        .where((a) => a.kind == MessageKind.file)
+        .toList(growable: false);
+    // CHATSCHED-010: a video is a video tile that plays in the app, not a file.
+    final videos = message.attachments
+        .where((a) => a.kind == MessageKind.video)
         .toList(growable: false);
 
     final senderColumn = reserveSenderColumn && !mine;
@@ -254,6 +267,16 @@ class MessageBubble extends StatelessWidget {
                         onTap: onOpenAttachment == null
                             ? null
                             : () => onOpenAttachment!(photo),
+                      ),
+                    for (final video in videos)
+                      _VideoAttachment(
+                        attachment: video,
+                        isSending: message.isPending,
+                        progress: uploadProgress,
+                        onCancel: onCancelUpload,
+                        onTap: onOpenAttachment == null
+                            ? null
+                            : () => onOpenAttachment!(video),
                       ),
                     for (final document in documents)
                       _FileAttachment(
@@ -902,6 +925,86 @@ class _AttachmentUnavailable extends StatelessWidget {
 /// No object key, no bucket, no content type — §25 and §31 keep storage out of
 /// a parent's sight. The name the sender chose and how big it is are the two
 /// things that help someone decide whether to open it.
+/// CHATSCHED-010: a video in a bubble -- a play tile with its length when
+/// known; tapping it plays the video in the app (ChatVideoScreen).
+class _VideoAttachment extends StatelessWidget {
+  const _VideoAttachment({required this.attachment, required this.isSending, this.progress, this.onCancel, this.onTap});
+
+  final Attachment attachment;
+  final bool isSending;
+
+  /// PARENT-017: the upload's progress (0..1) while it sends; a spinner when unknown.
+  final double? progress;
+
+  /// PARENT-017: "Cancel sending", shown while it sends.
+  final VoidCallback? onCancel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final tokens = JawwidTokens.of(context);
+    final duration = attachment.duration;
+    final length = duration == null
+        ? null
+        : '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.spacing2),
+      child: Semantics(
+        button: true,
+        label: l10n.attachmentVideoLabel,
+        child: InkWell(
+          key: const ValueKey('video-attachment'),
+          onTap: isSending ? null : onTap,
+          borderRadius: Radii.card,
+          child: Container(
+            width: 220,
+            height: 124,
+            decoration: BoxDecoration(color: tokens.colorMediaSurface, borderRadius: Radii.card),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (isSending)
+                  Semantics(
+                    label: progress == null ? null : l10n.uploadingPercent('${(progress! * 100).round()}'),
+                    child: CircularProgressIndicator(
+                      key: const ValueKey('video-upload-progress'),
+                      value: progress,
+                      color: tokens.colorMediaOnSurface,
+                    ),
+                  )
+                else
+                  Icon(Icons.play_circle_fill, color: tokens.colorMediaOnSurface, size: 52),
+                if (isSending && onCancel != null)
+                  PositionedDirectional(
+                    top: 0,
+                    end: 0,
+                    child: IconButton(
+                      key: const ValueKey('video-upload-cancel'),
+                      tooltip: l10n.cancelUpload,
+                      // 48 px: the tap target the app keeps for every control.
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      icon: Icon(Icons.close, color: tokens.colorMediaOnSurface),
+                      onPressed: onCancel,
+                    ),
+                  ),
+                PositionedDirectional(
+                  start: Spacing.spacing3,
+                  bottom: Spacing.spacing2,
+                  child: Text(
+                    length == null ? l10n.attachmentVideoLabel : '${l10n.attachmentVideoLabel} · $length',
+                    style: TextStyle(color: tokens.colorMediaOnSurface, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FileAttachment extends StatelessWidget {
   const _FileAttachment({
     required this.attachment,

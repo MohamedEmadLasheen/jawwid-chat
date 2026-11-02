@@ -195,6 +195,7 @@ function RecentRow({
           <Icon name={direction === 'outgoing' ? 'callOutgoing' : 'callIncoming'} size={14} />
           <span className="sr-only">{direction === 'outgoing' ? copy.outgoing : copy.incoming}</span>
           <span>{status}</span>
+          {row.endReason === 'connection_lost' ? <span>· {copy.connectionLost}</span> : null}
           {row.durationSeconds ? <span dir="ltr">· {copy.duration(row.durationSeconds)}</span> : null}
         </span>
       </span>

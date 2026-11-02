@@ -143,6 +143,9 @@
   "callIncoming": "مكالمة واردة",
   "callConnecting": "جارٍ الاتصال…",
   "callReconnecting": "جارٍ إعادة الاتصال…",
+  "callWaitingForReconnect": "انقطع الاتصال. بانتظار عودة الطرف الآخر…",
+  "callEndedConnectionLost": "انتهت المكالمة: انقطع الاتصال",
+  "callHistoryConnectionLost": "انقطع الاتصال",
   "callAccept": "قبول",
   "callDecline": "رفض",
   "callEnd": "إنهاء",
@@ -381,6 +384,11 @@
   "@attachFile": {
     "description": "Attachment menu entry for a document."
   },
+  "attachVideo": "فيديو",
+  "attachRecordVideo": "تسجيل فيديو",
+  "videoRecordPermissionDenied": "يحتاج جَوِّد إلى إذن لاستخدام الكاميرا والميكروفون لتسجيل فيديو. يمكنك السماح بذلك من الإعدادات.",
+  "cancelUpload": "إلغاء الإرسال",
+  "uploadingPercent": "جارٍ الإرسال… {percent}٪",
   "attachmentPhotoLabel": "صورة",
   "@attachmentPhotoLabel": {
     "description": "Stands in for a photo where a message has no text."
@@ -1129,7 +1137,15 @@
   "resetCodeLabel": "الرمز المكوّن من 6 أرقام",
   "resetCodeInvalid": "هذا الرمز غير صالح أو منتهي أو مستخدم من قبل. اطلب رمزًا جديدًا من الأكاديمية.",
   "resetFinish": "تعيين كلمة المرور",
-  "recoveryOpen": "لا تستطيع تسجيل الدخول؟",
+  "recoveryOpen": "أولياء الأمور: لا تستطيع تسجيل الدخول؟",
+  "signInStaffResetHint": "المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.",
+  "changePasswordTitle": "تغيير كلمة المرور",
+  "changePasswordCurrentLabel": "كلمة المرور الحالية",
+  "changePasswordWrongCurrent": "هذه ليست كلمة مرورك الحالية.",
+  "changePasswordCurrentRequired": "أدخل كلمة مرورك الحالية.",
+  "changePasswordUnchanged": "اختر كلمة مرور مختلفة عن كلمة مرورك الحالية.",
+  "changePasswordAction": "تغيير كلمة المرور",
+  "changePasswordDone": "تم تغيير كلمة المرور. سُجِّل خروجك من أجهزتك الأخرى.",
   "recoveryTitle": "استعادة حسابك",
   "recoveryIntro": "اختر ما تحتاج المساعدة فيه. لن يستغرق الأمر سوى دقيقة.",
   "recoveryUnavailable": "لاستعادة حسابك، اطلب من مشرفك رمز إعادة تعيين لمرة واحدة، ثم أدخله هنا.",
@@ -1329,6 +1345,19 @@
         "type": "String"
       },
       "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "salesOtherPaymentsTitle": "دفعات أخرى",
+  "@salesOtherPaymentsTitle": {
+    "description": "ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request)."
+  },
+  "salesRefundedAmount": "استُرد {amount}",
+  "@salesRefundedAmount": {
+    "description": "ADMIN-012: how much of a payment was refunded.",
+    "placeholders": {
+      "amount": {
         "type": "String"
       }
     }
@@ -1588,6 +1617,8 @@
   "signupLocked": "أدخلت رمزًا خاطئًا مرات كثيرة. تواصل مع المشرف.",
   "feedbackEntryTitle": "ملاحظات عن المعلّم",
   "feedbackEntrySubtitle": "إشادة أو اقتراح أو شكوى",
+  "feedbackShortcutPraise": "الثناء على المعلّم",
+  "feedbackShortcutProblem": "الإبلاغ عن مشكلة",
   "feedbackTeacherLine": "المعلّم: {name}",
   "feedbackHistoryTitle": "ملاحظاتك السابقة",
   "feedbackEmpty": "لم ترسل أي ملاحظة بعد",
@@ -1762,6 +1793,7 @@
   "boardLayoutNarrowRuled": "مسطّر ضيق",
   "boardLayoutGrid": "مربعات",
   "boardLayoutArabicLines": "أسطر الخط العربي",
+  "boardLayoutDotted": "منقّط",
   "boardBackgroundWhite": "أبيض",
   "boardBackgroundCream": "كريمي",
   "boardBackgroundGrey": "رمادي",
@@ -1774,6 +1806,12 @@
   "boardToolEraser": "ممحاة (الخط كاملًا)",
   "boardToolAreaEraser": "ممحاة (جزء)",
   "boardToolText": "نص",
+  "boardToolLaser": "مؤشر الليزر",
+  "boardTextSmaller": "تصغير النص",
+  "boardTextBigger": "تكبير النص",
+  "boardTextBold": "عريض",
+  "boardTextColour": "لون النص",
+  "boardTextDone": "تم",
   "boardToolRect": "مستطيل",
   "boardToolEllipse": "دائرة",
   "boardToolTriangle": "مثلث",
@@ -1786,6 +1824,9 @@
   "boardZoomOut": "تصغير",
   "boardZoomFit": "ملاءمة الصفحة",
   "boardDeleteSelection": "حذف المحدد",
+  "boardCopy": "نسخ",
+  "boardPaste": "لصق",
+  "boardDuplicate": "تكرار",
   "boardColour": "اللون",
   "boardThickness": "السُّمك",
   "boardTajweed": "التجويد",
@@ -1793,8 +1834,6 @@
   "boardTajweedGhunnah": "الغنة",
   "boardTajweedIkhfa": "الإخفاء",
   "boardTajweedIzhar": "الإظهار",
-  "boardTextTitle": "نص",
-  "boardTextHint": "اكتب هنا",
   "boardElementUnknown": "لا يظهر في هذا الإصدار",
   "boardStampExcellent": "ممتاز",
   "boardStampWellDone": "أحسنت",
@@ -1839,5 +1878,31 @@
   "materialsAgeLabel": "العمر",
   "photoLabel": "صورة",
   "photoPositionLabel": "الصورة {position} من {count}",
-  "chatDraftLabel": "مسودة:"
+  "chatDraftLabel": "مسودة:",
+  "rewardPraiseExcellent": "ممتاز",
+  "rewardPraiseWellDone": "أحسنت",
+  "rewardPraiseGreat": "رائع",
+  "rewardPraiseChampion": "بطل",
+  "rewardTrayTitle": "المكافآت",
+  "rewardTrayFor": "إلى",
+  "rewardTrayEveryone": "الجميع",
+  "rewardTrayNoLesson": "تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.",
+  "rewardTrayStar": "نجمة",
+  "rewardTrayStickers": "ملصقات",
+  "rewardTrayPraise": "ثناء",
+  "rewardTrayOwnWords": "كلماتي…",
+  "rewardTrayCelebrate": "احتفال",
+  "rewardTrayUndo": "تراجع",
+  "rewardTraySent": "أُعطيت المكافأة",
+  "rewardTrayFailed": "لم تُسجَّل المكافأة. ما زالت على السبورة.",
+  "rewardCelebrationLine": "معلّمك يحتفل بك!",
+  "rewardSoundTitle": "صوت المكافآت",
+  "rewardSoundSubtitle": "نغمة قصيرة عندما يحتفل المعلّم بطفلك.",
+  "rewardStarLine": "{count, plural, zero{نجمة!} one{نجمة! نجمة واحدة في هذه الحصة} two{نجمة! نجمتان في هذه الحصة} few{نجمة! {count} نجوم في هذه الحصة} many{نجمة! {count} نجمة في هذه الحصة} other{نجمة! {count} نجمة في هذه الحصة}}",
+  "rewardBadgeBronze": "جهد رائع",
+  "rewardBadgeSilver": "جهد مذهل",
+  "rewardBadgeGold": "نجم متألّق",
+  "rewardToNextBadge": "{count, plural, zero{{badge}} one{نجمة واحدة أخرى لـ{badge}} two{نجمتان أخريان لـ{badge}} few{{count} نجوم أخرى لـ{badge}} many{{count} نجمة أخرى لـ{badge}} other{{count} نجمة أخرى لـ{badge}}}",
+  "rewardBadgeEarned": "الشارة: {badge}",
+  "rewardReportStars": "{count, plural, zero{لا نجوم} one{نجمة واحدة} two{نجمتان} few{{count} نجوم} many{{count} نجمة} other{{count} نجمة}}"
 }

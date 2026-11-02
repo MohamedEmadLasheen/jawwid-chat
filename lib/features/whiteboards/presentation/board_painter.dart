@@ -144,6 +144,15 @@ void paintBackground(Canvas canvas, PageLayout layout, PageBackground background
       for (var y = gap; y < h; y += gap) {
         canvas.drawLine(Offset(0, y), Offset(w, y), line);
       }
+    case PageLayout.dotted:
+      // PD-55: a dot every 32 units, the rule colour made a little firmer.
+      const gap = 32.0;
+      final dot = Paint()..color = line.color.withValues(alpha: math.min(1, line.color.a * 1.8));
+      for (var x = gap; x < w; x += gap) {
+        for (var y = gap; y < h; y += gap) {
+          canvas.drawCircle(Offset(x, y), 2.2, dot);
+        }
+      }
     case PageLayout.arabicLines:
       // A baseline and a lighter upper guide per band: the height of a
       // letter's body, so a child's letters sit on the line (design §4.2).
@@ -358,22 +367,36 @@ TextDirection textDirectionOf(String text) {
   return TextDirection.ltr;
 }
 
-TextPainter layoutBoardText(String text, double fontSize, Color color, double maxWidth) {
+/// The board's text style: one place, so the painter, the export and the
+/// in-place editor (PD-55) lay text out identically.
+TextStyle boardTextStyle(double fontSize, Color color, {bool bold = false}) =>
+    TextStyle(fontFamily: kBoardFont, fontSize: fontSize, color: color, height: 1.4, fontWeight: bold ? FontWeight.w700 : FontWeight.w400);
+
+TextPainter layoutBoardText(String text, double fontSize, Color color, double maxWidth, {bool bold = false}) {
   final dir = textDirectionOf(text);
   return TextPainter(
-    text: TextSpan(
-      text: text,
-      style: TextStyle(fontFamily: kBoardFont, fontSize: fontSize, color: color, height: 1.4),
-    ),
+    text: TextSpan(text: text, style: boardTextStyle(fontSize, color, bold: bold)),
     textDirection: dir,
     textAlign: dir == TextDirection.rtl ? TextAlign.right : TextAlign.left,
   )..layout(maxWidth: maxWidth);
 }
 
 void _paintText(Canvas canvas, TextElement t) {
-  final tp = layoutBoardText(t.text, t.fontSize, t.color, t.size.width);
+  final tp = layoutBoardText(t.text, t.fontSize, t.color, t.size.width, bold: t.bold);
   final dx = tp.textDirection == TextDirection.rtl ? t.size.width - tp.width : 0.0;
+  if (t.rotation == 0) {
+    tp.paint(canvas, t.topLeft + Offset(dx, 0));
+    return;
+  }
+  // PD-55: turned about the box's centre.
+  final c = t.box.center;
+  canvas
+    ..save()
+    ..translate(c.dx, c.dy)
+    ..rotate(t.rotation)
+    ..translate(-c.dx, -c.dy);
   tp.paint(canvas, t.topLeft + Offset(dx, 0));
+  canvas.restore();
 }
 
 /// Icon stamps are Material icons drawn as glyphs; text stamps are our font.
@@ -382,6 +405,14 @@ const Map<StampKind, IconData> kStampIcons = {
   StampKind.check: Icons.check_circle_rounded,
   StampKind.heart: Icons.favorite_rounded,
   StampKind.thumbsUp: Icons.thumb_up_rounded,
+  // PD-55: the reward stickers (the same icons as features/rewards' Sticker).
+  StampKind.medal: Icons.military_tech_rounded,
+  StampKind.trophy: Icons.emoji_events_rounded,
+  StampKind.rocket: Icons.rocket_launch_rounded,
+  StampKind.sun: Icons.wb_sunny_rounded,
+  StampKind.rainbow: Icons.looks_rounded,
+  StampKind.crown: Icons.workspace_premium_rounded,
+  StampKind.balloon: Icons.celebration_rounded,
 };
 
 void _paintStamp(Canvas canvas, StampElement s) {

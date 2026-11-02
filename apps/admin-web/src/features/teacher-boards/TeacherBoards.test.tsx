@@ -139,7 +139,7 @@ describe('PD-39 staff board viewer', () => {
   it('is not offered to an account without a whiteboard key', async () => {
     renderWithProviders(<AppRoutes />, { staff: noKey, route: '/teachers/boards' })
     expect(await screen.findByText("You don't have permission to access this.")).toBeInTheDocument()
-    renderWithProviders(<AppRoutes />, { staff: noKey, route: '/teachers/supervision' })
+    renderWithProviders(<AppRoutes />, { staff: noKey, route: '/teachers/files' })
     const nav = await screen.findByRole('navigation', { name: 'Teachers' })
     expect(within(nav).queryByRole('link', { name: 'Boards' })).not.toBeInTheDocument()
     expect(calls('GET', /\/teacher-boards/)).toHaveLength(0)

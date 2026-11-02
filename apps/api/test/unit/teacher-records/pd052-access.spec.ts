@@ -38,15 +38,22 @@ const SHARED_READS = ['GET /parent-feedback', 'GET /teacher-supervision/director
 
 describe('PD-52: the new keys open what the old keys opened, page by page', () => {
   it('teacher_attendance.view opens page A\'s reads', () => {
-    expect(opened('teacher_attendance.view')).toEqual([...ATTENDANCE_READS, ...SHARED_READS].sort());
+    expect(opened('teacher_attendance.view')).toEqual([...ATTENDANCE_READS, ...SHARED_READS, 'GET /teacher-records/teachers/:id/summary'].sort());
   });
 
   it('teacher_grants.view opens page B\'s reads', () => {
-    expect(opened('teacher_grants.view')).toEqual(['GET /teacher-files/rewards', ...SHARED_READS].sort());
+    expect(opened('teacher_grants.view')).toEqual(
+      ['GET /teacher-files/rewards', 'GET /teacher-records/testimonials', 'GET /teacher-records/teachers/:id/summary', ...SHARED_READS].sort(),
+    );
   });
 
   it('teacher_attendance.record opens lateness, absences and complaint entries', () => {
-    expect(opened('teacher_attendance.record')).toEqual(['POST /lessons/:id/lateness', 'POST /teacher-files/:teacherId/entries', 'POST /teachers/:id/absences']);
+    expect(opened('teacher_attendance.record')).toEqual([
+      'GET /teacher-records/teachers/:id/students',
+      'POST /lessons/:id/lateness',
+      'POST /teacher-files/:teacherId/entries',
+      'POST /teachers/:id/absences',
+    ]);
   });
 
   it('teacher_attendance.decide opens the decisions: leave, the ladder, upholding, resolving, the parent\'s reply', () => {
@@ -59,11 +66,20 @@ describe('PD-52: the new keys open what the old keys opened, page by page', () =
       'POST /teacher-leave-requests/:id/approve',
       'POST /teacher-leave-requests/:id/cancel',
       'POST /teacher-leave-requests/:id/decline',
+      'POST /teacher-records/entries/:id/void',
     ]);
   });
 
   it('teacher_grants.record opens the grant without an amount and the reply to praise', () => {
-    expect(opened('teacher_grants.record')).toEqual(['POST /parent-feedback/:id/reply', 'POST /parent-feedback/:id/take', 'POST /teachers/:id/bonus']);
+    expect(opened('teacher_grants.record')).toEqual([
+      'GET /teacher-records/teachers/:id/students',
+      'POST /parent-feedback/:id/reply',
+      'POST /parent-feedback/:id/take',
+      'POST /teacher-records/entries/:id/void',
+      'POST /teacher-records/praise/:id/share',
+      'POST /teachers/:id/bonus',
+      'POST /teachers/:id/testimonials',
+    ]);
   });
 
   it('every route an old key opens accepts a new key too (so the old keys can go in PR-9)', () => {

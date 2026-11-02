@@ -501,6 +501,12 @@ void main() {
 
 /// Hands back one image, or null for a parent who backed out.
 class _Picker implements MediaPicker {
+  @override
+  Future<PendingAttachment?> pickVideo() async => null;
+
+  @override
+  Future<PendingAttachment?> recordVideo() async => null;
+
   _Picker(this._image);
 
   final PendingAttachment? _image;

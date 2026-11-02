@@ -444,6 +444,29 @@ describe('PD-27 over HTTP', () => {
     expect((await http(m.superAdmin.subject, 'POST', `/payments/${card.id}/refunds`, { amountMinor: 20001, reason: 'x' })).code).toBe(CommErrorCode.BILLING_STATE);
   });
 
+  it('ADMIN-012: "Paid" counts every standing payment of the family -- instalment-linked or standalone -- minus refunds, never a voided one', async () => {
+    const { f, supervisor } = familyOf(17);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Term', items: [{ amountMinor: 9000, dueDate: '2026-11-01' }, { amountMinor: 9000, dueDate: '2026-12-01' }],
+    });
+    const [first] = plan.json.instalments as any[];
+    expect((await http(supervisor.subject, 'POST', `/instalments/${first.id}/payment`, { paidOn: today(), method: 'cash' })).status).toBe(201);
+    // Standalone: one standing and refunded in part, one voided.
+    const standing = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5000, paidOn: today(), reference: 'R-1' });
+    const standingId = standing.json.payments.find((p: any) => p.reference === 'R-1').id;
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${standingId}/refunds`, { amountMinor: 2000, reason: 'a lesson not held' })).status).toBe(201);
+    const mistake = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 1000, paidOn: today(), reference: 'R-2' });
+    const mistakeId = mistake.json.payments.find((p: any) => p.reference === 'R-2').id;
+    expect((await http(m.salesManager.subject, 'POST', `/payments/${mistakeId}/void`, { reason: 'wrong family' })).status).toBe(201);
+
+    const staff = (await http(m.superAdmin.subject, 'GET', `/families/${f.id}/billing`)).json;
+    // 9000 (the instalment) + 5000 - 2000 (standalone, refunded in part); the voided 1000 never.
+    expect(staff.totals).toEqual([{ currency: 'AED', paidMinor: 12000, outstandingMinor: 9000, overdueMinor: 0 }]);
+    // The parent's view adds up the same.
+    expect((await http(f.parent.subject, 'GET', '/me/billing')).json.totals).toEqual(staff.totals);
+  });
+
   it('Stripe refusing a checkout reaches nobody raw: the app gets 503 PAYMENTS_UNAVAILABLE, the link page a plain message', async () => {
     const { f } = familyOf(7);
     const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {

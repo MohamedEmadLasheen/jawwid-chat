@@ -79,7 +79,7 @@ class _Uploads implements AttachmentUploader {
   final puts = <(String, int, Map<String, String>)>[];
 
   @override
-  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async =>
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers, void Function(int sent, int total)? onProgress, UploadCancel? cancel}) async =>
       puts.add((uploadUrl, bytes.length, headers));
 }
 
@@ -204,9 +204,16 @@ void main() {
     BoardImages images() => container.read(boardImagesProvider('b1').notifier);
     const element = ImageElement(id: 'i1', assetId: 'a1', rect: ui.Rect.fromLTWH(0, 0, 80, 60));
 
+    /// Lets fetching and decoding finish. Decoding is engine work that takes real time --
+    /// on a CI runner far more than a few turns of the event loop (CI-001 saw it still
+    /// loading) -- so after those turns it waits, up to 5 s, while the image is loading.
     Future<void> settle() async {
       for (var i = 0; i < 20; i++) {
         await Future<void>.delayed(Duration.zero);
+      }
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (images().lookup('a1').status == BoardImageStatus.loading && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
       }
     }
 
