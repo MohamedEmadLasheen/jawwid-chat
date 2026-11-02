@@ -88,6 +88,16 @@ class FakeStoryVideoPlayer implements StoryVideoPlayer {
     _emit(_current.copyWith(state: StoryVideoState.paused));
   }
 
+  /// Every position asked for (a chat video's seek bar).
+  final seeks = <Duration>[];
+
+  @override
+  Future<void> seek(Duration position) async {
+    seeks.add(position);
+    if (!_hasVideo) return;
+    _emit(_current.copyWith(position: position));
+  }
+
   @override
   Future<void> stop() async {
     stopCalls += 1;
