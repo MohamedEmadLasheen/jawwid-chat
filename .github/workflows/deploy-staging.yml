@@ -249,6 +249,8 @@ jobs:
           APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
           APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
           APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+          # S-06: iOS VoIP pushes for incoming calls; off unless the variable says true.
+          APNS_VOIP_ENABLED: ${{ vars.APNS_VOIP_ENABLED }}
           APNS_PRODUCTION: 'false'
           # A URL, not a secret -- but the staging Environment was provisioned
           # (2026-09-24) with it as a secret, so either is accepted.
