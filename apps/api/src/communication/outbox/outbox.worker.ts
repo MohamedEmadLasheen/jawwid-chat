@@ -734,7 +734,8 @@ export class OutboxWorker {
         priority: complaint ? 'normal' : 'low',
         // Praise is an entry only (plan §7): no push.
         push: complaint,
-        subject: payload.entryId ? { type: 'teacher_supervision_entry', id: payload.entryId as string } : { type: 'parent_feedback', id: record },
+        // The record's kind only; the page reads the record (PD-32 confinement: src/teacher-file).
+        subject: { type: complaint ? 'teacher_complaint' : 'teacher_praise', id: record },
         refs: { teacherId, page: complaint ? 'attendance' : 'grants' },
         scheduledAt: new Date(),
       });

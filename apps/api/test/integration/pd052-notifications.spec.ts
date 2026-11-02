@@ -57,7 +57,7 @@ describe('PD-52 PR-6: who is told', () => {
 
     for (const who of [tmgr, s.ownerId]) {
       const [entry] = await items(who, 'teacher_complaint_received');
-      expect(entry).toMatchObject({ category: 'task', subjectType: 'teacher_supervision_entry' });
+      expect(entry).toMatchObject({ category: 'task', subjectType: 'teacher_complaint' });
       expect(entry?.action).toEqual({ kind: 'open_teacher_records', teacherId: s.teacherId, page: 'attendance' });
       expect(await pushes(who, 'teacher_complaint_received')).toHaveLength(1);
     }
