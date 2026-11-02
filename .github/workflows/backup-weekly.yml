@@ -1,0 +1,80 @@
+name: Weekly database backup (encrypted, off-site)
+
+# Store readiness: a backup that does not wait for a deploy.
+#
+# The managed database's daily backups and 7-day point-in-time recovery are the
+# first line (docs/infrastructure/backup-recovery.md §2). The pre-deploy dump is
+# the second, but it exists only when someone deploys and lives 30 days as a
+# GitHub artifact. This is the third: every Sunday, whether or not anyone
+# deployed, an ENCRYPTED logical dump of the chat schema goes to the Spaces
+# bucket and is kept 8 weeks.
+#
+# Every credential comes from the `production` GitHub Environment; none is in
+# the repository. The passphrase must also be held outside GitHub (secrets here
+# are write-only): an archive nobody can decrypt is not a backup (§3).
+#
+# Repository variable BACKUP_BUCKET (optional) names a dedicated bucket; without
+# it the copy goes to STORAGE_BUCKET under backups/weekly/, which no attachment
+# key can reach (attachments live under conversations/ and other prefixes).
+
+on:
+  schedule:
+    - cron: '17 2 * * 0' # Sundays 02:17 UTC: quiet hours in Cairo, off the top of the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-weekly
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted dump of chat -> Spaces, keep 8 weeks
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The backup credentials are present
+        # Fails loudly, never a silent no-op: a scheduled job that skips is a
+        # backup nobody knows is missing.
+        env:
+          HAS_DB: ${{ secrets.DATABASE_URL != '' }}
+          HAS_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE != '' }}
+          HAS_KEY: ${{ secrets.STORAGE_ACCESS_KEY != '' && secrets.STORAGE_SECRET_KEY != '' }}
+          HAS_BUCKET: ${{ vars.BACKUP_BUCKET != '' || vars.STORAGE_BUCKET != '' }}
+        run: |
+          rc=0
+          [ "$HAS_DB" = "true" ] || { echo "::error title=Backup::DATABASE_URL is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_PASSPHRASE" = "true" ] || { echo "::error title=Backup::BACKUP_ENCRYPTION_PASSPHRASE is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_KEY" = "true" ] || { echo "::error title=Backup::STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY are not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_BUCKET" = "true" ] || { echo "::error title=Backup::neither BACKUP_BUCKET nor STORAGE_BUCKET is set"; rc=1; }
+          exit $rc
+
+      - name: Back up the database, encrypted in the pipe
+        # backup-db.sh refuses without the key for APP_ENV=production, before
+        # pg_dump runs; no plaintext archive ever exists on the runner.
+        env:
+          APP_ENV: production
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: scripts/infra/backup-db.sh --out ./backups --schema chat
+
+      - name: Store it in Spaces, read each object back, and keep the last 8 weeks
+        env:
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_REGION: ${{ vars.STORAGE_REGION }}
+          BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET || vars.STORAGE_BUCKET }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+          BACKUP_RETENTION_DAYS: '56'
+        run: |
+          scripts/infra/backup-offsite.sh upload ./backups
+          scripts/infra/backup-offsite.sh prune
+
+      - name: Remove the local copy
+        if: always()
+        run: rm -rf ./backups
