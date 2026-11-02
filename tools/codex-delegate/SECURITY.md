@@ -35,6 +35,18 @@
   project's own approval rules.
 
 ## Known limits
+- A process the agent deliberately detaches from its process group (`setsid`) can outlive the run and keep
+  writing inside the worktree and the run's temp dir (it stays sandboxed). The engine never runs git
+  through the worktree's `.git` pointer (the git dir is pinned), re-checks that pointer in `status`,
+  `review` and `cleanup`, refuses a review whose git dir resolves into its own folders, and tells the lead to
+  inspect through the main repository (`inspect_with` in `result.json`). Never run git, tests or builds
+  yourself inside a task worktree.
+- Folders that were already ignored before the run (for example `node_modules` from `--prepare`) are
+  tracked as one entry, so changes inside them are not detected. Verification runs sandboxed; do not run
+  unsandboxed commands in a task worktree.
+- A catch-all Code Owner rule (`*` or `/`) protects every path, so nothing can be delegated in that
+  repository until the rule is narrower. That is deliberate (it fails closed).
+- Runs made before 2.1 cannot be retried (no pinned git dir); start a new task.
 - The secret scan is pattern-based and cannot catch every encoding.
 - With `--test-network`, sandboxed tests can reach the network (needed for local databases). Leave it off
   unless the suite needs it.

@@ -85,7 +85,12 @@ remove_block() { # $1 = target
   changes=$((changes + 1))
   if [ "$MODE" = --check ]; then say "would remove block from: $1"; return 0; fi
   backup "$1"
-  awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$1" > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"
+  local stripped; stripped="$(awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$1")"
+  if [ -L "$1" ]; then
+    printf '%s\n' "$stripped" > "$1"   # write through a symlinked file; never replace the link
+  else
+    printf '%s\n' "$stripped" > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"
+  fi
   say "removed managed block: $1"
 }
 # A whole file the installer owns. An existing file without our marker belongs to
@@ -148,7 +153,6 @@ case "$MODE" in
       is_ours "$f" || { say "SKIPPED (not ours): $f"; continue; }
       backup "$f"; rm -f "$f"; rmdir "$(dirname "$f")" 2>/dev/null || true; say "removed: $f"
     done
-    rm -f "$BIN_DIR/codex-delegate" 2>/dev/null || true
     remove_block "$CLAUDE_HOME/CLAUDE.md"
     remove_block "$CODEX_HOME_DIR/AGENTS.md"
     if [ -d "$AI_HOME/engine" ]; then

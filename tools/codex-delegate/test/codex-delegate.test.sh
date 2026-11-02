@@ -261,5 +261,27 @@ plan t37; echo 'mkdir -p docs; echo d > docs/x.md; echo "export const x = 37;" >
 RUN_IN="$O" run --task-id t37 --brief "$BRIEF" --base old-base --allow 'src/*' --allow 'docs/*' --max-attempts 1 || true
 check "an old --base cannot drop the default branch's project policy" '[ "$(git -C "$(RUN_IN="$O" wt t37)" show --name-only --format= HEAD)" = src/a.ts ]'
 
+echo "16. after the run: a detached process plants a git dir and rewrites .git"
+w1="$(wt t1)"; rd1="$(res t1 run_dir)"; fake="$rd1/tmp/.git/worktrees/x"; mkdir -p "$fake"
+printf '%s\n' "$rd1/tmp/.git" > "$fake/commondir"; git -C "$REPO" rev-parse HEAD > "$fake/HEAD"
+mkdir -p "$rd1/tmp/.git/objects" "$rd1/tmp/.git/refs"; printf '[filter "x"]\n\tclean = touch %s/FILTERED\n' "$SANDBOX" > "$rd1/tmp/.git/config"
+printf 'gitdir: %s\n' "$fake" > "$w1/.git"
+check "review refuses the planted git dir" 'grep -q "unexpected .git pointer" <<<"$( cd "$w1" && bash "$ENGINE" review --task-id r9 --base main 2>&1 || true )" && [ ! -e "$SANDBOX/FILTERED" ]'
+check "status restores the pointer and warns" 'grep -q "altered after the run" <<<"$( cd "$REPO" && bash "$ENGINE" status t1 2>&1 )" && grep -q "worktrees" "$w1/.git" && ! grep -q "$rd1" "$w1/.git"'
+check "result.json says how to inspect safely" 'res t1 inspect_with | grep -q "git -C $REPO show"'
+rd9="$(res t9 run_dir 2>/dev/null || true)"
+plan t40; echo 'echo "export const x = 40;" > src/a.ts' > "$FAKE_CODEX_PLAN/1"; run --task-id t40 --brief "$BRIEF" --allow 'src/*' --max-attempts 3 --test false || true
+sed -i '' '/^gitdir=/d; /^gitfile=/d' "$(res t40 run_dir)/state"
+check "retry of a pre-2.1 run is refused, not half-run" 'grep -q "older than 2.1" <<<"$( cd "$REPO" && bash "$ENGINE" retry --task-id t40 --feedback "$BRIEF" 2>&1 || true )"'
+
+echo "17. a test-created file name with a newline cannot delete a candidate file"
+plan t41; cat > "$FAKE_CODEX_PLAN/1" <<'S'
+echo "export const x = 41;" > src/a.ts
+printf 'touch "$(printf "src/a.ts\\nzz")"\n' > src/t.sh
+S
+run --task-id t41 --brief "$BRIEF" --allow 'src/*' --test 'bash src/t.sh' || true
+check "candidate file still in the worktree and the commit" '[ -f "$(wt t41)/src/a.ts" ] && [ "$(git -C "$(wt t41)" show HEAD:src/a.ts)" = "export const x = 41;" ]'
+check "post-test list is not mangled" 'res t41 post_test_changes_discarded | grep -q "src/a.ts\\\\nzz\|a.ts.*zz"'
+
 echo; echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

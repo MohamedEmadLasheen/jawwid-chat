@@ -66,9 +66,23 @@ checkout_gitdir_sane() {
   [ -L "$1/.git" ] && return 1
   [ -d "$1/.git" ] && return 0
   [ -f "$1/.git" ] || return 1
-  local target; target="$(sed -n 's/^gitdir: //p' "$1/.git" | head -1)"
+  local target real dir_real; target="$(sed -n 's/^gitdir: //p' "$1/.git" | head -1)"
   case "$target" in */.git/worktrees/*) ;; *) return 1 ;; esac
-  [ -d "$target" ] && [ -f "$target/commondir" ] && [ -f "$target/HEAD" ]
+  [ -d "$target" ] && [ -f "$target/commondir" ] && [ -f "$target/HEAD" ] || return 1
+  real="$(cd "$target" && pwd -P)"; dir_real="$(cd "$1" && pwd -P)"
+  # Never a git dir planted inside the engine's run or worktree folders, or inside the checkout itself.
+  case "$real/" in "$(cd "$AI_HOME" 2>/dev/null && pwd -P)/"*|"$(cd "$WORKTREES" 2>/dev/null && pwd -P)/"*|"$dir_real/"*) return 1 ;; esac
+  # An engine task worktree must still hold the exact pointer recorded when it was created.
+  local wt_root; wt_root="$(cd "$WORKTREES" 2>/dev/null && pwd -P || true)"
+  if [ -n "$wt_root" ]; then
+    case "$dir_real/" in "$wt_root/"*)
+      local st; st="$(grep -rlxF "worktree=$1" "$RUNS" --include=state 2>/dev/null | head -1 || true)"
+      [ -n "$st" ] || st="$(grep -rlxF "worktree=$dir_real" "$RUNS" --include=state 2>/dev/null | head -1 || true)"
+      [ -n "$st" ] || return 1
+      [ "$(cat "$1/.git")" = "$(sed -n 's/^gitfile=//p' "$st" | tail -1)" ] || return 1 ;;
+    esac
+  fi
+  return 0
 }
 need() { [ $# -ge 2 ] && [ -n "$2" ] || die "option $1 needs a value"; }
 
@@ -217,6 +231,7 @@ on_exit() {
     write_result error > /dev/null 2>&1 || true
   fi
   rm -f "$RUN/lock/pid"; rmdir "$RUN/lock" 2>/dev/null || true
+  case "$rc" in 0|1|2|3) ;; *) exit 1 ;; esac   # documented exit codes only
 }
 
 acquire_lock() {
@@ -576,15 +591,18 @@ discard_post_test_changes() { # $1 = candidate tree
   # untracked files. Comparing against HEAD would list every candidate file.
   GIT_INDEX_FILE="$ATT/post.index" g read-tree "$1"
   GIT_INDEX_FILE="$ATT/post.index" g update-index -q --refresh >/dev/null 2>&1 || true
-  { GIT_INDEX_FILE="$ATT/post.index" g diff-files --name-only -z | tr '\0' '\n' | sed 's/^/ M /'
-    GIT_INDEX_FILE="$ATT/post.index" g ls-files --others --exclude-standard -z | tr '\0' '\n' | sed 's/^/?? /'
-  } | sed '/^ M $/d; /^?? $/d' > "$ATT/post-test-changes.txt" || true
+  GIT_INDEX_FILE="$ATT/post.index" g diff-files --name-only -z > "$ATT/post-modified.z" || true
+  GIT_INDEX_FILE="$ATT/post.index" g ls-files --others --exclude-standard -z > "$ATT/post-untracked.z" || true
+  : > "$ATT/post-test-changes.txt"
+  while IFS= read -r -d '' f; do printf '%q\n' "$f" >> "$ATT/post-test-changes.txt"; done < "$ATT/post-modified.z"
+  while IFS= read -r -d '' f; do printf '%q\n' "$f" >> "$ATT/post-test-changes.txt"; done < "$ATT/post-untracked.z"
   if [ -s "$ATT/post-test-changes.txt" ]; then
-    log "the tree changed after it was frozen (tests or leftover processes); discarding: $(cut -c4- "$ATT/post-test-changes.txt" | tr '\n' ' ')"
+    log "the tree changed after it was frozen (tests or leftover processes); discarding: $(tr '\n' ' ' < "$ATT/post-test-changes.txt")"
     GIT_INDEX_FILE="$ATT/post.index" g checkout-index -a -f
-    while IFS= read -r f; do
-      case "$f" in '?? '*) safe_rm "${f:3}" ;; esac
-    done < "$ATT/post-test-changes.txt"
+    while IFS= read -r -d '' f; do
+      case "$f" in *[[:cntrl:]]*) log "left in place (unsafe name, not committed): $(printf '%q' "$f")"; continue ;; esac
+      safe_rm "$f"
+    done < "$ATT/post-untracked.z"
   fi
   ignored_snapshot "$ATT/ignored-after-tests.txt"
   LC_ALL=C comm -13 "$ATT/ignored-before-tests.txt" "$ATT/ignored-after-tests.txt" > "$ATT/ignored-created-by-tests.txt" || true
@@ -632,9 +650,11 @@ result = {
     "tests_verified_by_wrapper": load(os.path.join(att, "tests.json"), []),
     "verification_sandbox": "none (owner/lead chose --test-unsandboxed)" if st.get("test_unsandboxed") == "1" else ("workspace-write, network " + ("on" if st.get("test_network") == "1" else "off")),
     "ignored_files_removed": [l for l in text("ignored-created.txt").splitlines() if l],
-    "post_test_changes_discarded": [l[3:] for l in text("post-test-changes.txt").splitlines() if l] + [l for l in text("ignored-created-by-tests.txt").splitlines() if l],
+    "post_test_changes_discarded": [l for l in text("post-test-changes.txt").splitlines() if l] + [l for l in text("ignored-created-by-tests.txt").splitlines() if l],
     "outstanding_problems": problems,
     "run_dir": run,
+    "inspect_with": ("git -C %s show %s" % (st.get("repo"), commit)) if commit else None,
+    "inspect_note": "Inspect through the main repository, never with git inside the task worktree (its .git pointer is agent-writable).",
 }
 json.dump(result, open(os.path.join(run, "result.json"), "w"), indent=2, ensure_ascii=False)
 print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -784,7 +804,9 @@ cmd_retry() {
   done
   [ -n "${TASK:-}" ] || die "retry: --task-id is required"
   [ -f "$fb" ] || die "retry: --feedback FILE is required"
-  load_task "$repo_arg"; acquire_lock
+  load_task "$repo_arg"
+  [ -n "$(state_get gitdir)" ] && [ -n "$(state_get gitfile)" ] || die "retry: this run was made by an engine older than 2.1 (no pinned git dir); start a new task instead"
+  acquire_lock
   [ -d "$WT" ] || die "retry: worktree $WT is gone"
   [ "$(state_get attempts)" -lt "$(state_get max)" ] || die "retry: attempt limit $(state_get max) reached; the lead takes over or re-scopes"
   cp "$fb" "$RUN/feedback-$(( $(state_get attempts) + 1 )).md"
@@ -810,7 +832,13 @@ cmd_review() {
     esac
   done
   [ -n "${TASK:-}" ] || die "review: --task-id is required"; valid_id "$TASK"
-  resolve_repo "$dir"; dir="$REPO"
+  # Locate the checkout root by walking up to the first `.git` entry, with no git
+  # involved, and vet its pointer before any git command reads it.
+  local top; top="$(cd "${dir:-$PWD}" && pwd)"
+  while [ "$top" != / ] && [ ! -e "$top/.git" ] && [ ! -L "$top/.git" ]; do top="$(dirname "$top")"; done
+  [ -e "$top/.git" ] || [ -L "$top/.git" ] || die "review: not inside a Git checkout: ${dir:-$PWD}"
+  checkout_gitdir_sane "$top" || die "review: $top has an unexpected .git pointer; refusing"
+  resolve_repo "$top"; dir="$REPO"
   check_protected_repo "$risk" "$approval"
   [ -n "$base" ] || base="$(default_base)"
   head="${head:-HEAD}"
@@ -819,7 +847,6 @@ cmd_review() {
   base_sha="$(git -C "$dir" rev-parse --verify --quiet "$base^{commit}")" || die "review: unknown base $base"
   # Review what the branch changed since it left the base, not the base's newer commits reversed.
   base_sha="$(git -C "$dir" merge-base "$base_sha" "$head_sha")" || die "review: $base and $head share no history"
-  checkout_gitdir_sane "$dir" || die "review: $dir has an unexpected .git pointer; refusing"
   [ "$(gx "$dir" rev-parse HEAD)" = "$head_sha" ] || die "review: $dir is not checked out at $head_sha; the reviewer reads source from it"
   [ -z "$(gx "$dir" status --porcelain)" ] || die "review: $dir has uncommitted changes; review needs a clean tree"
 
@@ -871,6 +898,7 @@ cmd_status() {
   done
   [ -n "${TASK:-}" ] || die "status: --task-id is required"
   load_task "$repo_arg"
+  if [ -d "$WT" ]; then ATT="$RUN"; gitfile_intact || log "WARNING: $WT's .git pointer had been altered after the run; restored. Treat the run as hostile."; fi
   if [ -f "$RUN/result.json" ]; then cat "$RUN/result.json"; else cat "$RUN/state"; fi
 }
 

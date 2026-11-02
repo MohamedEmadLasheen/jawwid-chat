@@ -47,4 +47,11 @@ check "uninstall leaves foreign skill alone" 'grep -q "^mine$" "$H2/.claude/skil
 H3="$H/third"; mkdir -p "$H3/dotfiles" "$H3/.claude"; printf 'mine\n' > "$H3/dotfiles/CLAUDE.md"; ln -s "$H3/dotfiles/CLAUDE.md" "$H3/.claude/CLAUDE.md"
 JAWWID_AI_HOME="$H3/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H3/bin" CLAUDE_CONFIG_HOME="$H3/.claude" CODEX_HOME="$H3/.codex" AGENTS_SKILLS_HOME="$H3/.agents/skills" bash "$INSTALL" > "$H3/log" 2>&1
 check "symlinked CLAUDE.md written through, link kept" '[ -L "$H3/.claude/CLAUDE.md" ] && grep -q "codex-delegate:begin" "$H3/dotfiles/CLAUDE.md" && head -1 "$H3/dotfiles/CLAUDE.md" | grep -qx mine'
+H4="$H/fourth"; mkdir -p "$H4/bin" "$H4/dotfiles" "$H4/.claude"; printf '#!/bin/sh\necho someone else\n' > "$H4/bin/codex-delegate"; chmod +x "$H4/bin/codex-delegate"
+printf 'mine\n' > "$H4/dotfiles/CLAUDE.md"; ln -s "$H4/dotfiles/CLAUDE.md" "$H4/.claude/CLAUDE.md"
+E4="JAWWID_AI_HOME=$H4/.jawwid-ai CODEX_DELEGATE_BIN_DIR=$H4/bin CLAUDE_CONFIG_HOME=$H4/.claude CODEX_HOME=$H4/.codex AGENTS_SKILLS_HOME=$H4/.agents/skills"
+env JAWWID_AI_HOME="$H4/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H4/bin2" CLAUDE_CONFIG_HOME="$H4/.claude" CODEX_HOME="$H4/.codex" AGENTS_SKILLS_HOME="$H4/.agents/skills" bash "$INSTALL" > /dev/null 2>&1 || true
+env JAWWID_AI_HOME="$H4/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H4/bin" CLAUDE_CONFIG_HOME="$H4/.claude" CODEX_HOME="$H4/.codex" AGENTS_SKILLS_HOME="$H4/.agents/skills" bash "$INSTALL" --uninstall > "$H4/ulog" 2>&1 || true
+check "uninstall never deletes a foreign codex-delegate binary" 'grep -q "someone else" "$H4/bin/codex-delegate"'
+check "uninstall writes through a symlinked CLAUDE.md" '[ -L "$H4/.claude/CLAUDE.md" ] && ! grep -q "codex-delegate:begin" "$H4/dotfiles/CLAUDE.md" && grep -qx mine "$H4/dotfiles/CLAUDE.md"'
 echo; echo "$pass passed, $fail failed"; [ "$fail" -eq 0 ]

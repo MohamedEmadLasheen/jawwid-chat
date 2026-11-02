@@ -38,13 +38,16 @@ clearly independent. Never switch anything to API billing.
 3. Read the JSON it prints (also in `result.json`). Exit codes: 0 passed, 1 failed/partial, 2 usage error,
    3 blocked. Trust `tests_verified_by_wrapper` (real exit codes, run sandboxed) over
    `tests_reported_by_codex`.
-4. Review the commit yourself: `git -C <worktree> show`. If it needs work, write concrete feedback and run
+4. Review the commit yourself **through the main repository**: run the `inspect_with` command from the result
+   (`git -C <repo> show <commit_sha>`). Never run git, tests or build commands inside a task worktree yourself:
+   its files and `.git` pointer were writable by the agent. If it needs work, write concrete feedback and run
    `codex-delegate retry --task-id <id> --feedback <file>` (3 attempts in total).
 5. Integrate: push the task branch or cherry-pick it into your branch, open the PR the project's way, and
    merge only under the project's approval rules. Then `codex-delegate cleanup --task-id <id>`.
 
 ## 3. Independent review
-From a **clean** checkout at the head commit (a task worktree, or a dedicated clone):
+From a **clean** checkout at the head commit (a dedicated clone or the lead's own worktree; the engine refuses a
+task worktree whose `.git` pointer changed):
 `codex-delegate review --task-id review-<name> --base <base-ref> [--head <ref>] [--focus <file>]`.
 It diffs from the merge base, gives Codex the diff as a file (read-only sandbox), and returns findings as
 JSON. Check every finding in the code, then report agreements, disagreements and severities. A Codex
