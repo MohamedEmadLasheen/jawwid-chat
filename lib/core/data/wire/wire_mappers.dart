@@ -263,7 +263,10 @@ abstract final class WireMappers {
             ? 'deleted'
             : lastMessage['type'] == 'system'
                 ? 'system:${lastMessage['systemKind'] ?? ''}'
-                : (lastText is String && lastText.isNotEmpty)
+                // RQA-F4: a card is named by its kind (the server sends the kind, never wording).
+                : lastMessage['type'] == 'card'
+                    ? 'card:${lastMessage['cardKind'] ?? ''}'
+                    : (lastText is String && lastText.isNotEmpty)
                     ? null
                     : lastMessage['type'] as String?;
 

@@ -63,7 +63,10 @@ export const S = {
 
   // Stats
   statsLabel: { en: 'Figures for this view', ar: 'أرقام هذا العرض' },
-  teachingHours: { en: 'Teaching hours', ar: 'ساعات التدريس' },
+  // CHATSCHED-014, decision A (department head, 2026-11-02): this is PD-38's *booked*
+  // time -- any lesson reserved for a student, whatever its outcome -- so it is named so.
+  // What was actually held is the hint below.
+  teachingHours: { en: 'Booked hours', ar: 'الساعات المحجوزة' },
   heldSoFar: { en: '{h} held', ar: '{h} منعقدة' },
   students: { en: 'Students', ar: 'الطلاب' },
   studentsHint: { en: '+{trial} trial · {paused} paused', ar: '+{trial} تجريبي · {paused} متوقف' },
@@ -75,8 +78,8 @@ export const S = {
   pausedHours: { en: 'Paused', ar: 'متوقف' },
   freeHours: { en: 'Free (hourly)', ar: 'متاح (بالساعة)' },
   capacityNote: {
-    en: 'Shift, empty and leave count every lesson of the teachers shown; teaching hours and students count only the matching lessons.',
-    ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ ساعات التدريس والطلاب تحتسب الحصص المطابقة فقط.',
+    en: 'Shift, empty and leave count every lesson of the teachers shown; booked hours and students count only the matching lessons.',
+    ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ الساعات المحجوزة والطلاب تحتسب الحصص المطابقة فقط.',
   },
   byTeacher: { en: 'By teacher', ar: 'حسب المعلم' },
   colShift: { en: 'Shift', ar: 'الشيفت' },
@@ -191,6 +194,23 @@ export const STATUS_LABEL: Record<CalendarStatus, Pair> = {
   trial: { en: 'Trial', ar: 'تجريبي' },
   paused: { en: 'Temporarily paused', ar: 'متوقف مؤقتاً' },
   moved: { en: 'Moved away', ar: 'نُقلت' },
+}
+
+/**
+ * CHATSCHED-014: a lesson nobody teaches -- cancelled, excused, the teacher
+ * absent -- is 'active' to calendar_status, so its block read "Active" like a
+ * booked one. For these the block says its outcome (OUTCOME_LABEL, as the
+ * details panel does). Their time still counts as booked (PD-38 §2: booked is
+ * any lesson reserved for a student, whatever its outcome).
+ */
+const NOT_TAUGHT: ReadonlySet<string> = new Set(['admin_cancelled', 'student_apology', 'teacher_apology', 'teacher_no_show'])
+
+/** Whether a block is a lesson nobody teaches (drawn muted and struck through). */
+export const notTaught = (l: { anonymous?: true; outcome?: string | null }) => !l.anonymous && !!l.outcome && NOT_TAUGHT.has(l.outcome)
+
+/** What a block says it is: the outcome for a lesson nobody teaches, else its calendar status. */
+export function statusOf(l: { status: CalendarStatus; anonymous?: true; outcome?: string | null }): Pair {
+  return notTaught(l) ? OUTCOME_LABEL[l.outcome as string]! : STATUS_LABEL[l.status]
 }
 
 export const KIND_LABEL: Record<LessonKind, Pair> = {

@@ -463,6 +463,41 @@ void main() {
     });
   });
 
+  group('PD-55 Phase 1 (4): emoji and stickers', () {
+    testWidgets('the stamp tool offers the emoji picker and the stickers; a chosen emoji is placed as a square stamp', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      await tester.tap(find.byTooltip(l10n.boardToolStamp).first);
+      await tester.pumpAndSettle();
+      // The reward stickers sit with PD-39's stamps: icons, no faces.
+      for (final k in [StampKind.medal, StampKind.trophy, StampKind.rocket, StampKind.rainbow, StampKind.balloon]) {
+        expect(find.byIcon(kStampIcons[k]!), findsOneWidget, reason: '$k');
+      }
+
+      // Below the tools in the side panel: scrolled to, as a teacher would.
+      await tester.ensureVisible(find.byKey(const ValueKey('board-emoji')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('board-emoji')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardEmojiPick), findsOneWidget);
+      expect(find.text(l10n.boardEmojiAnimals), findsOneWidget);
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('emoji-🦉')), 200, scrollable: find.byType(Scrollable).last);
+      await tester.tap(find.byKey(const ValueKey('emoji-🦉')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardEmojiPick), findsNothing);
+
+      await tester.tapAt(tester.getCenter(find.byType(BoardCanvas)));
+      await tester.pumpAndSettle();
+      final placed = container.read(boardEditorProvider('b1')).value!.page.elements.single as StampElement;
+      expect(placed.stamp, StampKind.emoji);
+      expect(placed.text, '🦉');
+      expect(placed.rect.width, closeTo(140, 0.001), reason: 'a square, like an icon stamp');
+      expect(placed.rect.height, closeTo(140, 0.001));
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      expect((repo.saved.last.elements.single as StampElement).text, '🦉');
+    });
+  });
+
   group('PD-55 (1b): tall pages', () {
     testWidgets('Add page offers a wide or a tall page, and the strip shows each in its own frame', (tester) async {
       final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
