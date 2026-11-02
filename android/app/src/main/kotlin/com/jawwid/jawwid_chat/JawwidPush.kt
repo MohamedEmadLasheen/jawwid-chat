@@ -183,13 +183,19 @@ object JawwidPush {
     private fun notify(context: Context, id: Int, builder: NotificationCompat.Builder) {
         val manager = NotificationManagerCompat.from(context)
         // POST_NOTIFICATIONS refused (Android 13+): nothing can be shown, and nothing is thrown.
-        if (!manager.areNotificationsEnabled()) return
+        if (!manager.areNotificationsEnabled()) {
+            android.util.Log.w(TAG, "notification $id not shown: notifications are off for the app")
+            return
+        }
         try {
             manager.notify(id, builder.build())
+            android.util.Log.i(TAG, "notification $id posted")
         } catch (e: SecurityException) {
             // The permission was revoked between the check and the post.
+            android.util.Log.w(TAG, "notification $id refused", e)
         } catch (e: IllegalArgumentException) {
             // A malformed notification must never take the messaging service down.
+            android.util.Log.e(TAG, "notification $id malformed", e)
         }
     }
 

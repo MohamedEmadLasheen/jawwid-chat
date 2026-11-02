@@ -19,7 +19,7 @@ PKG=com.jawwid.jawwid_chat
 APK="${APK:-build/app/outputs/flutter-apk/app-debug.apk}"
 OUT="${OUT:-android-ring}"
 mkdir -p "$OUT"
-fail() { echo "::error title=android-ring::$*"; adb shell dumpsys notification --noredact > "$OUT/notifications.txt" || true; adb logcat -d > "$OUT/logcat.txt" || true; exit 1; }
+fail() { echo "::error title=android-ring::$*"; adb logcat -d -s 'JawwidPush:*' 'AndroidRuntime:E' || true; adb shell dumpsys notification --noredact > "$OUT/notifications.txt" || true; adb logcat -d > "$OUT/logcat.txt" || true; exit 1; }
 
 adb wait-for-device
 adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
@@ -57,8 +57,9 @@ adb shell am broadcast -n "$PKG/.DebugPushReceiver" \
 
 # 1 ------------------------------------------------------------------------------
 dump=""
-for _ in $(seq 1 15); do
-  dump="$(adb shell dumpsys notification --noredact)"
+# A cold start for a broadcast on a shared CI emulator can take well over 15 s
+# (seen: 8 s before the process even started); the ring itself lasts 45 s.
+for _ in $(seq 1 40); do
   grep -q "pkg=$PKG" <<<"$dump" && break
   sleep 1
 done
