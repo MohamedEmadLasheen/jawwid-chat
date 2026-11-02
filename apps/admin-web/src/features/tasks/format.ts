@@ -105,7 +105,11 @@ export function sourceLink(t: Pick<TaskSummary, 'source' | 'titleParams'>): stri
     case 'new_student_group':
       return '/trials/new-students'
     case 'teacher_setup':
+    case 'teacher_account_deleted':
       return `/teachers/files/${encodeURIComponent(t.source.id)}`
+    case 'family_without_account':
+      // PD-56: the family's first child; its page reaches the family and its contacts.
+      return typeof t.titleParams?.learnerId === 'string' ? `/students/${encodeURIComponent(t.titleParams.learnerId)}` : null
     case 'trial_attendance':
     case 'trial_outcome':
       return '/trials'

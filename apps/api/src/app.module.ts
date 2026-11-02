@@ -17,6 +17,7 @@ import { ParentRecordModule } from './parent-profile/parent-record.module';
 import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
+import { AccountDeletionModule } from './account-deletion/account-deletion.module';
 import { StaffAccountsModule } from './staff-accounts/staff-accounts.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
@@ -72,6 +73,8 @@ import { TaskModule } from './tasks/task.module';
     CoreBoundaryModule,
     ScheduledCallModule,
     AccountAdminModule,
+    // PD-56: a parent or teacher deletes their own account (store compliance).
+    AccountDeletionModule,
     StaffAccountsModule,
     // PD-25: parents recover their own account from the sign-in screen.
     AccountRecoveryModule,

@@ -152,6 +152,8 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   feedback: { en: 'Parent feedback', ar: 'ملاحظة وليّ أمر' },
   schedule_change: { en: 'New lesson times', ar: 'طلب مواعيد جديدة' },
   makeup_owed: { en: 'Make-up owed', ar: 'حصة تعويضية مستحقة' },
+  family_without_account: { en: 'Parent deleted their account', ar: 'وليّ أمر حذف حسابه' },
+  teacher_account_deleted: { en: 'Teacher deleted their account', ar: 'معلم حذف حسابه' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -186,6 +188,14 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   feedback: { en: 'Answer a parent about {teacher}: {learner}', ar: 'أجب وليّ الأمر بشأن {teacher}: {learner}' },
   schedule_change: { en: 'Decide on new lesson times: {learner}', ar: 'قرّر بشأن المواعيد الجديدة: {learner}' },
   makeup_owed: { en: 'Make sure a lesson is made up: {learner}, {when}', ar: 'تأكّد من تعويض الحصة: {learner}، {when}' },
+  family_without_account: {
+    en: 'A family has nobody who can sign in: {family}, {count} children',
+    ar: 'عائلة بلا أحد يمكنه تسجيل الدخول: {family}، {count} من الأبناء',
+  },
+  teacher_account_deleted: {
+    en: 'A teacher deleted their account: move their {count} students and lessons',
+    ar: 'معلم حذف حسابه: انقل طلابه ({count}) وحصصه',
+  },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {
