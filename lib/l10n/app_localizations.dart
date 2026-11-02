@@ -5743,6 +5743,18 @@ abstract class L10n {
   /// **'Voided by {name}: {reason}'**
   String salesVoidedBy(String name, String reason);
 
+  /// ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request).
+  ///
+  /// In en, this message translates to:
+  /// **'Other payments'**
+  String get salesOtherPaymentsTitle;
+
+  /// ADMIN-012: how much of a payment was refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String salesRefundedAmount(String amount);
+
   /// A voided instalment whose voiding staff member is not known.
   ///
   /// In en, this message translates to:
@@ -6853,6 +6865,18 @@ abstract class L10n {
   /// **'Praise, a suggestion or a complaint'**
   String get feedbackEntrySubtitle;
 
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Praise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise the teacher'**
+  String get feedbackShortcutPraise;
+
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Complaint.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a problem'**
+  String get feedbackShortcutProblem;
+
   /// PD-32: who the feedback is about.
   ///
   /// In en, this message translates to:
@@ -7897,6 +7921,12 @@ abstract class L10n {
   /// **'Arabic handwriting lines'**
   String get boardLayoutArabicLines;
 
+  /// PD-55 whiteboard: a page with a dot every 32 units.
+  ///
+  /// In en, this message translates to:
+  /// **'Dotted'**
+  String get boardLayoutDotted;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -7968,6 +7998,42 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Text'**
   String get boardToolText;
+
+  /// PD-55 whiteboard: points without marking; the trail fades and is never saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Laser pointer'**
+  String get boardToolLaser;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get boardTextSmaller;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bigger text'**
+  String get boardTextBigger;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get boardTextBold;
+
+  /// PD-55 whiteboard: a quick colour on the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Text colour'**
+  String get boardTextColour;
+
+  /// PD-55 whiteboard: ends typing a text on the board.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get boardTextDone;
 
   /// PD-39 whiteboard.
   ///
@@ -8041,6 +8107,24 @@ abstract class L10n {
   /// **'Delete selection'**
   String get boardDeleteSelection;
 
+  /// PD-55 whiteboard: copy the selection (Ctrl/Cmd+C).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get boardCopy;
+
+  /// PD-55 whiteboard: paste what was copied (Ctrl/Cmd+V).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get boardPaste;
+
+  /// PD-55 whiteboard: copy and paste the selection in one step (Ctrl/Cmd+D).
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get boardDuplicate;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8082,18 +8166,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Izhar'**
   String get boardTajweedIzhar;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Text'**
-  String get boardTextTitle;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Write here'**
-  String get boardTextHint;
 
   /// PD-39 whiteboard.
   ///
@@ -8364,6 +8436,126 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Draft:'**
   String get chatDraftLabel;
+
+  /// PD-55: a praise stamp (general praise only).
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get rewardPraiseExcellent;
+
+  /// No description provided for @rewardPraiseWellDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Well done'**
+  String get rewardPraiseWellDone;
+
+  /// No description provided for @rewardPraiseGreat.
+  ///
+  /// In en, this message translates to:
+  /// **'Great'**
+  String get rewardPraiseGreat;
+
+  /// No description provided for @rewardPraiseChampion.
+  ///
+  /// In en, this message translates to:
+  /// **'Champion'**
+  String get rewardPraiseChampion;
+
+  /// PD-55: the teacher's reward tray on the whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards'**
+  String get rewardTrayTitle;
+
+  /// No description provided for @rewardTrayFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For'**
+  String get rewardTrayFor;
+
+  /// No description provided for @rewardTrayEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get rewardTrayEveryone;
+
+  /// No description provided for @rewardTrayNoLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards count during a lesson. Now they decorate the board only.'**
+  String get rewardTrayNoLesson;
+
+  /// No description provided for @rewardTrayStar.
+  ///
+  /// In en, this message translates to:
+  /// **'Star'**
+  String get rewardTrayStar;
+
+  /// No description provided for @rewardTrayStickers.
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers'**
+  String get rewardTrayStickers;
+
+  /// No description provided for @rewardTrayPraise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise'**
+  String get rewardTrayPraise;
+
+  /// No description provided for @rewardTrayOwnWords.
+  ///
+  /// In en, this message translates to:
+  /// **'My own words…'**
+  String get rewardTrayOwnWords;
+
+  /// No description provided for @rewardTrayCelebrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Celebrate'**
+  String get rewardTrayCelebrate;
+
+  /// No description provided for @rewardTrayUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get rewardTrayUndo;
+
+  /// No description provided for @rewardTraySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Reward given'**
+  String get rewardTraySent;
+
+  /// No description provided for @rewardTrayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The reward was not recorded. It is still on the board.'**
+  String get rewardTrayFailed;
+
+  /// PD-55: the family's celebration line.
+  ///
+  /// In en, this message translates to:
+  /// **'Your teacher is celebrating you!'**
+  String get rewardCelebrationLine;
+
+  /// PD-55: Settings switch for the celebration chime.
+  ///
+  /// In en, this message translates to:
+  /// **'Reward sounds'**
+  String get rewardSoundTitle;
+
+  /// No description provided for @rewardSoundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A short chime when a teacher celebrates your child.'**
+  String get rewardSoundSubtitle;
+
+  /// PD-55: the family's line for a star, sticker or praise.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}'**
+  String rewardStarLine(int count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

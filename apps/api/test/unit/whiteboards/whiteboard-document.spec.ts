@@ -36,6 +36,13 @@ describe('a board page document', () => {
     expect(r.value.bytes).toBe(Buffer.byteLength(JSON.stringify(r.value.document)));
   });
 
+  it('PD-55: keeps a text\'s bold and rotation as they came (the client\'s own fields)', () => {
+    const r = checkDocument(doc({ id: 't1', kind: 'text', text: 'أحسنت', bold: true, rotation: 1.5707963267948966 }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.document.elements[0]).toMatchObject({ bold: true, rotation: 1.5707963267948966 });
+  });
+
   it('refuses a verse that carries its text, Basmala or anything but the reference', () => {
     for (const field of ['text', 'basmala', 'ayahs', 'html']) {
       expect(reason(doc(verse({ [field]: 'بِسْمِ اللَّهِ' })))).toMatch(/a verse is a reference, never its text/);

@@ -1344,6 +1344,19 @@
       }
     }
   },
+  "salesOtherPaymentsTitle": "دفعات أخرى",
+  "@salesOtherPaymentsTitle": {
+    "description": "ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request)."
+  },
+  "salesRefundedAmount": "استُرد {amount}",
+  "@salesRefundedAmount": {
+    "description": "ADMIN-012: how much of a payment was refunded.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "salesVoidedReason": "أُلغي: {reason}",
   "@salesVoidedReason": {
     "description": "A voided instalment whose voiding staff member is not known.",
@@ -1599,6 +1612,8 @@
   "signupLocked": "أدخلت رمزًا خاطئًا مرات كثيرة. تواصل مع المشرف.",
   "feedbackEntryTitle": "ملاحظات عن المعلّم",
   "feedbackEntrySubtitle": "إشادة أو اقتراح أو شكوى",
+  "feedbackShortcutPraise": "الثناء على المعلّم",
+  "feedbackShortcutProblem": "الإبلاغ عن مشكلة",
   "feedbackTeacherLine": "المعلّم: {name}",
   "feedbackHistoryTitle": "ملاحظاتك السابقة",
   "feedbackEmpty": "لم ترسل أي ملاحظة بعد",
@@ -1773,6 +1788,7 @@
   "boardLayoutNarrowRuled": "مسطّر ضيق",
   "boardLayoutGrid": "مربعات",
   "boardLayoutArabicLines": "أسطر الخط العربي",
+  "boardLayoutDotted": "منقّط",
   "boardBackgroundWhite": "أبيض",
   "boardBackgroundCream": "كريمي",
   "boardBackgroundGrey": "رمادي",
@@ -1785,6 +1801,12 @@
   "boardToolEraser": "ممحاة (الخط كاملًا)",
   "boardToolAreaEraser": "ممحاة (جزء)",
   "boardToolText": "نص",
+  "boardToolLaser": "مؤشر الليزر",
+  "boardTextSmaller": "تصغير النص",
+  "boardTextBigger": "تكبير النص",
+  "boardTextBold": "عريض",
+  "boardTextColour": "لون النص",
+  "boardTextDone": "تم",
   "boardToolRect": "مستطيل",
   "boardToolEllipse": "دائرة",
   "boardToolTriangle": "مثلث",
@@ -1797,6 +1819,9 @@
   "boardZoomOut": "تصغير",
   "boardZoomFit": "ملاءمة الصفحة",
   "boardDeleteSelection": "حذف المحدد",
+  "boardCopy": "نسخ",
+  "boardPaste": "لصق",
+  "boardDuplicate": "تكرار",
   "boardColour": "اللون",
   "boardThickness": "السُّمك",
   "boardTajweed": "التجويد",
@@ -1804,8 +1829,6 @@
   "boardTajweedGhunnah": "الغنة",
   "boardTajweedIkhfa": "الإخفاء",
   "boardTajweedIzhar": "الإظهار",
-  "boardTextTitle": "نص",
-  "boardTextHint": "اكتب هنا",
   "boardElementUnknown": "لا يظهر في هذا الإصدار",
   "boardStampExcellent": "ممتاز",
   "boardStampWellDone": "أحسنت",
@@ -1850,5 +1873,25 @@
   "materialsAgeLabel": "العمر",
   "photoLabel": "صورة",
   "photoPositionLabel": "الصورة {position} من {count}",
-  "chatDraftLabel": "مسودة:"
+  "chatDraftLabel": "مسودة:",
+  "rewardPraiseExcellent": "ممتاز",
+  "rewardPraiseWellDone": "أحسنت",
+  "rewardPraiseGreat": "رائع",
+  "rewardPraiseChampion": "بطل",
+  "rewardTrayTitle": "المكافآت",
+  "rewardTrayFor": "إلى",
+  "rewardTrayEveryone": "الجميع",
+  "rewardTrayNoLesson": "تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.",
+  "rewardTrayStar": "نجمة",
+  "rewardTrayStickers": "ملصقات",
+  "rewardTrayPraise": "ثناء",
+  "rewardTrayOwnWords": "كلماتي…",
+  "rewardTrayCelebrate": "احتفال",
+  "rewardTrayUndo": "تراجع",
+  "rewardTraySent": "أُعطيت المكافأة",
+  "rewardTrayFailed": "لم تُسجَّل المكافأة. ما زالت على السبورة.",
+  "rewardCelebrationLine": "معلّمك يحتفل بك!",
+  "rewardSoundTitle": "صوت المكافآت",
+  "rewardSoundSubtitle": "نغمة قصيرة عندما يحتفل المعلّم بطفلك.",
+  "rewardStarLine": "{count, plural, zero{نجمة!} one{نجمة! نجمة واحدة في هذه الحصة} two{نجمة! نجمتان في هذه الحصة} few{نجمة! {count} نجوم في هذه الحصة} many{نجمة! {count} نجمة في هذه الحصة} other{نجمة! {count} نجمة في هذه الحصة}}"
 }

@@ -142,6 +142,18 @@ beforeEach(async () => {
 });
 
 describe('the owning teacher', () => {
+  it('PD-55: saves a dotted page, adds one, and still refuses a layout it does not know', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Dots' }, t);
+    const page = b.pages[0]!.id;
+    const saved = await boards.savePage(b.id, page, { revision: 1, document: drawing(1), layout: 'dotted' }, t);
+    let d = await boards.addPage(b.id, { revision: saved.revision, layout: 'dotted' }, t);
+    expect(d.pages.map((p) => p.layout)).toEqual(['dotted', 'dotted']);
+    await expect(boards.addPage(b.id, { revision: d.revision, layout: 'hexagons' }, t)).rejects.toThrow(/layout/);
+    d = await boards.open(b.id, t);
+    expect(d.pages.map((p) => p.layout)).toEqual(['dotted', 'dotted']);
+  });
+
   it('creates, saves with a revision, adds, duplicates, reorders and deletes pages', async () => {
     const t = teacher(s.teacherId);
     const b = await boards.create({ title: '  Al-Fatihah  ' }, t);

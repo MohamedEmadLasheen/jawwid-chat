@@ -117,6 +117,8 @@ describe('The navigation registry', () => {
           // PD-27: Payments likewise.
           ...(!billingReader && visibleAreas(role).includes('payments') ? ['payments'] : []),
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
+          // ADMIN-006: Teacher credentials waits for the Teachers department (GET /lessons/access).
+          ...(!lessonManager && visibleAreas(role).includes('teacher-profiles') ? ['teacher-profiles'] : []),
           // PD-29: Materials waits for the Teachers manager (GET /materials/admin/access).
           ...(visibleAreas(role).includes('materials') ? ['materials'] : []),
           // PD-41: Certificates waits for GET /certificates/access.

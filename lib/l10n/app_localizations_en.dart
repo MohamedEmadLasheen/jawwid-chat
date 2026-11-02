@@ -3355,6 +3355,14 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get salesOtherPaymentsTitle => 'Other payments';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'Refunded $amount';
+  }
+
+  @override
   String salesVoidedReason(String reason) {
     return 'Voided: $reason';
   }
@@ -4016,6 +4024,12 @@ class L10nEn extends L10n {
   String get feedbackEntrySubtitle => 'Praise, a suggestion or a complaint';
 
   @override
+  String get feedbackShortcutPraise => 'Praise the teacher';
+
+  @override
+  String get feedbackShortcutProblem => 'Report a problem';
+
+  @override
   String feedbackTeacherLine(String name) {
     return 'Teacher: $name';
   }
@@ -4600,6 +4614,9 @@ class L10nEn extends L10n {
   String get boardLayoutArabicLines => 'Arabic handwriting lines';
 
   @override
+  String get boardLayoutDotted => 'Dotted';
+
+  @override
   String get boardBackgroundWhite => 'White';
 
   @override
@@ -4634,6 +4651,24 @@ class L10nEn extends L10n {
 
   @override
   String get boardToolText => 'Text';
+
+  @override
+  String get boardToolLaser => 'Laser pointer';
+
+  @override
+  String get boardTextSmaller => 'Smaller text';
+
+  @override
+  String get boardTextBigger => 'Bigger text';
+
+  @override
+  String get boardTextBold => 'Bold';
+
+  @override
+  String get boardTextColour => 'Text colour';
+
+  @override
+  String get boardTextDone => 'Done';
 
   @override
   String get boardToolRect => 'Rectangle';
@@ -4672,6 +4707,15 @@ class L10nEn extends L10n {
   String get boardDeleteSelection => 'Delete selection';
 
   @override
+  String get boardCopy => 'Copy';
+
+  @override
+  String get boardPaste => 'Paste';
+
+  @override
+  String get boardDuplicate => 'Duplicate';
+
+  @override
   String get boardColour => 'Colour';
 
   @override
@@ -4691,12 +4735,6 @@ class L10nEn extends L10n {
 
   @override
   String get boardTajweedIzhar => 'Izhar';
-
-  @override
-  String get boardTextTitle => 'Text';
-
-  @override
-  String get boardTextHint => 'Write here';
 
   @override
   String get boardElementUnknown => 'Not shown in this version';
@@ -4849,4 +4887,75 @@ class L10nEn extends L10n {
 
   @override
   String get chatDraftLabel => 'Draft:';
+
+  @override
+  String get rewardPraiseExcellent => 'Excellent';
+
+  @override
+  String get rewardPraiseWellDone => 'Well done';
+
+  @override
+  String get rewardPraiseGreat => 'Great';
+
+  @override
+  String get rewardPraiseChampion => 'Champion';
+
+  @override
+  String get rewardTrayTitle => 'Rewards';
+
+  @override
+  String get rewardTrayFor => 'For';
+
+  @override
+  String get rewardTrayEveryone => 'Everyone';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'Rewards count during a lesson. Now they decorate the board only.';
+
+  @override
+  String get rewardTrayStar => 'Star';
+
+  @override
+  String get rewardTrayStickers => 'Stickers';
+
+  @override
+  String get rewardTrayPraise => 'Praise';
+
+  @override
+  String get rewardTrayOwnWords => 'My own words…';
+
+  @override
+  String get rewardTrayCelebrate => 'Celebrate';
+
+  @override
+  String get rewardTrayUndo => 'Undo';
+
+  @override
+  String get rewardTraySent => 'Reward given';
+
+  @override
+  String get rewardTrayFailed =>
+      'The reward was not recorded. It is still on the board.';
+
+  @override
+  String get rewardCelebrationLine => 'Your teacher is celebrating you!';
+
+  @override
+  String get rewardSoundTitle => 'Reward sounds';
+
+  @override
+  String get rewardSoundSubtitle =>
+      'A short chime when a teacher celebrates your child.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'A star! $count stars this lesson',
+      one: 'A star! 1 star this lesson',
+    );
+    return '$_temp0';
+  }
 }

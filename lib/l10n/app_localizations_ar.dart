@@ -3428,6 +3428,14 @@ class L10nAr extends L10n {
   }
 
   @override
+  String get salesOtherPaymentsTitle => 'دفعات أخرى';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'استُرد $amount';
+  }
+
+  @override
   String salesVoidedReason(String reason) {
     return 'أُلغي: $reason';
   }
@@ -4095,6 +4103,12 @@ class L10nAr extends L10n {
   String get feedbackEntrySubtitle => 'إشادة أو اقتراح أو شكوى';
 
   @override
+  String get feedbackShortcutPraise => 'الثناء على المعلّم';
+
+  @override
+  String get feedbackShortcutProblem => 'الإبلاغ عن مشكلة';
+
+  @override
   String feedbackTeacherLine(String name) {
     return 'المعلّم: $name';
   }
@@ -4694,6 +4708,9 @@ class L10nAr extends L10n {
   String get boardLayoutArabicLines => 'أسطر الخط العربي';
 
   @override
+  String get boardLayoutDotted => 'منقّط';
+
+  @override
   String get boardBackgroundWhite => 'أبيض';
 
   @override
@@ -4728,6 +4745,24 @@ class L10nAr extends L10n {
 
   @override
   String get boardToolText => 'نص';
+
+  @override
+  String get boardToolLaser => 'مؤشر الليزر';
+
+  @override
+  String get boardTextSmaller => 'تصغير النص';
+
+  @override
+  String get boardTextBigger => 'تكبير النص';
+
+  @override
+  String get boardTextBold => 'عريض';
+
+  @override
+  String get boardTextColour => 'لون النص';
+
+  @override
+  String get boardTextDone => 'تم';
 
   @override
   String get boardToolRect => 'مستطيل';
@@ -4766,6 +4801,15 @@ class L10nAr extends L10n {
   String get boardDeleteSelection => 'حذف المحدد';
 
   @override
+  String get boardCopy => 'نسخ';
+
+  @override
+  String get boardPaste => 'لصق';
+
+  @override
+  String get boardDuplicate => 'تكرار';
+
+  @override
   String get boardColour => 'اللون';
 
   @override
@@ -4785,12 +4829,6 @@ class L10nAr extends L10n {
 
   @override
   String get boardTajweedIzhar => 'الإظهار';
-
-  @override
-  String get boardTextTitle => 'نص';
-
-  @override
-  String get boardTextHint => 'اكتب هنا';
 
   @override
   String get boardElementUnknown => 'لا يظهر في هذا الإصدار';
@@ -4942,4 +4980,77 @@ class L10nAr extends L10n {
 
   @override
   String get chatDraftLabel => 'مسودة:';
+
+  @override
+  String get rewardPraiseExcellent => 'ممتاز';
+
+  @override
+  String get rewardPraiseWellDone => 'أحسنت';
+
+  @override
+  String get rewardPraiseGreat => 'رائع';
+
+  @override
+  String get rewardPraiseChampion => 'بطل';
+
+  @override
+  String get rewardTrayTitle => 'المكافآت';
+
+  @override
+  String get rewardTrayFor => 'إلى';
+
+  @override
+  String get rewardTrayEveryone => 'الجميع';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.';
+
+  @override
+  String get rewardTrayStar => 'نجمة';
+
+  @override
+  String get rewardTrayStickers => 'ملصقات';
+
+  @override
+  String get rewardTrayPraise => 'ثناء';
+
+  @override
+  String get rewardTrayOwnWords => 'كلماتي…';
+
+  @override
+  String get rewardTrayCelebrate => 'احتفال';
+
+  @override
+  String get rewardTrayUndo => 'تراجع';
+
+  @override
+  String get rewardTraySent => 'أُعطيت المكافأة';
+
+  @override
+  String get rewardTrayFailed => 'لم تُسجَّل المكافأة. ما زالت على السبورة.';
+
+  @override
+  String get rewardCelebrationLine => 'معلّمك يحتفل بك!';
+
+  @override
+  String get rewardSoundTitle => 'صوت المكافآت';
+
+  @override
+  String get rewardSoundSubtitle => 'نغمة قصيرة عندما يحتفل المعلّم بطفلك.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'نجمة! $count نجمة في هذه الحصة',
+      many: 'نجمة! $count نجمة في هذه الحصة',
+      few: 'نجمة! $count نجوم في هذه الحصة',
+      two: 'نجمة! نجمتان في هذه الحصة',
+      one: 'نجمة! نجمة واحدة في هذه الحصة',
+      zero: 'نجمة!',
+    );
+    return '$_temp0';
+  }
 }

@@ -596,6 +596,12 @@ export enum CommErrorCode {
   PARENT_EXISTS = 'COMM.PARENT_EXISTS',
   /** A child with this name (and date of birth) is already in the family; resend with confirmDuplicate for twins. 409. */
   CHILD_EXISTS = 'COMM.CHILD_EXISTS',
+  /**
+   * TEACHER-027: the database could not serve the request in time (unreachable,
+   * no pool connection, a transaction or statement timeout). Nothing was
+   * committed. 503 with Retry-After; retry the same request.
+   */
+  DATABASE_UNAVAILABLE = 'COMM.DATABASE_UNAVAILABLE',
 }
 
 export class CommError extends Error {

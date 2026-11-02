@@ -33,6 +33,12 @@ export class OutboxWorker {
     @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
+  /** PD-46: who besides the teacher hears of a lesson change (CalendarModule registers it at start). */
+  private lessonAudience: LessonAudience | null = null;
+  useLessonAudience(audience: LessonAudience): void {
+    this.lessonAudience = audience;
+  }
+
   async drain(batchSize = 100, now = new Date()): Promise<number> {
     // CLAIM PRECISION (issue #29). `availableAt` is written by Prisma's
     // client-side default and lands up to ONE millisecond after a clock read
@@ -116,6 +122,17 @@ export class OutboxWorker {
       case CommEvent.CASE_ASSIGNED:
       case CommEvent.CASE_DUE_SOON: {
         await this.deliverCase(type, payload);
+        return;
+      }
+
+      /**
+       * PD-52 (plan §7): a complaint about a teacher, or a parent's praise. No
+       * conversation: a Center entry for the people who follow it up, through
+       * the PD-34 pipeline. See deliverTeacherRecord.
+       */
+      case CommEvent.TEACHER_COMPLAINT_RECEIVED:
+      case CommEvent.TEACHER_PRAISE_RECEIVED: {
+        await this.deliverTeacherRecord(type, payload);
         return;
       }
 
@@ -265,6 +282,39 @@ export class OutboxWorker {
 
       // PD-34: a person's own Notification Center and read state, to their own
       // actor room and nobody else's -- never the conversation room.
+      case CommEvent.LESSON_CHANGED: {
+        // PD-46 §3.3: a signal to the teacher, the staff whose scope covers the
+        // lesson (decided now), and the family's conversations -- each socket
+        // there is authorized at delivery (RT-009), never by the room alone.
+        const teacherId = payload.teacherId as string;
+        const learnerId = (payload.learnerId as string | null) ?? null;
+        const readers = this.lessonAudience
+          ? await this.lessonAudience.staffFor(payload.organizationId as string, [{ teacherId, learnerId }])
+          : [];
+        await this.realtime.toUsers([...new Set([teacherId, ...readers])], type, payload as never);
+        for (const id of (payload.conversationIds as string[] | undefined) ?? []) {
+          await this.realtime.toThread(id, type, payload as never);
+        }
+        return;
+      }
+
+      case CommEvent.SCHEDULE_REFRESHED: {
+        // One batched refresh for many lessons (weekly materialization): their
+        // teachers and the staff whose scope covers any of those teachers.
+        const teacherIds = (payload.teacherIds as string[] | undefined) ?? [];
+        const learnerIds = (payload.learnerIds as string[] | undefined) ?? [];
+        if (teacherIds.length === 0) return;
+        const readers = this.lessonAudience
+          ? await this.lessonAudience.staffFor(payload.organizationId as string, [
+              ...teacherIds.map((t) => ({ teacherId: t, learnerId: null })),
+              // A learner's own line names no teacher a scope could match on its own.
+              ...learnerIds.map((l) => ({ teacherId: '', learnerId: l })),
+            ])
+          : [];
+        await this.realtime.toUsers([...new Set([...teacherIds, ...readers])], type, payload as never);
+        return;
+      }
+
       case CommEvent.INBOX_CHANGED: {
         const recipientId = payload.recipientId as string | undefined;
         if (recipientId) await this.realtime.toUsers([recipientId], type, payload as never);
@@ -282,6 +332,20 @@ export class OutboxWorker {
           return;
         }
         await this.realtime.toUsers([actorId], type, payload as never);
+        return;
+      }
+
+      // PD-55: a child's reward, to that child's family's LIVE contacts and to
+      // the teacher who gave it -- each to their own actor room, never a
+      // conversation. Resolved here, at delivery: a contact removed or
+      // deactivated after the award is not told.
+      case CommEvent.LEARNER_REWARD_GIVEN:
+      case CommEvent.LEARNER_REWARD_UNDONE: {
+        const learnerId = payload.learnerId as string | undefined;
+        const lessonId = payload.lessonId as string | undefined;
+        if (!learnerId || !lessonId) return;
+        const recipients = await this.rewardRecipientIds(learnerId, lessonId);
+        if (recipients.length > 0) await this.realtime.toUsers(recipients, type, payload as never);
         return;
       }
 
@@ -710,6 +774,61 @@ export class OutboxWorker {
    * action open_case) with a generic push; every recipient's actor room gets
    * the event itself, ids only, so Escalations refreshes.
    */
+  /**
+   * PD-52 (plan §7). Who is told, read now:
+   *   complaint  the teacher's PD-35 supervisor (else the Teachers manager,
+   *              chat.work_task_teacher_owner) and the PD-8 supervisor of the
+   *              child -- or of each child of the family -- it is about; an
+   *              entry with a generic push, quiet hours kept
+   *   praise     the teacher's supervisor (else the Teachers manager): an
+   *              entry only, no push
+   * Never the teacher (the teacher is not a staff recipient here), never the
+   * one who filed it, once per record and recipient (the dedupe key). The texts
+   * are generic: no teacher, child, family or words of the parent.
+   */
+  private async deliverTeacherRecord(type: CommEventName, payload: Record<string, unknown>): Promise<void> {
+    if (!this.pipeline) return;
+    const teacherId = payload.teacherId as string | undefined;
+    const record = (payload.entryId ?? payload.feedbackId) as string | undefined;
+    if (!teacherId || !record) return;
+    const complaint = type === CommEvent.TEACHER_COMPLAINT_RECEIVED;
+    const ruleKey = complaint ? 'teacher_complaint_received' : 'teacher_praise_received';
+    const learnerId = (payload.learnerId as string | null) ?? null;
+    const familyId = (payload.familyId as string | null) ?? null;
+    const [{ owner }] = await this.prisma.$queryRaw<Array<{ owner: string | null }>>`
+      SELECT chat.work_task_teacher_owner(${teacherId}::uuid)::text AS owner`;
+    const supervisors =
+      complaint && (learnerId || familyId)
+        ? await this.prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT DISTINCT ls.supervisor_id::text AS id
+              FROM chat.learner_supervision ls
+              JOIN chat.learner l ON l.id = ls.learner_id
+             WHERE (${learnerId}::uuid IS NOT NULL AND l.id = ${learnerId}::uuid)
+                OR (${learnerId}::uuid IS NULL AND l.family_id = ${familyId}::uuid)`
+        : [];
+    const by = (payload.recordedBy as string | null) ?? null;
+    const told = [...new Set([owner, ...supervisors.map((x) => x.id)].filter((x): x is string => !!x && x !== by))];
+    for (const recipientId of told) {
+      const recipient = await this.identity.resolveActor(recipientId);
+      if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.STAFF) continue;
+      await this.pipeline.emit({
+        dedupeKey: `${ruleKey}:${record}:${recipientId}`,
+        ruleKey,
+        eventType: ruleKey,
+        templateKey: ruleKey,
+        recipientId,
+        locale: recipient.locale,
+        priority: complaint ? 'normal' : 'low',
+        // Praise is an entry only (plan §7): no push.
+        push: complaint,
+        // The record's kind only; the page reads the record (PD-32 confinement: src/teacher-file).
+        subject: { type: complaint ? 'teacher_complaint' : 'teacher_praise', id: record },
+        refs: { teacherId, page: complaint ? 'attendance' : 'grants' },
+        scheduledAt: new Date(),
+      });
+    }
+  }
+
   private async deliverCase(type: CommEventName, payload: Record<string, unknown>): Promise<void> {
     const caseId = payload.caseId as string | undefined;
     if (!caseId) return;
@@ -796,6 +915,20 @@ export class OutboxWorker {
    * Never told: the person who did it. Never in any text: the task's title, an
    * amount, a card, a family or a child (a lock screen is not behind sign-in).
    */
+  /** PD-55: the learner's family's active contacts, and the lesson's teacher if still the learner's. */
+  private async rewardRecipientIds(learnerId: string, lessonId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      select c.id from chat.learner l
+        join chat.contact c on c.family_id = l.family_id and c.is_active
+       where l.id = ${learnerId}::uuid
+      union
+      select ls.teacher_id from chat.lesson ls
+        join chat.learner l on l.id = ls.learner_id and l.teacher_id = ls.teacher_id
+        join chat.teacher t on t.id = ls.teacher_id and t.is_active
+       where ls.id = ${lessonId}::uuid and ls.learner_id = ${learnerId}::uuid`;
+    return rows.map((r) => r.id);
+  }
+
   private async deliverTask(payload: Record<string, unknown>): Promise<void> {
     const taskId = payload.taskId as string | undefined;
     const change = payload.change as string | undefined;
@@ -971,4 +1104,9 @@ export class OutboxWorker {
       variables: {},
     });
   }
+}
+
+/** PD-46: resolves who besides a lesson's teacher hears that it changed. */
+export interface LessonAudience {
+  staffFor(organizationId: string, lessons: ReadonlyArray<{ teacherId: string; learnerId: string | null }>): Promise<string[]>;
 }

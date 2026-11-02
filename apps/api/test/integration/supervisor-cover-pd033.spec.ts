@@ -233,6 +233,25 @@ describe('2. the window: a cover is the link activation PD-8 already reads', () 
     // Nothing announced yet.
     for (const id of caseload(p.id).groups) expect(await lines(id, 'cover.started')).toBe(0);
   });
+
+  // G-43 / AMB-3..5 (department head, 2026-11-02): a cover window is half-open,
+  // [from, until). Both ends are absolute instants; the account time zone
+  // (PD-22) only decides which instant a person's "Monday 09:00" means, so a
+  // DST change cannot open a gap or an overlap at the boundary.
+  it('the window is half-open: in at `from` exactly, out at `until` exactly', async () => {
+    const p = m.supervisors[0]!;
+    const b = backupOf(p.id);
+    const from = new Date(Date.now() + 24 * HOUR);
+    const until = new Date(from.getTime() + 6 * HOUR);
+    const c = await covers.start(p.id, { supervisorId: p.id, from: from.toISOString(), until: until.toISOString() });
+    expect(new Date(c.startsAt).getTime()).toBe(from.getTime());
+    expect(new Date(c.endsAt).getTime()).toBe(until.getTime());
+    const at = (t: number) => principals(b.id, new Date(t));
+    expect(await at(from.getTime() - 1)).not.toContain(p.id);
+    expect(await at(from.getTime())).toContain(p.id);
+    expect(await at(until.getTime() - 1)).toContain(p.id);
+    expect(await at(until.getTime())).not.toContain(p.id);
+  });
 });
 
 describe('3. one open cover per supervisor', () => {

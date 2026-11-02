@@ -127,5 +127,9 @@ describe('PD-34: the Notification Center', () => {
     expect(routeFor({ kind: 'open_case', caseId: 'k 1' })).toBe('/cases?case=k%201')
     expect(routeFor({ kind: 'open_task', taskId: 't 1' })).toBe('/tasks?task=t%201')
     expect(routeFor({ kind: 'open_task' })).toBeNull()
+    // PD-52: a complaint or a parent's praise, on its page with the teacher's strip.
+    expect(routeFor({ kind: 'open_teacher_records', page: 'attendance', teacherId: 't 1' })).toBe('/teacher-attendance?section=complaints&teacher=t%201')
+    expect(routeFor({ kind: 'open_teacher_records', page: 'grants', teacherId: 't-1' })).toBe('/teacher-grants?section=testimonials&teacher=t-1')
+    expect(routeFor({ kind: 'open_teacher_records' })).toBeNull()
   })
 })

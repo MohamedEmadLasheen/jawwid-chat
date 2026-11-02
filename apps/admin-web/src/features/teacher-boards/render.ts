@@ -29,6 +29,8 @@ export type Ctx = Pick<
   CanvasRenderingContext2D,
   | 'save'
   | 'restore'
+  | 'translate'
+  | 'rotate'
   | 'fillRect'
   | 'strokeRect'
   | 'beginPath'
@@ -104,6 +106,17 @@ function drawBackground(ctx: Ctx, page: BoardPage) {
       for (let x = 60; x < PAGE_WIDTH; x += 60) line(x, 0, x, PAGE_HEIGHT)
       for (let y = 60; y < PAGE_HEIGHT; y += 60) line(0, y, PAGE_WIDTH, y)
       break
+    case 'dotted':
+      // PD-55: a dot every 32 units, the rule colour a little firmer (as the portal).
+      ctx.fillStyle = scaleAlpha(rule, 1.8)
+      for (let x = 32; x < PAGE_WIDTH; x += 32) {
+        for (let y = 32; y < PAGE_HEIGHT; y += 32) {
+          ctx.beginPath()
+          ctx.arc(x, y, 2.2, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      break
     case 'arabic_lines': {
       // A baseline and a lighter, dashed upper guide per band (the letter's body).
       const band = 135
@@ -139,7 +152,7 @@ function drawElement(ctx: Ctx, e: BoardElement, dark: boolean, background: strin
     case 'line':
       return drawLine(ctx, e)
     case 'text':
-      return drawText(ctx, e.text, e.rect, e.size, e.color)
+      return drawText(ctx, e.text, e.rect, e.size, e.color, e.bold, e.rotation)
     case 'stamp':
       return drawStamp(ctx, e, background)
     case 'verse': {
@@ -277,10 +290,18 @@ export function wrapLines(ctx: Pick<Ctx, 'measureText'>, text: string, maxWidth:
   return out
 }
 
-function drawText(ctx: Ctx, text: string, rect: Rect, size: number, color: string) {
+function drawText(ctx: Ctx, text: string, rect: Rect, size: number, color: string, bold = false, rotation = 0) {
   const rtl = isRtl(text)
   ctx.save()
-  ctx.font = `${size}px ${BOARD_FONT}`
+  if (rotation !== 0) {
+    // PD-55: turned about the box's centre, as the portal draws it.
+    const cx = rect.x + rect.w / 2
+    const cy = rect.y + rect.h / 2
+    ctx.translate(cx, cy)
+    ctx.rotate(rotation)
+    ctx.translate(-cx, -cy)
+  }
+  ctx.font = `${bold ? '700 ' : ''}${size}px ${BOARD_FONT}`
   ctx.fillStyle = color
   ctx.direction = rtl ? 'rtl' : 'ltr'
   ctx.textAlign = rtl ? 'right' : 'left'
@@ -447,6 +468,31 @@ function drawStamp(ctx: Ctx, s: Extract<BoardElement, { kind: 'stamp' }>, backgr
       ctx.closePath()
       ctx.fill()
       break
+    case 'medal':
+    case 'trophy':
+    case 'rocket':
+    case 'sun':
+    case 'rainbow':
+    case 'crown':
+    case 'balloon': {
+      // PD-55: a reward sticker. The staff viewer has no icon font, so each is the
+      // same badge -- a ring with a small star -- rather than some other stamp's
+      // shape it would be mistaken for.
+      ctx.lineWidth = Math.max(3, side * 0.08)
+      ctx.beginPath()
+      ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.beginPath()
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5
+        const rr = i % 2 === 0 ? r * 0.5 : r * 0.22
+        if (i === 0) ctx.moveTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a))
+        else ctx.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a))
+      }
+      ctx.closePath()
+      ctx.fill()
+      break
+    }
     default: {
       // A praise stamp: its words in a tinted, rounded frame.
       roundRect(ctx, s.rect, h * 0.25)

@@ -14,6 +14,7 @@ import '../../../core/media/media_picker.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../rewards/presentation/reward_tray.dart';
 import '../application/board_editor_controller.dart';
 import '../application/board_export.dart';
 import '../application/board_image_import.dart';
@@ -88,6 +89,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     _lifecycle = AppLifecycleListener(
       onStateChange: (s) {
         if (s == AppLifecycleState.inactive || s == AppLifecycleState.paused || s == AppLifecycleState.hidden) {
+          // A text being typed is part of the board: finished first, then kept (review of #384).
+          _canvas.currentState?.finishTextEdit();
           unawaited(_held.persistNow());
           unawaited(_held.flush());
         }
@@ -121,6 +124,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     });
     return PopScope(
       onPopInvokedWithResult: (_, _) {
+        _canvas.currentState?.finishTextEdit();
         unawaited(_controller.persistNow());
         unawaited(_controller.flush());
       },
@@ -184,7 +188,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       readOnly: !editable,
       view: _view,
       onCommit: _controller.commit,
-      onRequestText: ({initial}) => _askText(context, initial),
+      onCommitTo: _controller.commitTo,
       placeholderLabel: label,
       verses: verseCache.lookup,
       versesVersion: versesVersion,
@@ -197,6 +201,14 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): _controller.undo,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): _controller.redo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): _controller.redo,
+        // PD-55: copy, paste, duplicate. Inside a text being typed, Ctrl/Cmd+C and V
+        // are the text's own (handled before these); D is held back here.
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true): () => _onSelection((c) => c.copySelection()),
+        const SingleActivator(LogicalKeyboardKey.keyC, meta: true): () => _onSelection((c) => c.copySelection()),
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): () => _onSelection((c) => c.paste()),
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true): () => _onSelection((c) => c.paste()),
+        const SingleActivator(LogicalKeyboardKey.keyD, control: true): () => _onSelection((c) => c.duplicateSelection()),
+        const SingleActivator(LogicalKeyboardKey.keyD, meta: true): () => _onSelection((c) => c.duplicateSelection()),
         const SingleActivator(LogicalKeyboardKey.delete): _deleteSelection,
         const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelection,
         const SingleActivator(LogicalKeyboardKey.escape): () => _canvas.currentState?.clearSelection(),
@@ -263,10 +275,11 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                             onWidth: (w) => setState(() => _width = w),
                             onStamp: (k) => setState(() {
                               _stamp = k;
-                              _stampColor = k.index >= StampKind.excellentAr.index ? BoardPalette.stampGreen : BoardPalette.stampGold;
+                              _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
                             }),
                             onDelete: _deleteSelection,
                             onVerse: () => _insertVerse(context),
+                            onRewards: () => _openRewards(context),
                             onImage: s.imagesSupported ? () => _insertImage(context) : null,
                             onLayout: _controller.setLayout,
                             onBackground: _controller.setBackground,
@@ -316,6 +329,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  static bool _isTextStamp(StampKind k) =>
+      const {StampKind.excellentAr, StampKind.wellDoneAr, StampKind.excellentEn, StampKind.wellDoneEn, StampKind.praise}.contains(k);
+
   String? _stampText(L10n l10n) => switch (_stamp) {
     StampKind.excellentAr || StampKind.excellentEn => l10n.boardStampExcellent,
     StampKind.wellDoneAr || StampKind.wellDoneEn => l10n.boardStampWellDone,
@@ -328,6 +344,27 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     _ => _width > 16 ? 6 : _width,
   };
 
+  /// PD-55: the reward tray over the board. A reward lands in the middle of the view.
+  void _openRewards(BuildContext context) {
+    final canvas = _canvas.currentState;
+    if (canvas == null) return;
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId),
+      ),
+    );
+  }
+
+  /// A selection action from a shortcut or the panel -- never while a text is being typed.
+  void _onSelection(void Function(BoardCanvasState canvas) act) {
+    final c = _canvas.currentState;
+    if (c == null || c.isEditingText) return;
+    act(c);
+  }
+
   void _deleteSelection() {
     final c = _canvas.currentState;
     final s = ref.read(boardEditorProvider(widget.boardId)).value;
@@ -338,29 +375,6 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         if (!gone.contains(e.id)) e,
     ]);
     c.clearSelection();
-  }
-
-  Future<String?> _askText(BuildContext context, String? initial) {
-    final l10n = L10n.of(context);
-    final controller = TextEditingController(text: initial ?? '');
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.boardTextTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 1,
-          maxLines: 6,
-          maxLength: 2000,
-          decoration: InputDecoration(hintText: l10n.boardTextHint),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.boardsCancel)),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: Text(l10n.boardsSave)),
-        ],
-      ),
-    );
   }
 
   /// §10 5a: to Deleted boards, restorable for 30 days; then back to the list.
@@ -672,6 +686,7 @@ class _ToolPanel extends StatelessWidget {
     required this.onStamp,
     required this.onDelete,
     required this.onVerse,
+    required this.onRewards,
     required this.onImage,
     required this.onLayout,
     required this.onBackground,
@@ -689,6 +704,9 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
+
+  /// PD-55: the reward tray.
+  final VoidCallback onRewards;
   /// Null where the server has no images (or said they are off): no button.
   final VoidCallback? onImage;
   final ValueChanged<PageLayout> onLayout;
@@ -742,8 +760,16 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.line, Icons.horizontal_rule, l10n.boardToolLine),
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
+      toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
       if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      // PD-55: after the inserts, so nothing PD-39 placed moves; the floating dock (PR-6) regroups.
+      IconButton(
+        key: const ValueKey('board-rewards'),
+        tooltip: l10n.rewardTrayTitle,
+        onPressed: onRewards,
+        icon: const Icon(Icons.emoji_events_outlined),
+      ),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
@@ -752,7 +778,8 @@ class _ToolPanel extends StatelessWidget {
         swatch(BoardPalette.tajweedIkhfa, l10n.boardTajweedIkhfa),
         swatch(BoardPalette.tajweedIzhar, l10n.boardTajweedIzhar),
       ] else if (tool == BoardTool.stamp) ...[
-        for (final k in StampKind.values.where((k) => k != StampKind.excellentEn && k != StampKind.wellDoneEn))
+        // PD-39's own stamps; PD-55's stickers and praise live in the reward tray.
+        for (final k in const [StampKind.star, StampKind.check, StampKind.heart, StampKind.thumbsUp, StampKind.excellentAr, StampKind.wellDoneAr])
           IconButton(
             isSelected: stamp == k,
             tooltip: switch (k) {
@@ -800,7 +827,26 @@ class _ToolPanel extends StatelessWidget {
         icon: const Icon(Icons.format_line_spacing),
         onSelected: onLayout,
         itemBuilder: (_) => [
-          for (final l in PageLayout.values) CheckedPopupMenuItem(value: l, checked: page.layout == l, child: Text(_layoutName(l10n, l))),
+          // PD-55: as pictures, the four a teacher reaches for first, then the rest.
+          for (final l in _layoutOrder)
+            PopupMenuItem(
+              value: l,
+              child: Semantics(
+                selected: page.layout == l,
+                child: Row(
+                  children: [
+                    SizedBox(width: 24, child: page.layout == l ? const Icon(Icons.check, size: 20) : null),
+                    const SizedBox(width: Spacing.spacing2),
+                    KeyedSubtree(
+                      key: ValueKey('layout-thumb-${l.wire}'),
+                      child: _LayoutThumbnail(layout: l, background: page.background),
+                    ),
+                    const SizedBox(width: Spacing.spacing3),
+                    Flexible(child: Text(_layoutName(l10n, l))),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
       PopupMenuButton<PageBackground>(
@@ -837,12 +883,59 @@ class _ToolPanel extends StatelessWidget {
   }
 }
 
+const _layoutOrder = [
+  PageLayout.plain,
+  PageLayout.arabicLines,
+  PageLayout.grid,
+  PageLayout.dotted,
+  PageLayout.ruled,
+  PageLayout.narrowRuled,
+];
+
+/// PD-55: a page layout in miniature, drawn by the same painter as the page.
+class _LayoutThumbnail extends StatelessWidget {
+  const _LayoutThumbnail({required this.layout, required this.background});
+
+  final PageLayout layout;
+  final PageBackground background;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 64,
+    height: 36,
+    decoration: BoxDecoration(border: Border.all(color: JawwidTokens.of(context).colorBorderDefault)),
+    child: CustomPaint(painter: _LayoutThumbnailPainter(layout, background)),
+  );
+}
+
+class _LayoutThumbnailPainter extends CustomPainter {
+  _LayoutThumbnailPainter(this.layout, this.background);
+
+  final PageLayout layout;
+  final PageBackground background;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // A quarter of the page at a larger scale, so the rulings can be told apart.
+    canvas
+      ..save()
+      ..clipRect(Offset.zero & size)
+      ..scale(size.width * 2 / kBoardPageSize.width);
+    paintBackground(canvas, layout, background);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_LayoutThumbnailPainter old) => old.layout != layout || old.background != background;
+}
+
 String _layoutName(L10n l10n, PageLayout l) => switch (l) {
   PageLayout.plain => l10n.boardLayoutPlain,
   PageLayout.ruled => l10n.boardLayoutRuled,
   PageLayout.narrowRuled => l10n.boardLayoutNarrowRuled,
   PageLayout.grid => l10n.boardLayoutGrid,
   PageLayout.arabicLines => l10n.boardLayoutArabicLines,
+  PageLayout.dotted => l10n.boardLayoutDotted,
 };
 
 String _backgroundName(L10n l10n, PageBackground b) => switch (b) {

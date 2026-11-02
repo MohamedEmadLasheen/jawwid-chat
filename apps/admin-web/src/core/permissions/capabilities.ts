@@ -120,9 +120,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     //
     // Calls (PD-13): the account's calls, scheduled calls and call links. What
     // each call may do is decided by the server's call capability.
-    // teacher-profiles is here for the same reason stories is: admin and
-    // coverage hold the reviewer role server-side
-    // (AuthorizationService.canReviewTeacherProfile).
+    // teacher-profiles: admin and coverage pass the reviewer role check, but
+    // only the Teachers department reviews (ADMIN-006), so the entry waits for
+    // the server's word (SERVER_CONFIRMED_AREAS).
     // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
     // PD-52: Attendance & Complaints -- on the server's word (GET /teacher-records/access).
     return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants']
@@ -218,6 +218,9 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   certificates: (a) => a.certificates === true,
   // PD-48: the Lesson audio review page, for whoever may listen.
   'lesson-audio': (a) => a.lessonAudio === true,
+  // ADMIN-006: credential review is the Teachers department's and the super
+  // admin's -- the same people GET /lessons/access calls lessonManager.
+  'teacher-profiles': (a) => a.lessonManager === true,
   // PD-52: the Attendance & Complaints page, on the server's basis-and-key answer.
   'teacher-attendance': (a) => a.teacherAttendance === true,
   'teacher-grants': (a) => a.teacherGrants === true,

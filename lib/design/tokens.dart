@@ -545,4 +545,20 @@ abstract final class BoardPalette {
 
   /// Selection outline and handles.
   static const selection = Color(0xFF0E7C86);
+
+  /// PD-55: the laser pointer -- a bright red that reads on every page colour.
+  static const laser = Color(0xFFFF1744);
+}
+
+/// PD-55: the reward stickers' colours and the celebration's confetti. Bright and
+/// friendly, for children; each sticker sits on the tray's surface tint.
+abstract final class RewardPalette {
+  static const gold = Color(0xFFF9A825);
+  static const orange = Color(0xFFEF6C00);
+  static const blue = Color(0xFF1565C0);
+  static const purple = Color(0xFF6A1B9A);
+  static const red = Color(0xFFC62828);
+  static const green = Color(0xFF2E7D32);
+
+  static const confetti = [gold, red, blue, green, purple, orange];
 }

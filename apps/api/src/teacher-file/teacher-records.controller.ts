@@ -35,6 +35,13 @@ export class TeacherRecordsController {
     return this.records.recordTestimonial(actorId, id, body ?? {});
   }
 
+  /** PD-52 (plan §11 c): a parent's praise, shared with the teacher in their supervision chat -- once. */
+  @Requires('teacher_supervision.record', 'teacher_grants.record')
+  @Post('teacher-records/praise/:id/share')
+  sharePraise(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.records.sharePraise(actorId, id);
+  }
+
   /** A complaint (decide, page A) or testimonial (record, page B) entered by mistake, once. */
   @Requires('teacher_supervision.record', 'teacher_attendance.decide', 'teacher_grants.record')
   @Post('teacher-records/entries/:id/void')

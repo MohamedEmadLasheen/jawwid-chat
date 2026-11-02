@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { decisionForStep, Decision } from '../discipline/ladder';
@@ -13,6 +13,8 @@ import type { Actor } from '../platform/types';
 import { complaintAbout, familiesOfComplaints } from './complaint-family';
 import { ParentFeedbackService } from './parent-feedback.service';
 import { ENTRY_VOID, TeacherFileService, mapTimelineRefusal } from './teacher-file.service';
+import { SupervisionService } from '../lessons/supervision.service';
+import { CardKind } from '../communication/contracts/vocab';
 
 /**
  * PD-52: the two teacher-records pages (Attendance & Complaints, Grants &
@@ -46,6 +48,8 @@ export class TeacherRecordsService {
     private readonly feedback: ParentFeedbackService,
     private readonly permissions: PermissionService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-52 (plan §11 c): sharing a parent's praise posts a card in the teacher's supervision chat.
+    @Optional() private readonly supervision?: SupervisionService,
   ) {}
 
   /** Which pages and which actions, per basis and key. Advisory: every route decides again. */
@@ -75,6 +79,7 @@ export class TeacherRecordsService {
     const praise = await this.feedback.praise(actor, page, { teacherId, ...range });
 
     const names = await this.names(staffRows, [...voids.values()]);
+    const mayCorrect = access.grants.record ? await this.mayVoidTestimonials(actor, staffRows) : new Set<string | null>();
     const staff = staffRows
       .map((r) => ({
         id: r.id,
@@ -91,8 +96,12 @@ export class TeacherRecordsService {
         status: null,
         response: null,
         voided: voids.has(r.id) ? brief(voids.get(r.id) as Entry, names.staff) : null,
+        // Review of #377: offer Correct only where chat.may_void_testimonial would allow it.
+        canCorrect: !voids.has(r.id) && mayCorrect.has(r.createdBy),
+        sharedAt: null as Date | null,
       }))
       .filter((t) => query.voided === 'include' || t.voided === null);
+    const shared = await this.sharedAt(praise.map((f) => f.id));
     const parents = praise.map((f) => ({
       id: f.id,
       origin: 'parent' as const,
@@ -108,6 +117,9 @@ export class TeacherRecordsService {
       status: f.status,
       response: f.response,
       voided: null,
+      canCorrect: false,
+      // PD-52 (plan §11 c): when staff shared it with the teacher, if they did.
+      sharedAt: shared.get(f.id) ?? null,
     }));
     const testimonials = [...staff, ...parents].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id));
     return { canRecord: access.grants.record, testimonials };
@@ -159,6 +171,48 @@ export class TeacherRecordsService {
       return created;
     });
     return { id: row.id, kind: row.kind, createdAt: row.createdAt };
+  }
+
+  /**
+   * PD-52 (plan §11 c; owner: yes): share a parent's praise with the teacher --
+   * a card in the teacher's supervision chat with the child's first name and
+   * the parent's words, never the parent's name. Staff choose to; nothing is
+   * shared by itself. Page B's record right, for praise the caller may see.
+   * Once per piece of praise: a second share is refused (409), serialized on
+   * the praise so two at once post one card.
+   */
+  async sharePraise(actorId: string, feedbackId: string) {
+    const { actor, page } = await this.ctx(actorId, (a) => a.grants.record);
+    if (!this.supervision) throw new Error('TeacherRecordsService.sharePraise needs SupervisionService');
+    const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'praise not found');
+    if (!isUuid(feedbackId)) throw notFound;
+    const praise = await this.prisma.parentFeedback.findUnique({ where: { id: feedbackId } });
+    if (!praise || praise.organizationId !== actor.organizationId || praise.category !== 'praise') throw notFound;
+    if (!pageRowVisible(page, praise.teacherId, { learnerId: praise.learnerId })) throw notFound;
+    const teacher = await this.files.requireTeacherIn(actor, praise.teacherId, page.teachers);
+    const learner = await this.prisma.learner.findUnique({ where: { id: praise.learnerId }, select: { name: true } });
+    const childFirstName = (learner?.name ?? '').trim().split(/\s+/)[0] ?? '';
+    const supervision = this.supervision;
+
+    const out = await this.write(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'pd52_praise_share:' + praise.id}))`;
+      if ((await this.sharedAtIn(tx, [praise.id])).size > 0) {
+        throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, 'this praise was already shared with the teacher', 409);
+      }
+      const posted = await supervision.sharePraiseInTx(tx, actor, teacher, { feedbackId: praise.id, childFirstName, body: praise.body });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'parent_feedback.shared_with_teacher',
+        entity: 'parent_feedback',
+        entityId: praise.id,
+        after: { teacherId: teacher.id, messageId: posted.messageId },
+        // The parent's words stay in the card, not the audit trail.
+        reason: 'praise shared with the teacher',
+      });
+      return posted;
+    });
+    return { feedbackId: praise.id, conversationId: out.conversationId, messageId: out.messageId };
   }
 
   // ------------------------------------------------------------------
@@ -409,6 +463,35 @@ export class TeacherRecordsService {
       return pageRowVisible(page, row.teacherId, complaintAbout(row, await familiesOfComplaints(this.prisma, [row])));
     }
     return pageRowVisible(page, row.teacherId, aboutOf(row));
+  }
+
+  /**
+   * The authors whose testimonials the caller may correct: the database's own
+   * chat.may_void_testimonial (the recording department, the Operations
+   * Manager, the super admin), asked once per distinct author.
+   */
+  private async mayVoidTestimonials(actor: Actor, rows: Array<{ createdBy: string | null }>): Promise<Set<string | null>> {
+    const authors = [...new Set(rows.map((r) => r.createdBy).filter((x): x is string => x !== null))];
+    if (authors.length === 0 || !actor.organizationId) return new Set();
+    const ok = await this.prisma.$queryRaw<Array<{ author: string }>>`
+      SELECT a::text AS author FROM unnest(${authors}::uuid[]) a
+       WHERE chat.may_void_testimonial(${actor.actorId}::uuid, a, ${actor.organizationId}::uuid)`;
+    return new Set(ok.map((r) => r.author));
+  }
+
+  /** When each piece of praise was shared with its teacher (PD-52 §11 c): the card's time. */
+  private async sharedAt(feedbackIds: string[]): Promise<Map<string, Date>> {
+    return this.sharedAtIn(this.prisma, feedbackIds);
+  }
+
+  private async sharedAtIn(db: Prisma.TransactionClient | PrismaService, feedbackIds: string[]): Promise<Map<string, Date>> {
+    if (feedbackIds.length === 0) return new Map();
+    const rows = await db.$queryRaw<Array<{ id: string; at: Date }>>`
+      SELECT c.payload->>'feedbackId' AS id, min(m.created_at) AS at
+        FROM chat.message_card c JOIN chat.message m ON m.id = c.message_id
+       WHERE c.kind = ${CardKind.TEACHER_PRAISE_SHARED} AND c.payload->>'feedbackId' = ANY(${feedbackIds}::text[])
+       GROUP BY 1`;
+    return new Map(rows.map((r) => [r.id, r.at]));
   }
 
   private async voidsOf(ids: string[]): Promise<Map<string, Entry>> {
