@@ -121,6 +121,13 @@ function rules(): Record<string, Rule> {
     ),
     'teacher_supervision.view': onPage,
     'teacher_supervision.record': recordsOnPage,
+    // PD-52: the two pages that replace it, on the same basis. Deciding is the
+    // same right as recording today; Sales (PR-5) will record without deciding.
+    'teacher_attendance.view': onPage,
+    'teacher_attendance.record': recordsOnPage,
+    'teacher_attendance.decide': recordsOnPage,
+    'teacher_grants.view': onPage,
+    'teacher_grants.record': recordsOnPage,
     'supervision.chats': supervises,
     'leave.allowance': (a) => pd012(a).canSetAllowance,
     'teacher_files.view': (a) => file(a).canView,
