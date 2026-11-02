@@ -29,6 +29,7 @@ import { LessonAudioPage } from '@/features/lesson-audio/LessonAudioPage'
 import type { Staff } from '@/shared/types/domain'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
 import { TeacherAttendancePage } from '@/features/teacher-records/TeacherAttendancePage'
+import { TeacherGrantsPage } from '@/features/teacher-records/TeacherGrantsPage'
 import { TeacherBoardsPage } from '@/features/teacher-boards/TeacherBoardsPage'
 import { BoardViewerPage } from '@/features/teacher-boards/BoardViewerPage'
 import { BOARD_KEYS } from '@/features/teacher-boards/api'
@@ -128,7 +129,7 @@ export function AppRoutes() {
         {/* PD-48: lesson voice-over review (listen; two different reviewers approve each clip). */}
         <Route path="/lesson-audio" element={<Area area="lesson-audio"><LessonAudioPage /></Area>} />
         <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
-        {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
+        {/* PD-26's page: since PD-52 only where its old links land (the two teacher-records pages). */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
         {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
         <Route path="/teachers/cases" element={<Area area="teachers"><CasesPage header={<TeachersAreaTabs />} /></Area>} />
@@ -138,6 +139,7 @@ export function AppRoutes() {
         <Route path="/cases" element={<Area area="cases"><CasesPage /></Area>} />
         {/* PD-52: Attendance & Complaints, a page of its own (Operations, the Teachers department, and later Sales). */}
         <Route path="/teacher-attendance" element={<Area area="teacher-attendance"><TeacherAttendancePage basePath="/teachers" /></Area>} />
+        <Route path="/teacher-grants" element={<Area area="teacher-grants"><TeacherGrantsPage basePath="/teachers" /></Area>} />
         <Route path="/teachers/leave" element={<Navigate to="/teacher-attendance?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
         <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
@@ -210,6 +212,10 @@ export function AppRoutes() {
         <Route
           path="/admin/teacher-attendance"
           element={<SuperAdminOnly><TeacherAttendancePage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teacher-grants"
+          element={<SuperAdminOnly><TeacherGrantsPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
         />
         <Route
           path="/admin/teachers/supervision"

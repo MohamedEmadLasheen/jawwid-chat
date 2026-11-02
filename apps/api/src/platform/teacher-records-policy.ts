@@ -1,3 +1,5 @@
+import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import type { Actor } from './types';
 import { decidePd012PageAccess, type Pd012Access } from './pd012-policy';
 import { teacherFilePageAccess, type TeacherFileAccess } from './teacher-file-policy';
 import type { PageBasis } from './teacher-scope';
@@ -19,8 +21,11 @@ import type { PageBasis } from './teacher-scope';
  *
  * Advisory: every route decides again. DB-free, so the matrix is unit-testable.
  */
+/** PD-26's bases, and (PD-52 PR-5) Sales. */
+export type RecordsBasis = PageBasis | 'sales';
+
 export interface TeacherRecordsAccess {
-  basis: PageBasis | null;
+  basis: RecordsBasis | null;
   attendance: { view: boolean; record: boolean; decide: boolean };
   grants: { view: boolean; record: boolean };
   /** A teacher's leave allowance, used days and balance (PD-26: never for Operations). */
@@ -41,7 +46,7 @@ export const NO_TEACHER_RECORDS_ACCESS: TeacherRecordsAccess = Object.freeze({
 });
 
 export interface TeacherRecordsInput {
-  basis: PageBasis | null;
+  basis: RecordsBasis | null;
   /** decidePd012StaffAccess for the caller (before the basis widens it). */
   pd012: Pd012Access;
   /** decideTeacherFileAccess for the caller (before the basis narrows it). */
@@ -53,6 +58,23 @@ export interface TeacherRecordsInput {
 export function decideTeacherRecordsAccess(input: TeacherRecordsInput): TeacherRecordsAccess {
   const { basis, keys } = input;
   if (basis === null) return NO_TEACHER_RECORDS_ACCESS;
+  const holdsKey = (...any: string[]) => any.some((k) => keys.has(k));
+  if (basis === 'sales') {
+    // Plan §5.4 / owner §11 b: Sales sees and records (trial lateness,
+    // complaints, testimonials, grants without an amount) and never decides; no
+    // balance, amount or Teacher File. Only the new keys count: Sales never
+    // held teacher_supervision.*.
+    const attendanceView = holdsKey('teacher_attendance.view');
+    const grantsView = holdsKey('teacher_grants.view');
+    return {
+      basis,
+      attendance: { view: attendanceView, record: attendanceView && holdsKey('teacher_attendance.record'), decide: false },
+      grants: { view: grantsView, record: grantsView && holdsKey('teacher_grants.record') },
+      leaveBalance: false,
+      amounts: false,
+      opensFile: false,
+    };
+  }
   const pd012 = decidePd012PageAccess(input.pd012, basis);
   const file = teacherFilePageAccess(input.file, basis);
   const holds = (...any: string[]) => any.some((k) => keys.has(k));
@@ -75,4 +97,41 @@ export function decideTeacherRecordsAccess(input: TeacherRecordsInput): TeacherR
     amounts: grantsView && file.canViewFinance && holds('teacher_files.finance'),
     opensFile: file.canView && holds('teacher_files.view'),
   };
+}
+
+/**
+ * The key a write on the pages needs, by what it writes (review of #369). The
+ * route admits any of the page's keys; the service then holds each write to
+ * its own, the old teacher_supervision.record still counting for one release:
+ *
+ *   complaint, follow-up, and the Teacher File's own entries   teacher_attendance.record
+ *   a complaint's resolution                                   teacher_attendance.decide
+ */
+export function entryKeyAllows(kind: string, keys: ReadonlySet<string>): boolean {
+  if (keys.has('teacher_supervision.record')) return true;
+  return kind === 'complaint_resolution' ? keys.has('teacher_attendance.decide') : keys.has('teacher_attendance.record');
+}
+
+/**
+ * Parent feedback (PD-32) on the two pages: praise is page B's, a complaint
+ * or suggestion page A's (plan §5.2, §5.3). Taking or replying to praise needs
+ * teacher_grants.record; to anything else teacher_attendance.decide. Reading
+ * needs the view key of the page the category is on.
+ */
+export function feedbackKeyAllows(category: string, act: 'read' | 'write', keys: ReadonlySet<string>): boolean {
+  if (keys.has(act === 'read' ? 'teacher_supervision.view' : 'teacher_supervision.record')) return true;
+  if (category === 'praise') return keys.has(act === 'read' ? 'teacher_grants.view' : 'teacher_grants.record');
+  return keys.has(act === 'read' ? 'teacher_attendance.view' : 'teacher_attendance.decide');
+}
+
+/**
+ * PD-52 PR-5: is this account Sales, as chat.sales_basis decides it? The role
+ * is re-checked against the department relation, as decidePageBases does, so
+ * a stale row grants nothing. The super admin is never "Sales".
+ */
+export function decideSalesBasis(actor: Actor, salesRole: 'manager' | 'member' | null): 'manager' | 'member' | null {
+  if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
+  if (salesRole === 'manager' && actor.staffRole === StaffRole.MANAGER) return 'manager';
+  if (salesRole === 'member' && (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE)) return 'member';
+  return null;
 }
