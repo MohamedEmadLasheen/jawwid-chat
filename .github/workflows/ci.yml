@@ -660,6 +660,17 @@ jobs:
       - run: flutter pub get
       - name: Debug APK builds without google-services.json
         run: flutter build apk --debug
+      - name: A throwaway release key, so the Firebase refusal is the one tested
+        # Release signing (PD-56) refuses a release task without android/key.properties
+        # before anything else. This key is generated here, lives only on the runner,
+        # signs nothing that leaves it, and is never committed.
+        run: |
+          pass="$(openssl rand -hex 16)"
+          keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/ci-throwaway.jks" -storetype JKS \
+            -alias ci -keyalg RSA -keysize 2048 -validity 1 -dname "CN=ci throwaway" \
+            -storepass "$pass" -keypass "$pass"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=ci\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/ci-throwaway.jks" "$pass" "$pass" > android/key.properties
       - name: A release build without google-services.json refuses, and says why
         run: |
           if flutter build apk --release > release.log 2>&1; then
