@@ -28,6 +28,7 @@ import { CardPoster } from '../../src/supervision/card-poster';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
 import { TeacherEvaluationService } from '../../src/teacher-file/teacher-evaluation.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -63,7 +64,7 @@ async function code(p: Promise<unknown>): Promise<string> {
 
 async function lesson(ms: number): Promise<string> {
   const start = ms + (slot++ % 20) * 40 * 60_000 * (ms < 0 ? -1 : 1);
-  return (await lessons.schedule(tmgr, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
+  return (await addLesson(g, lessons, tmgr, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
 }
 
 const supervisionCards = async (kind: string) => {

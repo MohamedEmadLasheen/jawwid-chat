@@ -21,6 +21,7 @@ import { CommError, CommErrorCode } from '@platform/errors';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -175,7 +176,7 @@ describe('2b. a teacher\'s day off', () => {
 describe('3. the make-up a family books', () => {
   it('is offered only after the teacher cancelled, only in real free time, and booked instantly once', async () => {
     await openAllWeek();
-    const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(48 * HOUR), endsAt: at(48.5 * HOUR) })).id;
+    const id = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(48 * HOUR), endsAt: at(48.5 * HOUR) })).id;
     // Nothing is owed yet.
     expect(await code(scheduling.makeupSlots(s.parentId, id))).toBe(CommErrorCode.LESSON_STATE);
 
@@ -188,7 +189,7 @@ describe('3. the make-up a family books', () => {
     expect(offered.slots.length).toBeGreaterThan(100);
     // A time the teacher is busy is not offered: the sibling's lesson.
     const busyAt = new Date(offered.slots[10]);
-    await lessons.schedule(tsupId, { learnerId: siblingId, startsAt: busyAt.toISOString(), endsAt: new Date(busyAt.getTime() + 30 * 60_000).toISOString() });
+    await addLesson(g, lessons, tsupId, { learnerId: siblingId, startsAt: busyAt.toISOString(), endsAt: new Date(busyAt.getTime() + 30 * 60_000).toISOString() });
     const after = await scheduling.makeupSlots(s.parentId, id);
     expect(after.slots).not.toContain(busyAt.toISOString());
     expect(await code(scheduling.bookMakeup(s.parentId, id, { startsAt: busyAt.toISOString() }))).toBe(CommErrorCode.LESSON_STATE);
@@ -208,7 +209,7 @@ describe('3. the make-up a family books', () => {
 
   it('a day off removes the day; a teacher records an agreed time but never on a day off; a student apology owes a make-up too (PD-15); the database refuses a make-up nobody owed', async () => {
     await openAllWeek();
-    const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(48 * HOUR), endsAt: at(48.5 * HOUR) })).id;
+    const id = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(48 * HOUR), endsAt: at(48.5 * HOUR) })).id;
     await lessons.teacherApology(s.teacherId, id, { reason: 'ill' });
     const [{ d }] = await g.prisma.$queryRawUnsafe<Array<{ d: string }>>(
       `select to_char((now() at time zone '${TZ}')::date + 3, 'YYYY-MM-DD') as d`,
@@ -228,13 +229,14 @@ describe('3. the make-up a family books', () => {
     const booked = await scheduling.bookMakeup(s.teacherId, id, { startsAt: offered.slots[0] });
     expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.id } })).createdByKind).toBe('teacher');
 
-    // A family's own apology owes a make-up too, and its "+" offers it.
-    const apologised = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(72 * HOUR), endsAt: at(72.5 * HOUR) })).id;
+    // A family's own apology owes a make-up too, and its "+" offers it. (Not at
+    // +72 h: that is the day off above, where no lesson is added -- TEACHER-API-002.)
+    const apologised = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(120 * HOUR), endsAt: at(120.5 * HOUR) })).id;
     await lessons.apology(s.parentId, apologised, { reason: 'travel' });
     expect((await lessons.ticketsFor(s.parentId, groupId)).tickets.some((x) => x.ticket === 'book_makeup' && x.lessonId === apologised)).toBe(true);
 
     // A lesson that owes nothing (still open) cannot be "replaced" by a family.
-    const open = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(96 * HOUR), endsAt: at(96.5 * HOUR) })).id;
+    const open = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(96 * HOUR), endsAt: at(96.5 * HOUR) })).id;
     await expect(g.prisma.$executeRawUnsafe(
       `insert into chat.lesson (learner_id, teacher_id, kind, makeup_for, starts_at, ends_at, created_by_kind, created_by)
        values ($1::uuid, $2::uuid, 'makeup', $3::uuid, now() + interval '5 days', now() + interval '5 days 30 minutes', 'contact', $4::uuid)`,
@@ -312,7 +314,7 @@ describe('5. a family asks for new regular times', () => {
 
 describe('6. reminders', () => {
   it('are scheduled once, never late, and cancelled when the lesson will not happen', async () => {
-    const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * HOUR), endsAt: at(3.5 * HOUR) })).id;
+    const id = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(3 * HOUR), endsAt: at(3.5 * HOUR) })).id;
     expect(await scheduling.scheduleDueReminders()).toBe(1);
     expect(await scheduling.scheduleDueReminders()).toBe(0);
     const rows = await g.prisma.notification.findMany({ where: { dedupeKey: { contains: `:${id}:` } } });

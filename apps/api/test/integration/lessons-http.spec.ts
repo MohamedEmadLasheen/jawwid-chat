@@ -24,6 +24,8 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
+import { addLesson } from './lesson-fixture';
+import { LessonService } from '../../src/lessons/lesson.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -139,6 +141,12 @@ afterAll(async () => {
 });
 
 async function schedule(startMs: number): Promise<string> {
+  // A lesson that has started was added before it began (PD-46 PR-2c refuses a
+  // past start over HTTP): written as the route wrote it then.
+  if (startMs <= 0) {
+    return (await addLesson(g, app.get(LessonService), m.teacherSupervisors[0].id,
+      { learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) })).id;
+  }
   const r = await http(tsup, 'POST', '/lessons', { learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) });
   expect(r.status).toBe(201);
   return r.json.id as string;
@@ -148,6 +156,31 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
   it('every route is behind the bearer guard', async () => {
     expect((await http(null, 'GET', '/lessons')).status).toBe(401);
     expect((await http(null, 'POST', `/lessons/${randomUUID()}/report`, { covered: 'x' })).status).toBe(401);
+  });
+
+  it('CHATSCHED-007: a retried "Add lesson" with the same Idempotency-Key (or the app\'s X-Idempotency-Key) gets the same lesson', async () => {
+    // A retry sends the same bytes: the body is built once, not re-timed per call.
+    const post = async (header: string, key: string, body: string) => {
+      const r = await fetch(`${base}/lessons`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${await tokenFor(tsup)}`, [header]: key },
+        body,
+      });
+      return { status: r.status, json: (await r.json()) as { id?: string; error?: { code?: string } } };
+    };
+    for (const [header, startMs] of [['idempotency-key', 50 * 60 * MIN], ['x-idempotency-key', 52 * 60 * MIN]] as const) {
+      const key = `retry-${randomUUID()}`;
+      const body = JSON.stringify({ learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) });
+      const first = await post(header, key, body);
+      const again = await post(header, key, body);
+      expect(first.status).toBe(201);
+      expect(again.status).toBe(201);
+      expect(again.json.id).toBe(first.json.id);
+    }
+    // Without the key, the same request is the overlap it always was.
+    const plain = await http(tsup, 'POST', '/lessons', { learnerId: fam.child.id, startsAt: at(50 * 60 * MIN), endsAt: at(50 * 60 * MIN + 30 * MIN) });
+    expect(plain.status).toBe(409);
+    expect(plain.code).toBe(CommErrorCode.LESSON_TEACHER_BUSY);
   });
 
   it('a Teachers supervisor schedules; the teacher reports; the family reads the card in their family group', async () => {

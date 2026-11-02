@@ -191,7 +191,14 @@ export class LessonService {
   // ------------------------------------------------------------------
 
   /** One lesson for a learner, with the learner's assigned teacher. Teachers department only. */
-  async schedule(actorId: string, body: Record<string, unknown>) {
+  /**
+   * Add one lesson (Admin Web "Add lesson"). With an Idempotency-Key
+   * (CHATSCHED-007) a retry of the same request answers the lesson the first
+   * one created -- the same body under the same key, by the same person --
+   * instead of 409 "the teacher already has a lesson"; the same key with
+   * another body is a 409 of its own.
+   */
+  async schedule(actorId: string, body: Record<string, unknown>, idempotencyKey?: string) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireManager(actor);
     const learnerId = uuidField(body, 'learnerId');
@@ -199,6 +206,8 @@ export class LessonService {
     const endsAt = dateField(body, 'endsAt');
     const makeupFor = optionalUuidField(body, 'makeupFor');
     if (endsAt <= startsAt) throw invalid('endsAt: must be after startsAt');
+    const key = idempotencyKey === undefined || idempotencyKey === '' ? null : idempotencyKey;
+    if (key !== null && (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))) throw invalid('Idempotency-Key: 1-200 visible characters');
 
     const learner = await this.prisma.learner.findFirst({
       where: { id: learnerId, organizationId: actor.organizationId },
@@ -214,6 +223,20 @@ export class LessonService {
 
     const lesson = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
+        if (key !== null) {
+          // Requests of one key are taken one after the other, so the second
+          // finds what the first created (a P2002 would abort the transaction).
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'lesson-create:' + actor.actorId + ':' + key}, 0))`;
+          const earlier = await tx.lesson.findFirst({ where: { createdBy: actor.actorId, createKey: key }, include: LESSON_INCLUDE });
+          if (earlier) {
+            const same = earlier.learnerId === learnerId && earlier.startsAt.getTime() === startsAt.getTime()
+              && earlier.endsAt.getTime() === endsAt.getTime() && earlier.makeupFor === (makeupFor ?? null);
+            if (!same) throw stateError('this Idempotency-Key was used for another lesson; use a new key');
+            return learnerLesson(earlier);
+          }
+        }
+        // TEACHER-API-002 / CHATSCHED-005: never in the past, never on a leave day.
+        await this.assertOpenTime(learner.teacherId as string, startsAt, 'a lesson', tx);
         const created = await this.writer.create(tx, 'created', {
           organizationId: actor.organizationId as string,
           learnerId,
@@ -223,6 +246,7 @@ export class LessonService {
           startsAt,
           endsAt,
           createdBy: actor.actorId,
+          createKey: key,
         }, LESSON_INCLUDE).then(learnerLesson);
         // CHATSCHED-001: the family hears of a lesson added outside the weekly
         // times, like any other lesson change.
@@ -1357,6 +1381,28 @@ export class LessonService {
          AND ls.supervisor_id IN (SELECT chat.staff_principals(${actor.actorId}::uuid, ${at}::timestamptz))
          AND (${only ?? null}::uuid IS NULL OR ls.learner_id = ${only ?? null}::uuid)`;
     return rows.map((r) => r.learner_id);
+  }
+
+  /**
+   * TEACHER-API-002 / CHATSCHED-005: a lesson at a time a person chose (a
+   * one-off, a make-up, an agreed move) starts in the future and not on one of
+   * the teacher's days off -- an approved leave IS its days off (PD-12) -- in
+   * the teacher's own zone. The weekly schedule and the free-slot lists keep to
+   * both already.
+   */
+  async assertOpenTime(teacherId: string, startsAt: Date, what: string, db: Pick<Prisma.TransactionClient, '$queryRaw'> = this.prisma) {
+    const [r] = await db.$queryRaw<Array<{ future: boolean; day_off: boolean }>>`
+      SELECT ${startsAt}::timestamptz > now() AS future,
+             EXISTS (
+               SELECT 1 FROM chat.teacher_day_off o
+                WHERE o.teacher_id = ${teacherId}::uuid
+                  AND o.day = (${startsAt}::timestamptz AT TIME ZONE coalesce(
+                        (SELECT a.timezone FROM chat.teacher_availability a WHERE a.teacher_id = ${teacherId}::uuid LIMIT 1),
+                        (SELECT c.value #>> '{}' FROM chat.config c WHERE c.key = 'schedule.timezone'),
+                        'Africa/Cairo'))::date
+             ) AS day_off`;
+    if (!r.future) throw stateError(`${what} is scheduled in the future`);
+    if (r.day_off) throw stateError('that is one of the teacher\'s days off; agree on another day');
   }
 
   async languageOf(lesson: { learner: { familyId: string } }): Promise<CardLanguage> {

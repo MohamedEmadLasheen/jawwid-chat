@@ -53,6 +53,10 @@ const MOVE_REFUSALS: Readonly<Record<MoveRefusal, string>> = {
   family_monthly_limit: 'the family has moved this child\'s lessons as many times as allowed this month',
 };
 
+/** A span of start times a lesson may be booked or moved into. */
+type MoveWindow = { from: Date; to: Date };
+const DAY_MS = 86_400_000;
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const MAKEUP_ACTIONS: ReadonlySet<string> = new Set(Object.values(MakeupAction));
@@ -683,7 +687,7 @@ export class SchedulingService {
     const duration = minutesBetween(lesson.startsAt, lesson.endsAt);
     const check = await this.moveCheck(actor, lesson);
     const tz = await this.prisma.teacherAvailability.findFirst({ where: { teacherId: lesson.teacherId }, select: { timezone: true } });
-    const slots = check.locked || check.refusal ? [] : await this.freeSlots(lesson.teacherId, duration);
+    const slots = check.locked || check.refusal ? [] : await this.freeSlots(lesson.teacherId, duration, this.prisma, await this.moveWindow(lesson));
     return {
       lessonId: lesson.id,
       startsAt: lesson.startsAt.toISOString(),
@@ -714,10 +718,11 @@ export class SchedulingService {
     if (check.refusal) throw stateError(MOVE_REFUSALS[check.refusal]);
     if (startsAt.getTime() === lesson.startsAt.getTime()) throw invalid('startsAt: a different time');
     const duration = minutesBetween(lesson.startsAt, lesson.endsAt);
-    const free = await this.freeSlots(lesson.teacherId, duration);
+    const window = await this.moveWindow(lesson);
+    const free = await this.freeSlots(lesson.teacherId, duration, this.prisma, window);
     if (!free.some((d) => d.getTime() === startsAt.getTime())) {
       if (actor.kind !== ActorKind.STAFF) throw stateError('that time is not free any more; choose another');
-      await this.assertAgreedTime(lesson.teacherId, startsAt, 'a lesson');
+      await this.assertAgreedTime(lesson.teacherId, startsAt, 'a lesson', window);
     }
     const by = actor.kind === ActorKind.CONTACT ? 'contact' : actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff';
     const lang = await this.lessons.languageOf(lesson);
@@ -1549,44 +1554,64 @@ export class SchedulingService {
        ORDER BY d.weekday, d.start_minute`;
   }
 
-  /** Free start times for one lesson of `duration` (shared with TrialService). */
-  /** `db` lets a caller ask inside its own transaction (a trial being moved frees its old time first). */
-  async freeSlots(teacherId: string, duration: number, db: Pick<Prisma.TransactionClient, '$queryRaw'> = this.prisma): Promise<Date[]> {
-    const lead = Number(await this.config.get('lesson.booking_lead_minutes'));
-    const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
+  /**
+   * Free start times for one lesson of `duration` (shared with TrialService):
+   * from the booking lead to the make-up horizon, or within `window` (a move,
+   * CHATSCHED-011). `db` lets a caller ask inside its own transaction (a trial
+   * being moved frees its old time first).
+   */
+  async freeSlots(
+    teacherId: string,
+    duration: number,
+    db: Pick<Prisma.TransactionClient, '$queryRaw'> = this.prisma,
+    window?: MoveWindow,
+  ): Promise<Date[]> {
     const step = Number(await this.config.get('lesson.slot_step_minutes'));
+    const { from, to } = window ?? (await this.bookingWindow());
     const rows = await db.$queryRaw<Array<{ starts_at: Date }>>`
       SELECT starts_at FROM chat.teacher_free_slots(
-        ${teacherId}::uuid,
-        now() + make_interval(mins => ${lead}::int),
-        now() + make_interval(days => ${horizon}::int),
-        ${duration}::int,
-        ${step}::int)`;
+        ${teacherId}::uuid, ${from}::timestamptz, ${to}::timestamptz, ${duration}::int, ${step}::int)`;
     return rows.map((r) => r.starts_at);
   }
 
-  /**
-   * A make-up time agreed outside the free-slot list (PD-15): in the future,
-   * within the booking horizon, and not on one of the teacher's days off (in
-   * the teacher's own zone). Overlaps are the database's to refuse.
-   */
-  private async assertAgreedTime(teacherId: string, startsAt: Date, what = 'a make-up') {
+  /** The booking lead from now, to the make-up horizon from now. */
+  private async bookingWindow(): Promise<MoveWindow> {
+    const lead = Number(await this.config.get('lesson.booking_lead_minutes'));
     const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
-    const rows = await this.prisma.$queryRaw<Array<{ future: boolean; within: boolean; day_off: boolean }>>`
-      SELECT ${startsAt}::timestamptz > now() AS future,
-             ${startsAt}::timestamptz <= now() + make_interval(days => ${horizon}::int) AS within,
-             EXISTS (
-               SELECT 1 FROM chat.teacher_day_off o
-                WHERE o.teacher_id = ${teacherId}::uuid
-                  AND o.day = (${startsAt}::timestamptz AT TIME ZONE coalesce(
-                        (SELECT a.timezone FROM chat.teacher_availability a WHERE a.teacher_id = ${teacherId}::uuid LIMIT 1),
-                        (SELECT c.value #>> '{}' FROM chat.config c WHERE c.key = 'schedule.timezone'),
-                        'Africa/Cairo'))::date
-             ) AS day_off`;
-    const r = rows[0];
-    if (!r.future) throw stateError(`${what} is scheduled in the future`);
-    if (!r.within) throw stateError(`${what} is scheduled within ${horizon} days`);
-    if (r.day_off) throw stateError('that is one of the teacher\'s days off; agree on another day');
+    const now = Date.now();
+    return { from: new Date(now + lead * 60_000), to: new Date(now + horizon * DAY_MS) };
+  }
+
+  /**
+   * CHATSCHED-011: where a lesson may move to -- around its OWN date, the
+   * make-up horizon either side, never before the booking lead. A lesson in
+   * three weeks may move a day later; before, the list ran from now to now + 14
+   * days, so it could only be pulled earlier. A lesson near now keeps the whole
+   * horizon from now.
+   */
+  private async moveWindow(lesson: { startsAt: Date }): Promise<MoveWindow> {
+    const { from, to } = await this.bookingWindow();
+    const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
+    const around = lesson.startsAt.getTime();
+    return {
+      from: new Date(Math.max(from.getTime(), around - horizon * DAY_MS)),
+      to: new Date(Math.max(to.getTime(), around + horizon * DAY_MS)),
+    };
+  }
+
+  /**
+   * A time agreed outside the free-slot list (PD-15): in the future and not on
+   * one of the teacher's days off (LessonService.assertOpenTime), and before the
+   * end of the make-up horizon -- or of a move's window. Overlaps are the
+   * database's to refuse.
+   */
+  private async assertAgreedTime(teacherId: string, startsAt: Date, what = 'a make-up', window?: MoveWindow) {
+    await this.lessons.assertOpenTime(teacherId, startsAt, what);
+    const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
+    const to = window?.to ?? (await this.bookingWindow()).to;
+    if (startsAt.getTime() > to.getTime()) {
+      throw stateError(window ? `${what} moves to within ${horizon} days of its own date` : `${what} is scheduled within ${horizon} days`);
+    }
   }
 
   private async assertOwed(
