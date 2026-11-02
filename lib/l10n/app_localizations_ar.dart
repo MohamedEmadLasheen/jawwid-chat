@@ -4103,6 +4103,12 @@ class L10nAr extends L10n {
   String get feedbackEntrySubtitle => 'إشادة أو اقتراح أو شكوى';
 
   @override
+  String get feedbackShortcutPraise => 'الثناء على المعلّم';
+
+  @override
+  String get feedbackShortcutProblem => 'الإبلاغ عن مشكلة';
+
+  @override
   String feedbackTeacherLine(String name) {
     return 'المعلّم: $name';
   }

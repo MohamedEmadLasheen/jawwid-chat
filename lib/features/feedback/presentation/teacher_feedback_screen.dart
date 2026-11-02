@@ -33,15 +33,53 @@ class TeacherFeedbackEntry extends ConsumerWidget {
     if (!ref.watch(feedbackRepositoryProvider).isAvailable) return const SizedBox.shrink();
     if (ref.watch(currentRoleProvider) != UserRole.parent) return const SizedBox.shrink();
     final l10n = L10n.of(context);
-    return ListTile(
-      key: ValueKey('feedback-entry-$learnerId'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.rate_review_outlined),
-      title: Text(l10n.feedbackEntryTitle),
-      subtitle: Text(l10n.feedbackEntrySubtitle),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => TeacherFeedbackScreen.open(context, learnerId: learnerId, childName: childName),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          key: ValueKey('feedback-entry-$learnerId'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.rate_review_outlined),
+          title: Text(l10n.feedbackEntryTitle),
+          subtitle: Text(l10n.feedbackEntrySubtitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => TeacherFeedbackScreen.open(context, learnerId: learnerId, childName: childName),
+        ),
+        // PD-52 (plan §11 g): two shortcuts into the same form, its kind already chosen.
+        // The one form, the same limits; the parent can still change the kind.
+        Wrap(
+          spacing: Spacing.spacing3,
+          runSpacing: Spacing.spacing2,
+          children: [
+            OutlinedButton.icon(
+              key: ValueKey('feedback-praise-$learnerId'),
+              onPressed: () => _shortcut(context, ref, FeedbackCategory.praise),
+              icon: const Icon(Icons.favorite_outline),
+              label: Text(l10n.feedbackShortcutPraise),
+            ),
+            OutlinedButton.icon(
+              key: ValueKey('feedback-problem-$learnerId'),
+              onPressed: () => _shortcut(context, ref, FeedbackCategory.complaint),
+              icon: const Icon(Icons.report_outlined),
+              label: Text(l10n.feedbackShortcutProblem),
+            ),
+          ],
+        ),
+      ],
     );
+  }
+
+  Future<void> _shortcut(BuildContext context, WidgetRef ref, FeedbackCategory category) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = L10n.of(context);
+    final sent = await Navigator.of(context).push<FeedbackItem>(
+      MaterialPageRoute(
+        builder: (_) => TeacherFeedbackFormScreen(learnerId: learnerId, childName: childName, initialCategory: category),
+      ),
+    );
+    if (sent == null) return;
+    ref.invalidate(myFeedbackProvider);
+    messenger.showSnackBar(SnackBar(content: Text(l10n.feedbackSent)));
   }
 }
 

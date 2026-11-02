@@ -6865,6 +6865,18 @@ abstract class L10n {
   /// **'Praise, a suggestion or a complaint'**
   String get feedbackEntrySubtitle;
 
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Praise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise the teacher'**
+  String get feedbackShortcutPraise;
+
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Complaint.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a problem'**
+  String get feedbackShortcutProblem;
+
   /// PD-32: who the feedback is about.
   ///
   /// In en, this message translates to:

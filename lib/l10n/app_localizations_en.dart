@@ -4024,6 +4024,12 @@ class L10nEn extends L10n {
   String get feedbackEntrySubtitle => 'Praise, a suggestion or a complaint';
 
   @override
+  String get feedbackShortcutPraise => 'Praise the teacher';
+
+  @override
+  String get feedbackShortcutProblem => 'Report a problem';
+
+  @override
   String feedbackTeacherLine(String name) {
     return 'Teacher: $name';
   }
