@@ -176,6 +176,11 @@ check "refused without owner approval" '! ( cd "$P" && bash "$ENGINE" run --task
 check "review refused too" '! ( cd "$P" && bash "$ENGINE" review --task-id r1 --base main~1 ) >/dev/null 2>&1'
 plan t21; echo 'echo "export const x = 21;" > src/a.ts' > "$FAKE_CODEX_PLAN/1"
 RUN_IN="$P" run --task-id t21 --brief "$BRIEF" --allow 'src/*' --risk high --owner-approval "owner: yes, do it" || true
+git -C "$P" remote add origin "git@github.com:Some-Owner/Core-Repo.git" 2>/dev/null || git -C "$P" remote set-url origin "git@github.com:Some-Owner/Core-Repo.git"
+printf 'github\\.com[:/]Some-Owner/Core-Repo(\\.git)?/?$\n' > "$SANDBOX/ai/protected-repos.conf"
+check "origin rule is case-insensitive (owner/repo case differs)" '! ( cd "$P" && git remote set-url origin "https://github.com/some-owner/CORE-REPO.git" && bash "$ENGINE" run --task-id t22 --brief "$BRIEF" --allow "src/*" ) >/dev/null 2>&1'
+git -C "$P" remote remove origin
+printf '^%s(/|$)\n' "$SANDBOX/proj" > "$SANDBOX/ai/protected-repos.conf"
 check "allowed with recorded approval" '[ "$(RUN_IN="$P" res t21 status)" = passed ] && [ "$(RUN_IN="$P" res t21 owner_approval)" = "owner: yes, do it" ]'
 : > "$SANDBOX/ai/protected-repos.conf"
 
@@ -199,6 +204,61 @@ echo dirty >> "$(wt t10)/src/a.ts"
 check "dirty worktree kept" '! ( cd "$REPO" && bash "$ENGINE" cleanup --task-id t10 ) >/dev/null 2>&1 && [ -d "$(wt t10)" ]'
 w9="$(wt t9)"
 check "clean worktree removed, run kept" '( cd "$REPO" && bash "$ENGINE" cleanup --task-id t9 ) >/dev/null 2>&1 && [ ! -d "$w9" ] && [ -f "$(res t9 run_dir)/result.json" ]'
+
+echo "15. release audit 2.1: post-freeze writes, .git hijack, symlink deletion, CODEOWNERS dirs, Core matching"
+plan t30; cat > "$FAKE_CODEX_PLAN/1" <<'S'
+echo "export const x = 30;" > src/a.ts
+cat > src/t.sh <<'T'
+mkdir -p .github/workflows; echo evil > .github/workflows/evil.yml; echo "* @nobody" > CODEOWNERS
+k=sk_live_; echo "const k = \"${k}ABCDEFGHIJKLMNOP\";" > src/late.ts
+T
+S
+run --task-id t30 --brief "$BRIEF" --allow 'src/*' --test 'bash src/t.sh' || true
+check "tests that write protected files and secrets after the freeze: nothing of it committed" '[ "$(res t30 status)" = passed ] && ! git -C "$(wt t30)" show --name-only --format= HEAD | grep -qE "evil.yml|CODEOWNERS|late.ts"'
+check "post-test writes discarded and reported" '[ ! -e "$(wt t30)/.github/workflows/evil.yml" ] && res t30 post_test_changes_discarded | grep -q evil.yml'
+
+plan t31; cat > "$FAKE_CODEX_PLAN/1" <<'S'
+echo "export const x = 31;" > src/a.ts
+cat > src/t.sh <<'T'
+fake="$TMPDIR/fakegit"; git init -q --bare "$fake"
+git --git-dir="$fake" config commit.gpgsign true
+printf '#!/bin/sh\ntouch "%s/PWNED"\n' "$PWD" > "$TMPDIR/evil.sh"; chmod +x "$TMPDIR/evil.sh"
+git --git-dir="$fake" config gpg.program "$TMPDIR/evil.sh"
+echo "gitdir: $fake" > .git
+T
+S
+rc=0; run --task-id t31 --brief "$BRIEF" --allow 'src/*' --test 'bash src/t.sh' || rc=$?
+check ".git hijacked during tests: evil gpg never runs" '[ ! -e "$(wt t31)/PWNED" ]'
+check ".git hijack during tests: blocked, pointer restored, result written" '[ "$rc" = 3 ] && [ "$(res t31 status)" = blocked ] && grep -q "worktrees" "$(wt t31)/.git"'
+
+VICTIM="$SANDBOX/victim"; mkdir -p "$VICTIM"; echo keep > "$VICTIM/precious.txt"
+plan t32; cat > "$FAKE_CODEX_PLAN/1" <<S
+echo "export const x = 32;" > src/a.ts
+ln -s "$VICTIM" node_modules
+S
+run --task-id t32 --brief "$BRIEF" --allow 'src/*' || true
+check "ignored symlink to an outside dir: link removed, target untouched" '[ ! -L "$(wt t32)/node_modules" ] && [ -f "$VICTIM/precious.txt" ]'
+
+Q="$SANDBOX/codeowners"; newrepo "$Q"; printf 'apps/api @a\n**/logs @b\n' >> "$Q/.github/CODEOWNERS"; git -C "$Q" add -A; git -C "$Q" commit -q -m co
+plan t33; cat > "$FAKE_CODEX_PLAN/1" <<'S'
+mkdir -p apps/api/src x/logs; echo a > apps/api/src/x.ts; echo b > x/logs/y.txt; echo "export const x = 33;" > src/a.ts
+S
+RUN_IN="$Q" run --task-id t33 --brief "$BRIEF" --allow 'src/*' --allow 'apps/*' --allow 'x/*' --max-attempts 1 || true
+check "CODEOWNERS dir without slash and **/x protect everything below" '[ "$(git -C "$(RUN_IN="$Q" wt t33)" show --name-only --format= HEAD)" = src/a.ts ]'
+
+: > "$SANDBOX/ai/protected-repos.conf"
+A="$SANDBOX/alias"; newrepo "$A"; git -C "$A" remote add origin "git@github-personal:Some-Other/thing.git"; git -C "$A" remote add backup "git@github-personal:mohamedemadlasheen/JAWWID.git"
+check "built-in Core rule: ssh alias on a second remote, any case" 'grep -q "is protected" <<<"$( cd "$A" && bash "$ENGINE" run --task-id t34 --brief "$BRIEF" --allow "src/*" 2>&1 || true )"'
+R="$SANDBOX/rootcopy"; newrepo "$R"; ROOT="$(git -C "$R" rev-list --max-parents=0 HEAD)"; printf 'root:%s\n' "$ROOT" > "$SANDBOX/ai/protected-repos.conf"
+check "root-commit rule: a clone anywhere, with no remote, is protected" 'grep -q "is protected" <<<"$( cd "$R" && bash "$ENGINE" run --task-id t35 --brief "$BRIEF" --allow "src/*" 2>&1 || true )"'
+: > "$SANDBOX/ai/protected-repos.conf"
+check "jawwid-chat-like names are not caught by the Core rule" '( cd "$REPO" && git remote add origin "https://github.com/MohamedEmadLasheen/jawwid-chat.git" && ! bash "$ENGINE" run --task-id t36 --brief "$BRIEF" --allow "src/*" --max-attempts 1 2>&1 | grep -q "is protected"; rc=$?; git remote remove origin; exit $rc )'
+
+O="$SANDBOX/oldbase"; newrepo "$O"; git -C "$O" tag old-base
+printf '{"protected":["docs/*"]}\n' > "$O/.ai-delegation.json"; git -C "$O" add -A; git -C "$O" commit -q -m policy
+plan t37; echo 'mkdir -p docs; echo d > docs/x.md; echo "export const x = 37;" > src/a.ts' > "$FAKE_CODEX_PLAN/1"
+RUN_IN="$O" run --task-id t37 --brief "$BRIEF" --base old-base --allow 'src/*' --allow 'docs/*' --max-attempts 1 || true
+check "an old --base cannot drop the default branch's project policy" '[ "$(git -C "$(RUN_IN="$O" wt t37)" show --name-only --format= HEAD)" = src/a.ts ]'
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -30,8 +30,8 @@ codex-delegate doctor                           # Codex present, logged in, sand
 To update: pull the newer source, run `install.sh` again. `~/.jawwid-ai/engine/INSTALLED` records the
 version and source commit. Self-tests (no Codex usage):
 ```bash
-bash tools/codex-delegate/test/codex-delegate.test.sh   # engine: 48 checks incl. audited exploits
-bash tools/codex-delegate/test/install.test.sh          # installer: 13 checks in a throwaway home
+bash tools/codex-delegate/test/codex-delegate.test.sh   # engine: 59 checks incl. every audited exploit
+bash tools/codex-delegate/test/install.test.sh          # installer: 17 checks in a throwaway home
 ```
 
 ## Project independence

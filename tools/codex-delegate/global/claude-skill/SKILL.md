@@ -2,6 +2,7 @@
 name: ai-delegation
 description: Lead multi-agent engineering in any Git repository on this Mac. Decide per task whether to do it yourself, use Claude subagents, delegate a bounded implementation to the Codex CLI, or get an independent Codex review, then verify and integrate everything yourself. Use for any development task with a separable, well-specified piece, or when a risky diff needs a second reviewer.
 ---
+<!-- codex-delegate:owned-file (installed by tools/codex-delegate/install.sh; edit the source) -->
 
 # AI delegation (Claude leads, Codex helps)
 
@@ -58,7 +59,14 @@ JSON. Check every finding in the code, then report agreements, disagreements and
   files, Code Owner paths (read from the base commit), plus the project's `.ai-delegation.json` list.
 - The engine never pushes, merges or deploys.
 
-## 5. If something fails
+## 5. Disagreements and decisions
+When Codex's review or proposal conflicts with yours, settle it on evidence: read the code, check the
+official docs, write a reproducing test, run it. Then decide, record the decision and its rationale (PR
+body or the project's decision log) and move on. Never put the choice to the owner and never vote. If you
+want a stronger challenge before a significant design decision, run a read-only Codex review with a
+`--focus` file stating your plan and asking for the strongest counter-arguments.
+
+## 6. If something fails
 Run `codex-delegate doctor` (no usage spent). `blocked` means login or usage: do the work yourself and tell
 the owner only if they must log in. Otherwise read the run directory, fix the brief or the invocation,
 and stay within 3 attempts. Never weaken a check, widen `--allow` to swallow a violation, or force-remove a

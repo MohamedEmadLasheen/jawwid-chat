@@ -29,6 +29,8 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$AI_HOME/backups/$STAMP"
 MODE="${1:-install}"
 changes=0
+problems=0
+OWNED='codex-delegate:owned-file'   # present in every file the installer may replace or delete
 
 say() { printf '%s\n' "$*"; }
 backup() { # $1 = existing file
@@ -41,11 +43,29 @@ put_file() { # $1 = source, $2 = target, $3 = mode
   changes=$((changes + 1))
   if [ "$MODE" = --check ]; then say "would update: $2"; return 0; fi
   backup "$2"; mkdir -p "$(dirname "$2")"
-  cp "$1" "$2.tmp.$$"; chmod "$3" "$2.tmp.$$"; mv "$2.tmp.$$" "$2"
+  if [ -L "$2" ]; then
+    cat "$1" > "$2"   # a symlinked file (e.g. a dotfiles repo) is written through, never replaced
+  else
+    cp "$1" "$2.tmp.$$"; chmod "$3" "$2.tmp.$$"; mv "$2.tmp.$$" "$2"
+  fi
   say "updated: $2"
+}
+# A shared instruction file is edited only when its markers are intact: none, or
+# exactly one begin line followed later by exactly one end line. Anything else
+# (a lone marker, duplicates) is left untouched and reported, never "repaired".
+markers_ok() { # $1 = file
+  [ -f "$1" ] || return 0
+  local b e; b="$(grep -cxF "$BEGIN" "$1" || true)"; e="$(grep -cxF "$END" "$1" || true)"
+  [ "$b" = 0 ] && [ "$e" = 0 ] && return 0
+  [ "$b" = 1 ] && [ "$e" = 1 ] || return 1
+  [ "$(grep -nxF "$BEGIN" "$1" | cut -d: -f1)" -lt "$(grep -nxF "$END" "$1" | cut -d: -f1)" ]
 }
 # Replace (or append) the managed block in a shared instruction file.
 put_block() { # $1 = block source, $2 = target
+  if ! markers_ok "$2"; then
+    say "SKIPPED (markers damaged; fix or remove the codex-delegate lines by hand, then re-run): $2"
+    problems=$((problems + 1)); return 0
+  fi
   local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/cd-block.XXXXXX")"
   {
     if [ -f "$2" ]; then
@@ -61,11 +81,28 @@ put_block() { # $1 = block source, $2 = target
 }
 remove_block() { # $1 = target
   [ -f "$1" ] && grep -qxF "$BEGIN" "$1" || return 0
+  markers_ok "$1" || { say "SKIPPED (markers damaged): $1"; problems=$((problems + 1)); return 0; }
   changes=$((changes + 1))
   if [ "$MODE" = --check ]; then say "would remove block from: $1"; return 0; fi
   backup "$1"
   awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$1" > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"
   say "removed managed block: $1"
+}
+# A whole file the installer owns. An existing file without our marker belongs to
+# someone else: it is never replaced (or, on uninstall, deleted).
+# Ours = carries the marker, or is the pre-marker 2.0.0 skill (frontmatter name
+# ai-delegation and written for codex-delegate), or is the engine itself.
+is_ours() { # $1 = file
+  grep -q "$OWNED" "$1" && return 0
+  grep -qx 'name: ai-delegation' "$1" && grep -q 'codex-delegate' "$1" && return 0
+  head -3 "$1" | grep -q '^# codex-delegate' && return 0
+  return 1
+}
+put_owned() { # $1 = source, $2 = target
+  if [ -f "$2" ] && ! is_ours "$2"; then
+    say "SKIPPED (not ours; rename or remove it to install): $2"; problems=$((problems + 1)); return 0
+  fi
+  put_file "$1" "$2" 644
 }
 merge_protected() { # create if missing; append default rules that are absent; never remove
   local target="$AI_HOME/protected-repos.conf" src="$SRC/global/protected-repos.conf" line missing=""
@@ -90,8 +127,8 @@ case "$MODE" in
     merge_protected
     put_block "$SRC/global/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md"
     put_block "$SRC/global/codex-AGENTS.md" "$CODEX_HOME_DIR/AGENTS.md"
-    put_file "$SRC/global/claude-skill/SKILL.md" "$CLAUDE_HOME/skills/ai-delegation/SKILL.md" 644
-    put_file "$SRC/global/agents-skill/SKILL.md" "$AGENTS_SKILLS/ai-delegation/SKILL.md" 644
+    put_owned "$SRC/global/claude-skill/SKILL.md" "$CLAUDE_HOME/skills/ai-delegation/SKILL.md"
+    put_owned "$SRC/global/agents-skill/SKILL.md" "$AGENTS_SKILLS/ai-delegation/SKILL.md"
     if [ "$MODE" = install ]; then
       mkdir -p "$AI_HOME/engine" "$AI_HOME/runs"
       src_rev="$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -99,7 +136,8 @@ case "$MODE" in
         "$("$BIN_DIR/codex-delegate" --version | awk '{print $2}')" "$SRC" "$src_rev" "$STAMP" > "$AI_HOME/engine/INSTALLED"
       case ":$PATH:" in *":$BIN_DIR:"*) ;; *) say "note: $BIN_DIR is not on PATH; call $BIN_DIR/codex-delegate directly" ;; esac
       [ -d "$BACKUP" ] && say "backups: $BACKUP"
-      say "codex-delegate installed ($changes change(s)). Next: codex-delegate doctor"
+      say "codex-delegate installed ($changes change(s), $problems skipped). Next: codex-delegate doctor"
+      [ "$problems" = 0 ] || exit 1
     else
       say "$changes change(s) pending"
     fi
@@ -107,6 +145,7 @@ case "$MODE" in
   --uninstall)
     for f in "$BIN_DIR/codex-delegate" "$CLAUDE_HOME/skills/ai-delegation/SKILL.md" "$AGENTS_SKILLS/ai-delegation/SKILL.md"; do
       [ -f "$f" ] || continue
+      is_ours "$f" || { say "SKIPPED (not ours): $f"; continue; }
       backup "$f"; rm -f "$f"; rmdir "$(dirname "$f")" 2>/dev/null || true; say "removed: $f"
     done
     rm -f "$BIN_DIR/codex-delegate" 2>/dev/null || true

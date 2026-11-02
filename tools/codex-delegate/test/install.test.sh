@@ -27,10 +27,24 @@ check "custom protected rule kept, defaults added" 'grep -q "my/secret/repo" "$H
 check "backups taken of changed files" 'ls "$H"/.jawwid-ai/backups/*"$H"/.claude/CLAUDE.md >/dev/null 2>&1'
 before="$(shasum "$H/.claude/CLAUDE.md" "$H/.codex/AGENTS.md" "$H/.jawwid-ai/protected-repos.conf")"
 bash "$INSTALL" > "$H/install2.log"
-check "re-install is a no-op" 'grep -q "(0 change(s))" "$H/install2.log" && [ "$before" = "$(shasum "$H/.claude/CLAUDE.md" "$H/.codex/AGENTS.md" "$H/.jawwid-ai/protected-repos.conf")" ]'
+check "re-install is a no-op" 'grep -q "(0 change(s), 0 skipped)" "$H/install2.log" && [ "$before" = "$(shasum "$H/.claude/CLAUDE.md" "$H/.codex/AGENTS.md" "$H/.jawwid-ai/protected-repos.conf")" ]'
 check "exactly one managed block" '[ "$(grep -c "codex-delegate:begin" "$H/.claude/CLAUDE.md")" = 1 ]'
 bash "$INSTALL" --uninstall > "$H/uninstall.log"
 check "uninstall removes engine and skills" '[ ! -e "$H/bin/codex-delegate" ] && [ ! -e "$H/.claude/skills/ai-delegation" ]'
 check "uninstall leaves the user text only" '[ "$(cat "$H/.claude/CLAUDE.md")" = "$(printf "# My own rules\nAlways answer in Arabic.")" ] && [ "$(cat "$H/.codex/AGENTS.md")" = "my codex note" ]'
 check "uninstall keeps protected-repos.conf" 'grep -q "my/secret/repo" "$H/.jawwid-ai/protected-repos.conf"'
+
+# Damaged markers and files that are not ours are never touched.
+H2="$H/second"; mkdir -p "$H2/.claude/skills/ai-delegation" "$H2/.codex"
+printf 'keep me\n<!-- codex-delegate:begin (managed by tools/codex-delegate/install.sh; edit the source, not this block) -->\nmy precious tail\n' > "$H2/.claude/CLAUDE.md"
+printf -- '---\nname: ai-delegation\ndescription: my own skill\n---\nmine\n' > "$H2/.claude/skills/ai-delegation/SKILL.md"
+before2="$(shasum "$H2/.claude/CLAUDE.md" "$H2/.claude/skills/ai-delegation/SKILL.md")"
+rc=0; JAWWID_AI_HOME="$H2/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H2/bin" CLAUDE_CONFIG_HOME="$H2/.claude" CODEX_HOME="$H2/.codex" AGENTS_SKILLS_HOME="$H2/.agents/skills" bash "$INSTALL" > "$H2/log" 2>&1 || rc=$?
+check "lone marker: file left untouched, reported" '[ "$before2" = "$(shasum "$H2/.claude/CLAUDE.md" "$H2/.claude/skills/ai-delegation/SKILL.md")" ] && grep -q "markers damaged" "$H2/log"'
+check "foreign skill file: not replaced, reported, exit 1" 'grep -q "not ours" "$H2/log" && [ "$rc" = 1 ]'
+JAWWID_AI_HOME="$H2/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H2/bin" CLAUDE_CONFIG_HOME="$H2/.claude" CODEX_HOME="$H2/.codex" AGENTS_SKILLS_HOME="$H2/.agents/skills" bash "$INSTALL" --uninstall > "$H2/ulog" 2>&1 || true
+check "uninstall leaves foreign skill alone" 'grep -q "^mine$" "$H2/.claude/skills/ai-delegation/SKILL.md"'
+H3="$H/third"; mkdir -p "$H3/dotfiles" "$H3/.claude"; printf 'mine\n' > "$H3/dotfiles/CLAUDE.md"; ln -s "$H3/dotfiles/CLAUDE.md" "$H3/.claude/CLAUDE.md"
+JAWWID_AI_HOME="$H3/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H3/bin" CLAUDE_CONFIG_HOME="$H3/.claude" CODEX_HOME="$H3/.codex" AGENTS_SKILLS_HOME="$H3/.agents/skills" bash "$INSTALL" > "$H3/log" 2>&1
+check "symlinked CLAUDE.md written through, link kept" '[ -L "$H3/.claude/CLAUDE.md" ] && grep -q "codex-delegate:begin" "$H3/dotfiles/CLAUDE.md" && head -1 "$H3/dotfiles/CLAUDE.md" | grep -qx mine'
 echo; echo "$pass passed, $fail failed"; [ "$fail" -eq 0 ]

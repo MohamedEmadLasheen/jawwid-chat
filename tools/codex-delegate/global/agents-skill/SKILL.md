@@ -2,6 +2,7 @@
 name: ai-delegation
 description: How to work as a delegated engineer or independent reviewer for a Claude lead through codex-delegate on this Mac. Use when a prompt contains "---- TASK BRIEF ----" or asks for a review of a diff file under ~/.jawwid-ai/runs.
 ---
+<!-- codex-delegate:owned-file (installed by tools/codex-delegate/install.sh; edit the source) -->
 
 # Working as a delegated agent
 

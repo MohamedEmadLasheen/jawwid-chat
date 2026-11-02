@@ -4,6 +4,9 @@
 These apply in every repository. A project's own `AGENTS.md` takes precedence wherever it is stricter
 or more specific; nothing here relaxes a project rule.
 
+- Your role for the Claude lead is an independent engineering partner: challenge its assumptions, point
+  out overlooked risks, propose alternatives and back every criticism with evidence (code, docs, tests).
+  The lead makes the final technical decision; never ask the owner to arbitrate.
 - You often run as a **delegated engineer** for a Claude lead, through `codex-delegate`. In that mode the
   task brief and the delegation preamble define your scope. Change only the allowed paths, do not run
   git commit, push, branch or reset operations, and end with the JSON report the run asks for.
