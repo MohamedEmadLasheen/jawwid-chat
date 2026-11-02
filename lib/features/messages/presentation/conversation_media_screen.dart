@@ -11,6 +11,7 @@ import '../../../shared/utils/byte_size_format.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../application/messages_controller.dart';
+import 'chat_video_screen.dart';
 import 'media_viewer.dart';
 
 /// Everything shared in one conversation, in three tabs.
@@ -280,7 +281,10 @@ class _ItemList extends ConsumerWidget {
           // shared rather than a second place to play it.
           onTap: isVoice || url == null
               ? null
-              : () => ref.read(attachmentOpenerProvider).open(url),
+              // CHATSCHED-010: a video plays in the app; a document opens where documents open.
+              : item.attachment.kind == MessageKind.video
+                  ? () => showChatVideo(context, url: url, title: item.attachment.fileName)
+                  : () => ref.read(attachmentOpenerProvider).open(url),
           title: ContentText(
             item.attachment.fileName?.trim().isNotEmpty == true
                 ? item.attachment.fileName!

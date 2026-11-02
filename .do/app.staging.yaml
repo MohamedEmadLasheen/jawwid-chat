@@ -120,6 +120,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${DATABASE_POOL_MAX}
+      - key: DATABASE_WORKER_POOL_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_WORKER_POOL_MAX}
       - key: REDIS_URL
         scope: RUN_TIME
         type: SECRET
@@ -176,6 +180,18 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${STORAGE_SIGNED_URL_TTL_SECONDS}
+      - key: STORAGE_CONNECT_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_CONNECT_TIMEOUT_MS}
+      - key: STORAGE_REQUEST_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_REQUEST_TIMEOUT_MS}
+      - key: STORAGE_MAX_ATTEMPTS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_MAX_ATTEMPTS}
       - key: STORAGE_SIGNING_SECRET
         scope: RUN_TIME
         type: SECRET
@@ -489,6 +505,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${DATABASE_POOL_MAX}
+      - key: DATABASE_WORKER_POOL_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_WORKER_POOL_MAX}
       - key: REDIS_URL
         scope: RUN_TIME
         type: SECRET
@@ -545,6 +565,18 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${STORAGE_SIGNED_URL_TTL_SECONDS}
+      - key: STORAGE_CONNECT_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_CONNECT_TIMEOUT_MS}
+      - key: STORAGE_REQUEST_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_REQUEST_TIMEOUT_MS}
+      - key: STORAGE_MAX_ATTEMPTS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_MAX_ATTEMPTS}
       - key: STORAGE_SIGNING_SECRET
         scope: RUN_TIME
         type: SECRET

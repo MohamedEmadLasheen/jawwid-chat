@@ -54,6 +54,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/auth/login` | public | `platform/auth/auth.controller.ts#AuthController.login` |
 | POST | `/api/v1/auth/logout` | self-service | `platform/auth/auth.controller.ts#AuthController.logout` |
 | POST | `/api/v1/auth/password-reset` | public | `platform/auth/password-reset.controller.ts#PasswordResetController.complete` |
+| POST | `/api/v1/auth/password/change` | self-service | `platform/auth/auth.controller.ts#PasswordChangeController.change` |
 | POST | `/api/v1/auth/recovery/email` | public | `account-recovery/account-recovery.controller.ts#AccountRecoveryController.email` |
 | POST | `/api/v1/auth/recovery/email/verify` | public | `account-recovery/account-recovery.controller.ts#AccountRecoveryController.verifyEmail` |
 | GET | `/api/v1/auth/recovery/options` | public | `account-recovery/account-recovery.controller.ts#AccountRecoveryController.options` |
