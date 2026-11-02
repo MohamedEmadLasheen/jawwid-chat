@@ -5093,4 +5093,23 @@ class L10nEn extends L10n {
   @override
   String get deleteAccountTeacherBlocked =>
       'Please contact the academy to close your lessons and payroll before deleting your account.';
+
+  @override
+  String get cardScheduledTitle => 'Lesson added';
+
+  @override
+  String cardNowAt(String when) {
+    return 'Now: $when';
+  }
+
+  @override
+  String cardNowHeldAt(String when) {
+    return 'Held: $when';
+  }
+
+  @override
+  String get cardNowCancelled => 'This lesson was cancelled';
+
+  @override
+  String get cardNowMissed => 'This lesson did not take place';
 }

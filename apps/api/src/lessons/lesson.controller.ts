@@ -52,6 +52,13 @@ export class LessonController {
     return this.lessons.schedule(actorId, body ?? {});
   }
 
+  /** CHATSCHED-002: where the lessons this conversation's cards announced stand now. */
+  @Requires('chat.use')
+  @Get('conversations/:id/lesson-now')
+  lessonNow(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.lessons.lessonNow(actorId, id);
+  }
+
   /** What the caller may open under "+" in this conversation now. Advisory. */
   @Requires('chat.use')
   @Get('conversations/:id/lesson-tickets')

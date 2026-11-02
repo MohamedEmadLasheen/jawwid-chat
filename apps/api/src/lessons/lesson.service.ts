@@ -474,6 +474,58 @@ export class LessonService {
    * what the client puts under "+". Advisory, exactly like canCall: each ticket
    * is re-decided when it is submitted.
    */
+  /**
+   * CHATSCHED-002 (PD-46 §3.4, owner Q2): a lesson card is history and is
+   * never rewritten, but nobody should act on an old time. For every lesson a
+   * time-announcing card in this conversation is about, where that lesson is
+   * NOW: the end of its move chain (moved_from), its time and a plain status.
+   * The family's view: no reason, no recorder. The same read check as every
+   * conversation route; the times are those its own later cards announce.
+   */
+  async lessonNow(actorId: string, conversationId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    const conv = await this.conversations.requireConversation(conversationId);
+    const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
+    if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const read = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!read.allowed) throw new CommError(read.code, read.reason);
+    const rows = await this.prisma.$queryRaw<Array<{ lesson_id: string; current_id: string; starts_at: Date; ends_at: Date; outcome: string | null }>>`
+      WITH RECURSIVE carded AS (
+        SELECT c.lesson_id, max(m.seq) AS last_seq
+          FROM chat.message_card c
+          JOIN chat.message m ON m.id = c.message_id
+         WHERE m.conversation_id = ${conv.id}::uuid
+           AND m.deleted_at IS NULL
+           AND c.lesson_id IS NOT NULL
+           AND c.kind = ANY(${TIMED_CARD_KINDS}::text[])
+         GROUP BY c.lesson_id
+         ORDER BY last_seq DESC
+         LIMIT ${LESSON_NOW_LIMIT}
+      ), chain AS (
+        SELECT l.id AS origin, l.id AS cur, 0 AS depth
+          FROM carded JOIN chat.lesson l ON l.id = carded.lesson_id
+         WHERE l.organization_id = ${conv.organizationId}::uuid
+        UNION ALL
+        SELECT chain.origin, n.id, chain.depth + 1
+          FROM chain JOIN chat.lesson n ON n.moved_from = chain.cur
+         WHERE chain.depth < 50
+      )
+      SELECT DISTINCT ON (chain.origin)
+             chain.origin::text AS lesson_id, l.id::text AS current_id, l.starts_at, l.ends_at, l.outcome
+        FROM chain JOIN chat.lesson l ON l.id = chain.cur
+       ORDER BY chain.origin, chain.depth DESC`;
+    return {
+      lessons: rows.map((r) => ({
+        lessonId: r.lesson_id,
+        currentLessonId: r.current_id,
+        startsAt: r.starts_at.toISOString(),
+        endsAt: r.ends_at.toISOString(),
+        status: nowStatus(r.outcome),
+      })),
+    };
+  }
+
   async ticketsFor(actorId: string, conversationId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
@@ -1590,6 +1642,21 @@ export async function cancelReminders(tx: Tx, lessonId: string): Promise<void> {
     where: { subjectId: lessonId, cancelledAt: null, visibleAt: { gt: new Date() } },
     data: { cancelledAt: new Date(), cancelReason: 'subject_gone' },
   });
+}
+
+/** The cards that announce a time to come: the ones an old time could mislead (CHATSCHED-002). */
+const TIMED_CARD_KINDS: string[] = [CardKind.LESSON_SCHEDULED, CardKind.LESSON_MOVED, CardKind.LESSON_MAKEUP_BOOKED];
+/** The newest lessons carded in one conversation that lessonNow answers for. */
+const LESSON_NOW_LIMIT = 300;
+
+/** What a family may read of where a lesson stands: never why, never who. */
+export type LessonNowStatus = 'upcoming' | 'held' | 'missed' | 'cancelled';
+function nowStatus(outcome: string | null): LessonNowStatus {
+  if (outcome === null) return 'upcoming';
+  if (outcome === LessonOutcome.HELD) return 'held';
+  if (outcome === LessonOutcome.STUDENT_NO_SHOW || outcome === LessonOutcome.TEACHER_NO_SHOW) return 'missed';
+  // An apology, a cancellation, a pause, a replaced weekly time, a voided report.
+  return 'cancelled';
 }
 
 export function invalid(reason: string) {

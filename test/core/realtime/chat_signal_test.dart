@@ -79,6 +79,19 @@ void main() {
     }
   });
 
+  test('PD-46: lesson.changed names its conversations as a list, and its lesson', () {
+    final s = decodeChatSignal('lesson.changed', {
+      'lessonId': 'l1', 'revision': 3, 'change': 'moved', 'conversationIds': ['c1', 'c2', 7, ''],
+    })!;
+    expect(s.kind, ChatSignalKind.lessonChanged);
+    expect(s.conversationIds, ['c1', 'c2']);
+    expect(s.lessonId, 'l1');
+    expect(s.conversationId, isNull);
+    // A lesson change that reaches no conversation is not a chat signal.
+    expect(decodeChatSignal('lesson.changed', {'lessonId': 'l1', 'conversationIds': <String>[]}), isNull);
+    expect(decodeChatSignal('lesson.changed', 'l1'), isNull);
+  });
+
   test('a malformed seq is not invented: it decodes as null', () {
     final s = decodeChatSignal('message.created', {'conversationId': conv, 'seq': 'x'})!;
     expect(s.seq, isNull);
