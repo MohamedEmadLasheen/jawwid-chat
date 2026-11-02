@@ -206,6 +206,9 @@ describe('1. the lifecycle, newest first', () => {
       'teacher.created', 'account.first_login_code_issued', 'account.activated', 'teacher.offboarded', 'teacher.reactivated',
     ]));
     expect(actions.lastIndexOf('teacher.created')).toBe(actions.length - 1);
+    // TEACHER-002: the first sign-in is ONE line (its activation), not also a "password reset".
+    expect(actions.filter((x) => x === 'account.activated')).toHaveLength(1);
+    expect(actions).not.toContain('account.password_reset_completed');
     expect(actions.filter((a) => a === 'account.first_login_code_issued').length).toBeGreaterThanOrEqual(3);
     const times = events.map((e) => Date.parse(e.at));
     expect([...times].sort((a, b) => b - a)).toEqual(times);

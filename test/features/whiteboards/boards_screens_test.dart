@@ -21,6 +21,7 @@ import 'package:jawwid_chat/features/whiteboards/domain/board_elements.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/board_page.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/board_canvas.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/board_editor_screen.dart';
+import 'package:jawwid_chat/features/whiteboards/presentation/board_painter.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/boards_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
@@ -58,6 +59,26 @@ class _Boards implements WhiteboardsRepository {
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async {
     saved.add(page);
     return PageSaved(revision: ++this.revision, updatedAt: DateTime(2026));
+  }
+
+  /// PD-55: the shape each new board and each added page was asked for.
+  final created = <PageShape>[];
+  final added = <PageShape?>[];
+
+  @override
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async {
+    created.add(shape);
+    return open('b9');
+  }
+
+  @override
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async {
+    added.add(shape);
+    pages = [
+      ...pages,
+      BoardPage(id: 'p${pages.length + 1}', position: pages.length, layout: PageLayout.plain, background: PageBackground.white, shape: shape ?? PageShape.wide, elements: const []),
+    ];
+    return open(boardId);
   }
 
   @override
@@ -509,6 +530,57 @@ void main() {
       ]) {
         expect(contrast(c, BoardPalette.onTool), greaterThanOrEqualTo(4.5), reason: '$c');
       }
+    });
+  });
+
+  group('PD-55 (1b): tall pages', () {
+    testWidgets('Add page offers a wide or a tall page, and the strip shows each in its own frame', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      await tester.tap(find.byTooltip(l10n.boardAddPage));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardWidePage), findsOneWidget);
+      await tester.tap(find.text(l10n.boardTallPage));
+      await tester.pumpAndSettle();
+      expect(repo.added, [PageShape.tall]);
+      final thumbs = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is BoardPagePainter && w.size.height == 72));
+      expect(thumbs.map((t) => t.size), [const Size(128, 72), const Size(40.5, 72)]);
+    });
+
+    testWidgets('a tall page fills a phone held upright, and saves as tall', (tester) async {
+      repo.pages = const [
+        BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, shape: PageShape.tall, elements: []),
+      ];
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      // Drawn near the foot of the screen: on a tall page that is far below where a wide one ends.
+      final canvas = tester.getRect(find.byType(BoardCanvas));
+      final from = Offset(canvas.center.dx, canvas.bottom - 200);
+      final gesture = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
+      for (var i = 1; i <= 8; i++) {
+        await gesture.moveTo(from + Offset(i * 6.0, i * 2.0));
+      }
+      await gesture.up();
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      final saved = repo.saved.last;
+      expect(saved.shape, PageShape.tall);
+      expect((saved.elements.single as InkElement).points.first.y, greaterThan(1400));
+    });
+
+    testWidgets('a new board on a phone held upright starts tall; on a wider screen, wide', (tester) async {
+      Future<void> create(Size size) async {
+        final l10n = await pump(tester, const BoardsScreen(), size: size);
+        await tester.tap(find.text(l10n.boardsNew));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(l10n.boardsCreate));
+        await tester.pumpAndSettle();
+      }
+
+      await create(const Size(390, 844));
+      await create(const Size(1280, 800));
+      await create(const Size(844, 390));
+      expect(repo.created, [PageShape.tall, PageShape.wide, PageShape.wide]);
     });
   });
 }

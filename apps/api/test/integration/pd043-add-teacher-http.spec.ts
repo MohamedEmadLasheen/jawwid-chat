@@ -202,14 +202,53 @@ describe('1. POST /teachers', () => {
     expect(await g.prisma.teacher.count({ where: { organizationId: orgId } })).toBe(before);
   });
 
-  it('the same request twice is the same teacher, with a fresh code that kills the first', async () => {
+  // TEACHER-002 (QA T-ONB-06, owner requirement): a double click sent the add twice; the second
+  // issued a new code (the first died) and the history said "First sign-in code sent" twice.
+  const issuedFor = async (accountId: string) =>
+    g.prisma.auditLog.count({ where: { entity: 'account', entityId: accountId, action: 'account.first_login_code_issued' } });
+
+  it('the same request twice is the same teacher and ONE code: the first stays good, the replay shows none', async () => {
     const body = { id: randomUUID(), name: 'QA Added Teacher', email: email('j'), confirmSimilarName: true };
     const first = await http(m.teachersManager.subject, 'POST', '/teachers', body);
     const again = await http(m.teachersManager.subject, 'POST', '/teachers', body);
     expect([first.status, again.status]).toEqual([201, 201]);
     expect(again.json.teacher.id).toBe(first.json.teacher.id);
+    expect(again.json.firstLogin).toEqual({ expiresAt: first.json.firstLogin.expiresAt, emailed: false, alreadyIssued: true });
     const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: body.email } });
-    expect(await g.prisma.passwordResetCode.count({ where: { accountId: account.id, usedAt: null, supersededAt: null } })).toBe(1);
+    expect(await g.prisma.passwordResetCode.count({ where: { accountId: account.id } })).toBe(1);
+    expect(await issuedFor(account.id)).toBe(1);
+    // The code shown the first time still signs the teacher in.
+    expect((await http(null, 'POST', '/auth/password-reset', { username: body.email, code: first.json.firstLogin.code, password: '1234' })).status).toBe(200);
+  });
+
+  it('a double click (both at once) issues one code and e-mails it once', async () => {
+    const body = { id: randomUUID(), name: 'QA Added Teacher', email: email('dbl'), confirmSimilarName: true };
+    mailer.sent.length = 0;
+    mailer.available = true;
+    const both = await Promise.all([
+      http(m.teachersManager.subject, 'POST', '/teachers', body),
+      http(m.teachersManager.subject, 'POST', '/teachers', body),
+    ]);
+    expect(both.map((r) => r.status)).toEqual([201, 201]);
+    expect(new Set(both.map((r) => r.json.teacher.id))).toEqual(new Set([body.id]));
+    const codes = both.map((r) => r.json.firstLogin.code).filter(Boolean);
+    expect(codes).toHaveLength(1);
+    expect(both.filter((r) => r.json.firstLogin.alreadyIssued === true)).toHaveLength(1);
+    const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: body.email } });
+    expect(await issuedFor(account.id)).toBe(1);
+    expect(mailer.sent.filter((x) => x.to === body.email)).toHaveLength(1);
+    mailer.available = false;
+    expect((await http(null, 'POST', '/auth/password-reset', { username: body.email, code: codes[0], password: '1234' })).status).toBe(200);
+  });
+
+  it('once the teacher has signed in, the same request is refused: it never issues a code for a login in use', async () => {
+    const body = { id: randomUUID(), name: 'QA Added Teacher', email: email('rs'), confirmSimilarName: true };
+    const first = await http(m.teachersManager.subject, 'POST', '/teachers', body);
+    expect((await http(null, 'POST', '/auth/password-reset', { username: body.email, code: first.json.firstLogin.code, password: '1234' })).status).toBe(200);
+    const again = await http(m.teachersManager.subject, 'POST', '/teachers', body);
+    expect([again.status, again.code]).toEqual([409, 'COMM.TEACHER_FILE_CONFLICT']);
+    const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: body.email } });
+    expect(await issuedFor(account.id)).toBe(1);
   });
 });
 

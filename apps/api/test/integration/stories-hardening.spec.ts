@@ -579,11 +579,21 @@ describe('§E an empty audience is never everyone', () => {
   });
 
   it('a clause naming nobody reachable is refused rather than published to all', async () => {
-    // A family with no communicating contacts resolves to zero people.
+    // A family with no communicating contacts resolves to zero people. Its child
+    // is admin_a's, so the family is one admin_a reaches (ADMIN-003: a single
+    // family must be in the author's reach) -- the refusal tested is the empty one.
     const emptyFamily = randomUUID();
+    const child = randomUUID();
     await prisma.$executeRawUnsafe(
       `insert into chat.family (id, display_name, owner_id, language)
        values ('${emptyFamily}'::uuid, 'family_empty', '${s.ownerId}'::uuid, 'ar')`,
+    );
+    await prisma.$executeRawUnsafe(
+      `insert into chat.learner (id, family_id, name) values ('${child}'::uuid, '${emptyFamily}'::uuid, 'learner_e')`,
+    );
+    await prisma.$executeRawUnsafe(
+      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by)
+       values ('${child}'::uuid, chat.default_organization_id(), '${s.ownerId}'::uuid, '${s.managerId}'::uuid)`,
     );
     try {
       const draft = await stories.create(s.ownerId, {
@@ -594,6 +604,8 @@ describe('§E an empty audience is never everyone', () => {
         code: CommErrorCode.STORY_AUDIENCE_EMPTY,
       });
     } finally {
+      await prisma.$executeRawUnsafe(`delete from chat.learner_supervision where learner_id = '${child}'::uuid`);
+      await prisma.$executeRawUnsafe(`delete from chat.learner where id = '${child}'::uuid`);
       await prisma.$executeRawUnsafe(`delete from chat.family where id = '${emptyFamily}'::uuid`);
     }
   });

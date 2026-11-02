@@ -115,6 +115,7 @@ export class CertificateService {
     const title = text(body, 'title', MAX_TITLE, true) as string;
     const achievement = text(body, 'achievement', MAX_TEXT, true) as string;
     const achievedOn = calendarDate(body, 'achievedOn', true) as Date;
+    suggestedDateInWindow(achievedOn);
     const grade = text(body, 'grade', MAX_GRADE, false);
     const printedName = text(body, 'printedName', MAX_TITLE, true) as string;
     const note = text(body, 'note', MAX_TEXT, false);
@@ -130,6 +131,24 @@ export class CertificateService {
 
     const created = await this.write(() =>
       this.prisma.$transaction(async (t) => {
+        // TEACHER-025: the same certificate twice is refused for a teacher's
+        // suggestion too (staff requests: refuseDuplicate). A suggestion has no
+        // type, so "the same" is the same child, title and achievement, still
+        // open. One writer per child, so a double submit cannot pass the check twice.
+        await t.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'certificate-suggestion:' + learnerId}))`;
+        const [same] = await t.$queryRaw<Array<{ id: string; state: string }>>`
+          SELECT id::text AS id, state FROM chat.appreciation_certificate
+           WHERE organization_id = ${actor.organizationId}::uuid AND category = ${CertificateCategory.STUDENT} AND learner_id = ${learnerId}::uuid
+             AND state NOT IN (${CertificateState.CANCELLED}, ${CertificateState.DECLINED})
+             AND lower(regexp_replace(btrim(title), '[[:space:]]+', ' ', 'g')) = lower(regexp_replace(btrim(${title}), '[[:space:]]+', ' ', 'g'))
+             AND lower(regexp_replace(btrim(achievement), '[[:space:]]+', ' ', 'g')) = lower(regexp_replace(btrim(${achievement}), '[[:space:]]+', ' ', 'g'))
+           LIMIT 1`;
+        if (same) {
+          throw new CommError(CommErrorCode.CERTIFICATE_DUPLICATE, 'this certificate is already suggested or requested for this child', 409, {
+            certificateId: same.id,
+            state: same.state,
+          });
+        }
         // The card first, so the suggestion is born with it: no write outside an act.
         const id = randomUUID();
         const conv = await this.supervision.ensureInTx(t, actor.actorId, actor.organizationId as string, null);
@@ -1384,6 +1403,21 @@ function calendarDate(body: Record<string, unknown>, field: string, required: bo
   const d = new Date(`${raw}T00:00:00.000Z`);
   if (Number.isNaN(d.getTime()) || isoDate(d) !== raw) throw invalid(`${field}: not a real date`);
   return d;
+}
+
+/**
+ * TEACHER-025: a teacher's suggestion is for something achieved, so its date
+ * is never in the future, and at most five years back -- the app's own picker
+ * (1 January five years ago .. today, on the device's calendar). Measured on
+ * the widest calendars in use, so a device anywhere is never refused a day its
+ * picker offered: "today" as late as UTC+14, the year as early as UTC-12.
+ */
+function suggestedDateInWindow(d: Date): void {
+  const latest = isoDate(new Date(Date.now() + 14 * 3_600_000));
+  const earliest = `${new Date(Date.now() - 12 * 3_600_000).getUTCFullYear() - 5}-01-01`;
+  const day = isoDate(d);
+  if (day > latest) throw invalid('achievedOn: an achievement date is not in the future');
+  if (day < earliest) throw invalid('achievedOn: at most five years ago');
 }
 
 function mimeField(body: Record<string, unknown>): CertificateMime {

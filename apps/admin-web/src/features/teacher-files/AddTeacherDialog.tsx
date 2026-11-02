@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
@@ -35,6 +35,9 @@ export function AddTeacherDialog({
   const [supervisor, setSupervisor] = useState<string>(offer.supervisorChoice === 'self_or_none' ? 'self' : '')
   const [touched, setTouched] = useState(false)
   const [added, setAdded] = useState<AddedTeacher | null>(null)
+  // TEACHER-002: `disabled` lands only after a re-render, so a double click sent two
+  // adds. The ref stops the second click at once; the server answers a replay too.
+  const inFlight = useRef(false)
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
   const missing = (v: string) => (touched && !v.trim() ? tx(T.required) : null)
 
@@ -52,6 +55,8 @@ export function AddTeacherDialog({
   const submit = (confirmSimilarName = false) => {
     setTouched(true)
     if (!form.name.trim() || !form.email.trim()) return
+    if (inFlight.current) return
+    inFlight.current = true
     add.mutate(
       {
         id: teacherId,
@@ -62,7 +67,12 @@ export function AddTeacherDialog({
         supervisorId: supervisor === '' ? null : supervisor,
         ...(confirmSimilarName ? { confirmSimilarName: true } : {}),
       },
-      { onSuccess: setAdded },
+      {
+        onSuccess: setAdded,
+        onSettled: () => {
+          inFlight.current = false
+        },
+      },
     )
   }
 
@@ -207,6 +217,8 @@ export function FirstLoginCodeDialog({ signIn, firstLogin, onClose }: { signIn: 
           <p className="field__hint">{tx(T.validUntil, { when: dateTime(firstLogin.expiresAt) })}</p>
           <p className="field__hint">{tx(firstLogin.emailed ? T.emailedTo : T.notEmailed)}</p>
         </>
+      ) : firstLogin.alreadyIssued ? (
+        <p>{tx(T.codeAlreadyIssued, { when: dateTime(firstLogin.expiresAt) })}</p>
       ) : (
         <p>{tx(firstLogin.emailed ? T.codeEmailed : T.codeNotEmailedAskManager)}</p>
       )}

@@ -210,6 +210,61 @@ describe('the owning teacher', () => {
   });
 });
 
+describe('PD-55 (1b): wide and tall pages', () => {
+  const shapes = async (boardId: string, t: Actor) => (await boards.open(boardId, t)).pages.map((p) => p.shape);
+
+  it('a page is wide unless created tall: on a new board, an added page, a duplicate -- and a client that says nothing adds a wide one', async () => {
+    const t = teacher(s.teacherId);
+    const wide = await boards.create({ title: 'Wide' }, t);
+    expect(wide.pages.map((p) => p.shape)).toEqual(['wide']);
+    const b = await boards.create({ title: 'Tall', shape: 'tall' }, t);
+    expect(b.pages.map((p) => p.shape)).toEqual(['tall']);
+    let d = await boards.addPage(b.id, { revision: b.revision }, t);
+    d = await boards.addPage(b.id, { revision: d.revision, shape: 'tall' }, t);
+    d = await boards.duplicatePage(b.id, b.pages[0]!.id, { revision: d.revision }, t);
+    expect(d.pages.map((p) => p.shape)).toEqual(['tall', 'tall', 'wide', 'tall']);
+    expect(await code(boards.addPage(b.id, { revision: d.revision, shape: 'square' }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect(await code(boards.create({ title: 'Round', shape: 'round' }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+  });
+
+  it('an app that does not know shapes can save a wide page, but never a tall one -- refused, nothing written', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Mixed', shape: 'tall' }, t);
+    const d = await boards.addPage(b.id, { revision: b.revision }, t);
+    const [tall, wide] = [d.pages[0]!.id, d.pages[1]!.id];
+    // An older app: no shape in the save.
+    const before = await snapshot(b.id);
+    const refused = boards.savePage(b.id, tall, { revision: d.revision, document: drawing(2) }, t);
+    await expect(refused).rejects.toThrow(/update the app/);
+    expect(await code(boards.savePage(b.id, tall, { revision: d.revision, document: drawing(2) }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect(await snapshot(b.id)).toEqual(before);
+    const savedWide = await boards.savePage(b.id, wide, { revision: d.revision, document: drawing(1) }, t);
+    // This app says what it drew in; a mismatch is refused either way.
+    const savedTall = await boards.savePage(b.id, tall, { revision: savedWide.revision, document: drawing(2), shape: 'tall' }, t);
+    expect(await code(boards.savePage(b.id, wide, { revision: savedTall.revision, document: drawing(1), shape: 'tall' }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect(await code(boards.savePage(b.id, tall, { revision: savedTall.revision, document: drawing(1), shape: 'wide' }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    expect(await shapes(b.id, t)).toEqual(['tall', 'wide']);
+  });
+
+  it('a page never changes shape -- not even by the owner of the table', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Fixed', shape: 'tall' }, t);
+    await expect(exec(`update chat.whiteboard_page set shape = 'wide' where id = $1::uuid`, b.pages[0]!.id)).rejects.toThrow(/keeps the shape/);
+    await expect(exec(`update chat.whiteboard_page set shape = 'square' where id = $1::uuid`, b.pages[0]!.id)).rejects.toThrow();
+    // Anything else about the page still changes.
+    await exec(`update chat.whiteboard_page set layout = 'grid' where id = $1::uuid`, b.pages[0]!.id);
+    expect(await shapes(b.id, t)).toEqual(['tall']);
+  });
+
+  it('a copy keeps every page\'s shape (duplicate and copy-to-teacher share copyBoard)', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Copied', shape: 'tall' }, t);
+    await boards.addPage(b.id, { revision: b.revision }, t);
+    const copy = await boards.duplicate(b.id, t);
+    expect(copy.pages.map((p) => p.shape)).toEqual(['tall', 'wide']);
+  });
+});
+
 describe('§10 1a: nobody but the teacher edits', () => {
   it('another teacher, every staff role and a support session are refused, and the board is unchanged', async () => {
     const owner = teacher(s.teacherId);
@@ -640,11 +695,13 @@ describe('PR-4: images and export', () => {
 
   it('a copy takes its images to keys of the new board, and the pages name the copies', async () => {
     const t = teacher(s.teacherId);
-    const b = await boards.create({ title: 'Original' }, t);
+    // PD-55: tall, so the copy-with-images path is seen to keep the shape too.
+    const b = await boards.create({ title: 'Original', shape: 'tall' }, t);
     const { asset } = await addImage(b.id, t);
-    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(asset.id) }, t);
+    await boards.savePage(b.id, b.pages[0]!.id, { revision: 1, document: imageOn(asset.id), shape: 'tall' }, t);
     const before = await snapshot(b.id);
     const copy = await boards.duplicate(b.id, t);
+    expect(copy.pages.map((p) => p.shape)).toEqual(['tall']);
     expect(copy.assets).toHaveLength(1);
     const copied = copy.assets[0]!;
     expect(copied.id).not.toBe(asset.id);
@@ -753,6 +810,25 @@ describe('PR-4: images and export', () => {
     for (const p of grant.pages) expect(await blobs.get(p.upload.objectKey)).toBeNull();
     expect((await snapshot(b.id))!.assets).toBe(0);
     expect((await boards.open(b.id, t)).id).toBe(b.id);
+  });
+
+  it('PD-55: a tall page exports upright; a page larger than either frame is refused', async () => {
+    const t = teacher(s.teacherId);
+    const b = await boards.create({ title: 'Tall export', shape: 'tall' }, t);
+    await boards.addPage(b.id, { revision: b.revision }, t);
+    const pages = [png(1080, 1920), png(1920, 1080)];
+    const grant = await boards.grantExport(b.id, { pages: pages.map((p) => ({ byteSize: p.length })) }, t);
+    for (const [i, p] of grant.pages.entries()) await blobs.put(p.upload.objectKey, 'image/png', pages[i]!);
+    const { pdf } = await boards.composeExport(b.id, { pages: grant.pages.map((p) => ({ assetId: p.assetId, objectKey: p.upload.objectKey })) }, t);
+    // One upright page (540 x 960 + the credit strip), then one wide (960 x 540 + the strip).
+    expect(pdf.toString('latin1').match(/\/MediaBox \[[^\]]*\]/g)).toEqual(['/MediaBox [0 0 540 982]', '/MediaBox [0 0 960 562]']);
+
+    for (const [w, h] of [[1920, 1920], [1081, 1920], [1080, 1921]]) {
+      const big = png(w, h);
+      const g2 = await boards.grantExport(b.id, { pages: [{ byteSize: big.length }] }, t);
+      await blobs.put(g2.pages[0]!.upload.objectKey, 'image/png', big);
+      expect(await code(boards.composeExport(b.id, { pages: [{ assetId: g2.pages[0]!.assetId, objectKey: g2.pages[0]!.upload.objectKey }] }, t))).toBe(CommErrorCode.WHITEBOARD_INVALID);
+    }
   });
 
   it('an export page larger than the board page is refused at the grant and at compose (review of #305, P1)', async () => {

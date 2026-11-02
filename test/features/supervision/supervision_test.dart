@@ -227,6 +227,30 @@ void main() {
       expect(sent.grade, isNull);
       expect(calendarDay(sent.achievedOn), calendarDay(DateTime.now()));
     });
+
+    // TEACHER-025: the server refuses the same certificate twice; the form says so and stays.
+    testWidgets('the same certificate again is named as already suggested, not "try again"', (tester) async {
+      final repo = _RecordingSupervision(refuseCertificateWith: 'COMM.CERTIFICATE_DUPLICATE');
+      await tester.pumpWidget(app(
+        const CertificateRequestForm(learners: [SupervisionLearner(id: 'l1', name: 'learner_l')]),
+        repo: repo,
+      ));
+      final submit = find.byKey(const ValueKey('certificate-submit'));
+      await tester.enterText(find.byKey(const ValueKey('certificate-title')), 'Juz Amma');
+      await tester.enterText(find.byKey(const ValueKey('certificate-achievement')), 'Memorized with tajweed');
+      await tester.tap(find.byKey(const ValueKey('certificate-date')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(repo.certificates, hasLength(1));
+      expect(find.text('This certificate is already suggested for this child.'), findsOneWidget);
+      expect(find.text("Couldn't send. Please try again."), findsNothing);
+      expect(find.text('Juz Amma'), findsOneWidget);
+    });
   });
 
   group('the leave form', () {
@@ -346,9 +370,10 @@ class _ProgressOnly implements LessonRepository {
 }
 
 class _RecordingSupervision implements SupervisionRepository {
-  _RecordingSupervision({this.refuseLeaveWith, this.summary = const LeaveSummary(year: 2027, used: 0)});
+  _RecordingSupervision({this.refuseLeaveWith, this.refuseCertificateWith, this.summary = const LeaveSummary(year: 2027, used: 0)});
 
   final String? refuseLeaveWith;
+  final String? refuseCertificateWith;
   final LeaveSummary summary;
   final certificates = <CertificateDraft>[];
   final leaveRequests = <(String, String, String)>[];
@@ -358,7 +383,10 @@ class _RecordingSupervision implements SupervisionRepository {
   Future<SupervisionTickets> tickets(String conversationId) async => SupervisionTickets.none;
 
   @override
-  Future<void> requestCertificate(CertificateDraft draft) async => certificates.add(draft);
+  Future<void> requestCertificate(CertificateDraft draft) async {
+    certificates.add(draft);
+    if (refuseCertificateWith != null) throw AppError(AppErrorKind.validation, code: refuseCertificateWith);
+  }
 
   @override
   Future<void> requestLeave({required DateTime firstDay, required DateTime lastDay, required String reason}) async {

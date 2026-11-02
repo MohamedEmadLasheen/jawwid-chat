@@ -86,6 +86,17 @@ becomes `ar` or `en` for the reader's language; only an https URL is shown.
 | `PRIVACY_POLICY_URL` | the Flutter app and the teacher web portal (`--dart-define`) | e.g. `https://jawwid.example.org/{lang}/privacy` | the phone build's `--dart-define`; `PRIVACY_POLICY_URL` for `scripts/mobile/build-teacher-web.sh` |
 | `TERMS_URL` | the same | e.g. `https://jawwid.example.org/{lang}/terms` | the same, `TERMS_URL` |
 
+### Crash reporting (PD-56, S-07): build-time, unset = nothing sent
+
+| Variable | Built into | Value | Set from |
+|---|---|---|---|
+| `SENTRY_DSN` | the Flutter app (`--dart-define`) | the Sentry project's DSN (public by design: it only lets a client SEND events) | the store build's `--dart-define` |
+| `SENTRY_ENVIRONMENT` | the same | `production` (default) or `staging` | the same |
+
+Reports are sent only by a RELEASE build with `SENTRY_DSN` set. They carry no personal
+data: the person is a hash of their actor id; e-mails, phone numbers and quoted text
+are replaced; only navigation breadcrumbs are kept (`lib/core/crash/crash_reporting.dart`).
+
 The account-deletion page Google Play asks for is the API's own:
 `<API origin>/api/v1/account-deletion` (`?lang=en` for English).
 

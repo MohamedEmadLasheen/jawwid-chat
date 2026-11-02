@@ -31,6 +31,11 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- PD-56: only the system's standard encryption (HTTPS/TLS, WebRTC's
+	     DTLS-SRTP), which is exempt; App Store Connect then asks no export
+	     compliance question per build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- W8-W1. `voip` lets a PushKit push wake the app so an incoming call can
 	     be reported; `remote-notification` does the same for a data push.
 	     Receiving a VoIP push obliges an immediate CallKit report, which is
@@ -40,6 +45,9 @@
 	<array>
 		<string>voip</string>
 		<string>remote-notification</string>
+		<!-- PD-56: a voice call keeps its audio when the screen locks or the
+		     person switches app. -->
+		<string>audio</string>
 	</array>
 	<!-- Required before the system will even present the camera. Without it iOS
 	     terminates the app on capture rather than refusing it, so this is not a

@@ -17,8 +17,18 @@ import 'system_message_text.dart' show coverDay;
 ///
 /// The lookup goes to the backend rather than to a local cache so an unauthorized or deleted
 /// id fails here, with a safe error, instead of opening an empty thread (§52, §74).
-final _conversationProvider =
+///
+/// It belongs to the signed-in person (PARENT-013): the answer carries their own look for
+/// the chat (`viewerState.theme`, the wallpaper), kept on the server for the account. Cached
+/// past a sign-out, the next sign-in -- the same person or another -- reopened the chat with
+/// the look as it was when first opened, after this session's choices were rightly dropped.
+/// So it is dropped with the session ([principalIdProvider]'s invariant: listen and
+/// invalidate without reload, never watch) and read again for whoever signs in.
+final conversationRouteProvider =
     FutureProvider.family<Conversation, String>((ref, conversationId) {
+  ref.listen(principalIdProvider, (previous, next) {
+    if (previous != next) ref.invalidateSelf(asReload: false);
+  });
   return ref.read(conversationRepositoryProvider).byId(conversationId);
 });
 
@@ -41,7 +51,7 @@ class ChatScreenRoute extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
-    final conversation = ref.watch(_conversationProvider(conversationId));
+    final conversation = ref.watch(conversationRouteProvider(conversationId));
 
     return switch (conversation) {
       AsyncLoading() => Scaffold(
@@ -58,7 +68,7 @@ class ChatScreenRoute extends ConsumerWidget {
                 body: message.body,
                 retryLabel: message.canRetry ? l10n.retryAction : null,
                 onRetry: message.canRetry
-                    ? () => ref.invalidate(_conversationProvider(conversationId))
+                    ? () => ref.invalidate(conversationRouteProvider(conversationId))
                     : null,
               );
             },
@@ -113,7 +123,7 @@ class ChatScreenRoute extends ConsumerWidget {
           banner: value.isTrialGroup
               ? TrialGroupJoinBanner(
                   conversationId: conversationId,
-                  onJoined: () => ref.invalidate(_conversationProvider(conversationId)),
+                  onJoined: () => ref.invalidate(conversationRouteProvider(conversationId)),
                 )
               : null,
         ),

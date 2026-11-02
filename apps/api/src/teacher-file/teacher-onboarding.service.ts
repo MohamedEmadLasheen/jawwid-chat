@@ -103,7 +103,9 @@ export class TeacherOnboardingService {
     if (body.confirmSimilarName !== true) await this.warnOnSimilarName(actor, id, name);
 
     const issuer = await this.issuerAccount(actor);
-    let created: { name: string; issued: { id: string; code: string; expiresAt: Date } };
+    let created:
+      | { name: string; issued: { id: string; code: string; expiresAt: Date }; replay: false }
+      | { name: string; expiresAt: Date; replay: true };
     try {
       created = await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`
@@ -112,6 +114,18 @@ export class TeacherOnboardingService {
                                      ${actor.actorId}::uuid)::text AS id`;
         await this.supervision.ensureInTx(tx, id, org, actor.actorId);
         const teacher = await tx.teacher.findUniqueOrThrow({ where: { id }, select: { name: true, accountId: true } });
+        // TEACHER-002: chat.create_teacher answers the same request again (a
+        // double click, a retry) with the teacher it already made. That request
+        // already issued its first sign-in code; a second one would supersede
+        // the code on screen and log "First sign-in code sent" twice. So a
+        // live first sign-in code means this is the replay: nothing new is
+        // issued or e-mailed. (The second request waits on create_teacher's
+        // lock until the first commits, so it always sees the first's code.)
+        const live = await tx.passwordResetCode.findFirst({
+          where: { accountId: teacher.accountId as string, purpose: 'first_login', usedAt: null, supersededAt: null, expiresAt: { gt: new Date() } },
+          select: { expiresAt: true },
+        });
+        if (live) return { name: teacher.name, expiresAt: live.expiresAt, replay: true as const };
         const issued = await this.resets.issueInTx(tx, {
           accountId: teacher.accountId as string,
           organizationId: org,
@@ -121,10 +135,18 @@ export class TeacherOnboardingService {
           signOutEverywhere: false,
           purpose: 'first_login',
         });
-        return { name: teacher.name, issued };
+        return { name: teacher.name, issued, replay: false as const };
       });
     } catch (e) {
       throw await this.refusal(e, actor, email, phone, name);
+    }
+    if (created.replay) {
+      // The code was shown to whoever sent the first request; it is never stored to show again.
+      return {
+        teacher: { id, name: created.name, supervisorId },
+        signIn: email,
+        firstLogin: { expiresAt: created.expiresAt.toISOString(), emailed: false, alreadyIssued: true },
+      };
     }
     // Plan §3.7: an unsupervised teacher is the Teachers manager's. PD-47 PR-6b:
     // the manager's teacher_unsupervised task replaces the notice (owner 2026-10-29).

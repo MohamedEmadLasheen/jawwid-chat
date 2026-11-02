@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  PD-56 (store compliance): the RELEASE build's entitlements. A store or
+	  TestFlight build talks to the production APNs endpoint, so it carries
+	  `production`; Debug and Profile keep Runner.entitlements (`development`),
+	  which a development provisioning profile needs. The two are not
+	  interchangeable: a production device token sent to the sandbox endpoint is
+	  dropped, and a sandbox token sent to production is refused.
+	-->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>

@@ -37,6 +37,8 @@ export type SourceType =
   | 'feedback'
   | 'schedule_change'
   | 'makeup_owed'
+  | 'family_without_account'
+  | 'teacher_account_deleted'
   | 'group_admin_absent'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
