@@ -112,19 +112,28 @@ export class RewardService {
     const lesson = await this.requireLessonNow(teacherId, learnerId, input.lessonId);
 
     return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.$queryRaw<Array<{ id: string }>>`
-        select id from chat.learner_reward_event where teacher_id = ${teacherId}::uuid and client_event_id = ${clientEventId}::uuid`;
-      const eventId = existing[0]?.id ?? randomUUID();
-      if (!existing[0]) {
-        await tx.$executeRaw`
-          insert into chat.learner_reward_event
-            (id, organization_id, learner_id, lesson_id, teacher_id, board_id, kind, sticker_key, praise_key, praise_text, client_event_id)
-          values (${eventId}::uuid, ${lesson.organizationId}::uuid, ${learnerId}::uuid, ${lesson.id}::uuid, ${teacherId}::uuid,
-                  (select id from chat.whiteboard where id = ${boardId}::uuid and teacher_id = ${teacherId}::uuid),
-                  ${kind}, ${stickerKey}, ${praiseKey}, ${praiseText}, ${clientEventId}::uuid)`;
+      // A retried tap replays; two at once meet the unique key, and the second replays too.
+      const inserted = await tx.$queryRaw<Array<{ id: string }>>`
+        insert into chat.learner_reward_event
+          (id, organization_id, learner_id, lesson_id, teacher_id, board_id, kind, sticker_key, praise_key, praise_text, client_event_id)
+        values (${randomUUID()}::uuid, ${lesson.organizationId}::uuid, ${learnerId}::uuid, ${lesson.id}::uuid, ${teacherId}::uuid,
+                (select id from chat.whiteboard where id = ${boardId}::uuid and teacher_id = ${teacherId}::uuid),
+                ${kind}, ${stickerKey}, ${praiseKey}, ${praiseText}, ${clientEventId}::uuid)
+        on conflict (teacher_id, client_event_id) do nothing
+        returning id::text as id`;
+      let eventId = inserted[0]?.id;
+      if (!eventId) {
+        const [prior] = await tx.$queryRaw<Array<{ id: string; learner_id: string; lesson_id: string }>>`
+          select id::text as id, learner_id::text as learner_id, lesson_id::text as lesson_id
+            from chat.learner_reward_event where teacher_id = ${teacherId}::uuid and client_event_id = ${clientEventId}::uuid`;
+        // The same clientEventId for another learner or lesson is a client bug, not a retry.
+        if (!prior || prior.learner_id !== learnerId || prior.lesson_id !== lesson.id) {
+          throw new CommError(CommErrorCode.VALIDATION, 'clientEventId was already used for another reward', 409);
+        }
+        eventId = prior.id;
       }
       const stars = await this.stars(tx, lesson.id, learnerId);
-      if (!existing[0]) {
+      if (inserted[0]) {
         await this.outbox.enqueue(tx, CommEvent.LEARNER_REWARD_GIVEN, {
           learnerId,
           lessonId: lesson.id,
@@ -148,18 +157,24 @@ export class RewardService {
       select e.lesson_id, e.organization_id, e.kind, e.created_at,
              exists (select 1 from chat.learner_reward_event u where u.undoes = e.id) as undone
         from chat.learner_reward_event e
+        join chat.learner lr on lr.id = e.learner_id and lr.teacher_id = e.teacher_id
        where e.id = ${eventId}::uuid and e.teacher_id = ${teacherId}::uuid and e.learner_id = ${learnerId}::uuid`;
+    // No longer this learner's teacher (a transfer): the same answer as an unknown reward.
     if (!target || target.kind === 'undo') throw notFound();
     if (target.undone) return { stars: await this.stars(this.prisma, target.lesson_id, learnerId) };
     if (Date.now() - target.created_at.getTime() > 2 * 60_000) {
       throw new CommError(CommErrorCode.VALIDATION, 'a reward can be withdrawn only within 2 minutes', 409);
     }
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
+      // Two undos at once: the second meets learner_reward_event_undone_once and changes nothing.
+      const inserted = await tx.$executeRaw`
         insert into chat.learner_reward_event (organization_id, learner_id, lesson_id, teacher_id, kind, undoes, client_event_id)
-        values (${target.organization_id}::uuid, ${learnerId}::uuid, ${target.lesson_id}::uuid, ${teacherId}::uuid, 'undo', ${eventId}::uuid, ${randomUUID()}::uuid)`;
+        values (${target.organization_id}::uuid, ${learnerId}::uuid, ${target.lesson_id}::uuid, ${teacherId}::uuid, 'undo', ${eventId}::uuid, ${randomUUID()}::uuid)
+        on conflict (undoes) where kind = 'undo' do nothing`;
       const stars = await this.stars(tx, target.lesson_id, learnerId);
-      await this.outbox.enqueue(tx, CommEvent.LEARNER_REWARD_UNDONE, { learnerId, lessonId: target.lesson_id, eventId, stars });
+      if (inserted > 0) {
+        await this.outbox.enqueue(tx, CommEvent.LEARNER_REWARD_UNDONE, { learnerId, lessonId: target.lesson_id, eventId, stars });
+      }
       return { stars };
     });
   }
