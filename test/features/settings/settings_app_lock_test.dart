@@ -83,6 +83,22 @@ void main() {
     expect(find.text(l10n.appLockUnavailable('android')), findsOneWidget);
   });
 
+  // PD-56 (store compliance): parents and teachers delete their own account from Settings;
+  // a staff account is closed by the administration, so Sales has no such row.
+  for (final (role, shown) in const [(UserRole.parent, true), (UserRole.teacher, true), (UserRole.sales, false)]) {
+    testWidgets('PD-56: "Delete account" in Settings for a ${role.name}: $shown', (tester) async {
+      await pumpSettings(tester, role: role);
+      final tile = find.byKey(const ValueKey('settings-delete-account'));
+      if (shown) {
+        await tester.scrollUntilVisible(tile, 200);
+        expect(tile, findsOneWidget);
+      } else {
+        await tester.scrollUntilVisible(find.text('Sign out'), 200);
+        expect(tile, findsNothing);
+      }
+    });
+  }
+
   // Redmi A5 QA, 2026-10-27: the person followed the hint, added a screen lock in the
   // phone's Settings, came back, and the switch was still disabled until a restart.
   group('the device lock is asked again', () {
