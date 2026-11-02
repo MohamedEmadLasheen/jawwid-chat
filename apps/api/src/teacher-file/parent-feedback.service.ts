@@ -1,4 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { OutboxService } from '../communication/outbox/outbox.service';
+import { CommEvent } from '../communication/contracts/events';
 import type { ParentFeedback, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -53,6 +55,8 @@ export class ParentFeedbackService {
     private readonly conversations: ConversationService,
     private readonly files: TeacherFileService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-52 (plan §7): who follows a complaint or praise up is told.
+    @Optional() private readonly outbox: OutboxService = new OutboxService(),
   ) {}
 
   // ------------------------------------------------------------------
@@ -136,9 +140,10 @@ export class ParentFeedbackService {
             body: text,
           },
         });
+        let entryId: string | null = null;
         if (category === 'complaint') {
           // PD-26's queue: a complaint with no staff author and no handler yet.
-          await tx.teacherSupervisionEntry.create({
+          ({ id: entryId } = await tx.teacherSupervisionEntry.create({
             data: {
               organizationId: contact.organizationId,
               teacherId,
@@ -147,6 +152,21 @@ export class ParentFeedbackService {
               complaintSource: 'parent_app',
               parentFeedbackId: created.id,
             },
+            select: { id: true },
+          }));
+        }
+        // PD-52 (plan §7): a complaint tells its follow-up people and praise the
+        // teacher's supervisor, through the outbox (committed with the feedback).
+        // A suggestion is not announced.
+        if (category === 'complaint' || category === 'praise') {
+          await this.outbox.enqueue(tx, category === 'complaint' ? CommEvent.TEACHER_COMPLAINT_RECEIVED : CommEvent.TEACHER_PRAISE_RECEIVED, {
+            organizationId: contact.organizationId,
+            teacherId,
+            entryId,
+            feedbackId: created.id,
+            learnerId: learner.id,
+            familyId: contact.familyId,
+            recordedBy: null,
           });
         }
         // The parent is not staff (audit_log.actor_id names staff). The text stays

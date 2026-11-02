@@ -28,7 +28,18 @@ export interface InboxEntryDto {
   dueAt: string | null
   taskStatus: string | null
   count: number
-  action: { kind: string; conversationId?: string; lessonId?: string; learnerId?: string; familyId?: string; caseId?: string; taskId?: string } | null
+  action: {
+    kind: string
+    conversationId?: string
+    lessonId?: string
+    learnerId?: string
+    familyId?: string
+    caseId?: string
+    taskId?: string
+    /** PD-52: open_teacher_records -- which page, and whose strip. */
+    page?: string
+    teacherId?: string
+  } | null
 }
 
 export interface InboxCountsDto {
@@ -80,6 +91,14 @@ export function routeFor(action: InboxEntryDto['action']): string | null {
     // PD-47 PR-4: a task, opened in Tasks (which re-checks who may see it).
     case 'open_task':
       return action.taskId ? `/tasks?task=${enc(action.taskId)}` : null
+    // PD-52: a complaint (Attendance & Complaints) or a parent's praise (Grants &
+    // Testimonials), with the teacher's strip; the page re-checks who may see it.
+    case 'open_teacher_records': {
+      const teacher = action.teacherId ? `&teacher=${enc(action.teacherId)}` : ''
+      if (action.page === 'attendance') return `/teacher-attendance?section=complaints${teacher}`
+      if (action.page === 'grants') return `/teacher-grants?section=testimonials${teacher}`
+      return null
+    }
     default:
       return null
   }
