@@ -12,6 +12,8 @@ import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole }
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
 import { decidePd012StaffAccess } from '../platform/pd012-policy';
 import { PermissionService } from '../platform/permissions/permission.service';
+import { OutboxService } from '../communication/outbox/outbox.service';
+import { CommEvent } from '../communication/contracts/events';
 import { entryKeyAllows } from '../platform/teacher-records-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -81,6 +83,8 @@ export class TeacherFileService {
     @Optional() teacherScope?: TeacherScopeService,
     // PD-52: the caller's keys, for the per-write checks (review of #369).
     @Optional() permissions?: PermissionService,
+    // PD-52 (plan §7): a complaint that names a family tells who follows it up.
+    @Optional() private readonly outbox: OutboxService = new OutboxService(),
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
     this.permissions = permissions ?? new PermissionService(prisma);
@@ -454,6 +458,19 @@ export class TeacherFileService {
     const entry = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const row = await tx.teacherSupervisionEntry.create({ data });
+      // PD-52 (plan §7): a staff complaint about a family's child is announced to
+      // the teacher's supervisor and the child's supervisors (never its author).
+      if (kind === TeacherFileEntryKind.COMPLAINT && data.familyId) {
+        await this.outbox.enqueue(tx, CommEvent.TEACHER_COMPLAINT_RECEIVED, {
+          organizationId: teacher.organizationId,
+          teacherId: teacher.id,
+          entryId: row.id,
+          feedbackId: null,
+          learnerId: data.learnerId ?? null,
+          familyId: data.familyId,
+          recordedBy: actor.actorId,
+        });
+      }
       // PD-32: a follow-up or a resolution on a parent's app complaint is what the
       // parent reads as "in review" / "resolved" -- never its text.
       if (data.refersTo && (kind === TeacherFileEntryKind.COMPLAINT_FOLLOWUP || kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION)) {

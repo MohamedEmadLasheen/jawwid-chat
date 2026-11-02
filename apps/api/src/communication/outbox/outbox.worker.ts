@@ -120,6 +120,17 @@ export class OutboxWorker {
       }
 
       /**
+       * PD-52 (plan §7): a complaint about a teacher, or a parent's praise. No
+       * conversation: a Center entry for the people who follow it up, through
+       * the PD-34 pipeline. See deliverTeacherRecord.
+       */
+      case CommEvent.TEACHER_COMPLAINT_RECEIVED:
+      case CommEvent.TEACHER_PRAISE_RECEIVED: {
+        await this.deliverTeacherRecord(type, payload);
+        return;
+      }
+
+      /**
        * PD-47 PR-4: a task changed. No conversation: to the people whose lists
        * change, by actor room (ids only), and to the one who must act now
        * through the PD-34 pipeline. See deliverTask.
@@ -676,6 +687,60 @@ export class OutboxWorker {
    * action open_case) with a generic push; every recipient's actor room gets
    * the event itself, ids only, so Escalations refreshes.
    */
+  /**
+   * PD-52 (plan §7). Who is told, read now:
+   *   complaint  the teacher's PD-35 supervisor (else the Teachers manager,
+   *              chat.work_task_teacher_owner) and the PD-8 supervisor of the
+   *              child -- or of each child of the family -- it is about; an
+   *              entry with a generic push, quiet hours kept
+   *   praise     the teacher's supervisor (else the Teachers manager): an
+   *              entry only, no push
+   * Never the teacher (the teacher is not a staff recipient here), never the
+   * one who filed it, once per record and recipient (the dedupe key). The texts
+   * are generic: no teacher, child, family or words of the parent.
+   */
+  private async deliverTeacherRecord(type: CommEventName, payload: Record<string, unknown>): Promise<void> {
+    if (!this.pipeline) return;
+    const teacherId = payload.teacherId as string | undefined;
+    const record = (payload.entryId ?? payload.feedbackId) as string | undefined;
+    if (!teacherId || !record) return;
+    const complaint = type === CommEvent.TEACHER_COMPLAINT_RECEIVED;
+    const ruleKey = complaint ? 'teacher_complaint_received' : 'teacher_praise_received';
+    const learnerId = (payload.learnerId as string | null) ?? null;
+    const familyId = (payload.familyId as string | null) ?? null;
+    const [{ owner }] = await this.prisma.$queryRaw<Array<{ owner: string | null }>>`
+      SELECT chat.work_task_teacher_owner(${teacherId}::uuid)::text AS owner`;
+    const supervisors =
+      complaint && (learnerId || familyId)
+        ? await this.prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT DISTINCT ls.supervisor_id::text AS id
+              FROM chat.learner_supervision ls
+              JOIN chat.learner l ON l.id = ls.learner_id
+             WHERE (${learnerId}::uuid IS NOT NULL AND l.id = ${learnerId}::uuid)
+                OR (${learnerId}::uuid IS NULL AND l.family_id = ${familyId}::uuid)`
+        : [];
+    const by = (payload.recordedBy as string | null) ?? null;
+    const told = [...new Set([owner, ...supervisors.map((x) => x.id)].filter((x): x is string => !!x && x !== by))];
+    for (const recipientId of told) {
+      const recipient = await this.identity.resolveActor(recipientId);
+      if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.STAFF) continue;
+      await this.pipeline.emit({
+        dedupeKey: `${ruleKey}:${record}:${recipientId}`,
+        ruleKey,
+        eventType: ruleKey,
+        templateKey: ruleKey,
+        recipientId,
+        locale: recipient.locale,
+        priority: complaint ? 'normal' : 'low',
+        // Praise is an entry only (plan §7): no push.
+        push: complaint,
+        subject: payload.entryId ? { type: 'teacher_supervision_entry', id: payload.entryId as string } : { type: 'parent_feedback', id: record },
+        refs: { teacherId, page: complaint ? 'attendance' : 'grants' },
+        scheduledAt: new Date(),
+      });
+    }
+  }
+
   private async deliverCase(type: CommEventName, payload: Record<string, unknown>): Promise<void> {
     const caseId = payload.caseId as string | undefined;
     if (!caseId) return;

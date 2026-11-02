@@ -31,6 +31,8 @@ export interface EmitInput {
   channel?: string;
   priority?: string;
   respectQuietHours?: boolean;
+  /** false: a Center entry only, never a push (push_state 'none'). Default true. */
+  push?: boolean;
   familyId?: string | null;
   conversationId?: string | null;
   subject?: { type: string; id: string } | null;
@@ -115,7 +117,7 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
     }
     const entry = catalogEntry(input.ruleKey, input.eventType);
     const severity = severityOf(input.priority);
-    const pushState = await this.pushDecision(input.recipientId, entry.category, severity, input.scheduledAt);
+    const pushState = input.push === false ? 'none' : await this.pushDecision(input.recipientId, entry.category, severity, input.scheduledAt);
 
     const item = await this.upsertItem({
       organizationId,
