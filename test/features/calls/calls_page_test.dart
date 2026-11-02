@@ -14,8 +14,21 @@ import 'package:jawwid_chat/features/calls/presentation/calls_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
+import 'package:jawwid_chat/shared/utils/app_clock.dart';
 
 import 'calls_page_fakes.dart';
+
+/// A moment earlier TODAY, in the app's zone (the one `callWhenLabel` reads days in):
+/// an hour ago, or -- in the first hour of the app's day -- half the time since its
+/// midnight. `now - 1 h` crossed midnight between 00:00 and 01:00 and the "Today"
+/// label became "Yesterday" (it failed on main at 00:21).
+DateTime earlierToday() {
+  final now = DateTime.now();
+  final wall = AppClock.view(now);
+  final sinceMidnight = Duration(hours: wall.hour, minutes: wall.minute, seconds: wall.second);
+  const hour = Duration(hours: 1);
+  return now.subtract(sinceMidnight < hour ? sinceMidnight ~/ 2 : hour);
+}
 
 void main() {
   late L10n l10n;
@@ -41,7 +54,7 @@ void main() {
     id: id,
     conversationId: conversationId,
     title: title,
-    startedAt: DateTime.now().subtract(const Duration(hours: 1)),
+    startedAt: earlierToday(),
     outcome: outcome,
     isGroup: isGroup,
     duration: const Duration(minutes: 2),
