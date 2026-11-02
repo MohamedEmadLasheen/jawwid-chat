@@ -132,6 +132,12 @@ Files live outside every repository: run data in `~/.jawwid-ai/runs/<repo>/<id>/
 worktrees in `~/jawwid-ai-worktrees/<repo>/<id>/`. macOS purges `/tmp` after a few days, so nothing durable
 goes there.
 
+### Inspecting results safely
+`result.json` includes `inspect_with`, a `git -C <main repository> show <commit_sha>` command for the lead to inspect the delegated commit.
+Never run git, tests or builds yourself inside a task worktree: the agent could write everything there, including its `.git` pointer.
+`codex-delegate review` refuses to run inside a task worktree for this reason.
+To review a task commit, use the main repository or create a fresh worktree with `git -C <repo> worktree add <dir> <commit_sha>`.
+
 ## 6. Failure handling
 - **Codex cannot start** (missing binary, unknown flag): fix the invocation in the wrapper. The flags were
   checked against `codex --help` for codex-cli 0.166.0; re-check after a Codex upgrade.
