@@ -39,6 +39,7 @@ object JawwidPush {
     const val ACTION_ANSWER = "com.jawwid.jawwid_chat.ANSWER_CALL"
     const val ACTION_DECLINE = "com.jawwid.jawwid_chat.DECLINE_CALL"
     const val ACTION_OPEN_CALL = "com.jawwid.jawwid_chat.OPEN_CALL"
+    const val ACTION_HANG_UP = "com.jawwid.jawwid_chat.HANG_UP"
     const val EXTRA_CALL_ID = "callId"
     const val EXTRA_CONVERSATION_ID = "conversationId"
 
@@ -209,6 +210,11 @@ object JawwidPush {
         val args = mapOf("callId" to callId, "conversationId" to conversationId)
         deliver("onIncoming", args)
         deliver("onDecline", args)
+    }
+
+    /** S-06: Hang up on the ongoing-call notification: to the server through Flutter, like the in-app button. */
+    fun onHangUp(callId: String) {
+        deliver("onEnd", mapOf("callId" to callId, "conversationId" to null))
     }
 
     /** Dart said `ready`: flush what waited for it. */
