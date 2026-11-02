@@ -16,6 +16,7 @@ import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/rewards/application/reward_feed.dart';
 import 'package:jawwid_chat/features/rewards/data/rewards_repository.dart';
 import 'package:jawwid_chat/features/rewards/domain/rewards.dart';
+import 'package:jawwid_chat/features/rewards/presentation/lesson_rewards_row.dart';
 import 'package:jawwid_chat/features/rewards/presentation/reward_celebration.dart';
 import 'package:jawwid_chat/features/rewards/presentation/reward_tray.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/board_elements.dart';
@@ -74,9 +75,14 @@ class _Rewards implements RewardsRepository {
     undone.add(eventId);
     return 0;
   }
+
+  LessonRewards report = const LessonRewards(stars: 0);
+
+  @override
+  Future<LessonRewards> forLesson(String lessonId) async => report;
 }
 
-Map<String, Object?> _payload({String kind = 'star', int stars = 3, String? stickerKey}) => {
+Map<String, Object?> _payload({String kind = 'star', int stars = 3, String? stickerKey, String? badge, int? nextBadgeAt}) => {
   'learnerId': 'learner-1',
   'lessonId': 'lesson-1',
   'eventId': 'event-1',
@@ -85,6 +91,8 @@ Map<String, Object?> _payload({String kind = 'star', int stars = 3, String? stic
   'praiseKey': null,
   'praiseText': null,
   'stars': stars,
+  'badge': badge,
+  'nextBadgeAt': nextBadgeAt,
 };
 
 Widget _app(List<Override> overrides, Widget home, {bool reduceMotion = false}) => ProviderScope(
@@ -307,6 +315,8 @@ void main() {
 
     testWidgets('the teacher\'s own words: up to 40 characters, on the board and recorded', (tester) async {
       final repo = await pump(tester, [adam]);
+      await tester.ensureVisible(find.byKey(const ValueKey('reward-own-words-add')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('reward-own-words')), 'Beautiful reading today');
       await tester.tap(find.byKey(const ValueKey('reward-own-words-add')));
       await tester.pumpAndSettle();
@@ -340,6 +350,86 @@ void main() {
     });
   });
 
+  group('the tally and its badges (PR-5)', () {
+    test('progress: how many more for the next badge, or the badge once the last is earned', () {
+      final en = lookupL10n(const Locale('en')), ar = lookupL10n(const Locale('ar'));
+      expect(rewardProgress(en, stars: 1, nextBadgeAt: 3), '2 more stars for Great effort');
+      expect(rewardProgress(en, stars: 4, badge: RewardBadge.bronze, nextBadgeAt: 6), '2 more stars for Amazing effort');
+      expect(rewardProgress(en, stars: 9, badge: RewardBadge.silver, nextBadgeAt: 10), '1 more star for Superstar');
+      expect(rewardProgress(en, stars: 12, badge: RewardBadge.gold), 'Badge: Superstar');
+      expect(rewardProgress(en, stars: 0), isNull);
+      expect(rewardProgress(ar, stars: 4, badge: RewardBadge.bronze, nextBadgeAt: 6), 'نجمتان أخريان لـجهد مذهل');
+    });
+
+    testWidgets('the celebration says how far to the next badge', (tester) async {
+      final socket = SpySocket();
+      await tester.pumpWidget(_app([
+        appLockControllerProvider.overrideWith(() => _Lock(AppLockPhase.unlocked)),
+        authControllerProvider.overrideWith(() => ScriptedAuth(signedIn())),
+        currentRoleProvider.overrideWithValue(UserRole.parent),
+        realtimeSocketProvider.overrideWithValue(socket),
+        rewardChimeProvider.overrideWithValue(_Chime()),
+        rewardSoundStoreProvider.overrideWithValue(_SoundStore(false)),
+      ], const Scaffold(body: SizedBox())));
+      await tester.pumpAndSettle();
+      socket.emit(rewardGivenEvent, _payload(stars: 4, badge: 'bronze', nextBadgeAt: 6));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.widget<Text>(find.byKey(const ValueKey('reward-progress'))).data, '2 more stars for Amazing effort');
+      await tester.pump(const Duration(seconds: 3));
+      await socket.close();
+    });
+
+    testWidgets('the tray shows the chosen child\'s own tally and progress -- a HUD, nothing placed on the board', (tester) async {
+      placedForTally = [];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            rewardsRepositoryProvider.overrideWithValue(
+              _Rewards([const RewardLesson(lessonId: 'l', learnerId: 'adam', learnerName: 'Adam', stars: 4, badge: RewardBadge.bronze, nextBadgeAt: 6)]),
+            ),
+          ],
+          child: MaterialApp(
+            theme: JawwidTheme.light(isArabic: false),
+            localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+            supportedLocales: const [Locale('en'), Locale('ar')],
+            home: const Scaffold(body: RewardTray(place: _placeForTally)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final tally = find.byKey(const ValueKey('reward-tally-adam'));
+      expect(tally, findsOneWidget);
+      expect(find.descendant(of: tally, matching: find.text('2 more stars for Amazing effort')), findsOneWidget);
+      expect(tester.widget<LinearProgressIndicator>(find.descendant(of: tally, matching: find.byType(LinearProgressIndicator))).value, closeTo(4 / 6, 0.001));
+      expect(placedForTally, isEmpty);
+    });
+
+    Future<void> report(WidgetTester tester, LessonRewards rewards) async {
+      final repo = _Rewards(const [])..report = rewards;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [rewardsRepositoryProvider.overrideWithValue(repo)],
+          child: MaterialApp(
+            theme: JawwidTheme.light(isArabic: false),
+            localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+            supportedLocales: const [Locale('en'), Locale('ar')],
+            home: const Scaffold(body: LessonRewardsRow(lessonId: 'lesson-1')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the report card\'s row: stars, the badge, the praise -- and nothing at all with no stars', (tester) async {
+      await report(tester, const LessonRewards(stars: 7, badge: RewardBadge.silver, nextBadgeAt: 10, praise: [(praise: Praise.excellentAr, text: null), (praise: null, text: 'Lovely!')]));
+      expect(find.text('7 stars · Amazing effort · ممتاز، Lovely!'), findsOneWidget);
+
+      await report(tester, const LessonRewards(stars: 0));
+      expect(find.byKey(const ValueKey('lesson-rewards-lesson-1')), findsNothing, reason: 'never shown as zero');
+    });
+  });
+
   test('the sound: on by default for a family, off for a teacher', () async {
     for (final (role, expected) in [(UserRole.parent, true), (UserRole.teacher, false)]) {
       final container = ProviderContainer(
@@ -361,4 +451,11 @@ void main() {
     expect(container.read(rewardFeedProvider), isNull);
     container.dispose();
   });
+}
+
+List<({StampKind stamp, String? text})> placedForTally = [];
+
+String _placeForTally({required StampKind stamp, String? text, required Color color}) {
+  placedForTally.add((stamp: stamp, text: text));
+  return 'x';
 }

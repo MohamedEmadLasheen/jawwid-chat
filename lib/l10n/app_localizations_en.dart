@@ -4976,4 +4976,40 @@ class L10nEn extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get rewardBadgeBronze => 'Great effort';
+
+  @override
+  String get rewardBadgeSilver => 'Amazing effort';
+
+  @override
+  String get rewardBadgeGold => 'Superstar';
+
+  @override
+  String rewardToNextBadge(int count, String badge) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more stars for $badge',
+      one: '1 more star for $badge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rewardBadgeEarned(String badge) {
+    return 'Badge: $badge';
+  }
+
+  @override
+  String rewardReportStars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stars',
+      one: '1 star',
+    );
+    return '$_temp0';
+  }
 }

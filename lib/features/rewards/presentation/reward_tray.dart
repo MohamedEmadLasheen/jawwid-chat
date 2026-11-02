@@ -164,6 +164,9 @@ class _RewardTrayState extends ConsumerState<RewardTray> {
                     onSelected: (on) => setState(() => _for = on ? {for (final l in lessons) l.learnerId} : <String>{}),
                   ),
               ]),
+            // PR-5: each chosen child's own tally and how far to their next badge -- never a ranking.
+            for (final lesson in lessons.where((l) => chosen.contains(l.learnerId)))
+              _Tally(key: ValueKey('reward-tally-${lesson.learnerId}'), lesson: lesson),
             section(l10n.rewardTrayStar, [
               _RewardButton(
                 key: const ValueKey('reward-star'),
@@ -244,6 +247,42 @@ class _RewardTrayState extends ConsumerState<RewardTray> {
     Sticker.thumbsUp => StampKind.thumbsUp,
     Sticker.check => StampKind.check,
   };
+}
+
+/// One child's stars in this lesson, and a bar to their next badge (a HUD: never saved on the board).
+class _Tally extends StatelessWidget {
+  const _Tally({super.key, required this.lesson});
+
+  final RewardLesson lesson;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final next = lesson.nextBadgeAt;
+    final progress = rewardProgress(l10n, stars: lesson.stars, badge: lesson.badge, nextBadgeAt: next);
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.spacing2),
+      child: Row(
+        children: [
+          SizedBox(width: 96, child: Text(lesson.learnerName, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.star_rounded, color: BoardPalette.stampGold, size: 20),
+          Text(' ${lesson.stars}  '),
+          Expanded(
+            child: LinearProgressIndicator(
+              value: next == null ? 1 : (lesson.stars / next).clamp(0.0, 1.0),
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(4),
+              color: BoardPalette.stampGold,
+            ),
+          ),
+          if (progress != null) ...[
+            const SizedBox(width: Spacing.spacing2),
+            Flexible(child: Text(progress, style: Theme.of(context).textTheme.bodySmall)),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 /// One reward: at least 56 px square, labelled for screen readers.
