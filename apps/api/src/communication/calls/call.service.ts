@@ -34,16 +34,18 @@ const DEFAULT_HISTORY_PAGE = 30;
  * CHATSCHED-013: a call's duration at the moment it ends, in SQL against the
  * row being ended (alias `c`), on the database's clock.
  *
- * CONNECTED TIME when the call ever had two people in the media room: the
- * closed spans (`connected_seconds`) plus the one still open, so a drop and
- * the wait for a rejoin are not counted. A call that never reached two in the
+ * CONNECTED TIME when the call ever had two people in the media room
+ * (`was_connected` -- not "some seconds were counted", which a sub-second span
+ * rounds to 0, sending such a call back to `answered_at` and counting the very
+ * gap this excludes): the closed spans (`connected_seconds`) plus the one still
+ * open, so a drop and the wait for a rejoin are not counted. A call that never reached two in the
  * room -- or an environment that receives no LiveKit webhooks -- keeps the
  * locked rule: from `answered_at` (accepting is the act being timed), and 0
  * when nobody answered.
  */
 const DURATION_AT_END = Prisma.sql`
   case
-    when c.connected_seconds > 0 or c.connected_since is not null
+    when c.was_connected
       then c.connected_seconds + coalesce(greatest(0, round(extract(epoch from (now() - c.connected_since))))::int, 0)
     when c.answered_at is not null
       then greatest(0, round(extract(epoch from (now() - c.answered_at))))::int
@@ -855,8 +857,13 @@ export class CallService {
 
   /**
    * CHATSCHED-013: end the calls that dropped and were not rejoined within
-   * the grace (owner: 60 s), as `connection_lost`; and take out a group
-   * member who dropped and did not come back while the rest carried on.
+   * the grace (owner: 60 s), as `connection_lost`.
+   *
+   * Only whole calls. A group member who dropped while the rest carried on is
+   * NOT taken out of the call (review of #367): before this a member could
+   * rejoin a live group call at any time, the owner's requirement is "rejoin
+   * the same call", and a `left_at` would make authorizeJoin refuse them for
+   * good. The call itself ends them when it ends.
    *
    * The same shape as expireRingingCalls, for the same reasons: one statement
    * claims and transitions, on the database's clock, so it is safe on every
@@ -893,10 +900,9 @@ export class CallService {
         returning c.id, c.conversation_id, c.family_id, c.outcome, c.duration_seconds as duration`;
 
       for (const call of ended) {
-        await tx.callParticipant.updateMany({
-          where: { callId: call.id, leftAt: null },
-          data: { leftAt: new Date() },
-        });
+        // The database's clock, as the statement above: one clock for one ending.
+        await tx.$executeRaw`
+          update chat.call_participant set left_at = now() where call_id = ${call.id}::uuid and left_at is null`;
         await this.outbox.enqueue(tx, CommEvent.CALL_ENDED, {
           callId: call.id,
           conversationId: call.conversation_id,
@@ -912,19 +918,6 @@ export class CallService {
           payload: { callId: call.id, outcome: call.outcome, durationSeconds: call.duration, reason: CallEndReason.CONNECTION_LOST },
         });
       }
-
-      // A group member who dropped while the call carried on, and did not come
-      // back: out of the call, as a hang-up would have left them.
-      await tx.$executeRaw`
-        update chat.call_participant p
-           set left_at = now()
-          from chat.call c
-         where c.id = p.call_id
-           and c.status = 'active'
-           and p.left_at is null
-           and p.media_joined_at is not null
-           and p.media_left_at is not null
-           and p.media_left_at < now() - make_interval(secs => ${graceSeconds}::double precision)`;
 
       if (ended.length > 0) {
         this.log.log(`connection grace ended ${ended.length} call(s) after ${graceSeconds}s`);

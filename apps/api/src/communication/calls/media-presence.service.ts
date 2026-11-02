@@ -154,6 +154,18 @@ export class MediaPresenceService {
         select status from chat.call where id = ${call.id}::uuid for update`;
       terminal = locked?.status === CallStatus.ENDED;
 
+      // The latest join is kept apart (bookkeeping, never a claim): a departure
+      // older than it is a stale delivery -- they have come back since -- and is
+      // ignored below. Without it, a `left` at t=10 delivered after the rejoin at
+      // t=20 found media_left_at empty, interrupted a live call, and the sweep
+      // ended it (review of #367).
+      if (kind === 'joined') {
+        await tx.$executeRaw`
+          update chat.call_participant
+             set media_last_joined_at = greatest(coalesce(media_last_joined_at, ${at}::timestamptz), ${at}::timestamptz)
+           where id = ${participant.id}::uuid`;
+      }
+
       // The claim and the write are one conditional UPDATE, so two concurrent
       // deliveries of the same event cannot both decide they changed something.
       // `count` is the claim: 0 means another delivery got there first, or the
@@ -176,7 +188,8 @@ export class MediaPresenceService {
               update chat.call_participant
                  set media_left_at = greatest(coalesce(media_left_at, ${at}::timestamptz), ${at}::timestamptz)
                where id = ${participant.id}::uuid
-                 and (media_left_at is null or media_left_at < ${at}::timestamptz)`;
+                 and (media_left_at is null or media_left_at < ${at}::timestamptz)
+                 and (media_last_joined_at is null or media_last_joined_at < ${at}::timestamptz)`;
 
       if (updated === 0) return false;
 
@@ -246,7 +259,8 @@ export class MediaPresenceService {
 
     if (state.present >= 2) {
       if (!state.connected) {
-        await tx.$executeRaw`update chat.call set connected_since = ${at}::timestamptz where id = ${call.id}::uuid`;
+        await tx.$executeRaw`
+          update chat.call set connected_since = ${at}::timestamptz, was_connected = true where id = ${call.id}::uuid`;
       }
       if (state.interrupted) {
         await tx.$executeRaw`update chat.call set interrupted_at = null where id = ${call.id}::uuid`;

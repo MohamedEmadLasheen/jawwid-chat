@@ -723,6 +723,8 @@ model Call {
   connectedSince   DateTime? @map("connected_since") @db.Timestamptz
   /// CHATSCHED-013: connected time of the closed spans.
   connectedSeconds Int       @default(0) @map("connected_seconds")
+  /// CHATSCHED-013: the call ever had two in the media room.
+  wasConnected     Boolean   @default(false) @map("was_connected")
 
   participants CallParticipant[]
 
@@ -746,6 +748,8 @@ model CallParticipant {
   /// different facts, and only LiveKit knows the second.
   mediaJoinedAt DateTime? @map("media_joined_at") @db.Timestamptz
   mediaLeftAt   DateTime? @map("media_left_at") @db.Timestamptz
+  /// CHATSCHED-013: the latest media join; an older departure is ignored.
+  mediaLastJoinedAt DateTime? @map("media_last_joined_at") @db.Timestamptz
 
   @@unique([callId, actorId])
   @@map("call_participant")

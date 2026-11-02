@@ -24,7 +24,14 @@ alter table chat.call
   add column if not exists end_reason        text,
   add column if not exists interrupted_at    timestamptz,
   add column if not exists connected_since   timestamptz,
-  add column if not exists connected_seconds integer not null default 0;
+  add column if not exists connected_seconds integer not null default 0,
+  add column if not exists was_connected     boolean not null default false;
+
+-- A departure older than the participant's latest join is history, not a drop:
+-- LiveKit's webhooks can arrive out of order, and a stale `left` must not
+-- interrupt a call the participant has already rejoined.
+alter table chat.call_participant
+  add column if not exists media_last_joined_at timestamptz;
 
 alter table chat.call drop constraint if exists call_end_reason_valid;
 alter table chat.call add constraint call_end_reason_valid
@@ -47,6 +54,12 @@ comment on column chat.call.connected_since is
 comment on column chat.call.connected_seconds is
   'Connected time of the closed spans. duration_seconds at the end is this plus '
   'any open span: a disconnection is not counted.';
+comment on column chat.call.was_connected is
+  'The call ever had two or more participants in the media room. Its duration is '
+  'then connected time, even when that rounds to 0 s.';
+comment on column chat.call_participant.media_last_joined_at is
+  'The LATEST media join reported for this participant. A media departure older '
+  'than it is ignored: they already came back.';
 
 -- Ended calls get the reason their outcome already implies.
 update chat.call
@@ -79,7 +92,11 @@ select v.key, v.locale, v.title, v.body
   ) as v(key, locale, title, body)
  where not exists (select 1 from chat.notification_template t where t.key = v.key and t.locale = v.locale);
 
+-- `recipient_role = 'participant'`: both people are told (OutboxWorker
+-- .notifyConnectionLost schedules one per participant through scheduleByRule,
+-- which does not read the role), and 'participant' says so. offset 0: not a
+-- reminder schedule.
 insert into chat.notification_rule
   (key, event_type, offset_seconds, template_key, recipient_role, channel, priority, respect_quiet_hours) values
-  ('call_connection_lost', 'call_connection_lost', 0, 'call_connection_lost', 'callee', 'push', 'high', true)
+  ('call_connection_lost', 'call_connection_lost', 0, 'call_connection_lost', 'participant', 'push', 'high', true)
 on conflict (key) do nothing;

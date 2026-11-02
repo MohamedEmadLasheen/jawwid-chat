@@ -17,7 +17,10 @@ delete from chat.config where key = 'call.reconnect_grace_seconds';
 drop index if exists chat.call_interrupted_idx;
 alter table chat.call drop constraint if exists call_connected_seconds_nonnegative;
 alter table chat.call drop constraint if exists call_end_reason_valid;
+alter table chat.call_participant
+  drop column if exists media_last_joined_at;
 alter table chat.call
+  drop column if exists was_connected,
   drop column if exists connected_seconds,
   drop column if exists connected_since,
   drop column if exists interrupted_at,

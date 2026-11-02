@@ -11,7 +11,11 @@
  *   6. a hang-up stays a hang-up.
  *
  * Group calls: one member's drop with two still connected does not interrupt
- * the call; that member is out after the grace. A decline is unchanged.
+ * the call, and that member may rejoin it while it is live, however long
+ * after (review of #367). A decline is unchanged.
+ *
+ * Races (review of #367): the sweep against a rejoin, a hang-up and another
+ * sweep; two rejoins; webhooks delivered out of order.
  *
  * Media presence is driven with LiveKit's own event times, so "60 s ago" is an
  * event time, not a sleep.
@@ -171,7 +175,7 @@ describe('a hang-up stays a hang-up', () => {
 });
 
 describe('group calls', () => {
-  it('one member dropping while two stay connected does not interrupt the call; that member is out after the grace', async () => {
+  it('one member dropping while two stay connected does not interrupt the call; they may rejoin the same call, even past the grace', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
     const { callId, roomName } = await g.calls.start(group.id, s.ownerId);
     const members = (await g.prisma.callParticipant.findMany({ where: { callId } })).map((p) => p.actorId);
@@ -186,9 +190,13 @@ describe('group calls', () => {
     expect(await g.calls.endInterruptedCalls()).toBe(0);
     expect((await row(callId)).status).toBe('active');
     const dropped = await g.prisma.callParticipant.findUnique({ where: { callId_actorId: { callId, actorId: others[0]! } } });
-    expect(dropped!.leftAt).toBeInstanceOf(Date);
-    const stayed = await g.prisma.callParticipant.findUnique({ where: { callId_actorId: { callId, actorId: others[1]! } } });
-    expect(stayed!.leftAt).toBeNull();
+    expect(dropped!.leftAt).toBeNull();
+
+    // Back, past the grace: the same call lets them in.
+    await expect(g.calls.issueToken(callId, others[0]!)).resolves.toMatchObject({ roomName });
+    expect(await presence.participantJoined({ roomName, identity: others[0]!, at: new Date() })).toBe('reconciled');
+    const back = await g.prisma.callParticipant.findUnique({ where: { callId_actorId: { callId, actorId: others[0]! } } });
+    expect([back!.leftAt, back!.mediaLeftAt]).toEqual([null, null]);
   });
 
   it('one decline still ends a ringing group call (owner decision), with reason declined', async () => {
@@ -223,6 +231,113 @@ describe('the sweep and a rejoin at the same moment', () => {
         expect(await g.calls.endInterruptedCalls()).toBe(0);
       }
     }
+  });
+});
+
+describe('webhooks out of order (review of #367)', () => {
+  it('a departure delivered after the rejoin that followed it is ignored: no interruption, and the sweep never ends the call', async () => {
+    const { callId, roomName } = await connectedDirectCall(300);
+    // Dropped at -90 s, back at -80 s; LiveKit delivers the rejoin first.
+    expect(await presence.participantJoined({ roomName, identity: s.parentId, at: ago(80) })).toBe('noop');
+    expect(await presence.participantLeft({ roomName, identity: s.parentId, at: ago(90) })).toBe('noop');
+
+    const after = await row(callId);
+    expect([after.status, after.interrupted_at]).toEqual(['active', null]);
+    expect((await events(callId)).map((e) => e.type)).not.toContain(CommEvent.CALL_INTERRUPTED);
+    const parent = await g.prisma.callParticipant.findUnique({ where: { callId_actorId: { callId, actorId: s.parentId } } });
+    expect(parent!.mediaLeftAt).toBeNull();
+    expect(await g.calls.endInterruptedCalls()).toBe(0);
+
+    // A real departure, newer than that rejoin, still counts.
+    expect(await presence.participantLeft({ roomName, identity: s.parentId, at: ago(10) })).toBe('reconciled');
+    expect((await row(callId)).interrupted_at).toBeInstanceOf(Date);
+  });
+});
+
+describe('races (review of #367)', () => {
+  /** A connected 1:1 call, dropped past the grace: due to be swept. */
+  async function overdue() {
+    const call = await connectedDirectCall(300);
+    await presence.participantLeft({ roomName: call.roomName, identity: s.parentId, at: ago(grace + 2) });
+    return call;
+  }
+
+  async function fresh() {
+    await truncate(g.prisma);
+    s = await seed(g.prisma);
+    g.coverage.onDutyId = s.ownerId;
+  }
+
+  it('the sweep and a hang-up: one ending, with one reason, announced once', async () => {
+    const reasons = new Set<string>();
+    for (let round = 0; round < 8; round++) {
+      await fresh();
+      const { callId } = await overdue();
+      const settled = await Promise.allSettled([g.calls.endInterruptedCalls(), g.calls.end(callId, s.ownerId)]);
+      expect(settled.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+      const after = await row(callId);
+      const ended = (await events(callId)).filter((e) => e.type === CommEvent.CALL_ENDED);
+      expect(after.status).toBe('ended');
+      expect(ended).toHaveLength(1);
+      expect(ended[0]!.payload.reason).toBe(after.end_reason);
+      reasons.add(after.end_reason!);
+    }
+    expect([...reasons].every((r) => r === 'connection_lost' || r === 'hung_up')).toBe(true);
+  });
+
+  it('two sweeps at once end the call once', async () => {
+    for (let round = 0; round < 8; round++) {
+      await fresh();
+      const { callId } = await overdue();
+      const counts = await Promise.all([g.calls.endInterruptedCalls(), g.calls.endInterruptedCalls()]);
+      expect(counts[0]! + counts[1]!).toBe(1);
+      expect((await events(callId)).filter((e) => e.type === CommEvent.CALL_ENDED)).toHaveLength(1);
+    }
+  });
+
+  it('two rejoins at once resume the call once', async () => {
+    for (let round = 0; round < 8; round++) {
+      await fresh();
+      const { callId, roomName } = await connectedDirectCall(300);
+      await presence.participantLeft({ roomName, identity: s.parentId, at: ago(20) });
+      const now = new Date();
+      await Promise.all([
+        presence.participantJoined({ roomName, identity: s.parentId, at: now }),
+        presence.participantJoined({ roomName, identity: s.parentId, at: new Date(now.getTime() + 5) }),
+      ]);
+      const after = await row(callId);
+      expect([after.status, after.interrupted_at]).toEqual(['active', null]);
+      expect((await events(callId)).filter((e) => e.type === CommEvent.CALL_RESUMED)).toHaveLength(1);
+    }
+  });
+
+  it('a hang-up while interrupted ends it as hung_up, with the connected time only; the sweep then has nothing', async () => {
+    const { callId, roomName } = await connectedDirectCall(300);
+    // Connected 300 s ago, dropped 100 s ago (200 s connected), and the other side hangs up in the grace.
+    await presence.participantLeft({ roomName, identity: s.parentId, at: ago(100) });
+    await g.prisma.$executeRaw`update chat.call set interrupted_at = now() - make_interval(secs => 10) where id = ${callId}::uuid`;
+    await g.calls.end(callId, s.ownerId);
+    const ended = await row(callId);
+    expect([ended.status, ended.end_reason, ended.interrupted_at]).toEqual(['ended', 'hung_up', null]);
+    expect(ended.duration_seconds).toBeGreaterThanOrEqual(198);
+    expect(ended.duration_seconds).toBeLessThanOrEqual(202);
+    expect(await g.calls.endInterruptedCalls()).toBe(0);
+    expect((await events(callId)).filter((e) => e.type === CommEvent.CALL_ENDED)).toHaveLength(1);
+  });
+});
+
+describe('duration (review of #367)', () => {
+  it('a call that was connected for under a second is 0 s of connected time, not the time since the answer', async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const { callId, roomName } = await g.calls.start(conv.id, s.ownerId);
+    await g.calls.accept(callId, s.parentId);
+    await g.prisma.$executeRaw`update chat.call set answered_at = now() - make_interval(secs => 200) where id = ${callId}::uuid`;
+    const joined = ago(150);
+    for (const id of [s.ownerId, s.parentId]) await presence.participantJoined({ roomName, identity: id, at: joined });
+    await presence.participantLeft({ roomName, identity: s.parentId, at: new Date(joined.getTime() + 400) });
+    await g.prisma.$executeRaw`update chat.call set interrupted_at = now() - make_interval(secs => ${grace + 1}) where id = ${callId}::uuid`;
+    expect(await g.calls.endInterruptedCalls()).toBe(1);
+    expect((await row(callId)).duration_seconds).toBe(0);
   });
 });
 
