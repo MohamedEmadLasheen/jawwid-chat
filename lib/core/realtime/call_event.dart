@@ -81,6 +81,7 @@ final class CallEnded extends CallEvent {
     required super.conversationId,
     required this.outcome,
     required this.duration,
+    this.reason = CallEndReason.unknown,
   });
 
   final CallOutcome outcome;
@@ -89,6 +90,27 @@ final class CallEnded extends CallEvent {
   /// told" and "the call lasted no time" are different facts, and a call that
   /// was never answered legitimately has no duration.
   final Duration? duration;
+
+  /// CHATSCHED-013: WHY it ended, beside the outcome. [CallEndReason.unknown]
+  /// for a server from before the reason existed.
+  final CallEndReason reason;
+}
+
+/// CHATSCHED-013: why a call ended. A drop nobody came back from within the
+/// grace is [connectionLost]; a participant ending it is [hungUp].
+enum CallEndReason { hungUp, declined, ringTimeout, connectionLost, unknown }
+
+/// CHATSCHED-013: the call dropped below two people in the room. The server
+/// ends it as connection lost at [until] unless someone rejoins first.
+final class CallInterrupted extends CallEvent {
+  const CallInterrupted({required super.callId, required super.conversationId, required this.until});
+
+  final DateTime until;
+}
+
+/// CHATSCHED-013: a rejoin within the grace brought the call back.
+final class CallResumed extends CallEvent {
+  const CallResumed({required super.callId, required super.conversationId});
 }
 
 /// A payload that does not match the contract.
@@ -113,8 +135,10 @@ abstract final class CallEventNames {
   static const accepted = 'call.accepted';
   static const declined = 'call.declined';
   static const ended = 'call.ended';
+  static const interrupted = 'call.interrupted';
+  static const resumed = 'call.resumed';
 
-  static const all = <String>{incoming, accepted, declined, ended};
+  static const all = <String>{incoming, accepted, declined, ended, interrupted, resumed};
 }
 
 /// Decode one server frame.
@@ -193,14 +217,32 @@ CallEvent? decodeCallEvent(String name, Object? payload) {
       if (seconds != null && seconds < 0) {
         throw CallEventFormatException(name, 'durationSeconds');
       }
+      // Optional and open: a reason this build does not know is not a reason
+      // to drop the ending (the outcome above is what must be trusted).
+      final reason = switch (map['reason']) {
+        'hung_up' => CallEndReason.hungUp,
+        'declined' => CallEndReason.declined,
+        'ring_timeout' => CallEndReason.ringTimeout,
+        'connection_lost' => CallEndReason.connectionLost,
+        _ => CallEndReason.unknown,
+      };
       return CallEnded(
         callId: callId,
         conversationId: conversationId,
         outcome: outcome,
         duration: seconds == null ? null : Duration(seconds: seconds),
+        reason: reason,
       );
+
+    case CallEventNames.interrupted:
+      final until = DateTime.tryParse(required('until'));
+      if (until == null) throw CallEventFormatException(name, 'until');
+      return CallInterrupted(callId: callId, conversationId: conversationId, until: until);
+
+    case CallEventNames.resumed:
+      return CallResumed(callId: callId, conversationId: conversationId);
   }
 
-  // Unreachable: `all` and the switch above are the same four names.
+  // Unreachable: `all` and the switch above are the same names.
   throw CallEventFormatException(name, 'event');
 }

@@ -19,6 +19,8 @@ import { H, useCopy } from './copy'
 import { useDeductionDefaults, useRecordReward, useRewards, useSetDeductionDefault, useSupervisedComplaints } from './hooks'
 import { SectionIntro } from './SectionIntro'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { AboutPicker } from '@/features/teacher-records/AboutPicker'
+import { aboutFields } from '@/features/teacher-records/api'
 
 const MONEY = /^\d{1,10}(\.\d{1,2})?$/
 
@@ -27,7 +29,16 @@ const MONEY = /^\d{1,10}(\.\d{1,2})?$/
 // ---------------------------------------------------------------------------
 
 /** `canRecord` false: the reader may not record a grant (PD-52 page B's answer); no button is offered. */
-export function RewardsSection({ basePath, canRecord = true }: { basePath: string; canRecord?: boolean }) {
+export function RewardsSection({
+  basePath,
+  canRecord = true,
+  requireAbout = false,
+}: {
+  basePath: string
+  canRecord?: boolean
+  /** PD-52 PR-5 (Sales): every grant names the student or trial it is about, and never has an amount. */
+  requireAbout?: boolean
+}) {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   const money = useMoney()
@@ -86,12 +97,12 @@ export function RewardsSection({ basePath, canRecord = true }: { basePath: strin
         </QueryBoundary>
       )}
       {canViewAmounts && <DeductionDefaults />}
-      {recording && <RewardDialog withAmount={canViewAmounts} onClose={() => setRecording(false)} />}
+      {recording && <RewardDialog withAmount={canViewAmounts && !requireAbout} requireAbout={requireAbout} onClose={() => setRecording(false)} />}
     </>
   )
 }
 
-function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: () => void }) {
+function RewardDialog({ withAmount, requireAbout, onClose }: { withAmount: boolean; requireAbout: boolean; onClose: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const teachers = useSupervisionDirectory()
@@ -102,8 +113,9 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
   const [teacher, setTeacher] = useState('')
   const [reason, setReason] = useState('')
   const [amount, setAmount] = useState('')
+  const [about, setAbout] = useState('')
   const [touched, setTouched] = useState(false)
-  const missing = { teacher: !teacher, reason: !reason.trim(), amount: amount.trim() !== '' && !MONEY.test(amount.trim()) }
+  const missing = { teacher: !teacher, reason: !reason.trim(), amount: amount.trim() !== '' && !MONEY.test(amount.trim()), about: requireAbout && !about }
 
   return (
     <Dialog
@@ -118,11 +130,11 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
             disabled={record.isPending}
             onClick={() => {
               setTouched(true)
-              if (missing.teacher || missing.reason || missing.amount) return
+              if (missing.teacher || missing.reason || missing.amount || missing.about) return
               // With an amount, ONE request records the reward and prices it (PD-26):
               // a refusal (no pay terms that month) records nothing at all.
               record.mutate(
-                { teacherId: teacher, reason: reason.trim(), ...(withAmount && amount.trim() ? { amount: amount.trim() } : {}) },
+                { teacherId: teacher, reason: reason.trim(), ...(withAmount && amount.trim() ? { amount: amount.trim() } : {}), ...aboutFields(about) },
                 { onSuccess: onClose },
               )
             }}
@@ -149,6 +161,7 @@ function RewardDialog({ withAmount, onClose }: { withAmount: boolean; onClose: (
         </SearchableSelect>
         {touched && missing.teacher && <span className="field__error">{tx(H.teacher)}</span>}
       </div>
+      {requireAbout && <AboutPicker teacherId={teacher} value={about} onChange={setAbout} required error={touched && missing.about} />}
       <div className="field">
         <label className="field__label" htmlFor={reasonId}>
           {tx(H.reason)}
@@ -271,7 +284,12 @@ function DeductionDefaults() {
 
 type Source = 'all' | ComplaintSource
 
-export function ComplaintsSection() {
+/**
+ * `canDecide` false (PD-52 PR-5, Sales): records complaints and follows them
+ * up, every one about a student or trial it names; never takes, replies,
+ * upholds or resolves.
+ */
+export function ComplaintsSection({ canDecide = true, requireAbout = false }: { canDecide?: boolean; requireAbout?: boolean } = {}) {
   const tx = useCopy()
   const { locale } = useI18n()
   const [source, setSource] = useState<Source>('all')
@@ -331,6 +349,7 @@ export function ComplaintsSection() {
                   complaint={c}
                   teacherName={c.teacher.name}
                   canWrite={canWrite}
+                  canDecide={canDecide}
                   onFollowUp={() => setIntent({ teacherId: c.teacher.id, intent: { kind: 'complaint_followup', refersTo: c.id } })}
                   onResolve={() => setIntent({ teacherId: c.teacher.id, intent: { kind: 'complaint_resolution', refersTo: c.id } })}
                   onUphold={() => setUpholding(c)}
@@ -341,7 +360,7 @@ export function ComplaintsSection() {
           )}
         </QueryBoundary>
       )}
-      {intent && <AddEntryDialog teacherId={intent.teacherId} intent={intent.intent} onClose={() => setIntent(null)} />}
+      {intent && <AddEntryDialog teacherId={intent.teacherId} intent={intent.intent} requireAbout={requireAbout} onClose={() => setIntent(null)} />}
       {upholding && <UpholdDialog complaint={upholding} onClose={() => setUpholding(null)} />}
       {deciding && violation && <DecideDialog violation={violation} onClose={() => setDeciding(null)} />}
       {deciding && !violation && waiting.error ? (

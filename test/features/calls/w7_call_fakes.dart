@@ -44,6 +44,7 @@ class FakeCalls implements CallRepository {
   final acceptCalls = <String>[];
   final declineCalls = <String>[];
   final endCalls = <String>[];
+  final endConnectionLost = <bool>[];
   final tokenCalls = <String>[];
 
   String nextCallId = 'call_1';
@@ -88,8 +89,9 @@ class FakeCalls implements CallRepository {
   }
 
   @override
-  Future<void> end({required String callId}) async {
+  Future<void> end({required String callId, bool connectionLost = false}) async {
     endCalls.add(callId);
+    endConnectionLost.add(connectionLost);
     if (endError != null) throw endError!;
   }
 
@@ -324,13 +326,19 @@ abstract final class Frames {
     String conversationId = 'conv_1',
     String outcome = 'answered',
     int? durationSeconds = 0,
+    String? reason,
   }) =>
       {
         'callId': callId,
         'conversationId': conversationId,
         'outcome': outcome,
         'durationSeconds': durationSeconds,
+        'reason': ?reason,
       };
+
+  /// CHATSCHED-013: `call.interrupted`, with the server's deadline.
+  static Map<String, Object?> interrupted({String callId = 'call_1', String conversationId = 'conv_1', required DateTime until}) =>
+      {'callId': callId, 'conversationId': conversationId, 'until': until.toUtc().toIso8601String()};
 }
 
 /// A signed-in session, for the common case.

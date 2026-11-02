@@ -619,6 +619,24 @@ abstract class L10n {
   /// **'Reconnecting…'**
   String get callReconnecting;
 
+  /// CHATSCHED-013: in a call, the other side dropped; the call ends after 60 s unless they come back.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost. Waiting for them to reconnect…'**
+  String get callWaitingForReconnect;
+
+  /// CHATSCHED-013: the call ended because a participant dropped and did not reconnect within 60 s.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended: the connection was lost'**
+  String get callEndedConnectionLost;
+
+  /// CHATSCHED-013: in call history and the chat's call card, beside the outcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get callHistoryConnectionLost;
+
   /// No description provided for @callAccept.
   ///
   /// In en, this message translates to:

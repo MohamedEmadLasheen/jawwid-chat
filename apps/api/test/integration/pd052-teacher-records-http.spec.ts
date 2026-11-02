@@ -151,11 +151,13 @@ describe('PD-52 over HTTP', () => {
     expect((await g.prisma.parentFeedback.findUniqueOrThrow({ where: { id: feedbackId } })).status).toBe('received');
   });
 
-  it('GET /teacher-records/access offers a parent, a teacher and Sales nothing', async () => {
-    for (const subject of [m.families[0]!.parent.subject, m.teachers[0]!.subject, m.salesManager.subject]) {
+  it('GET /teacher-records/access offers a parent and a teacher nothing, and Sales its records (PR-5)', async () => {
+    for (const subject of [m.families[0]!.parent.subject, m.teachers[0]!.subject]) {
       const r = await call(await login(subject), 'GET', '/teacher-records/access');
       expect({ subject, status: r.status, json: r.json }).toEqual({ subject, status: 200, json: NOTHING });
     }
+    const sales = await call(await login(m.salesManager.subject), 'GET', '/teacher-records/access');
+    expect(sales.json).toEqual({ ...NOTHING, basis: 'sales', attendance: { view: true, record: true, decide: false }, grants: { view: true, record: true } });
     const owner = await call(await login(m.superAdmin.subject), 'GET', '/teacher-records/access');
     expect(owner.json).toMatchObject({ basis: 'super_admin', attendance: { decide: true }, grants: { record: true } });
   });

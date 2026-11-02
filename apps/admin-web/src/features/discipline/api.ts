@@ -38,8 +38,9 @@ export interface Violation {
   note: string | null
   recordedBy: { id: string; name: string | null } | null
   /** Its rank among the teacher's counted violations of the month (1-5). */
-  step: number
-  suggestedDecision: Decision
+  /** Null for Sales (PD-52 PR-5): the ladder is not its to see. */
+  step: number | null
+  suggestedDecision: Decision | null
   decision: Decision | null
   decisionNote: string | null
   decidedBy: { id: string; name: string | null } | null

@@ -12,6 +12,7 @@ import { CardKind, SupervisionKind } from '../communication/contracts/vocab';
 import { LessonService, invalid, textField } from './lesson.service';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { staffComplaintSource } from '../supervision/complaint-source';
+import { scopeCovers } from '../platform/teacher-scope';
 
 const ENTRY_KINDS: ReadonlySet<string> = new Set([SupervisionKind.COMPLAINT, SupervisionKind.MONTHLY_COMMENT, SupervisionKind.NOTE]);
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -170,6 +171,9 @@ export class SupervisionService {
    */
   async bonus(actorId: string, teacherId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
+    const scope = this.lessons.teacherScope;
+    // PD-52 PR-5: Sales records a grant, without an amount, about a child or trial in its reach.
+    if ((await scope.pageBasis(actor)) === null && (await scope.salesBasis(actor))) return this.salesBonus(actor, teacherId, body);
     const teacher = await this.supervisedTeacher(actor, teacherId, true);
     const reason = textField(body, 'reason', 2000, true) as string;
     const { entry, conversationId } = await this.lessons.write(() =>
@@ -189,6 +193,8 @@ export class SupervisionService {
     actor: Actor,
     teacher: { id: string; organizationId: string; name: string },
     reason: string,
+    // PD-52: the child, family or trial family it is about (the database checks the links).
+    about: { learnerId?: string; familyId?: string; trialProspectId?: string } = {},
   ) {
     const chat = await this.supervisionChats.ensureInTx(tx, teacher.id, teacher.organizationId, actor.actorId);
     const entry = await tx.teacherSupervisionEntry.create({
@@ -199,6 +205,7 @@ export class SupervisionService {
         body: reason,
         conversationId: chat.id,
         createdBy: actor.actorId,
+        ...about,
       },
     });
     await this.lessons.postCardInto(tx, chat, null, actor, CardKind.TEACHER_BONUS, { teacherName: teacher.name, reason }, 'ar');
@@ -208,6 +215,39 @@ export class SupervisionService {
       after: { entryId: entry.id }, reason,
     });
     return { entry, conversationId: chat.id };
+  }
+
+  /**
+   * PD-52 PR-5 (plan §5.4, owner §11 b): a grant by Sales -- never an amount
+   * (the payroll route is the finance tier's), and always about one child of a
+   * family it owns or one trial it reads (`learnerId` or `prospectId`). A
+   * teacher outside Sales' rows, or a child or trial outside them, is not
+   * found / refused; the database re-checks it (chat.may_record_teacher_row).
+   */
+  private async salesBonus(actor: Actor, teacherId: string, body: Record<string, unknown>) {
+    const scope = this.lessons.teacherScope;
+    const page = await scope.salesRowsOf(actor);
+    if (!isUuid(teacherId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    const teacher = await this.prisma.teacher.findFirst({ where: { id: teacherId, organizationId: actor.organizationId } });
+    if (!teacher || !scopeCovers(page.teachers, teacher.id)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    if (body.amount !== undefined && body.amount !== null) throw invalid('amount: a grant Sales records has no amount');
+    const reason = textField(body, 'reason', 2000, true) as string;
+    const about: { learnerId?: string; familyId?: string; trialProspectId?: string } = {};
+    if (isUuid(body.learnerId) && body.prospectId === undefined) {
+      const learner = await this.prisma.learner.findFirst({ where: { id: body.learnerId, organizationId: actor.organizationId }, select: { id: true, familyId: true } });
+      if (!learner || !page.learnerIds.has(learner.id)) throw invalid('learnerId: not a student you can record about');
+      about.learnerId = learner.id;
+      about.familyId = learner.familyId;
+    } else if (isUuid(body.prospectId) && body.learnerId === undefined) {
+      if (!page.prospectIds?.has(body.prospectId)) throw invalid('prospectId: not a trial family you can record about');
+      about.trialProspectId = body.prospectId;
+    } else {
+      throw invalid('learnerId: name the student, or prospectId: the trial family, the grant is about');
+    }
+    const { entry, conversationId } = await this.lessons.write(() =>
+      this.prisma.$transaction((tx) => this.bonusInTx(tx, actor, teacher, reason, about)),
+    );
+    return { id: entry.id, kind: entry.kind, conversationId };
   }
 
   /** Who may record a bonus for this teacher: the Teachers department and the super admin (see supervisedTeacher). */

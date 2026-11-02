@@ -70,4 +70,7 @@ export const R = {
   yearGrants: { en: '{n} grants in {year}', ar: 'المنح في {year}: {n}' },
   yearTestimonials: { en: '{n} testimonials in {year}', ar: 'الشهادات الطيبة في {year}: {n}' },
   openFile: { en: 'Open the Teacher File', ar: 'فتح ملف المعلم' },
+  // PD-52 PR-5
+  about: { en: 'Student or trial', ar: 'الطالب أو الحصة التجريبية' },
+  trialOf: { en: '{name} (trial)', ar: '{name} (تجريبية)' },
 }

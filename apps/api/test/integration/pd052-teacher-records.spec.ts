@@ -127,11 +127,11 @@ describe('PD-52 PR-1: the keys', () => {
       const keys = await keysOf(who);
       expect(keys).toEqual(expect.arrayContaining(['teacher_supervision.view', ...NEW_KEYS]));
     }
-    for (const who of [salesId, looseId]) {
-      const keys = await keysOf(who);
-      expect(keys).not.toContain('teacher_supervision.view');
-      expect(keys.filter((k) => NEW_KEYS.includes(k))).toEqual([]);
-    }
+    // PD-52 PR-5: Sales holds the view and record keys, never decide, never the old keys.
+    const sales = await keysOf(salesId);
+    expect(sales).not.toContain('teacher_supervision.view');
+    expect(sales.filter((k) => NEW_KEYS.includes(k)).sort()).toEqual(['teacher_attendance.record', 'teacher_attendance.view', 'teacher_grants.record', 'teacher_grants.view']);
+    expect((await keysOf(looseId)).filter((k) => NEW_KEYS.includes(k))).toEqual([]);
   });
 
   it('2. the migration copies every old grant of a role into its new keys, once', async () => {
@@ -166,7 +166,7 @@ describe('PD-52 PR-1: the keys', () => {
     expect(await keysOfRole(other)).toEqual(['lessons.view']);
   });
 
-  it('3. GET /teacher-records/access: Operations and the Teachers department both pages; Sales and the unplaced none', async () => {
+  it('3. GET /teacher-records/access: Operations and the Teachers department both pages; Sales records (PR-5); the unplaced none', async () => {
     const ops = await records.access(s.ownerId);
     expect(ops).toMatchObject({
       basis: 'operations',
@@ -179,9 +179,9 @@ describe('PD-52 PR-1: the keys', () => {
     const teachers = await records.access(tsupId);
     expect(teachers).toMatchObject({ basis: 'teachers', attendance: { view: true, decide: true }, grants: { view: true }, leaveBalance: true, opensFile: true });
     expect((await records.access(superId)).amounts).toBe(true);
-    for (const who of [salesId, looseId]) {
-      expect(await records.access(who)).toMatchObject({ basis: null, attendance: { view: false }, grants: { view: false } });
-    }
+    expect(await records.access(looseId)).toMatchObject({ basis: null, attendance: { view: false }, grants: { view: false } });
+    // PD-52 PR-5: Sales records, never decides.
+    expect(await records.access(salesId)).toMatchObject({ basis: 'sales', attendance: { view: true, record: true, decide: false }, grants: { view: true, record: true } });
   });
 });
 
@@ -361,7 +361,8 @@ describe('PD-52 PR-2: testimonials, corrections and links', () => {
     expect((await records.students(s.ownerId, s.teacherId)).students.map((x) => x.id)).toEqual([s.learnerId]);
     // Review of #377: who may not ask, and which teachers are not found.
     expect(await code(records.students(looseId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
-    expect(await code(records.students(salesId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    // PD-52 PR-5: Sales has a basis; owning no family here, the teacher is outside its rows.
+    expect(await code(records.students(salesId, s.teacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
     expect(await code(records.students(s.ownerId, s.unrelatedTeacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
     const elsewhere = randomUUID();
     const foreignTeacher = randomUUID();

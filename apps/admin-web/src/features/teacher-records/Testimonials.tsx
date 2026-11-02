@@ -10,9 +10,10 @@ import { FeedbackStatusBadge, ReplyDialog } from '@/features/teacher-supervision
 import { describeFeedbackError } from '@/features/teacher-supervision/copy'
 import { useTakeFeedback } from '@/features/teacher-supervision/hooks'
 import { SectionIntro } from '@/features/teacher-supervision/SectionIntro'
-import { TESTIMONIAL_SOURCES, type Testimonial, type TestimonialSource } from './api'
+import { AboutPicker } from './AboutPicker'
+import { TESTIMONIAL_SOURCES, aboutFields, type Testimonial, type TestimonialSource } from './api'
 import { R, useCopy, type Pair } from './copy'
-import { useRecordTestimonial, useTeacherStudents, useTestimonials, useVoidEntry } from './hooks'
+import { useRecordTestimonial, useTestimonials, useVoidEntry } from './hooks'
 
 type Origin = 'all' | 'parent' | 'staff'
 
@@ -30,7 +31,18 @@ const SOURCE_LABEL: Record<TestimonialSource, Pair> = {
  * mistake is corrected (hidden, never deleted). `canRecord` is
  * GET /teacher-records/access's grants.record; the server decides each request.
  */
-export function TestimonialsSection({ canRecord, teacher, month }: { canRecord: boolean; teacher?: string; month?: string }) {
+export function TestimonialsSection({
+  canRecord,
+  teacher,
+  month,
+  requireAbout = false,
+}: {
+  canRecord: boolean
+  teacher?: string
+  month?: string
+  /** PD-52 PR-5: Sales names the student or trial every testimonial is about. */
+  requireAbout?: boolean
+}) {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   const [origin, setOrigin] = useState<Origin>('all')
@@ -132,7 +144,7 @@ export function TestimonialsSection({ canRecord, teacher, month }: { canRecord: 
           )}
         </QueryBoundary>
       )}
-      {recording && <RecordTestimonialDialog initialTeacher={teacher ?? ''} onClose={() => setRecording(false)} />}
+      {recording && <RecordTestimonialDialog initialTeacher={teacher ?? ''} requireAbout={requireAbout} onClose={() => setRecording(false)} />}
       {replying && replying.parent && (
         <ReplyDialog
           feedbackId={replying.id}
@@ -147,19 +159,18 @@ export function TestimonialsSection({ canRecord, teacher, month }: { canRecord: 
   )
 }
 
-function RecordTestimonialDialog({ initialTeacher, onClose }: { initialTeacher: string; onClose: () => void }) {
+function RecordTestimonialDialog({ initialTeacher, requireAbout, onClose }: { initialTeacher: string; requireAbout: boolean; onClose: () => void }) {
   const tx = useCopy()
   const { locale } = useI18n()
   const directory = useSupervisionDirectory()
   const record = useRecordTestimonial()
-  const ids = { teacher: useId(), source: useId(), student: useId(), text: useId() }
+  const ids = { teacher: useId(), source: useId(), text: useId() }
   const [teacher, setTeacher] = useState(initialTeacher)
   const [source, setSource] = useState<TestimonialSource | ''>('')
-  const [student, setStudent] = useState('')
+  const [about, setAbout] = useState('')
   const [text, setText] = useState('')
   const [touched, setTouched] = useState(false)
-  const students = useTeacherStudents(teacher)
-  const missing = { teacher: !teacher, source: !source, text: !text.trim() }
+  const missing = { teacher: !teacher, source: !source, text: !text.trim(), about: requireAbout && !about }
 
   return (
     <Dialog
@@ -174,9 +185,9 @@ function RecordTestimonialDialog({ initialTeacher, onClose }: { initialTeacher: 
             disabled={record.isPending}
             onClick={() => {
               setTouched(true)
-              if (missing.teacher || missing.source || missing.text) return
+              if (Object.values(missing).some(Boolean)) return
               record.mutate(
-                { teacherId: teacher, body: text.trim(), source: source as TestimonialSource, ...(student ? { learnerId: student } : {}) },
+                { teacherId: teacher, body: text.trim(), source: source as TestimonialSource, ...aboutFields(about) },
                 { onSuccess: onClose },
               )
             }}
@@ -201,7 +212,7 @@ function RecordTestimonialDialog({ initialTeacher, onClose }: { initialTeacher: 
           value={teacher}
           onValueChange={(v) => {
             setTeacher(v)
-            setStudent('')
+            setAbout('')
           }}
         >
           <option value="">—</option>
@@ -229,19 +240,7 @@ function RecordTestimonialDialog({ initialTeacher, onClose }: { initialTeacher: 
         </SearchableSelect>
         {touched && missing.source && <p className="field__error">{tx(R.required)}</p>}
       </div>
-      <div className="field">
-        <label className="field__label" htmlFor={ids.student}>
-          {tx(R.student)}
-        </label>
-        <SearchableSelect id={ids.student} className="input" value={student} disabled={!teacher} onValueChange={(v) => setStudent(v)}>
-          <option value="">—</option>
-          {(students.data?.students ?? []).map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </SearchableSelect>
-      </div>
+      <AboutPicker teacherId={teacher} value={about} onChange={setAbout} required={requireAbout} error={touched && missing.about} />
       <div className="field">
         <label className="field__label" htmlFor={ids.text}>
           {tx(R.text)}

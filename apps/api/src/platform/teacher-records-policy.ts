@@ -1,3 +1,5 @@
+import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import type { Actor } from './types';
 import { decidePd012PageAccess, type Pd012Access } from './pd012-policy';
 import { teacherFilePageAccess, type TeacherFileAccess } from './teacher-file-policy';
 import type { PageBasis } from './teacher-scope';
@@ -19,8 +21,11 @@ import type { PageBasis } from './teacher-scope';
  *
  * Advisory: every route decides again. DB-free, so the matrix is unit-testable.
  */
+/** PD-26's bases, and (PD-52 PR-5) Sales. */
+export type RecordsBasis = PageBasis | 'sales';
+
 export interface TeacherRecordsAccess {
-  basis: PageBasis | null;
+  basis: RecordsBasis | null;
   attendance: { view: boolean; record: boolean; decide: boolean };
   grants: { view: boolean; record: boolean };
   /** A teacher's leave allowance, used days and balance (PD-26: never for Operations). */
@@ -41,7 +46,7 @@ export const NO_TEACHER_RECORDS_ACCESS: TeacherRecordsAccess = Object.freeze({
 });
 
 export interface TeacherRecordsInput {
-  basis: PageBasis | null;
+  basis: RecordsBasis | null;
   /** decidePd012StaffAccess for the caller (before the basis widens it). */
   pd012: Pd012Access;
   /** decideTeacherFileAccess for the caller (before the basis narrows it). */
@@ -53,6 +58,23 @@ export interface TeacherRecordsInput {
 export function decideTeacherRecordsAccess(input: TeacherRecordsInput): TeacherRecordsAccess {
   const { basis, keys } = input;
   if (basis === null) return NO_TEACHER_RECORDS_ACCESS;
+  const holdsKey = (...any: string[]) => any.some((k) => keys.has(k));
+  if (basis === 'sales') {
+    // Plan §5.4 / owner §11 b: Sales sees and records (trial lateness,
+    // complaints, testimonials, grants without an amount) and never decides; no
+    // balance, amount or Teacher File. Only the new keys count: Sales never
+    // held teacher_supervision.*.
+    const attendanceView = holdsKey('teacher_attendance.view');
+    const grantsView = holdsKey('teacher_grants.view');
+    return {
+      basis,
+      attendance: { view: attendanceView, record: attendanceView && holdsKey('teacher_attendance.record'), decide: false },
+      grants: { view: grantsView, record: grantsView && holdsKey('teacher_grants.record') },
+      leaveBalance: false,
+      amounts: false,
+      opensFile: false,
+    };
+  }
   const pd012 = decidePd012PageAccess(input.pd012, basis);
   const file = teacherFilePageAccess(input.file, basis);
   const holds = (...any: string[]) => any.some((k) => keys.has(k));
@@ -100,4 +122,16 @@ export function feedbackKeyAllows(category: string, act: 'read' | 'write', keys:
   if (keys.has(act === 'read' ? 'teacher_supervision.view' : 'teacher_supervision.record')) return true;
   if (category === 'praise') return keys.has(act === 'read' ? 'teacher_grants.view' : 'teacher_grants.record');
   return keys.has(act === 'read' ? 'teacher_attendance.view' : 'teacher_attendance.decide');
+}
+
+/**
+ * PD-52 PR-5: is this account Sales, as chat.sales_basis decides it? The role
+ * is re-checked against the department relation, as decidePageBases does, so
+ * a stale row grants nothing. The super admin is never "Sales".
+ */
+export function decideSalesBasis(actor: Actor, salesRole: 'manager' | 'member' | null): 'manager' | 'member' | null {
+  if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
+  if (salesRole === 'manager' && actor.staffRole === StaffRole.MANAGER) return 'manager';
+  if (salesRole === 'member' && (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE)) return 'member';
+  return null;
 }

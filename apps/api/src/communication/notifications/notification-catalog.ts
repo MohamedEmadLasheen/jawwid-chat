@@ -65,6 +65,8 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
   payment_p7: { version: 1, category: 'payment', inbox: 'inbox.payment_reminder', namedPush: 'payment_reminder_named', action: 'view_payments' },
   new_message: { version: 1, category: 'conversation', inbox: 'inbox.new_messages', action: 'open_conversation' },
   missed_call: { version: 1, category: 'call', inbox: 'inbox.missed_call', action: 'open_calls' },
+  // CHATSCHED-013: a 1:1 call ended because the connection was lost.
+  call_connection_lost: { version: 1, category: 'call', inbox: 'inbox.call_connection_lost', action: 'open_calls' },
   incoming_call: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   group_call_started: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   story_published: { version: 1, category: 'announcement', inbox: 'inbox.story_published', action: 'open_stories' },
@@ -76,6 +78,7 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
 const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   message_published: BY_RULE.new_message,
   call_missed: BY_RULE.missed_call,
+  call_connection_lost: BY_RULE.call_connection_lost,
   call_started: BY_RULE.incoming_call,
   group_call_started: BY_RULE.group_call_started,
   story_published: BY_RULE.story_published,

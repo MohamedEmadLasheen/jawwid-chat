@@ -9,7 +9,8 @@ import type { FeedbackStatus } from '@/features/teacher-supervision/api'
  * answer is advisory: every route decides again.
  */
 export interface TeacherRecordsAccess {
-  basis: 'super_admin' | 'teachers' | 'operations' | null
+  /** PD-52 PR-5: `sales` records about its trials and families, never decides. */
+  basis: 'super_admin' | 'teachers' | 'operations' | 'sales' | null
   attendance: { view: boolean; record: boolean; decide: boolean }
   grants: { view: boolean; record: boolean }
   /** A teacher's leave allowance and balance (never for Operations). */
@@ -18,6 +19,16 @@ export interface TeacherRecordsAccess {
   amounts: boolean
   /** The link to the Teacher File. */
   opensFile: boolean
+}
+
+/** Who a record is about: one student, or (PD-52 PR-5) one trial family. */
+export type RecordAbout = { learnerId?: string; prospectId?: string }
+
+/** The picker's value, `learner:<id>` or `prospect:<id>`, as the request's fields. */
+export function aboutFields(value: string): RecordAbout {
+  if (value.startsWith('learner:')) return { learnerId: value.slice('learner:'.length) }
+  if (value.startsWith('prospect:')) return { prospectId: value.slice('prospect:'.length) }
+  return {}
 }
 
 /** How a staff-recorded testimonial reached the academy; `parent_app` is a parent's own praise. */
@@ -59,6 +70,7 @@ export interface TestimonialQuery {
 export interface TeacherSummary {
   teacher: { id: string; name: string; isActive: boolean }
   away: { kind: 'leave' | 'suspended' | 'day_off'; until: string } | null
+  /** Also null for Sales: the ladder is a supervision matter (PD-52 PR-5). */
   ladder: { month: string; counted: number; nextStep: string } | null
   openComplaints: number | null
   year: string
@@ -76,14 +88,17 @@ export const teacherRecordsApi = {
     if (q.voided) query.voided = 'include'
     return api.get<{ canRecord: boolean; testimonials: Testimonial[] }>('/teacher-records/testimonials', Object.keys(query).length ? query : undefined)
   },
-  recordTestimonial: (teacherId: string, body: { body: string; source: TestimonialSource; learnerId?: string }) =>
+  recordTestimonial: (teacherId: string, body: { body: string; source: TestimonialSource } & RecordAbout) =>
     api.post<{ id: string; kind: string; createdAt: string }>(`/teachers/${encodeURIComponent(teacherId)}/testimonials`, body),
   /** A complaint (page A, decide) or testimonial (page B) entered by mistake: hidden, never deleted. */
   voidEntry: (entryId: string, reason: string) =>
     api.post<{ id: string; voids: string }>(`/teacher-records/entries/${encodeURIComponent(entryId)}/void`, { reason }),
   summary: (teacherId: string) => api.get<TeacherSummary>(`/teacher-records/teachers/${encodeURIComponent(teacherId)}/summary`),
+  /** Who a record about this teacher may name: their students and (PD-52 PR-5) trial families. */
   students: (teacherId: string) =>
-    api.get<{ students: Array<{ id: string; name: string; familyId: string }> }>(`/teacher-records/teachers/${encodeURIComponent(teacherId)}/students`),
+    api.get<{ students: Array<{ id: string; name: string; familyId: string }>; trials?: Array<{ id: string; name: string }> }>(
+      `/teacher-records/teachers/${encodeURIComponent(teacherId)}/students`,
+    ),
 }
 
 export const teacherRecordsKeys = {

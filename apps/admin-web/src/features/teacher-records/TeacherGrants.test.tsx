@@ -155,7 +155,7 @@ describe('PD-52 page B: testimonials', () => {
     await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')
     await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'How it reached us' }), 'parent_message')
     await waitFor(() => expect(calls('GET', /\/teachers\/t-1\/students$/).length).toBeGreaterThan(0))
-    await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'Student (optional)' }), 'k-1')
+    await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: 'Student (optional)' }), 'learner:k-1')
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'What was said' }), 'Very patient with him.')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Record a testimonial' }))
     await waitFor(() => expect(calls('POST', /\/teachers\/t-1\/testimonials$/)).toHaveLength(1))
