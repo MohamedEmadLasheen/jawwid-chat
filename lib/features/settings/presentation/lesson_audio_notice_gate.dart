@@ -31,6 +31,16 @@ class _LessonAudioNoticeGateState extends ConsumerState<LessonAudioNoticeGate> {
   Future<void> _maybeAsk() async {
     final repo = ref.read(parentNoticeRepositoryProvider);
     if (repo == null) return;
+    // PARENT-001: hold the app-lock offer until the notice is decided and closed.
+    final busy = ref.read(lessonAudioNoticeBusyProvider.notifier)..set(true);
+    try {
+      await _ask(repo);
+    } finally {
+      if (mounted) busy.set(false);
+    }
+  }
+
+  Future<void> _ask(ParentNoticeRepository repo) async {
     // The account asked about: if another one is signed in by the time the server
     // answers, that answer was about someone else, and it is dropped.
     final accountId = ref.read(authControllerProvider).user?.id;
