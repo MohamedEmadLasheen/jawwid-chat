@@ -123,6 +123,11 @@ class _FamilyBillingScreenState extends ConsumerState<FamilyBillingScreen> {
                 onRecord: billing.canRecord && (i.status?.isOpen ?? false) ? () => _record(billing, i) : null,
                 onVoid: billing.canRecord && i.status != null && i.status != SalesInstalmentStatus.voided ? () => _void(i) : null,
               ),
+          // ADMIN-012: the family's payments towards no instalment, so nobody chases one or records it twice.
+          if (billing.otherPayments.isNotEmpty) ...[
+            ProfileSectionHeading(text: l10n.salesOtherPaymentsTitle),
+            for (final p in billing.otherPayments) _PaymentTile(payment: p),
+          ],
         ],
       ),
     );
@@ -303,6 +308,71 @@ class _InstalmentTile extends StatelessWidget {
                   ),
               ],
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentTile extends StatelessWidget {
+  const _PaymentTile({required this.payment});
+
+  final SalesFamilyPayment payment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final tokens = JawwidTokens.of(context);
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final p = payment;
+    final date = DateFormat.yMMMd(locale).format(p.paidOn);
+    final method = methodLabel(p.method, l10n);
+    var paidLine = p.recordedByName != null && method != null
+        ? l10n.salesPaidRecordedBy(date, method, p.recordedByName!)
+        : method == null
+            ? l10n.billingPaidOnNoMethod(date)
+            : l10n.billingPaidOn(date, method);
+    if (p.reference != null) paidLine = '$paidLine · ${p.reference}';
+    final v = p.voided;
+    final voidLine = v == null ? null : (v.byName == null ? l10n.salesVoidedReason(v.reason) : l10n.salesVoidedBy(v.byName!, v.reason));
+    final secondary = theme.textTheme.bodySmall?.copyWith(color: tokens.colorTextSecondary);
+
+    return Padding(
+      key: ValueKey('sales-payment-${p.id}'),
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5, vertical: Spacing.spacing3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ContentText(p.childName ?? l10n.billingFamily, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: Spacing.spacing1),
+                ContentText(paidLine, style: theme.textTheme.bodySmall?.copyWith(color: v == null ? tokens.colorStatusSuccessFg : tokens.colorTextSecondary)),
+                if (p.refundedMinor > 0) ...[
+                  const SizedBox(height: Spacing.spacing1),
+                  Text(l10n.salesRefundedAmount(formatMoney(p.refundedMinor, p.currency, locale)), style: secondary),
+                ],
+                if (voidLine != null) ...[
+                  const SizedBox(height: Spacing.spacing1),
+                  ContentText(voidLine, style: secondary),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: Spacing.spacing3),
+          Text(
+            formatMoney(p.amountMinor, p.currency, locale),
+            key: ValueKey('sales-payment-amount-${p.id}'),
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              // A voided payment does not count: struck through, not hidden.
+              decoration: v != null ? TextDecoration.lineThrough : null,
+              color: v != null ? tokens.colorTextMuted : null,
+            ),
+          ),
         ],
       ),
     );

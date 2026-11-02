@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { PrismaClient } from '@prisma/client';
+import { cliPrismaClient } from './cli-prisma';
 import { selectObjectStorage } from '../communication/attachments/storage.provider';
 import type { PrismaService } from '../platform/prisma.service';
 import { listExtracted, planIngest, verifyArchive, type IngestPlan } from '../quran/audio-archive';
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
   const appEnv = process.env.APP_ENV ?? '';
   if (!mayWriteHere(appEnv, args.allowNonLocal)) throw new UsageError(`APP_ENV=${appEnv || '(unset)'}; it must be local, test or ci, or pass --allow-non-local`);
   if (!plan.complete) throw new UsageError(`the plan is not complete (archive ${plan.archive.refused ? 'refused' : 'ok'}, folder ${plan.manifest}, ${plan.rejected.length} rejects, ${plan.missing.length} missing): nothing is written`);
-  const prisma = new PrismaClient();
+  const prisma = cliPrismaClient();
   try {
     const report = await runIngest(
       plan,

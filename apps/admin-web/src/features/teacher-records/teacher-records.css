@@ -12,3 +12,4 @@
   background: var(--surface-sunken);
 }
 .tr-strip .btn { margin-inline-start: auto; }
+.tr-preview { margin: 0; padding: var(--space-3); border-inline-start: 3px solid var(--border-strong); background: var(--surface-sunken); border-radius: var(--radius-sm); }

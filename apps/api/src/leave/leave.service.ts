@@ -341,6 +341,8 @@ export class LeaveService {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
     await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    // TEACHER-007: approving an approved request again (a double click) answers as the first did.
+    if (row.state === LeaveState.APPROVED) return this.alreadyApproved(row.id, actor);
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const firstDay = isoDate(row.firstDay);
     const lastDay = isoDate(row.lastDay);
@@ -365,19 +367,20 @@ export class LeaveService {
     const teacher = await this.conversations.requireActor(row.teacherId);
     const year = Number(firstDay.slice(0, 4));
 
-    await this.write(() =>
+    const claimed = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.teacherLeaveRequest.update({
-          where: { id: row.id },
-          data: { state: LeaveState.APPROVED, decidedBy: actor.actorId, decisionNote: note },
-        });
+        // Lock, claim, then the balance: two approvals for one teacher at once must
+        // not both see the whole balance -- the teacher's row orders them (#398
+        // review) -- and of two approvals of ONE request, one writes (TEACHER-007).
+        // NO KEY UPDATE, not UPDATE: it orders approvals for this teacher without
+        // blocking the KEY SHARE locks every foreign-key check takes on the teacher
+        // (a concurrent decline's card insert), which deadlocked with FOR UPDATE.
+        await tx.$queryRaw`SELECT 1 FROM chat.teacher WHERE id = ${row.teacherId}::uuid FOR NO KEY UPDATE`;
+        if (!(await this.claim(tx, row.id, { state: LeaveState.APPROVED, decidedBy: actor.actorId, decisionNote: note }))) return false;
         const alreadyOff = new Set(await this.daysAlreadyOff(tx, row.teacherId, chosen));
         const toWrite = chosen.filter((d) => !alreadyOff.has(d)).sort();
         // TEACHER-005: the days fill what the balance has left, in date order;
         // the rest are unpaid leave. No allowance: nothing to exceed.
-        // Two approvals for one teacher at once must not both see the whole balance:
-        // the teacher's row orders them (#398 review).
-        await tx.$queryRaw`SELECT 1 FROM chat.teacher WHERE id = ${row.teacherId}::uuid FOR UPDATE`;
         const before = (await this.balanceOf(tx, row.teacherId, year)).balance;
         const covered = before === null ? toWrite.length : Math.max(0, before);
         for (const [i, day] of toWrite.entries()) {
@@ -407,8 +410,10 @@ export class LeaveService {
           after: { days: toWrite, unpaidDays: toWrite.slice(covered), collidingLessons: colliding.map((l) => l.id) },
           reason: note ?? 'leave approved',
         });
+        return true;
       }),
     );
+    if (!claimed) return this.alreadyDecided(row.id, actor, LeaveState.APPROVED).then((request) => ({ request, cancelledLessons: 0, notCancelled: [] }));
 
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
     for (const lesson of colliding) {
@@ -430,15 +435,14 @@ export class LeaveService {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
     await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    // TEACHER-007: declining a declined request again (a double click) answers as the first did.
+    if (row.state === LeaveState.DECLINED) return { request: await this.dtoById(row.id, actor) };
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const note = textField(body, 'note', MAX_TEXT, true) as string;
     const teacher = await this.conversations.requireActor(row.teacherId);
-    await this.write(() =>
+    const claimed = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.teacherLeaveRequest.update({
-          where: { id: row.id },
-          data: { state: LeaveState.DECLINED, decidedBy: actor.actorId, decisionNote: note },
-        });
+        if (!(await this.claim(tx, row.id, { state: LeaveState.DECLINED, decidedBy: actor.actorId, decisionNote: note }))) return false;
         await this.postToTeacher(tx, row, actor, CardKind.LEAVE_DECLINED, { note }, teacher);
         await this.audit.audit(tx, {
           actorId: actor.actorId,
@@ -447,8 +451,10 @@ export class LeaveService {
           entityId: row.id,
           reason: note,
         });
+        return true;
       }),
     );
+    if (!claimed) return { request: await this.alreadyDecided(row.id, actor, LeaveState.DECLINED) };
     return { request: await this.dtoById(row.id, actor) };
   }
 
@@ -626,6 +632,26 @@ export class LeaveService {
   private async unpaidDaysOf(r: TeacherLeaveRequest, open: boolean, year: number): Promise<number | null> {
     if (open) return unpaidFor((await this.balanceOf(this.prisma, r.teacherId, year)).balance, daysBetween(isoDate(r.firstDay), isoDate(r.lastDay)).length);
     return this.prisma.teacherDayOff.count({ where: { leaveRequestId: r.id, unpaid: true } });
+  }
+
+  /**
+   * TEACHER-007: moves a request out of 'requested' only if it is still there;
+   * false when another decision got there first (the row lock orders them).
+   */
+  private async claim(tx: Tx, requestId: string, data: { state: string; decidedBy: string; decisionNote: string | null }): Promise<boolean> {
+    const done = await tx.teacherLeaveRequest.updateMany({ where: { id: requestId, state: LeaveState.REQUESTED }, data });
+    return done.count === 1;
+  }
+
+  /** The decision another call made a moment ago: the same one answers as it did; a different one is a 409. */
+  private async alreadyDecided(requestId: string, actor: Actor, wanted: string) {
+    const now = await this.prisma.teacherLeaveRequest.findUniqueOrThrow({ where: { id: requestId }, select: { state: true } });
+    if (now.state !== wanted) throw state('this request has already been decided');
+    return this.dtoById(requestId, actor);
+  }
+
+  private async alreadyApproved(requestId: string, actor: Actor) {
+    return { request: await this.dtoById(requestId, actor), cancelledLessons: 0, notCancelled: [] as Array<{ lessonId: string; reason: string }> };
   }
 
   private async staffNames(ids: string[]): Promise<Map<string, string>> {

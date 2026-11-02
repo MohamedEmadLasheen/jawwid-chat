@@ -1344,6 +1344,19 @@
       }
     }
   },
+  "salesOtherPaymentsTitle": "دفعات أخرى",
+  "@salesOtherPaymentsTitle": {
+    "description": "ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request)."
+  },
+  "salesRefundedAmount": "استُرد {amount}",
+  "@salesRefundedAmount": {
+    "description": "ADMIN-012: how much of a payment was refunded.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "salesVoidedReason": "أُلغي: {reason}",
   "@salesVoidedReason": {
     "description": "A voided instalment whose voiding staff member is not known.",
@@ -1599,6 +1612,8 @@
   "signupLocked": "أدخلت رمزًا خاطئًا مرات كثيرة. تواصل مع المشرف.",
   "feedbackEntryTitle": "ملاحظات عن المعلّم",
   "feedbackEntrySubtitle": "إشادة أو اقتراح أو شكوى",
+  "feedbackShortcutPraise": "الثناء على المعلّم",
+  "feedbackShortcutProblem": "الإبلاغ عن مشكلة",
   "feedbackTeacherLine": "المعلّم: {name}",
   "feedbackHistoryTitle": "ملاحظاتك السابقة",
   "feedbackEmpty": "لم ترسل أي ملاحظة بعد",

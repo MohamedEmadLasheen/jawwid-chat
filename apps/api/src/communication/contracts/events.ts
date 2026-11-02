@@ -112,6 +112,18 @@ export const CommEvent = {
    */
   LESSON_MAKEUP_RESOLVED: 'lesson.makeup_resolved',
   /**
+   * PD-46: a lesson changed (created, moved, closed, paused, transferred...). A
+   * SIGNAL, not content: to the lesson's teacher, the staff whose calendar scope
+   * covers it (decided at delivery) and the family's conversations. Clients
+   * refetch through their own authorized routes; `revision` orders signals.
+   */
+  LESSON_CHANGED: 'lesson.changed',
+  /**
+   * PD-46: many lessons of these teachers changed at once (weekly
+   * materialization) -- refresh their calendars. One per batch, never one per lesson.
+   */
+  SCHEDULE_REFRESHED: 'schedule.refreshed',
+  /**
    * PD-35 B5, for PD-34 to deliver: an escalation case was opened (to its
    * owner), assigned to someone else (to the new owner), or is due tomorrow.
    * No conversationId and no title or body: a consumer reads the case.
@@ -119,6 +131,14 @@ export const CommEvent = {
   CASE_OPENED: 'case.opened',
   CASE_ASSIGNED: 'case.assigned',
   CASE_DUE_SOON: 'case.due_soon',
+  /**
+   * PD-52 (plan §7), for PD-34 to deliver: a complaint about a teacher arrived
+   * -- a parent's from the app, or a staff complaint that names a family -- and
+   * a parent praised a teacher. Ids only; the worker reads the record. The
+   * teacher is never told.
+   */
+  TEACHER_COMPLAINT_RECEIVED: 'teacher_records.complaint_received',
+  TEACHER_PRAISE_RECEIVED: 'teacher_records.praise_received',
   /**
    * PD-47: a task changed (created, commented, disputed, returned, reassigned,
    * completed, removed, its due date). A refetch signal, not content: ids and
@@ -421,6 +441,8 @@ export interface CommEventPayloads {
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
   [CommEvent.LESSON_CLOSED]: LessonClosedPayload;
   [CommEvent.LESSON_MAKEUP_RESOLVED]: LessonMakeupResolvedPayload;
+  [CommEvent.LESSON_CHANGED]: LessonChangedPayload;
+  [CommEvent.SCHEDULE_REFRESHED]: ScheduleRefreshedPayload;
   [CommEvent.LEARNER_TRANSFERRED]: LearnerTransferredPayload;
   [CommEvent.LEARNER_ENROLLMENT_CHANGED]: LearnerEnrollmentChangedPayload;
   [CommEvent.TEACHER_BONUS_RECORDED]: TeacherBonusRecordedPayload;
@@ -431,6 +453,8 @@ export interface CommEventPayloads {
   [CommEvent.CASE_OPENED]: CaseOpenedPayload;
   [CommEvent.CASE_ASSIGNED]: CaseAssignedPayload;
   [CommEvent.CASE_DUE_SOON]: CaseDueSoonPayload;
+  [CommEvent.TEACHER_COMPLAINT_RECEIVED]: TeacherRecordReceivedPayload;
+  [CommEvent.TEACHER_PRAISE_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TASK_CHANGED]: TaskChangedPayload;
 }
 
@@ -451,6 +475,21 @@ export interface TaskChangedPayload {
   toAssignee?: string | null;
   /** 'overdue': the due date it is overdue for (a task re-dated since is not). */
   dueAt?: string | null;
+}
+
+/**
+ * PD-52. Ids only. `entryId` is the supervision entry (a complaint);
+ * `feedbackId` the parent's feedback (an app complaint or praise). Who filed
+ * it (`recordedBy`, null for a parent) is not told about it.
+ */
+export interface TeacherRecordReceivedPayload {
+  organizationId: string;
+  teacherId: string;
+  entryId: string | null;
+  feedbackId: string | null;
+  learnerId: string | null;
+  familyId: string | null;
+  recordedBy: string | null;
 }
 
 /** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */
@@ -525,6 +564,30 @@ export interface LessonMakeupResolvedPayload {
   teacherId: string;
   action: string;
   durationMinutes: number;
+}
+
+/** PD-46 §3.3. What changed: `external` is a change the safety net found (a writer that did not announce). */
+export type LessonChange = 'created' | 'moved' | 'cancelled' | 'outcome' | 'held' | 'paused' | 'transferred' | 'trial' | 'external';
+
+export interface LessonChangedPayload {
+  lessonId: string;
+  revision: number;
+  change: LessonChange;
+  teacherId: string;
+  learnerId: string | null;
+  organizationId: string;
+  startsAt: string;
+  /** For a move: where it was. Null otherwise. */
+  previousStartsAt: string | null;
+  /** The family's conversations that refresh (their lesson tickets and live card footers). */
+  conversationIds: string[];
+}
+
+export interface ScheduleRefreshedPayload {
+  organizationId: string;
+  teacherIds: string[];
+  /** Their learners in this batch, so a PD-8 supervisor (scoped by learner) hears it too. */
+  learnerIds: string[];
 }
 
 export interface LessonClosedPayload {

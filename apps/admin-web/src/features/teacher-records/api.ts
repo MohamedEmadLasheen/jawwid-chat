@@ -54,6 +54,8 @@ export interface Testimonial {
   response: string | null
   /** Corrected: the reason, who and when. Shown only when asked for. */
   voided: { id: string; body: string; createdAt: string; author: Person | null } | null
+  /** PD-52 (plan §11 c): when staff shared the parent's praise with the teacher (parent praise only). */
+  sharedAt?: string | null
 }
 
 export interface TestimonialQuery {
@@ -93,6 +95,9 @@ export const teacherRecordsApi = {
   /** A complaint (page A, decide) or testimonial (page B) entered by mistake: hidden, never deleted. */
   voidEntry: (entryId: string, reason: string) =>
     api.post<{ id: string; voids: string }>(`/teacher-records/entries/${encodeURIComponent(entryId)}/void`, { reason }),
+  /** PD-52 (plan §11 c): a card in the teacher's supervision chat -- the child's first name and the words, never the parent's name. Once. */
+  sharePraise: (feedbackId: string) =>
+    api.post<{ feedbackId: string; conversationId: string; messageId: string }>(`/teacher-records/praise/${encodeURIComponent(feedbackId)}/share`),
   summary: (teacherId: string) => api.get<TeacherSummary>(`/teacher-records/teachers/${encodeURIComponent(teacherId)}/summary`),
   /** Who a record about this teacher may name: their students and (PD-52 PR-5) trial families. */
   students: (teacherId: string) =>

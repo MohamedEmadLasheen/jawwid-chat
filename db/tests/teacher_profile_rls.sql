@@ -71,14 +71,33 @@ insert into chat.account (id, subject, kind) values
   ('aa000000-0000-0000-0000-0000000000a1', 'tp-teacher-a', 'teacher'),
   ('aa000000-0000-0000-0000-0000000000a2', 'tp-teacher-b', 'teacher'),
   ('aa000000-0000-0000-0000-0000000000a3', 'tp-admin',     'staff'),
-  ('aa000000-0000-0000-0000-0000000000a4', 'tp-parent',    'family');
+  ('aa000000-0000-0000-0000-0000000000a4', 'tp-parent',    'family'),
+  ('aa000000-0000-0000-0000-0000000000a5', 'tp-ops-admin',   'staff'),
+  ('aa000000-0000-0000-0000-0000000000a6', 'tp-sales-admin', 'staff');
 
 insert into chat.teacher (id, account_id, name) values
   ('bb000000-0000-0000-0000-0000000000b1', 'aa000000-0000-0000-0000-0000000000a1', 'TP Teacher A'),
   ('bb000000-0000-0000-0000-0000000000b2', 'aa000000-0000-0000-0000-0000000000a2', 'TP Teacher B');
 
 insert into chat.staff (id, account_id, name, role) values
-  ('cc000000-0000-0000-0000-0000000000c1', 'aa000000-0000-0000-0000-0000000000a3', 'TP Reviewer', 'admin');
+  ('cc000000-0000-0000-0000-0000000000c1', 'aa000000-0000-0000-0000-0000000000a3', 'TP Reviewer', 'admin'),
+  ('cc000000-0000-0000-0000-0000000000c2', 'aa000000-0000-0000-0000-0000000000a5', 'TP Ops Admin', 'admin'),
+  ('cc000000-0000-0000-0000-0000000000c3', 'aa000000-0000-0000-0000-0000000000a6', 'TP Sales Admin', 'admin');
+
+-- ADMIN-006 (20261102140000): a reviewer is the super admin or the Teachers
+-- department, so the reviewer is a Teachers supervisor; an Operations and a
+-- Sales admin -- family-facing, but no reviewers -- are the negatives. One
+-- department per kind per organization, and this file shares its database:
+-- use the one there is, or make it (rolled back with everything else).
+insert into chat.department (kind, display_name)
+  select k, k from unnest(array['teachers', 'operations', 'sales']) k
+on conflict (organization_id, kind) do nothing;
+insert into chat.department_member (staff_id, organization_id, department_id, position)
+  select x.staff_id, d.organization_id, d.id, 'supervisor'
+    from (values ('cc000000-0000-0000-0000-0000000000c1'::uuid, 'teachers'),
+                 ('cc000000-0000-0000-0000-0000000000c2'::uuid, 'operations'),
+                 ('cc000000-0000-0000-0000-0000000000c3'::uuid, 'sales')) as x(staff_id, kind)
+    join chat.department d on d.kind = x.kind and d.organization_id = chat.default_organization_id();
 
 insert into chat.family (id, display_name, owner_id) values
   ('dd000000-0000-0000-0000-0000000000d1', 'TP Family', 'cc000000-0000-0000-0000-0000000000c1');
@@ -375,6 +394,19 @@ select pg_temp.want_ok(
   'R2  a reviewer reads a PENDING credential -- that is the job',
   (select count(*) = 1 from chat.teacher_profile_certificate
     where id = 'c1000000-0000-0000-0000-000000000002'));
+
+-- ADMIN-006: family-facing staff outside the Teachers department are no reviewers.
+set local chat.actor_subject = 'tp-ops-admin';
+select pg_temp.want_ok(
+  'R2b an Operations admin can NOT read a PENDING credential',
+  (select count(*) = 0 from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000002'));
+set local chat.actor_subject = 'tp-sales-admin';
+select pg_temp.want_ok(
+  'R2c a Sales admin can NOT read a PENDING credential',
+  (select count(*) = 0 from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000002'));
+set local chat.actor_subject = 'tp-admin';
 
 select pg_temp.want_ok(
   'R3  a reviewer may decide a credential they do not own',
