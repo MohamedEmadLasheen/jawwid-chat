@@ -926,6 +926,7 @@ class _VideoAttachment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
+    final tokens = JawwidTokens.of(context);
     final duration = attachment.duration;
     final length = duration == null
         ? null
@@ -942,20 +943,20 @@ class _VideoAttachment extends StatelessWidget {
           child: Container(
             width: 220,
             height: 124,
-            decoration: const BoxDecoration(color: Colors.black87, borderRadius: Radii.card),
+            decoration: BoxDecoration(color: tokens.colorMediaSurface, borderRadius: Radii.card),
             child: Stack(
               alignment: Alignment.center,
               children: [
                 if (isSending)
-                  const CircularProgressIndicator(color: Colors.white)
+                  CircularProgressIndicator(color: tokens.colorMediaOnSurface)
                 else
-                  const Icon(Icons.play_circle_fill, color: Colors.white, size: 52),
+                  Icon(Icons.play_circle_fill, color: tokens.colorMediaOnSurface, size: 52),
                 PositionedDirectional(
                   start: Spacing.spacing3,
                   bottom: Spacing.spacing2,
                   child: Text(
                     length == null ? l10n.attachmentVideoLabel : '${l10n.attachmentVideoLabel} · $length',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style: TextStyle(color: tokens.colorMediaOnSurface, fontSize: 12),
                   ),
                 ),
               ],

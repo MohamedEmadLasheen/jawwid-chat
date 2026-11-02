@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/media/story_video_player.dart';
+import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -61,6 +62,7 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
+    final tokens = JawwidTokens.of(context);
     final surface = _player.surface;
     final total = _status.duration;
     final at = _dragging != null && total != null
@@ -68,10 +70,10 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
         : _status.position;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: tokens.colorMediaSurface,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: tokens.colorMediaSurface,
+        foregroundColor: tokens.colorMediaOnSurface,
         title: Text(widget.title ?? l10n.attachmentVideoLabel),
       ),
       body: _status.hasFailed
@@ -81,7 +83,7 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
                 Expanded(
                   child: Center(
                     child: surface == null
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? CircularProgressIndicator(color: tokens.colorMediaOnSurface)
                         : AspectRatio(aspectRatio: _status.aspectRatio ?? 16 / 9, child: surface),
                   ),
                 ),
@@ -93,12 +95,12 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
                       children: [
                         IconButton(
                           key: const ValueKey('chat-video-play'),
-                          color: Colors.white,
+                          color: tokens.colorMediaOnSurface,
                           iconSize: 32,
                           onPressed: () => _status.isPlaying ? _player.pause() : _player.play(),
                           icon: Icon(_status.isPlaying ? Icons.pause : Icons.play_arrow),
                         ),
-                        Text(_clock(at), style: const TextStyle(color: Colors.white)),
+                        Text(_clock(at), style: TextStyle(color: tokens.colorMediaOnSurface)),
                         Expanded(
                           child: Slider(
                             key: const ValueKey('chat-video-seek'),
@@ -112,7 +114,7 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
                                   },
                           ),
                         ),
-                        Text(total == null ? '--:--' : _clock(total), style: const TextStyle(color: Colors.white)),
+                        Text(total == null ? '--:--' : _clock(total), style: TextStyle(color: tokens.colorMediaOnSurface)),
                       ],
                     ),
                   ),
