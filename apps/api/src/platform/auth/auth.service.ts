@@ -22,6 +22,7 @@ import {
   verifyAccessToken,
 } from './jwt';
 import { hashPassword, spendComparableTime, verifyPassword } from './password';
+import { isPasswordLengthAcceptable } from './password-policy';
 import { subjectHash } from './subject-hash';
 import { clientOfPlatform, sessionPolicyFor, sessionWindow, type SessionClient } from './session-policy';
 import { AccountAdminScope } from '../account-admin-scope';
@@ -40,7 +41,15 @@ export const AUTH_EVENT = {
 export const AUDIT_ACTION = {
   SESSION_CREATED: 'session.created',
   SESSION_REVOKED: 'session.revoked',
+  /** TEACHER-023: a signed-in account changed its own password. */
+  PASSWORD_CHANGED: 'account.password_changed',
 } as const;
+
+/** TEACHER-023: why the account's other sessions ended. */
+export const PASSWORD_CHANGED_REASON = 'password changed by the account holder';
+
+/** TEACHER-023: why the session that changed it was replaced by a successor. */
+export const PASSWORD_ROTATED_REASON = 'password changed: session renewed';
 
 /** Lockout policy. Beside the credential row, not in Redis: a lockout that
  *  disappears when the cache restarts is not a lockout. */
@@ -1090,6 +1099,104 @@ export class AuthService {
     if (ids.length > 0) this.revocation.disconnectSessions(ids);
     await this.revocation.confirmRevoked();
     return ids.length;
+  }
+
+  /**
+   * TEACHER-023: a signed-in account changes its own password -- any role, the
+   * same length rule as everywhere (password-policy.ts).
+   *
+   * THE CURRENT PASSWORD IS PROVEN FIRST, under the LOGIN'S lockout (review of
+   * #370): a locked account is refused (429 with the time left, not
+   * ACCOUNT_LOCKED -- that code ends the session in the app, and the holder is
+   * still signed in), and a wrong guess is counted exactly as a failed login
+   * (recordLoginFailure), so guesses here and at the sign-in screen share one
+   * budget. A new password equal to the old one is refused.
+   *
+   * ON SUCCESS: every OTHER session of the account ends -- support sessions
+   * acting as it too, as on a reset: the secret changed, and whoever was using
+   * it is out. THIS session is ROTATED rather than kept as it was (review of
+   * #370): if this device's refresh token is what leaked, its family must end
+   * here too. The successor keeps this session's device and lifetime (its
+   * chain), and its token pair is the answer, which the client stores. One
+   * audit row records the change.
+   */
+  async changePassword(
+    accountId: string,
+    keepSessionId: string,
+    actorId: string,
+    current: string,
+    next: string,
+    context: LoginContext = {},
+  ): Promise<TokenPair> {
+    if (!isPasswordLengthAcceptable(next)) throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
+    const account = await this.prisma.account.findUnique({ where: { id: accountId }, include: { credential: true } });
+    const credential = account?.credential;
+    if (!account || !credential) throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
+    if (credential.lockedUntil && credential.lockedUntil > new Date()) {
+      throw new AuthError(AuthErrorCode.RATE_LIMITED, Math.max(1, Math.ceil((credential.lockedUntil.getTime() - Date.now()) / 1000)));
+    }
+    if (!(await verifyPassword(current, credential.passwordHash))) {
+      await this.recordLoginFailure(accountId, account.subject, 'password_change_wrong_current', credential.failedAttempts);
+      throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
+    }
+    if (await verifyPassword(next, credential.passwordHash)) throw new AuthError(AuthErrorCode.PASSWORD_UNCHANGED);
+
+    const kept = await this.prisma.session.findUnique({ where: { id: keepSessionId } });
+    if (!kept || kept.revokedAt || kept.impersonationId || kept.accountId !== accountId) {
+      throw new AuthError(AuthErrorCode.SESSION_REVOKED);
+    }
+    const actor = await this.identity.resolveForAccount(account);
+    if (!actor || !actor.isActive) throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
+
+    // OUTSIDE the transaction: Argon2id must not hold a pooled connection.
+    const passwordHash = await hashPassword(next);
+    const ids = await this.prisma.$transaction(async (tx) => {
+      await tx.accountCredential.update({
+        where: { accountId },
+        data: { passwordHash, passwordChangedAt: new Date(), failedAttempts: 0, lockedUntil: null },
+      });
+      const live = await tx.session.findMany({
+        where: { accountId, revokedAt: null, id: { not: keepSessionId } },
+        select: { id: true },
+      });
+      const targets = live.map((row) => row.id);
+      if (targets.length > 0) {
+        await tx.session.updateMany({
+          where: { id: { in: targets }, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: PASSWORD_CHANGED_REASON, revokedBy: accountId },
+        });
+      }
+      await this.audit.audit(tx, {
+        actorId,
+        action: AUDIT_ACTION.PASSWORD_CHANGED,
+        entity: 'account',
+        entityId: accountId,
+        after: { revokedSessions: targets.length, rotated: keepSessionId },
+        reason: PASSWORD_CHANGED_REASON,
+      });
+      return targets;
+    });
+
+    // The kept session's token family ends; its successor continues the same
+    // sign-in on the same device. Not 'rotated': presenting the old refresh
+    // token afterwards is simply refused, not read as theft of the new one.
+    await this.revoke(keepSessionId, PASSWORD_ROTATED_REASON, accountId, actorId);
+    const chain: LoginChain = {
+      authenticatedAt: kept.authenticatedAt,
+      client: kept.client === 'app' || kept.client === 'web' ? kept.client : null,
+      remembered: kept.remembered,
+    };
+    const pair = await this.issue(account, actor, { ...context, deviceId: kept.deviceId, chain }, 'refresh');
+    this.revocation.sessionRotated(keepSessionId, pair.sessionId);
+    // PD-21: a support session this staff member started follows their session, as on a refresh.
+    await this.prisma.impersonationSession.updateMany({
+      where: { staffSessionId: keepSessionId, endedAt: null },
+      data: { staffSessionId: pair.sessionId },
+    });
+    // RT-009: the sockets of the other sessions, not this device's.
+    if (ids.length > 0) this.revocation.disconnectSessions(ids);
+    await this.revocation.confirmRevoked();
+    return pair;
   }
 
   // -------------------------------------------------------------------------

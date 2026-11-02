@@ -202,6 +202,51 @@ export class MeSessionsController {
   }
 }
 
+/**
+ * TEACHER-023: change your own password, signed in, any role.
+ *
+ * Rate-limited like a login (the same limiter, keyed on the account and the
+ * source): proving the current password is a password check, and an open
+ * session must not become an unmetered guessing oracle. A support session
+ * cannot reach it: it is a write, and the support-session allowlist does not
+ * name it.
+ */
+@Controller('auth/password')
+@UseFilters(CommErrorFilter)
+export class PasswordChangeController {
+  private readonly addressPolicy: ClientAddressPolicy;
+
+  constructor(
+    private readonly auth: AuthService,
+    private readonly rateLimit: LoginRateLimiter,
+    @Optional() @Inject(CLIENT_ADDRESS_POLICY) addressPolicy?: ClientAddressPolicy,
+  ) {
+    this.addressPolicy = addressPolicy ?? readClientAddressPolicy();
+  }
+
+  @SelfService()
+  @Post('change')
+  @HttpCode(200)
+  async change(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: unknown,
+    @Headers('user-agent') userAgent?: string,
+    @Ip() ip?: string,
+  ): Promise<TokenPairDto> {
+    const { accountId, sessionId, actorId } = verified(request);
+    const input = (body ?? {}) as Record<string, unknown>;
+    const current = asString(input.currentPassword);
+    const next = asString(input.newPassword);
+    if (!current || !next) throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
+    const subject = `password-change:${accountId}`;
+    await this.rateLimit.reserve(subject, sourceAddress(ip, this.addressPolicy));
+    // The answer is this session's successor (the old one was rotated): the client stores it.
+    const pair = await this.auth.changePassword(accountId, sessionId, actorId, current, next, { userAgent, ip });
+    await this.rateLimit.clearIdentifier(subject);
+    return toTokenPairDto(pair);
+  }
+}
+
 /** PD-23: the revocation reason when the holder ends a session from another device. */
 export const SIGNED_OUT_BY_HOLDER = 'signed out from another device';
 
