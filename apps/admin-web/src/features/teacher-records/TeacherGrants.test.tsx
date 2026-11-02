@@ -242,6 +242,17 @@ describe('PD-52: one teacher\'s strip', () => {
     expect(within(a).queryByRole('link', { name: 'Open the Teacher File' })).not.toBeInTheDocument()
   })
 
+  it('leaves out the sections the server returns null (a grants-only reader: no ladder, leave or complaints)', async () => {
+    on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json({ ...summary, ladder: null, away: null, openComplaints: null }))
+    on('GET', /\/teacher-records\/testimonials\?teacher=t-1$/, () => json({ canRecord: true, testimonials: [] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials&teacher=t-1' })
+    const strip = await screen.findByRole('region', { name: 'Teacher One' })
+    expect(within(strip).getByText('4 testimonials in 2026')).toBeInTheDocument()
+    expect(within(strip).queryByText(/This month/)).not.toBeInTheDocument()
+    expect(within(strip).queryByText(/open complaints/)).not.toBeInTheDocument()
+    expect(within(strip).queryByText('Available')).not.toBeInTheDocument()
+  })
+
   it('reads in Arabic', async () => {
     on('GET', /\/teacher-records\/teachers\/t-1\/summary$/, () => json(summary))
     on('GET', /\/teacher-records\/testimonials\?teacher=t-1$/, () => json({ canRecord: true, testimonials: [praise] }))

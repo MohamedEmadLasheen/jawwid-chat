@@ -51,14 +51,19 @@ export interface TestimonialQuery {
   voided?: boolean
 }
 
+/**
+ * One teacher's strip. Each section is null when the caller's key does not
+ * cover it (review of #374): away, the ladder and open complaints are page
+ * A's (attendance.view), grants and testimonials page B's (grants.view).
+ */
 export interface TeacherSummary {
   teacher: { id: string; name: string; isActive: boolean }
   away: { kind: 'leave' | 'suspended' | 'day_off'; until: string } | null
-  ladder: { month: string; counted: number; nextStep: string }
-  openComplaints: number
+  ladder: { month: string; counted: number; nextStep: string } | null
+  openComplaints: number | null
   year: string
-  grants: number
-  testimonials: number
+  grants: number | null
+  testimonials: number | null
   opensFile: boolean
 }
 

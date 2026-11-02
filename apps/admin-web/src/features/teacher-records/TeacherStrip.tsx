@@ -43,15 +43,17 @@ export function TeacherStrip({ teacherId, basePath }: { teacherId: string | null
   const summary = useTeacherSummary(teacherId)
   const s = summary.data
   if (!teacherId || !s) return null
-  const step = DECISION_LABEL[s.ladder.nextStep as Decision]
+  // A section the caller's key does not cover comes back null and is left out (review of #374).
+  const ladder = s.ladder
+  const step = ladder ? DECISION_LABEL[ladder.nextStep as Decision] : null
   return (
     <section className="tr-strip" aria-label={s.teacher.name}>
       <strong dir="auto">{s.teacher.name}</strong>
-      {s.away ? <AwayBadge away={s.away} /> : <Badge tone="ok">{tx(R.available)}</Badge>}
-      <span>{tx(R.ladder, { n: number(s.ladder.counted), step: step ? tx(step) : s.ladder.nextStep })}</span>
-      <span>{tx(R.openComplaints, { n: number(s.openComplaints) })}</span>
-      <span>{tx(R.yearGrants, { n: number(s.grants), year: s.year })}</span>
-      <span>{tx(R.yearTestimonials, { n: number(s.testimonials), year: s.year })}</span>
+      {ladder && (s.away ? <AwayBadge away={s.away} /> : <Badge tone="ok">{tx(R.available)}</Badge>)}
+      {ladder && <span>{tx(R.ladder, { n: number(ladder.counted), step: step ? tx(step) : ladder.nextStep })}</span>}
+      {s.openComplaints !== null && <span>{tx(R.openComplaints, { n: number(s.openComplaints) })}</span>}
+      {s.grants !== null && <span>{tx(R.yearGrants, { n: number(s.grants), year: s.year })}</span>}
+      {s.testimonials !== null && <span>{tx(R.yearTestimonials, { n: number(s.testimonials), year: s.year })}</span>}
       {s.opensFile && (
         <Link className="btn btn--sm btn--ghost" to={teacherFilePath(basePath, s.teacher.id)}>
           {tx(R.openFile)}
