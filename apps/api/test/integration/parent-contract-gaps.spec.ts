@@ -15,6 +15,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import { ConversationController } from '@communication/api/conversation.controller';
+import { PrismaAuditService } from '@platform/audit.service';
+import { CardPoster } from '../../src/supervision/card-poster';
 import type { ConversationDto } from '@communication/contracts/dto';
 import { buildGraph, legacyHeldMessage, seed, truncate, withAssignmentGate, supervise, Scenario } from './harness';
 
@@ -84,6 +86,23 @@ describe('viewerState -- what setPreferences stored, read back', () => {
 });
 
 describe('lastMessage -- the newest message THIS viewer may see', () => {
+  // RQA-F4 (release-qa walk): a chat whose last item was a card showed no preview line.
+  it('a card is previewed by its kind (cardKind), never its server-worded body', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    await send(group.id, s.ownerId, 'before the card');
+    const teacher = await g.conversations.requireActor(s.teacherId);
+    await g.prisma.$transaction((tx) =>
+      new CardPoster(g.conversations, g.outbox, new PrismaAuditService()).post(tx as never, group, teacher, {
+        kind: 'lesson_report', payload: { learnerName: 'learner_l' }, body: 'Lesson report: learner_l',
+      }),
+    );
+    const last = (await row(s.parentId, group.id))!.lastMessage!;
+    expect(last).toMatchObject({ type: 'card', cardKind: 'lesson_report', text: null, systemKind: null });
+    // A text message names no card kind.
+    await send(group.id, s.ownerId, 'after the card');
+    expect((await row(s.parentId, group.id))!.lastMessage).toMatchObject({ type: 'text', text: 'after the card', cardKind: null });
+  });
+
   it('a parent never sees an internal note in the preview; staff do', async () => {
     const direct = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
     await send(direct.id, s.ownerId, 'visible to the parent');

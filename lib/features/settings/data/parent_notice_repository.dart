@@ -58,3 +58,14 @@ class LessonAudioNoticeAsked extends Notifier<Set<String>> {
 }
 
 final lessonAudioNoticeAskedProvider = NotifierProvider<LessonAudioNoticeAsked, Set<String>>(LessonAudioNoticeAsked.new);
+
+/// PARENT-001: the notice is being decided or shown. The app-lock offer waits while it
+/// is, so a first sign-in sees one dialog at a time: the notice, then the offer.
+class LessonAudioNoticeBusy extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool busy) => state = busy;
+}
+
+final lessonAudioNoticeBusyProvider = NotifierProvider<LessonAudioNoticeBusy, bool>(LessonAudioNoticeBusy.new);
