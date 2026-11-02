@@ -29,6 +29,8 @@ export type Ctx = Pick<
   CanvasRenderingContext2D,
   | 'save'
   | 'restore'
+  | 'translate'
+  | 'rotate'
   | 'fillRect'
   | 'strokeRect'
   | 'beginPath'
@@ -139,7 +141,7 @@ function drawElement(ctx: Ctx, e: BoardElement, dark: boolean, background: strin
     case 'line':
       return drawLine(ctx, e)
     case 'text':
-      return drawText(ctx, e.text, e.rect, e.size, e.color)
+      return drawText(ctx, e.text, e.rect, e.size, e.color, e.bold, e.rotation)
     case 'stamp':
       return drawStamp(ctx, e, background)
     case 'verse': {
@@ -277,10 +279,18 @@ export function wrapLines(ctx: Pick<Ctx, 'measureText'>, text: string, maxWidth:
   return out
 }
 
-function drawText(ctx: Ctx, text: string, rect: Rect, size: number, color: string) {
+function drawText(ctx: Ctx, text: string, rect: Rect, size: number, color: string, bold = false, rotation = 0) {
   const rtl = isRtl(text)
   ctx.save()
-  ctx.font = `${size}px ${BOARD_FONT}`
+  if (rotation !== 0) {
+    // PD-55: turned about the box's centre, as the portal draws it.
+    const cx = rect.x + rect.w / 2
+    const cy = rect.y + rect.h / 2
+    ctx.translate(cx, cy)
+    ctx.rotate(rotation)
+    ctx.translate(-cx, -cy)
+  }
+  ctx.font = `${bold ? '700 ' : ''}${size}px ${BOARD_FONT}`
   ctx.fillStyle = color
   ctx.direction = rtl ? 'rtl' : 'ltr'
   ctx.textAlign = rtl ? 'right' : 'left'

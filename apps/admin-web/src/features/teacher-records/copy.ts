@@ -73,4 +73,14 @@ export const R = {
   // PD-52 PR-5
   about: { en: 'Student or trial', ar: 'الطالب أو الحصة التجريبية' },
   trialOf: { en: '{name} (trial)', ar: '{name} (تجريبية)' },
+  // PD-52 PR-8
+  share: { en: 'Share with the teacher', ar: 'مشاركته مع المعلّم' },
+  shareTitle: { en: 'Share this praise with the teacher', ar: 'مشاركة هذا الثناء مع المعلّم' },
+  shareHint: {
+    en: 'The teacher reads it in their supervision chat, with the child’s first name and the parent’s words. Never the parent’s name. It is shared once.',
+    ar: 'يقرؤه المعلّم في محادثة الإشراف، مع الاسم الأول للطالب وكلمات ولي الأمر، دون اسم ولي الأمر أبدًا. وتتم المشاركة مرة واحدة.',
+  },
+  sharePreview: { en: 'The teacher will read:', ar: 'سيقرأ المعلّم:' },
+  sharedOn: { en: 'Shared with the teacher {date}', ar: 'شوركت مع المعلّم {date}' },
+  previewLine: { en: '💐 Praise from {child}’s parent', ar: '💐 ثناء من ولي أمر {child}' },
 }

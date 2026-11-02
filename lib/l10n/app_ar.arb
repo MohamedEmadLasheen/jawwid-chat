@@ -1344,6 +1344,19 @@
       }
     }
   },
+  "salesOtherPaymentsTitle": "دفعات أخرى",
+  "@salesOtherPaymentsTitle": {
+    "description": "ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request)."
+  },
+  "salesRefundedAmount": "استُرد {amount}",
+  "@salesRefundedAmount": {
+    "description": "ADMIN-012: how much of a payment was refunded.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "salesVoidedReason": "أُلغي: {reason}",
   "@salesVoidedReason": {
     "description": "A voided instalment whose voiding staff member is not known.",
@@ -1787,6 +1800,11 @@
   "boardToolEraser": "ممحاة (الخط كاملًا)",
   "boardToolAreaEraser": "ممحاة (جزء)",
   "boardToolText": "نص",
+  "boardTextSmaller": "تصغير النص",
+  "boardTextBigger": "تكبير النص",
+  "boardTextBold": "عريض",
+  "boardTextColour": "لون النص",
+  "boardTextDone": "تم",
   "boardToolRect": "مستطيل",
   "boardToolEllipse": "دائرة",
   "boardToolTriangle": "مثلث",
@@ -1799,6 +1817,9 @@
   "boardZoomOut": "تصغير",
   "boardZoomFit": "ملاءمة الصفحة",
   "boardDeleteSelection": "حذف المحدد",
+  "boardCopy": "نسخ",
+  "boardPaste": "لصق",
+  "boardDuplicate": "تكرار",
   "boardColour": "اللون",
   "boardThickness": "السُّمك",
   "boardTajweed": "التجويد",
@@ -1806,8 +1827,6 @@
   "boardTajweedGhunnah": "الغنة",
   "boardTajweedIkhfa": "الإخفاء",
   "boardTajweedIzhar": "الإظهار",
-  "boardTextTitle": "نص",
-  "boardTextHint": "اكتب هنا",
   "boardElementUnknown": "لا يظهر في هذا الإصدار",
   "boardStampExcellent": "ممتاز",
   "boardStampWellDone": "أحسنت",

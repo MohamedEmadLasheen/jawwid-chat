@@ -3428,6 +3428,14 @@ class L10nAr extends L10n {
   }
 
   @override
+  String get salesOtherPaymentsTitle => 'دفعات أخرى';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'استُرد $amount';
+  }
+
+  @override
   String salesVoidedReason(String reason) {
     return 'أُلغي: $reason';
   }
@@ -4736,6 +4744,21 @@ class L10nAr extends L10n {
   String get boardToolText => 'نص';
 
   @override
+  String get boardTextSmaller => 'تصغير النص';
+
+  @override
+  String get boardTextBigger => 'تكبير النص';
+
+  @override
+  String get boardTextBold => 'عريض';
+
+  @override
+  String get boardTextColour => 'لون النص';
+
+  @override
+  String get boardTextDone => 'تم';
+
+  @override
   String get boardToolRect => 'مستطيل';
 
   @override
@@ -4772,6 +4795,15 @@ class L10nAr extends L10n {
   String get boardDeleteSelection => 'حذف المحدد';
 
   @override
+  String get boardCopy => 'نسخ';
+
+  @override
+  String get boardPaste => 'لصق';
+
+  @override
+  String get boardDuplicate => 'تكرار';
+
+  @override
   String get boardColour => 'اللون';
 
   @override
@@ -4791,12 +4823,6 @@ class L10nAr extends L10n {
 
   @override
   String get boardTajweedIzhar => 'الإظهار';
-
-  @override
-  String get boardTextTitle => 'نص';
-
-  @override
-  String get boardTextHint => 'اكتب هنا';
 
   @override
   String get boardElementUnknown => 'لا يظهر في هذا الإصدار';

@@ -13,7 +13,7 @@ import { SectionIntro } from '@/features/teacher-supervision/SectionIntro'
 import { AboutPicker } from './AboutPicker'
 import { TESTIMONIAL_SOURCES, aboutFields, type Testimonial, type TestimonialSource } from './api'
 import { R, useCopy, type Pair } from './copy'
-import { useRecordTestimonial, useTestimonials, useVoidEntry } from './hooks'
+import { useRecordTestimonial, useSharePraise, useTestimonials, useVoidEntry } from './hooks'
 
 type Origin = 'all' | 'parent' | 'staff'
 
@@ -52,6 +52,7 @@ export function TestimonialsSection({
   const [recording, setRecording] = useState(false)
   const [replying, setReplying] = useState<Testimonial | null>(null)
   const [correcting, setCorrecting] = useState<Testimonial | null>(null)
+  const [sharing, setSharing] = useState<Testimonial | null>(null)
   const checkId = useId()
   const rows = (list.data?.testimonials ?? []).filter((t) => origin === 'all' || t.origin === origin)
 
@@ -114,6 +115,9 @@ export function TestimonialsSection({
                   <p className="tf-entry__body" dir="auto">
                     {t.body}
                   </p>
+                  {t.sharedAt && (
+                    <p className="tf-muted">{tx(R.sharedOn, { date: dateTime(t.sharedAt) })}</p>
+                  )}
                   {t.voided && (
                     <p className="tf-muted" dir="auto">
                       {tx(R.corrected, { reason: t.voided.body })}
@@ -129,6 +133,11 @@ export function TestimonialsSection({
                       {t.origin === 'parent' && (
                         <button type="button" className="btn btn--primary btn--sm" onClick={() => setReplying(t)}>
                           {t.response ? tx(R.changeReply) : tx(R.reply)}
+                        </button>
+                      )}
+                      {t.origin === 'parent' && !t.sharedAt && (
+                        <button type="button" className="btn btn--sm" onClick={() => setSharing(t)}>
+                          {tx(R.share)}
                         </button>
                       )}
                       {t.origin === 'staff' && t.canCorrect && (
@@ -155,6 +164,7 @@ export function TestimonialsSection({
         />
       )}
       {correcting && <CorrectDialog entryId={correcting.id} onClose={() => setCorrecting(null)} />}
+      {sharing && <ShareDialog praise={sharing} onClose={() => setSharing(null)} />}
     </>
   )
 }
@@ -295,6 +305,46 @@ export function CorrectDialog({ entryId, onClose }: { entryId: string; onClose: 
         <textarea id={id} className="input" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} dir="auto" />
         {touched && !reason.trim() && <p className="field__error">{tx(R.required)}</p>}
       </div>
+    </Dialog>
+  )
+}
+
+/**
+ * PD-52 (plan §11 c): share a parent's praise with the teacher. The dialog shows
+ * exactly what the teacher will read -- the child's first name and the
+ * parent's words, never the parent's name (the server renders the card the
+ * same way).
+ */
+function ShareDialog({ praise, onClose }: { praise: Testimonial; onClose: () => void }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const share = useSharePraise()
+  const firstName = (praise.child?.name ?? '').trim().split(/\s+/)[0] ?? ''
+  return (
+    <Dialog
+      title={tx(R.shareTitle)}
+      onClose={onClose}
+      footer={
+        <>
+          <DialogCancelButton onClick={onClose} />
+          <button type="button" className="btn btn--primary" disabled={share.isPending} onClick={() => share.mutate(praise.id, { onSuccess: onClose })}>
+            {share.isPending ? '…' : tx(R.share)}
+          </button>
+        </>
+      }
+    >
+      <p className="field__hint">{tx(R.shareHint)}</p>
+      {share.error ? (
+        <div className="banner banner--danger" role="alert">
+          {describeFeedbackError(share.error, locale)}
+        </div>
+      ) : null}
+      <p className="field__label">{tx(R.sharePreview)}</p>
+      <blockquote className="tr-preview" dir="auto">
+        <strong>{tx(R.previewLine, { child: firstName })}</strong>
+        <br />
+        {locale === 'ar' ? `«${praise.body}»` : `“${praise.body}”`}
+      </blockquote>
     </Dialog>
   )
 }

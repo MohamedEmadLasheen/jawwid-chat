@@ -28,6 +28,7 @@ import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
+import { LessonEvents } from './lessons/lesson-events';
 import { setDatabasePoolRole } from './platform/database-pool';
 
 /**
@@ -154,6 +155,13 @@ const CASE_DUE_SWEEP_MS = 10 * 60_000;
 const TASK_SWEEP_MS = 60_000;
 
 /**
+ * PD-46 §3.2: how often lesson changes made outside the lesson writer
+ * (chat.lesson_change_unannounced -- weekly materialization, a raw SQL update)
+ * are announced. A missed writer shows up this late, never silently.
+ */
+const LESSON_ANNOUNCE_SWEEP_MS = Number(process.env.LESSON_ANNOUNCE_SWEEP_MS ?? 60_000);
+
+/**
  * PD-35 B6: how often the department rooms are healed against the structure
  * (a member deactivated, anything changed outside OrgStructureService). Access
  * never waits for it: chat.department_room_party is read live.
@@ -225,6 +233,7 @@ async function bootstrap(): Promise<void> {
   const seats = app.get(ConversationSeatService);
   const cases = app.get(SupervisionCaseService);
   const tasks = app.get(TaskService);
+  const lessonEvents = app.get(LessonEvents);
   const departmentRooms = app.get(DepartmentRoomService);
   const whiteboards = app.get(WhiteboardService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
@@ -285,6 +294,7 @@ async function bootstrap(): Promise<void> {
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
   let nextTaskSweep = 0;
+  let nextLessonAnnounceSweep = 0;
   let lastTaskIssues = 0;
   let nextRoomSweep = 0;
   let nextWhiteboardSweep = 0;
@@ -512,6 +522,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCaseDueSweep = Date.now() + CASE_DUE_SWEEP_MS;
+      }
+    }
+
+    // PD-46: announce the lesson changes nobody announced (the safety net).
+    if (Date.now() >= nextLessonAnnounceSweep) {
+      draining = true;
+      try {
+        const announced = await lessonEvents.announceUnannounced();
+        if (announced.lessons > 0) log.log(`lesson changes announced late (outside the writer): ${announced.lessons}`);
+      } catch (e) {
+        report(log, 'lesson announce sweep', 'lessons.announce', e);
+      } finally {
+        draining = false;
+        nextLessonAnnounceSweep = Date.now() + LESSON_ANNOUNCE_SWEEP_MS;
       }
     }
 

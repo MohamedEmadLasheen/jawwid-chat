@@ -1941,6 +1941,19 @@
       }
     }
   },
+  "salesOtherPaymentsTitle": "Other payments",
+  "@salesOtherPaymentsTitle": {
+    "description": "ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request)."
+  },
+  "salesRefundedAmount": "Refunded {amount}",
+  "@salesRefundedAmount": {
+    "description": "ADMIN-012: how much of a payment was refunded.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "salesVoidedReason": "Voided: {reason}",
   "@salesVoidedReason": {
     "description": "A voided instalment whose voiding staff member is not known.",
@@ -3137,6 +3150,16 @@
   "@boardToolAreaEraser": {"description": "PD-39 whiteboard."},
   "boardToolText": "Text",
   "@boardToolText": {"description": "PD-39 whiteboard."},
+  "boardTextSmaller": "Smaller text",
+  "@boardTextSmaller": {"description": "PD-55 whiteboard: the text style bar."},
+  "boardTextBigger": "Bigger text",
+  "@boardTextBigger": {"description": "PD-55 whiteboard: the text style bar."},
+  "boardTextBold": "Bold",
+  "@boardTextBold": {"description": "PD-55 whiteboard: the text style bar."},
+  "boardTextColour": "Text colour",
+  "@boardTextColour": {"description": "PD-55 whiteboard: a quick colour on the text style bar."},
+  "boardTextDone": "Done",
+  "@boardTextDone": {"description": "PD-55 whiteboard: ends typing a text on the board."},
   "boardToolRect": "Rectangle",
   "@boardToolRect": {"description": "PD-39 whiteboard."},
   "boardToolEllipse": "Circle",
@@ -3161,6 +3184,12 @@
   "@boardZoomFit": {"description": "PD-39 whiteboard."},
   "boardDeleteSelection": "Delete selection",
   "@boardDeleteSelection": {"description": "PD-39 whiteboard."},
+  "boardCopy": "Copy",
+  "@boardCopy": {"description": "PD-55 whiteboard: copy the selection (Ctrl/Cmd+C)."},
+  "boardPaste": "Paste",
+  "@boardPaste": {"description": "PD-55 whiteboard: paste what was copied (Ctrl/Cmd+V)."},
+  "boardDuplicate": "Duplicate",
+  "@boardDuplicate": {"description": "PD-55 whiteboard: copy and paste the selection in one step (Ctrl/Cmd+D)."},
   "boardColour": "Colour",
   "@boardColour": {"description": "PD-39 whiteboard."},
   "boardThickness": "Thickness",
@@ -3175,10 +3204,6 @@
   "@boardTajweedIkhfa": {"description": "PD-39 whiteboard."},
   "boardTajweedIzhar": "Izhar",
   "@boardTajweedIzhar": {"description": "PD-39 whiteboard."},
-  "boardTextTitle": "Text",
-  "@boardTextTitle": {"description": "PD-39 whiteboard."},
-  "boardTextHint": "Write here",
-  "@boardTextHint": {"description": "PD-39 whiteboard."},
   "boardElementUnknown": "Not shown in this version",
   "@boardElementUnknown": {"description": "PD-39 whiteboard."},
   "boardStampExcellent": "Excellent",

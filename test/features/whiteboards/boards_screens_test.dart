@@ -5,6 +5,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -152,6 +153,92 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.saved.single.elements.single, isA<InkElement>());
     expect(find.text(l10n.boardSaved), findsOneWidget);
+  });
+
+  testWidgets('PD-55: the editor\'s Text tool types on the page -- no dialog -- and Backspace edits the words, never the selection', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await tester.tap(find.byTooltip(l10n.boardToolText));
+    await tester.pump();
+    final centre = tester.getCenter(find.byType(BoardCanvas));
+    await tester.tapAt(centre);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.enterText(find.byType(EditableText), 'Helloo');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    final text = container.read(boardEditorProvider('b1')).value!.page.elements.single as TextElement;
+    expect(text.text, 'Hello');
+    expect(find.text(l10n.boardUnsaved), findsOneWidget);
+  });
+
+  testWidgets('PD-55: Ctrl+D or the selection bar\'s Duplicate copies the selection, one undo step each; never while typing', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    final centre = tester.getCenter(find.byType(BoardCanvas));
+    final gesture = await tester.startGesture(centre, kind: PointerDeviceKind.mouse);
+    for (var i = 1; i <= 10; i++) {
+      await gesture.moveTo(centre + Offset(i * 8.0, i * 3.0));
+    }
+    await gesture.up();
+    await tester.pump();
+    await tester.tap(find.byTooltip(l10n.boardToolSelect));
+    await tester.pump();
+    await tester.tapAt(centre + const Offset(40, 15));
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(container.read(boardEditorProvider('b1')).value!.page.elements, hasLength(2));
+
+    // The selection's own bar, beside it on the page.
+    await tester.tap(find.byKey(const ValueKey('board-sel-duplicate')));
+    await tester.pump();
+    expect(container.read(boardEditorProvider('b1')).value!.page.elements, hasLength(3));
+  });
+
+  Future<void> typeOnBoard(WidgetTester tester, L10n l10n, String text) async {
+    await tester.tap(find.byTooltip(l10n.boardToolText));
+    await tester.pump();
+    await tester.tapAt(tester.getCenter(find.byType(BoardCanvas)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(EditableText), text);
+    await tester.pump();
+  }
+
+  testWidgets('PD-55 (review of #384): Back while typing keeps the text', (tester) async {
+    final l10n = await pump(
+      tester,
+      Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await typeOnBoard(tester, l10n, 'Kept on Back');
+    await tester.pageBack();
+    await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    // Leaving saves the board -- with the text that was being typed in it.
+    expect((repo.saved.last.elements.single as TextElement).text, 'Kept on Back');
+  });
+
+  testWidgets('PD-55 (review of #384): going to the background while typing keeps the text', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await typeOnBoard(tester, l10n, 'Kept in the background');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    final page = container.read(boardEditorProvider('b1')).value!.page;
+    expect((page.elements.single as TextElement).text, 'Kept in the background');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a Tajweed highlighter colour stays with the highlighter: the next pen stroke is ink', (tester) async {

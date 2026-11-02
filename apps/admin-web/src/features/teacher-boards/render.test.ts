@@ -198,6 +198,29 @@ describe('text', () => {
     expect(isRtl('Read اقرأ')).toBe(false)
   })
 
+  it('PD-55: draws a bold text bold, and a turned text turned about its centre, as the portal does', () => {
+    const turned = parsePage({
+      layout: 'plain',
+      background: 'white',
+      document: { v: 1, elements: [{ id: 't', kind: 'text', text: 'أحسنت', x: 100, y: 200, w: 400, h: 80, size: 48, color: '#1b1b1b', bold: true, rotation: Math.PI / 2 }] },
+    })
+    const { ctx, calls } = recorder()
+    drawPage(ctx, turned, { verse: () => ({ status: 'loading' }), label })
+    const text = calls.find((c) => c.op === 'fillText')!
+    expect(text.state.font).toMatch(/^700 48px /)
+    expect(calls.find((c) => c.op === 'rotate')?.args).toEqual([Math.PI / 2])
+    // About the box's centre: translate there, turn, translate back.
+    expect(calls.filter((c) => c.op === 'translate').map((c) => c.args)).toEqual([[300, 240], [-300, -240]])
+  })
+
+  it('PD-39: a text without the PD-55 fields is drawn as before: regular weight, never turned', () => {
+    const plain = parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [{ id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, w: 100, h: 60, size: 40, color: '#1b1b1b' }] } })
+    const { ctx, calls } = recorder()
+    drawPage(ctx, plain, { verse: () => ({ status: 'loading' }), label })
+    expect(calls.find((c) => c.op === 'fillText')!.state.font).toMatch(/^40px /)
+    expect(calls.some((c) => c.op === 'rotate')).toBe(false)
+  })
+
   it('wraps on words, never inside one, and keeps line breaks', () => {
     const { ctx } = recorder()
     expect(wrapLines(ctx, 'one two three', 80)).toEqual(['one two', 'three'])

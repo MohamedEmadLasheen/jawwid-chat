@@ -249,6 +249,19 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     _replacePage(page.copyWith(elements: _history[page.id]!.present));
   }
 
+  /// PD-55: page [pageId]'s elements replaced, whichever page is showing now --
+  /// a text typed on a page the teacher has just left lands there, not on the
+  /// page now in view. One undo step on that page; false when it is gone.
+  bool commitTo(String pageId, List<BoardElement> elements) {
+    final s = _s;
+    final h = _history[pageId];
+    final page = s?.pages.where((p) => p.id == pageId).firstOrNull;
+    if (s == null || !s.canEdit || h == null || page == null) return false;
+    h.push(elements);
+    _replacePage(page.copyWith(elements: h.present));
+    return true;
+  }
+
   /// [element] added to page [pageId], whichever page is showing now: a
   /// picture lands on the page its upload started on (review of #328). One
   /// undo step on that page. False when the page is gone or the board is not

@@ -5743,6 +5743,18 @@ abstract class L10n {
   /// **'Voided by {name}: {reason}'**
   String salesVoidedBy(String name, String reason);
 
+  /// ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request).
+  ///
+  /// In en, this message translates to:
+  /// **'Other payments'**
+  String get salesOtherPaymentsTitle;
+
+  /// ADMIN-012: how much of a payment was refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String salesRefundedAmount(String amount);
+
   /// A voided instalment whose voiding staff member is not known.
   ///
   /// In en, this message translates to:
@@ -7981,6 +7993,36 @@ abstract class L10n {
   /// **'Text'**
   String get boardToolText;
 
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get boardTextSmaller;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bigger text'**
+  String get boardTextBigger;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get boardTextBold;
+
+  /// PD-55 whiteboard: a quick colour on the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Text colour'**
+  String get boardTextColour;
+
+  /// PD-55 whiteboard: ends typing a text on the board.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get boardTextDone;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8053,6 +8095,24 @@ abstract class L10n {
   /// **'Delete selection'**
   String get boardDeleteSelection;
 
+  /// PD-55 whiteboard: copy the selection (Ctrl/Cmd+C).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get boardCopy;
+
+  /// PD-55 whiteboard: paste what was copied (Ctrl/Cmd+V).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get boardPaste;
+
+  /// PD-55 whiteboard: copy and paste the selection in one step (Ctrl/Cmd+D).
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get boardDuplicate;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8094,18 +8154,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Izhar'**
   String get boardTajweedIzhar;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Text'**
-  String get boardTextTitle;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Write here'**
-  String get boardTextHint;
 
   /// PD-39 whiteboard.
   ///
