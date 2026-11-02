@@ -53,9 +53,12 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: 
         </div>
       </td>
       <td>
-        <Badge tone={STEP_TONE[v.step] ?? 'neutral'} dot>
-          {tx(D.stepOf, { n: v.step })}
-        </Badge>
+        {/* PD-52 PR-5: Sales reads no step. */}
+        {v.step !== null && (
+          <Badge tone={STEP_TONE[v.step] ?? 'neutral'} dot>
+            {tx(D.stepOf, { n: v.step })}
+          </Badge>
+        )}
       </td>
       <td>
         {v.decision ? (
@@ -72,7 +75,7 @@ export function ViolationRow({ v, onDecide, extra }: { v: Violation; onDecide?: 
           </div>
         ) : (
           <div className="dc-cell">
-            <span className="dc-muted">{tx(D.suggested, { d: tx(DECISION_LABEL[v.suggestedDecision]) })}</span>
+            {v.suggestedDecision && <span className="dc-muted">{tx(D.suggested, { d: tx(DECISION_LABEL[v.suggestedDecision]) })}</span>}
             {onDecide && (
               <button type="button" className="btn btn--primary btn--sm" onClick={onDecide}>
                 {tx(D.decide)}

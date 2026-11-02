@@ -72,8 +72,11 @@ export function TeacherGrantsPage({ basePath, eyebrow }: { basePath: string; eye
         </div>
         <TeacherStrip teacherId={teacher || null} basePath={basePath} />
         <div className="th-body">
-          {section === 'grants' && <RewardsSection basePath={basePath} canRecord={a.grants.record} />}
-          {section === 'testimonials' && <TestimonialsSection canRecord={a.grants.record} teacher={teacher || undefined} />}
+          {/* PD-52 PR-5: Sales names the student or trial of every grant and testimonial. */}
+          {section === 'grants' && <RewardsSection basePath={basePath} canRecord={a.grants.record} requireAbout={a.basis === 'sales'} />}
+          {section === 'testimonials' && (
+            <TestimonialsSection canRecord={a.grants.record} teacher={teacher || undefined} requireAbout={a.basis === 'sales'} />
+          )}
         </div>
       </div>
     </div>

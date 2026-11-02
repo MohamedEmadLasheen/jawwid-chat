@@ -19,6 +19,7 @@ import { decideBillingAccess, decidePd012PageAccess, decidePd012StaffAccess, typ
 import { decideTeacherFileAccess, teacherFilePageAccess } from '@platform/teacher-file-policy';
 import { decideStaffAccountCreate } from '@platform/staff-account-policy';
 import { decidePageBasis } from '@platform/teacher-scope';
+import { decideSalesBasis } from '@platform/teacher-records-policy';
 import { canCarryOverPackage, canGrantSubscriptionException } from '@platform/subscription-policy';
 import { accountAdminActs } from '@platform/account-admin-policy';
 import { decideTeacherOnboarding } from '@platform/teacher-onboarding-policy';
@@ -93,6 +94,7 @@ function rules(): Record<string, Rule> {
   // PD-26 amendment: the Teacher Supervision page, Teachers department or Operations.
   const basis = (a: Account) => decidePageBasis(a.actor, role(a, 'teachers'), role(a, 'operations'));
   const onPage: Rule = (a) => decidePd012PageAccess(pd012(a), basis(a)).canSupervise;
+  const sales: Rule = (a) => decideSalesBasis(a.actor, role(a, 'sales')) !== null;
   const recordsOnPage: Rule = (a) =>
     decidePd012PageAccess(pd012(a), basis(a)).canSupervise && teacherFilePageAccess(file(a), basis(a)).canWriteSupervision;
   return {
@@ -123,11 +125,12 @@ function rules(): Record<string, Rule> {
     'teacher_supervision.record': recordsOnPage,
     // PD-52: the two pages that replace it, on the same basis. Deciding is the
     // same right as recording today; Sales (PR-5) will record without deciding.
-    'teacher_attendance.view': onPage,
-    'teacher_attendance.record': recordsOnPage,
+    // PR-5: and Sales (owner §11 b), which records but never decides.
+    'teacher_attendance.view': (a) => onPage(a) || sales(a),
+    'teacher_attendance.record': (a) => recordsOnPage(a) || sales(a),
     'teacher_attendance.decide': recordsOnPage,
-    'teacher_grants.view': onPage,
-    'teacher_grants.record': recordsOnPage,
+    'teacher_grants.view': (a) => onPage(a) || sales(a),
+    'teacher_grants.record': (a) => recordsOnPage(a) || sales(a),
     'supervision.chats': supervises,
     'leave.allowance': (a) => pd012(a).canSetAllowance,
     'teacher_files.view': (a) => file(a).canView,

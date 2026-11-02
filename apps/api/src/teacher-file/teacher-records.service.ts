@@ -119,14 +119,18 @@ export class TeacherRecordsService {
     teacherId: string,
     body: { body?: unknown; source?: unknown; learnerId?: unknown; familyId?: unknown; prospectId?: unknown; conversationId?: unknown },
   ) {
-    const { actor, page } = await this.ctx(actorId, (a) => a.grants.record);
-    const teacher = await this.files.requireTeacher(actor, teacherId, 'page');
+    const { actor, access, page } = await this.ctx(actorId, (a) => a.grants.record);
+    const teacher = await this.files.requireTeacherIn(actor, teacherId, page.teachers);
     const whole = scopeCovers(page.whole, teacher.id);
     const text = requireText('body', body.body, BODY_MAX);
     if (typeof body.source !== 'string' || !(TESTIMONIAL_SOURCES as readonly string[]).includes(body.source)) {
       throw invalid('source', `must be one of ${TESTIMONIAL_SOURCES.join(', ')}`);
     }
     const about = await this.files.aboutOf(actor, body, whole, page);
+    // PD-52 PR-5: Sales records nothing about the teacher alone.
+    if (access.basis === 'sales' && !about.learnerId && !about.trialProspectId) {
+      throw invalid('learnerId', 'name the student or the trial family the testimonial is about');
+    }
     const conversationId =
       body.conversationId === undefined || body.conversationId === null ? undefined : await this.files.readableSource(actor, body.conversationId);
     const row = await this.write(async (tx) => {
@@ -228,7 +232,7 @@ export class TeacherRecordsService {
    */
   async summary(actorId: string, teacherId: string) {
     const { actor, access, page } = await this.ctx(actorId, (a) => a.attendance.view || a.grants.view);
-    const teacher = await this.files.requireTeacher(actor, teacherId, 'page');
+    const teacher = await this.files.requireTeacherIn(actor, teacherId, page.teachers);
     const org = teacher.organizationId;
     const [{ today }] = await this.prisma.$queryRaw<Array<{ today: string }>>`SELECT chat.academy_today()::text AS today`;
     const month = today.slice(0, 7);
@@ -239,10 +243,12 @@ export class TeacherRecordsService {
     // (grants, testimonials) for grants.view. A section not covered is null.
     const attendance = access.attendance.view;
     const grants = access.grants.view;
+    // PD-52 PR-5: leave and the ladder are supervision matters -- never Sales'.
+    const supervises = attendance && access.basis !== 'sales';
 
     const [away, ladder, openComplaints, grantCount, testimonialCount] = await Promise.all([
-      attendance ? this.files.awayToday([teacher.id]).then((m) => m.get(teacher.id) ?? null) : null,
-      attendance ? this.ladderOf(teacher.id, month) : null,
+      supervises ? this.files.awayToday([teacher.id]).then((m) => m.get(teacher.id) ?? null) : null,
+      supervises ? this.ladderOf(teacher.id, month) : null,
       attendance ? this.openComplaints(page, org, teacher.id) : null,
       grants ? this.grantCount(page, org, teacher.id, yearRange) : null,
       grants ? this.testimonialCount(actor, page, teacher.id, yearRange) : null,
@@ -316,11 +322,12 @@ export class TeacherRecordsService {
    * The students a record about this teacher may name: those the teacher
    * teaches or taught in the PD-26 window (chat.teaches_or_taught, the
    * database's own rule), and of an Operations-only teacher only the caller's
-   * own. For the record dialogs' student picker.
+   * own; and (PD-52 PR-5) the trial families the teacher taught in the window,
+   * for Sales only those it reads. For the record dialogs' picker.
    */
   async students(actorId: string, teacherId: string) {
     const { actor, page } = await this.ctx(actorId, (a) => a.attendance.record || a.grants.record);
-    const teacher = await this.files.requireTeacher(actor, teacherId, 'page');
+    const teacher = await this.files.requireTeacherIn(actor, teacherId, page.teachers);
     const whole = scopeCovers(page.whole, teacher.id);
     const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; family_id: string }>>`
       SELECT l.id::text AS id, l.name, l.family_id::text AS family_id
@@ -331,8 +338,18 @@ export class TeacherRecordsService {
          AND chat.teaches_or_taught(${teacher.id}::uuid, l.id)
        ORDER BY l.name, l.id
        LIMIT ${LIST_LIMIT}`;
+    // PD-52 PR-5: and the trial families this teacher taught in the window (Sales: those it reads).
+    const trials = await this.prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT DISTINCT p.id::text AS id, p.display_name AS name
+        FROM chat.lesson le
+        JOIN chat.trial_prospect p ON p.id = le.prospect_id
+       WHERE le.teacher_id = ${teacher.id}::uuid
+         AND le.starts_at >= now() - chat.operations_lesson_window()
+       ORDER BY name, id
+       LIMIT ${LIST_LIMIT}`;
     return {
       students: rows.filter((r) => whole || page.learnerIds.has(r.id)).map((r) => ({ id: r.id, name: r.name, familyId: r.family_id })),
+      trials: trials.filter((t) => whole || page.prospectIds?.has(t.id)),
     };
   }
 
@@ -354,13 +371,14 @@ export class TeacherRecordsService {
         access.basis === null ? 'the teacher-records pages are for the Teachers department and Operations' : 'this is not yours to do on the teacher-records pages',
       );
     }
-    return { actor, access, page: await this.files.teacherScope.pageRowsOf(actor) };
+    // PD-52 PR-5: the PD-26 page's rows for its bases, Sales' for Sales.
+    return { actor, access, page: await this.files.teacherScope.recordsRowsOf(actor) };
   }
 
   /** A `teacher` filter: a teacher outside the caller's scope is not found (PD-35). */
   private async teacherFilter(actor: Actor, page: PageScope, raw: string | undefined): Promise<string | undefined> {
     if (raw === undefined || raw === '') return undefined;
-    return (await this.files.requireTeacher(actor, raw, 'page')).id;
+    return (await this.files.requireTeacherIn(actor, raw, (await this.files.teacherScope.recordsRowsOf(actor)).teachers)).id;
   }
 
   /** Staff testimonials the caller may see, newest first. */
@@ -438,7 +456,7 @@ export class TeacherRecordsService {
 export function aboutOf(row: { learnerId: string | null; familyId: string | null; trialProspectId: string | null }) {
   if (row.learnerId) return { learnerId: row.learnerId, familyId: row.familyId };
   if (row.familyId) return { familyId: row.familyId };
-  if (row.trialProspectId) return { learnerId: null };
+  if (row.trialProspectId) return { learnerId: null, prospectId: row.trialProspectId };
   return null;
 }
 

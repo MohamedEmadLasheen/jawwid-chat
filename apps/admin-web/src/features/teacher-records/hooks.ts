@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parentFeedbackKeys, supervisionHubKeys } from '@/features/teacher-supervision/api'
-import { teacherRecordsApi, teacherRecordsKeys, type TestimonialQuery, type TestimonialSource } from './api'
+import { teacherRecordsApi, teacherRecordsKeys, type RecordAbout, type TestimonialQuery, type TestimonialSource } from './api'
 
 /** Which of the two pages, and which actions, the server offers this account. */
 export function useTeacherRecordsAccess(enabled = true) {
@@ -51,7 +51,7 @@ function useRefresh() {
 export function useRecordTestimonial() {
   const refresh = useRefresh()
   return useMutation({
-    mutationFn: ({ teacherId, ...body }: { teacherId: string; body: string; source: TestimonialSource; learnerId?: string }) =>
+    mutationFn: ({ teacherId, ...body }: { teacherId: string; body: string; source: TestimonialSource } & RecordAbout) =>
       teacherRecordsApi.recordTestimonial(teacherId, body),
     onSettled: refresh,
   })

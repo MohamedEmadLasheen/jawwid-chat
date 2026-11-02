@@ -42,12 +42,13 @@ export async function familiesOfComplaints(
  * Operations-only caller sees.
  */
 export function complaintAbout(
-  entry: { id: string; complaintSource: string | null; learnerId?: string | null; familyId?: string | null },
+  entry: { id: string; complaintSource: string | null; learnerId?: string | null; familyId?: string | null; trialProspectId?: string | null },
   familyOf: ReadonlyMap<string, string | null>,
-): { learnerId?: string | null; familyId: string | null } | null {
-  // PD-52: a complaint that names its student or family is about them, whatever its source.
+): { learnerId?: string | null; familyId: string | null; prospectId?: string | null } | null {
+  // PD-52: a complaint that names its student, family or trial family is about them, whatever its source.
   if (entry.learnerId) return { learnerId: entry.learnerId, familyId: entry.familyId ?? null };
   if (entry.familyId) return { familyId: entry.familyId };
+  if (entry.trialProspectId) return { learnerId: null, familyId: null, prospectId: entry.trialProspectId };
   if (entry.complaintSource === 'management') return null;
   return { familyId: familyOf.get(entry.id) ?? null };
 }

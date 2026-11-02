@@ -44,7 +44,7 @@ describe('PD-52: what a record is about', () => {
   it('a student, else a family, else a trial family (nobody\'s), else the teacher', () => {
     expect(aboutOf({ learnerId: 'l', familyId: 'f', trialProspectId: null })).toEqual({ learnerId: 'l', familyId: 'f' });
     expect(aboutOf({ learnerId: null, familyId: 'f', trialProspectId: null })).toEqual({ familyId: 'f' });
-    expect(aboutOf({ learnerId: null, familyId: null, trialProspectId: 'p' })).toEqual({ learnerId: null });
+    expect(aboutOf({ learnerId: null, familyId: null, trialProspectId: 'p' })).toEqual({ learnerId: null, prospectId: 'p' });
     expect(aboutOf({ learnerId: null, familyId: null, trialProspectId: null })).toBeNull();
   });
 

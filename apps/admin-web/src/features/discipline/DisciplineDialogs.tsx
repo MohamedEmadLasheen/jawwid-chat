@@ -31,7 +31,8 @@ export function DecideDialog({ violation, onClose }: { violation: Violation; onC
   const tx = useCopy()
   const decide = useDecide()
   const noteId = useId()
-  const [decision, setDecision] = useState<Decision>(violation.suggestedDecision)
+  // A reader who may decide always has the suggestion (only Sales reads none, PD-52 PR-5).
+  const [decision, setDecision] = useState<Decision>(violation.suggestedDecision ?? 'warning')
   const [note, setNote] = useState('')
   const [startsOn, setStartsOn] = useState(() => localDay(new Date()))
   const [endsOn, setEndsOn] = useState(() => localDay(new Date(Date.now() + 6 * 86_400_000)))
@@ -88,7 +89,7 @@ export function DecideDialog({ violation, onClose }: { violation: Violation; onC
           {tx(D.notCancelled, { n: leftOpen })}
         </div>
       )}
-      <p className="field__hint">{tx(D.decideHint, { n: violation.step })}</p>
+      <p className="field__hint">{tx(D.decideHint, { n: violation.step ?? 1 })}</p>
       <fieldset className="dc-options">
         <legend className="field__label">{tx(D.outcome)}</legend>
         {[...LADDER, 'excused' as const].map((d) => (
