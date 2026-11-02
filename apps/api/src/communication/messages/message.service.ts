@@ -269,6 +269,11 @@ export class MessageService {
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
+    // PARENT-023: and each object is really there, as authorized -- else the
+    // message would point at nothing and its bubble could never open. After
+    // canSend, so only a sender learns whether an object is in storage.
+    await this.attachments.assertUploaded(input.attachments ?? []);
+
     this.validateContent(type, input);
     await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
 

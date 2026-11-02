@@ -588,9 +588,9 @@ export class DisciplineService {
   private async stepOf(v: TeacherViolation): Promise<number> {
     const month = await this.standing(await this.prisma.teacherViolation.findMany({
       where: { teacherId: v.teacherId, month: v.month },
-      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true, lessonId: true, kind: true },
+      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true, suggestedStep: true, lessonId: true, kind: true },
     }));
-    return stepsOf(month.map((m) => ({ ...m, month: isoDate(m.month) }))).get(v.id) ?? 1;
+    return stepsOf(month.map((m) => ({ ...m, month: isoDate(m.month), decidedStep: m.suggestedStep }))).get(v.id) ?? 1;
   }
 
   private async openLessonsIn(teacherId: string, window: { startsOn: string; endsOn: string | null }, tz: string) {
@@ -623,9 +623,9 @@ export class DisciplineService {
     const keys = [...new Set(rows.map((r) => `${r.teacherId}|${isoDate(r.month)}`))];
     const all = await this.standing(await this.prisma.teacherViolation.findMany({
       where: { OR: keys.map((k) => ({ teacherId: k.split('|')[0], month: asDate(k.split('|')[1]) })) },
-      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true, lessonId: true, kind: true },
+      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true, suggestedStep: true, lessonId: true, kind: true },
     }));
-    const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month) })));
+    const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month), decidedStep: m.suggestedStep })));
     const lessons = await this.prisma.lesson.findMany({
       where: { id: { in: [...new Set(rows.map((r) => r.lessonId).filter((x): x is string => !!x))] } },
       select: { id: true, kind: true, startsAt: true, outcomeNote: true, excuseCategory: true, learner: { select: { name: true } } },

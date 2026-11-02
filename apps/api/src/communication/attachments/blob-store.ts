@@ -36,7 +36,12 @@ export interface BlobStore {
  */
 @Injectable()
 export class LocalFsBlobStore implements BlobStore {
-  private readonly root = process.env.STORAGE_LOCAL_ROOT ?? join(tmpdir(), 'jawwid-storage');
+  // Resolved on each use, not at construction: a store built before
+  // STORAGE_LOCAL_ROOT is set (a test harness that points each test at a fresh
+  // directory) must still read where the bytes were written.
+  private get root(): string {
+    return process.env.STORAGE_LOCAL_ROOT ?? join(tmpdir(), 'jawwid-storage');
+  }
 
   private pathFor(objectKey: string): string {
     const digest = createHash('sha256').update(objectKey).digest('hex');
