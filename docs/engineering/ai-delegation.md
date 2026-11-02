@@ -13,7 +13,7 @@ independently, and delivers one result. Shared repository rules are in `/AGENTS.
    the owner (the `grill-with-docs` skill if installed, otherwise short direct questions) and record the
    answer. Ordinary engineering choices are the lead's: decide, record the assumption, continue.
 5. **Specify**: write the spec or plan, then split it into tasks that do not touch the same files.
-6. **Route** each task (section 2) and write its brief from `scripts/ai/templates/task-brief.md`.
+6. **Route** each task (section 2) and write its brief from `tools/codex-delegate/templates/task-brief.md`.
 7. **Execute in parallel where safe**: each agent has its own worktree and branch. Never two agents in
    one tree.
 8. **Collect** results: Codex runs write `result.json`; builder sessions report by message.
@@ -59,28 +59,31 @@ changes to protections or paid resources.
 - Migrations: idempotent where the repo expects it, row-level security correct, rollback path, slot claimed.
 - Authorization boundaries, API compatibility (additive changes only unless agreed), regressions.
 - Arabic and English behaviour when user-facing.
-- For high-risk diffs, add an independent Codex review: `codex-task.sh review` (section 5). Compare it with
+- For high-risk diffs, add an independent Codex review: `codex-delegate review` (section 5). Compare it with
   the lead's own findings; disagreements are resolved by reading the code, not by vote.
 
-## 5. The Codex wrapper: `scripts/ai/codex-task.sh`
-All Codex use for this repository goes through the wrapper. It never pushes, merges or deploys.
+## 5. The Codex wrapper: `codex-delegate`
+All Codex use goes through `codex-delegate`, the user-level engine installed from `tools/codex-delegate/`
+(see its `README.md` and `SECURITY.md`; `scripts/ai/codex-task.sh` runs the same engine from this checkout).
+It works in any repository; this repository's extra rules are in `/.ai-delegation.json`. It never pushes,
+merges or deploys.
 
 ```bash
-# Implement (creates ~/jawwid-ai-worktrees/<id> on branch claude/codex-<id> from origin/main)
-scripts/ai/codex-task.sh run --task-id fix-x --brief /path/brief.md \
+# Implement (creates ~/jawwid-ai-worktrees/<repo>/<id> on branch claude/codex-<id> from origin/main)
+codex-delegate run --task-id fix-x --brief /path/brief.md \
   --allow 'apps/api/src/foo/*' --allow 'apps/api/test/foo/*' \
   --prepare 'cd apps/api && npm ci' \
   --test 'cd apps/api && npx jest --maxWorkers=2 test/foo'
 
 # Send review feedback back to the same worktree (counts toward the 3-attempt limit)
-scripts/ai/codex-task.sh retry --task-id fix-x --feedback /path/feedback.md
+codex-delegate retry --task-id fix-x --feedback /path/feedback.md
 
 # Independent read-only review of any clean checkout at the head commit
-scripts/ai/codex-task.sh review --task-id review-pr-123 --repo /path/clean-clone --base <sha> --head <sha>
+codex-delegate review --task-id review-pr-123 --repo /path/clean-clone --base <sha> --head <sha>
 
-scripts/ai/codex-task.sh status --task-id fix-x
-scripts/ai/codex-task.sh list
-scripts/ai/codex-task.sh cleanup --task-id fix-x [--delete-merged-branch]
+codex-delegate status --task-id fix-x
+codex-delegate list
+codex-delegate cleanup --task-id fix-x [--delete-merged-branch]
 ```
 
 What `run` does, in order:
@@ -91,13 +94,14 @@ What `run` does, in order:
 4. Runs Codex with `-s workspace-write` inside the worktree only, `-a never`, `--ignore-user-config`
    (no personal plugins or hooks), a per-attempt timeout, and a JSON output schema for the report.
 5. **Scope check:** any change outside `--allow` globs, or inside a protected path (`.github/`, Code
-   Owner paths, `scripts/ai/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, env and key files, and migrations
+   Owner paths, instruction files at any depth, hooks, env and key files, the delegation tooling, and migrations
    unless `--allow-migrations`), is saved as a patch for evidence and reverted.
 6. **Secret scan** of the candidate diff (provider tokens, private keys, JWTs, credentials inside URLs,
    `*PASSWORD=`/`*TOKEN=`-style assignments). A suspected credential blocks the commit; values are masked
    in the report. It is a safety net, not a guarantee: the lead still reads every diff.
-7. **Independent verification:** the wrapper re-runs every `--test` command itself, honouring the
-   machine-load rule.
+7. **Independent verification:** the wrapper re-runs every `--test` command itself, inside the Codex
+   sandbox (worktree-only writes, no network unless `--test-network`), honouring the machine-load rule.
+   Files the agent created in git-ignored paths are deleted first.
 8. **Commit** on the task branch with `Task-Id`, `Attempt`, `Delegated-Agent` and `Verified-By` trailers.
 9. On any failure it writes concrete feedback and retries automatically, up to `--max-attempts` (max 3).
    Usage-limit or authentication errors stop immediately with status `blocked`.
@@ -115,8 +119,8 @@ What `run` does, in order:
 report (completion, summary, files, the tests it says it ran, outstanding problems), the tests the
 wrapper re-ran with their real exit codes, and any scope or secret findings.
 
-Files live outside every repository: run data in `~/.jawwid-ai/runs/<id>/` (kept after cleanup),
-worktrees in `~/jawwid-ai-worktrees/<id>/`. macOS purges `/tmp` after a few days, so nothing durable
+Files live outside every repository: run data in `~/.jawwid-ai/runs/<repo>/<id>/` (kept after cleanup),
+worktrees in `~/jawwid-ai-worktrees/<repo>/<id>/`. macOS purges `/tmp` after a few days, so nothing durable
 goes there.
 
 ## 6. Failure handling
