@@ -8005,6 +8005,24 @@ abstract class L10n {
   /// **'Delete selection'**
   String get boardDeleteSelection;
 
+  /// PD-55 whiteboard: copy the selection (Ctrl/Cmd+C).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get boardCopy;
+
+  /// PD-55 whiteboard: paste what was copied (Ctrl/Cmd+V).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get boardPaste;
+
+  /// PD-55 whiteboard: copy and paste the selection in one step (Ctrl/Cmd+D).
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get boardDuplicate;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:

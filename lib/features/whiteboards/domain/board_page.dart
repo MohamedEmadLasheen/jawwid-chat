@@ -172,9 +172,12 @@ class BoardGeometry {
         continue;
       }
       final keep = radius + e.width / 2;
+      // PD-55: a simplified stroke's points can be far apart; the eraser
+      // cuts between them too, on the stroke resampled finely where it passes.
+      final points = _densify(e.points, point, keep);
       final runs = <List<StrokePoint>>[];
       var run = <StrokePoint>[];
-      for (final p in e.points) {
+      for (final p in points) {
         if ((p.offset - point).distance <= keep) {
           if (run.isNotEmpty) runs.add(run);
           run = [];
@@ -183,7 +186,7 @@ class BoardGeometry {
         }
       }
       if (run.isNotEmpty) runs.add(run);
-      if (runs.length == 1 && runs.first.length == e.points.length) {
+      if (runs.length == 1 && runs.first.length == points.length) {
         out.add(e);
         continue;
       }
@@ -194,11 +197,74 @@ class BoardGeometry {
     return out;
   }
 
+  /// [points] with extra points, every [keep] / 2, on the segments that pass
+  /// within [keep] of [at]; elsewhere unchanged.
+  static List<StrokePoint> _densify(List<StrokePoint> points, Offset at, double keep) {
+    if (points.length < 2) return points;
+    final step = math.max(1.0, keep / 2);
+    final out = <StrokePoint>[points.first];
+    for (var i = 1; i < points.length; i++) {
+      final a = points[i - 1], b = points[i];
+      final length = (b.offset - a.offset).distance;
+      if (length > step && _distanceToSegment(at, a.offset, b.offset) <= keep) {
+        final n = (length / step).ceil();
+        for (var k = 1; k < n; k++) {
+          final t = k / n;
+          out.add(StrokePoint(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.pressure + (b.pressure - a.pressure) * t));
+        }
+      }
+      out.add(b);
+    }
+    return out;
+  }
+
   /// Every element whose bounds meet [area] (the marquee selection).
   static Set<String> within(List<BoardElement> elements, Rect area) => {
     for (final e in elements)
       if (e.bounds.overlaps(area)) e.id,
   };
+
+  /// PD-55: what a freehand lasso takes -- a stroke when at least half of its
+  /// points are inside the loop, anything else when its centre is.
+  static Set<String> inLasso(List<BoardElement> elements, List<Offset> loop) {
+    if (loop.length < 3) return {};
+    return {
+      for (final e in elements)
+        if (switch (e) {
+          InkElement(:final points) when points.isNotEmpty =>
+            points.where((p) => insidePolygon(loop, p.offset)).length * 2 >= points.length,
+          _ => insidePolygon(loop, e.bounds.center),
+        })
+          e.id,
+    };
+  }
+
+  /// Whether [p] is inside the closed [polygon] (even-odd rule).
+  static bool insidePolygon(List<Offset> polygon, Offset p) {
+    var inside = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      final a = polygon[i], b = polygon[j];
+      if ((a.dy > p.dy) != (b.dy > p.dy) && p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) inside = !inside;
+    }
+    return inside;
+  }
+
+  /// PD-55: a finger's or a mouse's stroke, steadied -- each point the mean of
+  /// itself and the two before it, so the jitter of a hand is smoothed and the
+  /// ends stay where they were. A pen is never passed through this.
+  static List<StrokePoint> steady(List<StrokePoint> raw) {
+    if (raw.length < 3) return raw;
+    return [
+      raw.first,
+      for (var i = 1; i < raw.length - 1; i++)
+        StrokePoint(
+          (raw[i - 1].x + raw[i].x + raw[i + 1].x) / 3,
+          (raw[i - 1].y + raw[i].y + raw[i + 1].y) / 3,
+          raw[i].pressure,
+        ),
+      raw.last,
+    ];
+  }
 
   static bool _nearPolyline(List<Offset> pts, Offset p, double tolerance) {
     if (pts.length == 1) return (pts.first - p).distance <= tolerance;

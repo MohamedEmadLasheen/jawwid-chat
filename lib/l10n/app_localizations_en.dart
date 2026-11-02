@@ -4650,6 +4650,15 @@ class L10nEn extends L10n {
   String get boardDeleteSelection => 'Delete selection';
 
   @override
+  String get boardCopy => 'Copy';
+
+  @override
+  String get boardPaste => 'Paste';
+
+  @override
+  String get boardDuplicate => 'Duplicate';
+
+  @override
   String get boardColour => 'Colour';
 
   @override

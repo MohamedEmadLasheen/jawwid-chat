@@ -172,6 +172,32 @@ void main() {
     expect(find.text(l10n.boardUnsaved), findsOneWidget);
   });
 
+  testWidgets('PD-55: Ctrl+D or the selection bar\'s Duplicate copies the selection, one undo step each; never while typing', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    final centre = tester.getCenter(find.byType(BoardCanvas));
+    final gesture = await tester.startGesture(centre, kind: PointerDeviceKind.mouse);
+    for (var i = 1; i <= 10; i++) {
+      await gesture.moveTo(centre + Offset(i * 8.0, i * 3.0));
+    }
+    await gesture.up();
+    await tester.pump();
+    await tester.tap(find.byTooltip(l10n.boardToolSelect));
+    await tester.pump();
+    await tester.tapAt(centre + const Offset(40, 15));
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(container.read(boardEditorProvider('b1')).value!.page.elements, hasLength(2));
+
+    // The selection's own bar, beside it on the page.
+    await tester.tap(find.byKey(const ValueKey('board-sel-duplicate')));
+    await tester.pump();
+    expect(container.read(boardEditorProvider('b1')).value!.page.elements, hasLength(3));
+  });
+
   testWidgets('a Tajweed highlighter colour stays with the highlighter: the next pen stroke is ink', (tester) async {
     final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
     await tester.tap(find.byTooltip(l10n.boardToolHighlighter));
