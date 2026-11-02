@@ -897,13 +897,14 @@ extension on BoardCanvasState {
     if (edit != null && styled != null) {
       final text = edit.controller.text;
       final dir = textDirectionOf(text);
+      // The stack is left-to-right (page coordinates, never mirrored), so start is left.
       out.add(
-        Positioned(
-          left: _origin.dx + styled.topLeft.dx * _scale,
+        PositionedDirectional(
+          start: _origin.dx + styled.topLeft.dx * _scale,
           top: _origin.dy + styled.topLeft.dy * _scale,
           child: Transform.scale(
             scale: _scale,
-            alignment: Alignment.topLeft,
+            alignment: AlignmentDirectional.topStart,
             child: Transform.rotate(
               angle: styled.rotation,
               child: SizedBox(
@@ -942,8 +943,8 @@ extension on BoardCanvasState {
       // The bar is about 500 px wide (ten 48 px targets): kept inside the view.
       final left = (_origin.dx + r.left * _scale).clamp(8.0, math.max(8.0, _viewport.width - _TextStyleBar.width - 8)).toDouble();
       out.add(
-        Positioned(
-          left: left,
+        PositionedDirectional(
+          start: left,
           // Above the text being typed; below a selected one, whose rotate
           // handle is above it.
           top: edit == null || top - 64 < 8 ? below : top - 64,
