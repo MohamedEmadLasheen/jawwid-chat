@@ -138,12 +138,15 @@ class _RequestTile extends ConsumerWidget {
     final m = MaterialLocalizations.of(context);
     String day(DateTime d) => m.formatMediumDate(DateTime(d.year, d.month, d.day));
     final dates = request.firstDay == request.lastDay ? day(request.firstDay) : '${day(request.firstDay)} – ${day(request.lastDay)}';
-    final state = switch (request.state) {
-      LeaveState.requested => l10n.leaveStateRequested,
-      LeaveState.approved => l10n.leaveStateApproved,
-      LeaveState.declined => l10n.leaveStateDeclined,
-      LeaveState.withdrawn => l10n.leaveStateWithdrawn,
-      LeaveState.cancelled => l10n.leaveStateCancelled,
+    final tokens = JawwidTokens.of(context);
+    // RQA-F7: each state its own status colour, not one green for all -- waiting is a
+    // warning, approved a success, not approved a refusal, withdrawn/cancelled neutral.
+    final (state, stateFg, stateBg) = switch (request.state) {
+      LeaveState.requested => (l10n.leaveStateRequested, tokens.colorStatusWarningFg, tokens.colorStatusWarningBg),
+      LeaveState.approved => (l10n.leaveStateApproved, tokens.colorStatusSuccessFg, tokens.colorStatusSuccessBg),
+      LeaveState.declined => (l10n.leaveStateDeclined, tokens.colorStatusDangerFg, tokens.colorStatusDangerBg),
+      LeaveState.withdrawn => (l10n.leaveStateWithdrawn, tokens.colorStatusNeutralFg, tokens.colorStatusNeutralBg),
+      LeaveState.cancelled => (l10n.leaveStateCancelled, tokens.colorStatusNeutralFg, tokens.colorStatusNeutralBg),
     };
 
     return Card(
@@ -156,7 +159,14 @@ class _RequestTile extends ConsumerWidget {
             Row(
               children: [
                 Expanded(child: Text(dates, style: theme.textTheme.titleSmall)),
-                Text(state, style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary)),
+                DecoratedBox(
+                  key: ValueKey('leave-state-${request.id}'),
+                  decoration: BoxDecoration(color: stateBg, borderRadius: const BorderRadius.all(Radius.circular(Spacing.spacing2))),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing2, vertical: Spacing.spacing1),
+                    child: Text(state, style: theme.textTheme.labelLarge?.copyWith(color: stateFg)),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: Spacing.spacing1),

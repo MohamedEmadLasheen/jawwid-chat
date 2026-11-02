@@ -2,12 +2,14 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
 import '../data/board_images.dart';
 import '../data/quran_text_repository.dart';
 import '../domain/board_elements.dart';
+import '../domain/board_emoji.dart';
 import '../domain/board_page.dart';
 import '../domain/stroke_points.dart';
 
@@ -30,7 +32,8 @@ typedef VerseSource = VerseLookup Function(VerseElement verse);
 /// stroke (the canvas's overlay), not the whole page.
 class BoardPagePainter extends CustomPainter {
   BoardPagePainter({required this.page, this.placeholderLabel, this.verses, this.versesVersion, this.images, this.imagesVersion})
-    : _cache = _PictureCache.of(page, versesVersion, imagesVersion);
+    : emojiReady = boardEmojiFontReady.value,
+      _cache = _PictureCache.of(page, versesVersion, imagesVersion, boardEmojiFontReady.value);
 
   final BoardPage page;
 
@@ -45,6 +48,10 @@ class BoardPagePainter extends CustomPainter {
   /// The board's images (PR-4), and what changes whenever one of them arrives.
   final BoardImageSource? images;
   final Object? imagesVersion;
+
+  /// PD-55 (4): whether the emoji font could draw when this was made; a page
+  /// recorded before it loaded is recorded again once it has.
+  final bool emojiReady;
 
   final _PictureCache _cache;
 
@@ -62,7 +69,8 @@ class BoardPagePainter extends CustomPainter {
       old.page.layout != page.layout ||
       old.page.background != page.background ||
       !identical(old.versesVersion, versesVersion) ||
-      !identical(old.imagesVersion, imagesVersion);
+      !identical(old.imagesVersion, imagesVersion) ||
+      old.emojiReady != emojiReady;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,12 +89,13 @@ class _PictureCache {
   static const int _capacity = 16;
   static final LinkedHashMap<List<BoardElement>, _PictureCache> _recent = LinkedHashMap(equals: identical, hashCode: identityHashCode);
 
-  static _PictureCache of(BoardPage page, Object? versesVersion, [Object? imagesVersion]) {
+  static _PictureCache of(BoardPage page, Object? versesVersion, [Object? imagesVersion, bool emojiReady = true]) {
     final key = (
       page.layout,
       page.background,
       versesVersion == null ? 0 : identityHashCode(versesVersion),
       imagesVersion == null ? 0 : identityHashCode(imagesVersion),
+      emojiReady,
     );
     final existing = _recent.remove(page.elements);
     if (existing != null && existing.key == key) {
@@ -416,6 +425,18 @@ const Map<StampKind, IconData> kStampIcons = {
 };
 
 void _paintStamp(Canvas canvas, StampElement s) {
+  if (s.stamp == StampKind.emoji) {
+    // PD-55 (4): the emoji itself, filling its square, in colour (not in s.color).
+    final tp = TextPainter(
+      text: TextSpan(
+        text: s.text ?? '',
+        style: TextStyle(fontFamily: kIsWeb ? kBoardEmojiFont : null, fontSize: s.rect.shortestSide * 0.82, height: 1),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, s.rect.center - Offset(tp.width / 2, tp.height / 2));
+    return;
+  }
   final icon = kStampIcons[s.stamp];
   if (icon != null) {
     final tp = TextPainter(

@@ -366,6 +366,10 @@ enum StampKind {
   /// PD-55: a praise stamp with any words in [StampElement.text] -- the tray's
   /// رائع, بطل, Great, Champion, or the teacher's own.
   praise,
+
+  /// PD-55 Phase 1 (4): an emoji, the character itself in [StampElement.text]
+  /// (one of kBoardEmoji). An app or viewer from before draws it as a star.
+  emoji,
 }
 
 class StampElement extends BoardElement {

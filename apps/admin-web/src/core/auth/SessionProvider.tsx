@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { sessionApi } from '@/core/api/endpoints'
@@ -6,6 +6,7 @@ import { qk } from '@/core/api/queryKeys'
 import { setUnauthenticatedHandler } from '@/core/api/client'
 import { onSignedOutElsewhere, tokenStore } from './tokens'
 import type { Staff } from '@/shared/types/domain'
+import { accountLocale, rememberAccountLocale, useI18nIfAny } from '@/core/i18n/I18nProvider'
 
 interface SessionValue {
   staff: Staff | null
@@ -43,6 +44,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // tab signs out (or its refresh fails for good) it removes that token, and
   // this tab follows at once instead of at its next request.
   useEffect(() => onSignedOutElsewhere(() => endSession(queryClient)), [queryClient])
+
+  // ADMIN-008: the interface speaks the signed-in account's language -- its own
+  // pick on this browser, else its /me.locale -- and a pick made while signed in
+  // is that account's, never the next person's on this browser.
+  const i18n = useI18nIfAny()
+  const locale = i18n?.locale ?? null
+  const setLocale = i18n?.setLocale
+  const meId = meQuery.data?.id ?? null
+  const meLocale = meQuery.data?.locale
+  const applied = useRef<{ id: string | null; locale: string | null }>({ id: null, locale: null })
+  useEffect(() => {
+    if (meId === applied.current.id) return
+    applied.current = { id: meId, locale: null }
+    if (!meId || !setLocale) return
+    const want = accountLocale(meId, meLocale)
+    applied.current.locale = want ?? locale
+    if (want && want !== locale) setLocale(want)
+    // Only when the person changes: a pick made afterwards is theirs (below).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meId])
+  useEffect(() => {
+    if (!meId || !locale || applied.current.id !== meId || applied.current.locale === locale) return
+    applied.current.locale = locale
+    rememberAccountLocale(meId, locale)
+  }, [meId, locale])
 
   const value = useMemo<SessionValue>(
     () => ({
