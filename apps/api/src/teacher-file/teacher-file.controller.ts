@@ -30,8 +30,8 @@ export class TeacherFileController {
   /** Every complaint, newest first: by source (management | parent) and status. */
   @Requires('teacher_supervision.view', 'teacher_attendance.view')
   @Get('complaints')
-  complaints(@ActorId() actorId: string, @Query('from') from?: string, @Query('status') status?: string) {
-    return this.files.complaints(actorId, { from, status });
+  complaints(@ActorId() actorId: string, @Query('from') from?: string, @Query('status') status?: string, @Query('voided') voided?: string) {
+    return this.files.complaints(actorId, { from, status, voided });
   }
 
   /** Every recorded reward, newest first; amounts for the super admin only. */

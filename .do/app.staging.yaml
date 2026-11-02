@@ -220,6 +220,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${OUTBOX_IDLE_BACKOFF_MS}
+      - key: REALTIME_DELIVERY_CONCURRENCY
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${REALTIME_DELIVERY_CONCURRENCY}
       - key: ATTACHMENT_MAX_BYTES_IMAGE
         scope: RUN_TIME
         type: GENERAL
@@ -605,6 +609,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${OUTBOX_IDLE_BACKOFF_MS}
+      - key: REALTIME_DELIVERY_CONCURRENCY
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${REALTIME_DELIVERY_CONCURRENCY}
       - key: ATTACHMENT_MAX_BYTES_IMAGE
         scope: RUN_TIME
         type: GENERAL

@@ -1,7 +1,7 @@
 # PD-46: Schedule ↔ Chat in real time, and the supervisor's Upcoming lessons (plan)
 
 **State:** **APPROVED.** On 2026-10-28 the owner answered Q1–Q8 "Approve all 8 (Recommended)", relayed verbatim by the department head (§7). No feature code is written. PR-1 waits for the department head's GO (machine load).
-**Claim:** `docs/product/pd-registry/PD-46.md`. **PR-1's migration slot is `20261028235900`**, assigned by the department head and claimed in `docs/product/migration-slots/20261028235900.md`. Later PRs that need DDL (PR-2's card key if it does not land with PR-1, and PR-4) ask for their own slots.
+**Claim:** `docs/product/pd-registry/PD-46.md`. **PR-1's migration slot is `20261102150000`** (moved 2026-11-02 from `20261031130000`, and 2026-10-31 from `20261028235900`, each time because the old slot sorted before main's newest migration), assigned by the department head and claimed in `docs/product/migration-slots/20261102150000.md`. Later PRs that need DDL (PR-2's card key if it does not land with PR-1, and PR-4) ask for their own slots.
 **Base:** `main` @ `03fd9175`. All paths are relative to the repository root. SQL migrations live in `supabase/migrations/`, abbreviated `mig/`.
 **Frozen:** the call workstreams W1–W8, `lib/core/realtime/realtime_socket.dart` and `lib/core/realtime/call_realtime_client.dart`. Nothing here edits them (§3.6).
 
@@ -141,7 +141,7 @@ These triggers run on `chat.lesson`:
 - **New column:** `chat.lesson.revision bigint not null default 0`.
 - **Trigger:** a `BEFORE UPDATE` trigger `lesson_bumps_revision` sets `NEW.revision = OLD.revision + 1` whenever a field a reader sees changes (`starts_at`, `ends_at`, `teacher_id`, `outcome`, `kind`, `learner_id`). It is a separate function, per the shared-trigger rule.
 - **Ordering:** each event carries `revision`. A client keeps the highest revision seen per lesson and ignores a lower one. A refetch always returns the current row, so an out-of-order signal costs one redundant read and never shows an old state.
-- **Safety net:** an `AFTER` trigger records `(lesson_id, revision)` into `chat.lesson_change_unannounced` when the writer did not mark the transaction (`set_config('chat.lesson_writer', 'on', true)`). A 60-second sweep then announces those rows as `change: 'external'`. A missed writer therefore shows up late, never silently. A metric on this table's inflow tells us which writer still bypasses `LessonWriter`.
+- **Safety net:** an `AFTER` trigger records **every** change a reader sees as `(lesson_id, revision)` in `chat.lesson_change_unannounced`. `LessonEvents.record` deletes exactly the rows it announces (that lesson, up to that revision), in the same transaction; a 60-second sweep announces whatever is left as `change: 'external'` (weekly materialization as one `schedule.refreshed` per organization), draining the table each tick. There is no transaction-wide "writer" flag (review of #390): it would hide every other lesson changed in the same transaction. A missed writer therefore shows up late, never silently and never twice. A metric on this table's inflow tells us which writer still bypasses `LessonWriter`.
 
 ### 3.3 The event
 
@@ -244,7 +244,7 @@ lesson.changed {
 
 | PR | Content | Slot |
 |---|---|---|
-| PR-1 | `lesson.revision` + bump trigger + unannounced table; `outbox_event.idempotency_key`; `LessonEvents.record`; `lesson.changed` + `schedule.refreshed` in `events.ts` and the worker's fan-out; integration spec | **`20261028235900`** (assigned) |
+| PR-1 | `lesson.revision` + bump trigger + unannounced table; `outbox_event.idempotency_key`; `LessonEvents.record`; `lesson.changed` + `schedule.refreshed` in `events.ts` and the worker's fan-out; integration spec | **`20261102150000`** (assigned; was `20261028235900`) |
 | PR-2 | `LessonWriter` and the move of every §1.1 writer; the `lesson-writer` guard; `message_card.idempotency_key` + keyed `postCard` (same slot if landed together, else a second) | 0–1 |
 | PR-3 | Clients: Admin Web `/schedule` + Chat ticket refresh; Flutter `chat_signal.dart` kind + calendar/ticket invalidation; live card footer | none |
 | PR-4 | Item 5 API: `chat.lesson_watch_mark`, `GET /lessons/upcoming`, mark/unmark, `lessons.watch` key, audit | one slot |

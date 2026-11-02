@@ -143,6 +143,12 @@
   "callIncoming": "Incoming call",
   "callConnecting": "Connecting…",
   "callReconnecting": "Reconnecting…",
+  "callWaitingForReconnect": "Connection lost. Waiting for them to reconnect…",
+  "@callWaitingForReconnect": {"description": "CHATSCHED-013: in a call, the other side dropped; the call ends after 60 s unless they come back."},
+  "callEndedConnectionLost": "Call ended: the connection was lost",
+  "@callEndedConnectionLost": {"description": "CHATSCHED-013: the call ended because a participant dropped and did not reconnect within 60 s."},
+  "callHistoryConnectionLost": "Connection lost",
+  "@callHistoryConnectionLost": {"description": "CHATSCHED-013: in call history and the chat's call card, beside the outcome."},
   "callAccept": "Accept",
   "callDecline": "Decline",
   "callEnd": "End",
@@ -1935,6 +1941,19 @@
       }
     }
   },
+  "salesOtherPaymentsTitle": "Other payments",
+  "@salesOtherPaymentsTitle": {
+    "description": "ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request)."
+  },
+  "salesRefundedAmount": "Refunded {amount}",
+  "@salesRefundedAmount": {
+    "description": "ADMIN-012: how much of a payment was refunded.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "salesVoidedReason": "Voided: {reason}",
   "@salesVoidedReason": {
     "description": "A voided instalment whose voiding staff member is not known.",
@@ -2783,6 +2802,10 @@
   "@feedbackEntryTitle": {"description": "PD-32: the row on a child's card, and the screen title."},
   "feedbackEntrySubtitle": "Praise, a suggestion or a complaint",
   "@feedbackEntrySubtitle": {"description": "PD-32: under the entry row."},
+  "feedbackShortcutPraise": "Praise the teacher",
+  "@feedbackShortcutPraise": {"description": "PD-52: a shortcut on a child's card that opens the feedback form on Praise."},
+  "feedbackShortcutProblem": "Report a problem",
+  "@feedbackShortcutProblem": {"description": "PD-52: a shortcut on a child's card that opens the feedback form on Complaint."},
   "feedbackTeacherLine": "Teacher: {name}",
   "@feedbackTeacherLine": {"description": "PD-32: who the feedback is about.", "placeholders": {"name": {"type": "String"}}},
   "feedbackHistoryTitle": "Your earlier feedback",

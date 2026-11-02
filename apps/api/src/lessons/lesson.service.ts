@@ -1220,7 +1220,7 @@ export class LessonService {
     }
   }
 
-  cardBase(lesson: LessonWithRelations) {
+  cardBase(lesson: Pick<LessonWithRelations, 'id' | 'startsAt' | 'endsAt'> & { learner: { name: string }; teacher: { name: string } }) {
     return {
       lessonId: lesson.id,
       learnerName: lesson.learner.name,

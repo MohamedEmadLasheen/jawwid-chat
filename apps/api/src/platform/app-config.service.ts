@@ -49,6 +49,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'call.token_ttl_seconds': 120,
   /** initial hypothesis - unanswered call becomes a missed call */
   'call.ring_timeout_seconds': 45,
+  /** CHATSCHED-013 (owner): a dropped call waits this long for a participant to come back */
+  'call.reconnect_grace_seconds': 60,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
   /**

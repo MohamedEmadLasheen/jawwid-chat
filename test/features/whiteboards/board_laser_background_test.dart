@@ -78,6 +78,34 @@ void main() {
     });
   });
 
+  testWidgets('a page change clears the trail: pointing on one page never shows on the next (review of #387)', (tester) async {
+    final key = GlobalKey<BoardCanvasState>();
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    Widget canvas(String pageId) => MaterialApp(
+      localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+      home: Scaffold(
+        body: BoardCanvas(
+          key: key,
+          page: BoardPage(id: pageId, position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: const []),
+          tool: BoardTool.laser,
+          style: const ToolStyle(color: _ink, width: 6),
+          readOnly: false,
+          onCommit: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpWidget(canvas('p1'));
+    final g = await tester.startGesture(key.currentState!.screenOf(const Offset(200, 350)), kind: PointerDeviceKind.mouse);
+    await g.moveTo(key.currentState!.screenOf(const Offset(400, 350)));
+    await tester.pump(const Duration(milliseconds: 16));
+    await g.up();
+    expect(key.currentState!.laserTrail, isNotEmpty);
+    await tester.pumpWidget(canvas('p2'));
+    expect(key.currentState!.laserTrail, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   group('the dotted page', () {
     test('is a layout of its own on the wire', () {
       expect(PageLayout.parse('dotted'), PageLayout.dotted);

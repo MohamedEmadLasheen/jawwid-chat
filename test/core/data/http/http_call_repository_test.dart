@@ -252,6 +252,30 @@ void main() {
       expect(server.requests.single.json, isNot(contains('outcome')));
     });
 
+    test('CHATSCHED-013 (review 2 of #367): a client that gave up rejoining says so -- connection_lost, and nothing else', () async {
+      reply('end', const Reply.ok({'ok': true}));
+      await repository().end(callId: 'call_1', connectionLost: true);
+      expect(server.requests.single.path, '/calls/call_1/end');
+      expect(server.requests.single.json, {'reason': 'connection_lost'});
+    });
+
+    test('a refusal carries the server\'s detail (how an ended call ended)', () async {
+      reply(
+        'mediaToken',
+        const Reply(409, {
+          'error': {
+            'code': WireErrors.callAlreadyEnded,
+            'message': 'this call has ended',
+            'detail': {'endReason': 'hung_up', 'outcome': 'answered', 'durationSeconds': 42},
+          },
+        }),
+      );
+      await expectLater(
+        repository().mediaToken(callId: 'call_1'),
+        throwsA(isA<AppError>().having((e) => e.detail, 'detail', {'endReason': 'hung_up', 'outcome': 'answered', 'durationSeconds': 42})),
+      );
+    });
+
     test('and the end API has no outcome parameter to pass', () {
       // A source check, because the compiler is the real guard: `end(callId:
       // ..., outcome: ...)` would not compile, so no runtime test can exercise
@@ -262,8 +286,10 @@ void main() {
       // The parameter existed until 2026-09-27 and forwarded `{'outcome': ...}`
       // to an endpoint that had stopped accepting one. See API-CONTRACT §3.8.
       final contract = File('lib/core/data/repositories.dart').readAsStringSync();
-      expect(contract, contains('Future<void> end({required String callId});'));
-      expect(contract, isNot(contains('end({required String callId, String? outcome')));
+      // Review 2 of #367: the one thing a client may say is that it gave up
+      // rejoining (connection_lost) -- a flag, never an outcome.
+      expect(contract, contains('Future<void> end({required String callId, bool connectionLost = false});'));
+      expect(contract.substring(contract.indexOf('Future<void> end(')).split('\n').first, isNot(contains('outcome')));
 
       final http =
           File('lib/core/data/http/http_call_repository.dart').readAsStringSync();
@@ -277,7 +303,9 @@ void main() {
           .where((line) => !line.trimLeft().startsWith('//'))
           .join('\n');
       expect(code, isNot(contains('outcome')));
-      expect(code, isNot(contains('data:')));
+      // The only body it ever sends: the give-up reason.
+      expect(RegExp('data:').allMatches(code), hasLength(1));
+      expect(code, contains("data: connectionLost ? const {'reason': 'connection_lost'} : null"));
     });
 
     test('accepting a call already left keeps its own code', () async {

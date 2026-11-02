@@ -310,6 +310,16 @@ class L10nEn extends L10n {
   String get callReconnecting => 'Reconnecting…';
 
   @override
+  String get callWaitingForReconnect =>
+      'Connection lost. Waiting for them to reconnect…';
+
+  @override
+  String get callEndedConnectionLost => 'Call ended: the connection was lost';
+
+  @override
+  String get callHistoryConnectionLost => 'Connection lost';
+
+  @override
   String get callAccept => 'Accept';
 
   @override
@@ -3345,6 +3355,14 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get salesOtherPaymentsTitle => 'Other payments';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'Refunded $amount';
+  }
+
+  @override
   String salesVoidedReason(String reason) {
     return 'Voided: $reason';
   }
@@ -4004,6 +4022,12 @@ class L10nEn extends L10n {
 
   @override
   String get feedbackEntrySubtitle => 'Praise, a suggestion or a complaint';
+
+  @override
+  String get feedbackShortcutPraise => 'Praise the teacher';
+
+  @override
+  String get feedbackShortcutProblem => 'Report a problem';
 
   @override
   String feedbackTeacherLine(String name) {

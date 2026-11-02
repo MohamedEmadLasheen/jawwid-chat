@@ -98,12 +98,15 @@ class HttpCallRepository implements CallRepository {
   }
 
   @override
-  Future<void> end({required String callId}) async {
-    // NO BODY. The server derives the outcome from the call's own locked state,
-    // and it stopped accepting one from the request on 2026-09-27. Sending a
-    // field the endpoint ignores would only teach the next reader that the
-    // client has a say in call history.
-    await _client.post<Map<String, Object?>>('/calls/$callId/end');
+  Future<void> end({required String callId, bool connectionLost = false}) async {
+    // NO OUTCOME. The server derives it from the call's own locked state, and it
+    // stopped accepting one from the request on 2026-09-27. The one thing a
+    // client may say (CHATSCHED-013, review 2 of #367) is that it gave up
+    // rejoining -- the server then ends a live call as connection lost.
+    await _client.post<Map<String, Object?>>(
+      '/calls/$callId/end',
+      data: connectionLost ? const {'reason': 'connection_lost'} : null,
+    );
   }
 
   @override
@@ -172,6 +175,7 @@ class HttpCallRepository implements CallRepository {
       outcome: outcome,
       isGroup: row['type'] == Wire.callTypeGroup,
       duration: seconds is int ? Duration(seconds: seconds) : null,
+      connectionLost: row['endReason'] == 'connection_lost',
     );
   }
 

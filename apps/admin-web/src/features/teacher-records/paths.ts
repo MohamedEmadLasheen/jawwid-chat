@@ -9,3 +9,7 @@ export const GRANTS_PATH = '/teacher-grants'
 export function attendancePath(basePath: string): string {
   return basePath.startsWith('/admin') ? `/admin${ATTENDANCE_PATH}` : ATTENDANCE_PATH
 }
+
+export function grantsPath(basePath: string): string {
+  return basePath.startsWith('/admin') ? `/admin${GRANTS_PATH}` : GRANTS_PATH
+}

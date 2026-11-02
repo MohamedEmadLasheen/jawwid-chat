@@ -193,6 +193,58 @@ export class TeacherScopeService implements OnModuleInit {
     };
   }
 
+  // ------------------------------------------------------------------
+  // PD-52 PR-5: the Sales basis of the teacher-records pages
+  // ------------------------------------------------------------------
+
+  /** 'manager' | 'member' when the caller is in Sales (role re-checked, chat.sales_basis); else null. */
+  async salesBasis(actor: Actor): Promise<'manager' | 'member' | null> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
+    if (actor.staffRole === StaffRole.SUPER_ADMIN) return null;
+    const [row] = await this.prisma.$queryRaw<Array<{ basis: string | null }>>`SELECT chat.sales_basis(${actor.actorId}::uuid) AS basis`;
+    return row?.basis === 'manager' || row?.basis === 'member' ? row.basis : null;
+  }
+
+  /**
+   * Sales' rows (plan §5.4): the teachers of the trials it reads and the
+   * current teachers of the families it owns, and of those only the rows about
+   * one of those children or trial families -- never a teacher-level row
+   * (`teacherLevel` covers nobody). The database's own functions, so the page
+   * and the insert guards (chat.may_record_teacher_row) cannot disagree.
+   */
+  async salesRowsOf(actor: Actor, at: Date = new Date()): Promise<PageScope> {
+    if (!(await this.salesBasis(actor))) return EMPTY_PAGE;
+    const [teachers, learners, prospects] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.sales_teacher_ids(${actor.actorId}::uuid, ${at}::timestamptz) AS id`,
+      this.prisma.$queryRaw<Array<{ learner: string; family: string }>>`
+        SELECT l.id::text AS learner, l.family_id::text AS family
+          FROM chat.learner l WHERE l.id IN (SELECT chat.sales_learner_ids(${actor.actorId}::uuid))`,
+      this.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.sales_prospect_ids(${actor.actorId}::uuid, ${at}::timestamptz) AS id`,
+    ]);
+    return {
+      teachers: { all: false, teacherIds: new Set(teachers.map((r) => r.id)) },
+      whole: NO_TEACHERS,
+      learnerIds: new Set(learners.map((r) => r.learner)),
+      familyIds: new Set(learners.map((r) => r.family)),
+      prospectIds: new Set(prospects.map((r) => r.id)),
+      teacherLevel: NO_TEACHERS,
+    };
+  }
+
+  /** The teacher-records pages' rows: the PD-26 page's for its bases, else Sales'. */
+  async recordsRowsOf(actor: Actor, at: Date = new Date()): Promise<PageScope> {
+    if ((await this.pageBasis(actor)) !== null) return this.pageRowsOf(actor, at);
+    return this.salesRowsOf(actor, at);
+  }
+
+  /** Each lesson's learner (null for a trial) and trial family (PD-52), for pageRowVisible. */
+  async lessonsAbout(lessonIds: Iterable<string>): Promise<Map<string, { learnerId: string | null; prospectId: string | null }>> {
+    const ids = [...new Set(lessonIds)];
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.lesson.findMany({ where: { id: { in: ids } }, select: { id: true, learnerId: true, prospectId: true } });
+    return new Map(rows.map((r) => [r.id, { learnerId: r.learnerId, prospectId: r.prospectId }]));
+  }
+
   /** Each lesson's learner (null for a trial), for pageRowVisible. */
   async learnersOfLessons(lessonIds: Iterable<string>): Promise<Map<string, string | null>> {
     const ids = [...new Set(lessonIds)];
@@ -224,7 +276,20 @@ export interface PageScope {
   whole: TeacherScope;
   learnerIds: ReadonlySet<string>;
   familyIds: ReadonlySet<string>;
+  /** PD-52 (Sales): the trial families whose rows show. Absent: none. */
+  prospectIds?: ReadonlySet<string>;
+  /** PD-52 (Sales): the teachers whose teacher-level rows show. Absent: every teacher on the page. */
+  teacherLevel?: TeacherScope;
 }
+
+const EMPTY_PAGE: PageScope = Object.freeze({
+  teachers: NO_TEACHERS,
+  whole: NO_TEACHERS,
+  learnerIds: new Set<string>(),
+  familyIds: new Set<string>(),
+  prospectIds: new Set<string>(),
+  teacherLevel: NO_TEACHERS,
+});
 
 /**
  * May this row show? `about` is the child or family it is about; null for a
@@ -234,12 +299,15 @@ export interface PageScope {
 export function pageRowVisible(
   scope: PageScope,
   teacherId: string | null | undefined,
-  about: { learnerId?: string | null; familyId?: string | null } | null,
+  about: { learnerId?: string | null; familyId?: string | null; prospectId?: string | null } | null,
 ): boolean {
   if (!scopeCovers(scope.teachers, teacherId)) return false;
-  if (scopeCovers(scope.whole, teacherId) || about === null) return true;
+  if (scopeCovers(scope.whole, teacherId)) return true;
+  // PD-52: Sales sees no teacher-level row.
+  if (about === null) return scope.teacherLevel ? scopeCovers(scope.teacherLevel, teacherId) : true;
   if (about.learnerId) return scope.learnerIds.has(about.learnerId);
   if (about.familyId) return scope.familyIds.has(about.familyId);
+  if (about.prospectId) return scope.prospectIds?.has(about.prospectId) ?? false;
   return false;
 }
 

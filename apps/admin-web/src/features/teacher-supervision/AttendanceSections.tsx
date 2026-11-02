@@ -228,10 +228,12 @@ export function ExcusesSection({ canRecord, canDecide }: AttendanceRights) {
   )
 }
 
-export function LatenessSection({ canRecord, canDecide }: AttendanceRights) {
+/** `trialsOnly` (PD-52 PR-5, Sales): the trial lessons, and no regular ones. */
+export function LatenessSection({ canRecord, canDecide, trialsOnly = false }: AttendanceRights & { trialsOnly?: boolean }) {
   const tx = useCopy()
   const w = useWindow()
-  const [type, setType] = useState<'regular' | 'trial'>('regular')
+  const [picked, setType] = useState<'regular' | 'trial'>('regular')
+  const type = trialsOnly ? 'trial' : picked
   const [recording, setRecording] = useState(false)
   const query: ViolationQuery = w.window === 'open' ? { state: 'open', kind: 'late' } : { state: 'all', month: w.month, kind: 'late' }
   return (
@@ -247,16 +249,18 @@ export function LatenessSection({ canRecord, canDecide }: AttendanceRights) {
         }
       />
       {/* The two subsections: trial lessons and regular lessons (PD-26). */}
-      <FilterChips<'regular' | 'trial'>
-        variant="tabs"
-        label={tx(H.lessonType)}
-        value={type}
-        onChange={setType}
-        options={[
-          { value: 'regular', label: tx(H.regularLessons) },
-          { value: 'trial', label: tx(H.trialLessons) },
-        ]}
-      />
+      {!trialsOnly && (
+        <FilterChips<'regular' | 'trial'>
+          variant="tabs"
+          label={tx(H.lessonType)}
+          value={type}
+          onChange={setType}
+          options={[
+            { value: 'regular', label: tx(H.regularLessons) },
+            { value: 'trial', label: tx(H.trialLessons) },
+          ]}
+        />
+      )}
       <WindowFilter w={w} />
       <ViolationTable
         query={query}

@@ -25,6 +25,7 @@ import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
 import { FamilyIntakeService } from '../new-students/intake.service';
 import { FamilyIntakeController } from '../new-students/intake.controller';
 import { ReportMaterials } from '../materials/report-materials';
+import { LessonEvents } from './lesson-events';
 
 /**
  * PD-9 / PD-11: lessons, their one outcome, the tickets that record it, and
@@ -44,6 +45,8 @@ import { ReportMaterials } from '../materials/report-materials';
   controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController, ReportCorrectionController, FamilyIntakeController],
   providers: [
     LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService,
+    // PD-46: every lesson change announced once (lesson.changed / schedule.refreshed).
+    LessonEvents,
     // PD-15: corrections and report edits / deletes; enrolment details and courses.
     LessonRecordService, EnrollmentService,
     // PD-16: enrolling a new student. The file lives in src/new-students (it reads
@@ -59,6 +62,6 @@ import { ReportMaterials } from '../materials/report-materials';
   ],
   // PD-35: TrialGroupService re-seats a trial group when a teacher's supervisor changes.
   // PD-44: the Dashboard's Enrolment section counts through TrialService and NewStudentEnrolmentService.
-  exports: [LessonService, SchedulingService, ReportMaterials, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService, NewStudentEnrolmentService],
+  exports: [LessonService, LessonEvents, SchedulingService, ReportMaterials, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService, NewStudentEnrolmentService],
 })
 export class LessonModule {}

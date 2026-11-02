@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
+import { AppConfigService } from '../../platform/app-config.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { CallStatus } from '../contracts/vocab';
@@ -51,9 +53,13 @@ export type MediaPresenceOutcome =
  *   was decided before a token was ever issued, and this cannot widen it.
  * * It never moves terminal state backwards. A webhook arriving after a call
  *   ended is reconciled into history at most, and cannot revive it.
- * * It does not end calls. An empty media room is not an ending: the lifecycle
- *   ends a call explicitly or through the ring-timeout sweep, and inventing a
- *   third way would be a new lifecycle rule this workstream has no mandate for.
+ * * It does not end calls. An empty media room is not an ending by itself.
+ *   CHATSCHED-013 (owner, 2026-10-31) gave a drop a lifecycle of its own, and
+ *   this is its EDGE, not its end: presence records when an active call fell
+ *   below two people in the room (`interrupted_at`, `call.interrupted`) and
+ *   when a rejoin brought it back (`call.resumed`), and keeps the call's
+ *   connected time (`connected_since` / `connected_seconds`). The ending is
+ *   the worker's sweep, after the grace (CallService.endInterruptedCalls).
  *
  * ORDER-INDEPENDENT BY CONSTRUCTION. Every write uses the event's own timestamp
  * and monotonic arithmetic — earliest join wins, latest leave wins — so
@@ -68,6 +74,7 @@ export class MediaPresenceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    private readonly config: AppConfigService,
   ) {}
 
   /**
@@ -135,9 +142,30 @@ export class MediaPresenceService {
     });
     if (!participant) return 'unknown_participant';
 
-    const terminal = call.status === CallStatus.ENDED;
+    let terminal = call.status === CallStatus.ENDED;
+    const graceSeconds = await this.config.get('call.reconnect_grace_seconds');
 
     const changed = await this.prisma.$transaction(async (tx) => {
+      // CHATSCHED-013: the call row first, locked, and its status read again
+      // under the lock. A rejoin and the grace sweep meeting here settle on one
+      // outcome: the sweep skips a locked row, and a call the sweep ended
+      // first reads `ended` and is not resumed.
+      const [locked] = await tx.$queryRaw<Array<{ status: string }>>`
+        select status from chat.call where id = ${call.id}::uuid for update`;
+      terminal = locked?.status === CallStatus.ENDED;
+
+      // The latest join is kept apart (bookkeeping, never a claim): a departure
+      // older than it is a stale delivery -- they have come back since -- and is
+      // ignored below. Without it, a `left` at t=10 delivered after the rejoin at
+      // t=20 found media_left_at empty, interrupted a live call, and the sweep
+      // ended it (review of #367).
+      if (kind === 'joined') {
+        await tx.$executeRaw`
+          update chat.call_participant
+             set media_last_joined_at = greatest(coalesce(media_last_joined_at, ${at}::timestamptz), ${at}::timestamptz)
+           where id = ${participant.id}::uuid`;
+      }
+
       // The claim and the write are one conditional UPDATE, so two concurrent
       // deliveries of the same event cannot both decide they changed something.
       // `count` is the claim: 0 means another delivery got there first, or the
@@ -160,7 +188,8 @@ export class MediaPresenceService {
               update chat.call_participant
                  set media_left_at = greatest(coalesce(media_left_at, ${at}::timestamptz), ${at}::timestamptz)
                where id = ${participant.id}::uuid
-                 and (media_left_at is null or media_left_at < ${at}::timestamptz)`;
+                 and (media_left_at is null or media_left_at < ${at}::timestamptz)
+                 and (media_last_joined_at is null or media_last_joined_at < ${at}::timestamptz)`;
 
       if (updated === 0) return false;
 
@@ -169,6 +198,8 @@ export class MediaPresenceService {
       // reached a room the call has finished in, and emitting would invite a
       // consumer to act on a finished call.
       if (terminal) return false;
+
+      if (locked?.status === CallStatus.ACTIVE) await this.connection(tx, call, at, kind, graceSeconds);
 
       // The existing outbox, in the SAME transaction as the state change, so a
       // published event and the row it describes cannot disagree.
@@ -194,5 +225,65 @@ export class MediaPresenceService {
     }
 
     return changed ? 'reconciled' : terminal ? 'call_ended' : 'noop';
+  }
+
+  /**
+   * CHATSCHED-013: an ACTIVE call's connection, after a presence change, under
+   * the call's row lock. Connected means two or more participants in the room
+   * who have not left the call.
+   *
+   *   reached two     the connected span opens (`connected_since`); a call
+   *                   that was interrupted is resumed (`call.resumed`)
+   *   fell below two  the open span is closed into `connected_seconds`; a
+   *                   DEPARTURE interrupts the call (`call.interrupted`, with
+   *                   the moment it ends unless somebody comes back)
+   *
+   * A hang-up never reaches here: it ends the call first, and presence on an
+   * ended call is history only. Event times are LiveKit's, as everywhere here.
+   */
+  private async connection(
+    tx: Prisma.TransactionClient,
+    call: { id: string; conversationId: string },
+    at: Date,
+    kind: 'joined' | 'left',
+    graceSeconds: number,
+  ): Promise<void> {
+    const [state] = await tx.$queryRaw<Array<{ present: number; connected: boolean; interrupted: boolean }>>`
+      select (select count(*)::int from chat.call_participant p
+               where p.call_id = c.id and p.left_at is null
+                 and p.media_joined_at is not null and p.media_left_at is null) as present,
+             c.connected_since is not null as connected,
+             c.interrupted_at is not null as interrupted
+        from chat.call c where c.id = ${call.id}::uuid`;
+    if (!state) return;
+
+    if (state.present >= 2) {
+      if (!state.connected) {
+        await tx.$executeRaw`
+          update chat.call set connected_since = ${at}::timestamptz, was_connected = true where id = ${call.id}::uuid`;
+      }
+      if (state.interrupted) {
+        await tx.$executeRaw`update chat.call set interrupted_at = null where id = ${call.id}::uuid`;
+        await this.outbox.enqueue(tx, CommEvent.CALL_RESUMED, { callId: call.id, conversationId: call.conversationId });
+      }
+      return;
+    }
+
+    if (state.connected) {
+      await tx.$executeRaw`
+        update chat.call
+           set connected_seconds = connected_seconds
+                 + greatest(0, round(extract(epoch from (${at}::timestamptz - connected_since))))::int,
+               connected_since = null
+         where id = ${call.id}::uuid`;
+    }
+    if (kind === 'left' && !state.interrupted) {
+      await tx.$executeRaw`update chat.call set interrupted_at = ${at}::timestamptz where id = ${call.id}::uuid`;
+      await this.outbox.enqueue(tx, CommEvent.CALL_INTERRUPTED, {
+        callId: call.id,
+        conversationId: call.conversationId,
+        until: new Date(at.getTime() + graceSeconds * 1000).toISOString(),
+      });
+    }
   }
 }

@@ -1,9 +1,10 @@
 import 'reflect-metadata';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { CommErrorFilter } from './communication/api/http-exception.filter';
+import { DatabaseUnavailableFilter } from './platform/database-unavailable';
 import { applyInfrastructure } from './infra/http/bootstrap';
 import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
@@ -80,7 +81,10 @@ async function bootstrap(): Promise<void> {
   // Registered globally so every route maps a domain error to the same stable
   // {error:{code,message}} body. Registering it per-controller, as the
   // controllers currently do, leaves any future controller inconsistent.
-  app.useGlobalFilters(new CommErrorFilter());
+  // TEACHER-027: a database that could not serve the request in time (pool,
+  // connect, transaction or statement timeout) is a retryable 503 with
+  // Retry-After, not a bare 500. Every other error keeps Nest's default.
+  app.useGlobalFilters(new CommErrorFilter(), new DatabaseUnavailableFilter(app.get(HttpAdapterHost).httpAdapter));
 
   // One log line per request -- method, route TEMPLATE, final status, latency,
   // request id, actor kind -- and 5xx to the error tracker. Middleware, so it

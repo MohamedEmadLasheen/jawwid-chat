@@ -37,7 +37,18 @@ void main() {
         voided: voided,
       );
 
-  FamilyBilling family({bool canRecord = true, List<SalesInstalment>? instalments}) => FamilyBilling(
+  final otherPayments = [
+    SalesFamilyPayment(
+      id: 'pay1', amountMinor: 5000, refundedMinor: 2000, currency: 'AED', paidOn: DateTime(2026, 10, 20),
+      method: BillingMethod.cash, reference: 'R-1', recordedByName: 'خديجة',
+    ),
+    SalesFamilyPayment(
+      id: 'pay3', amountMinor: 1000, currency: 'AED', paidOn: DateTime(2026, 10, 18), method: BillingMethod.bankTransfer,
+      childName: 'سارة', voided: const SalesVoid(reason: 'wrong family', byName: 'حسن'),
+    ),
+  ];
+
+  FamilyBilling family({bool canRecord = true, List<SalesInstalment>? instalments, List<SalesFamilyPayment> payments = const []}) => FamilyBilling(
         familyId: 'f1',
         today: today,
         paymentMethod: BillingMethod.bankTransfer,
@@ -53,6 +64,7 @@ void main() {
               instalment('i3', SalesInstalmentStatus.voided, voided: const SalesVoid(reason: 'duplicate', byName: 'حسن')),
               instalment('i4', SalesInstalmentStatus.upcoming, child: 'حسن', days: 10),
             ],
+        otherPayments: payments,
         totals: const [BillingTotal(currency: 'AED', paidMinor: 125050, outstandingMinor: 250100, overdueMinor: 125050)],
       );
 
@@ -204,6 +216,39 @@ void main() {
       expect(find.byKey(const ValueKey('sales-record-i4')), findsOneWidget);
       expect(find.byKey(const ValueKey('sales-void-i1')), findsOneWidget);
       expect(find.byKey(const ValueKey('sales-void-i3')), findsNothing);
+    });
+
+    testWidgets('ADMIN-012: payments towards no instalment are listed after the instalments -- refunds said, voids struck through', (tester) async {
+      tall(tester);
+      await tester.pumpWidget(app(const FamilyBillingScreen(familyId: 'f1'), _Payments()..billing = family(payments: otherPayments)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Other payments'), findsOneWidget);
+      final lastInstalment = tester.getTopLeft(find.byKey(const ValueKey('sales-instalment-i4'))).dy;
+      expect(tester.getTopLeft(find.byKey(const ValueKey('sales-payment-pay1'))).dy, greaterThan(lastInstalment));
+      expect(within('sales-payment-pay1', find.text(formatMoney(5000, 'AED', 'en'))), findsOneWidget);
+      expect(within('sales-payment-pay1', find.text('Paid Oct 20, 2026 · Cash · recorded by خديجة · R-1')), findsOneWidget);
+      expect(within('sales-payment-pay1', find.text('Refunded ${formatMoney(2000, 'AED', 'en')}')), findsOneWidget);
+      expect(within('sales-payment-pay1', find.text('Family')), findsOneWidget);
+      expect(within('sales-payment-pay3', find.text('سارة')), findsOneWidget);
+      expect(within('sales-payment-pay3', find.text('Voided by حسن: wrong family')), findsOneWidget);
+      final voided = tester.widget<Text>(find.byKey(const ValueKey('sales-payment-amount-pay3')));
+      expect(voided.style?.decoration, TextDecoration.lineThrough);
+      final standing = tester.widget<Text>(find.byKey(const ValueKey('sales-payment-amount-pay1')));
+      expect(standing.style?.decoration, isNot(TextDecoration.lineThrough));
+    });
+
+    testWidgets('ADMIN-012: no other payments, no section; and the same list in Arabic', (tester) async {
+      tall(tester);
+      await tester.pumpWidget(app(const FamilyBillingScreen(familyId: 'f1'), _Payments()..billing = family()));
+      await tester.pumpAndSettle();
+      expect(find.text('Other payments'), findsNothing);
+
+      await tester.pumpWidget(app(const FamilyBillingScreen(familyId: 'f1'), _Payments()..billing = family(payments: otherPayments), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(find.text('دفعات أخرى'), findsOneWidget);
+      expect(within('sales-payment-pay1', find.text('استُرد ${formatMoney(2000, 'AED', 'ar')}')), findsOneWidget);
+      expect(within('sales-payment-pay3', find.text('ألغاه حسن: wrong family')), findsOneWidget);
     });
 
     testWidgets('no write affordance when the server says canRecord: false', (tester) async {

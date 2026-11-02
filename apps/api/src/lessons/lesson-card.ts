@@ -4,6 +4,15 @@ import { surahOf } from '../materials/quran-surahs';
 
 export type CardLanguage = 'ar' | 'en';
 
+/** PD-52: the longest parent's quote a shared-praise card shows (the feedback itself may hold 2000). */
+export const PRAISE_QUOTE_MAX = 500;
+
+/** At most `max` characters (code points, so an emoji is never split), with an ellipsis when cut. */
+function clip(text: string, max: number): string {
+  const chars = Array.from(text.trim());
+  return chars.length <= max ? chars.join('') : `${chars.slice(0, max - 1).join('').trimEnd()}…`;
+}
+
 /**
  * The plain-text body of a card message, in the family's language. A client
  * that knows cards draws `card.payload`; one that does not still shows this,
@@ -132,6 +141,15 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       return ar ? `▶️ عادت حصص ${learner}` : `▶️ ${learner}'s lessons have resumed`;
     case CardKind.TEACHER_BONUS:
       return join(ar ? '🏅 مكافأة' : '🏅 A bonus for you', line(ar ? 'السبب' : 'Reason', p.reason));
+    // PD-52 (plan §11 c): the child's first name and the parent's words -- never the parent's name.
+    // The quote is cut to PRAISE_QUOTE_MAX characters; the payload keeps the whole text.
+    case CardKind.TEACHER_PRAISE_SHARED: {
+      const quote = clip(String(p.body ?? ''), PRAISE_QUOTE_MAX);
+      return join(
+        ar ? `💐 ثناء من ولي أمر ${String(p.childFirstName ?? '')}` : `💐 Praise from ${String(p.childFirstName ?? '')}'s parent`,
+        ar ? `«${quote}»` : `“${quote}”`,
+      );
+    }
     case CardKind.SUBSCRIPTION_GRACE:
       return ar
         ? `⏳ انتهت حصص اشتراك ${learner}. ${graceLeftLabel(Number(p.graceLeft), true)} حتى التجديد.`

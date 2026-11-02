@@ -42,10 +42,21 @@ export function useSetDeductionDefault() {
 export function useRecordReward() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ teacherId, reason, amount }: { teacherId: string; reason: string; amount?: string }) => {
+    mutationFn: async ({
+      teacherId,
+      reason,
+      amount,
+      ...about
+    }: {
+      teacherId: string
+      reason: string
+      amount?: string
+      learnerId?: string
+      prospectId?: string
+    }) => {
       // PD-26: with an amount, the bonus and its amount are one server transaction.
       if (amount) return supervisionHubApi.recordReward(teacherId, { reason, amount })
-      return supervisionTimelineApi.bonus(teacherId, reason)
+      return supervisionTimelineApi.bonus(teacherId, reason, about)
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: supervisionHubKeys.all })

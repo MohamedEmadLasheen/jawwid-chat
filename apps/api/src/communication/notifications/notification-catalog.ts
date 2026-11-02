@@ -37,7 +37,9 @@ export type ActionKind =
   /** PD-35 B5: an escalation case, opened in Escalations (refs.caseId). */
   | 'open_case'
   /** PD-47 PR-4: a task, opened in Tasks (refs.taskId), which re-checks who may see it. */
-  | 'open_task';
+  | 'open_task'
+  /** PD-52: a teacher's records page (refs.page: attendance | grants; refs.teacherId), which re-checks who may see it. */
+  | 'open_teacher_records';
 
 export interface CatalogEntry {
   version: number;
@@ -63,6 +65,8 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
   payment_p7: { version: 1, category: 'payment', inbox: 'inbox.payment_reminder', namedPush: 'payment_reminder_named', action: 'view_payments' },
   new_message: { version: 1, category: 'conversation', inbox: 'inbox.new_messages', action: 'open_conversation' },
   missed_call: { version: 1, category: 'call', inbox: 'inbox.missed_call', action: 'open_calls' },
+  // CHATSCHED-013: a 1:1 call ended because the connection was lost.
+  call_connection_lost: { version: 1, category: 'call', inbox: 'inbox.call_connection_lost', action: 'open_calls' },
   incoming_call: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   group_call_started: { version: 1, category: 'call', inbox: 'inbox.generic', listed: false },
   story_published: { version: 1, category: 'announcement', inbox: 'inbox.story_published', action: 'open_stories' },
@@ -74,6 +78,7 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
 const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   message_published: BY_RULE.new_message,
   call_missed: BY_RULE.missed_call,
+  call_connection_lost: BY_RULE.call_connection_lost,
   call_started: BY_RULE.incoming_call,
   group_call_started: BY_RULE.group_call_started,
   story_published: BY_RULE.story_published,
@@ -92,6 +97,10 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   // the task's title, an amount, a card or a family (a lock screen is not
   // behind sign-in); the task is read in Tasks, which re-checks who may see it.
   task_assigned: { version: 1, category: 'task', inbox: 'inbox.task_assigned', action: 'open_task' },
+  // PD-52 (plan §7): a complaint about a teacher, a parent's praise. Generic
+  // texts: no teacher, child, family or words; the page re-checks who may see it.
+  teacher_complaint_received: { version: 1, category: 'task', inbox: 'inbox.teacher_complaint_received', action: 'open_teacher_records' },
+  teacher_praise_received: { version: 1, category: 'task', inbox: 'inbox.teacher_praise_received', action: 'open_teacher_records' },
   task_returned: { version: 1, category: 'task', inbox: 'inbox.task_returned', action: 'open_task' },
   task_out_of_scope: { version: 1, category: 'task', inbox: 'inbox.task_out_of_scope', action: 'open_task' },
   task_overdue: { version: 1, category: 'task', inbox: 'inbox.task_overdue', action: 'open_task' },

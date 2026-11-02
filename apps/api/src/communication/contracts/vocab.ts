@@ -188,6 +188,19 @@ export const CallOutcome = {
 } as const;
 export type CallOutcome = (typeof CallOutcome)[keyof typeof CallOutcome];
 
+/**
+ * CHATSCHED-013: WHY a call ended, beside its outcome. `connection_lost` is
+ * an unexpected drop nobody came back from within the grace; `hung_up` is a
+ * participant ending it on purpose.
+ */
+export const CallEndReason = {
+  HUNG_UP: 'hung_up',
+  DECLINED: 'declined',
+  RING_TIMEOUT: 'ring_timeout',
+  CONNECTION_LOST: 'connection_lost',
+} as const;
+export type CallEndReason = (typeof CallEndReason)[keyof typeof CallEndReason];
+
 export const NotificationStatus = {
   SCHEDULED: 'scheduled',
   SENT: 'sent',
@@ -335,6 +348,8 @@ export const CardKind = {
   LEARNER_RETURN_SOON: 'learner_return_soon',
   LEARNER_RESUMED: 'learner_resumed',
   TEACHER_BONUS: 'teacher_bonus',
+  /** PD-52 (plan §11 c): a parent's praise, shared by staff in the teacher's supervision chat. */
+  TEACHER_PRAISE_SHARED: 'teacher_praise_shared',
   /** PD-12: posted in the teacher supervision conversation. */
   CERTIFICATE_REQUESTED: 'certificate_requested',
   /** PD-12: posted in the learner's group, carrying the certificate file as its attachment. */

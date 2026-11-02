@@ -619,6 +619,24 @@ abstract class L10n {
   /// **'Reconnecting…'**
   String get callReconnecting;
 
+  /// CHATSCHED-013: in a call, the other side dropped; the call ends after 60 s unless they come back.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost. Waiting for them to reconnect…'**
+  String get callWaitingForReconnect;
+
+  /// CHATSCHED-013: the call ended because a participant dropped and did not reconnect within 60 s.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended: the connection was lost'**
+  String get callEndedConnectionLost;
+
+  /// CHATSCHED-013: in call history and the chat's call card, beside the outcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get callHistoryConnectionLost;
+
   /// No description provided for @callAccept.
   ///
   /// In en, this message translates to:
@@ -5725,6 +5743,18 @@ abstract class L10n {
   /// **'Voided by {name}: {reason}'**
   String salesVoidedBy(String name, String reason);
 
+  /// ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request).
+  ///
+  /// In en, this message translates to:
+  /// **'Other payments'**
+  String get salesOtherPaymentsTitle;
+
+  /// ADMIN-012: how much of a payment was refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String salesRefundedAmount(String amount);
+
   /// A voided instalment whose voiding staff member is not known.
   ///
   /// In en, this message translates to:
@@ -6834,6 +6864,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Praise, a suggestion or a complaint'**
   String get feedbackEntrySubtitle;
+
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Praise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise the teacher'**
+  String get feedbackShortcutPraise;
+
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Complaint.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a problem'**
+  String get feedbackShortcutProblem;
 
   /// PD-32: who the feedback is about.
   ///
