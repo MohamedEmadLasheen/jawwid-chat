@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -77,6 +78,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   double _width = 6;
   StampKind _stamp = StampKind.star;
   bool _gateLogged = false;
+  /// PD-55: the board takes the whole screen; the tools float, and fold away.
+  bool _fullScreen = false;
+  bool _toolsOpen = true;
   late final AppLifecycleListener _lifecycle;
   late final BoardEditorController _held;
 
@@ -98,8 +102,29 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  void _setFullScreen(bool on) {
+    if (_fullScreen == on) return;
+    setState(() {
+      _fullScreen = on;
+      _toolsOpen = true;
+    });
+    _view.fit();
+    _systemBars(hidden: on);
+  }
+
+  /// The status and navigation bars go with the app bar (a phone or tablet; a browser keeps its own).
+  void _systemBars({required bool hidden}) {
+    if (kIsWeb) return;
+    unawaited(
+      hidden
+          ? SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky)
+          : SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values),
+    );
+  }
+
   @override
   void dispose() {
+    if (_fullScreen) _systemBars(hidden: false);
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
     // (its keep-alive) until every page is on the server.
@@ -123,7 +148,13 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       }
     });
     return PopScope(
-      onPopInvokedWithResult: (_, _) {
+      // In full screen, Back leaves full screen first, then the board.
+      canPop: !_fullScreen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _setFullScreen(false);
+          return;
+        }
         _canvas.currentState?.finishTextEdit();
         unawaited(_controller.persistNow());
         unawaited(_controller.flush());
@@ -195,6 +226,51 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       images: images.lookup,
       imagesVersion: imagesVersion,
     );
+    Widget toolPanel(bool vertical) => _ToolPanel(
+      vertical: vertical,
+      tool: _tool,
+      color: _color,
+      width: _width,
+      stamp: _stamp,
+      page: page,
+      onTool: (t) => setState(() {
+        _tool = t;
+        _width = _defaultWidth(t);
+      }),
+      onColor: (c) => setState(() => _setColor(c)),
+      onWidth: (w) => setState(() => _width = w),
+      onStamp: (k) => setState(() {
+        _stamp = k;
+        _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
+      }),
+      onDelete: _deleteSelection,
+      onVerse: () => _insertVerse(context),
+      onRewards: () => _openRewards(context),
+      onImage: s.imagesSupported ? () => _insertImage(context) : null,
+      onLayout: _controller.setLayout,
+      onBackground: _controller.setBackground,
+    );
+    final banners = <Widget>[
+      if (s.save == SaveStatus.conflict) _ConflictBanner(onReload: _controller.reload, onCopy: () => _saveAsCopy(context, s)),
+      if (s.save == SaveStatus.failed) _FailedBanner(code: s.failureCode),
+      if (s.draftStale)
+        MaterialBanner(
+          leading: const Icon(Icons.history),
+          content: Text(l10n.boardDraftStale),
+          actions: [
+            TextButton(onPressed: _controller.discardStaleDraft, child: Text(l10n.boardDraftStaleDiscard)),
+            FilledButton(onPressed: _controller.keepStaleDraft, child: Text(l10n.boardDraftStaleKeep)),
+          ],
+        ),
+      if (s.draftNotKept && s.save != SaveStatus.saved)
+        MaterialBanner(
+          leading: const Icon(Icons.sd_card_alert_outlined),
+          content: Text(l10n.boardDraftNotKept),
+          actions: const [SizedBox.shrink()],
+        ),
+      if (s.canEdit && blockedByDevice)
+        MaterialBanner(content: Text(l10n.boardEditNeedsLargerScreen), actions: const [SizedBox.shrink()]),
+    ];
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): _controller.undo,
@@ -215,7 +291,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
+        child: _fullScreen
+            ? _fullScreenEditor(context, s, editable: editable, canvas: canvas, banners: banners, tools: toolPanel)
+            : Scaffold(
           appBar: AppBar(
             title: InkWell(
               onTap: editable ? () => _rename(context, s) : null,
@@ -236,55 +314,12 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
           ),
           body: Column(
             children: [
-              if (s.save == SaveStatus.conflict) _ConflictBanner(onReload: _controller.reload, onCopy: () => _saveAsCopy(context, s)),
-              if (s.save == SaveStatus.failed) _FailedBanner(code: s.failureCode),
-              if (s.draftStale)
-                MaterialBanner(
-                  leading: const Icon(Icons.history),
-                  content: Text(l10n.boardDraftStale),
-                  actions: [
-                    TextButton(onPressed: _controller.discardStaleDraft, child: Text(l10n.boardDraftStaleDiscard)),
-                    FilledButton(onPressed: _controller.keepStaleDraft, child: Text(l10n.boardDraftStaleKeep)),
-                  ],
-                ),
-              if (s.draftNotKept && s.save != SaveStatus.saved)
-                MaterialBanner(
-                  leading: const Icon(Icons.sd_card_alert_outlined),
-                  content: Text(l10n.boardDraftNotKept),
-                  actions: const [SizedBox.shrink()],
-                ),
-              if (s.canEdit && blockedByDevice)
-                MaterialBanner(content: Text(l10n.boardEditNeedsLargerScreen), actions: const [SizedBox.shrink()]),
+              ...banners,
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, c) {
                     final wide = c.maxWidth >= 700;
-                    final tools = editable
-                        ? _ToolPanel(
-                            vertical: wide,
-                            tool: _tool,
-                            color: _color,
-                            width: _width,
-                            stamp: _stamp,
-                            page: page,
-                            onTool: (t) => setState(() {
-                              _tool = t;
-                              _width = _defaultWidth(t);
-                            }),
-                            onColor: (c) => setState(() => _setColor(c)),
-                            onWidth: (w) => setState(() => _width = w),
-                            onStamp: (k) => setState(() {
-                              _stamp = k;
-                              _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
-                            }),
-                            onDelete: _deleteSelection,
-                            onVerse: () => _insertVerse(context),
-                            onRewards: () => _openRewards(context),
-                            onImage: s.imagesSupported ? () => _insertImage(context) : null,
-                            onLayout: _controller.setLayout,
-                            onBackground: _controller.setBackground,
-                          )
-                        : null;
+                    final tools = editable ? toolPanel(wide) : null;
                     final view = Stack(
                       children: [
                         Positioned.fill(
@@ -293,7 +328,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                         PositionedDirectional(
                           end: Spacing.spacing4,
                           bottom: Spacing.spacing4,
-                          child: _ZoomControls(view: _view),
+                          child: _ZoomControls(view: _view, onFullScreen: () => _setFullScreen(true)),
                         ),
                       ],
                     );
@@ -325,6 +360,134 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// PD-55: the board on the whole screen. What the app bar and the page strip
+  /// held floats over the page: leave full screen, undo and redo, the save
+  /// state, and the page. The tools float at the bottom (a phone) or along the
+  /// start edge (wider), and fold down to one button.
+  Widget _fullScreenEditor(
+    BuildContext context,
+    EditorState s, {
+    required bool editable,
+    required Widget canvas,
+    required List<Widget> banners,
+    required Widget Function(bool vertical) tools,
+  }) {
+    final l10n = L10n.of(context);
+    final tokens = JawwidTokens.of(context);
+    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final last = s.pages.length - 1;
+    final toolsOpen = editable && _toolsOpen;
+    final hideTools = IconButton(
+      key: const ValueKey('board-hide-tools'),
+      tooltip: l10n.boardHideTools,
+      onPressed: () => setState(() => _toolsOpen = false),
+      icon: const Icon(Icons.expand_more),
+    );
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: ColoredBox(color: tokens.colorSurfaceMuted, child: canvas)),
+          SafeArea(
+            child: Stack(
+              children: [
+                PositionedDirectional(
+                  top: Spacing.spacing2,
+                  start: Spacing.spacing2,
+                  end: Spacing.spacing2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: Spacing.spacing2,
+                        runSpacing: Spacing.spacing2,
+                        children: [
+                          _Floating(
+                            children: [
+                              IconButton(
+                                key: const ValueKey('board-exit-full-screen'),
+                                tooltip: l10n.boardExitFullScreen,
+                                onPressed: () => _setFullScreen(false),
+                                icon: const Icon(Icons.fullscreen_exit),
+                              ),
+                              if (editable) ...[
+                                IconButton(tooltip: l10n.boardUndo, onPressed: s.canUndo ? _controller.undo : null, icon: const Icon(Icons.undo)),
+                                IconButton(tooltip: l10n.boardRedo, onPressed: s.canRedo ? _controller.redo : null, icon: const Icon(Icons.redo)),
+                              ],
+                            ],
+                          ),
+                          _Floating(
+                            children: [
+                              _SaveChip(status: s.save, readOnly: !s.canEdit),
+                              IconButton(
+                                tooltip: l10n.boardPreviousPage,
+                                onPressed: s.current > 0 ? () => _controller.goTo(s.current - 1) : null,
+                                icon: const Icon(Icons.navigate_before),
+                              ),
+                              Semantics(
+                                label: l10n.boardPageOf('${s.current + 1}', '${s.pages.length}'),
+                                excludeSemantics: true,
+                                child: Text(
+                                  key: const ValueKey('board-page-indicator'),
+                                  '${s.current + 1} / ${s.pages.length}',
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: l10n.boardNextPage,
+                                onPressed: s.current < last ? () => _controller.goTo(s.current + 1) : null,
+                                icon: const Icon(Icons.navigate_next),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      ...banners,
+                    ],
+                  ),
+                ),
+                if (toolsOpen && wide)
+                  PositionedDirectional(
+                    start: Spacing.spacing2,
+                    top: 72,
+                    bottom: Spacing.spacing2,
+                    child: _Floating(vertical: true, children: [Flexible(child: tools(true)), hideTools]),
+                  ),
+                if (toolsOpen && !wide)
+                  PositionedDirectional(
+                    start: Spacing.spacing2,
+                    end: Spacing.spacing2,
+                    bottom: Spacing.spacing2,
+                    child: _Floating(children: [Expanded(child: tools(false)), hideTools]),
+                  ),
+                if (editable && !toolsOpen)
+                  PositionedDirectional(
+                    start: Spacing.spacing3,
+                    bottom: Spacing.spacing3,
+                    child: _Floating(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('board-show-tools'),
+                          tooltip: l10n.boardShowTools,
+                          onPressed: () => setState(() => _toolsOpen = true),
+                          icon: const Icon(Icons.brush_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                PositionedDirectional(
+                  end: Spacing.spacing3,
+                  bottom: toolsOpen && !wide ? 56 + Spacing.spacing5 : Spacing.spacing3,
+                  child: _ZoomControls(view: _view),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -399,7 +562,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     final picked = await pickVerse(context);
     final s = ref.read(boardEditorProvider(widget.boardId)).value;
     if (picked == null || s == null || !mounted) return;
-    const width = 1400.0, size = 64.0;
+    final page = s.page.size;
+    // As wide as most of the page: 1400 on a wide page, the page less its margins on a tall one.
+    final width = math.min(1400.0, page.width - 120), size = 64.0;
     final height = verseHeight(picked.text, size, width);
     final verse = VerseElement(
       id: 'v${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}',
@@ -409,8 +574,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       datasetId: picked.text.datasetId,
       rangeSha256: picked.text.rangeSha256,
       rect: Rect.fromLTWH(
-        (kBoardPageSize.width - width) / 2,
-        ((kBoardPageSize.height - height) / 2).clamp(24, double.infinity),
+        (page.width - width) / 2,
+        ((page.height - height) / 2).clamp(24, double.infinity),
         width,
         height,
       ),
@@ -438,8 +603,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     try {
       final picked = await ref.read(mediaPickerProvider).pickImage();
       if (picked == null || !mounted) return;
-      final pageId = ref.read(boardEditorProvider(widget.boardId)).value?.page.id;
-      if (pageId == null) return;
+      final startedOn = ref.read(boardEditorProvider(widget.boardId)).value?.page;
+      if (startedOn == null) return;
+      final pageId = startedOn.id;
       say(l10n.boardImageAdding);
       final bytes = await ref.read(boardImageBytesProvider)(picked.filePath);
       if (!mounted) return;
@@ -450,7 +616,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       ref.read(boardImagesProvider(widget.boardId).notifier).remember(asset, prepared.image);
       final placed = prepared;
       prepared = null; // the board's images hold it now
-      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height));
+      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height, page: startedOn.size));
       messenger.hideCurrentSnackBar();
     } on MediaPickException catch (e) {
       say(switch (e.reason) {
@@ -946,10 +1112,33 @@ String _backgroundName(L10n l10n, PageBackground b) => switch (b) {
   PageBackground.dark => l10n.boardBackgroundDark,
 };
 
+/// PD-55: a group of controls floating over the full-screen board.
+class _Floating extends StatelessWidget {
+  const _Floating({required this.children, this.vertical = false});
+
+  final List<Widget> children;
+  final bool vertical;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    elevation: 3,
+    borderRadius: const BorderRadius.all(Radii.radiusLg),
+    clipBehavior: Clip.antiAlias,
+    color: JawwidTokens.of(context).colorSurfaceRaised,
+    child: Padding(
+      padding: const EdgeInsets.all(Spacing.spacing1),
+      child: vertical ? Column(mainAxisSize: MainAxisSize.min, children: children) : Row(mainAxisSize: MainAxisSize.min, children: children),
+    ),
+  );
+}
+
+
 class _ZoomControls extends StatelessWidget {
-  const _ZoomControls({required this.view});
+  const _ZoomControls({required this.view, this.onFullScreen});
 
   final BoardViewController view;
+  /// PD-55: where the board can go full screen (null once it is).
+  final VoidCallback? onFullScreen;
 
   @override
   Widget build(BuildContext context) {
@@ -964,6 +1153,7 @@ class _ZoomControls extends StatelessWidget {
           IconButton(tooltip: l10n.boardZoomOut, onPressed: () => view.zoomBy(1 / 1.25), icon: const Icon(Icons.zoom_out)),
           IconButton(tooltip: l10n.boardZoomFit, onPressed: view.fit, icon: const Icon(Icons.fit_screen_outlined)),
           IconButton(tooltip: l10n.boardZoomIn, onPressed: () => view.zoomBy(1.25), icon: const Icon(Icons.zoom_in)),
+          if (onFullScreen != null) IconButton(tooltip: l10n.boardFullScreen, onPressed: onFullScreen, icon: const Icon(Icons.fullscreen)),
         ],
       ),
     );
@@ -1025,7 +1215,8 @@ class _PageBar extends ConsumerWidget {
                       child: Directionality(
                         textDirection: TextDirection.ltr,
                         child: CustomPaint(
-                          size: const Size(128, 72),
+                          // Each page in its own frame: 16:9, or 9:16 when tall (PD-55).
+                          size: Size(72 * state.pages[i].size.width / state.pages[i].size.height, 72),
                           painter: BoardPagePainter(
                             page: state.pages[i],
                             verses: verses,
@@ -1043,10 +1234,22 @@ class _PageBar extends ConsumerWidget {
             ),
             Text(l10n.boardPageOf('${state.current + 1}', '${state.pages.length}'), style: Theme.of(context).textTheme.labelMedium),
             if (editable) ...[
-              IconButton(
+              // PD-55: a new page is wide or tall; its shape is for good.
+              PopupMenuButton<PageShape>(
                 tooltip: l10n.boardAddPage,
-                onPressed: state.pages.length >= 50 ? null : c.addPage,
+                enabled: state.pages.length < 50,
                 icon: const Icon(Icons.note_add_outlined),
+                onSelected: (shape) => c.addPage(shape: shape),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: PageShape.wide,
+                    child: ListTile(leading: const Icon(Icons.crop_landscape), title: Text(l10n.boardWidePage)),
+                  ),
+                  PopupMenuItem(
+                    value: PageShape.tall,
+                    child: ListTile(leading: const Icon(Icons.crop_portrait), title: Text(l10n.boardTallPage)),
+                  ),
+                ],
               ),
               PopupMenuButton<String>(
                 tooltip: l10n.boardMore,

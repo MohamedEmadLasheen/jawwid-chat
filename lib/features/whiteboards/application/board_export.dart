@@ -50,13 +50,13 @@ class PageInk {
   final String Function(BoardElement element)? label;
 }
 
-/// A page as a PNG, 1920 x 1080.
+/// A page as a PNG at its own size: 1920 x 1080, or 1080 x 1920 when tall (PD-55).
 Future<Uint8List> renderPagePng(BoardPage page, PageInk ink) async {
-  final w = kBoardPageSize.width.toInt(), h = kBoardPageSize.height.toInt();
+  final w = page.size.width.toInt(), h = page.size.height.toInt();
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
   BoardPagePainter(page: page, verses: ink.verses, images: ink.images, placeholderLabel: ink.label, versesVersion: Object(), imagesVersion: Object())
-      .paint(canvas, kBoardPageSize);
+      .paint(canvas, page.size);
   final image = await recorder.endRecording().toImage(w, h);
   try {
     return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();

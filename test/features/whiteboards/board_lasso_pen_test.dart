@@ -40,11 +40,18 @@ class _Harness {
   final key = GlobalKey<BoardCanvasState>();
   BoardCanvasState get state => key.currentState!;
   late BoardPage page;
+  late StateSetter _set;
 
-  Future<void> pump(WidgetTester tester, {List<BoardElement> elements = const [], BoardTool tool = BoardTool.select, Size size = const Size(1280, 800)}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    List<BoardElement> elements = const [],
+    BoardTool tool = BoardTool.select,
+    Size size = const Size(1280, 800),
+    PageShape shape = PageShape.wide,
+  }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    page = BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: elements);
+    page = BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, shape: shape, elements: elements);
     await tester.pumpWidget(
       MaterialApp(
         theme: JawwidTheme.light(isArabic: false),
@@ -57,7 +64,10 @@ class _Harness {
         supportedLocales: const [Locale('en'), Locale('ar')],
         home: StatefulBuilder(
           builder: (context, setState) => Scaffold(
-            body: BoardCanvas(
+            body: Builder(
+              builder: (context) {
+                _set = setState;
+                return BoardCanvas(
               key: key,
               page: page,
               tool: tool,
@@ -67,11 +77,19 @@ class _Harness {
                 commits.add(elements);
                 setState(() => page = page.copyWith(elements: elements));
               },
+                );
+              },
             ),
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
+  }
+
+  /// Another page in the same canvas, as going to another page does.
+  Future<void> show(WidgetTester tester, BoardPage next) async {
+    _set(() => page = next);
     await tester.pumpAndSettle();
   }
 
@@ -158,6 +176,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.commits.single, isEmpty);
       expect(find.byKey(const ValueKey('board-sel-delete')), findsNothing, reason: 'nothing selected, no bar');
+    });
+
+    testWidgets('PD-55: copied on a tall page, pasted on a wide one, it lands on the page -- not below it', (tester) async {
+      final h = _Harness();
+      await h.pump(tester, shape: PageShape.tall, size: const Size(800, 1280), elements: [_stamp('a', const Offset(540, 1700))]);
+      await h.drag(tester, _loop(const Offset(540, 1700), 160));
+      h.state.copySelection();
+      await h.show(
+        tester,
+        const BoardPage(id: 'p2', position: 1, layout: PageLayout.plain, background: PageBackground.white, elements: []),
+      );
+      h.state.paste();
+      await tester.pumpAndSettle();
+      final copy = h.commits.last.single as StampElement;
+      expect(copy.rect.bottom, 1080, reason: 'moved up just enough to be on the wide page');
+      expect(copy.rect.center.dx, 564, reason: 'across, it was already on the page: only the 24-unit step');
+    });
+
+    testWidgets('PD-55: a tall page is drawn on to its foot -- far below where a wide page ends', (tester) async {
+      final h = _Harness();
+      await h.pump(tester, shape: PageShape.tall, size: const Size(390, 844), tool: BoardTool.pen);
+      await h.drag(tester, [const Offset(300, 1700), const Offset(500, 1800), const Offset(700, 1900), const Offset(900, 2100)]);
+      final ink = h.commits.single.single as InkElement;
+      final ys = ink.points.map((p) => p.y).toList();
+      expect(ys.reduce(math.max), 1920, reason: 'held to the tall page: 1920 units tall');
+      expect(ys.reduce(math.min), greaterThan(1080));
+      expect(ink.points.map((p) => p.x).reduce(math.max), lessThanOrEqualTo(1080), reason: 'and 1080 wide');
     });
 
     testWidgets('duplicate is copy and paste in one undo step', (tester) async {

@@ -10,10 +10,12 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-567 routes.
+571 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
+| GET | `/api/v1/account-deletion` | public | `account-deletion/account-deletion.controller.ts#AccountDeletionPageController.page` |
+| POST | `/api/v1/account-deletion` | public | `account-deletion/account-deletion.controller.ts#AccountDeletionPageController.submit` |
 | GET | `/api/v1/admin/access-roles` | staff_accounts.view | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.roles` |
 | POST | `/api/v1/admin/access-roles` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.define` |
 | POST | `/api/v1/admin/access-roles/:roleId` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.update` |
@@ -297,6 +299,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/materials/quran/surahs` | self-service | `materials/materials.controller.ts#MaterialsController.surahs` |
 | POST | `/api/v1/materials/recitations/:surah/open` | materials.view | `materials/materials.controller.ts#MaterialsController.openRecitation` |
 | GET | `/api/v1/me` | self-service | `platform/auth/auth.controller.ts#MeController.me` |
+| POST | `/api/v1/me/account/delete` | self-service | `account-deletion/account-deletion.controller.ts#AccountDeletionController.delete` |
 | DELETE | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.remove` |
 | POST | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.commit` |
 | POST | `/api/v1/me/avatar/upload` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.upload` |
@@ -487,6 +490,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/teacher-files/:teacherId/finance/terms` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.setTerms` |
 | GET | `/api/v1/teacher-files/:teacherId/leave` | teacher_supervision.view | teacher_attendance.view | `leave/leave.controller.ts#LeaveController.teacherLeave` |
 | POST | `/api/v1/teacher-files/:teacherId/leave-allowance` | leave.allowance | `leave/leave.controller.ts#LeaveController.setAllowance` |
+| GET | `/api/v1/teacher-files/:teacherId/lesson-reports` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.lessonReports` |
 | POST | `/api/v1/teacher-files/:teacherId/personal` | teacher_files.edit | `teacher-file/teacher-file.controller.ts#TeacherFileController.updatePersonal` |
 | POST | `/api/v1/teacher-files/:teacherId/rewards` | teacher_files.supervise | `teacher-file/teacher-file.controller.ts#TeacherFileController.recordReward` |
 | GET | `/api/v1/teacher-files/complaints` | teacher_supervision.view | teacher_attendance.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.complaints` |

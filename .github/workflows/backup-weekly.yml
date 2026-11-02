@@ -1,0 +1,91 @@
+name: Weekly database backup (encrypted, off-site)
+
+# Store readiness: a backup that does not wait for a deploy.
+#
+# The managed database's daily backups and 7-day point-in-time recovery are the
+# first line (docs/infrastructure/backup-recovery.md §2). The pre-deploy dump is
+# the second, but it exists only when someone deploys and lives 30 days as a
+# GitHub artifact. This is the third: every Sunday, whether or not anyone
+# deployed, an ENCRYPTED logical dump of the chat schema goes to the Spaces
+# bucket and is kept 8 weeks.
+#
+# ITS OWN GitHub Environment, `backup` (review of #414), holding only what a
+# backup needs, so production's required reviewers do not hold up every Sunday
+# and no deploy credential is in reach:
+#   secrets    BACKUP_DATABASE_URL       a READ-ONLY role (backup-recovery.md §3b)
+#              BACKUP_ENCRYPTION_PASSPHRASE
+#              BACKUP_SPACES_ACCESS_KEY / BACKUP_SPACES_SECRET_KEY
+#                                        a Spaces key limited to the backup bucket,
+#                                        never the application's key
+#   variables  BACKUP_BUCKET, BACKUP_SPACES_ENDPOINT, BACKUP_SPACES_REGION
+# Configure the environment with no required reviewers and deployments limited
+# to `main`. Nothing is in the repository. The passphrase must also be held
+# outside GitHub (secrets here are write-only): an archive nobody can decrypt is
+# not a backup (§3).
+
+on:
+  schedule:
+    - cron: '17 2 * * 0' # Sundays 02:17 UTC: quiet hours in Cairo, off the top of the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-weekly
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted dump of chat -> Spaces, keep 8 weeks
+    runs-on: ubuntu-latest
+    environment: backup
+    # Only main's copy of this workflow may reach the backup secrets (the
+    # environment's branch rule says the same; this is the second lock).
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The backup credentials are present
+        # Fails loudly, never a silent no-op: a scheduled job that skips is a
+        # backup nobody knows is missing.
+        env:
+          HAS_DB: ${{ secrets.BACKUP_DATABASE_URL != '' }}
+          HAS_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE != '' }}
+          HAS_KEY: ${{ secrets.BACKUP_SPACES_ACCESS_KEY != '' && secrets.BACKUP_SPACES_SECRET_KEY != '' }}
+          HAS_BUCKET: ${{ vars.BACKUP_BUCKET != '' && vars.BACKUP_SPACES_ENDPOINT != '' && vars.BACKUP_SPACES_REGION != '' }}
+        run: |
+          rc=0
+          [ "$HAS_DB" = "true" ] || { echo "::error title=Backup::BACKUP_DATABASE_URL (a read-only role) is not set in the backup GitHub Environment"; rc=1; }
+          [ "$HAS_PASSPHRASE" = "true" ] || { echo "::error title=Backup::BACKUP_ENCRYPTION_PASSPHRASE is not set in the backup GitHub Environment"; rc=1; }
+          [ "$HAS_KEY" = "true" ] || { echo "::error title=Backup::BACKUP_SPACES_ACCESS_KEY / BACKUP_SPACES_SECRET_KEY (a key limited to the backup bucket) are not set"; rc=1; }
+          [ "$HAS_BUCKET" = "true" ] || { echo "::error title=Backup::BACKUP_BUCKET, BACKUP_SPACES_ENDPOINT and BACKUP_SPACES_REGION must all be set"; rc=1; }
+          exit $rc
+
+      - name: Back up the database, encrypted in the pipe
+        # backup-db.sh refuses without the key for APP_ENV=production, before
+        # pg_dump runs; no plaintext archive ever exists on the runner.
+        env:
+          APP_ENV: production
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          # The runner's pg_dump is 16; pg_dump refuses a newer server (17).
+          PG_IMAGE: postgres:17-alpine
+        run: scripts/infra/backup-db.sh --out ./backups --schema chat
+
+      - name: Store it in Spaces, read each object back, and keep the last 8 weeks
+        env:
+          BACKUP_SPACES_ENDPOINT: ${{ vars.BACKUP_SPACES_ENDPOINT }}
+          BACKUP_SPACES_REGION: ${{ vars.BACKUP_SPACES_REGION }}
+          BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET }}
+          BACKUP_SPACES_ACCESS_KEY: ${{ secrets.BACKUP_SPACES_ACCESS_KEY }}
+          BACKUP_SPACES_SECRET_KEY: ${{ secrets.BACKUP_SPACES_SECRET_KEY }}
+          BACKUP_RETENTION_DAYS: '56'
+        run: |
+          scripts/infra/backup-offsite.sh upload ./backups
+          scripts/infra/backup-offsite.sh prune
+
+      - name: Remove the local copy
+        if: always()
+        run: rm -rf ./backups

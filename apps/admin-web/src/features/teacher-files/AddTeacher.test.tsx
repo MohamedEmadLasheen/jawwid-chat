@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
@@ -215,5 +215,41 @@ describe('Add teacher', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
     expect(within(dialog).getAllByText('Required.')).toHaveLength(2)
     expect(calls('POST', /\/teachers$/)).toHaveLength(0)
+  })
+
+  // TEACHER-002 (QA T-ONB-06): a double click sent the add twice before the button could disable.
+  it('a double click sends ONE add: both clicks land before React re-renders the button', async () => {
+    listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
+    on('POST', /\/teachers$/, () => json(ADDED, 201))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
+    await user.click(await screen.findByRole('button', { name: 'Add teacher' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add teacher' })
+    await user.type(within(dialog).getByLabelText('Full name'), 'New Teacher')
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'new.teacher@example.test')
+    const add = within(dialog).getByRole('button', { name: 'Add' })
+    act(() => {
+      add.click()
+      add.click()
+    })
+    expect(await screen.findByRole('dialog', { name: 'First sign-in code' })).toHaveTextContent('482913')
+    expect(calls('POST', /\/teachers$/)).toHaveLength(1)
+  })
+
+  it('a replayed add (the code was given the first time) says so, and shows no code', async () => {
+    listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
+    on('POST', /\/teachers$/, () =>
+      json({ ...ADDED, firstLogin: { expiresAt: '2026-10-31T09:00:00Z', emailed: false, alreadyIssued: true } }, 201),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
+    await user.click(await screen.findByRole('button', { name: 'Add teacher' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add teacher' })
+    await user.type(within(dialog).getByLabelText('Full name'), 'New Teacher')
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'new.teacher@example.test')
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    const shown = await screen.findByRole('dialog', { name: 'First sign-in code' })
+    expect(shown).toHaveTextContent('This teacher was already added, and their first sign-in code was given then')
+    expect(shown).toHaveTextContent('send a new code from the Teacher File')
   })
 })

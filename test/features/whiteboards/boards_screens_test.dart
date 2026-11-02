@@ -20,12 +20,15 @@ import 'package:jawwid_chat/features/whiteboards/domain/board_elements.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/board_page.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/board_canvas.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/board_editor_screen.dart';
+import 'package:jawwid_chat/features/whiteboards/presentation/board_painter.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/boards_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
 class _Boards implements WhiteboardsRepository {
   int revision = 1;
   final saved = <BoardPage>[];
+  /// The board's pages when opened; one blank page unless a test says otherwise.
+  List<BoardPage> pages = const [BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])];
 
   BoardSummary summary(String id, String title, {BoardState state = BoardState.active}) => BoardSummary(
     id: id,
@@ -48,13 +51,33 @@ class _Boards implements WhiteboardsRepository {
   Future<BoardDetail> open(String boardId) async => BoardDetail(
     summary: summary(boardId, 'Al-Fatihah'),
     canEdit: true,
-    pages: const [BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])],
+    pages: pages,
   );
 
   @override
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async {
     saved.add(page);
     return PageSaved(revision: ++this.revision, updatedAt: DateTime(2026));
+  }
+
+  /// PD-55: the shape each new board and each added page was asked for.
+  final created = <PageShape>[];
+  final added = <PageShape?>[];
+
+  @override
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async {
+    created.add(shape);
+    return open('b9');
+  }
+
+  @override
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async {
+    added.add(shape);
+    pages = [
+      ...pages,
+      BoardPage(id: 'p${pages.length + 1}', position: pages.length, layout: PageLayout.plain, background: PageBackground.white, shape: shape ?? PageShape.wide, elements: const []),
+    ];
+    return open(boardId);
   }
 
   @override
@@ -315,5 +338,179 @@ void main() {
     final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
     expect(find.text(l10n.boardEditNeedsLargerScreen), findsNothing);
     expect(find.byTooltip(l10n.boardToolPen), findsOneWidget);
+  });
+
+  group('PD-55: full screen', () {
+    late List<MethodCall> system;
+
+    setUp(() {
+      system = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        system.add(call);
+        return null;
+      });
+    });
+    tearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+    // Immersive is setEnabledSystemUIMode; manual mode with every overlay (the bars back) is setEnabledSystemUIOverlays.
+    Iterable<MethodCall> uiModes() =>
+        system.where((c) => c.method == 'SystemChrome.setEnabledSystemUIMode' || c.method == 'SystemChrome.setEnabledSystemUIOverlays');
+
+    testWidgets('on a phone: the page gets the whole screen, the tools float and fold away, and drawing still works', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
+      final before = tester.getSize(find.byType(BoardCanvas));
+
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      final after = tester.getSize(find.byType(BoardCanvas));
+      expect(find.byType(AppBar), findsNothing);
+      expect(after.width, 390);
+      expect(after.height, 844, reason: 'the canvas fills the screen; the controls float over it');
+      expect(after.height, greaterThan(before.height + 200), reason: 'the app bar, page strip and docked tools are gone');
+      expect(uiModes().single.method, 'SystemChrome.setEnabledSystemUIMode');
+      expect(uiModes().single.arguments, 'SystemUiMode.immersiveSticky');
+      expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == l10n.boardPageOf('1', '1')), findsOneWidget);
+
+      // The tools float -- and fold down to one button, and come back.
+      expect(find.byTooltip(l10n.boardToolPen), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('board-hide-tools')));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip(l10n.boardToolPen), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('board-show-tools')));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip(l10n.boardToolPen), findsOneWidget);
+
+      // A stroke drawn in full screen is a stroke on the page.
+      await tester.tap(find.byTooltip(l10n.boardToolPen));
+      await tester.pump();
+      final centre = tester.getCenter(find.byType(BoardCanvas));
+      final gesture = await tester.startGesture(centre, kind: PointerDeviceKind.mouse);
+      for (var i = 1; i <= 10; i++) {
+        await gesture.moveTo(centre + Offset(i * 6.0, i * 2.0));
+      }
+      await gesture.up();
+      await tester.pump();
+      expect(container.read(boardEditorProvider('b1')).value!.page.elements.single, isA<InkElement>());
+
+      await tester.tap(find.byKey(const ValueKey('board-exit-full-screen')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppBar), findsOneWidget);
+      expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
+      expect(uiModes().last.arguments, hasLength(SystemUiOverlay.values.length));
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Back leaves full screen first, then the board -- and the system bars come back', (tester) async {
+      final l10n = await pump(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        size: const Size(844, 390),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppBar), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardEditorScreen), findsOneWidget, reason: 'the first Back only leaves full screen');
+      expect(find.byType(AppBar), findsOneWidget);
+      expect(uiModes().map((c) => c.method), ['SystemChrome.setEnabledSystemUIMode', 'SystemChrome.setEnabledSystemUIOverlays'], reason: '$system');
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardEditorScreen), findsNothing);
+    });
+
+    testWidgets('on a wide screen the tools float along the side; the page bar is replaced by previous / next', (tester) async {
+      repo.pages = const [
+        BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: []),
+        BoardPage(id: 'p2', position: 1, layout: PageLayout.grid, background: PageBackground.white, elements: []),
+      ];
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      // Along the start edge: the pen sits left of the page's centre (English).
+      expect(tester.getCenter(find.byTooltip(l10n.boardToolPen)).dx, lessThan(100));
+      expect(find.text('1 / 2'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == l10n.boardPageOf('1', '2')), findsOneWidget);
+
+      await tester.tap(find.byTooltip(l10n.boardNextPage));
+      await tester.pumpAndSettle();
+      expect(find.text('2 / 2'), findsOneWidget);
+      expect(container.read(boardEditorProvider('b1')).value!.page.id, 'p2');
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.navigate_next)).onPressed, isNull);
+
+      await tester.tap(find.byTooltip(l10n.boardPreviousPage));
+      await tester.pumpAndSettle();
+      expect(container.read(boardEditorProvider('b1')).value!.page.id, 'p1');
+    });
+
+    testWidgets('Arabic: the floating tools sit on the right, the start edge', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), locale: const Locale('ar'));
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(find.byTooltip(l10n.boardToolPen)).dx, greaterThan(1280 - 100));
+    });
+  });
+
+  group('PD-55 (1b): tall pages', () {
+    testWidgets('Add page offers a wide or a tall page, and the strip shows each in its own frame', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      await tester.tap(find.byTooltip(l10n.boardAddPage));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardWidePage), findsOneWidget);
+      await tester.tap(find.text(l10n.boardTallPage));
+      await tester.pumpAndSettle();
+      expect(repo.added, [PageShape.tall]);
+      final thumbs = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is BoardPagePainter && w.size.height == 72));
+      expect(thumbs.map((t) => t.size), [const Size(128, 72), const Size(40.5, 72)]);
+    });
+
+    testWidgets('a tall page fills a phone held upright, and saves as tall', (tester) async {
+      repo.pages = const [
+        BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, shape: PageShape.tall, elements: []),
+      ];
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      // Drawn near the foot of the screen: on a tall page that is far below where a wide one ends.
+      final canvas = tester.getRect(find.byType(BoardCanvas));
+      final from = Offset(canvas.center.dx, canvas.bottom - 200);
+      final gesture = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
+      for (var i = 1; i <= 8; i++) {
+        await gesture.moveTo(from + Offset(i * 6.0, i * 2.0));
+      }
+      await gesture.up();
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      final saved = repo.saved.last;
+      expect(saved.shape, PageShape.tall);
+      expect((saved.elements.single as InkElement).points.first.y, greaterThan(1400));
+    });
+
+    testWidgets('a new board on a phone held upright starts tall; on a wider screen, wide', (tester) async {
+      Future<void> create(Size size) async {
+        final l10n = await pump(tester, const BoardsScreen(), size: size);
+        await tester.tap(find.text(l10n.boardsNew));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(l10n.boardsCreate));
+        await tester.pumpAndSettle();
+      }
+
+      await create(const Size(390, 844));
+      await create(const Size(1280, 800));
+      await create(const Size(844, 390));
+      expect(repo.created, [PageShape.tall, PageShape.wide, PageShape.wide]);
+    });
   });
 }
