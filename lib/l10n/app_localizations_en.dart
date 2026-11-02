@@ -4741,6 +4741,12 @@ class L10nEn extends L10n {
   String get boardNextPage => 'Next page';
 
   @override
+  String get boardWidePage => 'Wide page';
+
+  @override
+  String get boardTallPage => 'Tall page';
+
+  @override
   String get boardZoomFit => 'Fit page';
 
   @override
@@ -5040,4 +5046,51 @@ class L10nEn extends L10n {
 
   @override
   String get legalTerms => 'Terms of use';
+
+  @override
+  String get deleteAccountTitle => 'Delete account';
+
+  @override
+  String get deleteAccountIntro =>
+      'Deleting your account is final and cannot be undone.';
+
+  @override
+  String get deleteAccountGoes =>
+      'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.';
+
+  @override
+  String get deleteAccountKeptParent =>
+      'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.';
+
+  @override
+  String get deleteAccountKeptTeacher =>
+      'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
+
+  @override
+  String get deleteAccountPasswordLabel => 'Your password';
+
+  @override
+  String get deleteAccountAction => 'Delete my account';
+
+  @override
+  String get deleteAccountConfirm =>
+      'Delete your account for good? This cannot be undone.';
+
+  @override
+  String get deleteAccountWrongPassword => 'That password is not right.';
+
+  @override
+  String get deleteAccountStaff =>
+      'Staff accounts are closed by the administration.';
+
+  @override
+  String get deleteAccountFailed =>
+      'The account could not be deleted. Try again.';
+
+  @override
+  String get deleteAccountDone => 'Your account has been deleted.';
+
+  @override
+  String get deleteAccountTeacherBlocked =>
+      'Please contact the academy to close your lessons and payroll before deleting your account.';
 }

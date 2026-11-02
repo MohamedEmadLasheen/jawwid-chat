@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../data/whiteboards_repository.dart';
 import '../domain/board.dart';
+import '../domain/board_page.dart';
 
 /// PD-39: the teacher's boards in use, newest first (the Boards tab).
 class BoardsController extends AsyncNotifier<List<BoardSummary>> with SessionScoped<List<BoardSummary>> {
@@ -17,9 +18,9 @@ class BoardsController extends AsyncNotifier<List<BoardSummary>> with SessionSco
 
   WhiteboardsRepository get _repo => ref.read(whiteboardsRepositoryProvider);
 
-  /// A new board with one page; answers its id to open it.
-  Future<String> create(String title) async {
-    final board = await _repo.create(title);
+  /// A new board with one page (wide unless [shape] says tall); answers its id to open it.
+  Future<String> create(String title, {PageShape shape = PageShape.wide}) async {
+    final board = await _repo.create(title, shape: shape);
     ref.invalidateSelf();
     return board.id;
   }

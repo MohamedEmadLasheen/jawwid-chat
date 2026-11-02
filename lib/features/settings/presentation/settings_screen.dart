@@ -247,6 +247,16 @@ class SettingsScreen extends ConsumerWidget {
           const LegalLinksTiles(),
           const Divider(),
 
+          // PD-56 (store compliance): parents and teachers delete their own account here.
+          // Staff accounts are closed by the administration.
+          if (user != null && (user.role == UserRole.parent || user.isTeacher))
+            ListTile(
+              key: const ValueKey('settings-delete-account'),
+              leading: Icon(Icons.person_remove_outlined, color: tokens.colorStatusDangerFg),
+              title: Text(l10n.deleteAccountTitle, style: TextStyle(color: tokens.colorStatusDangerFg)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.deleteAccount),
+            ),
           ListTile(
             leading: Icon(Icons.logout, color: tokens.colorStatusDangerFg),
             title: Text(

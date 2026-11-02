@@ -160,6 +160,9 @@ chat.whiteboard_page
                      (the lesson this page was last drawn in, §5.2)
   (position and its deferrable unique constraint are unchanged: reorder needs them.
    A "deleted" page on a student board leaves the live pages as a history record, §5.1.)
+  (PD-55 1b, migration 20261102230000, already added `shape` -- wide 1920 x 1080 or tall
+   1080 x 1920, fixed when the page is created. Student pages inherit it unchanged: a tall
+   page stays tall in every copy, and an autosave of a tall page must send `shape: 'tall'`.)
 
 chat.whiteboard_document_blob         (migration A, PR-2: metadata of one object, §2.4)
   board_id uuid fk, sha256 text, primary key (board_id, sha256)

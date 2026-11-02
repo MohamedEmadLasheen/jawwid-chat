@@ -1829,6 +1829,8 @@
   "boardHideTools": "إخفاء الأدوات",
   "boardPreviousPage": "الصفحة السابقة",
   "boardNextPage": "الصفحة التالية",
+  "boardWidePage": "صفحة عريضة",
+  "boardTallPage": "صفحة طولية",
   "boardZoomFit": "ملاءمة الصفحة",
   "boardDeleteSelection": "حذف المحدد",
   "boardCopy": "نسخ",
@@ -1913,5 +1915,18 @@
   "rewardBadgeEarned": "الشارة: {badge}",
   "rewardReportStars": "{count, plural, zero{لا نجوم} one{نجمة واحدة} two{نجمتان} few{{count} نجوم} many{{count} نجمة} other{{count} نجمة}}",
   "legalPrivacyPolicy": "سياسة الخصوصية",
-  "legalTerms": "شروط الاستخدام"
+  "legalTerms": "شروط الاستخدام",
+  "deleteAccountTitle": "حذف الحساب",
+  "deleteAccountIntro": "حذف حسابك نهائي ولا يمكن التراجع عنه.",
+  "deleteAccountGoes": "يُحذف فورًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك.",
+  "deleteAccountKeptParent": "يُحتفظ به: المدفوعات والفواتير لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»)، وسجلات أبنائك لدى الأكاديمية. ويُبلَّغ فريق العمل لمتابعتها.",
+  "deleteAccountKeptTeacher": "يُحتفظ به: سجلات الرواتب لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.",
+  "deleteAccountPasswordLabel": "كلمة المرور",
+  "deleteAccountAction": "حذف حسابي",
+  "deleteAccountConfirm": "هل تريد حذف حسابك نهائيًا؟ لا يمكن التراجع عن ذلك.",
+  "deleteAccountWrongPassword": "كلمة المرور غير صحيحة.",
+  "deleteAccountStaff": "حسابات فريق العمل تُغلق عن طريق الإدارة.",
+  "deleteAccountFailed": "تعذّر حذف الحساب. حاول مرة أخرى.",
+  "deleteAccountDone": "تم حذف حسابك.",
+  "deleteAccountTeacherBlocked": "يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك."
 }

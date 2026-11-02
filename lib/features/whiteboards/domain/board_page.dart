@@ -40,6 +40,23 @@ enum PageBackground {
   static PageBackground parse(String? v) => values.firstWhere((b) => b.wire == v, orElse: () => white);
 }
 
+/// PD-55: a page's frame, chosen when the page is created and never changed
+/// (the server refuses a change): wide, the board's page until now, or tall --
+/// the same page turned upright, for a phone held upright.
+enum PageShape {
+  wide('wide', kBoardPageSize),
+  tall('tall', Size(1080, 1920));
+
+  const PageShape(this.wire, this.size);
+  final String wire;
+
+  /// The page in page units.
+  final Size size;
+
+  /// A page from before PD-55 has no shape: it is wide.
+  static PageShape parse(String? v) => values.firstWhere((s) => s.wire == v, orElse: () => wide);
+}
+
 /// One page as the editor holds it: its look and its elements, bottom first.
 class BoardPage {
   const BoardPage({
@@ -48,6 +65,7 @@ class BoardPage {
     required this.layout,
     required this.background,
     required this.elements,
+    this.shape = PageShape.wide,
     this.savedAt,
   });
 
@@ -56,6 +74,12 @@ class BoardPage {
   final PageLayout layout;
   final PageBackground background;
   final List<BoardElement> elements;
+
+  /// PD-55: wide or tall, for good.
+  final PageShape shape;
+
+  /// The page in page units: 1920 x 1080, or 1080 x 1920 when tall.
+  Size get size => shape.size;
 
   /// The server's `updatedAt` for this page as last seen here, exactly as sent:
   /// a draft made against it applies only while the server still says the same
@@ -70,6 +94,7 @@ class BoardPage {
       position: (json['position'] as num?)?.toInt() ?? 0,
       layout: PageLayout.parse(json['layout'] as String?),
       background: PageBackground.parse(json['background'] as String?),
+      shape: PageShape.parse(json['shape'] as String?),
       savedAt: json['updatedAt'] as String?,
       elements: [
         for (final e in raw)
@@ -85,6 +110,7 @@ class BoardPage {
         layout: layout ?? this.layout,
         background: background ?? this.background,
         elements: elements ?? this.elements,
+        shape: shape,
         savedAt: savedAt ?? this.savedAt,
       );
 
@@ -317,9 +343,9 @@ class BoardGeometry {
     ];
   }
 
-  /// Keeps a point on the page.
-  static Offset clampToPage(Offset p) =>
-      Offset(p.dx.clamp(0, kBoardPageSize.width).toDouble(), p.dy.clamp(0, kBoardPageSize.height).toDouble());
+  /// Keeps a point on a page of [page] size (a wide page unless said).
+  static Offset clampToPage(Offset p, [Size page = kBoardPageSize]) =>
+      Offset(p.dx.clamp(0, page.width).toDouble(), p.dy.clamp(0, page.height).toDouble());
 
   /// The angle of the segment [a]→[b], for arrow heads.
   static double angle(Offset a, Offset b) => math.atan2(b.dy - a.dy, b.dx - a.dx);
