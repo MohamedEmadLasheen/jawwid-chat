@@ -65,31 +65,42 @@ export class AccountAdminScope {
     return { allowed: true };
   }
 
-  /** The same rule as a filter on chat.account, for the Accounts list. */
-  async listFilter(actor: Actor): Promise<Prisma.AccountWhereInput> {
+  /**
+   * The same rule as a filter on chat.account, for the Accounts list -- and
+   * the families only a grant let in (family id -> grant id), so the list can
+   * log each grant whose family it shows: viewing is a use too.
+   */
+  async listFilter(actor: Actor): Promise<{ where: Prisma.AccountWhereInput; grantedFamilies: Map<string, string> }> {
     const and: Prisma.AccountWhereInput[] = [];
+    const grantedFamilies = new Map<string, string>();
     const scope = await this.teachers.scopeOf(actor);
     if (!scope.all) and.push({ OR: [{ kind: { not: 'teacher' } }, { teacher: { id: { in: [...scope.teacherIds] } } }] });
     if (await this.familyNarrowed(actor)) {
-      const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT f.id::text AS id FROM chat.family f
-         WHERE f.organization_id = ${actor.organizationId as string}::uuid
-           AND (chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL
-                OR chat.family_access_grant_active(${actor.actorId}::uuid, f.id) IS NOT NULL)`;
+      const rows = await this.prisma.$queryRaw<Array<{ id: string; reached: boolean; grant_id: string | null }>>`
+        SELECT x.id, x.reached, x.grant_id FROM (
+          SELECT f.id::text AS id,
+                 chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL AS reached,
+                 chat.family_access_grant_active(${actor.actorId}::uuid, f.id)::text AS grant_id
+            FROM chat.family f
+           WHERE f.organization_id = ${actor.organizationId as string}::uuid) x
+         WHERE x.reached OR x.grant_id IS NOT NULL`;
+      for (const r of rows) if (!r.reached && r.grant_id) grantedFamilies.set(r.id, r.grant_id);
       and.push({ OR: [{ kind: { not: 'family' } }, { contacts: { some: { familyId: { in: rows.map((r) => r.id) } } } }] });
     }
-    return and.length ? { AND: and } : {};
+    return { where: and.length ? { AND: and } : {}, grantedFamilies };
   }
 
   /**
    * Is this caller's parent-account administration narrowed to their families?
-   * An Operations member is; the Operations Manager and the super admin are
-   * not; anyone else (Sales) is decided elsewhere.
+   * Only when an Operations role is what lets them administer parents: an
+   * Operations member in an Operations role (supervisor, backup: admin;
+   * cover staff: coverage). The Operations Manager and the super admin are
+   * not; nor is a manager who is also an Operations member (a Sales manager
+   * keeps the Sales manager's reach) -- Sales is decided elsewhere.
    */
   private async familyNarrowed(actor: Actor): Promise<boolean> {
-    if (actor.staffRole === StaffRole.SUPER_ADMIN) return false;
+    if (actor.staffRole !== StaffRole.ADMIN && actor.staffRole !== StaffRole.COVERAGE) return false;
     const standing = await accountAdminStandingOf(this.prisma, actor);
-    if (standing.operations === 'manager' && actor.staffRole === StaffRole.MANAGER) return false;
     return standing.operations === 'member';
   }
 }

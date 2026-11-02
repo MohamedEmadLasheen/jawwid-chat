@@ -560,8 +560,24 @@ export class AuthService {
     const row = await this.prisma.impersonationSession.findUnique({ where: { id: impersonationId } });
     if (!row || row.targetAccountId !== target.id || row.endedAt) return null;
     const refuse = async (why: string) => {
-      await this.prisma.impersonationSession
-        .updateMany({ where: { id: row.id, endedAt: null }, data: { endedAt: new Date(), endedReason: why } })
+      await this.prisma
+        .$transaction(async (tx) => {
+          const ended = await tx.impersonationSession.updateMany({ where: { id: row.id, endedAt: null }, data: { endedAt: new Date(), endedReason: why } });
+          if (ended.count === 0) return;
+          // ADMIN-013: a support session ended here (a grant revoked or run out, the
+          // administrator's own session or standing gone) is on the record as one
+          // ended by Exit is: IMPERSONATION_AUDIT.ENDED, written out to keep
+          // platform/ from importing account-admin/.
+          await this.audit.audit(tx, {
+            actorId: row.staffId,
+            action: 'impersonation.ended',
+            entity: 'account',
+            entityId: row.targetAccountId,
+            after: { impersonationId: row.id, endedBy: 'system' },
+            reason: why,
+            impersonationId: row.id,
+          });
+        })
         .catch(() => undefined);
       return null;
     };
