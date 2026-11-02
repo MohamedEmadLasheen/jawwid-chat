@@ -193,6 +193,23 @@ export const STATUS_LABEL: Record<CalendarStatus, Pair> = {
   moved: { en: 'Moved away', ar: 'نُقلت' },
 }
 
+/**
+ * CHATSCHED-014: a lesson nobody teaches -- cancelled, excused, the teacher
+ * absent -- is 'active' to calendar_status, so its block read "Active" like a
+ * booked one. For these the block says its outcome (OUTCOME_LABEL, as the
+ * details panel does). Their time still counts as booked (PD-38 §2: booked is
+ * any lesson reserved for a student, whatever its outcome).
+ */
+const NOT_TAUGHT: ReadonlySet<string> = new Set(['admin_cancelled', 'student_apology', 'teacher_apology', 'teacher_no_show'])
+
+/** Whether a block is a lesson nobody teaches (drawn muted and struck through). */
+export const notTaught = (l: { anonymous?: true; outcome?: string | null }) => !l.anonymous && !!l.outcome && NOT_TAUGHT.has(l.outcome)
+
+/** What a block says it is: the outcome for a lesson nobody teaches, else its calendar status. */
+export function statusOf(l: { status: CalendarStatus; anonymous?: true; outcome?: string | null }): Pair {
+  return notTaught(l) ? OUTCOME_LABEL[l.outcome as string]! : STATUS_LABEL[l.status]
+}
+
 export const KIND_LABEL: Record<LessonKind, Pair> = {
   regular: { en: 'Regular', ar: 'أساسية' },
   makeup: { en: 'Make-up', ar: 'تعويضية' },

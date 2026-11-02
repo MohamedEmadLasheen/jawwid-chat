@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { STEPS, countLabel } from '@/core/i18n/counts'
 import { Badge } from '@/shared/components/Badge'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { QueryBoundary } from '@/shared/components/States'
@@ -192,7 +193,7 @@ const SETUP_STEPS = [
 /** PD-43: what is still to set up for an active teacher, read live; gone once everything is done. */
 function SetupChecklist({ file }: { file: TeacherFile }) {
   const tx = useCopy()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   const setup = file.setup
   if (!setup || !file.teacher.isActive || (setup.missing === 0 && setup.payMatchesShift)) return null
   return (
@@ -200,7 +201,7 @@ function SetupChecklist({ file }: { file: TeacherFile }) {
       id="tf-setup"
       title={tx(T.setupTitle)}
       action={
-        <Badge tone="warn">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { n: number(setup.missing) })}</Badge>
+        <Badge tone="warn">{setup.missing === 1 ? tx(T.oneStepLeft) : tx(T.stepsLeft, { steps: countLabel(setup.missing, number(setup.missing), STEPS, locale) })}</Badge>
       }
     >
       <ul className="tf-setup">
