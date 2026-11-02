@@ -3347,5 +3347,9 @@
   "@rewardSoundTitle": {"description": "PD-55: Settings switch for the celebration chime."},
   "rewardSoundSubtitle": "A short chime when a teacher celebrates your child.",
   "rewardStarLine": "{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}",
-  "@rewardStarLine": {"description": "PD-55: the family's line for a star, sticker or praise.", "placeholders": {"count": {"type": "int"}}}
+  "@rewardStarLine": {"description": "PD-55: the family's line for a star, sticker or praise.", "placeholders": {"count": {"type": "int"}}},
+  "legalPrivacyPolicy": "Privacy policy",
+  "@legalPrivacyPolicy": {"description": "PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings."},
+  "legalTerms": "Terms of use",
+  "@legalTerms": {"description": "PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings."}
 }

@@ -1898,5 +1898,7 @@
   "rewardCelebrationLine": "معلّمك يحتفل بك!",
   "rewardSoundTitle": "صوت المكافآت",
   "rewardSoundSubtitle": "نغمة قصيرة عندما يحتفل المعلّم بطفلك.",
-  "rewardStarLine": "{count, plural, zero{نجمة!} one{نجمة! نجمة واحدة في هذه الحصة} two{نجمة! نجمتان في هذه الحصة} few{نجمة! {count} نجوم في هذه الحصة} many{نجمة! {count} نجمة في هذه الحصة} other{نجمة! {count} نجمة في هذه الحصة}}"
+  "rewardStarLine": "{count, plural, zero{نجمة!} one{نجمة! نجمة واحدة في هذه الحصة} two{نجمة! نجمتان في هذه الحصة} few{نجمة! {count} نجوم في هذه الحصة} many{نجمة! {count} نجمة في هذه الحصة} other{نجمة! {count} نجمة في هذه الحصة}}",
+  "legalPrivacyPolicy": "سياسة الخصوصية",
+  "legalTerms": "شروط الاستخدام"
 }
