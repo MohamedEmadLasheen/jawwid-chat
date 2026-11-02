@@ -338,7 +338,7 @@ describe('C · call rooms', () => {
     return { raw, auth: await t.toJwt() };
   }
   const controllerWith = (rooms: MediaRoomControl) =>
-    new LiveKitWebhookController(new LiveKitWebhookVerifier(), new MediaPresenceService(g.prisma, new OutboxService()), g.prisma, rooms);
+    new LiveKitWebhookController(new LiveKitWebhookVerifier(), new MediaPresenceService(g.prisma, new OutboxService(), g.config), g.prisma, rooms);
 
   it('a join by someone no longer live (an earlier token, or one LiveKit refreshed) is undone at once; a live participant is left alone', async () => {
     const call = await g.calls.start(groupId, s.teacherId);

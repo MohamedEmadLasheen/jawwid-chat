@@ -183,6 +183,31 @@ void main() {
       );
     });
 
+    testWidgets('CHATSCHED-013: the other side dropped -- waiting for them; then ended as connection lost, with connected time', (tester) async {
+      await pumpLive(tester);
+      for (final locale in const [Locale('en'), Locale('ar')]) {
+        final l10n = await L10n.delegate.load(locale);
+        expect(l10n.callWaitingForReconnect, isNotEmpty);
+        expect(l10n.callEndedConnectionLost, isNotEmpty);
+        expect(l10n.callHistoryConnectionLost, isNotEmpty);
+      }
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      socket.emit(CallEventNames.interrupted, Frames.interrupted(until: DateTime.now().add(const Duration(seconds: 60))));
+      // The live clock ticks, so no pumpAndSettle: a few frames carry the event through.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(find.text(l10n.callWaitingForReconnect), findsOneWidget);
+      expect(find.byType(CallControls), findsOneWidget, reason: 'they can still hang up while waiting');
+
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'answered', durationSeconds: 95, reason: 'connection_lost'));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.callEndedConnectionLost), findsOneWidget);
+      expect(find.text(l10n.callOutcomeAnswered), findsNothing);
+      expect(find.text('1:35'), findsOneWidget, reason: 'connected time, from the server');
+    });
+
     testWidgets('a declined call is plain and neutral, never "rejected"',
         (tester) async {
       await pumpIncoming(tester);

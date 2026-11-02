@@ -318,6 +318,16 @@ class L10nAr extends L10n {
   String get callReconnecting => 'جارٍ إعادة الاتصال…';
 
   @override
+  String get callWaitingForReconnect =>
+      'انقطع الاتصال. بانتظار عودة الطرف الآخر…';
+
+  @override
+  String get callEndedConnectionLost => 'انتهت المكالمة: انقطع الاتصال';
+
+  @override
+  String get callHistoryConnectionLost => 'انقطع الاتصال';
+
+  @override
   String get callAccept => 'قبول';
 
   @override

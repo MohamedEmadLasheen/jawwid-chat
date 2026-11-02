@@ -280,19 +280,101 @@ describe('media is not the lifecycle', () => {
     medias[0]!.play({ phase: 'live' })
   }
 
-  it('a dropped connection is retried ONCE with a fresh token, and never ends the call', async () => {
+  it('a drop is rejoined -- at once, then on a growing wait -- with a fresh token each time, and never ends the call (CHATSCHED-013)', async () => {
+    vi.useFakeTimers()
     await live()
     medias[0]!.play({ phase: 'disconnected' })
     expect(c.getSnapshot().phase).toBe('reconnecting')
-    await flush()
+    await vi.advanceTimersByTimeAsync(0)
     expect(api.token).toHaveBeenCalledTimes(2)
     expect(medias[0]!.connects.map((x) => x.token)).toEqual(['tok-1', 'tok-2'])
 
+    // Still down: the next rejoin waits a second, not a storm.
+    medias[0]!.play({ phase: 'disconnected' })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(api.token).toHaveBeenCalledTimes(2)
+    expect(c.getSnapshot()).toMatchObject({ phase: 'reconnecting', failure: 'network' })
+    await vi.advanceTimersByTimeAsync(600)
+    expect(api.token).toHaveBeenCalledTimes(3)
+    expect(api.end).not.toHaveBeenCalled()
+
+    // The server's grace ran out: ended as connection lost; no more rejoining.
+    medias[0]!.play({ phase: 'disconnected' })
+    c.onServerEvent({ event: 'call.ended', payload: { callId: 'call-9', outcome: 'answered', durationSeconds: 95, reason: 'connection_lost' } })
+    expect(c.getSnapshot()).toMatchObject({ phase: 'ended', outcome: 'answered', durationSeconds: 95, endReason: 'connection_lost' })
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(api.token).toHaveBeenCalledTimes(3)
+    expect(api.end).not.toHaveBeenCalled()
+  })
+
+  it('back in the room: the rejoining stops and the next drop starts from the first wait (CHATSCHED-013)', async () => {
+    vi.useFakeTimers()
+    await live()
+    medias[0]!.play({ phase: 'disconnected' })
+    await vi.advanceTimersByTimeAsync(0)
+    medias[0]!.play({ phase: 'live' })
+    expect(c.getSnapshot().phase).toBe('live')
+    medias[0]!.play({ phase: 'disconnected' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.token).toHaveBeenCalledTimes(3)
+  })
+
+  it('the other side dropped: shown as waiting for them, cleared when they are back (CHATSCHED-013)', async () => {
+    await live()
+    c.onServerEvent({ event: 'call.interrupted', payload: { callId: 'call-9', until: 61_000 } })
+    expect(c.getSnapshot()).toMatchObject({ phase: 'live', interruptedUntil: 61_000 })
+    c.onServerEvent({ event: 'call.resumed', payload: { callId: 'call-9' } })
+    expect(c.getSnapshot()).toMatchObject({ phase: 'live', interruptedUntil: null })
+  })
+
+  it('a rejoin refused because the call is over (offline past the grace) ends as connection lost (CHATSCHED-013)', async () => {
+    await live()
+    api.token.mockRejectedValueOnce(refused(409, 'COMM.CALL_ALREADY_ENDED'))
     medias[0]!.play({ phase: 'disconnected' })
     await flush()
-    expect(api.token).toHaveBeenCalledTimes(2) // no second retry
-    expect(c.getSnapshot()).toMatchObject({ phase: 'reconnecting', failure: 'network' })
+    await flush()
+    expect(c.getSnapshot()).toMatchObject({ phase: 'ended', endReason: 'connection_lost' })
     expect(api.end).not.toHaveBeenCalled()
+  })
+
+  it('a rejoin refused because the other side HUNG UP while we were away ends as a hang-up, with the server\'s duration (review 2 of #367)', async () => {
+    await live()
+    api.token.mockRejectedValueOnce(
+      new ApiError({
+        status: 409,
+        code: 'COMM.CALL_ALREADY_ENDED',
+        messageEn: 'this call has ended',
+        messageAr: 'انتهت المكالمة',
+        detail: { endReason: 'hung_up', outcome: 'answered', durationSeconds: 42 },
+      }),
+    )
+    medias[0]!.play({ phase: 'disconnected' })
+    await flush()
+    await flush()
+    expect(c.getSnapshot()).toMatchObject({ phase: 'ended', endReason: 'hung_up', outcome: 'answered', durationSeconds: 42 })
+    expect(api.end).not.toHaveBeenCalled()
+  })
+
+  it('rejoining is bounded: 90 s after the drop it gives up -- ending the call here AND telling the server, as connection lost (review 2 of #367)', async () => {
+    vi.useFakeTimers()
+    c = new CallController(api, () => {
+      const m = fakeMedia()
+      medias.push(m)
+      return m
+    }, () => Date.now())
+    await live()
+    api.token.mockRejectedValue(new ApiError({ status: 0, code: 'NETWORK', messageEn: 'offline', messageAr: 'offline' }))
+    medias[0]!.play({ phase: 'disconnected' })
+    await vi.advanceTimersByTimeAsync(80_000)
+    expect(c.getSnapshot().phase).toBe('reconnecting')
+    expect(api.end).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(c.getSnapshot()).toMatchObject({ phase: 'ended', endReason: 'connection_lost' })
+    expect(api.end).toHaveBeenCalledTimes(1)
+    expect(api.end).toHaveBeenCalledWith(expect.any(String), { connectionLost: true })
+    const tries = api.token.mock.calls.length
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(api.token.mock.calls.length).toBe(tries)
   })
 
   it('no timer ends a call: ten minutes live is still live', async () => {

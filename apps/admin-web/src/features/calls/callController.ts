@@ -56,6 +56,16 @@ export interface CallState {
   /** From `call.ended` only. Null until the server says. */
   outcome: string | null
   durationSeconds: number | null
+  /**
+   * CHATSCHED-013: why it ended (`connection_lost`, `hung_up` ...), from
+   * `call.ended` -- or `connection_lost` when a rejoin found the call over.
+   */
+  endReason: string | null
+  /**
+   * CHATSCHED-013: the call dropped below two in the room; the server ends it
+   * at this time (ms) unless somebody rejoins first. Null while connected.
+   */
+  interruptedUntil: number | null
   failure: CallFailure | null
   /** The server's refusal, for its localized message. */
   error: ApiError | null
@@ -75,6 +85,8 @@ export const IDLE_CALL: CallState = {
   direction: null,
   outcome: null,
   durationSeconds: null,
+  endReason: null,
+  interruptedUntil: null,
   failure: null,
   error: null,
   microphoneMuted: false,
@@ -98,7 +110,9 @@ export type CallServerEvent =
   | { event: 'call.incoming'; payload: { callId: string; conversationId: string; type: string; initiatorName: string } }
   | { event: 'call.accepted'; payload: { callId: string } }
   | { event: 'call.declined'; payload: { callId: string } }
-  | { event: 'call.ended'; payload: { callId: string; outcome: string; durationSeconds: number | null } }
+  | { event: 'call.ended'; payload: { callId: string; outcome: string; durationSeconds: number | null; reason?: string | null } }
+  | { event: 'call.interrupted'; payload: { callId: string; until: number } }
+  | { event: 'call.resumed'; payload: { callId: string } }
 
 export function classify(error: unknown): { failure: CallFailure; error: ApiError | null } {
   if (error instanceof ApiError) {
@@ -117,8 +131,24 @@ export class CallController {
   private unsubscribeMedia: (() => void) | null = null
   /** True while WE take the media down, so its `disconnected` is not a drop. */
   private leavingMedia = false
-  /** One media retry per call, then stop: no reconnect storm, no false hope. */
-  private mediaRetryUsed = false
+  /**
+   * CHATSCHED-013 (owner): after a drop, rejoin -- at once, then after 1, 2, 4
+   * and every 8 s -- until the media is back or the SERVER ends the call (60 s
+   * after the drop, as connection lost). It used to try once, then stay
+   * "reconnecting" for ever. The timer only rejoins; it never ends a call.
+   */
+  private rejoinAttempts = 0
+  private rejoinTimer: ReturnType<typeof setTimeout> | null = null
+  private static readonly REJOIN_WAITS_MS = [0, 1000, 2000, 4000, 8000]
+  /**
+   * Review 2 of #367: rejoining stops this long after the drop -- the server's
+   * 60 s grace and 30 s more -- and the call ends here and, best effort, on the
+   * server (as the Flutter app does). An offline browser never hears
+   * `call.ended`, and with the room's `left` never delivered nothing else
+   * would end the call there.
+   */
+  static readonly REJOIN_GIVE_UP_MS = 90_000
+  private rejoinStartedAt: number | null = null
   private rejoining = false
   private alive = true
 
@@ -169,7 +199,7 @@ export class CallController {
    */
   async start(args: { conversationId: string; peerLabel: string; isGroup: boolean }): Promise<void> {
     if (this.isPresent) return
-    this.mediaRetryUsed = false
+    this.stopRejoining()
     this.rejoining = false
     this.set({
       ...IDLE_CALL,
@@ -223,7 +253,7 @@ export class CallController {
 
     if (!ringing) {
       if (this.isPresent) await this.teardownMedia()
-      this.mediaRetryUsed = false
+      this.stopRejoining()
       this.rejoining = false
       this.set({
         ...IDLE_CALL,
@@ -392,7 +422,7 @@ export class CallController {
         // (a failure with a callId included) is never interrupted.
         if (this.isPresent && !this.isOver()) return
         if (this.isPresent) void this.teardownMedia()
-        this.mediaRetryUsed = false
+        this.stopRejoining()
         this.rejoining = false
         this.set({
           ...IDLE_CALL,
@@ -429,7 +459,24 @@ export class CallController {
       case 'call.ended': {
         if (e.payload.callId !== this.state.callId) return
         // The authority on the outcome, even for a state it did not create.
-        this.goTerminal({ outcome: e.payload.outcome, durationSeconds: e.payload.durationSeconds, authoritative: true })
+        this.goTerminal({
+          outcome: e.payload.outcome,
+          durationSeconds: e.payload.durationSeconds,
+          endReason: e.payload.reason ?? null,
+          authoritative: true,
+        })
+        return
+      }
+      case 'call.interrupted': {
+        // Shown ("waiting for them to reconnect"), never acted on: the server
+        // keeps the deadline and sends `call.ended` at it.
+        if (e.payload.callId !== this.state.callId || this.isOver()) return
+        this.patch({ interruptedUntil: e.payload.until })
+        return
+      }
+      case 'call.resumed': {
+        if (e.payload.callId !== this.state.callId || this.isOver()) return
+        this.patch({ interruptedUntil: null })
         return
       }
     }
@@ -437,17 +484,27 @@ export class CallController {
 
   // ------------------------------------------------------------ terminal
 
-  private goTerminal(args: { outcome: string | null; durationSeconds?: number | null; authoritative?: boolean }) {
+  private goTerminal(args: {
+    outcome: string | null
+    durationSeconds?: number | null
+    endReason?: string | null
+    authoritative?: boolean
+  }) {
+    this.stopRejoining()
     if (this.state.phase === 'ended') {
       // Already terminal: no second teardown. An authoritative event may still
       // fill in what the server knows and we did not.
-      if (args.authoritative) this.patch({ outcome: args.outcome, durationSeconds: args.durationSeconds ?? null })
+      if (args.authoritative) {
+        this.patch({ outcome: args.outcome, durationSeconds: args.durationSeconds ?? null, endReason: args.endReason ?? this.state.endReason })
+      }
       return
     }
     this.patch({
       phase: 'ended',
       outcome: args.outcome,
       durationSeconds: args.durationSeconds ?? null,
+      endReason: args.endReason ?? null,
+      interruptedUntil: null,
       failure: null,
       error: null,
     })
@@ -475,7 +532,25 @@ export class CallController {
     } catch (e) {
       if (!this.alive || this.media !== media) return
       const c = classify(e)
-      if (c.failure === 'alreadyOver') return this.goTerminal({ outcome: null })
+      // CHATSCHED-013: a REJOIN refused because the call is over -- we were away
+      // and never heard `call.ended`. The server says how it ended (review 2 of
+      // #367): a hang-up while we were away is a hang-up; connection lost only
+      // when it does not say.
+      if (c.failure === 'alreadyOver') {
+        const detail = (c.error?.detail ?? {}) as { endReason?: unknown; outcome?: unknown; durationSeconds?: unknown }
+        if (!this.rejoining) return this.goTerminal({ outcome: null, endReason: null })
+        return this.goTerminal({
+          outcome: typeof detail.outcome === 'string' ? detail.outcome : null,
+          durationSeconds: typeof detail.durationSeconds === 'number' ? detail.durationSeconds : null,
+          endReason: typeof detail.endReason === 'string' ? detail.endReason : 'connection_lost',
+          authoritative: true,
+        })
+      }
+      if (this.rejoining && c.failure === 'network') {
+        this.patch({ phase: 'reconnecting', failure: 'network' })
+        this.scheduleRejoin()
+        return
+      }
       this.patch({ phase: 'failed', ...c })
       return
     }
@@ -496,6 +571,7 @@ export class CallController {
         break
       case 'live':
         this.rejoining = false
+        this.stopRejoining()
         next.phase = 'live'
         next.failure = null
         next.liveSince = this.state.liveSince ?? this.now()
@@ -506,21 +582,42 @@ export class CallController {
         break
       case 'disconnected': {
         if (this.leavingMedia) return
-        // A DROP IS NOT AN ENDING. Retry once, with a fresh token.
-        const callId = this.state.callId
-        if (!this.mediaRetryUsed && callId) {
-          this.mediaRetryUsed = true
-          this.rejoining = true
-          this.patch({ ...next, phase: 'reconnecting' })
-          void this.connectMedia(callId)
-          return
-        }
-        next.phase = 'reconnecting'
-        next.failure = 'network'
-        break
+        // A DROP IS NOT AN ENDING. Rejoin, with a fresh token each time, until the
+        // media is back or the server ends the call (CHATSCHED-013).
+        this.rejoining = true
+        this.patch({ ...next, phase: 'reconnecting', failure: this.rejoinAttempts === 0 ? null : 'network' })
+        this.scheduleRejoin()
+        return
       }
     }
     this.patch(next)
+  }
+
+  /** The next rejoin, after its wait. One at a time; nothing once the call is over. */
+  private scheduleRejoin(): void {
+    if (!this.alive || this.rejoinTimer || this.isOver()) return
+    const waits = CallController.REJOIN_WAITS_MS
+    const wait = waits[Math.min(this.rejoinAttempts, waits.length - 1)]!
+    if (this.rejoinAttempts === 0) this.rejoinStartedAt = this.now()
+    this.rejoinAttempts++
+    this.rejoinTimer = setTimeout(() => {
+      this.rejoinTimer = null
+      const callId = this.state.callId
+      if (!this.alive || this.isOver() || !callId) return
+      if (this.rejoinStartedAt !== null && this.now() - this.rejoinStartedAt >= CallController.REJOIN_GIVE_UP_MS) {
+        void this.api.end(callId, { connectionLost: true }).catch(() => undefined)
+        this.goTerminal({ outcome: null, endReason: 'connection_lost' })
+        return
+      }
+      void this.connectMedia(callId)
+    }, wait)
+  }
+
+  private stopRejoining(): void {
+    if (this.rejoinTimer) clearTimeout(this.rejoinTimer)
+    this.rejoinTimer = null
+    this.rejoinAttempts = 0
+    this.rejoinStartedAt = null
   }
 
   private async teardownMedia(): Promise<void> {
@@ -536,6 +633,7 @@ export class CallController {
   /** The session ended (sign-out, user switch): no call outlives its principal. */
   dispose(): void {
     this.alive = false
+    this.stopRejoining()
     void this.teardownMedia()
     this.listeners.clear()
     this.state = IDLE_CALL

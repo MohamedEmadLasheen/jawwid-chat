@@ -278,4 +278,24 @@ void main() {
       expect(decodeCallEvent('call.something_new', _participant()), isNull);
     });
   });
+
+  group('CHATSCHED-013: a dropped call', () {
+    test('call.ended carries why; a reason this build does not know still ends the call', () {
+      final lost = decodeCallEvent('call.ended', {'callId': 'c1', 'conversationId': 'v1', 'outcome': 'answered', 'durationSeconds': 70, 'reason': 'connection_lost'}) as CallEnded;
+      expect([lost.reason, lost.duration], [CallEndReason.connectionLost, const Duration(seconds: 70)]);
+      final hungUp = decodeCallEvent('call.ended', {'callId': 'c1', 'conversationId': 'v1', 'outcome': 'answered', 'durationSeconds': 70, 'reason': 'hung_up'}) as CallEnded;
+      expect(hungUp.reason, CallEndReason.hungUp);
+      final older = decodeCallEvent('call.ended', {'callId': 'c1', 'conversationId': 'v1', 'outcome': 'missed', 'durationSeconds': 0}) as CallEnded;
+      expect(older.reason, CallEndReason.unknown);
+      final newer = decodeCallEvent('call.ended', {'callId': 'c1', 'conversationId': 'v1', 'outcome': 'answered', 'durationSeconds': 1, 'reason': 'something_new'}) as CallEnded;
+      expect(newer.reason, CallEndReason.unknown);
+    });
+
+    test('call.interrupted names the deadline; call.resumed brings it back; a bad deadline fails closed', () {
+      final interrupted = decodeCallEvent('call.interrupted', {'callId': 'c1', 'conversationId': 'v1', 'until': '2026-10-31T12:01:00.000Z'}) as CallInterrupted;
+      expect(interrupted.until, DateTime.utc(2026, 10, 31, 12, 1));
+      expect(decodeCallEvent('call.resumed', {'callId': 'c1', 'conversationId': 'v1'}), isA<CallResumed>());
+      expect(() => decodeCallEvent('call.interrupted', {'callId': 'c1', 'conversationId': 'v1', 'until': 'soon'}), throwsA(isA<CallEventFormatException>()));
+    });
+  });
 }
