@@ -736,7 +736,11 @@ export class SchedulingService {
         });
         if (closed.count !== 1) throw stateError('this lesson changed meanwhile; open it again');
         await cancelReminders(tx, lesson.id);
-        const created = await tx.lesson.create({
+        // The new row only, not LESSON_INCLUDE: that is 8 round trips while the
+        // learner and (next) the group are locked, and the card needs nothing a
+        // fresh lesson has but its own columns and the names it shares with the
+        // lesson it replaces (TEACHER-027). The caller reads it whole after commit.
+        const row = await tx.lesson.create({
           data: {
             organizationId: lesson.organizationId,
             learnerId: lesson.learnerId,
@@ -749,8 +753,8 @@ export class SchedulingService {
             createdByKind: by,
             createdBy: actor.actorId,
           },
-          include: LESSON_INCLUDE,
-        }).then(learnerLesson);
+        });
+        const created = { ...row, learnerId: lesson.learnerId, learner: lesson.learner, teacher: lesson.teacher };
         await this.lessons.postCard(
           tx, created, actor, CardKind.LESSON_MOVED,
           { ...this.lessons.cardBase(created), previousStartsAt: lesson.startsAt.toISOString(), movedBy: movedByOf(by) },
