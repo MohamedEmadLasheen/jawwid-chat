@@ -401,6 +401,24 @@ abstract interface class PasswordChangeRepository {
   Future<void> change({required String currentPassword, required String newPassword});
 }
 
+/// PD-56 (store compliance): a parent or a teacher deletes their own account. On the
+/// AUTHENTICATED client; the password is asked again.
+abstract interface class AccountDeletionRepository {
+  /// `POST /me/account/delete`. A refusal is an AppError with the server's code
+  /// (`AUTH.INVALID_CREDENTIALS` for a wrong password, `AUTH.ACCOUNT_LOCKED`,
+  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account). On success every session
+  /// of the account has already ended on the server.
+  Future<void> deleteAccount({required String password});
+}
+
+/// The build with no account server (fixtures, tests that do not override it).
+class NoAccountDeletionRepository implements AccountDeletionRepository {
+  const NoAccountDeletionRepository();
+
+  @override
+  Future<void> deleteAccount({required String password}) => throw UnsupportedError('no account server in this build');
+}
+
 /// The build with no account server (fixtures, tests that do not override it).
 class NoPasswordChangeRepository implements PasswordChangeRepository {
   const NoPasswordChangeRepository();
