@@ -388,6 +388,9 @@ export interface LearnerRewardGivenPayload {
   praiseText: string | null;
   /** This learner's stars in this lesson, after this reward. */
   stars: number;
+  /** PD-55 PR-5: the badge those stars earned, and the stars the next one needs. */
+  badge: 'bronze' | 'silver' | 'gold' | null;
+  nextBadgeAt: number | null;
 }
 
 export interface LearnerRewardUndonePayload {

@@ -17,7 +17,8 @@ import { randomUUID } from 'node:crypto';
 import { CommEvent } from '@communication/contracts/events';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { NotificationService } from '@communication/notifications/notification.service';
-import { RewardService } from '../../src/rewards/reward.service';
+import { RewardService, badgeOf } from '../../src/rewards/reward.service';
+import { TeacherScopeService } from '../../src/platform/teacher-scope';
 import { Scenario, buildGraph, seed, truncate } from './harness';
 
 jest.setTimeout(60_000);
@@ -91,7 +92,7 @@ beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   await setConfig('rewards.enabled', true);
-  rewards = new RewardService(g.prisma, g.config, g.conversations, g.outbox);
+  rewards = new RewardService(g.prisma, g.config, g.conversations, g.outbox, new TeacherScopeService(g.prisma));
 });
 
 describe('giving a reward', () => {
@@ -173,6 +174,62 @@ describe('giving a reward', () => {
       lessons: [expect.objectContaining({ lessonId: now, learnerId: s.learnerId, learnerName: 'learner_l', stars: 1 })],
     });
     expect((await rewards.lessonsNow(s.newTeacherId)).lessons).toEqual([]);
+  });
+});
+
+describe('the tally and its badges (PR-5)', () => {
+  it('a badge for effort at each threshold, and the stars the next one needs -- from the configured thresholds', () => {
+    expect(badgeOf(0, [3, 6, 10])).toEqual({ badge: null, nextBadgeAt: 3 });
+    expect(badgeOf(4, [3, 6, 10])).toEqual({ badge: 'bronze', nextBadgeAt: 6 });
+    expect(badgeOf(6, [3, 6, 10])).toEqual({ badge: 'silver', nextBadgeAt: 10 });
+    expect(badgeOf(12, [3, 6, 10])).toEqual({ badge: 'gold', nextBadgeAt: null });
+    expect(badgeOf(2, [10, 2, 5])).toEqual({ badge: 'bronze', nextBadgeAt: 5 });
+  });
+
+  it('the live event, the tray and the report all carry the same tally', async () => {
+    const l = await lesson();
+    for (let i = 0; i < 3; i++) await rewards.give(s.teacherId, s.learnerId, star(l));
+    const given = await g.prisma.outboxEvent.findMany({ where: { type: CommEvent.LEARNER_REWARD_GIVEN }, orderBy: { createdAt: 'asc' } });
+    expect(given[2]!.payload).toMatchObject({ stars: 3, badge: 'bronze', nextBadgeAt: 6 });
+    expect((await rewards.lessonsNow(s.teacherId)).lessons[0]).toMatchObject({ stars: 3, badge: 'bronze', nextBadgeAt: 6 });
+    await rewards.give(s.teacherId, s.learnerId, { lessonId: l, kind: 'praise', praiseKey: 'excellent_ar', clientEventId: randomUUID() });
+    await rewards.give(s.teacherId, s.learnerId, { lessonId: l, kind: 'praise', praiseText: 'Lovely!', clientEventId: randomUUID() });
+    expect(await rewards.forLesson(s.parentId, l)).toEqual({
+      stars: 5,
+      badge: 'bronze',
+      nextBadgeAt: 6,
+      praise: [{ key: 'excellent_ar', text: null }, { key: null, text: 'Lovely!' }],
+    });
+  });
+
+  it('the report\'s tally: the teacher, the family and staff in the teacher scope -- a parent of ANOTHER family and another teacher get 404', async () => {
+    const l = await lesson();
+    await rewards.give(s.teacherId, s.learnerId, star(l));
+    expect((await rewards.forLesson(s.teacherId, l)).stars).toBe(1);
+    expect((await rewards.forLesson(s.otherParentId, l)).stars).toBe(1);
+
+    const family = randomUUID(), outsider = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.family (id, display_name, owner_id, language) values ($1::uuid, 'family_other', $2::uuid, 'en')`, family, s.ownerId);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.contact (id, family_id, name, role_preset, can_message, is_active) values ($1::uuid, $2::uuid, 'parent_other', 'primary_guardian', true, true)`,
+      outsider, family,
+    );
+    for (const who of [outsider, s.unrelatedTeacherId, s.newTeacherId]) {
+      await expect(rewards.forLesson(who, l)).rejects.toMatchObject({ status: 404 });
+    }
+    // Staff reach is the platform's one teacher scope (TeacherScopeService.covers,
+    // PD-35): department-wide unless TEACHER_SUPERVISOR_STRICT_SCOPE is on, as it
+    // is for every other lesson read. Whatever it answers, this answers.
+    const owner = await g.conversations.requireActor(s.ownerId);
+    const covered = await new TeacherScopeService(g.prisma).covers(owner, s.teacherId);
+    if (covered) expect((await rewards.forLesson(s.ownerId, l)).stars).toBe(1);
+    else await expect(rewards.forLesson(s.ownerId, l)).rejects.toMatchObject({ status: 404 });
+    const superAdmin = randomUUID();
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+      await tx.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'root', 'super_admin', true)`, superAdmin);
+    });
+    expect((await rewards.forLesson(superAdmin, l)).stars).toBe(1);
   });
 });
 

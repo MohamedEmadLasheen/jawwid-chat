@@ -7,6 +7,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
+import { TeacherScopeService } from '../platform/teacher-scope';
 
 /**
  * PD-55: rewards a teacher gives a child during the child's lesson
@@ -43,6 +44,20 @@ export interface GiveRewardInput {
   clientEventId?: unknown;
 }
 
+/** PD-55 PR-5: a lesson's badge -- named for effort, never a rank. */
+export type Badge = 'bronze' | 'silver' | 'gold';
+const BADGES: readonly Badge[] = ['bronze', 'silver', 'gold'];
+
+/** The badge [stars] earned and the stars the next one needs, from the configured thresholds. */
+export function badgeOf(stars: number, thresholds: readonly number[]): { badge: Badge | null; nextBadgeAt: number | null } {
+  const sorted = [...thresholds].slice(0, BADGES.length).sort((a, b) => a - b);
+  let badge: Badge | null = null;
+  sorted.forEach((t, i) => {
+    if (stars >= t) badge = BADGES[i]!;
+  });
+  return { badge, nextBadgeAt: sorted.find((t) => t > stars) ?? null };
+}
+
 interface LessonNow {
   lessonId: string;
   learnerId: string;
@@ -50,6 +65,17 @@ interface LessonNow {
   startsAt: string;
   endsAt: string;
   stars: number;
+  badge: Badge | null;
+  nextBadgeAt: number | null;
+}
+
+/** One learner's rewards in one lesson -- never anyone else's, never compared. */
+export interface LessonRewards {
+  stars: number;
+  badge: Badge | null;
+  nextBadgeAt: number | null;
+  /** The praise given, oldest first: a stamp's key, or the teacher's own words. */
+  praise: Array<{ key: string | null; text: string | null }>;
 }
 
 const invalid = (why: string) => new CommError(CommErrorCode.VALIDATION, why, 400);
@@ -62,7 +88,45 @@ export class RewardService {
     private readonly config: AppConfigService,
     private readonly conversations: ConversationService,
     private readonly outbox: OutboxService,
+    private readonly scope: TeacherScopeService,
   ) {}
+
+  /**
+   * PD-55 PR-5: one lesson's rewards for its learner -- the report card's row,
+   * and later PD-54's history. The lesson's teacher, an active contact of the
+   * learner's family, or staff who supervise the teacher; anyone else is told
+   * there is no such lesson.
+   */
+  async forLesson(actorId: string, lessonId: string): Promise<LessonRewards> {
+    if (!(await this.config.get('rewards.enabled'))) throw notFound();
+    if (!isUuid(lessonId)) throw notFound();
+    const actor = await this.conversations.requireActor(actorId);
+    const [l] = await this.prisma.$queryRaw<Array<{ learner_id: string | null; teacher_id: string; family_id: string | null }>>`
+      select ls.learner_id, ls.teacher_id, lr.family_id
+        from chat.lesson ls left join chat.learner lr on lr.id = ls.learner_id
+       where ls.id = ${lessonId}::uuid`;
+    if (!l || !l.learner_id) throw notFound();
+    let allowed = false;
+    if (actor.kind === 'teacher') allowed = actor.actorId === l.teacher_id;
+    else if (actor.kind === 'contact') {
+      const [c] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+        select exists (select 1 from chat.contact c where c.id = ${actor.actorId}::uuid and c.is_active and c.family_id = ${l.family_id}::uuid) as ok`;
+      allowed = c?.ok === true;
+    } else if (actor.kind === 'staff') allowed = await this.scope.covers(actor, l.teacher_id);
+    if (!allowed) throw notFound();
+
+    const stars = await this.stars(this.prisma, lessonId, l.learner_id);
+    const praise = await this.prisma.$queryRaw<Array<{ praise_key: string | null; praise_text: string | null }>>`
+      select e.praise_key, e.praise_text from chat.learner_reward_event e
+       where e.lesson_id = ${lessonId}::uuid and e.learner_id = ${l.learner_id}::uuid and e.kind = 'praise'
+         and not exists (select 1 from chat.learner_reward_event u where u.undoes = e.id)
+       order by e.created_at, e.id`;
+    return {
+      stars,
+      ...badgeOf(stars, await this.config.get('rewards.lesson_badge_thresholds')),
+      praise: praise.map((p) => ({ key: p.praise_key, text: p.praise_text })),
+    };
+  }
 
   /** The teacher's lessons that are on now, each with its learner and their stars so far -- the tray's "For". */
   async lessonsNow(actorId: string): Promise<{ lessons: LessonNow[] }> {
@@ -77,6 +141,7 @@ export class RewardService {
          and now() between l.starts_at - make_interval(mins => ${await this.config.get('rewards.award_window_before_minutes')}::int)
                        and l.ends_at + make_interval(mins => ${await this.config.get('rewards.award_window_after_minutes')}::int)
        order by l.starts_at, lr.name`;
+    const thresholds = await this.config.get('rewards.lesson_badge_thresholds');
     return {
       lessons: rows.map((r) => ({
         lessonId: r.lesson_id,
@@ -85,6 +150,7 @@ export class RewardService {
         startsAt: r.starts_at.toISOString(),
         endsAt: r.ends_at.toISOString(),
         stars: Number(r.stars),
+        ...badgeOf(Number(r.stars), thresholds),
       })),
     };
   }
@@ -110,6 +176,7 @@ export class RewardService {
     const clientEventId = this.uuid(input.clientEventId, 'clientEventId');
     const boardId = input.boardId === undefined || input.boardId === null ? null : this.uuid(input.boardId, 'boardId');
     const lesson = await this.requireLessonNow(teacherId, learnerId, input.lessonId);
+    const thresholds = await this.config.get('rewards.lesson_badge_thresholds');
 
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.$queryRaw<Array<{ id: string }>>`
@@ -134,9 +201,10 @@ export class RewardService {
           praiseKey,
           praiseText,
           stars,
+          ...badgeOf(stars, thresholds),
         });
       }
-      return { event: { id: eventId, kind, stickerKey, praiseKey, praiseText }, stars };
+      return { event: { id: eventId, kind, stickerKey, praiseKey, praiseText }, stars, ...badgeOf(stars, thresholds) };
     });
   }
 

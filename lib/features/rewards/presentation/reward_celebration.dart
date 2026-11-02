@@ -88,6 +88,8 @@ class _Celebration extends StatelessWidget {
     final l10n = L10n.of(context);
     final calm = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final line = reward.isCelebration ? l10n.rewardCelebrationLine : l10n.rewardStarLine(reward.stars);
+    // PR-5: how far to the next badge -- this child's own progress, nobody else's.
+    final progressLine = reward.isCelebration ? null : rewardProgress(l10n, stars: reward.stars, badge: reward.badge, nextBadgeAt: reward.nextBadgeAt);
     return AnimatedBuilder(
       animation: progress,
       builder: (context, _) {
@@ -103,7 +105,7 @@ class _Celebration extends StatelessWidget {
                 opacity: opacity.clamp(0.0, 1.0),
                 child: Semantics(
                   liveRegion: true,
-                  label: line,
+                  label: progressLine == null ? line : '$line. $progressLine',
                   child: ExcludeSemantics(
                     child: Material(
                       key: const ValueKey('reward-celebration'),
@@ -117,7 +119,17 @@ class _Celebration extends StatelessWidget {
                           children: [
                             Icon(reward.sticker?.icon ?? Icons.star_rounded, color: reward.sticker?.color ?? BoardPalette.stampGold, size: 40),
                             const SizedBox(width: Spacing.spacing3),
-                            Flexible(child: Text(line, style: Theme.of(context).textTheme.titleMedium)),
+                            Flexible(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(line, style: Theme.of(context).textTheme.titleMedium),
+                                  if (progressLine != null)
+                                    Text(progressLine, key: const ValueKey('reward-progress'), style: Theme.of(context).textTheme.bodyMedium),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
