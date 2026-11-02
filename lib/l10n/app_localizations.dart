@@ -8095,6 +8095,42 @@ abstract class L10n {
   /// **'Zoom out'**
   String get boardZoomOut;
 
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Full screen'**
+  String get boardFullScreen;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get boardExitFullScreen;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Show tools'**
+  String get boardShowTools;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide tools'**
+  String get boardHideTools;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get boardPreviousPage;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get boardNextPage;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:

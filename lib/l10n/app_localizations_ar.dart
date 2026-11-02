@@ -4795,6 +4795,24 @@ class L10nAr extends L10n {
   String get boardZoomOut => 'تصغير';
 
   @override
+  String get boardFullScreen => 'ملء الشاشة';
+
+  @override
+  String get boardExitFullScreen => 'الخروج من ملء الشاشة';
+
+  @override
+  String get boardShowTools => 'إظهار الأدوات';
+
+  @override
+  String get boardHideTools => 'إخفاء الأدوات';
+
+  @override
+  String get boardPreviousPage => 'الصفحة السابقة';
+
+  @override
+  String get boardNextPage => 'الصفحة التالية';
+
+  @override
   String get boardZoomFit => 'ملاءمة الصفحة';
 
   @override
