@@ -1408,8 +1408,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                 .firstOrNull
                 ?.message;
 
-            final fromSomeoneElse =
-                showsSenders && !message.isMine && !message.isSystem;
+            // RQA-F5: a card Jawwid posted (authorKind system -- "New teacher",
+            // a lesson card the recorder could not sign) has no sender to show;
+            // it used to fall back to "Member" with an "M" avatar.
+            final fromSomeoneElse = showsSenders &&
+                !message.isMine &&
+                !message.isSystem &&
+                message.authorRole != ParticipantRole.system;
             final showAuthor = fromSomeoneElse &&
                 (older == null ||
                     older.authorId != message.authorId ||

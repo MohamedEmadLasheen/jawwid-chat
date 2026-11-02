@@ -244,12 +244,14 @@ class FakeBackend {
     required String authorName,
     required ParticipantRole authorRole,
     required DateTime at,
+    String? authorId,
   }) {
     final message = Message(
       id: 'srv_${++_sequence}',
       clientMessageId: 'seed_$_sequence',
       conversationId: conversationId,
       sequence: _sequence,
+      authorId: authorId,
       authorName: authorName,
       authorRole: authorRole,
       kind: MessageKind.text,
@@ -266,14 +268,39 @@ class FakeBackend {
   ///
   /// Exists so a test can create the one state that matters for unread: a
   /// message that landed while the reader was looking somewhere else.
-  Message appendIncoming(String conversationId, String body) =>
+  Message appendIncoming(
+    String conversationId,
+    String body, {
+    String? authorId,
+    String authorName = 'جَوِّد',
+    ParticipantRole authorRole = ParticipantRole.admin,
+  }) =>
       _appendServerMessage(
         conversationId: conversationId,
         body: body,
-        authorName: 'جَوِّد',
-        authorRole: ParticipantRole.admin,
+        authorName: authorName,
+        authorRole: authorRole,
+        authorId: authorId,
         at: _now,
       );
+
+  /// A card Jawwid posted (authorKind `system`, no author id) -- the "New
+  /// teacher" card a transfer posts (RQA-F5).
+  Message appendSystemCard(String conversationId, String body) {
+    final message = Message(
+      id: 'srv_${++_sequence}',
+      clientMessageId: 'seed_$_sequence',
+      conversationId: conversationId,
+      sequence: _sequence,
+      authorRole: ParticipantRole.system,
+      kind: MessageKind.card,
+      body: body,
+      createdAt: _now,
+      deliveryState: DeliveryState.delivered,
+    );
+    _messages.putIfAbsent(conversationId, () => []).add(message);
+    return message;
+  }
 
   /// The newest sequence this fixture has issued for a conversation.
   int? highestSequence(String conversationId) {
