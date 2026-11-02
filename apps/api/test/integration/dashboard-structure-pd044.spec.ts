@@ -23,7 +23,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { PrismaService } from '@platform/prisma.service';
 import { TeacherScopeService } from '@platform/teacher-scope';
 import { SeatPolicyRegistry } from '@communication/seats/seat-policy';
 import { OrgStructureService } from '../../src/org/org-structure.service';
@@ -34,14 +33,11 @@ import { CardPoster } from '../../src/supervision/card-poster';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import type { DashboardTile } from '../../src/dashboard/dashboard-tile';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { statementCounter } from './statement-counter';
 
-const logged = new PrismaService({ log: [{ emit: 'event', level: 'query' }] });
-let statements = 0;
-(logged as unknown as { $on(event: 'query', cb: () => void): void }).$on('query', () => {
-  statements += 1;
-});
-
-const g = buildGraph(undefined, logged);
+// Prisma reports queries asynchronously: the marker-fenced counter (#352) counts a block exactly.
+const counter = statementCounter();
+const g = buildGraph(undefined, counter.prisma);
 const audit = new PrismaAuditService();
 const scope = new TeacherScopeService(g.prisma);
 const supervisionChats = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit, scope);
@@ -81,11 +77,7 @@ const all = async (actorId: string) => [
   ...(await covers.dashboardCounts(actorId)),
 ];
 
-async function counted<T>(run: () => Promise<T>): Promise<{ result: T; n: number }> {
-  statements = 0;
-  const result = await run();
-  return { result, n: statements };
-}
+const counted = counter.counted;
 
 /** A family of `n` children nobody supervises yet (taught by teacher_c). */
 async function unsupervisedFamily(n: number): Promise<void> {
