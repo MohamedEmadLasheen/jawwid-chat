@@ -40,7 +40,7 @@ void main() {
   });
 
   group('a page document', () {
-    test('round-trips every MVP element, and keeps a kind it does not draw (an image before PR-4) exactly as it came', () {
+    test('round-trips every MVP element, and an image naming its asset (PR-4), and keeps a kind it does not draw exactly as it came', () {
       final verse = <String, Object?>{
         'id': 'v1',
         'kind': 'verse',
@@ -52,7 +52,9 @@ void main() {
         'transform': {'x': 260.0, 'y': 300.0, 'w': 1400.0, 'h': 420.0},
         'style': {'size': 64.0, 'color': '#1b1b1b'},
       };
-      final image = <String, Object?>{'id': 'i1', 'kind': 'image', 'assetId': '3f2c1a9e-0b1d-4c2e-9f00-1234567890ab'};
+      final image = <String, Object?>{'id': 'i1', 'kind': 'image', 'assetId': '3f2c1a9e-0b1d-4c2e-9f00-1234567890ab', 'x': 10.0, 'y': 20.0, 'w': 400.0, 'h': 300.0};
+      // A kind newer than this build: kept and saved back exactly as it came.
+      final newer = <String, Object?>{'id': 'n1', 'kind': 'sticker', 'x': 1.0, 'y': 2.0, 'w': 3.0, 'h': 4.0, 'emoji': 'x'};
       final page = BoardPage.fromJson({
         'id': 'p1',
         'position': 0,
@@ -95,6 +97,7 @@ void main() {
             ).toJson(),
             verse,
             image,
+            newer,
           ],
         },
       });
@@ -107,14 +110,44 @@ void main() {
         TextElement,
         StampElement,
         VerseElement,
+        ImageElement,
         OpaqueElement,
       ]);
+      expect((page.elements[6] as ImageElement).rect, const Rect.fromLTWH(10, 20, 400, 300));
+      expect(page.elements.last.toJson(), newer);
       final again = BoardPage.fromJson({'id': 'p1', 'document': page.documentJson()});
       expect(again.documentJson(), page.documentJson());
       final out = page.documentJson()['elements'] as List;
       // The verse is a reference and its place: exactly the fields the server allows, no text.
       expect(out[5], verse);
-      expect(out.last, image);
+      expect(out[6], image);
+      expect(out.last, newer);
+    });
+
+    test('an image keeps the fields this build does not know, through moves and scales (review of #328)', () {
+      final json = <String, Object?>{
+        'id': 'i1',
+        'kind': 'image',
+        'assetId': 'aaaaaaaa-0000-4000-8000-000000000001',
+        'x': 10.0,
+        'y': 20.0,
+        'w': 400.0,
+        'h': 300.0,
+        'z': 7,
+        'crop': {'x': 0.1, 'y': 0.0, 'w': 0.8, 'h': 1.0},
+        'style': {'border': 'gold', 'radius': 12},
+        'transform': [1, 0, 0, 1, 0, 0],
+      };
+      final image = BoardElement.fromJson(json) as ImageElement;
+      expect(image.toJson(), json);
+      final moved = image.translated(const Offset(5, 5)).scaled(Offset.zero, 2, 2).toJson();
+      expect(moved['rect'], isNull);
+      expect({'x': moved['x'], 'y': moved['y'], 'w': moved['w'], 'h': moved['h']}, {'x': 30.0, 'y': 50.0, 'w': 800.0, 'h': 600.0});
+      for (final key in ['z', 'crop', 'style', 'transform']) {
+        expect(moved[key], json[key], reason: key);
+      }
+      // A known field is never overwritten by a stale copy in the extras.
+      expect(moved['assetId'], json['assetId']);
     });
 
     test('moving and scaling keep ids; a verse without a position is not moved', () {

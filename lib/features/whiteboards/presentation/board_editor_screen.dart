@@ -7,14 +7,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/providers.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/error_presenter.dart';
+import '../../../core/media/media_picker.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/board_editor_controller.dart';
+import '../application/board_export.dart';
+import '../application/board_image_import.dart';
 import '../application/boards_controller.dart';
+import '../data/board_images.dart';
 import '../data/quran_text_repository.dart';
+import '../data/whiteboards_repository.dart';
 import '../domain/board_elements.dart';
 import '../domain/board_page.dart';
 import 'board_canvas.dart';
@@ -151,8 +157,15 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     // draws them too); the cache's identity changes when one arrives.
     final versesVersion = ref.watch(verseCacheProvider);
     final verseCache = ref.read(verseCacheProvider.notifier);
+    // The board's images: signed with the board, decoded once each (PR-4).
+    final imagesVersion = ref.watch(boardImagesProvider(widget.boardId));
+    final images = ref.read(boardImagesProvider(widget.boardId).notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) verseCache.ensure(s.pages.expand((p) => p.elements));
+      if (!mounted) return;
+      verseCache.ensure(s.pages.expand((p) => p.elements));
+      images
+        ..seed(s.assets)
+        ..ensure(s.pages.expand((p) => p.elements));
     });
     String label(BoardElement e) => switch (e) {
       VerseElement() => switch (verseCache.lookup(e).status) {
@@ -160,6 +173,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         VerseStatus.unavailable => l10n.boardVerseUnavailable,
         _ => l10n.boardVerseLoading,
       },
+      ImageElement() => images.lookup(e.assetId).status == BoardImageStatus.unavailable ? l10n.boardImageUnavailable : l10n.boardImageLoading,
       _ => l10n.boardElementUnknown,
     };
     final canvas = BoardCanvas(
@@ -174,6 +188,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       placeholderLabel: label,
       verses: verseCache.lookup,
       versesVersion: versesVersion,
+      images: images.lookup,
+      imagesVersion: imagesVersion,
     );
     return CallbackShortcuts(
       bindings: {
@@ -198,7 +214,11 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
               if (editable) ...[
                 IconButton(tooltip: l10n.boardUndo, onPressed: s.canUndo ? _controller.undo : null, icon: const Icon(Icons.undo)),
                 IconButton(tooltip: l10n.boardRedo, onPressed: s.canRedo ? _controller.redo : null, icon: const Icon(Icons.redo)),
-                _BoardMenu(onDelete: () => _moveToTrash(context, s)),
+                _BoardMenu(
+                  onDelete: () => _moveToTrash(context, s),
+                  onExportPng: () => _exportPng(context, label),
+                  onExportPdf: () => _exportPdf(context, label),
+                ),
               ],
             ],
           ),
@@ -247,6 +267,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                             }),
                             onDelete: _deleteSelection,
                             onVerse: () => _insertVerse(context),
+                            onImage: s.imagesSupported ? () => _insertImage(context) : null,
                             onLayout: _controller.setLayout,
                             onBackground: _controller.setBackground,
                           )
@@ -279,7 +300,15 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                   },
                 ),
               ),
-              _PageBar(state: s, editable: editable, verses: verseCache.lookup, versesVersion: versesVersion, placeholderLabel: label),
+              _PageBar(
+                state: s,
+                editable: editable,
+                verses: verseCache.lookup,
+                versesVersion: versesVersion,
+                images: images.lookup,
+                imagesVersion: imagesVersion,
+                placeholderLabel: label,
+              ),
             ],
           ),
         ),
@@ -378,6 +407,137 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     _controller.commit([...s.page.elements, verse]);
   }
 
+  /// PR-4 (§4.4): a picture from the device, checked and uploaded, then placed
+  /// in the middle of the page it was started on. Every way it can fail says
+  /// so plainly.
+  ///
+  /// After each await the screen may be gone (the teacher left mid-upload):
+  /// `mounted` is checked before `ref` is touched again, and a picture that
+  /// is then not placed is let go (review of #328).
+  Future<void> _insertImage(BuildContext context) async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    void say(String text) => messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+    PreparedImage? prepared;
+    try {
+      final picked = await ref.read(mediaPickerProvider).pickImage();
+      if (picked == null || !mounted) return;
+      final pageId = ref.read(boardEditorProvider(widget.boardId)).value?.page.id;
+      if (pageId == null) return;
+      say(l10n.boardImageAdding);
+      final bytes = await ref.read(boardImageBytesProvider)(picked.filePath);
+      if (!mounted) return;
+      prepared = await prepareBoardImage(bytes);
+      if (!mounted) return;
+      final asset = await uploadBoardImage(ref.read(whiteboardsRepositoryProvider), ref.read(boardUploaderProvider), widget.boardId, prepared);
+      if (!mounted) return;
+      ref.read(boardImagesProvider(widget.boardId).notifier).remember(asset, prepared.image);
+      final placed = prepared;
+      prepared = null; // the board's images hold it now
+      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height));
+      messenger.hideCurrentSnackBar();
+    } on MediaPickException catch (e) {
+      say(switch (e.reason) {
+        MediaPickFailure.permissionDenied => l10n.attachmentPermissionDenied,
+        MediaPickFailure.tooLarge => l10n.boardImageTooLarge,
+        MediaPickFailure.typeNotAllowed => l10n.boardImageNotImage,
+        MediaPickFailure.unsupported => l10n.attachmentUnsupported,
+        MediaPickFailure.failed => l10n.boardImageFailed,
+      });
+    } on ImageImportException catch (e) {
+      if (e.outcome == ImageImportOutcome.imagesOff && mounted) _controller.imagesOff();
+      say(switch (e.outcome) {
+        ImageImportOutcome.imagesOff => l10n.boardImageOff,
+        ImageImportOutcome.tooLarge => l10n.boardImageTooLarge,
+        ImageImportOutcome.notAnImage => l10n.boardImageNotImage,
+        _ => l10n.boardImageFailed,
+      });
+    } on Object {
+      say(l10n.boardImageFailed);
+    } finally {
+      prepared?.image.dispose();
+    }
+  }
+
+  /// What a page is drawn with, as the editor draws it.
+  PageInk _pageInk(String Function(BoardElement) label) => PageInk(
+    verses: ref.read(verseCacheProvider.notifier).lookup,
+    images: ref.read(boardImagesProvider(widget.boardId).notifier).lookup,
+    label: label,
+  );
+
+  /// PR-4 (§4.6): the page on screen as a PNG, drawn here and saved here.
+  Future<void> _exportPng(BuildContext context, String Function(BoardElement) label) =>
+      _export(context, (s) async {
+        final ink = _pageInk(label);
+        await settleForExport([s.page], ink);
+        final png = await renderPagePng(s.page, ink);
+        return ref.read(exportSaverProvider)(png, exportName('${s.board.title} ${s.current + 1}', 'png'), 'image/png');
+      });
+
+  /// PR-4 (§4.6): every page drawn here, the PDF made by the server from them.
+  Future<void> _exportPdf(BuildContext context, String Function(BoardElement) label) =>
+      _export(context, (s) async {
+        final ink = _pageInk(label);
+        await settleForExport(s.pages, ink);
+        final pngs = [for (final p in s.pages) await renderPagePng(p, ink)];
+        // Closing the editor mid-export lets the export go on the server.
+        final pdf = await exportPdf(ref.read(whiteboardsRepositoryProvider), ref.read(boardUploaderProvider), widget.boardId, pngs, cancelled: () => !mounted);
+        return ref.read(exportSaverProvider)(pdf, exportName(s.board.title, 'pdf'), 'application/pdf');
+      });
+
+  /// One export at a time (review of #335): a second tap while one is drawn
+  /// and sent would draw everything twice and take a second worker.
+  bool _exporting = false;
+
+  Future<void> _export(BuildContext context, Future<ExportOutcome> Function(EditorState s) run) async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    void say(String text) => messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+    if (_exporting) return;
+    // Nowhere to save it here: said before a page is drawn or the server asked.
+    if (!ref.read(exportHereProvider)) return say(l10n.boardExportNotHere);
+    final s = ref.read(boardEditorProvider(widget.boardId)).value;
+    if (s == null) return;
+    _exporting = true;
+    say(l10n.boardExporting);
+    ExportOutcome outcome;
+    try {
+      outcome = await run(s);
+    } on ExportException catch (e) {
+      outcome = e.outcome;
+    } on Object {
+      outcome = ExportOutcome.failed;
+    } finally {
+      _exporting = false;
+    }
+    if (!mounted) return;
+    switch (outcome) {
+      case ExportOutcome.cancelled:
+        messenger.hideCurrentSnackBar();
+      case ExportOutcome.saved:
+        say(l10n.boardExportSaved);
+      case ExportOutcome.exportsOff:
+        say(l10n.boardExportOff);
+      case ExportOutcome.busy:
+        say(l10n.boardExportBusy);
+      case ExportOutcome.inProgress:
+        say(l10n.boardExportInProgress);
+      case ExportOutcome.expired:
+        say(l10n.boardExportExpired);
+      case ExportOutcome.tooLarge:
+        say(l10n.boardExportTooLarge);
+      case ExportOutcome.notHere:
+        say(l10n.boardExportNotHere);
+      case ExportOutcome.failed:
+        say(l10n.boardExportFailed);
+    }
+  }
+
   Future<void> _rename(BuildContext context, EditorState s) async {
     final l10n = L10n.of(context);
     final title = await askBoardTitle(context, title: l10n.boardsRename, action: l10n.boardsSave, initial: s.board.title);
@@ -469,18 +629,28 @@ class _FailedBanner extends StatelessWidget {
 }
 
 class _BoardMenu extends StatelessWidget {
-  const _BoardMenu({required this.onDelete});
+  const _BoardMenu({required this.onDelete, required this.onExportPng, required this.onExportPdf});
 
   final VoidCallback onDelete;
+  final VoidCallback onExportPng;
+  final VoidCallback onExportPdf;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     return PopupMenuButton<String>(
       tooltip: l10n.boardMore,
-      itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text(l10n.boardsDelete))],
-      onSelected: (v) {
-        if (v == 'delete') onDelete();
+      itemBuilder: (_) => [
+        PopupMenuItem(value: 'png', child: Text(l10n.boardExportPng)),
+        PopupMenuItem(value: 'pdf', child: Text(l10n.boardExportPdf)),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: 'delete', child: Text(l10n.boardsDelete)),
+      ],
+      onSelected: (v) => switch (v) {
+        'png' => onExportPng(),
+        'pdf' => onExportPdf(),
+        'delete' => onDelete(),
+        _ => null,
       },
     );
   }
@@ -502,6 +672,7 @@ class _ToolPanel extends StatelessWidget {
     required this.onStamp,
     required this.onDelete,
     required this.onVerse,
+    required this.onImage,
     required this.onLayout,
     required this.onBackground,
   });
@@ -518,6 +689,8 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
+  /// Null where the server has no images (or said they are off): no button.
+  final VoidCallback? onImage;
   final ValueChanged<PageLayout> onLayout;
   final ValueChanged<PageBackground> onBackground;
 
@@ -570,6 +743,7 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
+      if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
@@ -705,12 +879,22 @@ class _ZoomControls extends StatelessWidget {
 
 /// The page strip: thumbnails, and add / duplicate / delete / move a page.
 class _PageBar extends ConsumerWidget {
-  const _PageBar({required this.state, required this.editable, this.verses, this.versesVersion, this.placeholderLabel});
+  const _PageBar({
+    required this.state,
+    required this.editable,
+    this.verses,
+    this.versesVersion,
+    this.images,
+    this.imagesVersion,
+    this.placeholderLabel,
+  });
 
   final EditorState state;
   final bool editable;
   final VerseSource? verses;
   final Object? versesVersion;
+  final BoardImageSource? images;
+  final Object? imagesVersion;
   final String Function(BoardElement element)? placeholderLabel;
 
   @override
@@ -753,6 +937,8 @@ class _PageBar extends ConsumerWidget {
                             page: state.pages[i],
                             verses: verses,
                             versesVersion: versesVersion,
+                            images: images,
+                            imagesVersion: imagesVersion,
                             placeholderLabel: placeholderLabel,
                           ),
                         ),

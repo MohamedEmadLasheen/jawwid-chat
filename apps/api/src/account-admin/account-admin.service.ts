@@ -13,6 +13,8 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { FIRST_LOGIN_MAILER, recoveryMail, sendWithin, type MailSender } from '../account-recovery/recovery-delivery';
 import type { Actor } from '../platform/types';
+import { AccountAdminScope } from '../platform/account-admin-scope';
+import { recordUse } from './family-access.service';
 
 export const ACCOUNT_AUDIT = {
   SUSPENDED: 'account.suspended',
@@ -40,6 +42,8 @@ export interface AccountSummaryDto {
   staffRole: string | null;
   /** Family accounts: the family, and its children -- an administrator looks a student up by name. */
   familyName: string | null;
+  /** ADMIN-002: the family, so a grantor can open it to one Operations staff member. */
+  familyId: string | null;
   children: string[];
   /** provisioned | active | suspended | deactivated */
   status: string;
@@ -92,6 +96,11 @@ type AccountRow = Prisma.AccountGetPayload<{ select: typeof ACCOUNT_SELECT }>;
 @Injectable()
 export class AccountAdminService {
   private readonly log = new Logger('AccountAdmin');
+  /** TEACHER-011: the per-account narrowing (a teacher account: the caller's PD-35 scope). */
+  private scopeRule?: AccountAdminScope;
+  private get scope(): AccountAdminScope {
+    return (this.scopeRule ??= new AccountAdminScope(this.prisma));
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -123,6 +132,7 @@ export class AccountAdminService {
     const like = q ? { contains: q, mode: Prisma.QueryMode.insensitive } : undefined;
     // PD-42 S3: under the Sales switch 'own', a Sales member sees the parents of their own families only.
     const owned = await this.salesOwnedFamilies(actor, standing);
+    const scope = await this.scope.listFilter(actor);
 
     const rows = await this.prisma.account.findMany({
       where: {
@@ -130,6 +140,8 @@ export class AccountAdminService {
         kind: { in: kind },
         // Never the caller's own, never the super admin's.
         NOT: [{ staff: { id: actor.actorId } }, { staff: { role: StaffRole.SUPER_ADMIN } }],
+        // TEACHER-011: a teacher account within the caller's teacher scope only.
+        AND: [scope.where],
         ...(owned ? { contacts: { some: { familyId: { in: owned } } } } : {}),
         ...(like
           ? {
@@ -156,9 +168,11 @@ export class AccountAdminService {
       take: LIST_LIMIT + 1,
     });
 
+    const shown = rows.slice(0, LIST_LIMIT);
+    await this.logGrantedViews(actor, shown, scope.grantedFamilies);
     return {
       truncated: rows.length > LIST_LIMIT,
-      accounts: rows.slice(0, LIST_LIMIT).map((row) => this.summary(actor, row, standing)),
+      accounts: shown.map((row) => this.summary(actor, row, standing)),
       administers: kinds,
     };
   }
@@ -172,6 +186,7 @@ export class AccountAdminService {
     // decision says which, for the logs). Every kind's acts include a reset.
     const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), 'reset_password', standing);
     if (!decision.allowed) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, decision.reason);
+    await this.requireInScope(actor, row, 'view');
     await this.requireOwnedFamily(actor, standing, row);
     return this.summary(actor, row, standing, await this.managed(actor, row));
   }
@@ -383,8 +398,40 @@ export class AccountAdminService {
     const standing = await accountAdminStandingOf(this.prisma, actor);
     const decision = this.authz.canAdministerAccount(actor, toTarget(row, await this.managed(actor, row)), act, standing);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.requireInScope(actor, row, act);
     await this.requireOwnedFamily(actor, standing, row);
     return { row };
+  }
+
+  /**
+   * ADMIN-002: a list that shows a family only an exceptional grant opened is a
+   * use of that grant -- the parent's name, the family's and the children's are
+   * on the screen. One 'used' row (act 'list') per such grant per request.
+   */
+  private async logGrantedViews(actor: Actor, shown: AccountRow[], grantedFamilies: Map<string, string>) {
+    if (grantedFamilies.size === 0) return;
+    const byGrant = new Map<string, string[]>();
+    for (const row of shown) {
+      const grantId = grantedFamilies.get(row.contacts[0]?.familyId ?? '');
+      if (grantId) byGrant.set(grantId, [...(byGrant.get(grantId) ?? []), row.id]);
+    }
+    if (byGrant.size === 0) return;
+    const grants = await this.prisma.familyAccessGrant.findMany({ where: { id: { in: [...byGrant.keys()] } } });
+    for (const grant of grants) await recordUse(this.audit, this.prisma, grant, actor.actorId, 'list', byGrant.get(grant.id)!);
+  }
+
+  /**
+   * TEACHER-011 / ADMIN-002: an account outside the caller's scope (a teacher
+   * not theirs, a family they do not reach) reads as not found; one opened
+   * only by an exceptional grant is allowed, and this use is logged.
+   */
+  private async requireInScope(actor: Actor, row: AccountRow, act: string) {
+    const decision = await this.scope.decide(actor, { kind: row.kind, teacherId: row.teacher?.id, familyId: row.contacts[0]?.familyId });
+    if (!decision.allowed) {
+      // Word for word what an absent account says: out of scope is not told apart from absent.
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such account');
+    }
+    if (decision.grant) await recordUse(this.audit, this.prisma, decision.grant, actor.actorId, act, row.id);
   }
 
   /**
@@ -454,6 +501,7 @@ export class AccountAdminService {
       name: row.staff?.name ?? row.teacher?.name ?? contact?.name ?? '',
       staffRole: row.staff?.role ?? null,
       familyName: contact?.family.displayName ?? null,
+      familyId: contact?.familyId ?? null,
       children: contact?.family.learners.map((l) => l.name) ?? [],
       status: row.status,
       hasLogin: row.credential !== null,

@@ -619,6 +619,24 @@ abstract class L10n {
   /// **'Reconnecting…'**
   String get callReconnecting;
 
+  /// CHATSCHED-013: in a call, the other side dropped; the call ends after 60 s unless they come back.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost. Waiting for them to reconnect…'**
+  String get callWaitingForReconnect;
+
+  /// CHATSCHED-013: the call ended because a participant dropped and did not reconnect within 60 s.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended: the connection was lost'**
+  String get callEndedConnectionLost;
+
+  /// CHATSCHED-013: in call history and the chat's call card, beside the outcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get callHistoryConnectionLost;
+
   /// No description provided for @callAccept.
   ///
   /// In en, this message translates to:
@@ -5008,8 +5026,56 @@ abstract class L10n {
   /// No description provided for @recoveryOpen.
   ///
   /// In en, this message translates to:
-  /// **'Trouble signing in?'**
+  /// **'Parents: trouble signing in?'**
   String get recoveryOpen;
+
+  /// TEACHER-023: under the parents' recovery link on the sign-in screen; self-service recovery is for parents only.
+  ///
+  /// In en, this message translates to:
+  /// **'Teachers and staff: ask your supervisor for a reset code.'**
+  String get signInStaffResetHint;
+
+  /// TEACHER-023: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordTitle;
+
+  /// No description provided for @changePasswordCurrentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get changePasswordCurrentLabel;
+
+  /// No description provided for @changePasswordWrongCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not your current password.'**
+  String get changePasswordWrongCurrent;
+
+  /// No description provided for @changePasswordCurrentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password.'**
+  String get changePasswordCurrentRequired;
+
+  /// No description provided for @changePasswordUnchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a password different from your current one.'**
+  String get changePasswordUnchanged;
+
+  /// No description provided for @changePasswordAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordAction;
+
+  /// No description provided for @changePasswordDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed. You were signed out on your other devices.'**
+  String get changePasswordDone;
 
   /// No description provided for @recoveryTitle.
   ///
@@ -8112,6 +8178,120 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Verse text updated, re-insert'**
   String get boardVerseChanged;
+
+  /// PD-39 whiteboard: the tool that puts a picture on the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get boardToolImage;
+
+  /// PD-39 whiteboard images: while a picture uploads.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding the image…'**
+  String get boardImageAdding;
+
+  /// PD-39 whiteboard images: an image not yet shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the image…'**
+  String get boardImageLoading;
+
+  /// PD-39 whiteboard images: an image that could not be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Image unavailable'**
+  String get boardImageUnavailable;
+
+  /// PD-39 whiteboard images: 503 COMM.WHITEBOARD_ASSETS_OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Pictures on boards aren\'t switched on yet.'**
+  String get boardImageOff;
+
+  /// PD-39 whiteboard images: over a size, board or storage limit.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture is too large. Use one under 10 MB, or fewer pictures on this board.'**
+  String get boardImageTooLarge;
+
+  /// PD-39 whiteboard images: not a picture the server accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'That file isn\'t a picture the board can show. Use a PNG, JPEG or WebP.'**
+  String get boardImageNotImage;
+
+  /// PD-39 whiteboard images: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The picture couldn\'t be added. Try again.'**
+  String get boardImageFailed;
+
+  /// PD-39 whiteboard export: board menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Export this page as a picture (PNG)'**
+  String get boardExportPng;
+
+  /// PD-39 whiteboard export: board menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Export the board as a PDF'**
+  String get boardExportPdf;
+
+  /// PD-39 whiteboard export: while pages are drawn and the PDF is made.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the export…'**
+  String get boardExporting;
+
+  /// PD-39 whiteboard export: done.
+  ///
+  /// In en, this message translates to:
+  /// **'Exported.'**
+  String get boardExportSaved;
+
+  /// PD-39 whiteboard export: 503 COMM.WHITEBOARD_ASSETS_OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Export isn\'t switched on yet.'**
+  String get boardExportOff;
+
+  /// PD-39 whiteboard export: 429, the export workers are busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Many exports are being made right now. Try again in a minute.'**
+  String get boardExportBusy;
+
+  /// PD-39 whiteboard export: 409 the teacher's own exports in flight (five at most), or this one already being made.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have exports being made. Wait a few minutes, then try again.'**
+  String get boardExportInProgress;
+
+  /// PD-39 whiteboard export: 409 COMM.WHITEBOARD_STATE, the export's pages expired before compose.
+  ///
+  /// In en, this message translates to:
+  /// **'The export took too long and ran out. Export again.'**
+  String get boardExportExpired;
+
+  /// PD-39 whiteboard export: over the export limits.
+  ///
+  /// In en, this message translates to:
+  /// **'This board is too large to export in one go.'**
+  String get boardExportTooLarge;
+
+  /// PD-39 whiteboard export: a phone or tablet build has nowhere to save a file.
+  ///
+  /// In en, this message translates to:
+  /// **'Export works in the browser. Open the board there to export it.'**
+  String get boardExportNotHere;
+
+  /// PD-39 whiteboard export: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The export couldn\'t be made. Try again.'**
+  String get boardExportFailed;
 
   /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
   ///

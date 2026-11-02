@@ -18,6 +18,8 @@ export interface AccountSummary {
   name: string
   staffRole: string | null
   familyName: string | null
+  /** ADMIN-002: the family of a parent account (for a temporary-access grant). Absent on an older API. */
+  familyId?: string | null
   children: string[]
   status: AccountStatus
   hasLogin: boolean

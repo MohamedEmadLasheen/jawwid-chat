@@ -9,6 +9,7 @@ import type { Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { SeatPolicyRegistry } from '../communication/seats/seat-policy';
 import { ActorKind, ConversationType, StaffRole } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { TrialGroupService } from '../lessons/trial-group.service';
 
@@ -25,6 +26,19 @@ const REASON_MAX = 500;
 const CANDIDATE_LIMIT = 200;
 
 const denied = (reason: string) => new CommError(CommErrorCode.TEACHER_FILE_DENIED, reason);
+
+interface TeacherRow {
+  id: string;
+  name: string;
+  active: boolean;
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  supervisor_live: boolean | null;
+  assigned_at: Date | null;
+}
+
+/** A live teacher with no supervisor, or one who no longer supervises (left, or left the department). */
+const isUnsupervised = (t: TeacherRow) => t.active && !(t.supervisor_id && t.supervisor_live);
 const invalid = (reason: string) => new CommError(CommErrorCode.VALIDATION, reason, 400);
 
 /**
@@ -92,25 +106,10 @@ export class TeacherSupervisorService implements OnModuleInit, OnApplicationBoot
   async assignments(actorId: string) {
     const actor = await this.requireAssigner(actorId);
     const org = actor.organizationId as string;
-    const [teachers, supervisors, strict] = await Promise.all([
-      this.prisma.$queryRaw<Array<{ id: string; name: string; active: boolean; supervisor_id: string | null; supervisor_name: string | null; supervisor_live: boolean | null; assigned_at: Date | null }>>`
-        SELECT t.id::text AS id, t.name, (t.is_active AND t.left_at IS NULL) AS active,
-               a.supervisor_id::text AS supervisor_id, s.name AS supervisor_name, a.assigned_at,
-               -- A supervisor who left, or left the department, supervises no one.
-               (s.is_active AND s.left_at IS NULL AND EXISTS (
-                  SELECT 1 FROM chat.department_member m JOIN chat.department d ON d.id = m.department_id
-                   WHERE m.staff_id = s.id AND m.position = 'supervisor' AND d.kind = 'teachers')) AS supervisor_live
-          FROM chat.teacher t
-          LEFT JOIN chat.teacher_supervisor_assignment a ON a.teacher_id = t.id
-          LEFT JOIN chat.staff s ON s.id = a.supervisor_id
-         WHERE t.organization_id = ${org}::uuid
-         ORDER BY (t.is_active AND t.left_at IS NULL) DESC, t.name`,
-      this.eligibleSupervisors(org),
-      this.scope.strict(),
-    ]);
+    const [teachers, supervisors, strict] = await Promise.all([this.teacherRows(org), this.eligibleSupervisors(org), this.scope.strict()]);
     return {
       strictScope: strict,
-      unassigned: teachers.filter((t) => t.active && !(t.supervisor_id && t.supervisor_live)).length,
+      unassigned: teachers.filter(isUnsupervised).length,
       teachers: teachers.map((t) => ({
         id: t.id,
         name: t.name,
@@ -379,9 +378,48 @@ export class TeacherSupervisorService implements OnModuleInit, OnApplicationBoot
     };
   }
 
+  /**
+   * PD-44: the Dashboard's teachers tile -- `assignments`' own `unassigned`
+   * (the Teachers tab's banner), over the same rows (teacherRows) and the same
+   * rule (isUnsupervised). It comes to whom the tab shows: the super admin and
+   * the Teachers Manager. Other staff get no tile; non-staff are refused.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.assignerOrNone(actorId);
+    if (!actor) return [];
+    const org = actor.organizationId as string;
+    // The page shows the Teachers tab only with a Teachers department in view.
+    if (!(await this.prisma.department.findFirst({ where: { organizationId: org, kind: 'teachers' }, select: { id: true } }))) return [];
+    const teachers = await this.teacherRows(org);
+    return [dashboardTile('teachers.unsupervised', teachers.filter(isUnsupervised).length)];
+  }
+
+  /** Every teacher of the organization with their supervisor, and whether that supervisor still supervises. */
+  private teacherRows(org: string) {
+    return this.prisma.$queryRaw<TeacherRow[]>`
+        SELECT t.id::text AS id, t.name, (t.is_active AND t.left_at IS NULL) AS active,
+               a.supervisor_id::text AS supervisor_id, s.name AS supervisor_name, a.assigned_at,
+               -- A supervisor who left, or left the department, supervises no one.
+               (s.is_active AND s.left_at IS NULL AND EXISTS (
+                  SELECT 1 FROM chat.department_member m JOIN chat.department d ON d.id = m.department_id
+                   WHERE m.staff_id = s.id AND m.position = 'supervisor' AND d.kind = 'teachers')) AS supervisor_live
+          FROM chat.teacher t
+          LEFT JOIN chat.teacher_supervisor_assignment a ON a.teacher_id = t.id
+          LEFT JOIN chat.staff s ON s.id = a.supervisor_id
+         WHERE t.organization_id = ${org}::uuid
+         ORDER BY (t.is_active AND t.left_at IS NULL) DESC, t.name`;
+  }
+
   // ------------------------------------------------------------------
 
   private async requireAssigner(actorId: string): Promise<Actor> {
+    const actor = await this.assignerOrNone(actorId);
+    if (!actor) throw denied('teachers are assigned to supervisors by the Teachers Manager');
+    return actor;
+  }
+
+  /** The assigner, or null for other staff (PD-44: no tile); anyone not live staff is refused. */
+  private async assignerOrNone(actorId: string): Promise<Actor | null> {
     const actor = await this.conversations.requireActor(actorId);
     if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) throw denied('staff only');
     if (actor.staffRole === StaffRole.SUPER_ADMIN) return actor;
@@ -389,10 +427,7 @@ export class TeacherSupervisorService implements OnModuleInit, OnApplicationBoot
       SELECT EXISTS (SELECT 1 FROM chat.department d
                       WHERE d.kind = 'teachers' AND d.organization_id = ${actor.organizationId}::uuid
                         AND d.manager_id = ${actor.actorId}::uuid) AS manager`;
-    if (!manager || actor.staffRole !== StaffRole.MANAGER) {
-      throw denied('teachers are assigned to supervisors by the Teachers Manager');
-    }
-    return actor;
+    return manager && actor.staffRole === StaffRole.MANAGER ? actor : null;
   }
 
   private async inTeachersDepartment(actor: Actor): Promise<boolean> {

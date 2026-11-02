@@ -125,4 +125,124 @@ void main() {
     expect(server.lastRequestTo('POST', '/whiteboards/b1/pages/order')!.body, {'revision': 4, 'pageIds': ['p2', 'p1']});
     expect((await repo.deletePage('b1', 'p2', 5)).revision, 6);
   });
+
+  test('images (PR-4): grant, confirm and re-sign use the API paths; the board answer carries its images', () async {
+    const asset = {
+      'id': 'A1B2C3D4-0000-4000-8000-000000000001',
+      'kind': 'image',
+      'contentType': 'image/png',
+      'width': 40,
+      'height': 30,
+      'byteSize': 1234,
+      'url': 'https://storage.example.test/whiteboards/x?sig=1',
+      'expiresAt': '2026-10-29T10:15:00.000Z',
+    };
+    server
+      ..on('GET', '/whiteboards/b1', [Reply.ok({...board(), 'assets': [asset]})])
+      ..on('POST', '/whiteboards/b1/assets/grant', [
+        const Reply.ok({
+          'assetId': 'a1',
+          'upload': {
+            'objectKey': 'whiteboard-uploads/o/b1/a1/u',
+            'uploadUrl': 'https://storage.example.test/up?sig=2',
+            'method': 'PUT',
+            'headers': {'Content-Type': 'image/png'},
+            'expiresAt': '2026-10-29T10:15:00.000Z',
+          },
+        }),
+      ])
+      ..on('POST', '/whiteboards/b1/assets/a1/confirm', [const Reply.ok({'asset': asset})])
+      ..on('GET', '/whiteboards/b1/assets', [const Reply.ok({'assets': [asset]})]);
+    final repo = repository();
+    final opened = await repo.open('b1');
+    expect(opened.assets.single.id, 'a1b2c3d4-0000-4000-8000-000000000001');
+    expect(opened.assets.single.url, asset['url']);
+
+    final grant = await repo.grantImage('b1', contentType: 'image/png', byteSize: 1234);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/assets/grant')!.body, {'kind': 'image', 'contentType': 'image/png', 'byteSize': 1234});
+    expect([grant.assetId, grant.objectKey, grant.uploadUrl, grant.headers], ['a1', 'whiteboard-uploads/o/b1/a1/u', 'https://storage.example.test/up?sig=2', {'Content-Type': 'image/png'}]);
+
+    final kept = await repo.confirmImage('b1', 'a1', grant.objectKey);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/assets/a1/confirm')!.body, {'objectKey': 'whiteboard-uploads/o/b1/a1/u'});
+    expect([kept.width, kept.height], [40, 30]);
+    expect((await repo.imageUrls('b1')).single.url, asset['url']);
+  });
+
+  test('images switched off: the API\'s 503 COMM.WHITEBOARD_ASSETS_OFF reaches the caller intact', () async {
+    server.on('POST', '/whiteboards/b1/assets/grant', [Reply.commError(503, kAssetsOffCode)]);
+    await expectLater(
+      repository().grantImage('b1', contentType: 'image/png', byteSize: 10),
+      throwsA(isA<AppError>().having((e) => e.code, 'code', kAssetsOffCode)),
+    );
+  });
+
+  test('export (PR-4): one grant per page in order; compose sends every page and answers with the PDF bytes', () async {
+    server
+      ..on('POST', '/whiteboards/b1/exports/grant', [
+        const Reply.ok({
+          'pages': [
+            {'assetId': 'e0', 'upload': {'objectKey': 'whiteboard-uploads/o/b1/e0/u', 'uploadUrl': 'https://s.test/e0', 'headers': {'Content-Type': 'image/png'}}},
+            {'assetId': 'e1', 'upload': {'objectKey': 'whiteboard-uploads/o/b1/e1/u', 'uploadUrl': 'https://s.test/e1', 'headers': {'Content-Type': 'image/png'}}},
+          ],
+        }),
+      ])
+      ..on('POST', '/whiteboards/b1/exports/compose', [
+        const Reply(200, '%PDF-1.3 board', headers: {'content-type': 'application/pdf'}),
+      ]);
+    final repo = repository();
+    final grants = await repo.grantExport('b1', [111, 222]);
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/exports/grant')!.body, {
+      'pages': [
+        {'byteSize': 111},
+        {'byteSize': 222},
+      ],
+    });
+    expect(grants.map((g) => g.assetId), ['e0', 'e1']);
+    final pdf = await repo.composeExport('b1', grants);
+    expect(String.fromCharCodes(pdf), '%PDF-1.3 board');
+    expect(server.lastRequestTo('POST', '/whiteboards/b1/exports/compose')!.body, {
+      'pages': [
+        {'assetId': 'e0', 'objectKey': 'whiteboard-uploads/o/b1/e0/u'},
+        {'assetId': 'e1', 'objectKey': 'whiteboard-uploads/o/b1/e1/u'},
+      ],
+    });
+  });
+
+  test('a compose refusal\'s code reaches the caller, though the answer is read as bytes (review of #335)', () async {
+    final grants = [const ImageGrant(assetId: 'e0', objectKey: 'whiteboard-uploads/o/b1/e0/u', uploadUrl: 'https://s.test/e0', headers: {})];
+    for (final (status, code) in [
+      (409, 'COMM.WHITEBOARD_STATE'),
+      (409, 'COMM.WHITEBOARD_CONFLICT'),
+      (503, kAssetsOffCode),
+      (429, 'COMM.WHITEBOARD_LIMIT'),
+    ]) {
+      server.on('POST', '/whiteboards/b1/exports/compose', [Reply.commError(status, code)]);
+      await expectLater(repository().composeExport('b1', grants), throwsA(isA<AppError>().having((e) => e.code, 'code', code)), reason: code);
+    }
+  });
+
+  test('compose has its own, longer wait: it may queue behind the export workers (review of #335)', () async {
+    // Every other call gives up after the client's own receive timeout (here 300 ms).
+    HttpWhiteboardsRepository repo({Duration? compose}) => HttpWhiteboardsRepository(
+      client: buildApiClient(config: ApiConfig(baseUrl: server.baseUrl, receiveTimeout: const Duration(milliseconds: 300)), tokens: _NoTokens()),
+      composeTimeout: compose ?? kComposeTimeout,
+    );
+    expect(kComposeTimeout, greaterThanOrEqualTo(const Duration(seconds: 90)));
+    server
+      ..on('POST', '/whiteboards/b1/exports/grant', [const Reply(200, {'pages': []}, delay: Duration(milliseconds: 900))])
+      ..on('POST', '/whiteboards/b1/exports/compose', [const Reply(200, '%PDF-1.3 slow', headers: {'content-type': 'application/pdf'}, delay: Duration(milliseconds: 900))]);
+    await expectLater(repo().grantExport('b1', [1]), throwsA(isA<AppError>().having((e) => e.kind, 'kind', AppErrorKind.timeout)));
+    final pdf = await repo().composeExport('b1', const []);
+    expect(String.fromCharCodes(pdf), '%PDF-1.3 slow');
+  });
+
+  test('an export given up on is released: DELETE /exports with every page (review of #335)', () async {
+    server.on('DELETE', '/whiteboards/b1/exports', [const Reply.ok({'released': 1})]);
+    await repository().releaseExport('b1', [const ImageGrant(assetId: 'e0', objectKey: 'whiteboard-uploads/o/b1/e0/u', uploadUrl: 'https://s.test/e0', headers: {})]);
+    expect(server.lastRequestTo('DELETE', '/whiteboards/b1/exports')!.body, {
+      'pages': [
+        {'assetId': 'e0', 'objectKey': 'whiteboard-uploads/o/b1/e0/u'},
+      ],
+    });
+  });
 }

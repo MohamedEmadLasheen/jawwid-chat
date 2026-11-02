@@ -109,8 +109,8 @@ class ApiClient {
   Future<Response<T>> put<T>(String path, {Object? data}) =>
       _guard(() => _dio.put<T>(path, data: data));
 
-  Future<Response<T>> delete<T>(String path, {Map<String, Object?>? query}) =>
-      _guard(() => _dio.delete<T>(path, queryParameters: query));
+  Future<Response<T>> delete<T>(String path, {Map<String, Object?>? query, Object? data}) =>
+      _guard(() => _dio.delete<T>(path, queryParameters: query, data: data));
 
   Future<Response<T>> _guard<T>(Future<Response<T>> Function() send) async {
     try {

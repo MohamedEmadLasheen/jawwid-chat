@@ -106,6 +106,7 @@ whatever these say.
 | `REDIS_URL` | **yes** | req | req | req |
 | `QUEUE_PREFIX` | no | req | req | req |
 | `WORKER_CONCURRENCY` | no | opt | opt | opt |
+| `REALTIME_DELIVERY_CONCURRENCY` | no | opt | opt | opt |
 
 ### Auth
 

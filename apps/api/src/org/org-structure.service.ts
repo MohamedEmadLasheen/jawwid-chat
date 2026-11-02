@@ -8,7 +8,8 @@ import type { AuditService } from '../platform/audit.service';
 import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/realtime-revocation';
 import { isConversationStaff, type Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { StaffRole } from '../communication/contracts/vocab';
+import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { SupervisorCoverService } from './supervisor-cover.service';
 import { DepartmentRoomService, type RoomChange } from './department-room.service';
 
@@ -19,6 +20,8 @@ const POSITIONS: ReadonlySet<string> = new Set(Object.values(DepartmentPosition)
 
 /** The longest a single backup activation may run before someone renews it. */
 const MAX_ACTIVATION_DAYS = 90;
+/** The Children tab's list size (taken before its filters); the Dashboard tile caps at it too (PD-44). */
+const LEARNER_LIMIT = 2000;
 
 export type BackupStatus = 'dormant' | 'active' | 'expired' | 'deactivated' | 'ended';
 
@@ -141,10 +144,50 @@ export class OrgStructureService {
     const actor = await this.conversations.requireActor(actorId);
     const gate = this.authz.canViewOrgStructure(actor);
     if (!gate.allowed) throw new CommError(gate.code, gate.reason);
-    const org = actor.organizationId as string;
     if (filter.supervisorId !== undefined && !isUuid(filter.supervisorId)) {
       throw new CommError(CommErrorCode.VALIDATION, 'supervisorId: must be a uuid', 400);
     }
+    return { learners: (await this.learnerList(actor, filter)).learners };
+  }
+
+  /**
+   * PD-44: the Dashboard's children tile -- the Children tab's "Without a
+   * supervisor" filter, found as `learners` finds it (learnerList: the same
+   * scope, the same LEARNER_LIMIT rows, then the filter), so the count is the
+   * list's length; `capped` when the rows reached the limit. It comes only to
+   * whom the page shows that tab: an Operations department in view (the super
+   * admin, the Operations Manager). Other staff get no tile; non-staff are
+   * refused as the page refuses them.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.conversations.requireActor(actorId);
+    const gate = this.authz.canViewOrgStructure(actor);
+    if (!gate.allowed) {
+      if (actor.kind === ActorKind.STAFF && actor.isActive) return [];
+      throw new CommError(gate.code, gate.reason);
+    }
+    if (!(await this.seesOperations(actor))) return [];
+    const { learners, candidates } = await this.learnerList(actor, { unassigned: true });
+    return [dashboardTile('learners.unsupervised', learners.length, null, candidates >= LEARNER_LIMIT)];
+  }
+
+  /** Does the Organization page show this viewer an Operations department (its Children tab, its covers)? */
+  async seesOperations(actor: Actor): Promise<boolean> {
+    const org = actor.organizationId as string;
+    const dept = await this.prisma.department.findFirst({
+      where: {
+        organizationId: org,
+        kind: DepartmentKind.OPERATIONS,
+        ...(actor.staffRole === StaffRole.SUPER_ADMIN ? {} : { managerId: actor.actorId }),
+      },
+      select: { id: true },
+    });
+    return dept !== null;
+  }
+
+  /** What `learners` lists: the viewer's scope, LEARNER_LIMIT rows, then the filter. */
+  private async learnerList(actor: Actor, filter: { supervisorId?: string; unassigned?: boolean }) {
+    const org = actor.organizationId as string;
 
     let where: Prisma.LearnerWhereInput = { organizationId: org };
     if (actor.staffRole !== StaffRole.SUPER_ADMIN) {
@@ -152,7 +195,7 @@ export class OrgStructureService {
         where: { organizationId: org, managerId: actor.actorId },
         include: { members: { select: { staffId: true } } },
       });
-      if (!dept) return { learners: [] };
+      if (!dept) return { learners: [], candidates: 0 };
       const supervised = await this.prisma.learnerSupervision.findMany({
         where: { organizationId: org, supervisorId: { in: dept.members.map((m) => m.staffId) } },
         select: { learnerId: true },
@@ -173,7 +216,7 @@ export class OrgStructureService {
       where,
       include: { family: { select: { id: true, displayName: true } }, teacher: { select: { id: true, name: true } } },
       orderBy: [{ familyId: 'asc' }, { name: 'asc' }],
-      take: 2000,
+      take: LEARNER_LIMIT,
     });
     const supervision = await this.prisma.learnerSupervision.findMany({
       where: { learnerId: { in: rows.map((r) => r.id) } },
@@ -202,6 +245,7 @@ export class OrgStructureService {
           if (filter.supervisorId) return l.supervisor?.id === filter.supervisorId;
           return true;
         }),
+      candidates: rows.length,
     };
   }
 

@@ -65,6 +65,10 @@ beforeEach(() => {
     return json({ error: { code: 'unrouted', message: `no mock for ${method} ${url}` } }, 404)
   })
   vi.stubGlobal('fetch', fetchMock)
+  // PD-52: leave and discipline are on the Attendance & Complaints page, which asks what to offer.
+  on('GET', /\/teacher-records\/access$/, () =>
+    json({ basis: 'teachers', attendance: { view: true, record: true, decide: true }, grants: { view: true, record: true }, leaveBalance: true, amounts: false, opensFile: true }),
+  )
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
   on('GET', /\/teacher-files$/, () => json({ access: { canEditPersonal: false, canWriteSupervision: true }, teachers: [] }))
 })
@@ -84,7 +88,7 @@ describe('the Teachers area has three pages', () => {
   })
 
   it('the super admin has the same pages under Admin > Teachers, without Statistics (that is Admin > Reports)', async () => {
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/supervision' })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/boards' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers department' })
     expect(within(tabs).getByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/admin/teachers')
     expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/admin/teachers/supervision')

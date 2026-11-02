@@ -24,6 +24,7 @@ import {
   useText,
 } from './copy'
 import { adminSectionPath, type AdminSection } from './sections'
+import { DashboardSections, useDashboardSections } from '@/features/dashboard/ManagerDashboard'
 
 const RECENT = 8
 const STATE_ORDER = ['waiting_on_jawwid', 'waiting_on_customer', 'open', 'resolved'] as const
@@ -47,11 +48,14 @@ export function DashboardView({ section }: { section: AdminSection }) {
   const { t, time } = useI18n()
   const overview = useQuery({ queryKey: qk.adminOverview, queryFn: adminApi.overview })
   const conversations = useQuery({ queryKey: qk.adminConversations, queryFn: adminApi.conversations })
+  // PD-44 PR-8 (Q7): the manager Dashboard's sections, above the inventory -- one Dashboard per person.
+  const manager = useDashboardSections()
   const o = overview.data
 
   const refresh = () => {
     void overview.refetch()
     void conversations.refetch()
+    manager.refetch()
   }
 
   return (
@@ -64,11 +68,13 @@ export function DashboardView({ section }: { section: AdminSection }) {
           actions={
             <RefreshAction
               updatedAt={overview.dataUpdatedAt}
-              fetching={overview.isFetching || conversations.isFetching}
+              fetching={overview.isFetching || conversations.isFetching || manager.fetching}
               onRefresh={refresh}
             />
           }
         />
+
+        <DashboardSections shown={manager.shown} />
 
         {/* Figures kept from an earlier read are shown only with this warning,
             never silently as current. */}

@@ -10,7 +10,8 @@ import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/rea
 import type { Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { NotificationService } from '../communication/notifications/notification.service';
-import { StaffRole } from '../communication/contracts/vocab';
+import { ActorKind, StaffRole } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService;
@@ -110,6 +111,37 @@ export class SupervisorCoverService {
     const actor = await this.conversations.requireActor(actorId);
     const org = requireOrg(actor);
     const activeOnly = query.active === 'true' || query.active === true;
+    return { covers: await this.views(await this.listed(actor, org, activeOnly), actor) };
+  }
+
+  /**
+   * PD-44: the Dashboard's covers tile -- the "covered by" badges on the
+   * Organization page's Structure tab: `list({ active: true })`'s rows
+   * (listed: the same scope, the same LIST_LIMIT) whose status is active --
+   * started, not ended (statusOf). Scheduled covers are not counted. It comes
+   * to whom the page shows the Operations department, which alone has covers:
+   * the super admin and the Operations Manager. Other staff get no tile;
+   * non-staff are refused as the page refuses them.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.conversations.requireActor(actorId);
+    const org = requireOrg(actor);
+    if (actor.kind !== ActorKind.STAFF) throw new CommError(CommErrorCode.ORG_STRUCTURE_DENIED, 'covers are the organization\'s');
+    if (actor.staffRole !== StaffRole.SUPER_ADMIN && actor.staffRole !== StaffRole.MANAGER) return [];
+    const operations = await this.prisma.department.findFirst({
+      where: { organizationId: org, kind: 'operations', ...(actor.staffRole === StaffRole.SUPER_ADMIN ? {} : { managerId: actor.actorId }) },
+      select: { id: true },
+    });
+    if (!operations) return [];
+    const now = new Date();
+    const rows = await this.listed(actor, org, true);
+    const active = rows.filter((c) => statusOf(c, now) === 'active');
+    const oldest = active.reduce<Date | null>((min, c) => (min === null || c.startsAt < min ? c.startsAt : min), null);
+    return [dashboardTile('covers.active', active.length, oldest, rows.length >= LIST_LIMIT)];
+  }
+
+  /** What `list` lists: the viewer's covers (the organization's, their department's, or their own), newest first. */
+  private async listed(actor: Actor, org: string, activeOnly: boolean): Promise<SupervisorCover[]> {
     const where: Prisma.SupervisorCoverWhereInput = {
       organizationId: org,
       ...(activeOnly ? { endedAt: null } : {}),
@@ -120,8 +152,7 @@ export class SupervisorCoverService {
     } else if (actor.staffRole !== StaffRole.SUPER_ADMIN) {
       where.OR = [{ primaryId: actor.actorId }, { backupId: actor.actorId }];
     }
-    const rows = await this.prisma.supervisorCover.findMany({ where, orderBy: { startsAt: 'desc' }, take: 100 });
-    return { covers: await this.views(rows, actor) };
+    return this.prisma.supervisorCover.findMany({ where, orderBy: { startsAt: 'desc' }, take: LIST_LIMIT });
   }
 
   /** The signed-in staff member's own state: may they hand over, are they away, whom do they cover. */
@@ -687,7 +718,7 @@ export class SupervisorCoverService {
     const primaries = [...new Set(covers.map((c) => c.primaryId))];
     const acts = new Map(await Promise.all(primaries.map(async (p) => [p, await this.authz.actsFor(actor, p, now)] as const)));
     return covers.map((c) => {
-      const status: CoverStatus = c.endedAt || c.endsAt <= now ? 'ended' : c.startsAt > now ? 'scheduled' : 'active';
+      const status = statusOf(c, now);
       const ctx = { organizationId: c.organizationId, actsForPrimary: acts.get(c.primaryId) ?? null, isCoveringBackup: actor.actorId === c.backupId };
       return {
         id: c.id,
@@ -811,6 +842,14 @@ export function refusal(e: unknown): unknown {
 const invalid = (field: string, why: string) => new CommError(CommErrorCode.VALIDATION, `${field}: ${why}`, 400);
 const structure = (why: string) => new CommError(CommErrorCode.ORG_STRUCTURE_INVALID, why, 409);
 const notFound = () => new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'cover not found', 404);
+
+/** The covers list's size; the Dashboard tile flags `capped` at it (PD-44). */
+const LIST_LIMIT = 100;
+
+/** A cover's state at `now`: ended (closed, or past its end), scheduled (not started yet) or active. */
+function statusOf(c: Pick<SupervisorCover, 'endedAt' | 'endsAt' | 'startsAt'>, now: Date): CoverStatus {
+  return c.endedAt || c.endsAt <= now ? 'ended' : c.startsAt > now ? 'scheduled' : 'active';
+}
 
 function requireOrg(actor: Actor): string {
   if (!actor.organizationId) throw new CommError(CommErrorCode.ORG_STRUCTURE_DENIED, 'no organization');

@@ -118,6 +118,15 @@ class MessageLog {
 
   Message? byClientId(String clientMessageId) => _byKey[clientMessageId];
 
+  /// Drop a message that never reached the server (discarded from the outbox): it leaves
+  /// no bubble behind (PARENT-005). One the server has confirmed is never removed here.
+  MessageLog removeLocal(String clientMessageId) {
+    final existing = _byKey[clientMessageId];
+    if (existing == null || !existing.deliveryState.isLocal) return this;
+    final next = Map<String, Message>.from(_byKey)..remove(clientMessageId);
+    return MessageLog._(next, _sorted(next.values), oldestCursor, hasMoreOlder);
+  }
+
   /// Find a message by its **server** id.
   ///
   /// The log is keyed by client id, so this is a scan — which is what it should

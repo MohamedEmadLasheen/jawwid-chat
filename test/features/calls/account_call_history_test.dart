@@ -47,6 +47,7 @@ Map<String, Object?> row({
   String type = 'direct',
   int? durationSeconds = 120,
   String startedAt = '2026-09-28T10:00:00.000Z',
+  String? endReason,
 }) =>
     {
       'id': id,
@@ -58,6 +59,7 @@ Map<String, Object?> row({
       'startedAt': startedAt,
       'endedAt': '2026-09-28T10:02:00.000Z',
       'durationSeconds': durationSeconds,
+      'endReason': ?endReason,
       'participants': const [],
     };
 
@@ -124,6 +126,17 @@ void main() {
       final page = await repository().page();
 
       expect(page.items.single.duration, isNull);
+    });
+
+    test('CHATSCHED-013: a call that dropped is marked, a hang-up and an older row are not', () async {
+      reply(Reply.ok({
+        'items': [row(id: 'a', endReason: 'connection_lost'), row(id: 'b', endReason: 'hung_up'), row(id: 'c')],
+        'nextCursor': null,
+      }));
+
+      final page = await repository().page();
+
+      expect(page.items.map((e) => e.connectionLost), [true, false, false]);
     });
 
     test('7. an empty page is empty, not an error', () async {

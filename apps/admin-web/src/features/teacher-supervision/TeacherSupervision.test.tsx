@@ -38,6 +38,14 @@ const bodyOf = (call: unknown[] | undefined) => {
 const supervisor = makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin' })
 const roster = { teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, timezone: null }], learners: [] }
 const access = { canEditPersonal: false, canWriteSupervision: true, canViewFinance: false }
+const fullAccess = {
+  basis: 'teachers',
+  attendance: { view: true, record: true, decide: true },
+  grants: { view: true, record: true },
+  leaveBalance: true,
+  amounts: false,
+  opensFile: true,
+}
 
 function violation(over: Partial<Violation> = {}): Violation {
   return {
@@ -121,6 +129,8 @@ beforeEach(() => {
     }),
   )
   on('GET', /\/lessons\/access$/, () => json({ lessonManager: true, sales: false, operations: false, calendar: true, supervisionPage: true }))
+  // PD-52: the Attendance & Complaints page asks what to offer.
+  on('GET', /\/teacher-records\/access$/, () => json(fullAccess))
   on('GET', /\/teacher-files$/, () =>
     json({ access, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, studentCount: 3, openComplaints: 1, away: null }], supervisors: [{ id: 's-2', name: 'Supervisor Two' }] }),
   )
@@ -427,60 +437,65 @@ describe('5b. complaints from the parent app (PD-32)', () => {
   })
 })
 
-describe('6. parent feedback (PD-32)', () => {
-  it('lists every piece of feedback, filters by type and status, takes one and resolves praise with a reply', async () => {
-    on('GET', /\/parent-feedback$/, () =>
+describe('6. parent feedback (PD-32) -- since PD-52 by category: suggestions here, complaints in Complaints, praise on page B', () => {
+  const SUGGESTIONS = '/teacher-attendance?section=complaints&view=suggestions'
+  const suggestion = (over: Partial<StaffFeedback> = {}) => feedback({ category: 'suggestion', body: 'More homework, please.', ...over })
+
+  it('opens on the status the URL names, so a Dashboard tile opens the list it counted (PD-44)', async () => {
+    on('GET', /\/parent-feedback\?status=received&category=suggestion$/, () => json({ canWrite: true, feedback: [suggestion()] }))
+    on('GET', /\/parent-feedback\?status=in_review&category=suggestion$/, () => json({ canWrite: true, feedback: [] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: `${SUGGESTIONS}&status=received` })
+    expect(await screen.findByText('More homework, please.')).toBeInTheDocument()
+    const status = screen.getByRole('group', { name: 'Status' })
+    expect(within(status).getByRole('button', { name: 'Received' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(status).getByRole('button', { name: 'In review' }))
+    await waitFor(() => expect(calls('GET', /\/parent-feedback\?status=in_review&category=suggestion$/).length).toBeGreaterThan(0))
+  })
+
+  it('the old Parent feedback link lands by category: praise on Testimonials, a suggestion here, the rest in Complaints', async () => {
+    on('GET', /\/parent-feedback\?category=suggestion$/, () => json({ canWrite: true, feedback: [suggestion()] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=feedback&category=suggestion' })
+    expect(await screen.findByText('More homework, please.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Suggestions', pressed: true })).toBeInTheDocument()
+  })
+
+  it('lists the suggestions, filters by status, takes one and resolves it with a reply', async () => {
+    on('GET', /\/parent-feedback\?category=suggestion$/, () =>
       json({
         canWrite: true,
         feedback: [
-          feedback(),
-          feedback({ id: 'pf-2', category: 'suggestion', body: 'More homework, please.', status: 'resolved', response: 'Done.', respondedBy: { id: 's-1', name: 'Supervisor One' }, respondedAt: '2026-10-25T10:00:00Z' }),
-          feedback({ id: 'pf-3', category: 'complaint', body: 'Ends early.', status: 'in_review', complaint: { entryId: 'c-app', handledBy: { id: 's-2', name: 'Supervisor Two' } } }),
+          suggestion({ id: 'pf-1', body: 'Shorter lessons for the little one.' }),
+          suggestion({ id: 'pf-2', status: 'resolved', response: 'Done.', respondedBy: { id: 's-1', name: 'Supervisor One' }, respondedAt: '2026-10-25T10:00:00Z' }),
         ],
       }),
     )
-    on('GET', /\/parent-feedback\?category=praise$/, () => json({ canWrite: true, feedback: [feedback()] }))
-    on('GET', /\/parent-feedback\?status=resolved&category=praise$/, () => json({ canWrite: true, feedback: [] }))
-    on('POST', /\/parent-feedback\/pf-1\/take$/, () => json(feedback({ status: 'in_review' })))
-    on('POST', /\/parent-feedback\/pf-1\/reply$/, () => json(feedback({ status: 'resolved', response: 'Thank you!' })))
-    on('POST', /\/parent-feedback\/pf-3\/reply$/, () => json(feedback({ id: 'pf-3', category: 'complaint' })))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=feedback' })
+    on('GET', /\/parent-feedback\?status=resolved&category=suggestion$/, () => json({ canWrite: true, feedback: [] }))
+    on('POST', /\/parent-feedback\/pf-1\/take$/, () => json(suggestion({ id: 'pf-1', status: 'in_review' })))
+    on('POST', /\/parent-feedback\/pf-1\/reply$/, () => json(suggestion({ id: 'pf-1', status: 'resolved', response: 'Thank you!' })))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: SUGGESTIONS })
 
-    expect(await screen.findByRole('button', { name: 'Parent feedback', pressed: true })).toBeInTheDocument()
-    const praise = (await screen.findByText('The teacher is patient and kind.')).closest('li')!
-    expect(within(praise).getByText('Praise')).toBeInTheDocument()
-    expect(within(praise).getByText('Received')).toBeInTheDocument()
-    expect(within(praise).getByText('Student: Child One')).toBeInTheDocument()
-    expect(within(praise).getByText('Parent: Parent Alpha')).toBeInTheDocument()
-    expect(within(praise).getByRole('link', { name: 'Teacher: Teacher One' })).toHaveAttribute('href', '/teachers/files/t-1')
-    const suggestion = screen.getByText('More homework, please.').closest('li')!
-    expect(within(suggestion).getByText('Done.')).toBeInTheDocument()
-    expect(within(suggestion).queryByRole('button', { name: 'Take it' })).not.toBeInTheDocument()
-    expect(within(suggestion).getByRole('button', { name: 'Change the reply' })).toBeInTheDocument()
-    const complaintRow = screen.getByText('Ends early.').closest('li')!
-    expect(within(complaintRow).getByText('Handled by Supervisor Two')).toBeInTheDocument()
+    const first = (await screen.findByText('Shorter lessons for the little one.')).closest('li')!
+    expect(within(first).getByText('Suggestion')).toBeInTheDocument()
+    expect(within(first).getByText('Received')).toBeInTheDocument()
+    expect(within(first).getByText('Student: Child One')).toBeInTheDocument()
+    expect(within(first).getByText('Parent: Parent Alpha')).toBeInTheDocument()
+    expect(within(first).getByRole('link', { name: 'Teacher: Teacher One' })).toHaveAttribute('href', '/teachers/files/t-1')
+    const answered = screen.getByText('More homework, please.').closest('li')!
+    expect(within(answered).getByText('Done.')).toBeInTheDocument()
+    expect(within(answered).queryByRole('button', { name: 'Take it' })).not.toBeInTheDocument()
+    expect(within(answered).getByRole('button', { name: 'Change the reply' })).toBeInTheDocument()
+    // One category: no category filter.
+    expect(screen.queryByRole('button', { name: 'Praise' })).not.toBeInTheDocument()
 
-    // The complaint's reply cannot resolve it: the dialog points at the Teacher File.
-    await userEvent.click(within(complaintRow).getByRole('button', { name: 'Reply to parent' }))
-    let dialog = await screen.findByRole('dialog')
-    expect(within(dialog).queryByRole('checkbox', { name: /Mark resolved/ })).not.toBeInTheDocument()
-    expect(within(dialog).getByText(/resolved on the Teacher File/)).toBeInTheDocument()
-    expect(within(dialog).getByRole('link', { name: 'Open the teacher’s file' })).toHaveAttribute('href', '/teachers/files/t-1')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-
-    // Filters reach the server.
-    await userEvent.click(screen.getByRole('button', { name: 'Praise' }))
-    await waitFor(() => expect(screen.queryByText('More homework, please.')).not.toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: 'Resolved' }))
     expect(await screen.findByText('No feedback here.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Any status' }))
 
-    const row = (await screen.findByText('The teacher is patient and kind.')).closest('li')!
+    const row = (await screen.findByText('Shorter lessons for the little one.')).closest('li')!
     await userEvent.click(within(row).getByRole('button', { name: 'Take it' }))
     await waitFor(() => expect(calls('POST', /\/pf-1\/take$/)).toHaveLength(1))
-
     await userEvent.click(within(row).getByRole('button', { name: 'Reply to parent' }))
-    dialog = await screen.findByRole('dialog', { name: 'Reply to Parent Alpha' })
+    const dialog = await screen.findByRole('dialog', { name: 'Reply to Parent Alpha' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send reply' }))
     expect(within(dialog).getByText('Write the reply first.')).toBeInTheDocument()
     expect(calls('POST', /\/reply$/)).toHaveLength(0)
@@ -492,23 +507,23 @@ describe('6. parent feedback (PD-32)', () => {
   })
 
   it('a reader who cannot write sees the feedback without actions', async () => {
-    on('GET', /\/parent-feedback$/, () => json({ canWrite: false, feedback: [feedback()] }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=feedback' })
-    await screen.findByText('The teacher is patient and kind.')
+    on('GET', /\/parent-feedback\?category=suggestion$/, () => json({ canWrite: false, feedback: [suggestion()] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: SUGGESTIONS })
+    await screen.findByText('More homework, please.')
     expect(screen.queryByRole('button', { name: 'Take it' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reply to parent' })).not.toBeInTheDocument()
   })
 
   it('a refusal is said plainly', async () => {
-    on('GET', /\/parent-feedback$/, () => json({ error: { code: 'COMM.TEACHER_FILE_DENIED', message: 'denied' } }, 403))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=feedback' })
+    on('GET', /\/parent-feedback\?category=suggestion$/, () => json({ error: { code: 'COMM.TEACHER_FILE_DENIED', message: 'denied' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: SUGGESTIONS })
     expect(await screen.findByText('Teacher Files are for the Teachers department and the super admin.')).toBeInTheDocument()
   })
 
   it('reads in Arabic', async () => {
-    on('GET', /\/parent-feedback$/, () => json({ canWrite: true, feedback: [feedback({ category: 'suggestion' })] }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=feedback', locale: 'ar' })
-    const row = (await screen.findByText('The teacher is patient and kind.')).closest('li')!
+    on('GET', /\/parent-feedback\?category=suggestion$/, () => json({ canWrite: true, feedback: [suggestion()] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: SUGGESTIONS, locale: 'ar' })
+    const row = (await screen.findByText('More homework, please.')).closest('li')!
     expect(within(row).getByText('اقتراح')).toBeInTheDocument()
     expect(within(row).getByText('مستلمة')).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: 'الرد على ولي الأمر' })).toBeInTheDocument()
@@ -519,6 +534,7 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
   const opsSupervisor = makeStaff({ id: 'o-1', name: 'Ops One', role: 'admin' })
   function asOperations() {
     on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: false, operations: true, calendar: true, supervisionPage: true }))
+    on('GET', /\/teacher-records\/access$/, () => json({ ...fullAccess, basis: 'operations', leaveBalance: false, opensFile: false }))
     on('GET', /\/teacher-supervision\/directory$/, () =>
       json({
         basis: 'operations',
@@ -529,15 +545,15 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     )
   }
 
-  it('the Teachers entry is offered when the server confirms the page, and leads straight to Supervision', () => {
-    const teachersPath = (access: Parameters<typeof destinationsFor>[1]) =>
-      destinationsFor('admin', access).flatMap(entriesOf).find((e) => e.key === 'teachers')?.path
-    expect(teachersPath({ lessonManager: false, operations: true, supervisionPage: true })).toBe('/teachers/supervision')
-    expect(teachersPath({ lessonManager: true, supervisionPage: true })).toBe('/teachers')
-    expect(teachersPath({ lessonManager: false, operations: true, supervisionPage: false })).toBeUndefined()
+  it('PD-52: Operations is offered the two teacher-records pages, not the Teachers area', () => {
+    const paths = (access: Parameters<typeof destinationsFor>[1]) => destinationsFor('admin', access).flatMap(entriesOf).map((e) => e.path)
+    const ops = paths({ lessonManager: false, operations: true, supervisionPage: true, teacherAttendance: true, teacherGrants: true })
+    expect(ops).toEqual(expect.arrayContaining(['/teacher-attendance', '/teacher-grants']))
+    expect(ops.filter((p) => p.startsWith('/teachers'))).toEqual([])
+    expect(paths({ lessonManager: true, supervisionPage: true })).toContain('/teachers')
   })
 
-  it('shows only the Supervision tab of the Teachers area, and no Teacher File links', async () => {
+  it('lands on Attendance & complaints (PD-52), outside the Teachers area, with no Teacher File links', async () => {
     asOperations()
     on('GET', /\/teacher-leave-overview$/, () =>
       // As the server sends it to Operations: no allowance, no days used, no balance.
@@ -545,8 +561,8 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     )
     on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
     renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision' })
-    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
-    await waitFor(() => expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Supervision']))
+    expect(await screen.findByRole('heading', { name: 'Attendance & complaints' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Teachers' })).not.toBeInTheDocument()
     const row = (await screen.findByText('Teacher One')).closest('tr')!
     expect(within(row).queryByRole('link')).not.toBeInTheDocument()
     // The balance column is the Teachers department's: not there at all, not "Not tracked".

@@ -182,10 +182,15 @@ class CallHistoryEntry {
     required this.isGroup,
     this.duration,
     this.direction,
+    this.connectionLost = false,
   });
 
   final String id;
   final String conversationId;
+
+  /// CHATSCHED-013: the call ended because the connection was lost (the server's
+  /// `endReason`), not because anybody hung up.
+  final bool connectionLost;
 
   /// A display name — "Jawwid", "Mr. Ahmed". Never a phone number (§36).
   final String title;
@@ -383,6 +388,26 @@ abstract interface class PasswordResetRepository {
   /// `POST /auth/password-reset`. A refusal is an AppError with the server's code
   /// (`AUTH.RESET_CODE_INVALID`, `AUTH.PASSWORD_TOO_WEAK`, `COMMON.RATE_LIMITED`).
   Future<void> complete({required String username, required String code, required String password});
+}
+
+/// TEACHER-023: a signed-in account (any role) changes its own password. On the
+/// AUTHENTICATED client: the current password is proven, and the server ends every OTHER
+/// session of the account and keeps this one.
+abstract interface class PasswordChangeRepository {
+  /// `POST /auth/password/change`. A refusal is an AppError with the server's code
+  /// (`AUTH.INVALID_CREDENTIALS` for a wrong current password, `AUTH.PASSWORD_TOO_WEAK`,
+  /// `AUTH.PASSWORD_UNCHANGED`, `COMMON.RATE_LIMITED` -- also while the account is locked).
+  /// Success rotates this device's session; the new token pair is stored before it returns.
+  Future<void> change({required String currentPassword, required String newPassword});
+}
+
+/// The build with no account server (fixtures, tests that do not override it).
+class NoPasswordChangeRepository implements PasswordChangeRepository {
+  const NoPasswordChangeRepository();
+
+  @override
+  Future<void> change({required String currentPassword, required String newPassword}) =>
+      throw UnsupportedError('no account server in this build');
 }
 
 /// The build with no reset server (fixtures, tests that do not override it).
@@ -723,7 +748,7 @@ abstract interface class CallRepository {
   /// accepting one on 2026-09-27 -- a participant naming their own call history
   /// is false history through the front door -- so the parameter is gone rather
   /// than left here to be rediscovered and silently ignored.
-  Future<void> end({required String callId});
+  Future<void> end({required String callId, bool connectionLost = false});
 
   /// `GET /calls/history/:conversationId`.
   ///

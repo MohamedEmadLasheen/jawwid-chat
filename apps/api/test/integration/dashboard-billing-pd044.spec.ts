@@ -24,7 +24,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { PrismaService } from '@platform/prisma.service';
 import { AvatarService } from '@communication/profile/avatar.service';
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { BillingService } from '../../src/billing/billing.service';
@@ -35,15 +34,12 @@ import { PaymentsService } from '../../src/billing/payments.service';
 import { ParentRecordService } from '../../src/parent-profile/parent-record.service';
 import type { DashboardTile } from '../../src/dashboard/dashboard-tile';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { statementCounter } from './statement-counter';
 import { FakeStripe } from './fake-stripe';
 
-const logged = new PrismaService({ log: [{ emit: 'event', level: 'query' }] });
-let statements = 0;
-(logged as unknown as { $on(event: 'query', cb: () => void): void }).$on('query', () => {
-  statements += 1;
-});
+const counter = statementCounter();
 
-const g = buildGraph(undefined, logged);
+const g = buildGraph(undefined, counter.prisma);
 const audit = new PrismaAuditService();
 const stripe = new FakeStripe();
 const ledger = new PaymentLedger(g.prisma, audit, g.notifications, g.reminders);
@@ -84,11 +80,7 @@ const both = async (actorId: string) => [
   ...(await parents.dashboardCounts(actorId)),
 ];
 
-async function counted<T>(run: () => Promise<T>): Promise<{ result: T; n: number }> {
-  statements = 0;
-  const result = await run();
-  return { result, n: statements };
-}
+const counted = counter.counted;
 
 /** A family the instalments, receipts and packages below belong to: family_x by default. */
 interface Fam {

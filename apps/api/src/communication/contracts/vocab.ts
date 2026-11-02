@@ -188,6 +188,19 @@ export const CallOutcome = {
 } as const;
 export type CallOutcome = (typeof CallOutcome)[keyof typeof CallOutcome];
 
+/**
+ * CHATSCHED-013: WHY a call ended, beside its outcome. `connection_lost` is
+ * an unexpected drop nobody came back from within the grace; `hung_up` is a
+ * participant ending it on purpose.
+ */
+export const CallEndReason = {
+  HUNG_UP: 'hung_up',
+  DECLINED: 'declined',
+  RING_TIMEOUT: 'ring_timeout',
+  CONNECTION_LOST: 'connection_lost',
+} as const;
+export type CallEndReason = (typeof CallEndReason)[keyof typeof CallEndReason];
+
 export const NotificationStatus = {
   SCHEDULED: 'scheduled',
   SENT: 'sent',

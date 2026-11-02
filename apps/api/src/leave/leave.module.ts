@@ -14,5 +14,7 @@ import { LeaveService } from './leave.service';
   imports: [CommunicationModule, SupervisionModule, LessonModule],
   controllers: [LeaveController],
   providers: [LeaveService],
+  // PD-44: the Dashboard's Teachers section counts this page's list.
+  exports: [LeaveService],
 })
 export class LeaveModule {}

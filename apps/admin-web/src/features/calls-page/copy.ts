@@ -37,6 +37,8 @@ export interface CallsPageCopy {
   missed: string
   declined: string
   ongoing: string
+  /** CHATSCHED-013: beside the outcome, when the call dropped and nobody came back. */
+  connectionLost: string
   duration: (seconds: number) => string
   // tiles
   actions: string
@@ -132,6 +134,7 @@ const ar: CallsPageCopy = {
   missed: 'فائتة',
   declined: 'مرفوضة',
   ongoing: 'جارية',
+  connectionLost: 'انقطع الاتصال',
   duration,
   actions: 'إجراءات المكالمات',
   startCall: 'بدء مكالمة',
@@ -219,6 +222,7 @@ const en: CallsPageCopy = {
   missed: 'Missed',
   declined: 'Declined',
   ongoing: 'Ongoing',
+  connectionLost: 'Connection lost',
   duration,
   actions: 'Call actions',
   startCall: 'Start call',

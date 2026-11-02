@@ -38,38 +38,38 @@ export class LeaveController {
 
   // --- the Teachers department ---
 
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_attendance.view')
   @Get('teacher-leave-requests')
   list(@ActorId() actorId: string, @Query('state') state?: string) {
     return this.leave.list(actorId, { state });
   }
 
-  @Requires('teacher_supervision.record')
+  @Requires('teacher_supervision.record', 'teacher_attendance.decide')
   @Post('teacher-leave-requests/:id/approve')
   approve(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.leave.approve(actorId, id, body ?? {});
   }
 
-  @Requires('teacher_supervision.record')
+  @Requires('teacher_supervision.record', 'teacher_attendance.decide')
   @Post('teacher-leave-requests/:id/decline')
   decline(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.leave.decline(actorId, id, body ?? {});
   }
 
-  @Requires('teacher_supervision.record')
+  @Requires('teacher_supervision.record', 'teacher_attendance.decide')
   @Post('teacher-leave-requests/:id/cancel')
   cancel(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.leave.cancel(actorId, id, body ?? {});
   }
 
   /** PD-26: every teacher's balance and whether they are away today. */
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_attendance.view')
   @Get('teacher-leave-overview')
   overview(@ActorId() actorId: string, @Query('year') year?: string) {
     return this.leave.overview(actorId, year);
   }
 
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_attendance.view')
   @Get('teacher-files/:teacherId/leave')
   teacherLeave(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Query('year') year?: string) {
     return this.leave.teacherLeave(actorId, teacherId, year);

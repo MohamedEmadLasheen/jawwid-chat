@@ -734,6 +734,7 @@ class _CallRow extends ConsumerWidget {
     final duration = entry.duration;
     final detail = [
       outcome,
+      if (entry.connectionLost) l10n.callHistoryConnectionLost,
       if (duration != null)
         l10n.callDuration(duration.inMinutes, duration.inSeconds.remainder(60)),
     ].join(' · ');

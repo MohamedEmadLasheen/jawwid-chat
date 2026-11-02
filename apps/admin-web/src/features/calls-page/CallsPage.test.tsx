@@ -147,6 +147,7 @@ const HISTORY_PAGE_1 = {
       startedAt: '2026-10-19T09:00:00.000Z',
       endedAt: '2026-10-19T09:02:05.000Z',
       durationSeconds: 125,
+      endReason: 'connection_lost',
       participants: [
         { actorId: 'staff_a', actorKind: 'staff', displayName: 'Admin A', joinedAt: null, leftAt: null },
         { actorId: 'parent-1', actorKind: 'contact', displayName: 'Parent One', joinedAt: null, leftAt: null },
@@ -300,6 +301,9 @@ describe('Calls page layout', () => {
     expect(within(rows[0]!).getByText('Parent One')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('Answered')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('· 2:05')).toBeInTheDocument()
+    // CHATSCHED-013: a call that dropped says so beside its outcome.
+    expect(within(rows[0]!).getByText('· Connection lost')).toBeInTheDocument()
+    expect(within(rows[1]!).queryByText(/Connection lost/)).not.toBeInTheDocument()
     // A group call is named after the conversation, not its participants; missed is marked.
     expect(within(rows[1]!).getByText('Group Alpha')).toHaveClass('cp-row__name--missed')
     expect(within(rows[1]!).getByText('Missed')).toBeInTheDocument()

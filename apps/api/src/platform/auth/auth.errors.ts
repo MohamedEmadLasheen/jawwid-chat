@@ -47,6 +47,8 @@ export enum AuthErrorCode {
   SIGNUP_LOCKED = 'AUTH.SIGNUP_LOCKED',
   /** 400. PD-16 parent sign-up / PD-21 reset: the chosen password is outside 4..128 characters. */
   PASSWORD_TOO_WEAK = 'AUTH.PASSWORD_TOO_WEAK',
+  /** TEACHER-023: a password change to the same password. */
+  PASSWORD_UNCHANGED = 'AUTH.PASSWORD_UNCHANGED',
   /**
    * 401. PD-21 password reset: the code is wrong, expired, used up or was never
    * issued -- one code for all of them, and the same whether the login is known
@@ -79,6 +81,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 'the code is not valid; ask for a new one',
   [AuthErrorCode.SIGNUP_LOCKED]: 'too many wrong codes; please contact your supervisor',
   [AuthErrorCode.PASSWORD_TOO_WEAK]: 'choose a password of at least 4 characters',
+  [AuthErrorCode.PASSWORD_UNCHANGED]: 'choose a password different from the current one',
   [AuthErrorCode.RESET_CODE_INVALID]: 'the code is not valid; ask your administrator for a new one',
 };
 
@@ -93,6 +96,7 @@ const STATUS: Record<AuthErrorCode, number> = {
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 401,
   [AuthErrorCode.SIGNUP_LOCKED]: 403,
   [AuthErrorCode.PASSWORD_TOO_WEAK]: 400,
+  [AuthErrorCode.PASSWORD_UNCHANGED]: 400,
   [AuthErrorCode.RESET_CODE_INVALID]: 401,
 };
 

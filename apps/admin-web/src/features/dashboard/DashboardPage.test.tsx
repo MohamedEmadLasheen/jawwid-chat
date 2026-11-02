@@ -150,7 +150,8 @@ describe('the manager Dashboard', () => {
   })
 
   it('an account no section key opens still has its own Tasks (PD-47: self-service), and nothing else is asked for', async () => {
-    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['org.view'] }))
+    // stories.view opens no section (org.view did until PR-7 gave the Organization section that key).
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['stories.view'] }))
     await waitFor(() => expect(requested().filter((p) => p.startsWith('/dashboard/'))).toEqual(['/dashboard/tasks']))
   })
 
@@ -267,6 +268,57 @@ describe('the manager Dashboard', () => {
     expect(within(section).getByRole('link', { name: /Parents of a child in the grace period/ })).toHaveAttribute('href', '/parents?access=grace')
   })
 
+  it('shows the Teachers section: the Teacher Supervision sections, certificates and credentials (PR-6)', async () => {
+    routes['/dashboard/teachers'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [
+          tile('leave.pending', 2),
+          tile('absences.open', 1),
+          tile('lateness.open', 3),
+          tile('feedback.received', 4),
+          tile('feedback.in_review', 1),
+          tile('certificates.student_requested', 2),
+          tile('certificates.teacher_requested', 1),
+          tile('teacher_profiles.pending', 1),
+        ],
+      })
+    open(makeStaff({ id: 'staff_tmgr', role: 'manager', permissions: ['teacher_supervision.view', 'certificates.view', 'teacher_profiles.review'] }))
+    const section = await screen.findByRole('region', { name: 'Teachers' })
+    const link = (name: RegExp) => within(section).getByRole('link', { name })
+    const leave = await within(section).findByRole('link', { name: /Leave requests waiting for a decision/ })
+    expect(leave).toHaveAttribute('href', '/teachers/supervision?section=leave')
+    expect(leave).toHaveClass('dash-tile--alert')
+    expect(link(/Absences waiting for a decision/)).toHaveAttribute('href', '/teachers/supervision?section=absences')
+    expect(link(/Lateness waiting for a decision/)).toHaveAttribute('href', '/teachers/supervision?section=lateness')
+    const received = link(/New parent feedback/)
+    expect(received).toHaveAttribute('href', '/teachers/supervision?section=feedback&status=received')
+    expect(received).toHaveClass('dash-tile--alert')
+    expect(link(/Parent feedback in review/)).toHaveAttribute('href', '/teachers/supervision?section=feedback&status=in_review')
+    expect(link(/Student certificates requested/)).toHaveAttribute('href', '/certificates?category=student')
+    expect(link(/Teacher certificates requested/)).toHaveAttribute('href', '/certificates?category=teacher')
+    expect(link(/Teacher credentials to review/)).toHaveAttribute('href', '/teacher-profiles')
+  })
+
+  it('shows the Organization section: children and teachers without a supervisor, covers under way (PR-7)', async () => {
+    routes['/dashboard/structure'] = () =>
+      json({
+        generatedAt: NOW,
+        tiles: [tile('learners.unsupervised', 2), tile('teachers.unsupervised', 3), tile('covers.active', 1)],
+      })
+    open(makeStaff({ id: 'staff_mgr', role: 'manager', permissions: ['org.view', 'org.covers'] }))
+    const section = await screen.findByRole('region', { name: 'Organization' })
+    const children = await within(section).findByRole('link', { name: /Children without a supervisor/ })
+    expect(children).toHaveAttribute('href', '/organization?tab=children&filter=unassigned')
+    expect(children).toHaveClass('dash-tile--alert')
+    const teachers = within(section).getByRole('link', { name: /Teachers without a supervisor/ })
+    expect(teachers).toHaveAttribute('href', '/organization?tab=teachers')
+    expect(teachers).toHaveClass('dash-tile--alert')
+    const away = within(section).getByRole('link', { name: /Supervisors away, covered by a backup/ })
+    expect(away).toHaveAttribute('href', '/organization?tab=structure')
+    expect(away).not.toHaveClass('dash-tile--alert')
+  })
+
   it('is Arabic first: Arabic labels and digits, right to left', async () => {
     open(MANAGER, 'ar')
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()
@@ -274,6 +326,17 @@ describe('the manager Dashboard', () => {
     const waiting = await screen.findByRole('link', { name: /محادثات تنتظر ردّنا/ })
     expect(within(waiting).getByText('٤')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /حالات تجاوزت موعدها/ })).toBeInTheDocument()
+  })
+
+  it("the super admin's /dashboard is the Admin Portal's Dashboard: the same sections, above the inventory (PR-8)", async () => {
+    routes['/admin/overview'] = () => json({ error: { code: 'NOT_FOUND', message: 'not here' } }, 404)
+    open(makeStaff({ id: 'staff_root', role: 'super_admin', permissions: ['chat.use', 'cases.view'] }))
+    // One Dashboard per person (Q7): the Admin Portal's, which asks for its inventory too.
+    const waiting = await screen.findByRole('link', { name: /Chats waiting for our reply/ })
+    expect(waiting).toHaveAttribute('href', '/chat?view=waiting')
+    await waitFor(() => expect(requested()).toContain('/admin/overview'))
+    const nav = screen.getByRole('navigation')
+    expect(within(nav).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
   })
 
   for (const role of ['manager', 'super_admin'] as StaffRole[]) {
