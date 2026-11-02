@@ -200,11 +200,35 @@ describe('PD-52 page B: testimonials', () => {
     await waitFor(() => expect(calls('POST', /\/pf-1\/reply$/)).toHaveLength(1))
   })
 
-  it('without grants.record: no Record, Correct, Take or Reply', async () => {
+  it('shares the parent\'s praise with the teacher: shows what the teacher will read (the child\'s first name, never the parent\'s), once', async () => {
+    let shared = false
+    on('GET', /\/teacher-records\/testimonials/, () =>
+      json({ canRecord: true, testimonials: [testimonial(), { ...praise, sharedAt: shared ? '2026-11-02T10:00:00Z' : null }] }),
+    )
+    on('POST', /\/teacher-records\/praise\/pf-1\/share$/, () => {
+      shared = true
+      return json({ feedbackId: 'pf-1', conversationId: 'c-1', messageId: 'm-1' })
+    })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials' })
+    const staffRow = (await screen.findByText('The parents thanked her on the phone.')).closest('li')!
+    expect(within(staffRow).queryByRole('button', { name: 'Share with the teacher' })).not.toBeInTheDocument()
+    const row = screen.getByText('She is wonderful with my son.').closest('li')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Share with the teacher' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Share this praise with the teacher' })
+    expect(within(dialog).getByText('💐 Praise from Child’s parent')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/Parent Alpha/)).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Share with the teacher' }))
+    await waitFor(() => expect(calls('POST', /\/praise\/pf-1\/share$/)).toHaveLength(1))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const after = (await screen.findByText(/Shared with the teacher/)).closest('li')!
+    expect(within(after).queryByRole('button', { name: 'Share with the teacher' })).not.toBeInTheDocument()
+  })
+
+  it('without grants.record: no Record, Correct, Take, Reply or Share', async () => {
     on('GET', /\/teacher-records\/access$/, () => json({ ...ALL, grants: { view: true, record: false } }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials' })
     await screen.findByText('She is wonderful with my son.')
-    for (const name of ['Record a testimonial', 'Correct', 'I’m on it', 'Reply to the parent']) {
+    for (const name of ['Record a testimonial', 'Correct', 'I’m on it', 'Reply to the parent', 'Share with the teacher']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
     }
   })
