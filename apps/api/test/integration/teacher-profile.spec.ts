@@ -43,9 +43,30 @@ beforeAll(async () => {
 afterAll(async () => {
   await g.prisma.$disconnect();
 });
+/**
+ * ADMIN-006: credentials are reviewed by the Teachers department (and the super
+ * admin) -- tmgr manages it, `reviewer` supervises in it. The seed's admin_a
+ * (s.ownerId) is an Operations supervisor: staff, but no reviewer.
+ */
+let reviewer: string;
+let tmgr: string;
+
 beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
+  [reviewer, tmgr] = [randomUUID(), randomUUID()];
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'reviewer_t', 'admin', true), ($2::uuid, 'tmgr_t', 'manager', true)`,
+    reviewer, tmgr,
+  );
+  const [{ id: dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `insert into chat.department (kind, display_name, manager_id) values ('teachers', 'teachers', $1::uuid) returning id::text as id`, tmgr,
+  );
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.department_member (staff_id, organization_id, department_id, position)
+     values ($1::uuid, chat.default_organization_id(), $2::uuid, 'supervisor')`,
+    reviewer, dept,
+  );
 });
 
 /** `chat.audit_log.id` is a bigint, which JSON.stringify refuses outright. */
@@ -411,7 +432,7 @@ describe('certificates: a credential is not verified by being uploaded', () => {
   it('an approved certificate is, and carries no internals', async () => {
     await g.teacherProfiles.saveProfile(s.teacherId, { bio: 'x' });
     const id = await attachCertificate(s.teacherId, 'Ijazah');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
 
     const certificates = (await g.teacherProfiles.publicProfile(s.teacherId))!.certificates;
     expect(certificates).toEqual([
@@ -422,7 +443,7 @@ describe('certificates: a credential is not verified by being uploaded', () => {
   it('a rejected certificate is not published either', async () => {
     await g.teacherProfiles.saveProfile(s.teacherId, { bio: 'x' });
     const id = await attachCertificate(s.teacherId, 'Refused');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, {
+    await g.teacherProfiles.decideCertificate(reviewer, id, {
       approved: false,
       note: 'not legible',
     });
@@ -455,14 +476,14 @@ describe('certificates: a credential is not verified by being uploaded', () => {
     const id = await attachCertificate(s.teacherId, 'Mine');
     expect(
       await codeOf(() =>
-        g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: false, note: '  ' }),
+        g.teacherProfiles.decideCertificate(reviewer, id, { approved: false, note: '  ' }),
       ),
     ).toBe(CommErrorCode.TEACHER_PROFILE_REVIEW_NOTE_REQUIRED);
   });
 
   it('EDITING A CLAIM DROPS THE DECISION MADE ABOUT THE OLD ONE', async () => {
     const id = await attachCertificate(s.teacherId, 'Ijazah in Tajweed, Al-Azhar');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
     expect((await g.teacherProfiles.myProfile(s.teacherId)).certificates[0].state).toBe('approved');
 
     // The approval was of a CLAIM, not of a file. Retitling must not inherit it.
@@ -619,7 +640,7 @@ describe('certificates: a credential is not verified by being uploaded', () => {
     const row = await g.prisma.teacherProfileCertificate.findFirstOrThrow();
 
     expect(JSON.stringify(mine)).not.toContain(row.objectKey);
-    const queue = await g.teacherProfiles.certificateReviewQueue(s.ownerId);
+    const queue = await g.teacherProfiles.certificateReviewQueue(reviewer);
     expect(JSON.stringify(queue)).not.toContain(row.objectKey);
   });
 });
@@ -630,10 +651,10 @@ describe('the certificate review queue', () => {
     const id = await attachCertificate(s.teacherId, 'Pending one');
     await attachCertificate(s.newTeacherId, 'Pending two');
 
-    expect(await g.teacherProfiles.certificateReviewQueue(s.ownerId)).toHaveLength(2);
+    expect(await g.teacherProfiles.certificateReviewQueue(reviewer)).toHaveLength(2);
 
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
-    const queue = await g.teacherProfiles.certificateReviewQueue(s.ownerId);
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
+    const queue = await g.teacherProfiles.certificateReviewQueue(reviewer);
     expect(queue).toHaveLength(1);
     expect(queue[0].teacherName).toBe('teacher_d');
   });
@@ -642,7 +663,7 @@ describe('the certificate review queue', () => {
     await attachCertificate(s.teacherId, 'A');
     await attachCertificate(s.teacherId, 'B');
 
-    const [item] = await g.teacherProfiles.certificateReviewQueue(s.ownerId);
+    const [item] = await g.teacherProfiles.certificateReviewQueue(reviewer);
     expect(item.pendingCertificates).toBe(2);
     expect((item as unknown as Record<string, unknown>).revisionId).toBeUndefined();
   });
@@ -656,9 +677,12 @@ describe('the certificate review queue', () => {
     );
   });
 
-  it('a manager may review', async () => {
+  it('the Teachers Manager may review; the Operations Manager and an Operations supervisor may not (ADMIN-006)', async () => {
     await attachCertificate(s.teacherId, 'Cert');
-    expect(await g.teacherProfiles.certificateReviewQueue(s.managerId)).toHaveLength(1);
+    expect(await g.teacherProfiles.certificateReviewQueue(tmgr)).toHaveLength(1);
+    for (const ops of [s.managerId, s.ownerId]) {
+      expect(await codeOf(() => g.teacherProfiles.certificateReviewQueue(ops))).toBe(CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW);
+    }
   });
 });
 
@@ -674,27 +698,27 @@ describe('certificate download authorization', () => {
 
   it('a reviewer does too', async () => {
     const id = await attachCertificate(s.teacherId, 'Mine');
-    expect(await g.teacherProfiles.certificateDownloadUrl(s.ownerId, id)).toContain(
-      `a=${s.ownerId}`,
+    expect(await g.teacherProfiles.certificateDownloadUrl(reviewer, id)).toContain(
+      `a=${reviewer}`,
     );
   });
 
   it('RT-037: the link is re-decided on every request -- a deleted certificate stops it', async () => {
     const id = await attachCertificate(s.teacherId, 'Mine');
-    await g.teacherProfiles.certificateDownloadUrl(s.ownerId, id);
-    expect((await g.teacherProfiles.authorizeCertificateRead(id, s.ownerId)).objectKey).toMatch(
+    await g.teacherProfiles.certificateDownloadUrl(reviewer, id);
+    expect((await g.teacherProfiles.authorizeCertificateRead(id, reviewer)).objectKey).toMatch(
       new RegExp(`^teacher-certificates/${s.teacherId}/`),
     );
 
     await g.teacherProfiles.removeCertificate(s.teacherId, id);
-    expect(await codeOf(() => g.teacherProfiles.authorizeCertificateRead(id, s.ownerId))).toBe(
+    expect(await codeOf(() => g.teacherProfiles.authorizeCertificateRead(id, reviewer))).toBe(
       CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
     );
   });
 
   it('A PARENT DOES NOT, even for an approved certificate', async () => {
     const id = await attachCertificate(s.teacherId, 'Mine');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
 
     expect(await codeOf(() => g.teacherProfiles.certificateDownloadUrl(s.parentId, id))).toBe(
       CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
@@ -721,7 +745,7 @@ describe('the public read model', () => {
   it('carries no id, no key, no review metadata and no reviewer', async () => {
     await g.teacherProfiles.saveProfile(s.teacherId, { bio: 'x' });
     const id = await attachCertificate(s.teacherId, 'Cert');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
 
     const view = await g.teacherProfiles.publicProfile(s.teacherId);
     const serialized = JSON.stringify(view);
@@ -796,7 +820,7 @@ describe('the certificate audit trail', () => {
   it('2. EDITED: one row, carrying the title change and the lost approval',
       async () => {
     const id = await attachCertificate(s.teacherId, 'Before');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
     await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'After' });
 
     const row = await auditRowFor('teacher_profile.certificate_edited');
@@ -834,7 +858,7 @@ describe('the certificate audit trail', () => {
 
   it('4. APPROVED: one row, by the REVIEWER and not the owner', async () => {
     const id = await attachCertificate(s.teacherId, 'Ijazah');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
 
     const row = await auditRowFor('teacher_profile.certificate_approved');
     const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
@@ -843,7 +867,7 @@ describe('the certificate audit trail', () => {
 
     // THE assertion that makes the trail worth keeping: the actor is the staff
     // member who decided, never the teacher who uploaded.
-    expect(row.actorId).toBe(s.ownerId);
+    expect(row.actorId).toBe(reviewer);
     expect(row.actorId).not.toBe(s.teacherId);
     expect(row.entityId).toBe(id);
     expect(row.before).toEqual({ state: 'pending' });
@@ -856,7 +880,7 @@ describe('the certificate audit trail', () => {
 
   it('5. REJECTED: one row, carrying the reviewer’s own reason', async () => {
     const id = await attachCertificate(s.teacherId, 'Illegible');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, {
+    await g.teacherProfiles.decideCertificate(reviewer, id, {
       approved: false,
       note: 'the scan is not readable',
     });
@@ -866,7 +890,7 @@ describe('the certificate audit trail', () => {
       where: { id },
     });
 
-    expect(row.actorId).toBe(s.ownerId);
+    expect(row.actorId).toBe(reviewer);
     expect(row.entityId).toBe(id);
     expect(row.before).toEqual({ state: 'pending' });
     expect(row.after).toEqual({ state: 'rejected' });
@@ -878,9 +902,9 @@ describe('the certificate audit trail', () => {
     // A full lifecycle in order. Five actions in, five rows out: no duplicates
     // from a retry, and no event fired that nobody asked for.
     const id = await attachCertificate(s.teacherId, 'Lifecycle');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
     await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'Renamed' });
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, {
+    await g.teacherProfiles.decideCertificate(reviewer, id, {
       approved: false,
       note: 'no',
     });
@@ -905,7 +929,7 @@ describe('the certificate audit trail', () => {
     const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
       where: { id },
     });
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
     await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'Swept' });
     await g.teacherProfiles.removeCertificate(s.teacherId, id);
 
@@ -972,7 +996,7 @@ describe('the certificate audit trail', () => {
 
     expect(
       await codeOf(() =>
-        g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: false, note: ' ' }),
+        g.teacherProfiles.decideCertificate(reviewer, id, { approved: false, note: ' ' }),
       ),
     ).toBe(CommErrorCode.TEACHER_PROFILE_REVIEW_NOTE_REQUIRED);
 
@@ -1004,7 +1028,7 @@ describe('the certificate audit trail', () => {
     // change are both present, and `at` sits inside the mutation's own window.
     const started = new Date();
     const id = await attachCertificate(s.teacherId, 'Together');
-    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.decideCertificate(reviewer, id, { approved: true });
     const finished = new Date();
 
     const row = await auditRowFor('teacher_profile.certificate_approved');
