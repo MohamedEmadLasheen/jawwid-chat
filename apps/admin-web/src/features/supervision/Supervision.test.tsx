@@ -88,7 +88,7 @@ describe('the Teachers area has three pages', () => {
   })
 
   it('the super admin has the same pages under Admin > Teachers, without Statistics (that is Admin > Reports)', async () => {
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/supervision?section=rewards' })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/boards' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers department' })
     expect(within(tabs).getByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/admin/teachers')
     expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/admin/teachers/supervision')

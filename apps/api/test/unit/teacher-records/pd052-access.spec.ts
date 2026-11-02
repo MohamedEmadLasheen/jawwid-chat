@@ -48,7 +48,12 @@ describe('PD-52: the new keys open what the old keys opened, page by page', () =
   });
 
   it('teacher_attendance.record opens lateness, absences and complaint entries', () => {
-    expect(opened('teacher_attendance.record')).toEqual(['POST /lessons/:id/lateness', 'POST /teacher-files/:teacherId/entries', 'POST /teachers/:id/absences']);
+    expect(opened('teacher_attendance.record')).toEqual([
+      'GET /teacher-records/teachers/:id/students',
+      'POST /lessons/:id/lateness',
+      'POST /teacher-files/:teacherId/entries',
+      'POST /teachers/:id/absences',
+    ]);
   });
 
   it('teacher_attendance.decide opens the decisions: leave, the ladder, upholding, resolving, the parent\'s reply', () => {
@@ -67,6 +72,7 @@ describe('PD-52: the new keys open what the old keys opened, page by page', () =
 
   it('teacher_grants.record opens the grant without an amount and the reply to praise', () => {
     expect(opened('teacher_grants.record')).toEqual([
+      'GET /teacher-records/teachers/:id/students',
       'POST /parent-feedback/:id/reply',
       'POST /parent-feedback/:id/take',
       'POST /teacher-records/entries/:id/void',

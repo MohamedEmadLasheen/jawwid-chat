@@ -127,11 +127,15 @@ describe('PD-52: the old links land on their section', () => {
     expect(await screen.findByRole('button', { name: 'Excuses & absences', pressed: true })).toBeInTheDocument()
   })
 
-  it('grants and the parents\' feedback stay on the Supervision page until page B', async () => {
+  it.each([
+    ['/teachers/supervision?section=rewards', 'Grants'],
+    ['/teachers/supervision?section=feedback&category=praise', 'Testimonials'],
+  ])('%s -> Grants & testimonials, %s (PD-52 PR-4)', async (route, section) => {
     on('GET', /\/teacher-files\/rewards/, () => json({ canViewAmounts: false, rewards: [] }))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=rewards' })
-    expect(await screen.findByRole('heading', { name: 'Teacher supervision' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Attendance & complaints' })).not.toBeInTheDocument()
+    on('GET', /\/teacher-records\/testimonials/, () => json({ canRecord: true, testimonials: [] }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route })
+    expect(await screen.findByRole('heading', { name: 'Grants & testimonials' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: section, pressed: true })).toBeInTheDocument()
   })
 })
 

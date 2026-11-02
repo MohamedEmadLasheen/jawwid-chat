@@ -1,56 +1,45 @@
 import { Navigate, useSearchParams } from 'react-router-dom'
-import { FilterChips } from '@/shared/components/FilterChips'
-import { PageHeader } from '@/shared/components/PageHeader'
-import { TeachersTabs } from '@/features/supervision/TeachersTabs'
-import { attendancePath } from '@/features/teacher-records/paths'
-import { H, useCopy } from './copy'
-import { ParentFeedbackSection } from './ParentFeedback'
-import { RewardsSection } from './RewardsAndComplaints'
-import './teacher-supervision.css'
+import { attendancePath, grantsPath } from '@/features/teacher-records/paths'
 
 export type HubSection = 'leave' | 'absences' | 'lateness' | 'rewards' | 'complaints' | 'feedback'
-/** What is still on this page until PD-52 PR-4 moves it to Grants & Testimonials. */
-const HERE: readonly HubSection[] = ['rewards', 'feedback']
-/** PD-52: the sections now on the Attendance & Complaints page, and their names there. */
-const MOVED: Partial<Record<HubSection, string>> = { leave: 'leave', absences: 'excuses', lateness: 'lateness', complaints: 'complaints' }
 
 /**
- * PD-26: one page for the Teachers department's supervision. PD-52 splits it:
- * leave, lateness, excuses and absences and complaints are on the Attendance &
- * Complaints page now, and their old links land there (`?section=` mapped,
- * the rest of the query kept). Grants and the parents' feedback stay here
- * until the Grants & Testimonials page (PR-4).
+ * Where an old Teacher Supervision link (PD-26) lands now that PD-52 split the
+ * page in two (plan §5.1): leave, absences, lateness and complaints on
+ * Attendance & Complaints; rewards on Grants & Testimonials. Parent feedback
+ * goes by its category -- praise to Testimonials, a suggestion to the
+ * Suggestions view, anything else (a complaint, or no category) to
+ * Complaints. The rest of the query is kept.
  */
-export function TeacherSupervisionPage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
-  const tx = useCopy()
-  const [params, setParams] = useSearchParams()
-  const asked = (params.get('section') ?? 'leave') as HubSection
-  const moved = MOVED[asked]
-  if (moved || !HERE.includes(asked)) {
-    const next = new URLSearchParams(params)
-    next.set('section', moved ?? 'leave')
-    return <Navigate to={`${attendancePath(basePath)}?${next.toString()}`} replace />
+export function supervisionRedirect(basePath: string, params: URLSearchParams): string {
+  const next = new URLSearchParams(params)
+  const section = (params.get('section') ?? 'leave') as HubSection
+  const category = params.get('category')
+  next.delete('category')
+  const go = (path: string, s: string, extra: Record<string, string> = {}) => {
+    next.set('section', s)
+    for (const [k, v] of Object.entries(extra)) next.set(k, v)
+    return `${path}?${next.toString()}`
   }
-  const section = asked
-  const label: Record<string, string> = { rewards: tx(H.rewards), feedback: tx(H.feedback) }
+  switch (section) {
+    case 'rewards':
+      return go(grantsPath(basePath), 'grants')
+    case 'feedback':
+      if (category === 'praise') return go(grantsPath(basePath), 'testimonials')
+      if (category === 'suggestion') return go(attendancePath(basePath), 'complaints', { view: 'suggestions' })
+      return go(attendancePath(basePath), 'complaints')
+    case 'absences':
+      return go(attendancePath(basePath), 'excuses')
+    case 'lateness':
+    case 'complaints':
+      return go(attendancePath(basePath), section)
+    default:
+      return go(attendancePath(basePath), 'leave')
+  }
+}
 
-  return (
-    <div className="page">
-      <div className="page__inner">
-        <PageHeader eyebrow={eyebrow} title={tx(H.title)} subtitle={tx(H.subtitle)} />
-        <TeachersTabs basePath={basePath} />
-        <FilterChips<HubSection>
-          variant="tabs"
-          label={tx(H.sections)}
-          value={section}
-          onChange={(next) => setParams({ section: next }, { replace: true })}
-          options={HERE.map((s) => ({ value: s, label: label[s] ?? s }))}
-        />
-        <div className="th-body">
-          {section === 'rewards' && <RewardsSection basePath={basePath} />}
-          {section === 'feedback' && <ParentFeedbackSection basePath={basePath} />}
-        </div>
-      </div>
-    </div>
-  )
+/** PD-26's page is now only where its old links land (PD-52). */
+export function TeacherSupervisionPage({ basePath }: { basePath: string; eyebrow?: string }) {
+  const [params] = useSearchParams()
+  return <Navigate to={supervisionRedirect(basePath, params)} replace />
 }

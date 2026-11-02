@@ -26,7 +26,8 @@ const MONEY = /^\d{1,10}(\.\d{1,2})?$/
 // 4. Grants and rewards
 // ---------------------------------------------------------------------------
 
-export function RewardsSection({ basePath }: { basePath: string }) {
+/** `canRecord` false: the reader may not record a grant (PD-52 page B's answer); no button is offered. */
+export function RewardsSection({ basePath, canRecord = true }: { basePath: string; canRecord?: boolean }) {
   const tx = useCopy()
   const { locale, dateTime } = useI18n()
   const money = useMoney()
@@ -39,9 +40,11 @@ export function RewardsSection({ basePath }: { basePath: string }) {
       <SectionIntro
         hint={tx(H.rewardsHint)}
         actions={
-          <button type="button" className="btn btn--sm" onClick={() => setRecording(true)}>
-            {tx(H.recordReward)}
-          </button>
+          canRecord && (
+            <button type="button" className="btn btn--sm" onClick={() => setRecording(true)}>
+              {tx(H.recordReward)}
+            </button>
+          )
         }
       />
       {list.error ? (

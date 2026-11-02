@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-560 routes.
+561 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -499,6 +499,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teacher-profiles/review` | teacher_profiles.review | `communication/api/teacher-profile.controller.ts#TeacherProfileController.reviewQueue` |
 | GET | `/api/v1/teacher-records/access` | self-service | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.access` |
 | POST | `/api/v1/teacher-records/entries/:id/void` | teacher_supervision.record | teacher_attendance.decide | teacher_grants.record | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.voidEntry` |
+| GET | `/api/v1/teacher-records/teachers/:id/students` | teacher_supervision.record | teacher_attendance.record | teacher_grants.record | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.students` |
 | GET | `/api/v1/teacher-records/teachers/:id/summary` | teacher_supervision.view | teacher_attendance.view | teacher_grants.view | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.summary` |
 | GET | `/api/v1/teacher-records/testimonials` | teacher_supervision.view | teacher_grants.view | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.testimonials` |
 | GET | `/api/v1/teacher-supervision/directory` | teacher_supervision.view | teacher_attendance.view | teacher_grants.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.directory` |

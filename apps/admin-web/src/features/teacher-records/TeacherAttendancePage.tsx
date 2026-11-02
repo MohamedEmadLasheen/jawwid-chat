@@ -7,6 +7,8 @@ import { ParentFeedbackSection } from '@/features/teacher-supervision/ParentFeed
 import { ComplaintsSection } from '@/features/teacher-supervision/RewardsAndComplaints'
 import { R, useCopy } from './copy'
 import { useTeacherRecordsAccess } from './hooks'
+import { TeacherPicker, TeacherStrip } from './TeacherStrip'
+import './teacher-records.css'
 
 export type AttendanceSection = 'leave' | 'lateness' | 'excuses' | 'complaints'
 export const ATTENDANCE_SECTIONS: readonly AttendanceSection[] = ['leave', 'lateness', 'excuses', 'complaints']
@@ -20,7 +22,8 @@ type ComplaintsView = 'complaints' | 'suggestions'
  * GET /teacher-records/access's answer. `basePath` is where the Teacher File
  * links point (the Teachers area, or the super admin's Admin > Teachers).
  *
- * The URL holds the section (`?section=`) and the complaints view (`&view=`),
+ * The URL holds the section (`?section=`), the complaints view (`&view=`) and
+ * the teacher whose strip shows (`&teacher=`),
  * so the old Teacher Supervision links and a Dashboard tile land on theirs.
  */
 export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string; eyebrow?: string }) {
@@ -30,7 +33,15 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
   const asked = params.get('section') as AttendanceSection | null
   const section: AttendanceSection = asked && ATTENDANCE_SECTIONS.includes(asked) ? asked : 'leave'
   const view: ComplaintsView = params.get('view') === 'suggestions' ? 'suggestions' : 'complaints'
-  const set = (next: Record<string, string>) => setParams(next, { replace: true })
+  // PD-52 §5.5: `&teacher=` shows one teacher's strip; it stays as the sections change.
+  const teacher = params.get('teacher') ?? ''
+  const set = (next: Record<string, string>) => setParams(teacher && !('teacher' in next) ? { ...next, teacher } : next, { replace: true })
+  const setTeacher = (id: string) => {
+    const p = new URLSearchParams(params)
+    if (id) p.set('teacher', id)
+    else p.delete('teacher')
+    setParams(p, { replace: true })
+  }
   const label: Record<AttendanceSection, string> = {
     leave: tx(R.leave),
     lateness: tx(R.lateness),
@@ -63,6 +74,10 @@ export function TeacherAttendancePage({ basePath, eyebrow }: { basePath: string;
           onChange={(next) => set({ section: next })}
           options={ATTENDANCE_SECTIONS.map((s) => ({ value: s, label: label[s] }))}
         />
+        <div className="tr-toolbar">
+          <TeacherPicker value={teacher} onChange={setTeacher} />
+        </div>
+        <TeacherStrip teacherId={teacher || null} basePath={basePath} />
         <div className="th-body">
           {section === 'leave' && <LeaveSection basePath={basePath} />}
           {section === 'lateness' && <LatenessSection {...rights} />}

@@ -339,5 +339,10 @@ describe('PD-52 PR-2: testimonials, corrections and links', () => {
     const ops = await records.summary(s.otherAdminId, s.teacherId);
     expect(ops).toMatchObject({ openComplaints: 1, testimonials: 0, opensFile: false });
     expect(await code(records.summary(s.otherAdminId, s.unrelatedTeacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
+
+    // PD-52 PR-4: the student picker -- the teacher's students, narrowed for Operations.
+    expect((await records.students(tsupId, s.teacherId)).students.map((x) => x.id).sort()).toEqual([s.learnerId, learnerY].sort());
+    expect((await records.students(s.otherAdminId, s.teacherId)).students).toEqual([{ id: learnerY, name: 'learner_y', familyId: expect.any(String) }]);
+    expect((await records.students(s.ownerId, s.teacherId)).students.map((x) => x.id)).toEqual([s.learnerId]);
   });
 });

@@ -264,6 +264,30 @@ export class TeacherRecordsService {
     };
   }
 
+  /**
+   * The students a record about this teacher may name: those the teacher
+   * teaches or taught in the PD-26 window (chat.teaches_or_taught, the
+   * database's own rule), and of an Operations-only teacher only the caller's
+   * own. For the record dialogs' student picker.
+   */
+  async students(actorId: string, teacherId: string) {
+    const { actor, page } = await this.ctx(actorId, (a) => a.attendance.record || a.grants.record);
+    const teacher = await this.files.requireTeacher(actor, teacherId, 'page');
+    const whole = scopeCovers(page.whole, teacher.id);
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; family_id: string }>>`
+      SELECT l.id::text AS id, l.name, l.family_id::text AS family_id
+        FROM chat.learner l
+       WHERE l.organization_id = ${teacher.organizationId}::uuid
+         AND l.id IN (SELECT x.id FROM chat.learner x WHERE x.teacher_id = ${teacher.id}::uuid
+                      UNION SELECT le.learner_id FROM chat.lesson le WHERE le.teacher_id = ${teacher.id}::uuid AND le.learner_id IS NOT NULL)
+         AND chat.teaches_or_taught(${teacher.id}::uuid, l.id)
+       ORDER BY l.name, l.id
+       LIMIT ${LIST_LIMIT}`;
+    return {
+      students: rows.filter((r) => whole || page.learnerIds.has(r.id)).map((r) => ({ id: r.id, name: r.name, familyId: r.family_id })),
+    };
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------

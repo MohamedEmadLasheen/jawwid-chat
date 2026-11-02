@@ -42,6 +42,13 @@ export class TeacherRecordsController {
     return this.records.voidEntry(actorId, id, body ?? {});
   }
 
+  /** The students a record about this teacher may name (taught now or in the PD-26 window; Operations: their own). */
+  @Requires('teacher_supervision.record', 'teacher_attendance.record', 'teacher_grants.record')
+  @Get('teacher-records/teachers/:id/students')
+  students(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.records.students(actorId, id);
+  }
+
   /** One teacher's strip: away, this month's ladder, open complaints, this year's grants and testimonials. */
   @Requires('teacher_supervision.view', 'teacher_attendance.view', 'teacher_grants.view')
   @Get('teacher-records/teachers/:id/summary')
