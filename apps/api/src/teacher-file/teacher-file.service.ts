@@ -9,9 +9,11 @@ import type { Actor } from '../platform/types';
 import { TeacherScopeService, pageRowVisible, scopeCovers, type PageScope, type TeacherScope } from '../platform/teacher-scope';
 import { complaintAbout, familiesOfComplaints, familyOfConversation } from './complaint-family';
 import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
-import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
-import { decidePd012StaffAccess } from '../platform/pd012-policy';
+import { NO_TEACHER_FILE_ACCESS, OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
+import { NO_PD012_ACCESS, decidePd012StaffAccess } from '../platform/pd012-policy';
 import { PermissionService } from '../platform/permissions/permission.service';
+import { OutboxService } from '../communication/outbox/outbox.service';
+import { CommEvent } from '../communication/contracts/events';
 import { entryKeyAllows, type RecordsBasis } from '../platform/teacher-records-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -81,6 +83,8 @@ export class TeacherFileService {
     @Optional() teacherScope?: TeacherScopeService,
     // PD-52: the caller's keys, for the per-write checks (review of #369).
     @Optional() permissions?: PermissionService,
+    // PD-52 (plan §7): a complaint that names a family tells who follows it up.
+    @Optional() private readonly outbox: OutboxService = new OutboxService(),
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
     this.permissions = permissions ?? new PermissionService(prisma);
@@ -461,6 +465,19 @@ export class TeacherFileService {
     const entry = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       const row = await tx.teacherSupervisionEntry.create({ data });
+      // PD-52 (plan §7): a staff complaint about a family's child is announced to
+      // the teacher's supervisor and the child's supervisors (never its author).
+      if (kind === TeacherFileEntryKind.COMPLAINT && data.familyId) {
+        await this.outbox.enqueue(tx, CommEvent.TEACHER_COMPLAINT_RECEIVED, {
+          organizationId: teacher.organizationId,
+          teacherId: teacher.id,
+          entryId: row.id,
+          feedbackId: null,
+          learnerId: data.learnerId ?? null,
+          familyId: data.familyId,
+          recordedBy: actor.actorId,
+        });
+      }
       // PD-32: a follow-up or a resolution on a parent's app complaint is what the
       // parent reads as "in review" / "resolved" -- never its text.
       if (data.refersTo && (kind === TeacherFileEntryKind.COMPLAINT_FOLLOWUP || kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION)) {
@@ -538,8 +555,10 @@ export class TeacherFileService {
   /** Shared with TeacherPayrollService: the access decision runs before any teacher lookup. */
   async gate(actorId: string, needs: (a: TeacherFileAccess) => boolean) {
     const actor = await this.conversations.requireActor(actorId);
+    // No organization: refused before any query (review of #374).
+    if (!actor.organizationId) throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'the Teacher File is for staff of an organization');
     const access = this.authz.teacherFileAccess(actor, {
-      organizationId: actor.organizationId ?? '',
+      organizationId: actor.organizationId,
       teachersDepartmentRole: await this.teachersDepartmentRole(actor),
     });
     if (!needs(access)) {
@@ -643,11 +662,15 @@ export class TeacherFileService {
    * (decideTeacherRecordsAccess applies it, as pageGate does). Never throws.
    */
   async recordsInputs(actor: Actor) {
+    // No organization: no basis and no rights, and no query (review of #374).
+    if (!actor.organizationId) {
+      return { basis: null as RecordsBasis | null, pd012: NO_PD012_ACCESS, file: NO_TEACHER_FILE_ACCESS };
+    }
     const teachersRole = await this.teachersDepartmentRole(actor);
     return {
       basis: ((await this.teacherScope.pageBasis(actor)) ?? ((await this.teacherScope.salesBasis(actor)) ? 'sales' : null)) as RecordsBasis | null,
       pd012: decidePd012StaffAccess(actor, teachersRole),
-      file: this.authz.teacherFileAccess(actor, { organizationId: actor.organizationId ?? '', teachersDepartmentRole: teachersRole }),
+      file: this.authz.teacherFileAccess(actor, { organizationId: actor.organizationId, teachersDepartmentRole: teachersRole }),
     };
   }
 
@@ -695,10 +718,14 @@ export class TeacherFileService {
 
   async pageGate(actorId: string, needs: (a: TeacherFilePageAccess) => boolean) {
     const actor = await this.conversations.requireActor(actorId);
+    // No organization: refused before any query (review of #374).
+    if (!actor.organizationId) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'the Teacher Supervision page is for the Teachers department and Operations');
+    }
     const basis = await this.teacherScope.pageBasis(actor);
     const access = teacherFilePageAccess(
       this.authz.teacherFileAccess(actor, {
-        organizationId: actor.organizationId ?? '',
+        organizationId: actor.organizationId,
         teachersDepartmentRole: await this.teachersDepartmentRole(actor),
       }),
       basis,
@@ -836,9 +863,14 @@ export class TeacherFileService {
       // (chat.is_lesson_manager, the database's rule), or -- PD-52 PR-5 -- by
       // Sales, for a trial it reads (its rows carry `prospectIds`; checked
       // below). Anyone else is refused here first so the caller reads why
-      // (review of #374).
-      const [{ ok }] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-        SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId ?? ''}::uuid) AS ok`;
+      // (review of #374). No organization: not allowed, and no query (an empty
+      // id would fail the uuid cast).
+      const ok =
+        !!actor.organizationId &&
+        (
+          await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS ok`
+        )[0]?.ok === true;
       if (!(whole && ok) && !page.prospectIds) {
         throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'a trial family is named only by the Teachers department, the super admin and Sales');
       }
