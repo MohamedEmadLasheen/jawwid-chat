@@ -3391,6 +3391,14 @@ class L10nAr extends L10n {
   }
 
   @override
+  String get salesOtherPaymentsTitle => 'دفعات أخرى';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'استُرد $amount';
+  }
+
+  @override
   String salesVoidedReason(String reason) {
     return 'أُلغي: $reason';
   }
