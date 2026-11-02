@@ -115,6 +115,15 @@ What `run` does, in order:
 | `blocked` | Codex could not run because of an auth or usage limit; no retry. | Fall back to a Claude builder; resolve login if needed. |
 | `needs_feedback` | Auto-retry is off after a failed attempt. | Read the feedback and retry or re-scope the task. |
 
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Successful run (`passed`) or review. |
+| 1 | Run did not pass (`partial`, `failed` or `needs_feedback`), or review failed. |
+| 2 | Invalid invocation or precondition; the wrapper reported an error. |
+| 3 | Run or review was blocked, including an authentication or usage limit. |
+
 `result.json` carries: task id, status, attempts, branch, worktree, base and commit SHAs, Codex's own
 report (completion, summary, files, the tests it says it ran, outstanding problems), the tests the
 wrapper re-ran with their real exit codes, and any scope or secret findings.
