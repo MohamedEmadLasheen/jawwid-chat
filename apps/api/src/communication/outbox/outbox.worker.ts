@@ -33,6 +33,12 @@ export class OutboxWorker {
     @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
+  /** PD-46: who besides the teacher hears of a lesson change (CalendarModule registers it at start). */
+  private lessonAudience: LessonAudience | null = null;
+  useLessonAudience(audience: LessonAudience): void {
+    this.lessonAudience = audience;
+  }
+
   async drain(batchSize = 100, now = new Date()): Promise<number> {
     // CLAIM PRECISION (issue #29). `availableAt` is written by Prisma's
     // client-side default and lands up to ONE millisecond after a clock read
@@ -276,6 +282,39 @@ export class OutboxWorker {
 
       // PD-34: a person's own Notification Center and read state, to their own
       // actor room and nobody else's -- never the conversation room.
+      case CommEvent.LESSON_CHANGED: {
+        // PD-46 §3.3: a signal to the teacher, the staff whose scope covers the
+        // lesson (decided now), and the family's conversations -- each socket
+        // there is authorized at delivery (RT-009), never by the room alone.
+        const teacherId = payload.teacherId as string;
+        const learnerId = (payload.learnerId as string | null) ?? null;
+        const readers = this.lessonAudience
+          ? await this.lessonAudience.staffFor(payload.organizationId as string, [{ teacherId, learnerId }])
+          : [];
+        await this.realtime.toUsers([...new Set([teacherId, ...readers])], type, payload as never);
+        for (const id of (payload.conversationIds as string[] | undefined) ?? []) {
+          await this.realtime.toThread(id, type, payload as never);
+        }
+        return;
+      }
+
+      case CommEvent.SCHEDULE_REFRESHED: {
+        // One batched refresh for many lessons (weekly materialization): their
+        // teachers and the staff whose scope covers any of those teachers.
+        const teacherIds = (payload.teacherIds as string[] | undefined) ?? [];
+        const learnerIds = (payload.learnerIds as string[] | undefined) ?? [];
+        if (teacherIds.length === 0) return;
+        const readers = this.lessonAudience
+          ? await this.lessonAudience.staffFor(payload.organizationId as string, [
+              ...teacherIds.map((t) => ({ teacherId: t, learnerId: null })),
+              // A learner's own line names no teacher a scope could match on its own.
+              ...learnerIds.map((l) => ({ teacherId: '', learnerId: l })),
+            ])
+          : [];
+        await this.realtime.toUsers([...new Set([...teacherIds, ...readers])], type, payload as never);
+        return;
+      }
+
       case CommEvent.INBOX_CHANGED: {
         const recipientId = payload.recipientId as string | undefined;
         if (recipientId) await this.realtime.toUsers([recipientId], type, payload as never);
@@ -1037,4 +1076,9 @@ export class OutboxWorker {
       variables: {},
     });
   }
+}
+
+/** PD-46: resolves who besides a lesson's teacher hears that it changed. */
+export interface LessonAudience {
+  staffFor(organizationId: string, lessons: ReadonlyArray<{ teacherId: string; learnerId: string | null }>): Promise<string[]>;
 }
