@@ -387,6 +387,12 @@ describe('PD-30 over HTTP', () => {
     expect(await access(child.id)).toMatchObject({ held: true });
     const held = await g.prisma.lesson.findUniqueOrThrow({ where: { id: future.json.id } });
     expect(held).toMatchObject({ outcome: 'suspended', outcomeByKind: 'system', outcomeBy: null, outcomeNote: 'subscription' });
+    // PD-46: the hold's raw UPDATE announces what it suspended, in its own
+    // transaction -- `paused`, at the revision it produced -- and leaves
+    // nothing of it for the sweep.
+    const pausedSignal = await g.prisma.outboxEvent.findMany({ where: { idempotencyKey: `lesson:${held.id}:${held.revision}:paused` } });
+    expect(pausedSignal).toHaveLength(1);
+    expect(await g.prisma.lessonChangeUnannounced.count({ where: { lessonId: held.id } })).toBe(0);
     // The teacher's Schedule says "suspended" -- nothing financial reaches a teacher; staff read why.
     const asTeacher = (await http(teacher.subject, 'GET', '/lessons')).json.lessons.find((l: any) => l.id === future.json.id);
     expect(asTeacher).toMatchObject({ outcome: 'suspended', outcomeNote: null });

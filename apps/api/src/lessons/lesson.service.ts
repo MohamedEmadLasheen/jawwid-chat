@@ -1100,9 +1100,15 @@ export class LessonService {
     lang: CardLanguage,
     opts: CardOptions = {},
   ): Promise<string> {
-    // PD-46 §3.4: one card per lesson change. The same change posted again (a
-    // retried request, a double tap) answers the card already there.
+    // PD-46 §3.4: one card per lesson change -- the key is (lesson, revision,
+    // change), so the same change posted twice answers the card already there.
+    // (A retried REQUEST is a new transaction: it re-reads the lesson, whose
+    // revision has moved on, and refuses or posts on its own merits.) The key is
+    // locked first, so two transactions posting the same change queue here
+    // instead of racing to the unique index -- a P2002 inside a transaction
+    // would abort it, so it cannot be caught and turned into "the card exists".
     if (opts.idempotencyKey) {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'card:' + opts.idempotencyKey}, 0))`;
       const existing = await tx.messageCard.findUnique({ where: { idempotencyKey: opts.idempotencyKey }, select: { messageId: true } });
       if (existing) return existing.messageId;
     }
@@ -1179,15 +1185,20 @@ export class LessonService {
 
   /**
    * Where a lesson's card is posted: the learner's live student group, or else a
-   * live PD-8 family group that is about the learner -- the one the lesson's
-   * teacher is in, when there is one. Both belong to ONE family
+   * live PD-8 family group that is about the learner AND that this lesson's
+   * teacher is in -- or WAS in. Both belong to ONE family
    * (chat.conversation_learner holds a single family's children), so a card
    * never reaches another family.
    *
-   * CHATSCHED-012: the teacher is a preference, not a condition. After a change
-   * of teacher the old one has left the group but still closes their remaining
-   * lessons, and the family must still read those records (and may contest
-   * them), so they go to the learner's group all the same.
+   * CHATSCHED-012: after a change of teacher the old one has LEFT the group but
+   * still closes their remaining lessons, and the family must still read those
+   * records (and may contest them), so a group the teacher was ever a member of
+   * qualifies, the current one first.
+   *
+   * Never a group this teacher was never in (#420 review): a family group can
+   * hold several children with different teachers, and child A's attendance,
+   * apology or ruling (with its notes and excuse category) does not belong in a
+   * group that only sibling B's teacher was let into.
    */
   async groupFor(tx: Tx, lesson: CardSubject) {
     const own = await tx.conversation.findFirst({
@@ -1203,6 +1214,8 @@ export class LessonService {
          AND c.type = 'family_group'
          AND c.archived_at IS NULL
          AND c.organization_id = ${lesson.organizationId}::uuid
+         AND EXISTS (SELECT 1 FROM chat.conversation_member m
+                      WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid)
        ORDER BY EXISTS (SELECT 1 FROM chat.conversation_member m
                          WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid AND m.left_at IS NULL) DESC,
                 c.created_at DESC

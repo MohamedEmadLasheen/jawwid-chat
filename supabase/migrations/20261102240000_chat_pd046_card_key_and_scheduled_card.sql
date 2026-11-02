@@ -8,6 +8,11 @@
 --    (Admin Web "Add lesson", a booked blocked occurrence) is announced in the
 --    family's group like every other lesson change.
 
+-- message_card is written by every lesson ticket: the index build and the column
+-- take locks every card insert waits on. Fail fast rather than queue behind live
+-- traffic; re-run at a quiet moment if it times out.
+set local lock_timeout = '5s';
+
 alter table chat.message_card add column idempotency_key text;
 create unique index message_card_idempotency_key on chat.message_card (idempotency_key)
   where idempotency_key is not null;

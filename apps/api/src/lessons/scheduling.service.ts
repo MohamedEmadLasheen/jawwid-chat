@@ -897,8 +897,10 @@ export class SchedulingService {
     const startsAt = dateField(body, 'startsAt');
     const { actor, row } = await this.openBlocked(actorId, id);
     const duration = minutesBetween(row.startsAt, row.endsAt);
-    const learner = await this.prisma.learner.findUnique({ where: { id: row.learnerId }, select: { teacherId: true } });
+    const learner = await this.prisma.learner.findUnique({ where: { id: row.learnerId }, select: { teacherId: true, familyId: true } });
     if (learner?.teacherId !== row.teacherId) throw stateError('the student has another teacher now; dismiss this and book with them');
+    // Before the transaction: one read fewer while it holds its locks.
+    const lang = await this.lessons.languageOf({ learner: { familyId: learner.familyId } });
     await this.assertAgreedTime(row.teacherId, startsAt, 'a lesson');
     // A stranded make-up is booked again as the make-up of the same missed lesson.
     const stranded = row.strandedLesson
@@ -915,11 +917,13 @@ export class SchedulingService {
           startsAt,
           endsAt: new Date(startsAt.getTime() + duration * 60_000),
           createdBy: actor.actorId,
-        }, LESSON_INCLUDE).then(learnerLesson);
+          // Only what the card reads: the names (the response is read whole after commit).
+        }, { learner: { select: { name: true } }, teacher: { select: { name: true } } });
         // CHATSCHED-001: the weekly lesson the teacher could not take has a time
         // again; the family hears it like any added lesson.
-        await this.lessons.postCard(tx, created, actor, CardKind.LESSON_SCHEDULED, this.lessons.cardBase(created),
-          await this.lessons.languageOf(created), { idempotencyKey: cardKey(created, 'created') });
+        await this.lessons.postCard(tx, { ...created, learnerId: row.learnerId }, actor, CardKind.LESSON_SCHEDULED,
+          this.lessons.cardBase({ ...created, learner: created.learner!, teacher: created.teacher }), lang,
+          { idempotencyKey: cardKey(created, 'created') });
         await tx.lessonBlockedOccurrence.update({
           where: { id: row.id },
           data: { resolution: 'scheduled', resolvedBy: actor.actorId, resolvedAt: new Date(), lessonId: created.id },
