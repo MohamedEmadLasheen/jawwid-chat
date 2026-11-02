@@ -201,19 +201,54 @@ export class AuthService {
    * (`authentication-decision-gate.md` §5: there is no username column and no
    * email column; the subject is the login identifier).
    */
-  async login(username: string, password: string, context: LoginContext = {}): Promise<TokenPair> {
+  /**
+   * The account a sign-in name names, with its credential: exactly as typed,
+   * else lower-cased -- a teacher's sign-in is stored lower-cased (PD-43), and
+   * an older account with capitals keeps matching exactly.
+   * PasswordResetService.complete() applies the same rule.
+   */
+  async findForSignIn(username: string) {
     const typed = username.trim();
-    // Exactly as typed, else lower-cased: a teacher's sign-in is stored
-    // lower-cased (PD-43), and an older account with capitals keeps matching
-    // exactly. PasswordResetService.complete() applies the same rule.
     const exact = typed
       ? await this.prisma.account.findUnique({ where: { subject: typed }, include: { credential: true } })
       : null;
     const lower = typed.toLowerCase();
-    const account =
-      exact || !typed || lower === typed
-        ? exact
-        : await this.prisma.account.findUnique({ where: { subject: lower }, include: { credential: true } });
+    return exact || !typed || lower === typed
+      ? exact
+      : this.prisma.account.findUnique({ where: { subject: lower }, include: { credential: true } });
+  }
+
+  /**
+   * PD-56: proves the caller holds this account's password before an act that
+   * cannot be undone (deleting the account). The same lockout, failure count
+   * and comparable time as a sign-in, so it is no better a password oracle.
+   * Throws INVALID_CREDENTIALS or ACCOUNT_LOCKED; returns on a right password.
+   */
+  async proveHolder(
+    account: Awaited<ReturnType<AuthService['findForSignIn']>>,
+    typed: string,
+    password: string,
+    reason: string,
+  ): Promise<void> {
+    const subject = account?.subject ?? typed.trim();
+    if (!account || !account.credential) {
+      await spendComparableTime(password);
+      await this.recordLoginFailure(null, subject, reason);
+      throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
+    }
+    if (account.credential.lockedUntil && account.credential.lockedUntil > new Date()) {
+      await this.recordLoginFailure(account.id, subject, 'account_locked');
+      throw new AuthError(AuthErrorCode.ACCOUNT_LOCKED);
+    }
+    if (!(await verifyPassword(password, account.credential.passwordHash))) {
+      await this.recordLoginFailure(account.id, subject, reason, account.credential.failedAttempts);
+      throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
+    }
+  }
+
+  async login(username: string, password: string, context: LoginContext = {}): Promise<TokenPair> {
+    const typed = username.trim();
+    const account = await this.findForSignIn(typed);
     const subject = account?.subject ?? typed;
 
     if (!account || !account.credential) {
