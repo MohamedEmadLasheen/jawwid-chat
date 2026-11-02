@@ -47,6 +47,7 @@ import '../data/message_search_repository.dart';
 import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
 import 'chat_theme_sheet.dart';
+import 'chat_video_screen.dart';
 import 'forward_sheet.dart';
 import 'media_viewer.dart';
 import 'message_actions.dart';
@@ -1022,6 +1023,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       return;
     }
 
+    // CHATSCHED-010: a video plays here, in the app; Safari could not play it and
+    // showed its signed URL.
+    if (attachment.kind == MessageKind.video && attachment.url != null) {
+      await showChatVideo(context, url: attachment.url!, title: attachment.fileName);
+      return;
+    }
+
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final url = attachment.url;
@@ -1045,7 +1053,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
 
   void _openFirstAttachment(Message message) {
     final first = message.attachments.firstWhereOrNull(
-      (a) => a.kind == MessageKind.image || a.kind == MessageKind.file,
+      (a) => a.kind == MessageKind.image || a.kind == MessageKind.file || a.kind == MessageKind.video,
     );
     if (first != null) _openAttachment(message, first);
   }

@@ -25,6 +25,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/sales_payments/presentation/family_billing_screen.dart';
 import '../features/sales_payments/presentation/sales_payments_screen.dart';
 import '../features/sessions/presentation/devices_screen.dart';
+import '../features/settings/presentation/change_password_screen.dart';
 import '../features/settings/presentation/date_time_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
@@ -79,6 +80,9 @@ abstract final class Routes {
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
   static const myAccount = '/settings/account';
+
+  /// TEACHER-023: change your own password, any role.
+  static const changePassword = '/settings/password';
 
   /// PD-12: a teacher's own leave balance and requests.
   static const myLeave = '/settings/leave';
@@ -326,6 +330,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         pageBuilder: (context, state) => _page(state, const MyAccountScreen()),
+      ),
+      GoRoute(
+        path: Routes.changePassword,
+        pageBuilder: (context, state) => _page(state, const ChangePasswordScreen()),
       ),
       GoRoute(
         path: Routes.myLeave,
