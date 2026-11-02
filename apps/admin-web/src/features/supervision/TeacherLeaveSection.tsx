@@ -69,6 +69,11 @@ export function TeacherLeaveSection({ teacherId, canSetAllowance }: { teacherId:
                 <span className="tf-muted">
                   {tx(S.days)}: {number(r.days)}
                 </span>
+                {(r.unpaidDays ?? 0) > 0 && (
+                  <span className="tf-muted">
+                    {tx(r.state === 'requested' ? S.willBeUnpaid : S.unpaidLeave, { n: number(r.unpaidDays as number) })}
+                  </span>
+                )}
               </div>
               <p className="tf-entry__body" dir="auto">
                 {r.reason}

@@ -1583,6 +1583,8 @@ model TeacherDayOff {
   leaveRequestId String?  @map("leave_request_id") @db.Uuid
   /// PD-12 S2: the temporary suspension this day off belongs to (not counted against leave).
   suspensionId   String?  @map("suspension_id") @db.Uuid
+  /// TEACHER-005: a leave day beyond the allowance (unpaid leave). SQL owns the CHECK.
+  unpaid         Boolean  @default(false)
 
   @@unique([teacherId, day])
   @@map("teacher_day_off")
