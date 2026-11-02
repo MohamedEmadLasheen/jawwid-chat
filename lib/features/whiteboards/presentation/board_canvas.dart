@@ -210,6 +210,8 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
         WidgetsBinding.instance.addPostFrameCallback((_) => widget.onCommitTo?.call(page.id, elements));
       }
     }
+    // The laser points at the page it was used on: another page starts clean.
+    if (oldWidget.page.id != widget.page.id) _laser.clear();
     if (oldWidget.page.id != widget.page.id || oldWidget.tool != widget.tool) {
       _selected = {};
       // Another tool ends an edit -- after this frame, since it commits.
