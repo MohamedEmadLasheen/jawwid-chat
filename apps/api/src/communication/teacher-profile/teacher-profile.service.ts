@@ -390,7 +390,7 @@ export class TeacherProfileService {
    */
   async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
     const actor = await this.requireActor(actorId);
-    const decision = this.authz.canReviewTeacherProfile(actor);
+    const decision = await this.reviewDecision(actor);
     if (!decision.allowed) {
       if (actor.kind === ActorKind.STAFF && actor.isActive) return [];
       throw new CommError(decision.code, decision.reason);
@@ -491,6 +491,13 @@ export class TeacherProfileService {
    * this reader.
    */
   async certificateDownloadUrl(actorId: string, certificateId: string): Promise<string> {
+    // ADMIN-006: staff who are not reviewers are refused before any lookup, as
+    // the queue refuses them; the teacher's own link goes on to the owner check.
+    const actor = await this.requireActor(actorId);
+    if (actor.kind === ActorKind.STAFF) {
+      const decision = await this.reviewDecision(actor);
+      if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    }
     await this.authorizeCertificateRead(certificateId, actorId);
     return this.mediaUrls.url(
       'teacher-certificates',
@@ -525,8 +532,9 @@ export class TeacherProfileService {
 
     const isOwner = actor.kind === 'teacher' && actor.actorId === certificate.profile.teacherId;
     if (!isOwner) {
-      // A reviewer, and (TEACHER-001) of a teacher in their PD-35 scope.
-      if (!this.authz.canReviewTeacherProfile(actor).allowed) throw notFound();
+      // A reviewer (ADMIN-006: the Teachers department or the super admin), and
+      // (TEACHER-001) of a teacher in their PD-35 scope.
+      if (!(await this.reviewDecision(actor)).allowed) throw notFound();
       if (!scopeCovers(await this.teacherScope.scopeOf(actor), certificate.profile.teacherId)) throw notFound();
     }
     return { objectKey: certificate.objectKey };
@@ -593,9 +601,29 @@ export class TeacherProfileService {
 
   private async requireReviewer(actorId: string): Promise<Actor> {
     const actor = await this.requireActor(actorId);
-    const decision = this.authz.canReviewTeacherProfile(actor);
+    const decision = await this.reviewDecision(actor);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     return actor;
+  }
+
+  /**
+   * ADMIN-006: who reviews a teacher's credentials -- the super admin and the
+   * Teachers department (its manager; its supervisors, narrowed by PD-35),
+   * nobody else. A credential approved here is shown to families, so Sales and
+   * Operations, though family-facing, are refused (TEACHER_PROFILE_CANNOT_REVIEW).
+   * The role check comes first; the department is the PD-26 page basis.
+   */
+  private async reviewDecision(actor: Actor): Promise<{ allowed: true } | { allowed: false; code: CommErrorCode; reason: string }> {
+    const role = this.authz.canReviewTeacherProfile(actor);
+    if (!role.allowed) return { allowed: false, code: role.code, reason: role.reason };
+    if (!(await this.teacherScope.pageBases(actor)).teachers) {
+      return {
+        allowed: false,
+        code: CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW,
+        reason: 'only the Teachers department and the super admin review teacher credentials',
+      };
+    }
+    return { allowed: true };
   }
 
   /**

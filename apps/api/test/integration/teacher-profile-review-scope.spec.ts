@@ -160,3 +160,46 @@ describe('TEACHER-001: strict scope off', () => {
     expect((await profiles.decideCertificate(heba, cred.d, { approved: true })).teacherName).toBe('teacher_d');
   });
 });
+
+describe('ADMIN-006: only the Teachers department and the super admin review credentials', () => {
+  /** Sales: a manager and a member, beside the seed's Operations (manager_c; admin_a, admin_b supervisors). */
+  async function sales(): Promise<{ manager: string; member: string }> {
+    const [manager, member] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'smgr_x', 'manager', true), ($2::uuid, 'smem_x', 'admin', true)`,
+      manager, member,
+    );
+    const [{ id }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.department (kind, display_name, manager_id) values ('sales', 'sales', $1::uuid) returning id::text as id`, manager,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, 'supervisor')`,
+      member, id,
+    );
+    return { manager, member };
+  }
+
+  it('Sales and Operations are refused the queue, a decision and the file link (403), and get no Dashboard tile', async () => {
+    const { manager, member } = await sales();
+    for (const who of [manager, member, s.managerId, s.ownerId]) {
+      expect(await code(profiles.certificateReviewQueue(who))).toBe(CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW);
+      expect(await code(profiles.decideCertificate(who, cred.c, { approved: true }))).toBe(CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW);
+      expect(await code(profiles.certificateDownloadUrl(who, cred.c))).toBe(CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW);
+      expect(await profiles.dashboardCounts(who)).toEqual([]);
+    }
+    // Nothing was decided.
+    expect((await g.prisma.teacherProfileCertificate.findUniqueOrThrow({ where: { id: cred.c } })).state).toBe('pending');
+    // The RT-037 media route still answers 404: refused and absent read alike.
+    expect(await code(profiles.authorizeCertificateRead(cred.c, member))).toBe(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND);
+  });
+
+  it('the Teachers Manager, a teacher supervisor and the super admin still review; the teacher keeps their own link', async () => {
+    expect((await queue(tmgr)).length).toBe(3);
+    expect((await queue(heba)).length).toBeGreaterThan(0);
+    expect((await queue(superId)).length).toBe(3);
+    expect(await profiles.certificateDownloadUrl(s.teacherId, cred.c)).toEqual(expect.any(String));
+    await profiles.decideCertificate(tmgr, cred.c, { approved: true });
+    expect((await g.prisma.teacherProfileCertificate.findUniqueOrThrow({ where: { id: cred.c } })).state).toBe('approved');
+  });
+});

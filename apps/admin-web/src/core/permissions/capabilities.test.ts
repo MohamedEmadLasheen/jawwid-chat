@@ -84,14 +84,16 @@ describe('navigation lists what a role may open', () => {
     }
   })
 
-  it('nothing else is hidden: navigation is the openable areas minus Teacher statistics, Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
+  it('nothing else is hidden: navigation is the openable areas minus Teacher statistics, Teacher credentials (ADMIN-006), Instalments, Parents, Payments, Materials and the Schedule until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
       // PD-41: Certificates waits for GET /certificates/access.
       // PD-48: Lesson audio waits for GET /lesson-audio/access.
       const certs = (a: string) => a === 'certificates' || a === 'lesson-audio'
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter((a) => a !== 'teachers' && a !== 'trials' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)),
+        visibleAreas(role).filter(
+          (a) => a !== 'teachers' && a !== 'trials' && a !== 'teacher-profiles' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a),
+        ),
       )
       expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))
       expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'materials' && a !== 'schedule' && !certs(a)))
@@ -109,6 +111,13 @@ describe('navigation lists what a role may open', () => {
     expect(navAreas('manager')).not.toContain('materials')
     for (const role of ['admin', 'coverage', 'finance', 'technical', 'academic'] as const) {
       expect(navAreas(role, { materialsManager: true })).not.toContain('materials')
+    }
+  })
+
+  it('ADMIN-006: Teacher credentials is offered only to the Teachers department and the super admin -- never to Sales or Operations', () => {
+    for (const role of ['admin', 'coverage', 'manager', 'super_admin'] as const) {
+      expect(navAreas(role, { lessonManager: true })).toContain('teacher-profiles')
+      expect(navAreas(role, { sales: true, operations: true, billingReader: true, supervisionPage: true })).not.toContain('teacher-profiles')
     }
   })
 

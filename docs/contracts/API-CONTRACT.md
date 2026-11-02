@@ -860,7 +860,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 | POST | `/teacher-profiles/certificates/:id/decide` | `{ approved, note? }` | Reviewers only, never on their own; rejecting needs a `note`. |
 | GET | `/teacher-profiles/certificates/:id/download` | none | `{ url }`: a `GET /media/teacher-certificates/:id` link bound to the caller, the owning teacher or a reviewer, re-decided on every request (RT-037). |
 
-**Reviewers:** admin, coverage, manager and the super admin (`AuthorizationService.canReviewTeacherProfile`, mirrored by `chat.current_can_review_teacher_profile()`), same organization.
+**Reviewers:** the super admin and the Teachers department — its manager, and its supervisors for the teachers in their PD-35 scope (TEACHER-API-001, ADMIN-006). Same organization. The role check (`AuthorizationService.canReviewTeacherProfile`: admin, coverage, manager, super admin) comes first, then the department (`TeacherScopeService.pageBases`) and the scope. Sales and Operations get `TEACHER_PROFILE_CANNOT_REVIEW` 403 on the queue, a decision and the file link; the Dashboard shows them no credentials tile. The RT-037 media route still answers 404 to anyone who may not read a file. Follow-up: the SQL mirror `chat.current_can_review_teacher_profile()` still admits every admin, coverage and manager role, and needs a migration to follow.
 
 **Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`, `_NOT_UPLOADED`.
 
