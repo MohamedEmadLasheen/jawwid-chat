@@ -40,6 +40,7 @@ class BoardCanvas extends StatefulWidget {
     required this.style,
     required this.readOnly,
     required this.onCommit,
+    this.onCommitTo,
     this.placeholderLabel,
     this.view,
     this.verses,
@@ -55,6 +56,11 @@ class BoardCanvas extends StatefulWidget {
 
   /// One finished edit: the page's elements after it (one undo step).
   final ValueChanged<List<BoardElement>> onCommit;
+
+  /// PD-55: an edit finished for a page no longer shown (a text being typed when
+  /// the page changed) -- committed to THAT page. Without it, such an edit is
+  /// committed through [onCommit] only if its page is still the one shown.
+  final void Function(String pageId, List<BoardElement> elements)? onCommitTo;
 
   final String Function(BoardElement element)? placeholderLabel;
 
@@ -183,9 +189,22 @@ class BoardCanvasState extends State<BoardCanvas> {
   void didUpdateWidget(BoardCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.view != widget.view && widget.view != null) _view = widget.view!;
+    final edit = _edit;
+    if (edit != null && oldWidget.page.id != widget.page.id) {
+      // Another page: the text belongs to the page it was typed on. Its result
+      // is taken from THAT page now; the commit (a provider change) waits for
+      // the frame, but can no longer land on the page now in view (review of #384).
+      final page = oldWidget.page;
+      final elements = _finishedOn(page, edit);
+      _edit = null;
+      _release(edit);
+      if (elements != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => widget.onCommitTo?.call(page.id, elements));
+      }
+    }
     if (oldWidget.page.id != widget.page.id || oldWidget.tool != widget.tool) {
       _selected = {};
-      // Another tool or page ends an edit -- after this frame, since it commits.
+      // Another tool ends an edit -- after this frame, since it commits.
       if (_edit != null) WidgetsBinding.instance.addPostFrameCallback((_) => finishTextEdit());
     }
     // A selection keeps only what still exists (after undo, say).
@@ -277,6 +296,8 @@ class BoardCanvasState extends State<BoardCanvas> {
     _lastDownAtScreen = e.localPosition;
     if (_activePointer == null &&
         !widget.readOnly &&
+        // Not with a drawing tool: its first tap would already have drawn or erased.
+        const {BoardTool.select, BoardTool.hand, BoardTool.text}.contains(widget.tool) &&
         last != null &&
         lastAt != null &&
         now.difference(last) < const Duration(milliseconds: 400) &&
@@ -633,9 +654,14 @@ class BoardCanvasState extends State<BoardCanvas> {
     final width = math.max(original.size.width, math.min(natural, 900.0));
     final laid = layoutBoardText(text.isEmpty ? ' ' : text, edit.fontSize, edit.color, width, bold: edit.bold);
     final left = rtl ? original.box.right - width : original.box.left;
+    // A turned text grows about its centre: growing from an edge would swing it
+    // across the page as it turns (review of #384).
+    final topLeft = original.rotation == 0
+        ? Offset(left, original.box.top)
+        : original.box.center - Offset(width / 2, laid.height / 2);
     return original.copyWith(
       text: text,
-      topLeft: Offset(left, original.box.top),
+      topLeft: topLeft,
       size: Size(width, laid.height),
       fontSize: edit.fontSize,
       color: edit.color,
@@ -648,29 +674,32 @@ class BoardCanvasState extends State<BoardCanvas> {
   void finishTextEdit() {
     final edit = _edit;
     if (edit == null) return;
+    final elements = _finishedOn(widget.page, edit);
+    setState(() => _edit = null);
+    _release(edit);
+    if (elements != null) widget.onCommit(elements);
+  }
+
+  /// [page]'s elements with [edit] applied -- the new text added, the edited one
+  /// replaced, an emptied one removed -- or null when there is nothing to commit.
+  List<BoardElement>? _finishedOn(BoardPage page, _TextEdit edit) {
     final element = _editedText(edit);
     final empty = edit.controller.text.trim().isEmpty;
     _textSize = edit.fontSize;
     _textBold = edit.bold;
     _textColor = edit.color;
-    setState(() => _edit = null);
-    _release(edit);
-    if (edit.original == null) {
-      if (!empty) widget.onCommit([...widget.page.elements, element]);
-      return;
-    }
+    if (edit.original == null) return empty ? null : [...page.elements, element];
     if (empty) {
-      widget.onCommit([
-        for (final e in widget.page.elements)
+      return [
+        for (final e in page.elements)
           if (e.id != edit.id) e,
-      ]);
-      return;
+      ];
     }
-    if (element.toJson().toString() == edit.original!.toJson().toString()) return;
-    widget.onCommit([
-      for (final e in widget.page.elements)
+    if (element.toJson().toString() == edit.original!.toJson().toString()) return null;
+    return [
+      for (final e in page.elements)
         if (e.id == edit.id) element else e,
-    ]);
+    ];
   }
 
   /// The one text selected (not being typed), for the style bar and the rotate handle.
