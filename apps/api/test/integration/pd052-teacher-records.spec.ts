@@ -361,7 +361,8 @@ describe('PD-52 PR-2: testimonials, corrections and links', () => {
     expect((await records.students(s.ownerId, s.teacherId)).students.map((x) => x.id)).toEqual([s.learnerId]);
     // Review of #377: who may not ask, and which teachers are not found.
     expect(await code(records.students(looseId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
-    expect(await code(records.students(salesId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    // PD-52 PR-5: Sales has a basis; owning no family here, the teacher is outside its rows.
+    expect(await code(records.students(salesId, s.teacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
     expect(await code(records.students(s.ownerId, s.unrelatedTeacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
     const elsewhere = randomUUID();
     const foreignTeacher = randomUUID();
