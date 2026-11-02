@@ -223,6 +223,26 @@ describe('text', () => {
     expect(dots[0]!.args.slice(0, 3)).toEqual([32, 32, 2.2])
   })
 
+  it('PD-55: a reward sticker is read as itself and drawn as a sticker badge, never as some other stamp; free praise is drawn as its words', () => {
+    const rewards = parsePage({
+      layout: 'plain',
+      background: 'white',
+      document: {
+        v: 1,
+        elements: [
+          { id: 's1', kind: 'stamp', stamp: 'rocket', x: 0, y: 0, w: 160, h: 160, color: '#1565c0' },
+          { id: 's2', kind: 'stamp', stamp: 'praise', x: 300, y: 0, w: 220, h: 110, color: '#2e7d32', text: 'بطل' },
+        ],
+      },
+    })
+    expect(rewards.elements.map((e) => (e.kind === 'stamp' ? e.stamp : e.kind))).toEqual(['rocket', 'praise'])
+    const { ctx, calls, texts } = recorder()
+    drawPage(ctx, rewards, { verse: () => ({ status: 'loading' }), label })
+    // The badge: a ring with a star in it -- not a bare star that would read as a "star" reward.
+    expect(calls.filter((c) => c.op === 'arc').length).toBeGreaterThanOrEqual(1)
+    expect(texts()).toContain('بطل')
+  })
+
   it('PD-39: a text without the PD-55 fields is drawn as before: regular weight, never turned', () => {
     const plain = parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [{ id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, w: 100, h: 60, size: 40, color: '#1b1b1b' }] } })
     const { ctx, calls } = recorder()

@@ -70,6 +70,12 @@ class _Boards implements WhiteboardsRepository {
 }
 
 class _Picker implements MediaPicker {
+  @override
+  Future<PendingAttachment?> pickVideo() async => null;
+
+  @override
+  Future<PendingAttachment?> recordVideo() async => null;
+
   Object? error;
 
   @override
@@ -87,7 +93,7 @@ class _Uploads implements AttachmentUploader {
   int puts = 0;
 
   @override
-  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async {
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers, void Function(int sent, int total)? onProgress, UploadCancel? cancel}) async {
     puts++;
     if (error != null) throw error!;
   }

@@ -468,6 +468,31 @@ function drawStamp(ctx: Ctx, s: Extract<BoardElement, { kind: 'stamp' }>, backgr
       ctx.closePath()
       ctx.fill()
       break
+    case 'medal':
+    case 'trophy':
+    case 'rocket':
+    case 'sun':
+    case 'rainbow':
+    case 'crown':
+    case 'balloon': {
+      // PD-55: a reward sticker. The staff viewer has no icon font, so each is the
+      // same badge -- a ring with a small star -- rather than some other stamp's
+      // shape it would be mistaken for.
+      ctx.lineWidth = Math.max(3, side * 0.08)
+      ctx.beginPath()
+      ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.beginPath()
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5
+        const rr = i % 2 === 0 ? r * 0.5 : r * 0.22
+        if (i === 0) ctx.moveTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a))
+        else ctx.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a))
+      }
+      ctx.closePath()
+      ctx.fill()
+      break
+    }
     default: {
       // A praise stamp: its words in a tinted, rounded frame.
       roundRect(ctx, s.rect, h * 0.25)

@@ -79,7 +79,7 @@ class _Uploads implements AttachmentUploader {
   final puts = <(String, int, Map<String, String>)>[];
 
   @override
-  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async =>
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers, void Function(int sent, int total)? onProgress, UploadCancel? cancel}) async =>
       puts.add((uploadUrl, bytes.length, headers));
 }
 

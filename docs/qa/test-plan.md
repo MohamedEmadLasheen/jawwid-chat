@@ -330,18 +330,18 @@ lint, typecheck, unit, integration, security and migration validation.
 | E2E-016 | Manager dashboard + one-click offboarding |
 | E2E-017 | Admin Inbox full loop: parent message → correct owner → coverage if off-shift → reply → follow-up → resolve → reopen |
 
-## 21. Open specification ambiguities
+## 21. Specification ambiguities — all decided 2026-11-02
 
-Each would yield two defensible implementations. **AMB-9 blocks BR-1 testing.**
+Each would have yielded two defensible implementations. **All nine were decided by the department head under the owner's Phase 1 delegation, 2026-11-02** (release gate G-43). The original question is kept in each row so the history stays auditable.
 
-| ID | Ambiguity | Impact |
-|---|---|---|
-| **AMB-9** | **"Required admin presence/authorization" in a Student Group is undefined.** Must an admin be a member? online? on-duty? Does a group become invalid if the admin is removed or offboarded? | BR1-09 and SG-12 are unwritable until answered. This is the load-bearing condition of BR-1's *permitted* case. |
-| AMB-10 | Preset→capability-flag defaults for the four contact presets are unpublished | seeding unverifiable |
-| AMB-3 | No tie-break for equal-priority coverage rules | non-deterministic handler ⇒ INV-6 breach |
-| AMB-4 | Shift windows carry no timezone; Egypt observes DST | silent coverage gap ⇒ INV-6 breach |
-| AMB-5 | Shift boundary inclusive or exclusive | one-minute zero-handler window |
-| AMB-11 | Approval scope: which message types/groups require approval, and who the authorized approver is when the owner is off-duty | AP-08 expectation unconfirmed |
-| AMB-12 | Whether an archived group is readable or fully revoked | SG-09 expectation unconfirmed |
-| AMB-2 | Attention bucket precedence when a high score coincides with "waiting on family" | inbox ordering differs between implementations |
-| AMB-7 | Attention recompute cadence vs. continuously-changing signals | displayed state can disagree with true state at thresholds |
+| ID | Ambiguity (as raised) | Decision | Proof on `main` |
+|---|---|---|---|
+| **AMB-9** | "Required admin presence/authorization" in a Student Group is undefined. Must an admin be a member? online? on duty? Does a group become invalid if the admin is removed or offboarded? | **Adopt product decision C-4 (2026-09-06) as built.** An *active* staff member with `member_role = admin` must be a member. They need not be online or on duty. If no such admin remains (removed or offboarded), the group survives, but teacher and parent sends are refused (`BR1_ADMIN_PRESENCE_REQUIRED`) until an admin rejoins. Staff may still post, so they can repair the group. Follow-up, assigned by the head: a group muted this way raises a Needs-action item. | DB: deferred trigger in `20260905093300_chat_br1_structural_backstop.sql` (RT-025). API: `requireAdminPresence` in `authorization.service.ts`. `schema-invariants.spec.ts` "RT-025: the same group WITHOUT an admin is rejected" |
+| AMB-10 | Preset→capability-flag defaults for the four contact presets are unpublished | **One preset exists in Phase 1:** `primary_guardian`, with all six flags `true` (enrolment, intake, seed). **Only `canMessage` is enforced.** `canViewProgress`, `canManageSchedule`, `canManageBilling`, `canManageContacts` and the contact's `canCancel` are **reserved, not enforced in Phase 1**. They are to be enforced when a second-guardian or payer role is built. G-29 is re-scoped to match. | `new-students/enrolment.service.ts`, `new-students/intake.service.ts`, `cli/org-chat-seed.ts` |
+| AMB-3 | No tie-break for equal-priority coverage rules | **Moot.** The shift and coverage-rule engine is frozen for removal (PD-3), and PD-8 retired on-duty as an access grant. Cover is an explicit PD-33 assignment. | `staff-scope-revocation.spec.ts` (PD-8) |
+| AMB-4 | Shift windows carry no time zone; Egypt observes DST | **Moot for shifts** (as AMB-3). **For PD-33 cover windows:** both ends are absolute instants, and the account's time zone (PD-22) decides which instant a person's local time means. A DST change therefore cannot open a gap or an overlap. | `supervisor-cover-pd033.spec.ts` §2 "the window is half-open…" |
+| AMB-5 | Shift boundary inclusive or exclusive | **Moot for shifts. A PD-33 cover window is half-open, [from, until):** the backup is in at `from` exactly and out at `until` exactly. | `supervisor-cover-pd033.spec.ts` §2 "the window is half-open: in at `from` exactly, out at `until` exactly"; `chat.backup_is_active` (`activated_at <= at`, `active_until > at`) |
+| AMB-11 | Approval scope: which message types/groups require approval, and who approves when the owner is off duty | **Moot: PD-14 (2026-10-20)** holds no message for approval, for any role. | `groups-approval-calls.spec.ts` "PD-14: nothing is held…" |
+| AMB-12 | Whether an archived group is readable or fully revoked | **Adopt what is built:** an archived conversation is read-only history for its current members, and every send is refused (`CONVERSATION_ARCHIVED`). A member who is removed loses read access as usual. | `authorization.service.ts` `canSend` (archive check after `canRead`); `realtime-revocation.spec.ts` (removal) |
+| AMB-2 | Attention bucket precedence when a high score coincides with "waiting on family" | **Moot:** there is no attention engine. G-22's attention half is retired. | — |
+| AMB-7 | Attention recompute cadence vs. continuously changing signals | **Moot,** as AMB-2. | — |

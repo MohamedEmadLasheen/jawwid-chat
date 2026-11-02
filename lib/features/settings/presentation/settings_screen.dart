@@ -19,6 +19,7 @@ import '../../app_lock/data/device_security_settings.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
 import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
+import '../../rewards/application/reward_feed.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
 import 'lesson_audio_about_screen.dart';
@@ -222,6 +223,16 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l10n.settingsNotifications),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.notificationSettings),
+          ),
+          // PD-55: the reward celebration's chime, per device. On for a family by
+          // default, off for a teacher; the phone's silent mode silences it anyway.
+          SwitchListTile(
+            key: const ValueKey('settings-reward-sound'),
+            secondary: const Icon(Icons.music_note_outlined),
+            title: Text(l10n.rewardSoundTitle),
+            subtitle: Text(l10n.rewardSoundSubtitle),
+            value: ref.watch(rewardSoundProvider).value ?? false,
+            onChanged: (on) => ref.read(rewardSoundProvider.notifier).set(on),
           ),
           // PD-23: every device this account is signed in on.
           ListTile(

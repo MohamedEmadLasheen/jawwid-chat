@@ -14,6 +14,7 @@ import '../../../core/media/media_picker.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../rewards/presentation/reward_tray.dart';
 import '../application/board_editor_controller.dart';
 import '../application/board_export.dart';
 import '../application/board_image_import.dart';
@@ -274,10 +275,11 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                             onWidth: (w) => setState(() => _width = w),
                             onStamp: (k) => setState(() {
                               _stamp = k;
-                              _stampColor = k.index >= StampKind.excellentAr.index ? BoardPalette.stampGreen : BoardPalette.stampGold;
+                              _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
                             }),
                             onDelete: _deleteSelection,
                             onVerse: () => _insertVerse(context),
+                            onRewards: () => _openRewards(context),
                             onImage: s.imagesSupported ? () => _insertImage(context) : null,
                             onLayout: _controller.setLayout,
                             onBackground: _controller.setBackground,
@@ -327,6 +329,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  static bool _isTextStamp(StampKind k) =>
+      const {StampKind.excellentAr, StampKind.wellDoneAr, StampKind.excellentEn, StampKind.wellDoneEn, StampKind.praise}.contains(k);
+
   String? _stampText(L10n l10n) => switch (_stamp) {
     StampKind.excellentAr || StampKind.excellentEn => l10n.boardStampExcellent,
     StampKind.wellDoneAr || StampKind.wellDoneEn => l10n.boardStampWellDone,
@@ -338,6 +343,20 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     BoardTool.text => 6,
     _ => _width > 16 ? 6 : _width,
   };
+
+  /// PD-55: the reward tray over the board. A reward lands in the middle of the view.
+  void _openRewards(BuildContext context) {
+    final canvas = _canvas.currentState;
+    if (canvas == null) return;
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId),
+      ),
+    );
+  }
 
   /// A selection action from a shortcut or the panel -- never while a text is being typed.
   void _onSelection(void Function(BoardCanvasState canvas) act) {
@@ -667,6 +686,7 @@ class _ToolPanel extends StatelessWidget {
     required this.onStamp,
     required this.onDelete,
     required this.onVerse,
+    required this.onRewards,
     required this.onImage,
     required this.onLayout,
     required this.onBackground,
@@ -684,6 +704,9 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
+
+  /// PD-55: the reward tray.
+  final VoidCallback onRewards;
   /// Null where the server has no images (or said they are off): no button.
   final VoidCallback? onImage;
   final ValueChanged<PageLayout> onLayout;
@@ -740,6 +763,13 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
       if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      // PD-55: after the inserts, so nothing PD-39 placed moves; the floating dock (PR-6) regroups.
+      IconButton(
+        key: const ValueKey('board-rewards'),
+        tooltip: l10n.rewardTrayTitle,
+        onPressed: onRewards,
+        icon: const Icon(Icons.emoji_events_outlined),
+      ),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
@@ -748,7 +778,8 @@ class _ToolPanel extends StatelessWidget {
         swatch(BoardPalette.tajweedIkhfa, l10n.boardTajweedIkhfa),
         swatch(BoardPalette.tajweedIzhar, l10n.boardTajweedIzhar),
       ] else if (tool == BoardTool.stamp) ...[
-        for (final k in StampKind.values.where((k) => k != StampKind.excellentEn && k != StampKind.wellDoneEn))
+        // PD-39's own stamps; PD-55's stickers and praise live in the reward tray.
+        for (final k in const [StampKind.star, StampKind.check, StampKind.heart, StampKind.thumbsUp, StampKind.excellentAr, StampKind.wellDoneAr])
           IconButton(
             isSelected: stamp == k,
             tooltip: switch (k) {

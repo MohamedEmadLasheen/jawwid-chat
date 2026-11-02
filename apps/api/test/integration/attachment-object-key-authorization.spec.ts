@@ -24,6 +24,7 @@
  * server-side state: attachment -> message -> conversation. A stub would prove
  * a function was called, not that the relationship holds.
  */
+import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -53,7 +54,11 @@ async function conversationB() {
   return g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
 }
 
-/** A real, authorized object key in [conversationId], as the server mints it. */
+/**
+ * A real, authorized object key in [conversationId], as the server mints it --
+ * and uploaded, as a client does before sending (PARENT-023: the send path
+ * refuses an object that is not in storage).
+ */
 async function mintKeyIn(conversationId: string, actorId: string): Promise<string> {
   const auth = await g.attachments.authorizeUpload({
     conversationId,
@@ -62,6 +67,7 @@ async function mintKeyIn(conversationId: string, actorId: string): Promise<strin
     mimeType: 'image/png',
     byteSize: 1024,
   });
+  await new LocalFsBlobStore().put(auth.objectKey, 'image/png', Buffer.alloc(1024, 7));
   return auth.objectKey;
 }
 
