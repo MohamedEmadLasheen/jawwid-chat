@@ -37,7 +37,9 @@ android {
         applicationId = "com.jawwid.jawwid_chat"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // PD-56 (department head, 2026-11-02): Android 8.0+. Sentry's SDK (crash
+        // reporting, S-07) needs API 26; Android 7.x is a very small share of devices.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -92,7 +94,7 @@ flutter {
 
 dependencies {
     // PD-23: local_auth's BiometricPrompt needs an AppCompat launch theme, or it
-    // crashes on Android 8 and below (minSdk is 24). local_auth_android brings
+    // crashes on Android 8 and below (minSdk is 26 since PD-56). local_auth_android brings
     // biometric/fragment/core, not appcompat, so the theme's parent comes from here.
     implementation("androidx.appcompat:appcompat:1.7.1")
 }
