@@ -37,9 +37,10 @@
 ## Known limits
 - A process the agent deliberately detaches from its process group (`setsid`) can outlive the run and keep
   writing inside the worktree and the run's temp dir (it stays sandboxed). The engine never runs git
-  through the worktree's `.git` pointer (the git dir is pinned), re-checks that pointer in `status`,
-  `review` and `cleanup`, refuses a review whose git dir resolves into its own folders, and tells the lead to
-  inspect through the main repository (`inspect_with` in `result.json`). Never run git, tests or builds
+  through the worktree's `.git` pointer (the git dir is pinned), re-checks and restores that pointer in
+  `status` and `cleanup`, **refuses to `review` inside any task worktree** (or a subfolder of one), refuses a
+  review whose git dir resolves into its own folders, and tells the lead to inspect through the main
+  repository (`inspect_with` in `result.json`). Never run git, tests or builds
   yourself inside a task worktree.
 - Folders that were already ignored before the run (for example `node_modules` from `--prepare`) are
   tracked as one entry, so changes inside them are not detected. Verification runs sandboxed; do not run

@@ -46,8 +46,9 @@ clearly independent. Never switch anything to API billing.
    merge only under the project's approval rules. Then `codex-delegate cleanup --task-id <id>`.
 
 ## 3. Independent review
-From a **clean** checkout at the head commit (a dedicated clone or the lead's own worktree; the engine refuses a
-task worktree whose `.git` pointer changed):
+From a **clean** checkout at the head commit: a dedicated clone, the lead's own worktree, or a fresh worktree of a
+task's commit (`git -C <repo> worktree add <dir> <commit_sha>`). The engine refuses to review inside a task
+worktree itself, because the agent could write everything there, including `.git`:
 `codex-delegate review --task-id review-<name> --base <base-ref> [--head <ref>] [--focus <file>]`.
 It diffs from the merge base, gives Codex the diff as a file (read-only sandbox), and returns findings as
 JSON. Check every finding in the code, then report agreements, disagreements and severities. A Codex

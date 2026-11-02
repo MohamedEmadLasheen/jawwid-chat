@@ -266,7 +266,7 @@ w1="$(wt t1)"; rd1="$(res t1 run_dir)"; fake="$rd1/tmp/.git/worktrees/x"; mkdir 
 printf '%s\n' "$rd1/tmp/.git" > "$fake/commondir"; git -C "$REPO" rev-parse HEAD > "$fake/HEAD"
 mkdir -p "$rd1/tmp/.git/objects" "$rd1/tmp/.git/refs"; printf '[filter "x"]\n\tclean = touch %s/FILTERED\n' "$SANDBOX" > "$rd1/tmp/.git/config"
 printf 'gitdir: %s\n' "$fake" > "$w1/.git"
-check "review refuses the planted git dir" 'grep -q "unexpected .git pointer" <<<"$( cd "$w1" && bash "$ENGINE" review --task-id r9 --base main 2>&1 || true )" && [ ! -e "$SANDBOX/FILTERED" ]'
+check "review refuses the planted git dir" 'grep -q "task.s worktree" <<<"$( cd "$w1" && bash "$ENGINE" review --task-id r9 --base main 2>&1 || true )" && [ ! -e "$SANDBOX/FILTERED" ]'
 check "status restores the pointer and warns" 'grep -q "altered after the run" <<<"$( cd "$REPO" && bash "$ENGINE" status t1 2>&1 )" && grep -q "worktrees" "$w1/.git" && ! grep -q "$rd1" "$w1/.git"'
 check "result.json says how to inspect safely" 'res t1 inspect_with | grep -q "git -C $REPO show"'
 rd9="$(res t9 run_dir 2>/dev/null || true)"
@@ -282,6 +282,14 @@ S
 run --task-id t41 --brief "$BRIEF" --allow 'src/*' --test 'bash src/t.sh' || true
 check "candidate file still in the worktree and the commit" '[ -f "$(wt t41)/src/a.ts" ] && [ "$(git -C "$(wt t41)" show HEAD:src/a.ts)" = "export const x = 41;" ]'
 check "post-test list is not mangled" 'res t41 post_test_changes_discarded | grep -q "src/a.ts\\\\nzz\|a.ts.*zz"'
+
+echo "18. review never runs inside a task worktree; the owner's own worktrees still work"
+w9b="$(wt t41)"; rm -f "$w9b/.git"; mkdir -p "$w9b/.git"; git -C "$w9b" init -q 2>/dev/null || true
+printf '[filter "x"]\n\tclean = touch %s/REVIEW_PWNED\n' "$SANDBOX" >> "$w9b/.git/config"; mkdir -p "$w9b/.git/info"; echo '* filter=x' > "$w9b/.git/info/attributes"
+check ".git FOLDER in a task worktree: refused, no filter ran" 'grep -q "task.s worktree" <<<"$( cd "$w9b" && bash "$ENGINE" review --task-id r20 --base main 2>&1 || true )" && [ ! -e "$SANDBOX/REVIEW_PWNED" ]'
+check "from a subfolder of a task worktree: refused" 'grep -q "task.s worktree" <<<"$( cd "$w9b/src" && bash "$ENGINE" review --task-id r21 --base main 2>&1 || true )"'
+mine="$SANDBOX/wt/mine"; git -C "$REPO" worktree add -q -b mine "$mine" main; echo "x" > "$mine/src/m.ts"; git -C "$mine" add -A; git -C "$mine" commit -q -m mine
+check "an owner worktree inside the engine's worktree folder is reviewed normally" 'grep -q "\"verdict\"" <<<"$( cd "$mine" && bash "$ENGINE" review --task-id r22 --base main 2>&1 )"'
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -72,17 +72,21 @@ checkout_gitdir_sane() {
   real="$(cd "$target" && pwd -P)"; dir_real="$(cd "$1" && pwd -P)"
   # Never a git dir planted inside the engine's run or worktree folders, or inside the checkout itself.
   case "$real/" in "$(cd "$AI_HOME" 2>/dev/null && pwd -P)/"*|"$(cd "$WORKTREES" 2>/dev/null && pwd -P)/"*|"$dir_real/"*) return 1 ;; esac
-  # An engine task worktree must still hold the exact pointer recorded when it was created.
-  local wt_root; wt_root="$(cd "$WORKTREES" 2>/dev/null && pwd -P || true)"
-  if [ -n "$wt_root" ]; then
-    case "$dir_real/" in "$wt_root/"*)
-      local st; st="$(grep -rlxF "worktree=$1" "$RUNS" --include=state 2>/dev/null | head -1 || true)"
-      [ -n "$st" ] || st="$(grep -rlxF "worktree=$dir_real" "$RUNS" --include=state 2>/dev/null | head -1 || true)"
-      [ -n "$st" ] || return 1
-      [ "$(cat "$1/.git")" = "$(sed -n 's/^gitfile=//p' "$st" | tail -1)" ] || return 1 ;;
-    esac
-  fi
   return 0
+}
+# Is $1 (or any folder above it) a worktree the engine created for a delegated task?
+# Every file there, including `.git`, was writable by the agent, so review never runs
+# git in one. Matched against every run's recorded worktree path, physical and logical.
+inside_task_worktree() {
+  local p logical physical
+  logical="$(cd "$1" && pwd)"; physical="$(cd "$1" && pwd -P)"
+  for p in "$logical" "$physical"; do
+    while [ -n "$p" ] && [ "$p" != / ]; do
+      grep -rqxF "worktree=$p" "$RUNS" --include=state 2>/dev/null && return 0
+      p="$(dirname "$p")"
+    done
+  done
+  return 1
 }
 need() { [ $# -ge 2 ] && [ -n "$2" ] || die "option $1 needs a value"; }
 
@@ -835,6 +839,7 @@ cmd_review() {
   # Locate the checkout root by walking up to the first `.git` entry, with no git
   # involved, and vet its pointer before any git command reads it.
   local top; top="$(cd "${dir:-$PWD}" && pwd)"
+  inside_task_worktree "$top" && die "review: $top is a delegated task's worktree (agent-writable). Review the commit from the main repository or a fresh worktree of it instead: git -C <repo> worktree add <dir> <commit>"
   while [ "$top" != / ] && [ ! -e "$top/.git" ] && [ ! -L "$top/.git" ]; do top="$(dirname "$top")"; done
   [ -e "$top/.git" ] || [ -L "$top/.git" ] || die "review: not inside a Git checkout: ${dir:-$PWD}"
   checkout_gitdir_sane "$top" || die "review: $top has an unexpected .git pointer; refusing"
