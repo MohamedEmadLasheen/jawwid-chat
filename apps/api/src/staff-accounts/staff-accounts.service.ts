@@ -283,6 +283,8 @@ export class StaffAccountsService {
 
   async roles(actor: Actor): Promise<{ roles: AccessRoleDto[] }> {
     const org = requireStaff(actor);
+    // ADMIN-005: the role definitions are the catalogue's readers' -- the same rule.
+    await this.requireCatalogueReader(actor);
     const standing = await this.standing(actor);
     const rows = await this.prisma.$queryRaw<
       Array<{ id: string; key: string; name_en: string; name_ar: string; description: string | null; max_tier: string; archived: boolean; template: boolean; permissions: string[] | null }>
@@ -373,6 +375,21 @@ export class StaffAccountsService {
     return { role };
   }
 
+  /**
+   * TEACHER-004 / ADMIN-005: the permission catalogue and the access-role list
+   * are for whoever manages staff accounts or roles -- staff_accounts.view or
+   * access_roles.manage, the routes' own keys (the super admin holds every
+   * key). PermissionGuard runs in shadow mode on some stacks and lets non-staff
+   * through to the service, so the service decides.
+   */
+  private async requireCatalogueReader(actor: Actor): Promise<void> {
+    if (actor.staffRole === StaffRole.SUPER_ADMIN) return;
+    const held = (await this.access.profileOf(actor)).permissions;
+    if (!held.has('staff_accounts.view') && !held.has('access_roles.manage')) {
+      throw denied('access roles and their permissions are for whoever manages staff accounts or access roles');
+    }
+  }
+
   /** The checklist a role is made from: every key, its page, risk, and whether it goes in roles and may be delegated. */
   /**
    * The catalogue the role editor builds from. TEACHER-004: for whoever manages
@@ -385,12 +402,7 @@ export class StaffAccountsService {
     actor: Actor,
   ): Promise<{ permissions: Array<{ key: string; page: string; action: string; label: { en: string; ar: string }; risk: string; delegable: boolean; inRoles: boolean }> }> {
     requireStaff(actor);
-    if (actor.staffRole !== StaffRole.SUPER_ADMIN) {
-      const held = (await this.access.profileOf(actor)).permissions;
-      if (!held.has('staff_accounts.view') && !held.has('access_roles.manage')) {
-        throw denied('the permission catalogue is for whoever manages staff accounts or access roles');
-      }
-    }
+    await this.requireCatalogueReader(actor);
     return {
       permissions: PERMISSIONS.map((p) => ({
         key: p.key,
