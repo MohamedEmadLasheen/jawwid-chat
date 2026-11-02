@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * PD-46 PR-1 (docs/product/pd046-schedule-chat-integration-plan.md §3.2-3.4):
  * every lesson change is announced, once.
@@ -65,6 +66,28 @@ async function lessonAt(offsetMs: number, learnerId = s.learnerId): Promise<stri
 const revisionOf = async (id: string) => Number((await g.prisma.lesson.findUniqueOrThrow({ where: { id }, select: { revision: true } })).revision);
 const unannounced = (id: string) => g.prisma.lessonChangeUnannounced.findMany({ where: { lessonId: id }, orderBy: { revision: 'asc' } });
 const keyed = (key: string) => g.prisma.outboxEvent.findMany({ where: { idempotencyKey: key } });
+/** `n` hourly lessons of the seeded learner, inserted in one statement (from a weekly time when `fromSlot`). */
+async function bulkLessons(n: number, fromSlot: boolean): Promise<string[]> {
+  let slot: string | null = null;
+  if (fromSlot) {
+    [{ id: slot }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.learner_schedule_slot (organization_id, learner_id, teacher_id, weekday, start_minute, duration_minutes, timezone, valid_from, created_by)
+       select organization_id, id, teacher_id, 1, 22 * 60, 30, 'Africa/Cairo', current_date + 1, $2::uuid from chat.learner where id = $1::uuid
+       returning id::text as id`,
+      s.learnerId, s.ownerId,
+    );
+  }
+  const rows = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `insert into chat.lesson (organization_id, learner_id, teacher_id, created_by, starts_at, ends_at, schedule_slot_id)
+     select l.organization_id, l.id, l.teacher_id, $2::uuid,
+            date_trunc('hour', now()) + make_interval(hours => 24 + g), date_trunc('hour', now()) + make_interval(hours => 24 + g, mins => 30), $3::uuid
+       from chat.learner l, generate_series(1, $4::int) g
+      where l.id = $1::uuid
+     returning id::text as id`,
+    s.learnerId, s.ownerId, slot, n,
+  );
+  return rows.map((r) => r.id);
+}
 const pendingOf = (type: string) => g.prisma.outboxEvent.findMany({ where: { type, status: 'pending' }, orderBy: { createdAt: 'asc' } });
 
 beforeAll(async () => {
@@ -97,20 +120,50 @@ describe('chat.lesson.revision', () => {
   });
 });
 
-describe('the safety net: a change outside the writer is recorded, one inside it is not', () => {
-  it('an unmarked insert and update are recorded with their revisions; a marked transaction records nothing', async () => {
-    const id = await lessonAt(5 * HOUR); // LessonService.schedule does not use the writer yet (PR-2)
+describe('the safety net notes every change; record() takes back exactly what it announces', () => {
+  it('an insert and an update are noted with their revisions, and an insert always starts at revision 0', async () => {
+    const id = await lessonAt(5 * HOUR);
     expect((await unannounced(id)).map((r) => [Number(r.revision), r.op, r.fromSlot])).toEqual([[0, 'insert', false]]);
-
     await g.prisma.$executeRawUnsafe(`update chat.lesson set starts_at = starts_at + interval '1 hour', ends_at = ends_at + interval '1 hour' where id = $1::uuid`, id);
     expect((await unannounced(id)).map((r) => Number(r.revision))).toEqual([0, 1]);
 
-    await g.prisma.$transaction(async (tx) => {
-      await LessonEvents.markWriter(tx);
-      await tx.$executeRawUnsafe(`update chat.lesson set starts_at = starts_at + interval '1 hour', ends_at = ends_at + interval '1 hour' where id = $1::uuid`, id);
+    // A revision is the database's to give, on insert too.
+    const forged = await g.prisma.lesson.create({
+      data: {
+        learnerId: s.learnerId, teacherId: s.teacherId, createdBy: s.ownerId, revision: 7,
+        startsAt: new Date(Date.now() + 9 * HOUR), endsAt: new Date(Date.now() + 9 * HOUR + HOUR / 2),
+      },
+      select: { id: true, revision: true },
     });
-    expect(await revisionOf(id)).toBe(2);
-    expect((await unannounced(id)).map((r) => Number(r.revision))).toEqual([0, 1]); // revision 2 announced by its writer
+    expect(Number(forged.revision)).toBe(0);
+  });
+
+  it('(a) a lesson changed in the same transaction but left out of record() is still swept, as external', async () => {
+    const [a, b] = [await lessonAt(5 * HOUR), await lessonAt(7 * HOUR)];
+    await g.prisma.lessonChangeUnannounced.deleteMany({});
+    await g.prisma.$transaction(async (tx) => {
+      for (const id of [a, b]) {
+        await tx.$executeRawUnsafe(`update chat.lesson set starts_at = starts_at + interval '1 hour', ends_at = ends_at + interval '1 hour' where id = $1::uuid`, id);
+      }
+      await events.record(tx, [a], 'moved'); // b is not passed on
+    });
+    expect(await unannounced(a)).toEqual([]);
+    expect((await unannounced(b)).map((r) => Number(r.revision))).toEqual([1]);
+    expect(await events.announceUnannounced()).toEqual({ lessons: 1, refreshed: 0 });
+    expect((await keyed(`lesson:${b}:1:external`)).length).toBe(1);
+    expect((await keyed(`lesson:${a}:1:external`)).length).toBe(0);
+  });
+
+  it('(b) a change that was announced is not announced again as external -- including its earlier revisions', async () => {
+    const id = await lessonAt(5 * HOUR);
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`update chat.lesson set starts_at = starts_at + interval '1 hour', ends_at = ends_at + interval '1 hour' where id = $1::uuid`, id);
+      await tx.$executeRawUnsafe(`update chat.lesson set starts_at = starts_at + interval '1 hour', ends_at = ends_at + interval '1 hour' where id = $1::uuid`, id);
+      await events.record(tx, [id], 'moved'); // at revision 2: covers 0, 1 and 2
+    });
+    expect(await unannounced(id)).toEqual([]);
+    expect(await events.announceUnannounced()).toEqual({ lessons: 0, refreshed: 0 });
+    expect((await pendingOf(CommEvent.LESSON_CHANGED)).map((e) => (e.payload as { change: string }).change)).toEqual(['moved']);
   });
 });
 
@@ -187,6 +240,24 @@ describe('the sweep announces what the writer did not', () => {
   });
 });
 
+describe('the sweep drains: more than one batch in one tick', () => {
+  it('600 lessons changed outside the writer are all announced in one sweep', async () => {
+    const ids = await bulkLessons(600, false);
+    const r = await events.announceUnannounced();
+    expect(r).toEqual({ lessons: 600, refreshed: 0 });
+    expect(await g.prisma.lessonChangeUnannounced.count()).toBe(0);
+    expect(new Set((await pendingOf(CommEvent.LESSON_CHANGED)).map((e) => (e.payload as { lessonId: string }).lessonId))).toEqual(new Set(ids));
+  });
+
+  it('600 lessons from a weekly time are ONE schedule.refreshed for the organization', async () => {
+    await bulkLessons(600, true);
+    const r = await events.announceUnannounced();
+    expect(r).toEqual({ lessons: 0, refreshed: 1 });
+    expect(await pendingOf(CommEvent.SCHEDULE_REFRESHED)).toHaveLength(1);
+    expect(await g.prisma.lessonChangeUnannounced.count()).toBe(0);
+  });
+});
+
 describe('the worker fans lesson.changed out to exactly who may see the lesson', () => {
   it('the teacher, the PD-8 supervisor and the Operations manager (actor rooms) and the family\'s group -- not another supervisor', async () => {
     const id = await lessonAt(5 * HOUR);
@@ -213,3 +284,27 @@ describe('the worker fans lesson.changed out to exactly who may see the lesson',
   });
 });
 
+describe('another organization hears nothing', () => {
+  it('its academy-wide staff and its groups receive no lesson.changed and no schedule.refreshed of ours', async () => {
+    const [org2, sa2] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_two')`, org2, `pd46-${org2.slice(0, 8)}`);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.staff (id, name, role, is_active, organization_id) values ($1::uuid, 'sa_two', 'super_admin', true, $2::uuid)`, sa2, org2,
+      ),
+    ]);
+    const { organizationId } = await g.prisma.learner.findUniqueOrThrow({ where: { id: s.learnerId }, select: { organizationId: true } });
+    const id = await lessonAt(5 * HOUR);
+    await g.prisma.$transaction((tx) => events.record(tx, [id], 'created'));
+    await g.prisma.outboxEvent.create({
+      data: { type: CommEvent.SCHEDULE_REFRESHED, payload: { organizationId, teacherIds: [s.teacherId], learnerIds: [s.learnerId] } },
+    });
+    await worker.drain();
+    const ours = sent.filter((x) => x.event === CommEvent.LESSON_CHANGED || x.event === CommEvent.SCHEDULE_REFRESHED);
+    expect(ours.length).toBeGreaterThan(0);
+    for (const x of ours) expect(x.to).not.toContain(sa2);
+    // Threads: only the lesson's own family group, never a room of the other organization.
+    expect(ours.filter((x) => x.via === 'thread').map((x) => x.to[0])).toEqual([groupId]);
+  });
+});

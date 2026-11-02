@@ -3,14 +3,23 @@
 --   1. chat.lesson.revision: bumped by a trigger whenever a field a reader sees
 --      changes, so a client can order signals and ignore a stale one, and a
 --      write that bypasses the API's writer is still counted.
---   2. chat.lesson_change_unannounced: the safety net. A lesson change made by a
---      transaction that did not mark itself as the lesson writer
---      (set_config('chat.lesson_writer', 'on', true)) is recorded here; the
---      worker announces it within a minute (`change: external`, or one batched
---      `schedule.refreshed` for weekly materialization). A missed writer shows up
---      late, never silently.
+--   2. chat.lesson_change_unannounced: the safety net. EVERY lesson change a
+--      reader sees is noted here, by (lesson, revision). The API's writer
+--      announces its own changes and deletes exactly the rows it announced, in
+--      the same transaction; whatever is left -- a writer that bypassed it, a
+--      lesson it did not pass on -- the worker announces within a minute
+--      (`change: external`, or one batched `schedule.refreshed` per organization
+--      for weekly materialization). A missed change shows up late, never
+--      silently, and is never announced twice. (No transaction-wide "I am the
+--      writer" flag: it would hide every other lesson changed in that
+--      transaction.)
 --   3. chat.outbox_event.idempotency_key: `lesson:<id>:<revision>:<change>`, so a
 --      retried transaction cannot enqueue the same announcement twice.
+
+-- outbox_event is never pruned: building its index takes a lock that blocks
+-- every outbox insert. Fail fast rather than queue behind (or ahead of) live
+-- traffic; re-run at a quiet moment if it times out.
+set local lock_timeout = '5s';
 
 alter table chat.lesson add column revision bigint not null default 0;
 comment on column chat.lesson.revision is
@@ -22,6 +31,10 @@ language plpgsql
 set search_path = chat, pg_temp
 as $$
 begin
+  if tg_op = 'INSERT' then
+    new.revision := 0; -- a new lesson starts at 0, whatever the insert said
+    return new;
+  end if;
   if (new.starts_at, new.ends_at, new.teacher_id, new.outcome, new.kind, new.learner_id)
      is distinct from (old.starts_at, old.ends_at, old.teacher_id, old.outcome, old.kind, old.learner_id) then
     new.revision := old.revision + 1;
@@ -32,7 +45,7 @@ begin
 end
 $$;
 
-create trigger lesson_bumps_revision before update on chat.lesson
+create trigger lesson_bumps_revision before insert or update on chat.lesson
   for each row execute function chat.lesson_bump_revision();
 
 create table chat.lesson_change_unannounced (
@@ -60,9 +73,6 @@ language plpgsql
 set search_path = chat, pg_temp
 as $$
 begin
-  if coalesce(current_setting('chat.lesson_writer', true), '') = 'on' then
-    return null; -- the writer announces its own changes, in its own transaction
-  end if;
   if tg_op = 'UPDATE' and new.revision = old.revision then
     return null; -- nothing a reader sees changed
   end if;

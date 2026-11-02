@@ -9,21 +9,29 @@ type Tx = Prisma.TransactionClient;
 /** How many unannounced changes one sweep takes (the rest wait for the next). */
 export const UNANNOUNCED_BATCH = 500;
 
+/** How many batches of non-weekly changes one sweep takes before yielding the tick. */
+export const UNANNOUNCED_ROUNDS = 20;
+
 /**
  * PD-46 §3.2-3.4: every lesson change is announced, once.
+ *
+ * The database notes EVERY change a reader sees in
+ * chat.lesson_change_unannounced, by (lesson, revision). Then:
  *
  *   record()               the writer's path: in the caller's transaction, one
  *                          `lesson.changed` per lesson, keyed
  *                          lesson:<id>:<revision>:<change> (a retried
- *                          transaction enqueues nothing new), and the
- *                          transaction marked as the writer, so the safety net
- *                          (chat.lesson_change_unannounced) stands aside.
- *   announceUnannounced()  the safety net's sweep: whatever changed WITHOUT the
- *                          writer -- weekly materialization, a raw SQL update --
- *                          is announced late but never lost. Lessons created
- *                          from a weekly time become ONE `schedule.refreshed`
- *                          per batch (plan §2, Q8), everything else a
- *                          `lesson.changed` with change `external`.
+ *                          transaction enqueues nothing new), and the noted rows
+ *                          of exactly those lessons, up to the revision
+ *                          announced, deleted -- so the sweep does not announce
+ *                          them again. A lesson changed in the same transaction
+ *                          but not passed here keeps its row and is swept.
+ *   announceUnannounced()  the safety net's sweep: whatever is left -- a writer
+ *                          that bypassed record(), a raw SQL update -- is
+ *                          announced late but never lost. Lessons created from a
+ *                          weekly time become ONE `schedule.refreshed` per
+ *                          organization per sweep (plan §2, Q8), everything
+ *                          else a `lesson.changed` with change `external`.
  *
  * A signal, never content: clients refetch through their authorized routes.
  */
@@ -31,71 +39,95 @@ export const UNANNOUNCED_BATCH = 500;
 export class LessonEvents {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** This transaction announces its own lesson changes. */
-  static async markWriter(tx: Tx): Promise<void> {
-    await tx.$queryRaw`SELECT set_config('chat.lesson_writer', 'on', true)`;
-  }
-
   /** One `lesson.changed` per lesson (current revision), in `tx`. Returns how many were new. */
   async record(tx: Tx, lessonIds: readonly string[], change: LessonChange): Promise<number> {
-    await LessonEvents.markWriter(tx);
     const ids = [...new Set(lessonIds)];
     if (ids.length === 0) return 0;
     const payloads = await this.payloads(tx, ids, change);
     let enqueued = 0;
     for (const p of payloads) enqueued += await this.enqueueKeyed(tx, `lesson:${p.lessonId}:${p.revision}:${p.change}`, CommEvent.LESSON_CHANGED, p);
+    // Announced up to this revision: one signal covers every earlier change of
+    // the lesson too (clients refetch the current row).
+    await tx.$executeRaw`
+      DELETE FROM chat.lesson_change_unannounced u
+       USING (SELECT unnest(${payloads.map((p) => p.lessonId)}::uuid[]) AS lesson_id,
+                     unnest(${payloads.map((p) => p.revision)}::bigint[]) AS revision) d
+       WHERE u.lesson_id = d.lesson_id AND u.revision <= d.revision`;
     if (enqueued > 0) notifyOutboxWake();
     return enqueued;
   }
 
-  /** The safety net's sweep. Returns what it announced. */
+  /** The safety net's sweep, until it is drained (or UNANNOUNCED_ROUNDS batches). Returns what it announced. */
   async announceUnannounced(limit = UNANNOUNCED_BATCH): Promise<{ lessons: number; refreshed: number }> {
-    return this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<Array<{ lesson_id: string; revision: bigint; organization_id: string; teacher_id: string; from_slot: boolean }>>`
-        SELECT lesson_id::text, revision, organization_id::text, teacher_id::text, from_slot
-          FROM chat.lesson_change_unannounced
-         ORDER BY recorded_at
-         LIMIT ${limit}
-           FOR UPDATE SKIP LOCKED`;
-      if (rows.length === 0) return { lessons: 0, refreshed: 0 };
+    const refreshed = await this.announceMaterialized();
+    let lessons = 0;
+    for (let round = 0; round < UNANNOUNCED_ROUNDS; round++) {
+      const batch = await this.announceBatch(limit);
+      lessons += batch.announced;
+      if (batch.taken < limit) break;
+    }
+    return { lessons, refreshed };
+  }
 
-      // Materialized weekly lessons: one refresh per organization for its teachers and learners.
-      const slotRows = rows.filter((x) => x.from_slot);
-      const learnerOf = new Map(
-        (slotRows.length === 0 ? [] : await tx.$queryRaw<Array<{ id: string; learner_id: string | null }>>`
-          SELECT id::text, learner_id::text FROM chat.lesson WHERE id = ANY (${slotRows.map((r) => r.lesson_id)}::uuid[])`)
-          .map((l) => [l.id, l.learner_id]),
-      );
-      const refreshed = new Map<string, { teachers: Set<string>; learners: Set<string> }>();
-      for (const r of slotRows) {
-        const batch = refreshed.get(r.organization_id) ?? { teachers: new Set<string>(), learners: new Set<string>() };
+  /**
+   * Every lesson a weekly time created since the last sweep, all at once: one
+   * `schedule.refreshed` per organization, however many lessons a
+   * materialization wrote (plan §2, Q8).
+   */
+  private async announceMaterialized(): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ organization_id: string; teacher_id: string; learner_id: string | null }>>`
+        WITH taken AS (
+          SELECT lesson_id, revision FROM chat.lesson_change_unannounced
+           WHERE from_slot FOR UPDATE SKIP LOCKED),
+        gone AS (
+          DELETE FROM chat.lesson_change_unannounced u USING taken t
+           WHERE u.lesson_id = t.lesson_id AND u.revision = t.revision
+          RETURNING u.lesson_id, u.organization_id, u.teacher_id)
+        SELECT DISTINCT g.organization_id::text, g.teacher_id::text, l.learner_id::text
+          FROM gone g LEFT JOIN chat.lesson l ON l.id = g.lesson_id`;
+      const byOrg = new Map<string, { teachers: Set<string>; learners: Set<string> }>();
+      for (const r of rows) {
+        const batch = byOrg.get(r.organization_id) ?? { teachers: new Set<string>(), learners: new Set<string>() };
         batch.teachers.add(r.teacher_id);
-        const learner = learnerOf.get(r.lesson_id);
-        if (learner) batch.learners.add(learner);
-        refreshed.set(r.organization_id, batch);
+        if (r.learner_id) batch.learners.add(r.learner_id);
+        byOrg.set(r.organization_id, batch);
       }
-      for (const [organizationId, batch] of refreshed) {
+      for (const [organizationId, batch] of byOrg) {
         const payload: ScheduleRefreshedPayload = {
           organizationId, teacherIds: [...batch.teachers].sort(), learnerIds: [...batch.learners].sort(),
         };
         await tx.outboxEvent.create({ data: { type: CommEvent.SCHEDULE_REFRESHED, payload: payload as unknown as Prisma.InputJsonValue } });
       }
+      if (byOrg.size > 0) notifyOutboxWake();
+      return byOrg.size;
+    });
+  }
 
-      // Everything else: a signal per lesson, at its CURRENT revision (several
-      // unannounced revisions of one lesson are one signal).
-      const others = [...new Set(rows.filter((x) => !x.from_slot).map((x) => x.lesson_id))];
-      let lessons = 0;
-      for (const p of await this.payloads(tx, others, 'external')) {
-        lessons += await this.enqueueKeyed(tx, `lesson:${p.lessonId}:${p.revision}:external`, CommEvent.LESSON_CHANGED, p);
+  /** One batch of the other changes: a signal per lesson at its CURRENT revision. */
+  private async announceBatch(limit: number): Promise<{ taken: number; announced: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ lesson_id: string; revision: bigint }>>`
+        SELECT lesson_id::text, revision
+          FROM chat.lesson_change_unannounced
+         WHERE NOT from_slot
+         ORDER BY recorded_at
+         LIMIT ${limit}
+           FOR UPDATE SKIP LOCKED`;
+      if (rows.length === 0) return { taken: 0, announced: 0 };
+      // Several unannounced revisions of one lesson are one signal.
+      const ids = [...new Set(rows.map((x) => x.lesson_id))];
+      let announced = 0;
+      for (const p of await this.payloads(tx, ids, 'external')) {
+        announced += await this.enqueueKeyed(tx, `lesson:${p.lessonId}:${p.revision}:external`, CommEvent.LESSON_CHANGED, p);
       }
-
       await tx.$executeRaw`
         DELETE FROM chat.lesson_change_unannounced u
          USING (SELECT unnest(${rows.map((r) => r.lesson_id)}::uuid[]) AS lesson_id,
                        unnest(${rows.map((r) => r.revision)}::bigint[]) AS revision) d
          WHERE u.lesson_id = d.lesson_id AND u.revision = d.revision`;
-      if (lessons + refreshed.size > 0) notifyOutboxWake();
-      return { lessons, refreshed: refreshed.size };
+      if (announced > 0) notifyOutboxWake();
+      return { taken: rows.length, announced };
     });
   }
 
