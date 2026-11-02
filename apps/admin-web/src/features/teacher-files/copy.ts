@@ -235,6 +235,10 @@ export const T = {
   },
   sending: { en: 'Sending…', ar: 'جارٍ الإرسال…' },
   codeEmailed: { en: 'A new code was e-mailed to the teacher.', ar: 'أُرسل رمز جديد إلى بريد المعلم.' },
+  codeAlreadyIssued: {
+    en: 'This teacher was already added, and their first sign-in code was given then (valid until {when}). If it is lost, send a new code from the Teacher File.',
+    ar: 'أُضيف هذا المعلم من قبل، وأُعطي رمز تسجيل الدخول الأول حينها (صالح حتى {when}). إن ضاع، أرسل رمزًا جديدًا من ملف المعلم.',
+  },
   codeNotEmailedAskManager: {
     en: 'The code could not be e-mailed. Ask the Teachers Manager to send it.',
     ar: 'تعذّر إرسال الرمز بالبريد. اطلب من مدير قسم المعلمين إرساله.',
