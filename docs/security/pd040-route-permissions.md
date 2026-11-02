@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-567 routes.
+568 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -487,6 +487,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/teacher-files/:teacherId/finance/terms` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.setTerms` |
 | GET | `/api/v1/teacher-files/:teacherId/leave` | teacher_supervision.view | teacher_attendance.view | `leave/leave.controller.ts#LeaveController.teacherLeave` |
 | POST | `/api/v1/teacher-files/:teacherId/leave-allowance` | leave.allowance | `leave/leave.controller.ts#LeaveController.setAllowance` |
+| GET | `/api/v1/teacher-files/:teacherId/lesson-reports` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.lessonReports` |
 | POST | `/api/v1/teacher-files/:teacherId/personal` | teacher_files.edit | `teacher-file/teacher-file.controller.ts#TeacherFileController.updatePersonal` |
 | POST | `/api/v1/teacher-files/:teacherId/rewards` | teacher_files.supervise | `teacher-file/teacher-file.controller.ts#TeacherFileController.recordReward` |
 | GET | `/api/v1/teacher-files/complaints` | teacher_supervision.view | teacher_attendance.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.complaints` |
