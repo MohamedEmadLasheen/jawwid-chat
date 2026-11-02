@@ -778,8 +778,12 @@ describe('7. no client names its own call history', () => {
     );
     const handler = source.slice(source.indexOf("@Post(':id/end')"));
     const body = handler.slice(0, handler.indexOf('\n  }'));
-    expect(body).not.toMatch(/@Body/);
     expect(body).not.toMatch(/outcome/);
+    // CHATSCHED-013 (review 2 of #367): the body is read for ONE thing -- a
+    // client that gave up rejoining -- and anything else is refused. It never
+    // reaches the service as a value, only as that flag.
+    expect(body).toMatch(/reason !== CallEndReason\.CONNECTION_LOST/);
+    expect(body).toMatch(/connectionLost: reason === CallEndReason\.CONNECTION_LOST/);
   });
 
   it('7b. the service itself exposes no outcome parameter', async () => {
@@ -798,7 +802,8 @@ describe('7. no client names its own call history', () => {
       'utf8',
     );
     const sig = source.slice(source.indexOf('async end('));
-    expect(sig.slice(0, sig.indexOf(')'))).toBe('async end(callId: string, actorId: string');
+    // CHATSCHED-013 (review 2 of #367): an optional give-up flag, never an outcome.
+    expect(sig.slice(0, sig.indexOf(')'))).toBe('async end(callId: string, actorId: string, opts: { connectionLost?: boolean } = {}');
   });
 
   it('7c. and the three outcomes each have exactly one writer', async () => {

@@ -63,7 +63,7 @@ export class CallController {
   async end(@ActorId() actorId: string, @Param('id') id: string, @Body() body?: unknown) {
     // CHATSCHED-013 (review 2 of #367): the ONE thing a client may say about an
     // ending -- that it gave up rejoining. Any other reason is refused; the
-    // outcome is still the server's, from the call's locked state.
+    // result is still the server's, from the call's own locked state.
     const reason = body && typeof body === 'object' ? (body as Record<string, unknown>).reason : undefined;
     if (reason !== undefined && reason !== CallEndReason.CONNECTION_LOST) {
       throw new CommError(CommErrorCode.VALIDATION, 'reason: only connection_lost', 400);
