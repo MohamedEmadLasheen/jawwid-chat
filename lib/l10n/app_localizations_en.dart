@@ -4964,7 +4964,7 @@ class L10nEn extends L10n {
 
   @override
   String get rewardSoundSubtitle =>
-      'A short chime when a teacher celebrates your child.';
+      'A short sound when a teacher rewards your child: a chime, applause or a fanfare.';
 
   @override
   String rewardStarLine(int count) {

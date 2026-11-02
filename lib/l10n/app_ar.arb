@@ -1897,7 +1897,7 @@
   "rewardTrayFailed": "لم تُسجَّل المكافأة. ما زالت على السبورة.",
   "rewardCelebrationLine": "معلّمك يحتفل بك!",
   "rewardSoundTitle": "صوت المكافآت",
-  "rewardSoundSubtitle": "نغمة قصيرة عندما يحتفل المعلّم بطفلك.",
+  "rewardSoundSubtitle": "صوت قصير عندما يكافئ المعلّم طفلك: نغمة أو تصفيق أو احتفال.",
   "rewardStarLine": "{count, plural, zero{نجمة!} one{نجمة! نجمة واحدة في هذه الحصة} two{نجمة! نجمتان في هذه الحصة} few{نجمة! {count} نجوم في هذه الحصة} many{نجمة! {count} نجمة في هذه الحصة} other{نجمة! {count} نجمة في هذه الحصة}}",
   "rewardBadgeBronze": "جهد رائع",
   "rewardBadgeSilver": "جهد مذهل",
