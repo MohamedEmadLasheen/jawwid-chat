@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
-import { PrismaClient } from '@prisma/client';
+import { cliPrismaClient } from './cli-prisma';
 import { BootstrapRefusal, bootstrapSuperAdmin } from './super-admin-bootstrap';
 
 /**
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
   }
 
   const password = readPassword(args.passwordFile);
-  const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  const prisma = cliPrismaClient(databaseUrl);
   try {
     const result = await bootstrapSuperAdmin(prisma, {
       email: args.email,

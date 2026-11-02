@@ -25,13 +25,27 @@
  * Both variables are required in staging and production (manifest.tsv). Left
  * unset -- a laptop, CI -- the size stays Prisma's own default, so local and CI
  * runs keep the pool they were written against.
+ *
+ * STATEMENT TIMEOUT. DATABASE_STATEMENT_TIMEOUT_MS (15000 in both workflows) is
+ * set on every API and worker session through the URL's `options`
+ * (`-c statement_timeout=N`), so one runaway query is cancelled (SQLSTATE 57014)
+ * instead of holding a connection of a 10-connection budget. Per STATEMENT, not
+ * per transaction: a long transaction of short statements is unaffected. The
+ * one statement that legitimately scales with the whole academy -- the lesson
+ * materializer -- raises its own limit locally (SchedulingService.materialize).
+ * Unset or 0 means no limit (a laptop, CI; or an escape hatch in a deployment).
+ * Migrations never pass through here (psql with DATABASE_URL), and the CLIs
+ * use the 'cli' role: a pool of 2 and no statement timeout.
  */
-export const DATABASE_POOL_DEFAULTS = { poolTimeoutSeconds: 10 } as const;
+export const DATABASE_POOL_DEFAULTS = { poolTimeoutSeconds: 10, cliConnectionLimit: 2 } as const;
 
 const MAX_CONNECTION_LIMIT = 50;
 
-/** Which process this is: the worker sizes its pool by DATABASE_WORKER_POOL_MAX. */
-export type DatabasePoolRole = 'api' | 'worker';
+/**
+ * Which process this is: the worker sizes its pool by DATABASE_WORKER_POOL_MAX;
+ * a CLI (src/cli) gets a pool of 2 and no statement timeout.
+ */
+export type DatabasePoolRole = 'api' | 'worker' | 'cli';
 let processRole: DatabasePoolRole = 'api';
 
 /** Called by worker.ts before Nest builds any PrismaService. */
@@ -59,10 +73,26 @@ export function pooledDatabaseUrl(
   if (!parsed.searchParams.has('pool_timeout')) {
     parsed.searchParams.set('pool_timeout', String(DATABASE_POOL_DEFAULTS.poolTimeoutSeconds));
   }
+  const statementTimeout = role === 'cli' ? 0 : statementTimeoutMs(env);
+  if (statementTimeout > 0 && !parsed.searchParams.has('options')) {
+    parsed.searchParams.set('options', `-c statement_timeout=${statementTimeout}`);
+  }
   return parsed.toString();
 }
 
+/** DATABASE_STATEMENT_TIMEOUT_MS: 0..600000, unset or 0 = no limit. */
+export function statementTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = (env.DATABASE_STATEMENT_TIMEOUT_MS ?? '').trim();
+  if (!raw) return 0;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 600_000) {
+    throw new Error('DATABASE_STATEMENT_TIMEOUT_MS must be an integer from 0 to 600000 (0 = no limit)');
+  }
+  return n;
+}
+
 function connectionLimit(env: NodeJS.ProcessEnv, role: DatabasePoolRole): number | null {
+  if (role === 'cli') return DATABASE_POOL_DEFAULTS.cliConnectionLimit;
   const name = role === 'worker' ? 'DATABASE_WORKER_POOL_MAX' : 'DATABASE_POOL_MAX';
   const raw = (env[name] ?? '').trim();
   if (!raw) return null;
