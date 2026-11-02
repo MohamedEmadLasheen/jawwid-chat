@@ -1261,9 +1261,6 @@ model SupervisorBackup {
   @@schema("chat")
 }
 
-/// PD-33: a supervisor away, their backup covering for a window. Access is the
-/// backup link's activation; this row is the event, the routing input and the
-/// history (20261026130000).
 /// ADMIN-002: time-boxed, purpose-bound account administration over ONE family's parent accounts. SQL owns the DDL and the guard.
 model FamilyAccessGrant {
   id              String    @id @default(uuid()) @db.Uuid
@@ -1284,6 +1281,9 @@ model FamilyAccessGrant {
   @@schema("chat")
 }
 
+/// PD-33: a supervisor away, their backup covering for a window. Access is the
+/// backup link's activation; this row is the event, the routing input and the
+/// history (20261026130000).
 model SupervisorCover {
   id               String    @id @default(uuid()) @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid

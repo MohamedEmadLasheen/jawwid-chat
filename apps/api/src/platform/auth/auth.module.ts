@@ -12,7 +12,7 @@ import { AuthenticatedGuard } from './auth.guard';
 import { PermissionGuard } from '../permissions/permission.guard';
 import { PermissionService } from '../permissions/permission.service';
 import { ActionThrottleGuard } from './action-throttle.guard';
-import { AuthController, MeController, MeSessionsController } from './auth.controller';
+import { AuthController, MeController, MeSessionsController, PasswordChangeController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
 import { LoginRateLimiter, RATE_LIMIT_STORE, type RateLimitStore } from './login-rate-limit';
 import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy } from './client-address';
@@ -87,7 +87,7 @@ export const loginRateLimitStoreProvider = {
   // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
   // PD-21: PasswordResetController -- the person finishes a reset an administrator issued.
   // PD-23: MeSessionsController -- the person's own Devices & sessions.
-  controllers: [AuthController, MeController, MeSessionsController, ParentSignupController, PasswordResetController],
+  controllers: [AuthController, MeController, MeSessionsController, ParentSignupController, PasswordResetController, PasswordChangeController],
   providers: [
     AuthService,
     PermissionService,

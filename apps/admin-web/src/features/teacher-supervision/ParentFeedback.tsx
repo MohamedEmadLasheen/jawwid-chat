@@ -14,11 +14,16 @@ import { SectionIntro } from './SectionIntro'
 type CategoryFilter = 'all' | FeedbackCategory
 type StatusFilter = 'all' | FeedbackStatus
 
-/** PD-32 on the Teacher Supervision page: every parent's feedback, with Take and Reply. */
-export function ParentFeedbackSection({ basePath }: { basePath: string }) {
+/**
+ * PD-32 on the Teacher Supervision page: every parent's feedback, with Take and
+ * Reply. `only` fixes one category and drops its filter (PD-52: suggestions on
+ * the Attendance & Complaints page).
+ */
+export function ParentFeedbackSection({ basePath, only }: { basePath: string; only?: FeedbackCategory }) {
   const tx = useCopy()
   const { locale } = useI18n()
-  const [category, setCategory] = useState<CategoryFilter>('all')
+  const [picked, setCategory] = useState<CategoryFilter>('all')
+  const category: CategoryFilter = only ?? picked
   // PD-44: the status lives in the URL (?section=feedback&status=received), so a
   // Dashboard tile opens the list it counted.
   const [params, setParams] = useSearchParams()
@@ -43,17 +48,19 @@ export function ParentFeedbackSection({ basePath }: { basePath: string }) {
     <>
       <SectionIntro hint={tx(F.hint)} />
       <div className="toolbar th-filters">
-        <FilterChips<CategoryFilter>
-          label={tx(F.category)}
-          value={category}
-          onChange={setCategory}
-          options={[
-            { value: 'all', label: tx(F.allCategories) },
-            { value: 'praise', label: tx(F.praise) },
-            { value: 'suggestion', label: tx(F.suggestion) },
-            { value: 'complaint', label: tx(F.complaint) },
-          ]}
-        />
+        {!only && (
+          <FilterChips<CategoryFilter>
+            label={tx(F.category)}
+            value={category}
+            onChange={setCategory}
+            options={[
+              { value: 'all', label: tx(F.allCategories) },
+              { value: 'praise', label: tx(F.praise) },
+              { value: 'suggestion', label: tx(F.suggestion) },
+              { value: 'complaint', label: tx(F.complaint) },
+            ]}
+          />
+        )}
         <FilterChips<StatusFilter>
           label={tx(F.status)}
           value={status}

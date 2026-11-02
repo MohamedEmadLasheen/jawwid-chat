@@ -14,11 +14,13 @@ import 'package:jawwid_chat/core/media/attachment_opener.dart';
 import 'package:jawwid_chat/core/media/media_picker.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
+import 'package:jawwid_chat/features/messages/presentation/chat_video_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
+import '../stories/fake_story_video_player.dart';
 import 'fake_voice_devices.dart';
 
 /// A picker that hands back whatever the test says, without a platform channel.
@@ -70,6 +72,7 @@ class _FakeAttachmentOpener implements AttachmentOpener {
 /// through the real chat screen.
 void main() {
   late FakeBackend backend;
+  final videoPlayer = FakeStoryVideoPlayer();
   late FakeVoiceRecorder recorder;
   late FakeVoicePlayer player;
   late _FakeMediaPicker picker;
@@ -117,6 +120,7 @@ void main() {
         voicePlayerProvider.overrideWithValue(player),
         mediaPickerProvider.overrideWithValue(picker),
         attachmentOpenerProvider.overrideWithValue(opener),
+        storyVideoPlayerFactoryProvider.overrideWithValue(() => videoPlayer),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider
@@ -511,6 +515,37 @@ void main() {
         hasLength(1),
         reason: 'Open must actually open something, not be a dead tap',
       );
+    });
+  });
+
+  group('a video (CHATSCHED-010)', () {
+    testWidgets('is a video tile, and plays in the app: no external launch', (tester) async {
+      final onDisk = File('${scratch.path}${Platform.pathSeparator}Recitation.mp4')
+        ..writeAsBytesSync(List<int>.filled(4096, 1));
+      picker.file = PendingAttachment(
+        filePath: onDisk.path,
+        kind: MessageKind.video,
+        mimeType: 'video/mp4',
+        byteSize: 4096,
+        fileName: 'Recitation.mp4',
+      );
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('video-attachment')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('video-attachment')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatVideoScreen), findsOneWidget);
+      expect(videoPlayer.loaded, hasLength(1));
+      expect(opener.opened, isEmpty, reason: 'Safari could not play it and showed the signed URL');
     });
   });
 

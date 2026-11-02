@@ -119,6 +119,16 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          // TEACHER-023: your own password, for every role (the web portal too). A
+          // teacher's only way used to be a reset code from their supervisor.
+          if (user != null)
+            ListTile(
+              key: const ValueKey('settings-change-password'),
+              leading: const Icon(Icons.lock_outline),
+              title: Text(l10n.changePasswordTitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.changePassword),
+            ),
           // ONE profile per account (owner 2026-10-24): the row above opens it. For a
           // teacher that is their professional profile; for a parent, their own profile
           // with each child's -- photo, name and About, one photo control each. There is
