@@ -878,13 +878,8 @@ class _ToolPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final tokens = JawwidTokens.of(context);
-    Widget toolButton(BoardTool t, IconData icon, String label) => IconButton(
-      tooltip: label,
-      isSelected: tool == t,
-      style: IconButton.styleFrom(backgroundColor: tool == t ? tokens.colorBrandPrimary.withValues(alpha: 0.14) : null),
-      onPressed: () => onTool(t),
-      icon: Icon(icon, color: tool == t ? tokens.colorBrandPrimary : tokens.colorTextPrimary),
-    );
+    Widget toolButton(BoardTool t, IconData icon, String label) =>
+        _KidToolButton(tooltip: label, icon: icon, tint: _toolTint(t), selected: tool == t, onPressed: () => onTool(t));
     Widget swatch(Color c, String label) => Semantics(
       button: true,
       selected: c == color,
@@ -894,43 +889,47 @@ class _ToolPanel extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: () => onColor(c),
-          child: Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.all(Spacing.spacing1),
+          // PD-55 Phase 1 (2): a big round drop of the colour; the chosen one has a tick.
+          child: AnimatedContainer(
+            duration: Motion.respecting(context, Motion.motionFast),
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.all(Spacing.spacing2),
             decoration: BoxDecoration(
               color: c,
               shape: BoxShape.circle,
               border: Border.all(color: c == color ? tokens.colorBrandPrimary : tokens.colorBorderDefault, width: c == color ? 3 : 1),
             ),
+            child: c == color ? Icon(Icons.check_rounded, size: 20, color: c.computeLuminance() > 0.5 ? BoardPalette.ink : BoardPalette.onTool) : null,
           ),
         ),
       ),
     );
     final widths = tool == BoardTool.highlighter ? const [18.0, 30.0, 44.0] : const [3.0, 6.0, 10.0, 16.0];
     final children = <Widget>[
-      toolButton(BoardTool.select, Icons.near_me_outlined, l10n.boardToolSelect),
-      toolButton(BoardTool.hand, Icons.pan_tool_outlined, l10n.boardToolHand),
-      toolButton(BoardTool.pen, Icons.edit_outlined, l10n.boardToolPen),
-      toolButton(BoardTool.highlighter, Icons.border_color_outlined, l10n.boardToolHighlighter),
-      toolButton(BoardTool.eraser, Icons.cleaning_services_outlined, l10n.boardToolEraser),
-      toolButton(BoardTool.areaEraser, Icons.auto_fix_normal_outlined, l10n.boardToolAreaEraser),
-      toolButton(BoardTool.text, Icons.text_fields, l10n.boardToolText),
-      toolButton(BoardTool.rect, Icons.crop_square, l10n.boardToolRect),
+      toolButton(BoardTool.select, Icons.near_me_rounded, l10n.boardToolSelect),
+      toolButton(BoardTool.hand, Icons.pan_tool_rounded, l10n.boardToolHand),
+      toolButton(BoardTool.pen, Icons.edit_rounded, l10n.boardToolPen),
+      toolButton(BoardTool.highlighter, Icons.border_color_rounded, l10n.boardToolHighlighter),
+      toolButton(BoardTool.eraser, Icons.cleaning_services_rounded, l10n.boardToolEraser),
+      toolButton(BoardTool.areaEraser, Icons.auto_fix_normal_rounded, l10n.boardToolAreaEraser),
+      toolButton(BoardTool.text, Icons.text_fields_rounded, l10n.boardToolText),
+      toolButton(BoardTool.rect, Icons.crop_square_rounded, l10n.boardToolRect),
       toolButton(BoardTool.ellipse, Icons.circle_outlined, l10n.boardToolEllipse),
-      toolButton(BoardTool.triangle, Icons.change_history, l10n.boardToolTriangle),
-      toolButton(BoardTool.line, Icons.horizontal_rule, l10n.boardToolLine),
-      toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
-      toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
-      toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
-      IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
-      if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      toolButton(BoardTool.triangle, Icons.change_history_rounded, l10n.boardToolTriangle),
+      toolButton(BoardTool.line, Icons.horizontal_rule_rounded, l10n.boardToolLine),
+      toolButton(BoardTool.arrow, Icons.arrow_right_alt_rounded, l10n.boardToolArrow),
+      toolButton(BoardTool.stamp, Icons.star_rounded, l10n.boardToolStamp),
+      toolButton(BoardTool.laser, Icons.highlight_rounded, l10n.boardToolLaser),
+      _KidToolButton(tooltip: l10n.boardToolVerse, icon: Icons.menu_book_rounded, tint: BoardPalette.toolInsert, onPressed: onVerse),
+      if (onImage != null) _KidToolButton(tooltip: l10n.boardToolImage, icon: Icons.image_rounded, tint: BoardPalette.toolInsert, onPressed: onImage),
       // PD-55: after the inserts, so nothing PD-39 placed moves; the floating dock (PR-6) regroups.
-      IconButton(
+      _KidToolButton(
         key: const ValueKey('board-rewards'),
         tooltip: l10n.rewardTrayTitle,
+        icon: Icons.emoji_events_rounded,
+        tint: BoardPalette.toolReward,
         onPressed: onRewards,
-        icon: const Icon(Icons.emoji_events_outlined),
       ),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
@@ -967,22 +966,21 @@ class _ToolPanel extends StatelessWidget {
       if (tool != BoardTool.stamp && tool != BoardTool.select && tool != BoardTool.hand) ...[
         const Divider(height: Spacing.spacing4),
         for (final w in widths)
+          // PD-55 Phase 1 (2): a dot as fat as the line it draws.
           IconButton(
             tooltip: l10n.boardThickness,
             isSelected: width == w,
             onPressed: () => onWidth(w),
-            icon: Container(
-              width: 22,
-              height: (w / 2).clamp(2, 14),
-              decoration: BoxDecoration(
-                color: width == w ? tokens.colorBrandPrimary : tokens.colorTextSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
+            icon: AnimatedContainer(
+              duration: Motion.respecting(context, Motion.motionFast),
+              width: (w * 0.75).clamp(6, 26),
+              height: (w * 0.75).clamp(6, 26),
+              decoration: BoxDecoration(color: width == w ? _toolTint(tool) : tokens.colorTextSecondary, shape: BoxShape.circle),
             ),
           ),
       ],
       if (tool == BoardTool.select)
-        IconButton(tooltip: l10n.boardDeleteSelection, onPressed: onDelete, icon: const Icon(Icons.delete_outline)),
+        _KidToolButton(tooltip: l10n.boardDeleteSelection, icon: Icons.delete_rounded, tint: BoardPalette.toolErase, onPressed: onDelete),
       const Divider(height: Spacing.spacing4),
       PopupMenuButton<PageLayout>(
         tooltip: l10n.boardLayout,
@@ -1041,6 +1039,58 @@ class _ToolPanel extends StatelessWidget {
                 child: Row(children: [for (final c in children) c is Divider ? const VerticalDivider(width: Spacing.spacing4) : c]),
               ),
             ),
+    );
+  }
+}
+
+/// PD-55 Phase 1 (2): each tool's colour, by what it does.
+Color _toolTint(BoardTool t) => switch (t) {
+  BoardTool.select || BoardTool.hand => BoardPalette.toolMove,
+  BoardTool.pen || BoardTool.highlighter => BoardPalette.toolDraw,
+  BoardTool.eraser || BoardTool.areaEraser => BoardPalette.toolErase,
+  BoardTool.text => BoardPalette.toolText,
+  BoardTool.stamp => BoardPalette.toolReward,
+  BoardTool.laser => BoardPalette.toolPoint,
+  _ => BoardPalette.toolShape,
+};
+
+/// PD-55 Phase 1 (2): a tool for small hands -- a big rounded square (48 pt to touch),
+/// a light wash of its colour; chosen, it fills with that colour, its icon turns
+/// white and it grows a little (not with "reduce motion"). Same tooltip, same
+/// semantics as before: tests and screen readers find it as they did.
+class _KidToolButton extends StatelessWidget {
+  const _KidToolButton({super.key, required this.tooltip, required this.icon, required this.tint, required this.onPressed, this.selected});
+
+  final String tooltip;
+  final IconData icon;
+  final Color tint;
+  final VoidCallback? onPressed;
+
+  /// Null for an action (insert a verse, open the rewards), which is never "chosen".
+  final bool? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = selected ?? false;
+    final tokens = JawwidTokens.of(context);
+    // A 44 pt tile in a 48 pt touch target: the panel keeps PD-39's 48 pt rhythm, so
+    // nothing below moves further down, and the tiles have air between them.
+    return AnimatedScale(
+      scale: on ? 1.08 : 1,
+      duration: Motion.respecting(context, Motion.motionFast),
+      curve: Motion.easingStandard,
+      child: IconButton(
+        tooltip: tooltip,
+        isSelected: selected,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          fixedSize: const Size.square(44),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          backgroundColor: on ? tint : tint.withValues(alpha: 0.12),
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radii.radiusLg)),
+        ),
+        icon: Icon(icon, size: 26, color: on ? BoardPalette.onTool : tokens.colorTextPrimary),
+      ),
     );
   }
 }
