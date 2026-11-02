@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../design/tokens.dart';
+import '../../../l10n/app_localizations.dart';
 import '../data/board_images.dart';
 import '../domain/board_elements.dart';
 import '../domain/board_page.dart';
@@ -39,7 +40,6 @@ class BoardCanvas extends StatefulWidget {
     required this.style,
     required this.readOnly,
     required this.onCommit,
-    this.onRequestText,
     this.placeholderLabel,
     this.view,
     this.verses,
@@ -56,8 +56,6 @@ class BoardCanvas extends StatefulWidget {
   /// One finished edit: the page's elements after it (one undo step).
   final ValueChanged<List<BoardElement>> onCommit;
 
-  /// Asks for text to place (or to edit, with [initial]); null cancels.
-  final Future<String?> Function({String? initial})? onRequestText;
   final String Function(BoardElement element)? placeholderLabel;
 
   /// Zoom and pan, shared with the zoom buttons.
@@ -108,7 +106,37 @@ class BoardViewController extends ChangeNotifier {
   }
 }
 
-enum _Drag { none, draw, erase, shape, move, resize, marquee, pan, pinch }
+enum _Drag { none, draw, erase, shape, move, resize, rotate, marquee, pan, pinch }
+
+/// PD-55: the text sizes the style bar steps through (page units).
+const kBoardTextSizes = <double>[24, 32, 48, 64, 96, 144];
+
+/// PD-55: a text being typed in place. Nothing is committed until it ends: the
+/// whole edit is one undo step.
+class _TextEdit {
+  _TextEdit({required this.id, required this.original, required this.anchor, required this.fontSize, required this.color, required this.bold})
+    : controller = TextEditingController(text: original?.text ?? ''),
+      focus = FocusNode(debugLabel: 'board text');
+
+  final String id;
+
+  /// The text being re-edited; null for a new one.
+  final TextElement? original;
+
+  /// A new text: where it was tapped -- its start edge (the right edge for
+  /// right-to-left text) and the middle of its first line.
+  final Offset anchor;
+  final TextEditingController controller;
+  final FocusNode focus;
+  double fontSize;
+  Color color;
+  bool bold;
+
+  void dispose() {
+    controller.dispose();
+    focus.dispose();
+  }
+}
 
 class BoardCanvasState extends State<BoardCanvas> {
   late BoardViewController _view = widget.view ?? BoardViewController();
@@ -133,11 +161,25 @@ class BoardCanvasState extends State<BoardCanvas> {
   Set<String> _selected = {};
   int _idSeq = 0;
 
+  // PD-55: text typed in place, the last text style, and a double tap.
+  _TextEdit? _edit;
+  double _textSize = 48;
+  bool _textBold = false;
+  Color? _textColor;
+  DateTime? _lastDownAt;
+  Offset? _lastDownAtScreen;
+  final _editorKey = GlobalKey();
+  final _styleBarKey = GlobalKey();
+
   @override
   void didUpdateWidget(BoardCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.view != widget.view && widget.view != null) _view = widget.view!;
-    if (oldWidget.page.id != widget.page.id || oldWidget.tool != widget.tool) _selected = {};
+    if (oldWidget.page.id != widget.page.id || oldWidget.tool != widget.tool) {
+      _selected = {};
+      // Another tool or page ends an edit -- after this frame, since it commits.
+      if (_edit != null) WidgetsBinding.instance.addPostFrameCallback((_) => finishTextEdit());
+    }
     // A selection keeps only what still exists (after undo, say).
     _selected = _selected.where((id) => widget.page.elements.any((e) => e.id == id)).toSet();
   }
@@ -151,6 +193,7 @@ class BoardCanvasState extends State<BoardCanvas> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
+    _edit?.dispose();
     super.dispose();
   }
 
@@ -159,11 +202,29 @@ class BoardCanvasState extends State<BoardCanvas> {
 
   void clearSelection() => setState(() => _selected = {});
 
+  /// Whether a text is being typed (the editor screen's shortcuts stand aside).
+  bool get isEditingText => _edit != null;
+
   bool _onKey(KeyEvent e) {
-    if (e.logicalKey == LogicalKeyboardKey.space) {
+    // A space typed into a text is a space, not "pan the view".
+    if (e.logicalKey == LogicalKeyboardKey.space && _edit == null) {
       _spaceDown = e is! KeyUpEvent;
     }
     return false;
+  }
+
+  /// [pagePoint] on screen, in this canvas's own coordinates.
+  @visibleForTesting
+  Offset screenOf(Offset pagePoint) {
+    final box = context.findRenderObject()! as RenderBox;
+    return box.localToGlobal(_origin + pagePoint * _scale);
+  }
+
+  /// The rotate handle of the selected text, on screen; null without one.
+  @visibleForTesting
+  Offset? get rotateHandleOnScreen {
+    final at = _rotateHandle;
+    return at == null ? null : screenOf(at);
   }
 
   String _newId() => 'e${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${(_idSeq++).toRadixString(36)}';
@@ -181,9 +242,46 @@ class BoardCanvasState extends State<BoardCanvas> {
 
   bool _isPen(PointerEvent e) => e.kind == PointerDeviceKind.stylus || e.kind == PointerDeviceKind.invertedStylus;
 
+  bool _inside(GlobalKey key, Offset global) {
+    final box = key.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return false;
+    return (Offset.zero & box.size).contains(box.globalToLocal(global));
+  }
+
   void _down(PointerDownEvent e) {
     if (e.kind == PointerDeviceKind.touch) _touches[e.pointer] = e.localPosition;
     if (_isPen(e)) _stylusSeen = true;
+    // PD-55: the text being typed and its bar take their own taps; a tap
+    // anywhere else ends the edit -- and only that.
+    if (_inside(_editorKey, e.position) || _inside(_styleBarKey, e.position)) return;
+    if (_edit != null && _activePointer == null) {
+      finishTextEdit();
+      _activePointer = e.pointer;
+      _drag = _Drag.none;
+      _start = null;
+      return;
+    }
+    final now = DateTime.now();
+    final last = _lastDownAt;
+    final lastAt = _lastDownAtScreen;
+    _lastDownAt = now;
+    _lastDownAtScreen = e.localPosition;
+    if (_activePointer == null &&
+        !widget.readOnly &&
+        last != null &&
+        lastAt != null &&
+        now.difference(last) < const Duration(milliseconds: 400) &&
+        (e.localPosition - lastAt).distance < 24) {
+      // A double tap on a text edits it in place, with any tool.
+      final hit = BoardGeometry.hit(widget.page.elements, _toPage(e.localPosition));
+      if (hit is TextElement) {
+        _activePointer = e.pointer;
+        _drag = _Drag.none;
+        _start = null;
+        _beginTextEdit(hit, hit.box.topLeft);
+        return;
+      }
+    }
     if (_activePointer != null) {
       // A second finger: whatever the first began becomes a pinch (nothing is committed).
       if (e.kind == PointerDeviceKind.touch && _touches.length == 2) _beginPinch();
@@ -223,6 +321,7 @@ class BoardCanvasState extends State<BoardCanvas> {
 
   void _up(PointerEvent e, {bool cancelled = false}) {
     _touches.remove(e.pointer);
+    if (_activePointer == null) return;
     if (_drag == _Drag.pinch) {
       if (_touches.isEmpty) _reset();
       return;
@@ -341,6 +440,9 @@ class BoardCanvasState extends State<BoardCanvas> {
       case _Drag.resize:
       case _Drag.marquee:
         setState(() => _current = at);
+      case _Drag.rotate:
+        // Not clamped to the page: the handle may be dragged off it.
+        setState(() => _current = p);
       case _Drag.none:
       case _Drag.pan:
       case _Drag.pinch:
@@ -375,9 +477,12 @@ class BoardCanvasState extends State<BoardCanvas> {
       case _Drag.marquee:
         if (start == null || current == null) return;
         setState(() => _selected = BoardGeometry.within(widget.page.elements, Rect.fromPoints(start, current)));
+      case _Drag.rotate:
+        if (current == null) return;
+        widget.onCommit(_rotated(current));
       case _Drag.none:
         if (start == null) return;
-        if (tool == BoardTool.text) await _placeText(start);
+        if (tool == BoardTool.text) _placeText(start);
         if (tool == BoardTool.stamp) _placeStamp(start);
       case _Drag.pan:
       case _Drag.pinch:
@@ -424,36 +529,191 @@ class BoardCanvasState extends State<BoardCanvas> {
     };
   }
 
-  Future<void> _placeText(Offset at) async {
+  // -- PD-55: text typed in place ------------------------------------------------
+
+  /// The Text tool: a tap on a text edits it; anywhere else starts a new one there.
+  void _placeText(Offset at) {
     final hit = BoardGeometry.hit(widget.page.elements, at);
     if (hit is TextElement) {
-      final text = await widget.onRequestText?.call(initial: hit.text);
-      if (text == null || !mounted) return;
-      final laid = layoutBoardText(text, hit.fontSize, hit.color, hit.size.width);
-      final edited = hit.copyWith(text: text, size: Size(hit.size.width, laid.height));
+      _beginTextEdit(hit, hit.box.topLeft);
+      return;
+    }
+    _beginTextEdit(null, at);
+  }
+
+  /// An edit's controller and focus node outlive the frame that removes its
+  /// editor: released after it, never under a mounted EditableText.
+  void _release(_TextEdit edit) => WidgetsBinding.instance.addPostFrameCallback((_) => edit.dispose());
+
+  void _beginTextEdit(TextElement? original, Offset anchor) {
+    final previous = _edit;
+    if (previous != null) _release(previous);
+    final edit = _TextEdit(
+      id: original?.id ?? _newId(),
+      original: original,
+      anchor: anchor,
+      fontSize: original?.fontSize ?? _textSize,
+      color: original?.color ?? _textColor ?? widget.style.color,
+      bold: original?.bold ?? _textBold,
+    );
+    edit.controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+    setState(() {
+      _edit = edit;
+      _selected = {};
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_edit, edit)) edit.focus.requestFocus();
+    });
+  }
+
+  /// The text as it would be committed now.
+  TextElement _editedText(_TextEdit edit) {
+    final text = edit.controller.text;
+    final original = edit.original;
+    final measured = layoutBoardText(text.isEmpty ? ' ' : text, edit.fontSize, edit.color, 900, bold: edit.bold);
+    final natural = math.max(measured.width + edit.fontSize * 0.5, 60.0);
+    final rtl = textDirectionOf(text) == TextDirection.rtl;
+    if (original == null) {
+      final width = math.min(natural, 900.0);
+      final laid = layoutBoardText(text.isEmpty ? ' ' : text, edit.fontSize, edit.color, width, bold: edit.bold);
+      // Right-to-left text ends where it was tapped and grows towards the left.
+      final left = rtl ? edit.anchor.dx - width : edit.anchor.dx;
+      return TextElement(
+        id: edit.id,
+        text: text,
+        topLeft: Offset(left, edit.anchor.dy - edit.fontSize * 0.7),
+        size: Size(width, laid.height),
+        fontSize: edit.fontSize,
+        color: edit.color,
+        bold: edit.bold,
+      );
+    }
+    // Re-edited: it keeps its width unless the words need more, and grows from
+    // the edge its direction starts at.
+    final width = math.max(original.size.width, math.min(natural, 900.0));
+    final laid = layoutBoardText(text.isEmpty ? ' ' : text, edit.fontSize, edit.color, width, bold: edit.bold);
+    final left = rtl ? original.box.right - width : original.box.left;
+    return original.copyWith(
+      text: text,
+      topLeft: Offset(left, original.box.top),
+      size: Size(width, laid.height),
+      fontSize: edit.fontSize,
+      color: edit.color,
+      bold: edit.bold,
+    );
+  }
+
+  /// Ends the edit: one commit (a new text, the edited one, or -- emptied --
+  /// its removal), or none for a new text left empty.
+  void finishTextEdit() {
+    final edit = _edit;
+    if (edit == null) return;
+    final element = _editedText(edit);
+    final empty = edit.controller.text.trim().isEmpty;
+    _textSize = edit.fontSize;
+    _textBold = edit.bold;
+    _textColor = edit.color;
+    setState(() => _edit = null);
+    _release(edit);
+    if (edit.original == null) {
+      if (!empty) widget.onCommit([...widget.page.elements, element]);
+      return;
+    }
+    if (empty) {
       widget.onCommit([
         for (final e in widget.page.elements)
-          if (e.id == hit.id) edited else e,
+          if (e.id != edit.id) e,
       ]);
       return;
     }
-    final text = await widget.onRequestText?.call();
-    if (text == null || text.trim().isEmpty || !mounted) return;
-    final fontSize = 24 + widget.style.width * 4;
-    final laid = layoutBoardText(text, fontSize, widget.style.color, 900);
-    final width = math.max(laid.width + 8, 60.0);
-    final dir = textDirectionOf(text);
-    // Right-to-left text grows from where it was placed towards the left.
-    final left = dir == TextDirection.rtl ? at.dx - width : at.dx;
-    final element = TextElement(
-      id: _newId(),
-      text: text,
-      topLeft: BoardGeometry.clampToPage(Offset(left, at.dy - laid.height / 2)),
-      size: Size(width, laid.height),
-      fontSize: fontSize,
-      color: widget.style.color,
-    );
-    widget.onCommit([...widget.page.elements, element]);
+    if (element.toJson().toString() == edit.original!.toJson().toString()) return;
+    widget.onCommit([
+      for (final e in widget.page.elements)
+        if (e.id == edit.id) element else e,
+    ]);
+  }
+
+  /// The one text selected (not being typed), for the style bar and the rotate handle.
+  TextElement? get _selectedText {
+    if (_edit != null || _selected.length != 1) return null;
+    for (final e in widget.page.elements) {
+      if (e is TextElement && _selected.contains(e.id)) return e;
+    }
+    return null;
+  }
+
+  /// A style change: to the text being typed, or -- one undo step -- to the selected one.
+  void _restyle({double? fontSize, Color? color, bool? bold}) {
+    final edit = _edit;
+    if (edit != null) {
+      setState(() {
+        if (fontSize != null) edit.fontSize = fontSize;
+        if (color != null) edit.color = color;
+        if (bold != null) edit.bold = bold;
+      });
+      return;
+    }
+    final t = _selectedText;
+    if (t == null) return;
+    var next = t.copyWith(fontSize: fontSize, color: color, bold: bold);
+    // A new size re-lays the words in the same width.
+    final laid = layoutBoardText(next.text, next.fontSize, next.color, next.size.width, bold: next.bold);
+    next = next.copyWith(size: Size(next.size.width, laid.height));
+    _textSize = next.fontSize;
+    _textBold = next.bold;
+    _textColor = next.color;
+    widget.onCommit([
+      for (final e in widget.page.elements)
+        if (e.id == t.id) next else e,
+    ]);
+  }
+
+  double _stepSize(double from, int by) {
+    final i = kBoardTextSizes.indexWhere((s) => s >= from - 0.5);
+    final at = i < 0 ? kBoardTextSizes.length - 1 : i;
+    final exact = i >= 0 && (kBoardTextSizes[at] - from).abs() < 0.5;
+    final next = by > 0 ? (exact ? at + 1 : at) : at - 1;
+    return kBoardTextSizes[next.clamp(0, kBoardTextSizes.length - 1)];
+  }
+
+  /// Where the rotate handle of the selected text sits: above its turned box.
+  Offset? get _rotateHandle {
+    final t = _selectedText;
+    if (t == null) return null;
+    final reach = t.size.height / 2 + 48 / _scale.clamp(0.1, 10);
+    return t.box.center + Offset(math.sin(t.rotation) * reach, -math.cos(t.rotation) * reach);
+  }
+
+  /// Where the handle's stem starts: the middle of the turned box's top edge.
+  Offset? get _rotateStem {
+    final t = _selectedText;
+    if (t == null) return null;
+    final half = t.size.height / 2;
+    return t.box.center + Offset(math.sin(t.rotation) * half, -math.cos(t.rotation) * half);
+  }
+
+  /// The page with the selected text turned towards [p]: upright snaps within
+  /// 5 degrees; Shift steps by 15.
+  List<BoardElement> _rotated(Offset p) {
+    final t = _selectedText;
+    if (t == null) return widget.page.elements;
+    final d = p - t.box.center;
+    var angle = math.atan2(d.dx, -d.dy);
+    const quarter = math.pi / 2;
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      angle = (angle / (math.pi / 12)).roundToDouble() * (math.pi / 12);
+    } else {
+      final nearest = (angle / quarter).roundToDouble() * quarter;
+      if ((angle - nearest).abs() <= 5 * math.pi / 180) angle = nearest;
+    }
+    angle = angle % (2 * math.pi);
+    if (angle.abs() < 1e-9) angle = 0;
+    return [
+      for (final e in widget.page.elements)
+        if (e.id == t.id) t.copyWith(rotation: angle) else e,
+    ];
   }
 
   void _placeStamp(Offset at) {
@@ -478,6 +738,11 @@ class BoardCanvasState extends State<BoardCanvas> {
   double get _handleSize => 22 / _scale.clamp(0.1, 10);
 
   void _beginSelect(Offset at) {
+    final handle = _rotateHandle;
+    if (handle != null && (at - handle).distance <= _handleSize * 1.2) {
+      _drag = _Drag.rotate;
+      return;
+    }
     final bounds = _selectionBounds;
     if (bounds != null && (at - bounds.bottomRight).distance <= _handleSize) {
       _drag = _Drag.resize;
@@ -521,6 +786,15 @@ class BoardCanvasState extends State<BoardCanvas> {
     if (working != null) return widget.page.copyWith(elements: working);
     if ((_drag == _Drag.move || _drag == _Drag.resize) && _start != null && _current != null) {
       return widget.page.copyWith(elements: _transformed(_start!, _current!));
+    }
+    if (_drag == _Drag.rotate && _current != null) return widget.page.copyWith(elements: _rotated(_current!));
+    // The text being typed is drawn by its editor, not twice.
+    final edit = _edit;
+    if (edit != null) {
+      return widget.page.copyWith(elements: [
+        for (final e in widget.page.elements)
+          if (e.id != edit.id) e,
+      ]);
     }
     return widget.page;
   }
@@ -591,13 +865,16 @@ class BoardCanvasState extends State<BoardCanvas> {
                                   marquee: _drag == _Drag.marquee && _start != null && _current != null
                                       ? Rect.fromPoints(_start!, _current!)
                                       : null,
-                                  selection: _drag == _Drag.move || _drag == _Drag.resize ? null : _selectionBounds,
+                                  selection: _drag == _Drag.move || _drag == _Drag.resize || _drag == _Drag.rotate ? null : _selectionBounds,
                                   handle: _handleSize,
+                                  rotateHandle: _drag == _Drag.none ? _rotateHandle : null,
+                                  rotateStem: _rotateStem,
                                 ),
                               ),
                             ),
                           ),
                         ),
+                        ..._textOverlays(context),
                       ],
                     ),
                   );
@@ -611,10 +888,212 @@ class BoardCanvasState extends State<BoardCanvas> {
   }
 }
 
+extension on BoardCanvasState {
+  /// PD-55: the text being typed, in place, and the style bar beside it.
+  List<Widget> _textOverlays(BuildContext context) {
+    final out = <Widget>[];
+    final edit = _edit;
+    final styled = edit != null ? _editedText(edit) : _selectedText;
+    if (edit != null && styled != null) {
+      final text = edit.controller.text;
+      final dir = textDirectionOf(text);
+      out.add(
+        Positioned(
+          left: _origin.dx + styled.topLeft.dx * _scale,
+          top: _origin.dy + styled.topLeft.dy * _scale,
+          child: Transform.scale(
+            scale: _scale,
+            alignment: Alignment.topLeft,
+            child: Transform.rotate(
+              angle: styled.rotation,
+              child: SizedBox(
+                key: _editorKey,
+                width: styled.size.width,
+                child: CallbackShortcuts(
+                  // Escape ends the edit here, before the board's own shortcuts see it.
+                  bindings: {const SingleActivator(LogicalKeyboardKey.escape): finishTextEdit},
+                  // Typing keys (Backspace, Delete, the arrows, undo) are the
+                  // text's: handled under the board's shortcuts, never by them.
+                  child: DefaultTextEditingShortcuts(
+                    child: EditableText(
+                      controller: edit.controller,
+                      focusNode: edit.focus,
+                      style: boardTextStyle(edit.fontSize, edit.color, bold: edit.bold),
+                      cursorColor: BoardPalette.selection,
+                      backgroundCursorColor: BoardPalette.ruleOnLight,
+                      textDirection: dir,
+                      textAlign: dir == TextDirection.rtl ? TextAlign.right : TextAlign.left,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      cursorWidth: math.max(2, edit.fontSize / 16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (styled != null && !widget.readOnly && _drag != _Drag.rotate) {
+      final r = styled.bounds;
+      final top = _origin.dy + r.top * _scale;
+      final below = _origin.dy + r.bottom * _scale + 8;
+      // The bar is about 500 px wide (ten 48 px targets): kept inside the view.
+      final left = (_origin.dx + r.left * _scale).clamp(8.0, math.max(8.0, _viewport.width - _TextStyleBar.width - 8)).toDouble();
+      out.add(
+        Positioned(
+          left: left,
+          // Above the text being typed; below a selected one, whose rotate
+          // handle is above it.
+          top: edit == null || top - 64 < 8 ? below : top - 64,
+          child: _TextStyleBar(
+            key: _styleBarKey,
+            fontSize: edit?.fontSize ?? styled.fontSize,
+            color: edit?.color ?? styled.color,
+            bold: edit?.bold ?? styled.bold,
+            darkPage: widget.page.background.isDark,
+            editing: edit != null,
+            onSmaller: () => _restyle(fontSize: _stepSize(edit?.fontSize ?? styled.fontSize, -1)),
+            onBigger: () => _restyle(fontSize: _stepSize(edit?.fontSize ?? styled.fontSize, 1)),
+            onBold: () => _restyle(bold: !(edit?.bold ?? styled.bold)),
+            onColor: (c) => _restyle(color: c),
+            onDone: finishTextEdit,
+          ),
+        ),
+      );
+    }
+    return out;
+  }
+}
+
+/// PD-55: size, colour and bold for a text, beside it. Every target is at least
+/// 44 px (Material's 48 on touch).
+class _TextStyleBar extends StatelessWidget {
+  const _TextStyleBar({
+    super.key,
+    required this.fontSize,
+    required this.color,
+    required this.bold,
+    required this.darkPage,
+    required this.editing,
+    required this.onSmaller,
+    required this.onBigger,
+    required this.onBold,
+    required this.onColor,
+    required this.onDone,
+  });
+
+  final double fontSize;
+  final Color color;
+  final bool bold;
+  final bool darkPage;
+  final bool editing;
+  final VoidCallback onSmaller;
+  final VoidCallback onBigger;
+  final VoidCallback onBold;
+  final ValueChanged<Color> onColor;
+  final VoidCallback onDone;
+
+  static const _target = BoxConstraints(minWidth: 48, minHeight: 48);
+
+  /// Its widest (typing: three buttons, six colours and Done), for placing it.
+  static const width = 10 * 48.0 + 2 * Spacing.spacing1;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    // The quick colours: the first six inks, with chalk for ink on a dark page.
+    final colours = [darkPage ? BoardPalette.pens.last : BoardPalette.pens.first, ...BoardPalette.pens.sublist(1, 6)];
+    return Directionality(
+      textDirection: Directionality.of(context),
+      child: Material(
+        elevation: 4,
+        borderRadius: Radii.card,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing1),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                key: const ValueKey('board-text-smaller'),
+                constraints: _target,
+                tooltip: l10n.boardTextSmaller,
+                onPressed: fontSize <= kBoardTextSizes.first ? null : onSmaller,
+                icon: const Icon(Icons.text_decrease),
+              ),
+              IconButton(
+                key: const ValueKey('board-text-bigger'),
+                constraints: _target,
+                tooltip: l10n.boardTextBigger,
+                onPressed: fontSize >= kBoardTextSizes.last ? null : onBigger,
+                icon: const Icon(Icons.text_increase),
+              ),
+              IconButton(
+                key: const ValueKey('board-text-bold'),
+                constraints: _target,
+                tooltip: l10n.boardTextBold,
+                isSelected: bold,
+                onPressed: onBold,
+                icon: const Icon(Icons.format_bold),
+              ),
+              for (var i = 0; i < colours.length; i++)
+                Semantics(
+                  label: l10n.boardTextColour,
+                  selected: colours[i] == color,
+                  button: true,
+                  child: InkWell(
+                    key: ValueKey('board-text-color-$i'),
+                    customBorder: const CircleBorder(),
+                    onTap: () => onColor(colours[i]),
+                    child: SizedBox.square(
+                      dimension: 48,
+                      child: Center(
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: colours[i],
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: colours[i] == color ? BoardPalette.selection : BoardPalette.ruleOnLight,
+                              width: colours[i] == color ? 3 : 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (editing)
+                IconButton(
+                  key: const ValueKey('board-text-done'),
+                  constraints: _target,
+                  tooltip: l10n.boardTextDone,
+                  onPressed: onDone,
+                  icon: const Icon(Icons.check),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// What is drawn over the page: the stroke under the pen, a shape being
 /// dragged, the marquee and the selection.
 class _OverlayPainter extends CustomPainter {
-  _OverlayPainter({this.live, required this.liveRevision, this.preview, this.marquee, this.selection, required this.handle});
+  _OverlayPainter({
+    this.live,
+    required this.liveRevision,
+    this.preview,
+    this.marquee,
+    this.selection,
+    required this.handle,
+    this.rotateHandle,
+    this.rotateStem,
+  });
 
   final InkElement? live;
   final int liveRevision;
@@ -622,6 +1101,10 @@ class _OverlayPainter extends CustomPainter {
   final Rect? marquee;
   final Rect? selection;
   final double handle;
+
+  /// PD-55: where the selected text's rotate handle is, and where its stem starts.
+  final Offset? rotateHandle;
+  final Offset? rotateStem;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -644,6 +1127,11 @@ class _OverlayPainter extends CustomPainter {
         Paint()..color = BoardPalette.selection,
       );
     }
+    final r = rotateHandle;
+    if (r != null && selection != null) {
+      canvas.drawLine(rotateStem ?? Offset(selection!.center.dx, selection!.top), r, outline);
+      canvas.drawCircle(r, handle * 0.6, Paint()..color = BoardPalette.selection);
+    }
     canvas.restore();
   }
 
@@ -653,5 +1141,7 @@ class _OverlayPainter extends CustomPainter {
       old.preview != preview ||
       old.marquee != marquee ||
       old.selection != selection ||
+      old.rotateHandle != rotateHandle ||
+      old.rotateStem != rotateStem ||
       !identical(old.live, live);
 }

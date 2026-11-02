@@ -184,7 +184,6 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       readOnly: !editable,
       view: _view,
       onCommit: _controller.commit,
-      onRequestText: ({initial}) => _askText(context, initial),
       placeholderLabel: label,
       verses: verseCache.lookup,
       versesVersion: versesVersion,
@@ -338,29 +337,6 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         if (!gone.contains(e.id)) e,
     ]);
     c.clearSelection();
-  }
-
-  Future<String?> _askText(BuildContext context, String? initial) {
-    final l10n = L10n.of(context);
-    final controller = TextEditingController(text: initial ?? '');
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.boardTextTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 1,
-          maxLines: 6,
-          maxLength: 2000,
-          decoration: InputDecoration(hintText: l10n.boardTextHint),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.boardsCancel)),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: Text(l10n.boardsSave)),
-        ],
-      ),
-    );
   }
 
   /// §10 5a: to Deleted boards, restorable for 30 days; then back to the list.

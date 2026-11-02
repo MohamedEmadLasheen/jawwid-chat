@@ -74,6 +74,8 @@ sealed class BoardElement {
             size: Size(_num(json['w'], 300), _num(json['h'], 60)),
             fontSize: _num(json['size'], 48),
             color: _color(json['color']),
+            bold: json['bold'] == true,
+            rotation: _num(json['rotation'], 0),
           );
         case 'verse':
           final t = json['transform'];
@@ -264,27 +266,46 @@ class TextElement extends BoardElement {
     required this.size,
     required this.fontSize,
     required this.color,
+    this.bold = false,
+    this.rotation = 0,
   }) : super(id);
 
   final String text;
+
+  /// The box as laid out, before [rotation]: where it wraps and what turns.
   final Offset topLeft;
   final Size size;
   final double fontSize;
   final Color color;
 
+  /// PD-55: bold, and a turn about the box's centre (radians, clockwise on
+  /// screen). Both are additive fields: a PD-39 text has neither and keeps the
+  /// bytes it had (see [toJson]).
+  final bool bold;
+  final double rotation;
+
   @override
   String get kind => 'text';
 
-  @override
-  Rect get bounds => topLeft & size;
+  /// The unrotated box.
+  Rect get box => topLeft & size;
 
-  TextElement copyWith({String? text, Offset? topLeft, Size? size, double? fontSize, Color? color}) => TextElement(
+  /// What it covers on the page: the box, turned.
+  @override
+  Rect get bounds => rotation == 0 ? box : _rotatedBounds(box, rotation);
+
+  /// [point] in the box's own (unrotated) frame -- for a hit test where it is drawn.
+  Offset toBox(Offset point) => rotation == 0 ? point : _rotateAbout(point, box.center, -rotation);
+
+  TextElement copyWith({String? text, Offset? topLeft, Size? size, double? fontSize, Color? color, bool? bold, double? rotation}) => TextElement(
     id: id,
     text: text ?? this.text,
     topLeft: topLeft ?? this.topLeft,
     size: size ?? this.size,
     fontSize: fontSize ?? this.fontSize,
     color: color ?? this.color,
+    bold: bold ?? this.bold,
+    rotation: rotation ?? this.rotation,
   );
 
   @override
@@ -292,8 +313,15 @@ class TextElement extends BoardElement {
 
   @override
   BoardElement scaled(Offset anchor, double sx, double sy) {
-    final r = _scaleRect(bounds, anchor, sx, sy);
-    return copyWith(topLeft: r.topLeft, size: r.size, fontSize: (fontSize * math.sqrt(sx.abs() * sy.abs())).clamp(8, 400).toDouble());
+    // The box scales about [anchor] as its centre moves; the turn is kept.
+    final centre = _scaleRect(Rect.fromCenter(center: box.center, width: 0, height: 0), anchor, sx, sy).center;
+    final k = math.sqrt(sx.abs() * sy.abs());
+    final next = Size(size.width * sx.abs(), size.height * sy.abs());
+    return copyWith(
+      topLeft: centre - Offset(next.width / 2, next.height / 2),
+      size: next,
+      fontSize: (fontSize * k).clamp(8, 400).toDouble(),
+    );
   }
 
   @override
@@ -307,6 +335,8 @@ class TextElement extends BoardElement {
     'h': _round(size.height),
     'size': _round(fontSize),
     'color': _hex(color),
+    if (bold) 'bold': true,
+    if (rotation != 0) 'rotation': rotation,
   };
 }
 
@@ -512,6 +542,22 @@ class OpaqueElement extends BoardElement {
 double _num(Object? v, double fallback) => v is num && v.isFinite ? v.toDouble() : fallback;
 
 double _round(double v) => (v * 10).roundToDouble() / 10;
+
+Offset _rotateAbout(Offset p, Offset c, double angle) {
+  final d = p - c;
+  final cos = math.cos(angle), sin = math.sin(angle);
+  return c + Offset(d.dx * cos - d.dy * sin, d.dx * sin + d.dy * cos);
+}
+
+/// The axis-aligned box around [r] turned by [angle] about its centre.
+Rect _rotatedBounds(Rect r, double angle) {
+  final corners = [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft].map((p) => _rotateAbout(p, r.center, angle));
+  var out = Rect.fromPoints(corners.first, corners.first);
+  for (final p in corners) {
+    out = out.expandToInclude(Rect.fromPoints(p, p));
+  }
+  return out;
+}
 
 Color _color(Object? v) {
   if (v is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v)) return Color(int.parse(v.substring(1), radix: 16) | 0xFF000000);
