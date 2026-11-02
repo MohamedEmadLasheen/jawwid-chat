@@ -74,6 +74,21 @@ whatever these say.
 | `LESSONS_PARENT_ORIGINS` | the lessons engine (`apps/lessons/vite.config.ts`) | comma-separated https origins allowed to hand a lesson its audio list: the Admin Web and teacher web origins (= `frame-ancestors`); the phone app needs none | `vars.LESSONS_PARENT_ORIGINS` (ci.yml lessons build) |
 | `LESSONS_MEDIA_ORIGINS` | the lessons engine (also its CSP `connect-src`) | comma-separated https origins the signed audio URLs point at (the object storage) | `vars.LESSONS_MEDIA_ORIGINS` (ci.yml lessons build) |
 
+### Privacy policy and terms (PD-56): build-time, public, unset = no link
+
+The owner's legal texts, linked from the sign-in and sign-up screens and from
+Settings (store compliance: Apple and Google Play both require them). Compiled
+into the app, so not in `infra/env/manifest.tsv`. A `{lang}` in the value
+becomes `ar` or `en` for the reader's language; only an https URL is shown.
+
+| Variable | Built into | Value | Set from |
+|---|---|---|---|
+| `PRIVACY_POLICY_URL` | the Flutter app and the teacher web portal (`--dart-define`) | e.g. `https://jawwid.example.org/{lang}/privacy` | the phone build's `--dart-define`; `PRIVACY_POLICY_URL` for `scripts/mobile/build-teacher-web.sh` |
+| `TERMS_URL` | the same | e.g. `https://jawwid.example.org/{lang}/terms` | the same, `TERMS_URL` |
+
+The account-deletion page Google Play asks for is the API's own:
+`<API origin>/api/v1/account-deletion` (`?lang=en` for English).
+
 ---
 
 ## Variables

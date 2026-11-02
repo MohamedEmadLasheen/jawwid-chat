@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../settings/data/parent_notice_repository.dart';
@@ -235,6 +236,8 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                       onPressed: _busy ? null : _askCode,
                       child: Text(l10n.signupNewCode),
                     ),
+                  // PD-56: the privacy policy and the terms, before the account exists.
+                  const LegalLinksRow(),
                 ],
               ),
             ),

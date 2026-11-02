@@ -8622,6 +8622,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 star} other{{count} stars}}'**
   String rewardReportStars(int count);
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get legalPrivacyPolicy;
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of use'**
+  String get legalTerms;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

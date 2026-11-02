@@ -5012,4 +5012,10 @@ class L10nEn extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get legalPrivacyPolicy => 'Privacy policy';
+
+  @override
+  String get legalTerms => 'Terms of use';
 }

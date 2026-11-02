@@ -1904,5 +1904,7 @@
   "rewardBadgeGold": "نجم متألّق",
   "rewardToNextBadge": "{count, plural, zero{{badge}} one{نجمة واحدة أخرى لـ{badge}} two{نجمتان أخريان لـ{badge}} few{{count} نجوم أخرى لـ{badge}} many{{count} نجمة أخرى لـ{badge}} other{{count} نجمة أخرى لـ{badge}}}",
   "rewardBadgeEarned": "الشارة: {badge}",
-  "rewardReportStars": "{count, plural, zero{لا نجوم} one{نجمة واحدة} two{نجمتان} few{{count} نجوم} many{{count} نجمة} other{{count} نجمة}}"
+  "rewardReportStars": "{count, plural, zero{لا نجوم} one{نجمة واحدة} two{نجمتان} few{{count} نجوم} many{{count} نجمة} other{{count} نجمة}}",
+  "legalPrivacyPolicy": "سياسة الخصوصية",
+  "legalTerms": "شروط الاستخدام"
 }

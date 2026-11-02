@@ -3357,5 +3357,9 @@
   "rewardBadgeEarned": "Badge: {badge}",
   "@rewardBadgeEarned": {"placeholders": {"badge": {"type": "String"}}},
   "rewardReportStars": "{count, plural, =1{1 star} other{{count} stars}}",
-  "@rewardReportStars": {"description": "PD-55: the lesson report card's rewards row.", "placeholders": {"count": {"type": "int"}}}
+  "@rewardReportStars": {"description": "PD-55: the lesson report card's rewards row.", "placeholders": {"count": {"type": "int"}}},
+  "legalPrivacyPolicy": "Privacy policy",
+  "@legalPrivacyPolicy": {"description": "PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings."},
+  "legalTerms": "Terms of use",
+  "@legalTerms": {"description": "PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings."}
 }
