@@ -545,4 +545,7 @@ abstract final class BoardPalette {
 
   /// Selection outline and handles.
   static const selection = Color(0xFF0E7C86);
+
+  /// PD-55: the laser pointer -- a bright red that reads on every page colour.
+  static const laser = Color(0xFFFF1744);
 }

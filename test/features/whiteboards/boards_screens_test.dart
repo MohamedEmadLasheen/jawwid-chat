@@ -198,6 +198,38 @@ void main() {
     expect(container.read(boardEditorProvider('b1')).value!.page.elements, hasLength(3));
   });
 
+  testWidgets('PD-55: the page menu shows each layout as a picture -- blank, lined, grid and dotted first -- and dotted is chosen', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await tester.ensureVisible(find.byTooltip(l10n.boardLayout));
+    await tester.tap(find.byTooltip(l10n.boardLayout));
+    await tester.pumpAndSettle();
+    final shown = [
+      for (final e in tester.widgetList<KeyedSubtree>(find.byWidgetPredicate((w) => w is KeyedSubtree && '${w.key}'.contains('layout-thumb-'))))
+        '${e.key}'.split('layout-thumb-').last.replaceAll(RegExp(r"[^a-z_]"), ''),
+    ];
+    expect(shown.take(4), ['plain', 'arabic_lines', 'grid', 'dotted']);
+    expect(shown.toSet(), {for (final l in PageLayout.values) l.wire});
+    await tester.tap(find.text(l10n.boardLayoutDotted));
+    await tester.pumpAndSettle();
+    expect(container.read(boardEditorProvider('b1')).value!.page.layout, PageLayout.dotted);
+    await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('PD-55: the laser is a tool on the panel, and pointing with it saves nothing', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await tester.ensureVisible(find.byTooltip(l10n.boardToolLaser));
+    await tester.tap(find.byTooltip(l10n.boardToolLaser));
+    await tester.pump();
+    final centre = tester.getCenter(find.byType(BoardCanvas));
+    final g = await tester.startGesture(centre, kind: PointerDeviceKind.mouse);
+    await g.moveTo(centre + const Offset(80, 10));
+    await g.up();
+    await tester.pump(const Duration(seconds: 1));
+    expect(container.read(boardEditorProvider('b1')).value!.page.elements, isEmpty);
+    expect(find.text(l10n.boardSaved), findsOneWidget);
+  });
+
   testWidgets('a Tajweed highlighter colour stays with the highlighter: the next pen stroke is ink', (tester) async {
     final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
     await tester.tap(find.byTooltip(l10n.boardToolHighlighter));

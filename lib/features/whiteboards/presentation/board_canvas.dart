@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../../design/tokens.dart';
@@ -13,7 +14,7 @@ import '../domain/stroke_points.dart';
 import 'board_painter.dart';
 
 /// The board's tools (design §4.1).
-enum BoardTool { select, hand, pen, highlighter, eraser, areaEraser, text, rect, ellipse, triangle, line, arrow, stamp }
+enum BoardTool { select, hand, pen, highlighter, eraser, areaEraser, text, rect, ellipse, triangle, line, arrow, stamp, laser }
 
 /// What the current tool draws with.
 class ToolStyle {
@@ -106,7 +107,7 @@ class BoardViewController extends ChangeNotifier {
   }
 }
 
-enum _Drag { none, draw, erase, shape, move, resize, rotate, marquee, lasso, pan, pinch }
+enum _Drag { none, draw, erase, shape, move, resize, rotate, marquee, lasso, laser, pan, pinch }
 
 /// PD-55: the text sizes the style bar steps through (page units).
 const kBoardTextSizes = <double>[24, 32, 48, 64, 96, 144];
@@ -138,7 +139,7 @@ class _TextEdit {
   }
 }
 
-class BoardCanvasState extends State<BoardCanvas> {
+class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderStateMixin {
   late BoardViewController _view = widget.view ?? BoardViewController();
   Size _viewport = Size.zero;
 
@@ -179,6 +180,13 @@ class BoardCanvasState extends State<BoardCanvas> {
   List<BoardElement> _clipboard = const [];
   int _pasteCount = 0;
 
+  // PD-55 PR-3: the laser's trail, each point with the time it was made. It
+  // is drawn and faded on its own ticker and is never part of the page.
+  static const laserFade = Duration(milliseconds: 700);
+  final List<(Offset, Duration)> _laser = [];
+  late final Ticker _laserTicker = createTicker(_onLaserTick);
+  Duration _laserNow = Duration.zero;
+
   @override
   void didUpdateWidget(BoardCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -202,7 +210,27 @@ class BoardCanvasState extends State<BoardCanvas> {
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
     _edit?.dispose();
+    _laserTicker.dispose();
     super.dispose();
+  }
+
+  /// PD-55: the laser trail as it stands (page units, oldest first); for tests.
+  @visibleForTesting
+  List<Offset> get laserTrail => [for (final (p, _) in _laser) p];
+
+  void _addLaserPoint(Offset p) {
+    if (!_laserTicker.isActive) {
+      _laserNow = Duration.zero;
+      _laserTicker.start();
+    }
+    setState(() => _laser.add((p, _laserNow)));
+  }
+
+  void _onLaserTick(Duration elapsed) {
+    _laserNow = elapsed;
+    setState(() => _laser.removeWhere((point) => elapsed - point.$2 > laserFade));
+    // Nothing left and nobody pointing: the ticker stops until the next point.
+    if (_laser.isEmpty && _drag != _Drag.laser) _laserTicker.stop();
   }
 
   /// The selection, for the editor's delete and arrange actions.
@@ -432,6 +460,9 @@ class BoardCanvasState extends State<BoardCanvas> {
           _drag = _Drag.shape;
         case BoardTool.select:
           _beginSelect(at);
+        case BoardTool.laser:
+          _drag = _Drag.laser;
+          _addLaserPoint(p);
         case BoardTool.text:
         case BoardTool.stamp:
         case BoardTool.hand:
@@ -459,6 +490,8 @@ class BoardCanvasState extends State<BoardCanvas> {
         });
       case _Drag.lasso:
         setState(() => _lasso.add(at));
+      case _Drag.laser:
+        _addLaserPoint(p);
       case _Drag.shape:
       case _Drag.move:
       case _Drag.resize:
@@ -505,6 +538,9 @@ class BoardCanvasState extends State<BoardCanvas> {
       case _Drag.lasso:
         final loop = _lasso;
         setState(() => _selected = BoardGeometry.inLasso(widget.page.elements, loop));
+      case _Drag.laser:
+        // Nothing to keep: the trail fades on its own.
+        break;
       case _Drag.rotate:
         if (current == null) return;
         widget.onCommit(_rotated(current));
@@ -961,6 +997,7 @@ class BoardCanvasState extends State<BoardCanvas> {
                                   lasso: _drag == _Drag.lasso ? _lasso : null,
                                   lassoRevision: _lasso.length,
                                   eraserRing: eraserRing,
+                                  laser: _laser.isEmpty ? null : [for (final (p, t) in _laser) (p, 1 - ((_laserNow - t).inMicroseconds / laserFade.inMicroseconds).clamp(0.0, 1.0))],
                                   selection: _drag == _Drag.move || _drag == _Drag.resize || _drag == _Drag.rotate ? null : _selectionBounds,
                                   handle: _handleSize,
                                   rotateHandle: _drag == _Drag.none ? _rotateHandle : null,
@@ -1272,6 +1309,7 @@ class _OverlayPainter extends CustomPainter {
     this.lasso,
     this.lassoRevision = 0,
     this.eraserRing,
+    this.laser,
   });
 
   final InkElement? live;
@@ -1289,6 +1327,9 @@ class _OverlayPainter extends CustomPainter {
   final List<Offset>? lasso;
   final int lassoRevision;
   final Rect? eraserRing;
+
+  /// PD-55 PR-3: the laser trail, each point with how much of it is left (1 new, 0 gone).
+  final List<(Offset, double)>? laser;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1309,6 +1350,25 @@ class _OverlayPainter extends CustomPainter {
       final path = Path()..addPolygon(loop, true);
       canvas.drawPath(path, Paint()..color = BoardPalette.selection.withValues(alpha: 0.08));
       canvas.drawPath(path, outline);
+    }
+    final trail = laser;
+    if (trail != null && trail.isNotEmpty) {
+      final scale = kBoardPageSize.width / size.width;
+      for (var i = 1; i < trail.length; i++) {
+        final (a, _) = trail[i - 1];
+        final (b, life) = trail[i];
+        canvas.drawLine(
+          a,
+          b,
+          Paint()
+            ..color = BoardPalette.laser.withValues(alpha: 0.85 * life)
+            ..strokeWidth = (4 + 6 * life) * scale
+            ..strokeCap = StrokeCap.round,
+        );
+      }
+      final (tip, life) = trail.last;
+      canvas.drawCircle(tip, 9 * scale, Paint()..color = BoardPalette.laser.withValues(alpha: 0.35 * life));
+      canvas.drawCircle(tip, 5 * scale, Paint()..color = BoardPalette.laser.withValues(alpha: life));
     }
     final ring = eraserRing;
     if (ring != null) {
@@ -1341,5 +1401,6 @@ class _OverlayPainter extends CustomPainter {
       old.lassoRevision != lassoRevision ||
       !identical(old.lasso, lasso) ||
       old.eraserRing != eraserRing ||
+      !identical(old.laser, laser) ||
       !identical(old.live, live);
 }

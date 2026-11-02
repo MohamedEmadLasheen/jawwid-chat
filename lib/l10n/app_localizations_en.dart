@@ -4563,6 +4563,9 @@ class L10nEn extends L10n {
   String get boardLayoutArabicLines => 'Arabic handwriting lines';
 
   @override
+  String get boardLayoutDotted => 'Dotted';
+
+  @override
   String get boardBackgroundWhite => 'White';
 
   @override
@@ -4597,6 +4600,9 @@ class L10nEn extends L10n {
 
   @override
   String get boardToolText => 'Text';
+
+  @override
+  String get boardToolLaser => 'Laser pointer';
 
   @override
   String get boardTextSmaller => 'Smaller text';

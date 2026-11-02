@@ -144,6 +144,15 @@ void paintBackground(Canvas canvas, PageLayout layout, PageBackground background
       for (var y = gap; y < h; y += gap) {
         canvas.drawLine(Offset(0, y), Offset(w, y), line);
       }
+    case PageLayout.dotted:
+      // PD-55: a dot every 32 units, the rule colour made a little firmer.
+      const gap = 32.0;
+      final dot = Paint()..color = line.color.withValues(alpha: math.min(1, line.color.a * 1.8));
+      for (var x = gap; x < w; x += gap) {
+        for (var y = gap; y < h; y += gap) {
+          canvas.drawCircle(Offset(x, y), 2.2, dot);
+        }
+      }
     case PageLayout.arabicLines:
       // A baseline and a lighter upper guide per band: the height of a
       // letter's body, so a child's letters sit on the line (design §4.2).
