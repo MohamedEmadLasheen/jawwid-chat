@@ -560,7 +560,7 @@ export class BillingService {
       currency: billing?.currency ?? null,
       planMonths: family.subscriptionPlanMonths,
       instalments: timeline,
-      totals: totalsOf(timeline),
+      totals: totalsOf(timeline, money),
       // Operations and Sales record (PD-17); the client hides nothing the server would refuse.
       canRecord: access.canRecord,
       // PD-27.
@@ -634,7 +634,7 @@ export class BillingService {
       currency: billing?.currency ?? null,
       planMonths: family.subscriptionPlanMonths,
       instalments,
-      totals: totalsOf(instalments),
+      totals: totalsOf(instalments, money),
       requests: money.requests,
       invoices: money.invoices,
       receipts: money.receipts,
@@ -947,16 +947,35 @@ function present(
   };
 }
 
-/** Per currency: what has been paid, what is still owed, and how much of that is late. Voided rows do not count. */
-function totalsOf(rows: { status: string; amountMinor: number; currency: string; paidMinor: number; remainingMinor: number }[]) {
+/**
+ * Per currency: what has been paid, what is still owed, and how much of that is late.
+ *
+ * ADMIN-012: "paid" is every standing payment of the family -- towards an
+ * instalment, a request, or neither -- less what was refunded on it; a voided
+ * payment never counts. An instalment marked paid without payment rows behind
+ * it (recorded before the ledger) still counts for the part no payment covers.
+ * What is owed and late comes from the instalments, voided ones excluded.
+ */
+function totalsOf(
+  rows: { id: string; status: string; amountMinor: number; currency: string; paidMinor: number; remainingMinor: number }[],
+  money: Pick<MoneyView, 'payments' | 'byInstalment'>,
+) {
   const totals = new Map<string, { currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>();
+  const sumOf = (currency: string) => {
+    const sum = totals.get(currency) ?? { currency, paidMinor: 0, outstandingMinor: 0, overdueMinor: 0 };
+    totals.set(currency, sum);
+    return sum;
+  };
   for (const t of rows) {
     if (t.status === 'voided') continue;
-    const sum = totals.get(t.currency) ?? { currency: t.currency, paidMinor: 0, outstandingMinor: 0, overdueMinor: 0 };
-    sum.paidMinor += t.paidMinor;
+    const sum = sumOf(t.currency);
+    sum.paidMinor += Math.max(0, t.paidMinor - (money.byInstalment.get(t.id)?.paidMinor ?? 0));
     sum.outstandingMinor += t.remainingMinor;
     if (t.status === 'overdue') sum.overdueMinor += t.remainingMinor;
-    totals.set(t.currency, sum);
+  }
+  for (const p of money.payments) {
+    if (p.voided) continue;
+    sumOf(p.currency).paidMinor += Math.max(0, p.amountMinor - p.refundedMinor);
   }
   return [...totals.values()];
 }
