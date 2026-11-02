@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/storage/browser_token_store.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
@@ -213,6 +214,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    // PD-56: the privacy policy and the terms, before anyone signs in.
+                    const LegalLinksRow(),
                   ],
                 ),
               ),

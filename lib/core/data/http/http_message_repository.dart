@@ -171,6 +171,8 @@ class HttpMessageRepository implements MessageRepository {
   Future<UploadedAttachment> uploadAttachment({
     required String conversationId,
     required PendingAttachment attachment,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   }) async {
     final objectKey = await _authorizeAndPut(
       conversationId: conversationId,
@@ -179,6 +181,8 @@ class HttpMessageRepository implements MessageRepository {
       mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
       sizeChangedCode: 'attachment_size_changed',
+      onProgress: onProgress,
+      cancel: cancel,
     );
 
     return UploadedAttachment(
@@ -186,6 +190,7 @@ class HttpMessageRepository implements MessageRepository {
       objectKey: objectKey,
       mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
+      durationMs: attachment.duration?.inMilliseconds,
     );
   }
 
@@ -204,6 +209,8 @@ class HttpMessageRepository implements MessageRepository {
     required String mimeType,
     required int byteSize,
     required String sizeChangedCode,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   }) async {
     final authorized = await _client.post<Map<String, Object?>>(
       '${_base(conversationId)}/attachments/authorize',
@@ -237,6 +244,8 @@ class HttpMessageRepository implements MessageRepository {
       uploadUrl,
       bytes: bytes,
       headers: _stringHeaders(grant?['headers']),
+      onProgress: onProgress,
+      cancel: cancel,
     );
 
     return objectKey;

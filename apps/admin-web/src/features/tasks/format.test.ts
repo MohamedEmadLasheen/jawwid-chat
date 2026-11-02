@@ -104,3 +104,40 @@ describe('PD-47 PR-6c: the Teachers department\'s decisions', () => {
     }
   })
 })
+
+describe('PD-56: an erased account leaves work for staff', () => {
+  it('a family left with nobody who can sign in names the family and opens its first child', () => {
+    const t = task('family_without_account', 'f1', { familyName: 'family_x', learnerId: 'l1', count: 2 })
+    expect(titleOf(t, en, fmt)).toBe('A family has nobody who can sign in: family_x, 2 children')
+    expect(sourceLink(t)).toBe('/students/l1')
+    expect(sourceLink(task('family_without_account', 'f1', { familyName: 'family_x', count: 0 }))).toBeNull()
+  })
+
+  it('a teacher who deleted their account (nothing was left open) leads to the Teacher File, to record the departure', () => {
+    const t = task('teacher_account_deleted', 't1', { teacherId: 't1', count: 0 })
+    expect(titleOf(t, en, fmt)).toBe('A teacher deleted their account: record their departure')
+    expect(sourceLink(t)).toBe('/teachers/files/t1')
+  })
+
+  it('both have their label and title in both languages, with no placeholder left unfilled', () => {
+    for (const type of ['family_without_account', 'teacher_account_deleted'] as const) {
+      expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
+      expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
+      expect(titleOf(task(type, 's1', { familyName: 'F', teacherId: 's1', learnerId: 'l1', count: 1 }), en, fmt)).not.toMatch(/[{}]/)
+    }
+  })
+})
+
+describe('AMB-9: a group left without a live admin', () => {
+  it('names the group, says what waits on it, and opens the group in Chat', () => {
+    const t = task('group_admin_absent', 'spell1', { groupTitle: 'learner_l · Jawwid', conversationId: 'c 1', groupType: 'student_group' })
+    expect(titleOf(t, en, fmt)).toBe('Add an admin to the group: learner_l · Jawwid (the teacher and parents cannot write until then)')
+    expect(sourceLink(t)).toBe('/chat/c%201')
+    expect(sourceLink(task('group_admin_absent', 'spell1', {}))).toBeNull()
+  })
+
+  it('has its label and title in both languages, with the same placeholders', () => {
+    expect(SOURCE_LABEL.group_admin_absent.en && SOURCE_LABEL.group_admin_absent.ar).toBeTruthy()
+    expect(SOURCE_TITLE.group_admin_absent.ar.match(/\{\w+\}/g)).toEqual(SOURCE_TITLE.group_admin_absent.en.match(/\{\w+\}/g))
+  })
+})

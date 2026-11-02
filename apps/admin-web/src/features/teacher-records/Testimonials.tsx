@@ -140,7 +140,7 @@ export function TestimonialsSection({
                           {tx(R.share)}
                         </button>
                       )}
-                      {t.origin === 'staff' && (
+                      {t.origin === 'staff' && t.canCorrect && (
                         <button type="button" className="btn btn--sm btn--ghost" onClick={() => setCorrecting(t)}>
                           {tx(R.correct)}
                         </button>

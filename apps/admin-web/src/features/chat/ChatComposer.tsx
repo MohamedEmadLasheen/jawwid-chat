@@ -10,6 +10,7 @@ import { matchQuickReplies, QuickRepliesDialog, useQuickReplies } from './QuickR
 import { chatApi, chatKeys, type MentionCandidates, type SendMention } from './chatApi'
 import { activeMentionQuery, insertMention, spansFor, type PickedMention } from './mentions'
 import { useTypingSignal } from './useTyping'
+import { MESSAGE_COUNTER_FROM, MESSAGE_MAX_CHARACTERS, messageLength, messageTooLong } from './messageLength'
 
 export interface ComposerSend {
   body: string
@@ -193,7 +194,10 @@ export function ChatComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId])
 
-  const canSend = editing ? body.trim().length > 0 : body.trim().length > 0 || files.length > 0
+  // PARENT-003: the server's limit, counted as it counts; past it, Send waits and the counter says why.
+  const length = messageLength(body.trim())
+  const tooLong = messageTooLong(body.trim())
+  const canSend = !tooLong && (editing ? body.trim().length > 0 : body.trim().length > 0 || files.length > 0)
 
   function submit() {
     if (!canSend) return
@@ -504,6 +508,15 @@ export function ChatComposer({
             onSent={onVoiceSent}
           />
         )}
+        {length > MESSAGE_COUNTER_FROM && (
+          <span
+            className={tooLong ? 'cw-composer__count cw-composer__count--over' : 'cw-composer__count'}
+            aria-live="polite"
+            title={tooLong ? copy.tooLong(MESSAGE_MAX_CHARACTERS) : undefined}
+          >
+            {copy.charCount(length, MESSAGE_MAX_CHARACTERS)}
+          </span>
+        )}
         <button
           type="button"
           className="cw-send"
@@ -516,6 +529,11 @@ export function ChatComposer({
         </button>
       </div>
 
+      {tooLong && (
+        <p className="cw-composer__over" role="alert">
+          {copy.tooLong(MESSAGE_MAX_CHARACTERS)}
+        </p>
+      )}
       {quickOpen && (
         <QuickRepliesDialog
           onClose={() => setQuickOpen(false)}

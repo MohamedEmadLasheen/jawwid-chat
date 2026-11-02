@@ -7,8 +7,10 @@
  *               leave.pending          GET /teacher-leave-requests?state=requested
  *               absences.open          GET /discipline/violations?state=open&kind=absences
  *               lateness.open          GET /discipline/violations?state=open&kind=late
- *               feedback.received      GET /parent-feedback?status=received
- *               feedback.in_review     GET /parent-feedback?status=in_review
+ *               feedback.received      GET /parent-feedback?status=received&category=suggestion
+ *               feedback.in_review     GET /parent-feedback?status=in_review&category=suggestion
+ *                                      (the parents' suggestions only: complaints
+ *                                      and praise have their own flows)
  *               certificates.student_requested / .teacher_requested
  *                                      GET /certificates?category=student|teacher&status=pending
  *               teacher_profiles.pending
@@ -170,8 +172,9 @@ async function pages(actorId: string) {
   await shown('leave.pending', async () => (await leave.list(actorId, { state: 'requested' })).requests.length);
   await shown('absences.open', async () => (await discipline.list(actorId, { state: 'open', kind: 'absences' })).violations.length);
   await shown('lateness.open', async () => (await discipline.list(actorId, { state: 'open', kind: 'late' })).violations.length);
-  await shown('feedback.received', async () => (await feedback.list(actorId, { status: 'received' })).feedback.length);
-  await shown('feedback.in_review', async () => (await feedback.list(actorId, { status: 'in_review' })).feedback.length);
+  // The tiles open the Attendance page's Suggestions view: that list, that status.
+  await shown('feedback.received', async () => (await feedback.list(actorId, { status: 'received', category: 'suggestion' })).feedback.length);
+  await shown('feedback.in_review', async () => (await feedback.list(actorId, { status: 'in_review', category: 'suggestion' })).feedback.length);
   // The Certificates page shows a category's tab only to whom it reaches (CertificatesPage's own rule).
   const a = await certificates.access(actorId);
   for (const category of ['student', 'teacher'] as const) {
@@ -249,11 +252,14 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
     // Lateness, about one child: teacher_c late for learner_l (family_x) and for learner_n (family_y).
     await discipline.recordLateness(tsupId, await heldLesson(s.learnerId), { minutes: 15 });
     await discipline.recordLateness(tsupId, await heldLesson(y.learnerId), { minutes: 20 });
-    // Feedback about teacher_c, from both families; family_x's second one taken (in review).
+    // Feedback about teacher_c, from both families: a new suggestion from each, family_x's
+    // second one taken (in review); and a praise and a complaint, which no tile counts.
     await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'praise', body: 'Thank you.' });
     const taken = await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'suggestion', body: 'More revision.' });
     await feedback.take(tsupId, taken.id);
+    await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'suggestion', body: 'Shorter homework.' });
     await feedback.file(y.parentId, { learnerId: y.learnerId, category: 'complaint', body: 'Too fast.' });
+    await feedback.file(y.parentId, { learnerId: y.learnerId, category: 'suggestion', body: 'A slower pace.' });
     // Certificates: a student request (admin_a, for learner_l) and a teacher one (the Teachers department).
     await certificates.create(s.ownerId, {
       category: 'student', typeId: juzTypeId, learnerId: s.learnerId, printedName: 'learner_l', juz: 30, requestKey: randomUUID(),
@@ -301,15 +307,29 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
     expect((await all(superId)).every((t) => t.capped === false)).toBe(true);
   });
 
-  it('follows a decision: a decided violation and a resolved feedback leave their tiles', async () => {
+  it('follows a decision: a decided violation and a taken suggestion move between their tiles', async () => {
     const [late] = (await discipline.list(tmgrId, { state: 'open', kind: 'late' })).violations;
     await discipline.decide(tmgrId, late!.id, { decision: 'warning', note: 'a first lateness: a warning' });
-    // A reply resolves praise (PD-32): it leaves the received tile.
-    const [praise] = (await feedback.list(tmgrId, { status: 'received', category: 'praise' })).feedback;
-    await feedback.reply(tmgrId, praise!.id, { response: 'Thank you!' });
+    // Taking a suggestion moves it from the received tile to the in-review one.
+    const [suggestion] = (await feedback.list(tmgrId, { status: 'received', category: 'suggestion' })).feedback;
+    await feedback.take(tmgrId, suggestion!.id);
     await expectParity(tmgrId);
     const t = await all(tmgrId);
-    expect([tileOf(t, 'lateness.open')?.count, tileOf(t, 'feedback.received')?.count]).toEqual([1, 1]);
+    expect(['lateness.open', 'feedback.received', 'feedback.in_review'].map((k) => tileOf(t, k)?.count)).toEqual([1, 1, 2]);
+  });
+
+  it('counts the parents\' suggestions only: complaints and praise keep their own flows', async () => {
+    // Four received rows reach the Teachers department; two of them are suggestions.
+    expect((await feedback.list(tmgrId, { status: 'received' })).feedback.map((f) => f.category).sort()).toEqual(['complaint', 'praise', 'suggestion', 'suggestion']);
+    expect(tileOf(await all(tmgrId), 'feedback.received')?.count).toBe(2);
+    // Resolving the praise and the complaint leaves the tiles as they were.
+    const [praise] = (await feedback.list(tmgrId, { status: 'received', category: 'praise' })).feedback;
+    await feedback.reply(tmgrId, praise!.id, { response: 'Thank you!' });
+    const [complaint] = (await feedback.list(tmgrId, { status: 'received', category: 'complaint' })).feedback;
+    await feedback.take(tmgrId, complaint!.id);
+    const t = await all(tmgrId);
+    expect([tileOf(t, 'feedback.received')?.count, tileOf(t, 'feedback.in_review')?.count]).toEqual([2, 1]);
+    await expectParity(tmgrId);
   });
 
   it('runs the same number of statements for a few rows as for many (no N+1)', async () => {
@@ -321,7 +341,7 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
       await discipline.recordLateness(tsupId, await heldLesson(s.learnerId), { minutes: 10 + i });
     }
     // learner_m's (at most 3 a child a day, PD-32): teacher_d's, so it adds to the received tile's candidates.
-    for (let i = 0; i < 3; i += 1) await feedback.file(s.parentId, { learnerId: s.secondLearnerId, category: 'praise', body: `Thanks ${i}.` });
+    for (let i = 0; i < 3; i += 1) await feedback.file(s.parentId, { learnerId: s.secondLearnerId, category: 'suggestion', body: `Idea ${i}.` });
     await pendingCredential(s.newTeacherId, 'Tajweed');
     g.config.invalidate();
     const large = await counted(() => all(superId));
