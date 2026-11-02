@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { cliPrismaClient } from './cli-prisma';
 import { backfillFamilyContactKeys } from '../parent-profile/family-contact-keys';
 
 /**
@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     process.stderr.write('family-contact-keys-backfill: REFUSED DATABASE_URL is not set\n');
     process.exit(2);
   }
-  const prisma = new PrismaClient();
+  const prisma = cliPrismaClient();
   try {
     const report = await backfillFamilyContactKeys(prisma, { apply: argv.includes('--apply'), acceptGaps: argv.includes('--accept-gaps') });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

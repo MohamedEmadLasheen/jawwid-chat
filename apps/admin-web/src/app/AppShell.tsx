@@ -68,12 +68,13 @@ function useDestinations(): Destination[] {
   // PD-52: the teacher-records pages, on the server's basis-and-key answer.
   const recordsAccess = useTeacherRecordsAccess(operator)
   const teacherAttendance = recordsAccess.data?.attendance.view === true
+  const teacherGrants = recordsAccess.data?.grants.view === true
   return useMemo(
     () =>
       staff
-        ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance })
+        ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants })
         : [],
-    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance],
+    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants],
   )
 }
 

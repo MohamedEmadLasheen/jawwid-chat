@@ -182,10 +182,15 @@ class CallHistoryEntry {
     required this.isGroup,
     this.duration,
     this.direction,
+    this.connectionLost = false,
   });
 
   final String id;
   final String conversationId;
+
+  /// CHATSCHED-013: the call ended because the connection was lost (the server's
+  /// `endReason`), not because anybody hung up.
+  final bool connectionLost;
 
   /// A display name — "Jawwid", "Mr. Ahmed". Never a phone number (§36).
   final String title;
@@ -743,7 +748,7 @@ abstract interface class CallRepository {
   /// accepting one on 2026-09-27 -- a participant naming their own call history
   /// is false history through the front door -- so the parameter is gone rather
   /// than left here to be rediscovered and silently ignored.
-  Future<void> end({required String callId});
+  Future<void> end({required String callId, bool connectionLost = false});
 
   /// `GET /calls/history/:conversationId`.
   ///

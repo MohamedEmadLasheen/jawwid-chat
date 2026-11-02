@@ -146,8 +146,8 @@ describe('Admin Portal registry and navigation', () => {
     // behind a toggle. (The desktop rail's menus are covered in
     // app/Navigation.test.tsx.)
     // PD-41: plus Certificates under People; PD-48: Lesson audio under More;
-    // PD-52: Attendance & complaints, its own group under People.
-    expect(within(nav).getAllByRole('link')).toHaveLength(31)
+    // PD-52: the two teacher-records pages, their own group under People.
+    expect(within(nav).getAllByRole('link')).toHaveLength(32)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

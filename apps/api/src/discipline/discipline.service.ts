@@ -94,13 +94,24 @@ export class DisciplineService {
    * one teacher, and `late` or `cancellations` only.
    */
   async list(actorId: string, query: { state?: string; month?: string; teacherId?: string; kind?: string }) {
-    const actor = await this.requireSupervisor(actorId);
+    const supervisor = await this.supervisorOrNone(actorId);
+    // PD-52 PR-5: Sales reads the lateness on the trials it reads, and nothing else.
+    const sales = supervisor ? null : await this.salesPage(actorId);
+    const actor = supervisor ?? sales?.actor;
+    if (!actor) throw disciplineDenied();
     const state = query.state ?? 'open';
     if (!['open', 'decided', 'all'].includes(state)) throw invalid('state: open | decided | all');
     if (query.month !== undefined && !MONTH_RE.test(query.month)) throw invalid('month: YYYY-MM');
     if (query.teacherId !== undefined && !isUuid(query.teacherId)) throw invalid('teacherId: a uuid');
     if (query.kind !== undefined && !(query.kind in KIND_FILTERS)) throw invalid(`kind: ${Object.keys(KIND_FILTERS).join(' | ')}`);
 
+    if (sales) {
+      if (query.kind !== undefined && query.kind !== 'late') return { violations: [] };
+      const { rows } = await this.listed(actor, sales.page, { ...query, state, kind: 'late' });
+      const about = await this.supervision.teacherScope.lessonsAbout(rows.map((r) => r.lessonId).filter((x): x is string => !!x));
+      const trials = rows.filter((r) => r.lessonId && about.get(r.lessonId)?.prospectId);
+      return { violations: (await this.dtos(trials)).map(forSales) };
+    }
     // PD-35: the violations of the teachers in the caller's scope.
     const page = await this.supervision.teacherScope.pageRowsOf(actor);
     const { rows } = await this.listed(actor, page, { ...query, state });
@@ -189,14 +200,24 @@ export class DisciplineService {
   // ------------------------------------------------------------------
 
   async recordLateness(actorId: string, lessonId: string, body: Record<string, unknown>) {
-    const actor = await this.requireSupervisor(actorId);
+    const supervisor = await this.supervisorOrNone(actorId);
+    const sales = supervisor ? null : await this.salesPage(actorId);
+    const actor = supervisor ?? sales?.actor;
+    if (!actor) throw disciplineDenied();
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
     const lesson = await this.prisma.lesson.findFirst({ where: { id: lessonId, organizationId: actor.organizationId } });
     if (!lesson) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
-    await this.supervision.requireTeacherInPageScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
-    // P2-4: an Operations supervisor records lateness on their own families' lessons only.
-    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), lesson.teacherId, { learnerId: lesson.learnerId })) {
-      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+    if (sales) {
+      // PD-52 PR-5: Sales, on a trial it reads -- a regular lesson is not found.
+      if (lesson.kind !== 'trial' || !lesson.prospectId || !pageRowVisible(sales.page, lesson.teacherId, { learnerId: null, prospectId: lesson.prospectId })) {
+        throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+      }
+    } else {
+      await this.supervision.requireTeacherInPageScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+      // P2-4: an Operations supervisor records lateness on their own families' lessons only.
+      if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), lesson.teacherId, { learnerId: lesson.learnerId })) {
+        throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+      }
     }
     const minutes = body.minutes;
     if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
@@ -233,7 +254,8 @@ export class DisciplineService {
         return created;
       }),
     );
-    return { violation: (await this.dtos([row]))[0] };
+    const [dto] = await this.dtos([row]);
+    return { violation: sales ? forSales(dto!) : dto };
   }
 
   // ------------------------------------------------------------------
@@ -298,6 +320,12 @@ export class DisciplineService {
     const about = complaintAbout(complaint, await familiesOfComplaints(this.prisma, [complaint]));
     if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, about)) {
       throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    }
+    // PD-52 (review of #374): a complaint entered by mistake is never upheld. The
+    // database refuses it too, under the complaint's row lock, so a void and an
+    // uphold racing each other cannot both land.
+    if (await this.prisma.teacherSupervisionEntry.findFirst({ where: { refersTo: complaint.id, kind: 'entry_void' }, select: { id: true } })) {
+      throw stateError('this complaint was voided; it is not upheld');
     }
     const note = textField(body, 'note', false);
     const row = await this.write(() =>
@@ -687,7 +715,8 @@ export class DisciplineService {
     const partial = rows.filter((r) => !scopeCovers(page.whole, r.teacherId));
     if (partial.length === 0) return rows;
     const scope = this.supervision.teacherScope;
-    const learnerOf = await scope.learnersOfLessons(partial.map((r) => r.lessonId).filter((x): x is string => !!x));
+    // PD-52 PR-5: a trial's row is about its trial family (Sales reads it; Operations does not).
+    const aboutOf = await scope.lessonsAbout(partial.map((r) => r.lessonId).filter((x): x is string => !!x));
     const complaintIds = partial.map((r) => r.complaintEntryId).filter((x): x is string => !!x);
     const complaints = complaintIds.length
       ? await this.prisma.teacherSupervisionEntry.findMany({
@@ -698,7 +727,7 @@ export class DisciplineService {
     const familyOf = await familiesOfComplaints(this.prisma, complaints);
     const complaintOf = new Map(complaints.map((c) => [c.id, c]));
     return rows.filter((r) => {
-      if (r.lessonId) return pageRowVisible(page, r.teacherId, { learnerId: learnerOf.get(r.lessonId) ?? null });
+      if (r.lessonId) return pageRowVisible(page, r.teacherId, aboutOf.get(r.lessonId) ?? { learnerId: null });
       const c = r.complaintEntryId ? complaintOf.get(r.complaintEntryId) : undefined;
       return pageRowVisible(page, r.teacherId, c ? complaintAbout(c, familyOf) : null);
     });
@@ -723,6 +752,14 @@ export class DisciplineService {
     return rows.filter(
       (r) => r.decision !== null || r.lessonId === null || outcomeOf.get(r.lessonId) === (r.kind === 'late' ? 'held' : r.kind),
     );
+  }
+
+  /** PD-52 PR-5: Sales on the teacher-records pages -- its rows -- or null for anyone else. */
+  private async salesPage(actorId: string): Promise<{ actor: Actor; page: PageScope } | null> {
+    const actor = await this.conversations.requireActor(actorId);
+    const scope = this.supervision.teacherScope;
+    if (!(await scope.salesBasis(actor))) return null;
+    return { actor, page: await scope.salesRowsOf(actor) };
   }
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
@@ -858,4 +895,12 @@ const LIST_LIMIT = 500;
 
 function disciplineDenied(): CommError {
   return new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
+}
+
+/**
+ * PD-52 PR-5: a violation as Sales reads it -- what happened and who recorded
+ * it, never the ladder: no step, suggestion or decision (plan §5.4).
+ */
+function forSales<T extends Record<string, unknown>>(v: T): T {
+  return { ...v, step: null, suggestedDecision: null, decision: null, decisionNote: null, decidedBy: null, decidedAt: null, suspension: null };
 }

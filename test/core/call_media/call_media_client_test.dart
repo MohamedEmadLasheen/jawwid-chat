@@ -150,7 +150,7 @@ class FakeCalls implements CallRepository {
   Future<void> decline({required String callId}) =>
       throw UnimplementedError('the media client must not decline calls');
   @override
-  Future<void> end({required String callId}) =>
+  Future<void> end({required String callId, bool connectionLost = false}) =>
       throw UnimplementedError('the media client must not end calls');
   @override
   Future<List<CallHistoryEntry>> callHistory({

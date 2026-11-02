@@ -117,8 +117,11 @@ describe('the super admin\'s link', () => {
     const people = destinationsFor('super_admin').find((d) => d.key === 'people')!
     const entry = entriesOf(people).find((e) => e.path === '/teacher-profiles')
     expect(entry?.label).toEqual({ text: { en: 'Teacher credentials review', ar: 'مراجعة مؤهلات المعلمين' } })
-    const operatorPeople = destinationsFor('admin').find((d) => d.key === 'people')!
+    // ADMIN-006: an operator only when the server confirms the Teachers department.
+    const operatorPeople = destinationsFor('admin', { lessonManager: true }).find((d) => d.key === 'people')!
     expect(entriesOf(operatorPeople).find((e) => e.path === '/teacher-profiles')?.label).toEqual({ message: 'nav.teacher-profiles' })
+    const opsPeople = destinationsFor('admin', { operations: true }).find((d) => d.key === 'people')
+    expect(opsPeople ? entriesOf(opsPeople).find((e) => e.path === '/teacher-profiles') : undefined).toBeUndefined()
 
     routes({})
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/conversations' })

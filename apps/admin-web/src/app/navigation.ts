@@ -1,4 +1,4 @@
-import { ATTENDANCE_PATH } from '@/features/teacher-records/paths'
+import { ATTENDANCE_PATH, GRANTS_PATH } from '@/features/teacher-records/paths'
 import { isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
 import type { StaffRole } from '@/shared/types/domain'
 import {
@@ -113,6 +113,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   'lesson-audio': 'more',
   // PD-52: the teacher-records pages, in their own group under People.
   'teacher-attendance': 'people',
+  'teacher-grants': 'people',
   // PD-44: out of More, its own destination (the super admin's stays in the
   // Admin Portal's More until PD-44 PR-8).
   dashboard: 'dashboard',
@@ -139,6 +140,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   certificates: '/certificates',
   'lesson-audio': '/lesson-audio',
   'teacher-attendance': ATTENDANCE_PATH,
+  'teacher-grants': GRANTS_PATH,
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -161,6 +163,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   certificates: 'star',
   'lesson-audio': 'approvals',
   'teacher-attendance': 'calendar',
+  'teacher-grants': 'star',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */
@@ -288,7 +291,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     label: { message: 'nav.lesson-audio' },
     inDevelopment: false,
   })
-  // PD-52: Attendance & Complaints, in its own group under People.
+  // PD-52: the two teacher-records pages, in their own group under People.
   out.get('people')?.push({
     ...TEACHER_RECORDS_GROUP,
     entries: [
@@ -297,6 +300,13 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
         path: `/admin${ATTENDANCE_PATH}`,
         icon: AREA_ICON['teacher-attendance'],
         label: { message: 'nav.teacher-attendance' },
+        inDevelopment: false,
+      },
+      {
+        key: 'teacher-grants',
+        path: `/admin${GRANTS_PATH}`,
+        icon: AREA_ICON['teacher-grants'],
+        label: { message: 'nav.teacher-grants' },
         inDevelopment: false,
       },
     ],
@@ -313,7 +323,7 @@ export const TEACHER_RECORDS_GROUP: { key: string; label: Bilingual } = {
   key: 'teacher-records',
   label: { en: 'Teacher records', ar: 'سجلات المعلمين' },
 }
-const TEACHER_RECORDS_AREAS: ReadonlySet<OperatorArea> = new Set<OperatorArea>(['teacher-attendance'])
+const TEACHER_RECORDS_AREAS: ReadonlySet<OperatorArea> = new Set<OperatorArea>(['teacher-attendance', 'teacher-grants'])
 
 function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
@@ -329,8 +339,7 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
     }
     group.entries.push({
       key: area,
-      // PD-26 amendment: without the Teachers department, the Teachers area is its Supervision page.
-      path: area === 'teachers' && access.lessonManager !== true ? `${AREA_PATH.teachers}/supervision` : AREA_PATH[area],
+      path: AREA_PATH[area],
       icon: AREA_ICON[area],
       label: { message: `nav.${area}` },
       inDevelopment: false,

@@ -89,6 +89,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     _lifecycle = AppLifecycleListener(
       onStateChange: (s) {
         if (s == AppLifecycleState.inactive || s == AppLifecycleState.paused || s == AppLifecycleState.hidden) {
+          // A text being typed is part of the board: finished first, then kept (review of #384).
+          _canvas.currentState?.finishTextEdit();
           unawaited(_held.persistNow());
           unawaited(_held.flush());
         }
@@ -122,6 +124,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     });
     return PopScope(
       onPopInvokedWithResult: (_, _) {
+        _canvas.currentState?.finishTextEdit();
         unawaited(_controller.persistNow());
         unawaited(_controller.flush());
       },
@@ -185,6 +188,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       readOnly: !editable,
       view: _view,
       onCommit: _controller.commit,
+      onCommitTo: _controller.commitTo,
       placeholderLabel: label,
       verses: verseCache.lookup,
       versesVersion: versesVersion,

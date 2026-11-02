@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { cliPrismaClient } from './cli-prisma';
 import { describeTarget } from './bootstrap-super-admin';
 import {
   DeactivationRefusal,
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
     requestedBy: args.requestedBy ?? null,
     status: args.suspend ? 'suspended' : 'deactivated',
   };
-  const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  const prisma = cliPrismaClient(databaseUrl);
   try {
     const result = await deactivatePrincipal(prisma, input, { timeoutMs: args.timeoutMs });
     process.stdout.write(`${JSON.stringify({ target, ...result })}\n`);

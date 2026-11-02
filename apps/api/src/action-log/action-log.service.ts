@@ -65,8 +65,12 @@ export class ActionLogService {
   async list(actorId: string, staffId: string, query: { from?: string; to?: string; cursor?: string }) {
     const actor = await this.conversations.requireActor(actorId);
     const { reasonsSince } = await this.requireReader(actor, staffId);
-    const now = Date.now();
-    const to = timeField(query.to, 'to') ?? new Date(now);
+    // One clock: every `at` below is the database's now() at writing, so the
+    // default window ends on the database's clock too. With the server's own
+    // clock, a row written a moment ago fell past `to` whenever the database
+    // ran ahead of it (seen 2026-11-02: 0.7 s on a developer machine).
+    const [{ now }] = await this.prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() AS now`;
+    const to = timeField(query.to, 'to') ?? new Date(now.getTime() + 1);
     const from = timeField(query.from, 'from') ?? new Date(to.getTime() - DEFAULT_DAYS * DAY_MS);
     if (from >= to) throw invalid('from: before to');
     if (to.getTime() - from.getTime() > MAX_DAYS * DAY_MS) throw invalid(`at most ${MAX_DAYS} days at a time`);
