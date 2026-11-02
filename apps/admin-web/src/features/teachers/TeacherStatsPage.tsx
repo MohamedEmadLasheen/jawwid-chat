@@ -377,7 +377,7 @@ function useFormat() {
       /** RQA-F8: "October 2026" / "أكتوبر ٢٠٢٦", never the raw "2026-10". */
       month: (ym: string) => (/^\d{4}-\d{2}$/.test(ym) ? monthFmt.format(new Date(`${ym}-01T00:00:00Z`)) : ym),
       percent: (r: number | null) =>
-        r === null ? tx(T.none) : new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { style: 'percent', maximumFractionDigits: 0 }).format(r),
+        r === null ? tx(T.none) : new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { style: 'percent', maximumFractionDigits: 0 }).format(r),
       lessons: lessonsOf,
       lessonsHours: (b: Bucket) => `${lessonsOf(b.lessons)} · ${hoursOf(b.minutes)}`,
     }

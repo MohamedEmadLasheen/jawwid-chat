@@ -214,7 +214,7 @@ export const CURRENCIES = ['EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD
 /** "1,234.50 EGP", in the reader's language. */
 export function formatMoney(amount: number, currency: string, locale: 'ar' | 'en'): string {
   try {
-    return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { style: 'currency', currency }).format(amount)
+    return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { style: 'currency', currency }).format(amount)
   } catch {
     return `${amount} ${currency}`
   }
@@ -233,7 +233,7 @@ export const NOT_SUBSCRIBED_REASON: Record<string, Pair> = {
 export function formatWhen(iso: string, locale: 'ar' | 'en'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(d)
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(d)
 }
 
 /** The academy's calendar day of an instant, as a grouping key (PD-22: not the browser's). */
