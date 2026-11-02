@@ -230,7 +230,8 @@ class _EntryTile extends ConsumerWidget {
     } catch (_) {
       // Recording the tap is a courtesy; opening the screen is what was asked for.
     }
-    unawaited(router.push(route));
+    // A tab is gone to, not pushed over the open shell (PARENT-021).
+    openFromOverlay(router, route);
   }
 
   static IconData _icon(String category) => switch (category) {
