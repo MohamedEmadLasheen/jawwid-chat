@@ -54,13 +54,39 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // A cold start from Answer or a tap on the ring: queued until Dart is ready.
-        JawwidPush.onCallIntent(applicationContext, intent)
+        // NOT on a recreate (rotation, process restore) or a launch from recents: the
+        // intent is the one already handled, and replaying it would answer again.
+        val fromHistory = (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (savedInstanceState == null && !fromHistory) handleCallIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleCallIntent(intent)
+    }
+
+    /**
+     * A call action: shown over the lock screen and waking it (#408 review --
+     * otherwise a full-screen ring or an Answer lands on the unlock prompt),
+     * handed to Flutter, then cleared so nothing replays it.
+     */
+    private fun handleCallIntent(intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action != JawwidPush.ACTION_ANSWER && action != JawwidPush.ACTION_OPEN_CALL) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+            )
+        }
         JawwidPush.onCallIntent(applicationContext, intent)
+        intent.action = null
+        intent.removeExtra(JawwidPush.EXTRA_CALL_ID)
     }
 
     override fun onResume() {
@@ -95,7 +121,7 @@ class MainActivity : FlutterFragmentActivity() {
         callChannel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "ready" -> {
-                    JawwidPush.attach(callChannel)
+                    JawwidPush.attach(applicationContext, callChannel)
                     result.success(null)
                 }
                 "dismiss" -> {
