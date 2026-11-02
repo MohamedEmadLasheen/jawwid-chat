@@ -384,6 +384,11 @@
   "@attachFile": {
     "description": "Attachment menu entry for a document."
   },
+  "attachVideo": "فيديو",
+  "attachRecordVideo": "تسجيل فيديو",
+  "videoRecordPermissionDenied": "يحتاج جَوِّد إلى إذن لاستخدام الكاميرا والميكروفون لتسجيل فيديو. يمكنك السماح بذلك من الإعدادات.",
+  "cancelUpload": "إلغاء الإرسال",
+  "uploadingPercent": "جارٍ الإرسال… {percent}٪",
   "attachmentPhotoLabel": "صورة",
   "@attachmentPhotoLabel": {
     "description": "Stands in for a photo where a message has no text."

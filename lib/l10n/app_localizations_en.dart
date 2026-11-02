@@ -831,6 +831,24 @@ class L10nEn extends L10n {
   String get attachFile => 'File';
 
   @override
+  String get attachVideo => 'Video';
+
+  @override
+  String get attachRecordVideo => 'Record video';
+
+  @override
+  String get videoRecordPermissionDenied =>
+      'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.';
+
+  @override
+  String get cancelUpload => 'Cancel sending';
+
+  @override
+  String uploadingPercent(String percent) {
+    return 'Sending… $percent%';
+  }
+
+  @override
   String get attachmentPhotoLabel => 'Photo';
 
   @override
