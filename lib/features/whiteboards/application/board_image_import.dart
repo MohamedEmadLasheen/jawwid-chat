@@ -105,16 +105,16 @@ Future<PreparedImage> prepareBoardImage(Uint8List raw) async {
   return PreparedImage(bytes: png, contentType: 'image/png', image: still, width: w, height: h);
 }
 
-/// Where a new picture sits: the middle of the page, at most 60% of it either
-/// way, keeping its proportions.
-ImageElement placeBoardImage(String assetId, int width, int height, {String? id}) {
-  final maxW = kBoardPageSize.width * 0.6, maxH = kBoardPageSize.height * 0.6;
+/// Where a new picture sits: the middle of the page (a wide one unless said),
+/// at most 60% of it either way, keeping its proportions.
+ImageElement placeBoardImage(String assetId, int width, int height, {String? id, ui.Size page = kBoardPageSize}) {
+  final maxW = page.width * 0.6, maxH = page.height * 0.6;
   final k = [maxW / width, maxH / height, 1.0].reduce((a, b) => a < b ? a : b);
   final w = width * k, h = height * k;
   return ImageElement(
     id: id ?? 'i${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}',
     assetId: assetId,
-    rect: ui.Rect.fromLTWH((kBoardPageSize.width - w) / 2, (kBoardPageSize.height - h) / 2, w, h),
+    rect: ui.Rect.fromLTWH((page.width - w) / 2, (page.height - h) / 2, w, h),
   );
 }
 

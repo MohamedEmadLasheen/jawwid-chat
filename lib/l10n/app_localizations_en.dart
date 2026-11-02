@@ -4741,6 +4741,12 @@ class L10nEn extends L10n {
   String get boardNextPage => 'Next page';
 
   @override
+  String get boardWidePage => 'Wide page';
+
+  @override
+  String get boardTallPage => 'Tall page';
+
+  @override
   String get boardZoomFit => 'Fit page';
 
   @override

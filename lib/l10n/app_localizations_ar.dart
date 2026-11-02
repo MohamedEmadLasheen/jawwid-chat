@@ -4835,6 +4835,12 @@ class L10nAr extends L10n {
   String get boardNextPage => 'الصفحة التالية';
 
   @override
+  String get boardWidePage => 'صفحة عريضة';
+
+  @override
+  String get boardTallPage => 'صفحة طولية';
+
+  @override
   String get boardZoomFit => 'ملاءمة الصفحة';
 
   @override
