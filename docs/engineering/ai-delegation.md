@@ -86,13 +86,16 @@ scripts/ai/codex-task.sh cleanup --task-id fix-x [--delete-merged-branch]
 What `run` does, in order:
 1. Refuses an existing task id or worktree, and holds a lock so only one agent works on the tree.
 2. Creates the worktree and branch from the verified base, and copies the brief into the run directory.
-3. Runs `--prepare` commands **outside** the sandbox (dependency installs may need the network).
+3. Runs `--prepare` commands **outside** the sandbox (dependency installs may need the network). Only
+   lockfile installs are accepted: `[cd <path> && ] npm ci [--flags]` or `flutter pub get`. No pipes or downloads.
 4. Runs Codex with `-s workspace-write` inside the worktree only, `-a never`, `--ignore-user-config`
    (no personal plugins or hooks), a per-attempt timeout, and a JSON output schema for the report.
 5. **Scope check:** any change outside `--allow` globs, or inside a protected path (`.github/`, Code
    Owner paths, `scripts/ai/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, env and key files, and migrations
    unless `--allow-migrations`), is saved as a patch for evidence and reverted.
-6. **Secret scan** of the candidate diff. A suspected credential blocks the commit.
+6. **Secret scan** of the candidate diff (provider tokens, private keys, JWTs, credentials inside URLs,
+   `*PASSWORD=`/`*TOKEN=`-style assignments). A suspected credential blocks the commit; values are masked
+   in the report. It is a safety net, not a guarantee: the lead still reads every diff.
 7. **Independent verification:** the wrapper re-runs every `--test` command itself, honouring the
    machine-load rule.
 8. **Commit** on the task branch with `Task-Id`, `Attempt`, `Delegated-Agent` and `Verified-By` trailers.

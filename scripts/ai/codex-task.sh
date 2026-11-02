@@ -116,8 +116,14 @@ changed_files_z() { # $1 = output file
 # Added lines that look like credentials. Prints matches with the value masked.
 secret_scan() { # $1 = unified diff file
   grep -nE '^\+' "$1" | grep -E \
-    '(sk_(live|test)_[A-Za-z0-9]{8,}|pk_live_[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|xox[abpr]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.|(api[_-]?key|secret|password|passwd|token)["'"'"' ]*[:=][ ]*["'"'"'][^"'"'"']{8,}["'"'"'])' \
-    | sed -E 's/(["'"'"'])[^"'"'"']{8,}(["'"'"'])/\1<redacted>\2/g; s/(sk_|pk_|AKIA|xox.-|gh.)_?[A-Za-z0-9_-]{6,}/\1<redacted>/g' || true
+    '([a-z][a-z0-9+.-]*://[^/[:space:]:@]+:[^@[:space:]/]{3,}@|[A-Z0-9_]*(SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=[^[:space:]$<{\"'"'"'][^[:space:]]{7,}|sk_(live|test)_[A-Za-z0-9]{8,}|pk_live_[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|xox[abpr]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.|(api[_-]?key|secret|password|passwd|token)["'"'"' ]*[:=][ ]*["'"'"'][^"'"'"']{8,}["'"'"'])' \
+    | sed -E 's#(://[^/[:space:]:@]+:)[^@[:space:]/]+@#\1<redacted>@#g; s/((SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=)[^[:space:]]+/\1<redacted>/g; s/(["'"'"'])[^"'"'"']{8,}(["'"'"'])/\1<redacted>\2/g; s/(sk_|pk_|AKIA|xox.-|gh.)_?[A-Za-z0-9_-]{6,}/\1<redacted>/g' || true
+}
+
+# `[cd <repo path> && ] npm ci [--flags]` or `[cd <repo path> && ] flutter pub get`.
+prepare_allowed() {
+  [[ "$1" =~ ^(cd\ [A-Za-z0-9_./-]+\ \&\&\ )?(npm\ ci(\ --[a-z-]+)*|(\$HOME/development/flutter/bin/)?flutter\ pub\ get)$ ]] || return 1
+  case "$1" in *..*) return 1 ;; esac
 }
 
 codex_version() { "$CODEX" --version 2>/dev/null | awk '{print $NF}'; }
@@ -367,6 +373,10 @@ cmd_run() {
   esac
   [ "$migrations" = 0 ] || [ "$risk" != low ] || die "run: a migration is never low risk; use --risk medium or high"
   [ -x "$CODEX" ] || die "codex CLI not found at $CODEX (set CODEX_BIN)"
+  local a
+  for a in ${prepare[@]+"${prepare[@]}"}; do
+    prepare_allowed "$a" || die "prepare: only lockfile installs are allowed (e.g. 'cd apps/api && npm ci'); refused: $a"
+  done
 
   RUN="$RUNS/$TASK"; WT="$WORKTREES/$TASK"
   [ -e "$RUN/state" ] && die "run: task $TASK already exists; use 'retry' or a new task id"
@@ -391,10 +401,11 @@ cmd_run() {
     echo "allow_migrations=$migrations"; echo "codex_timeout=$ct"; echo "test_timeout=$tt"
   } > "$RUN/state"
   # Multi-line values: one line each under a single key.
-  local a; for a in "${allow[@]}"; do echo "allow=$a"; done >> "$RUN/state"
+  for a in "${allow[@]}"; do echo "allow=$a"; done >> "$RUN/state"
   for a in ${tests[@]+"${tests[@]}"}; do echo "tests=$a"; done >> "$RUN/state"
 
-  # Dependency setup runs OUTSIDE the sandbox (it may need the network), before Codex.
+  # Dependency setup runs OUTSIDE the sandbox (it may need the network), before Codex,
+  # so it is limited to lockfile installs: no pipes, no downloads, no arbitrary scripts.
   for a in ${prepare[@]+"${prepare[@]}"}; do
     wait_for_load || die "prepare: load stayed above $LOAD_MAX"
     log "prepare: $a"
@@ -451,7 +462,10 @@ cmd_review() {
   [ "$(git -C "$dir" rev-parse HEAD)" = "$head_sha" ] || die "review: $dir is not checked out at $head_sha; the reviewer reads source from it"
   [ -z "$(git -C "$dir" status --porcelain)" ] || die "review: $dir has uncommitted changes; review needs a clean tree"
 
-  RUN="$RUNS/$TASK/review-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$RUN/tmp"; LOGFILE="$RUN/review.log"
+  mkdir -p "$RUNS/$TASK"
+  RUN="$RUNS/$TASK/review-$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir "$RUN" || die "review: $RUN already exists"   # no -p: never share a run directory
+  mkdir "$RUN/tmp"; LOGFILE="$RUN/review.log"
   git -C "$dir" diff --no-color --no-ext-diff "$base_sha" "$head_sha" > "$RUN/diff.patch"
   git -C "$dir" diff --name-status "$base_sha" "$head_sha" > "$RUN/files.txt"
   local nfiles; nfiles="$(wc -l < "$RUN/files.txt" | tr -d ' ')"
@@ -459,7 +473,7 @@ cmd_review() {
   secret_scan "$RUN/diff.patch" > "$RUN/secret-scan.txt"
   if [ -s "$RUN/secret-scan.txt" ]; then
     log "possible credentials in the diff: redacting before Codex sees it"
-    sed -E -i '' 's/(sk_(live|test)_|pk_live_|AKIA|gh[pousr]_|xox[abpr]-)[A-Za-z0-9_-]{6,}/\1<redacted>/g; s/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*/<redacted-jwt>/g' "$RUN/diff.patch"
+    sed -E -i '' 's/(sk_(live|test)_|pk_live_|AKIA|gh[pousr]_|xox[abpr]-)[A-Za-z0-9_-]{6,}/\1<redacted>/g; s/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*/<redacted-jwt>/g; s#(://[^/[:space:]:@]+:)[^@[:space:]/]+@#\1<redacted>@#g; s/((SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=)[^[:space:]]+/\1<redacted>/g' "$RUN/diff.patch"
   fi
   sed -e "s#{{DIFF_FILE}}#$RUN/diff.patch#" -e "s#{{FILE_COUNT}}#$nfiles#" "$TEMPLATES/reviewer-preamble.md" > "$RUN/prompt.md"
   { echo; echo "Review the change $base_sha..$head_sha."; [ -f "$focus" ] && { echo; echo "---- FOCUS ----"; cat "$focus"; }; } >> "$RUN/prompt.md"
