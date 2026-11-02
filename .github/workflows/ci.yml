@@ -143,6 +143,9 @@ jobs:
         # against a real database is G-41 in the integration job.
         run: bash scripts/qa/guards.sh backup-encryption
 
+      - name: The weekly off-site backup stores only encrypted archives and keeps 8 weeks
+        run: bash scripts/qa/guards.sh backup-offsite
+
   # ------------------------------------------------------------------ backend
   api:
     name: API · typecheck + unit
