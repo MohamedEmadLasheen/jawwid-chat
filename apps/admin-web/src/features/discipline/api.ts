@@ -20,7 +20,15 @@ export interface Violation {
   kind: 'teacher_apology' | 'teacher_no_show' | 'late' | 'absence' | 'complaint'
   teacher: { id: string; name: string | null }
   /** Null for an absence with no lesson and an upheld complaint (PD-26). `kind` is absent on older servers. */
-  lesson: { id: string; kind?: 'trial' | 'regular'; startsAt: string | null; learnerName: string | null; note: string | null } | null
+  lesson: {
+    id: string
+    kind?: 'trial' | 'regular'
+    startsAt: string | null
+    learnerName: string | null
+    note: string | null
+    /** PD-50, staff only: why the teacher was excused (travel | illness | exams | emergency | other). */
+    excuseCategory?: string | null
+  } | null
   /** The complaint an upheld-complaint violation came from (PD-26). */
   complaint?: { id: string; body: string; from: 'management' | 'parent' | null; createdAt: string } | null
   occurredAt: string

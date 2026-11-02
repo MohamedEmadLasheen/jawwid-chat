@@ -69,6 +69,10 @@ beforeEach(() => {
     return json({ error: { code: 'unrouted', message: `no mock for ${method} ${url}` } }, 404)
   })
   vi.stubGlobal('fetch', fetchMock)
+  // PD-52: leave and discipline are on the Attendance & Complaints page, which asks what to offer.
+  on('GET', /\/teacher-records\/access$/, () =>
+    json({ basis: 'teachers', attendance: { view: true, record: true, decide: true }, grants: { view: true, record: true }, leaveBalance: true, amounts: false, opensFile: true }),
+  )
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
 })
 afterEach(() => {
