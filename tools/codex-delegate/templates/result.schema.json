@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex task report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_completed", "summary", "files_changed", "tests_executed", "outstanding_problems"],
+  "properties": {
+    "task_completed": {
+      "type": "boolean",
+      "description": "True only if every acceptance criterion in the brief is met."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Two to five sentences: what was changed and why."
+    },
+    "files_changed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repository-relative paths of every file created, modified or deleted."
+    },
+    "tests_executed": {
+      "type": "array",
+      "description": "Every test or check command actually run. Do not list commands that were not run.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "result", "details"],
+        "properties": {
+          "command": { "type": "string" },
+          "result": { "type": "string", "enum": ["passed", "failed", "not_run"] },
+          "details": { "type": "string", "description": "Counts or the first failing assertion; empty if none." }
+        }
+      }
+    },
+    "outstanding_problems": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Anything unfinished, uncertain or blocked. Empty if none."
+    }
+  }
+}

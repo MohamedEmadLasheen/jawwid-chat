@@ -63,6 +63,8 @@ async function code(p: Promise<unknown>): Promise<string> {
 const actor = (id: string): Promise<Actor> => g.conversations.requireActor(id);
 const auditRows = (action: string) =>
   g.prisma.auditLog.findMany({ where: { action }, orderBy: { id: 'asc' } });
+/** ADMIN-013: the record of a support session's end. */
+const endedRows = (impersonationId: string) => g.prisma.auditLog.findMany({ where: { action: 'impersonation.ended', impersonationId } });
 /** Moves a grant's window into the past, as time would (the guard forbids it to the application). */
 async function expire(grantId: string) {
   await g.prisma.$transaction([
@@ -139,7 +141,7 @@ describe('ADMIN-002 B: exceptional access to one family', () => {
     expect((await access.list(b)).grants.map((x) => [x.id, x.endsAt])).toEqual([[grant.id, grant.endsAt]]);
   });
 
-  it('past its end: not found again, a support session under it ends on its next request, and the sweep logs the expiry once', async () => {
+  it('past its end: not found again, a support session under it ends on its next request (impersonation.ended, ADMIN-013), and the sweep logs the expiry once', async () => {
     const grant = await access.grant(await actor(s.managerId), { familyId: s.familyId, granteeId: s.otherAdminId, purpose: 'support', hours: 2 });
     await auth.setPassword(adminBAccount, PASSWORD);
     const subject = (await g.prisma.account.findUniqueOrThrow({ where: { id: adminBAccount } })).subject;
@@ -152,6 +154,11 @@ describe('ADMIN-002 B: exceptional access to one family', () => {
     expect(await code(accounts.get(b, parentAccount))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
     expect(await auth.authenticate(support.accessToken)).toBeNull();
     expect((await g.prisma.impersonationSession.findUniqueOrThrow({ where: { id: support.session.id } })).endedAt).not.toBeNull();
+    // ADMIN-013: on the record, once, as Exit would be.
+    await auth.authenticate(support.accessToken);
+    const ended = await endedRows(support.session.id);
+    expect(ended).toHaveLength(1);
+    expect(ended[0]).toMatchObject({ actorId: s.otherAdminId, entityId: parentAccount, reason: "the family is no longer in the administrator's scope" });
 
     expect(await access.sweepExpired()).toBe(1);
     expect(await access.sweepExpired()).toBe(0);
@@ -189,5 +196,178 @@ describe('ADMIN-002 B: exceptional access to one family', () => {
         s.familyId, s.otherAdminId, s.managerId,
       ),
     ).rejects.toThrow(/family_access_grant_window/);
+  });
+
+  it('the Admin Web needs: a grantor learns who may receive a grant, anyone else only their own; an account row carries its family', async () => {
+    const manager = await access.list(await actor(s.managerId));
+    expect(manager.canGrant).toBe(true);
+    const ids = (manager.grantees ?? []).map((x) => x.id);
+    expect(ids).toEqual(expect.arrayContaining([s.ownerId, s.otherAdminId]));
+    expect(ids).not.toContain(s.managerId);
+    expect(ids).not.toContain(s.teacherId);
+    expect((await access.list(await actor(superId))).canGrant).toBe(true);
+
+    const b = await access.list(await actor(s.otherAdminId));
+    expect(b).toEqual({ grants: [], canGrant: false });
+
+    expect((await accounts.get(await actor(s.managerId), parentAccount)).familyId).toBe(s.familyId);
+  });
+});
+
+describe('ADMIN-002 review (#363): the edges', () => {
+  /** family_y: a second family (nobody's in the seed), its parent with a sign-in. */
+  async function otherFamilyAccount(): Promise<{ familyId: string; accountId: string }> {
+    const template = await g.prisma.contact.findUniqueOrThrow({ where: { id: s.parentId } });
+    const [{ id: familyId }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.family (display_name, owner_id, language) values ('family_y', $1::uuid, 'ar') returning id::text as id`,
+      s.managerId,
+    );
+    const account = await g.prisma.account.create({ data: { subject: `y-${randomUUID()}@acct.test`, kind: 'family', status: 'active', isActive: true } });
+    await g.prisma.contact.create({
+      data: {
+        familyId, name: 'parent_y', accountId: account.id, rolePreset: template.rolePreset,
+        canViewProgress: true, canManageSchedule: true, canManageBilling: true, canManageContacts: true, canCancel: true,
+      },
+    });
+    return { familyId, accountId: account.id };
+  }
+  const grantB = (hours = 24) =>
+    actor(s.managerId).then((m) => access.grant(m, { familyId: s.familyId, granteeId: s.otherAdminId, purpose: 'support', hours }));
+
+  it('a grant for family_x opens family_x only: family_y stays not found, in the list and by id', async () => {
+    const y = await otherFamilyAccount();
+    expect(y.familyId).not.toBe(s.familyId);
+    await grantB();
+    const b = await actor(s.otherAdminId);
+    const listed = (await accounts.list(b, { kind: 'family' })).accounts.map((a) => a.accountId);
+    expect(listed).toContain(parentAccount);
+    expect(listed).not.toContain(y.accountId);
+    expect(await code(accounts.get(b, y.accountId))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+  });
+
+  it('out of scope and absent read word for word the same', async () => {
+    const b = await actor(s.otherAdminId);
+    const message = async (p: Promise<unknown>) => p.then(() => 'allowed', (e: CommError) => `${e.code} ${e.message}`);
+    const outOfScope = await message(accounts.get(b, parentAccount));
+    expect(outOfScope).toBe(await message(accounts.get(b, randomUUID())));
+    expect(await message(impersonation.start({ actor: b, accountId: adminBAccount, sessionId: randomUUID() }, { accountId: parentAccount, reason: 'x' })))
+      .toBe(await message(impersonation.start({ actor: b, accountId: adminBAccount, sessionId: randomUUID() }, { accountId: randomUUID(), reason: 'x' })));
+  });
+
+  it('viewing the Accounts list under a grant is a use: one "used" row (act list) per grant per request, none for a family reached anyway', async () => {
+    const grant = await grantB();
+    await accounts.list(await actor(s.otherAdminId), { kind: 'family' });
+    const used = (await auditRows('family_access.used')).filter((r) => (r.after as { act?: string }).act === 'list');
+    expect(used).toHaveLength(1);
+    expect(used[0]).toMatchObject({ actorId: s.otherAdminId, entityId: grant.id, reason: 'support' });
+    expect(used[0]!.after).toMatchObject({ grantedBy: s.managerId, accessorId: s.otherAdminId, accountIds: [parentAccount] });
+
+    // admin_a reaches family_x on her own: her list uses no grant.
+    await accounts.list(await actor(s.ownerId), { kind: 'family' });
+    expect((await auditRows('family_access.used')).filter((r) => (r.after as { act?: string }).act === 'list')).toHaveLength(1);
+  });
+
+  it('only the Operations Manager or the super admin grants: an Operations supervisor and the grantee are refused', async () => {
+    const asks = { familyId: s.familyId, granteeId: s.otherAdminId, purpose: 'support' };
+    expect(await code(access.grant(await actor(s.ownerId), asks))).toBe(CommErrorCode.ACCOUNT_ADMIN_DENIED);
+    expect(await code(access.grant(await actor(s.otherAdminId), { ...asks, granteeId: s.ownerId }))).toBe(CommErrorCode.ACCOUNT_ADMIN_DENIED);
+  });
+
+  it('the database refuses what the API refuses: a self-grant, a non-manager grantor and a grant across organizations, on a direct insert', async () => {
+    const insert = (org: string, grantee: string, grantor: string) =>
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.family_access_grant (organization_id, family_id, grantee_id, granted_by, purpose, ends_at)
+         values (${org}, $1::uuid, $2::uuid, $3::uuid, 'x', now() + interval '1 hour')`,
+        s.familyId, grantee, grantor,
+      );
+    const home = 'chat.default_organization_id()';
+    await expect(insert(home, s.otherAdminId, s.otherAdminId)).rejects.toThrow(/Operations Manager or the super admin|family_access_grant_not_self/);
+    await expect(insert(home, s.managerId, s.managerId)).rejects.toThrow(/live Operations staff member|family_access_grant_not_self/);
+    await expect(insert(home, s.otherAdminId, s.ownerId)).rejects.toThrow(/only the Operations Manager or the super admin/);
+    const [{ id: other }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.organization (slug, display_name) values ('admin002-${randomUUID().slice(0, 8)}', 'Other') returning id::text as id`,
+    );
+    await expect(insert(`'${other}'::uuid`, s.otherAdminId, superId)).rejects.toThrow(/organization|Operations staff member/);
+    expect(await g.prisma.familyAccessGrant.count()).toBe(0);
+  });
+
+  it('a revoke is the grantor\'s (or a grantor\'s): an Operations supervisor and the grantee get not found', async () => {
+    const grant = await grantB();
+    expect(await code(access.revoke(await actor(s.ownerId), grant.id, { reason: 'x' }))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+    expect(await code(access.revoke(await actor(s.otherAdminId), grant.id, { reason: 'x' }))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+    expect((await g.prisma.familyAccessGrant.findUniqueOrThrow({ where: { id: grant.id } })).revokedAt).toBeNull();
+    // The super admin may revoke what the Operations Manager granted.
+    expect((await access.revoke(await actor(superId), grant.id, { reason: 'closing it' })).status).toBe('revoked');
+  });
+
+  it('two revokes at once: one revokes, the other is a 409 -- never a 500 -- and one revoked row is logged', async () => {
+    const grant = await grantB();
+    const m = await actor(s.managerId);
+    const outcomes = await Promise.all([
+      access.revoke(m, grant.id, { reason: 'one' }).then(() => 'ok', (e: CommError) => e.code),
+      access.revoke(await actor(superId), grant.id, { reason: 'two' }).then(() => 'ok', (e: CommError) => e.code),
+    ]);
+    expect(outcomes.sort()).toEqual([CommErrorCode.ACCOUNT_ADMIN_STATE, 'ok'].sort());
+    expect(await auditRows('family_access.revoked')).toHaveLength(1);
+  });
+
+  it('a support session opened before a revoke ends on its next request, with an impersonation.ended row (ADMIN-013)', async () => {
+    const grant = await grantB();
+    await auth.setPassword(adminBAccount, PASSWORD);
+    const subject = (await g.prisma.account.findUniqueOrThrow({ where: { id: adminBAccount } })).subject;
+    const pair = await auth.login(subject, PASSWORD);
+    const support = await impersonation.start(
+      { actor: await actor(s.otherAdminId), accountId: adminBAccount, sessionId: pair.sessionId },
+      { accountId: parentAccount, reason: 'support' },
+    );
+    expect(await auth.authenticate(support.accessToken)).not.toBeNull();
+    await access.revoke(await actor(s.managerId), grant.id, { reason: 'resolved' });
+    expect(await auth.authenticate(support.accessToken)).toBeNull();
+    expect((await g.prisma.impersonationSession.findUniqueOrThrow({ where: { id: support.session.id } })).endedAt).not.toBeNull();
+    // ADMIN-013: the end is on the record, once.
+    await auth.authenticate(support.accessToken);
+    const ended = await endedRows(support.session.id);
+    expect(ended).toHaveLength(1);
+    expect(ended[0]).toMatchObject({ actorId: s.otherAdminId, entityId: parentAccount, reason: "the family is no longer in the administrator's scope" });
+  });
+
+  it('a grant ends once: revoked, then past its end, the sweep logs no expiry', async () => {
+    const grant = await grantB();
+    await access.revoke(await actor(s.managerId), grant.id, { reason: 'resolved' });
+    await expire(grant.id);
+    expect(await access.sweepExpired()).toBe(0);
+    expect(await auditRows('family_access.expired')).toHaveLength(0);
+    // And the other order: expired and swept, a revoke is a 409.
+    const later = await grantB();
+    await expire(later.id);
+    expect(await access.sweepExpired()).toBe(1);
+    expect(await code(access.revoke(await actor(s.managerId), later.id, { reason: 'late' }))).toBe(CommErrorCode.ACCOUNT_ADMIN_STATE);
+    expect(await auditRows('family_access.revoked')).toHaveLength(1);
+  });
+
+  it('a Sales manager who is also an Operations member keeps the Sales manager\'s reach', async () => {
+    // PD-8's guards forbid this today (a member is admin or coverage; a manager is
+    // a manager; one department each), so it is built past them: the narrowing
+    // must not depend on them -- only an Operations role narrows.
+    const salesManager = randomUUID();
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.staff (id, organization_id, name, role, is_active) values ($1::uuid, chat.default_organization_id(), 'sales_m', 'manager', true)`,
+        salesManager,
+      ),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.department (organization_id, kind, display_name, manager_id) values (chat.default_organization_id(), 'sales', 'sales', $1::uuid)`,
+        salesManager,
+      ),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.department_member (staff_id, organization_id, department_id, position)
+         select $1::uuid, chat.default_organization_id(), d.id, 'supervisor' from chat.department d
+          where d.kind = 'operations' and d.organization_id = chat.default_organization_id()`,
+        salesManager,
+      ),
+    ]);
+    // family_x is admin_a's, not theirs; the Sales manager's rule reaches it all the same.
+    expect((await accounts.get(await actor(salesManager), parentAccount)).allowed.resetPassword).toBe(true);
   });
 });

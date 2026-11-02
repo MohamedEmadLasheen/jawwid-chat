@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from './prisma.service';
+import { pooledDatabaseUrl } from './database-pool';
 import { CommError, CommErrorCode } from './errors';
 import type { Actor } from './types';
 
@@ -44,7 +45,8 @@ export class ActorScopedDatabase implements OnModuleDestroy {
     private readonly owner: PrismaService,
     url: string | null | undefined = process.env.DATABASE_APP_URL,
   ) {
-    this.client = url ? new PrismaClient({ datasourceUrl: url }) : null;
+    // A second pool in this process: sized by the same budget (database-pool.ts).
+    this.client = url ? new PrismaClient({ datasourceUrl: pooledDatabaseUrl(url) }) : null;
   }
 
   get enabled(): boolean {
