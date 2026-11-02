@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// PD-55: rewards for a child during their lesson
@@ -12,17 +13,17 @@ import '../../../l10n/app_localizations.dart';
 
 /// A sticker: its wire key, its icon and its colour.
 enum Sticker {
-  star('star', Icons.star_rounded, Color(0xFFF9A825)),
-  medal('medal', Icons.military_tech_rounded, Color(0xFFEF6C00)),
-  trophy('trophy', Icons.emoji_events_rounded, Color(0xFFF9A825)),
-  rocket('rocket', Icons.rocket_launch_rounded, Color(0xFF1565C0)),
-  sun('sun', Icons.wb_sunny_rounded, Color(0xFFF9A825)),
-  rainbow('rainbow', Icons.looks_rounded, Color(0xFF6A1B9A)),
-  crown('crown', Icons.workspace_premium_rounded, Color(0xFFEF6C00)),
-  balloon('balloon', Icons.celebration_rounded, Color(0xFFC62828)),
-  heart('heart', Icons.favorite_rounded, Color(0xFFC62828)),
-  thumbsUp('thumbs_up', Icons.thumb_up_rounded, Color(0xFF2E7D32)),
-  check('check', Icons.check_circle_rounded, Color(0xFF2E7D32));
+  star('star', Icons.star_rounded, RewardPalette.gold),
+  medal('medal', Icons.military_tech_rounded, RewardPalette.orange),
+  trophy('trophy', Icons.emoji_events_rounded, RewardPalette.gold),
+  rocket('rocket', Icons.rocket_launch_rounded, RewardPalette.blue),
+  sun('sun', Icons.wb_sunny_rounded, RewardPalette.gold),
+  rainbow('rainbow', Icons.looks_rounded, RewardPalette.purple),
+  crown('crown', Icons.workspace_premium_rounded, RewardPalette.orange),
+  balloon('balloon', Icons.celebration_rounded, RewardPalette.red),
+  heart('heart', Icons.favorite_rounded, RewardPalette.red),
+  thumbsUp('thumbs_up', Icons.thumb_up_rounded, RewardPalette.green),
+  check('check', Icons.check_circle_rounded, RewardPalette.green);
 
   const Sticker(this.wire, this.icon, this.color);
   final String wire;

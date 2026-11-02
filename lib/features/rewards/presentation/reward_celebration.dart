@@ -141,14 +141,7 @@ class _ConfettiPainter extends CustomPainter {
   final double t;
   final int seed;
 
-  static const _colours = [
-    Color(0xFFF9A825),
-    Color(0xFFC62828),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFEF6C00),
-  ];
+  static const _colours = RewardPalette.confetti;
 
   @override
   void paint(Canvas canvas, Size size) {

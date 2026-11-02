@@ -757,14 +757,15 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
       toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
+      IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
+      if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      // PD-55: after the inserts, so nothing PD-39 placed moves; the floating dock (PR-6) regroups.
       IconButton(
         key: const ValueKey('board-rewards'),
         tooltip: l10n.rewardTrayTitle,
         onPressed: onRewards,
         icon: const Icon(Icons.emoji_events_outlined),
       ),
-      IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
-      if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
