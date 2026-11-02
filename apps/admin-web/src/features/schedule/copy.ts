@@ -63,7 +63,10 @@ export const S = {
 
   // Stats
   statsLabel: { en: 'Figures for this view', ar: 'أرقام هذا العرض' },
-  teachingHours: { en: 'Teaching hours', ar: 'ساعات التدريس' },
+  // CHATSCHED-014, decision A (department head, 2026-11-02): this is PD-38's *booked*
+  // time -- any lesson reserved for a student, whatever its outcome -- so it is named so.
+  // What was actually held is the hint below.
+  teachingHours: { en: 'Booked hours', ar: 'الساعات المحجوزة' },
   heldSoFar: { en: '{h} held', ar: '{h} منعقدة' },
   students: { en: 'Students', ar: 'الطلاب' },
   studentsHint: { en: '+{trial} trial · {paused} paused', ar: '+{trial} تجريبي · {paused} متوقف' },
@@ -75,8 +78,8 @@ export const S = {
   pausedHours: { en: 'Paused', ar: 'متوقف' },
   freeHours: { en: 'Free (hourly)', ar: 'متاح (بالساعة)' },
   capacityNote: {
-    en: 'Shift, empty and leave count every lesson of the teachers shown; teaching hours and students count only the matching lessons.',
-    ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ ساعات التدريس والطلاب تحتسب الحصص المطابقة فقط.',
+    en: 'Shift, empty and leave count every lesson of the teachers shown; booked hours and students count only the matching lessons.',
+    ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ الساعات المحجوزة والطلاب تحتسب الحصص المطابقة فقط.',
   },
   byTeacher: { en: 'By teacher', ar: 'حسب المعلم' },
   colShift: { en: 'Shift', ar: 'الشيفت' },
