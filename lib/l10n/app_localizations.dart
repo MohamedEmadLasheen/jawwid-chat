@@ -8605,7 +8605,7 @@ abstract class L10n {
   /// **'Your teacher is celebrating you!'**
   String get rewardCelebrationLine;
 
-  /// PD-55: Settings switch for the celebration chime.
+  /// PD-55: Settings switch for the reward sounds (chime, applause, fanfare).
   ///
   /// In en, this message translates to:
   /// **'Reward sounds'**
@@ -8614,7 +8614,7 @@ abstract class L10n {
   /// No description provided for @rewardSoundSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'A short chime when a teacher celebrates your child.'**
+  /// **'A short sound when a teacher rewards your child: a chime, applause or a fanfare.'**
   String get rewardSoundSubtitle;
 
   /// PD-55: the family's line for a star, sticker or praise.

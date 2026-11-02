@@ -5073,7 +5073,8 @@ class L10nAr extends L10n {
   String get rewardSoundTitle => 'صوت المكافآت';
 
   @override
-  String get rewardSoundSubtitle => 'نغمة قصيرة عندما يحتفل المعلّم بطفلك.';
+  String get rewardSoundSubtitle =>
+      'صوت قصير عندما يكافئ المعلّم طفلك: نغمة أو تصفيق أو احتفال.';
 
   @override
   String rewardStarLine(int count) {
