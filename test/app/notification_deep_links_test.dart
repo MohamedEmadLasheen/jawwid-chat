@@ -7,6 +7,8 @@
 //
 // The real app router, signed in as a parent, from Chats -> the bell -> each
 // kind of notification button.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -129,7 +131,7 @@ void main() {
   Future<void> openFrom(WidgetTester tester, String id) async {
     router().go(Routes.chats);
     await settle(tester);
-    router().push(Routes.notifications);
+    unawaited(router().push(Routes.notifications));
     await settle(tester);
     expect(location(), Routes.notifications);
     await tester.tap(find.byKey(ValueKey('notification-action-$id')));
