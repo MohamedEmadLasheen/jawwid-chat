@@ -216,7 +216,9 @@ export const opsApi = {
     api.post<{ id: string; status: string }>(`/schedule-change-requests/${id(requestId)}/decide`, body),
 
   // Scheduling
-  schedule: (body: { learnerId: string; startsAt: string; endsAt: string }) => api.post<LessonDto>('/lessons', body),
+  /** CHATSCHED-007: a retry with the same key answers the lesson the first request created. */
+  schedule: (body: { learnerId: string; startsAt: string; endsAt: string }, idempotencyKey?: string) =>
+    api.post<LessonDto>('/lessons', body, idempotencyKey),
   availability: (teacherId: string) => api.get<Availability>(`/teachers/${id(teacherId)}/availability`),
   setAvailability: (teacherId: string, body: { timezone: string; windows: Availability['windows'] }) =>
     api.post<Availability>(`/teachers/${id(teacherId)}/availability`, body),
