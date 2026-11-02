@@ -53,13 +53,13 @@ class TeacherFeedbackEntry extends ConsumerWidget {
           children: [
             OutlinedButton.icon(
               key: ValueKey('feedback-praise-$learnerId'),
-              onPressed: () => _shortcut(context, ref, FeedbackCategory.praise),
+              onPressed: () => _shortcut(context, FeedbackCategory.praise),
               icon: const Icon(Icons.favorite_outline),
               label: Text(l10n.feedbackShortcutPraise),
             ),
             OutlinedButton.icon(
               key: ValueKey('feedback-problem-$learnerId'),
-              onPressed: () => _shortcut(context, ref, FeedbackCategory.complaint),
+              onPressed: () => _shortcut(context, FeedbackCategory.complaint),
               icon: const Icon(Icons.report_outlined),
               label: Text(l10n.feedbackShortcutProblem),
             ),
@@ -69,16 +69,19 @@ class TeacherFeedbackEntry extends ConsumerWidget {
     );
   }
 
-  Future<void> _shortcut(BuildContext context, WidgetRef ref, FeedbackCategory category) async {
+  Future<void> _shortcut(BuildContext context, FeedbackCategory category) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = L10n.of(context);
+    // Read before the await: the profile can rebuild while the form is open and unmount this
+    // card, and a ConsumerWidget's ref throws once it is gone. The container outlives it.
+    final container = ProviderScope.containerOf(context, listen: false);
     final sent = await Navigator.of(context).push<FeedbackItem>(
       MaterialPageRoute(
         builder: (_) => TeacherFeedbackFormScreen(learnerId: learnerId, childName: childName, initialCategory: category),
       ),
     );
     if (sent == null) return;
-    ref.invalidate(myFeedbackProvider);
+    container.invalidate(myFeedbackProvider);
     messenger.showSnackBar(SnackBar(content: Text(l10n.feedbackSent)));
   }
 }
