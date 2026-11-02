@@ -11,6 +11,7 @@ import { currentImpersonationId } from '../platform/request-context';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { TeacherFileService, mapTimelineRefusal } from './teacher-file.service';
+import { feedbackKeyAllows } from '../platform/teacher-records-policy';
 
 export const FEEDBACK_CATEGORIES = ['praise', 'suggestion', 'complaint'] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
@@ -181,9 +182,16 @@ export class ParentFeedbackService {
     if (query.category !== undefined && !(FEEDBACK_CATEGORIES as readonly string[]).includes(query.category)) {
       throw invalid('category: must be praise, suggestion or complaint');
     }
+    // PD-52 (review of #369): praise is page B's, a complaint or suggestion page A's.
+    const keys = await this.files.keysOf(actor);
+    const readable = FEEDBACK_CATEGORIES.filter((c) => feedbackKeyAllows(c, 'read', keys));
+    if (query.category !== undefined ? !readable.includes(query.category as FeedbackCategory) : readable.length === 0) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this feedback is on a page you do not hold');
+    }
     const page = await this.files.teacherScope.pageRowsOf(actor);
     const { rows } = await this.listed(actor, page, query);
-    return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(rows) };
+    const shown = rows.filter((r) => readable.includes(r.category as FeedbackCategory));
+    return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(shown) };
   }
 
   /**
@@ -213,6 +221,28 @@ export class ParentFeedbackService {
   }
 
   /**
+   * PD-52: the parents' praise, read in place for the Grants & Testimonials
+   * page -- never copied into a testimonial. Scoped as `list` is (the caller's
+   * teachers; of an Operations-only teacher, their own learners), shaped as
+   * the Parent feedback list shows it.
+   */
+  async praise(actor: Actor, page: PageScope, query: { teacherId?: string; from?: Date; to?: Date }) {
+    const scope = page.teachers;
+    if (query.teacherId && !scopeCovers(scope, query.teacherId)) return [];
+    const found = await this.prisma.parentFeedback.findMany({
+      where: {
+        organizationId: actor.organizationId as string,
+        category: 'praise',
+        ...(query.teacherId ? { teacherId: query.teacherId } : scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
+        ...(query.from || query.to ? { createdAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? { lt: query.to } : {}) } } : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: LIST_LIMIT,
+    });
+    return this.forStaff(found.filter((f) => pageRowVisible(page, f.teacherId, { learnerId: f.learnerId })));
+  }
+
+  /**
    * What `list` shows: PD-35, the feedback about the teachers in the caller's
    * scope; of an Operations-only teacher, about the caller's own learners (P2-4).
    */
@@ -238,6 +268,10 @@ export class ParentFeedbackService {
   async take(actorId: string, id: string) {
     const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
+    // PD-52 (review of #369): praise needs teacher_grants.record, anything else teacher_attendance.decide.
+    if (!feedbackKeyAllows(row.category, 'write', await this.files.keysOf(actor))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this feedback is on a page you do not hold');
+    }
     await this.write(async (tx) => {
       if (row.category === 'complaint') {
         await tx.teacherSupervisionEntry.updateMany({
@@ -266,6 +300,10 @@ export class ParentFeedbackService {
   async reply(actorId: string, id: string, body: Record<string, unknown>) {
     const { actor } = await this.files.pageGate(actorId, (a) => a.canWriteSupervision);
     const row = await this.requireFeedback(actor, id);
+    // PD-52 (review of #369): praise needs teacher_grants.record, anything else teacher_attendance.decide.
+    if (!feedbackKeyAllows(row.category, 'write', await this.files.keysOf(actor))) {
+      throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'this feedback is on a page you do not hold');
+    }
     if (typeof body.response !== 'string' || body.response.trim().length === 0) throw invalid('response: is required');
     const response = body.response.trim();
     if (response.length > BODY_MAX) throw invalid(`response: must be at most ${BODY_MAX} characters`);

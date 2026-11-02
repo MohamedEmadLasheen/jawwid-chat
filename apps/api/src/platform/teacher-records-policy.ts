@@ -76,3 +76,28 @@ export function decideTeacherRecordsAccess(input: TeacherRecordsInput): TeacherR
     opensFile: file.canView && holds('teacher_files.view'),
   };
 }
+
+/**
+ * The key a write on the pages needs, by what it writes (review of #369). The
+ * route admits any of the page's keys; the service then holds each write to
+ * its own, the old teacher_supervision.record still counting for one release:
+ *
+ *   complaint, follow-up, and the Teacher File's own entries   teacher_attendance.record
+ *   a complaint's resolution                                   teacher_attendance.decide
+ */
+export function entryKeyAllows(kind: string, keys: ReadonlySet<string>): boolean {
+  if (keys.has('teacher_supervision.record')) return true;
+  return kind === 'complaint_resolution' ? keys.has('teacher_attendance.decide') : keys.has('teacher_attendance.record');
+}
+
+/**
+ * Parent feedback (PD-32) on the two pages: praise is page B's, a complaint
+ * or suggestion page A's (plan §5.2, §5.3). Taking or replying to praise needs
+ * teacher_grants.record; to anything else teacher_attendance.decide. Reading
+ * needs the view key of the page the category is on.
+ */
+export function feedbackKeyAllows(category: string, act: 'read' | 'write', keys: ReadonlySet<string>): boolean {
+  if (keys.has(act === 'read' ? 'teacher_supervision.view' : 'teacher_supervision.record')) return true;
+  if (category === 'praise') return keys.has(act === 'read' ? 'teacher_grants.view' : 'teacher_grants.record');
+  return keys.has(act === 'read' ? 'teacher_attendance.view' : 'teacher_attendance.decide');
+}

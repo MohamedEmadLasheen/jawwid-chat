@@ -1696,6 +1696,12 @@ model TeacherSupervisionEntry {
   handledBy        String?   @map("handled_by") @db.Uuid
   /// PD-32: the parent feedback an app complaint was filed as.
   parentFeedbackId String?   @unique @map("parent_feedback_id") @db.Uuid
+  /// PD-52: how a staff-recorded testimonial reached the academy (testimonials only).
+  testimonialSource String?  @map("testimonial_source")
+  /// PD-52: the student, family or trial family a complaint, testimonial or grant is about.
+  learnerId        String?   @map("learner_id") @db.Uuid
+  familyId         String?   @map("family_id") @db.Uuid
+  trialProspectId  String?   @map("trial_prospect_id") @db.Uuid
 
   @@map("teacher_supervision_entry")
   @@schema("chat")
