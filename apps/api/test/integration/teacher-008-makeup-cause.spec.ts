@@ -154,7 +154,15 @@ describe('TEACHER-008: cancelled because of the teacher, a make-up is owed', () 
     const l = await lessonIn(30 * HOUR);
     // Offboarding needs the teacher's students moved first; the lesson booked with them stays theirs.
     await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${s.newTeacherId}'::uuid where teacher_id = '${s.teacherId}'::uuid`);
-    await onboarding.offboard(tmgrId, s.teacherId, { reason: 'contract ended', cancelOpenLessons: true });
+    // A signed-in manager has an account; offboarding records it.
+    const account = await g.prisma.account.create({ data: { subject: `t008-${randomUUID()}@example.test`, kind: 'staff', status: 'active', isActive: true } });
+    await g.prisma.staff.update({ where: { id: tmgrId }, data: { accountId: account.id } });
+    try {
+      await onboarding.offboard(tmgrId, s.teacherId, { reason: 'contract ended', cancelOpenLessons: true });
+    } finally {
+      await g.prisma.staff.update({ where: { id: tmgrId }, data: { accountId: null } });
+      await g.prisma.account.delete({ where: { id: account.id } }).catch(() => undefined);
+    }
 
     expect(await row(l.id)).toMatchObject({ outcome: 'admin_cancelled', cancelCause: 'teacher_deactivated' });
     expect(await owed()).toContain(l.id);

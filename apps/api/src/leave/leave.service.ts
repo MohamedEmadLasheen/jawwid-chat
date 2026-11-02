@@ -400,7 +400,7 @@ export class LeaveService {
         const reason = teacher.locale === 'en' ? 'The teacher is on approved leave' : 'المعلم في إجازة معتمدة';
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
-        else await this.lessons.cancel(actorId, lesson.id, { reason });
+        else await this.lessons.cancel(actorId, lesson.id, { reason }, 'teacher_leave');
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
         this.logger.warn(`lesson ${lesson.id} inside approved leave ${row.id} was not cancelled: ${reason}`);
