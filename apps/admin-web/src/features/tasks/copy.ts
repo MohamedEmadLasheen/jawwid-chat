@@ -154,6 +154,7 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   makeup_owed: { en: 'Make-up owed', ar: 'حصة تعويضية مستحقة' },
   family_without_account: { en: 'Parent deleted their account', ar: 'وليّ أمر حذف حسابه' },
   teacher_account_deleted: { en: 'Teacher deleted their account', ar: 'معلم حذف حسابه' },
+  group_admin_absent: { en: 'Group without an admin', ar: 'مجموعة بلا مشرف' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -195,6 +196,10 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   teacher_account_deleted: {
     en: 'A teacher deleted their account: record their departure',
     ar: 'معلم حذف حسابه: سجّل مغادرته',
+  },
+  group_admin_absent: {
+    en: 'Add an admin to the group: {group} (the teacher and parents cannot write until then)',
+    ar: 'أضف مشرفًا إلى المجموعة: {group} (لا يستطيع المعلم وأولياء الأمور الكتابة حتى ذلك الحين)',
   },
 }
 

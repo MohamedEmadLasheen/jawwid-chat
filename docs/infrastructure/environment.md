@@ -260,10 +260,13 @@ to start without it (at least 32 characters). `STORAGE_ENDPOINT`,
 `STORAGE_ENDPOINT` does **not**: it is the S3 service endpoint only, and its
 presence is part of what selects the S3 backend — see `STORAGE_PUBLIC_BASE_URL`
 below.
-`STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY`
-are the S3-compatible surface the `ObjectStorage` seam is built for: no adapter
-exists yet (`findings.md` RT-022), so no code reads them, and `docker-compose.yml`
-already runs the local service they configure. No provider has been selected.
+With `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`
+and `STORAGE_SECRET_KEY` all set, `OBJECT_STORAGE` is the S3-compatible adapter
+(`s3-object-storage.ts`; DigitalOcean Spaces in staging and production). With
+none of them set it is the local reference storage above, which only
+`APP_ENV` `local`, `test`, `ci` or unset may use: **staging and production
+refuse to start without the S3 configuration**, and a partial group refuses
+everywhere (`storage.provider.ts`, `s3-storage-selection.spec.ts`).
 
 **`STORAGE_PUBLIC_BASE_URL`** — the public base URL of this API's own `/storage`
 route, used ONLY by the local reference storage when it mints signed URLs. A

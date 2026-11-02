@@ -83,6 +83,8 @@ export const SOURCE_TYPES = [
   // PD-56: after an erasure -- a family nobody can sign in to (settled by chat.work_task_sweep_erasure),
   // and a teacher's departure (a notice, withdrawn when raised: the Teachers manager acknowledges it).
   'family_without_account', 'teacher_account_deleted',
+  // AMB-9: a group left without a live admin (chat.work_task_sweep_group_admin).
+  'group_admin_absent',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -453,11 +455,11 @@ export class TaskService {
       failed: 0, declined: 0, issues: 0, batches: 0,
     };
     // PR-2's sources, PR-2b's financial ones, PR-6a's set-up ones, then PR-6b's
-    // hand-overs: each sweep its own lock and batches.
+    // hand-overs, PR-6c's decisions and AMB-9's groups: each sweep its own lock and batches.
     const sweeps = [
       Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`,
       Prisma.sql`chat.work_task_sweep_setup(50)`, Prisma.sql`chat.work_task_sweep_handover(50)`,
-      Prisma.sql`chat.work_task_sweep_decisions(50)`, Prisma.sql`chat.work_task_sweep_erasure(50)`,
+      Prisma.sql`chat.work_task_sweep_decisions(50)`, Prisma.sql`chat.work_task_sweep_group_admin(50)`, Prisma.sql`chat.work_task_sweep_erasure(50)`,
     ];
     let skipped = 0;
     for (const sweep of sweeps) {
@@ -1130,6 +1132,10 @@ export class TaskService {
                WHEN 'makeup_owed' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
                                           FROM chat.lesson l JOIN chat.learner ln ON ln.id = l.learner_id
                                          WHERE l.id = chat.work_task_makeup_original(t.source_id))
+               -- AMB-9. Named by the group's title, opened by its id.
+               WHEN 'group_admin_absent' THEN (SELECT jsonb_build_object('groupTitle', c.title, 'conversationId', c.id, 'groupType', c.type)
+                                                 FROM chat.work_task_group_admin_spell sp JOIN chat.conversation c ON c.id = sp.conversation_id
+                                                WHERE sp.id = t.source_id)
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

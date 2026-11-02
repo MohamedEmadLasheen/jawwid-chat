@@ -127,3 +127,17 @@ describe('PD-56: an erased account leaves work for staff', () => {
     }
   })
 })
+
+describe('AMB-9: a group left without a live admin', () => {
+  it('names the group, says what waits on it, and opens the group in Chat', () => {
+    const t = task('group_admin_absent', 'spell1', { groupTitle: 'learner_l · Jawwid', conversationId: 'c 1', groupType: 'student_group' })
+    expect(titleOf(t, en, fmt)).toBe('Add an admin to the group: learner_l · Jawwid (the teacher and parents cannot write until then)')
+    expect(sourceLink(t)).toBe('/chat/c%201')
+    expect(sourceLink(task('group_admin_absent', 'spell1', {}))).toBeNull()
+  })
+
+  it('has its label and title in both languages, with the same placeholders', () => {
+    expect(SOURCE_LABEL.group_admin_absent.en && SOURCE_LABEL.group_admin_absent.ar).toBeTruthy()
+    expect(SOURCE_TITLE.group_admin_absent.ar.match(/\{\w+\}/g)).toEqual(SOURCE_TITLE.group_admin_absent.en.match(/\{\w+\}/g))
+  })
+})
