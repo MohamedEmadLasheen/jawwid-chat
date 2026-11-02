@@ -329,12 +329,16 @@ export class TeacherRecordsService {
     const { actor, page } = await this.ctx(actorId, (a) => a.attendance.record || a.grants.record);
     const teacher = await this.files.requireTeacherIn(actor, teacherId, page.teachers);
     const whole = scopeCovers(page.whole, teacher.id);
+    // Of an Operations-only teacher, the caller's own learners -- filtered in the
+    // query, before the cap, so none of them is ever cut off (review of #377).
+    const own = whole ? null : [...page.learnerIds];
     const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; family_id: string }>>`
       SELECT l.id::text AS id, l.name, l.family_id::text AS family_id
         FROM chat.learner l
        WHERE l.organization_id = ${teacher.organizationId}::uuid
          AND l.id IN (SELECT x.id FROM chat.learner x WHERE x.teacher_id = ${teacher.id}::uuid
                       UNION SELECT le.learner_id FROM chat.lesson le WHERE le.teacher_id = ${teacher.id}::uuid AND le.learner_id IS NOT NULL)
+         AND (${own === null}::boolean OR l.id = ANY(${own ?? []}::uuid[]))
          AND chat.teaches_or_taught(${teacher.id}::uuid, l.id)
        ORDER BY l.name, l.id
        LIMIT ${LIST_LIMIT}`;
@@ -345,11 +349,14 @@ export class TeacherRecordsService {
         JOIN chat.trial_prospect p ON p.id = le.prospect_id
        WHERE le.teacher_id = ${teacher.id}::uuid
          AND le.starts_at >= now() - chat.operations_lesson_window()
+         AND le.starts_at <= now()
+         -- Sales: the trials it reads, filtered before the cap (review of #377).
+         AND (${whole}::boolean OR p.id = ANY(${[...(page.prospectIds ?? [])]}::uuid[]))
        ORDER BY name, id
        LIMIT ${LIST_LIMIT}`;
     return {
-      students: rows.filter((r) => whole || page.learnerIds.has(r.id)).map((r) => ({ id: r.id, name: r.name, familyId: r.family_id })),
-      trials: trials.filter((t) => whole || page.prospectIds?.has(t.id)),
+      students: rows.map((r) => ({ id: r.id, name: r.name, familyId: r.family_id })),
+      trials,
     };
   }
 

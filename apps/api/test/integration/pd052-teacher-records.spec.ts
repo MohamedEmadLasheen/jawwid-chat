@@ -359,6 +359,18 @@ describe('PD-52 PR-2: testimonials, corrections and links', () => {
     expect((await records.students(tsupId, s.teacherId)).students.map((x) => x.id).sort()).toEqual([s.learnerId, learnerY].sort());
     expect((await records.students(s.otherAdminId, s.teacherId)).students).toEqual([{ id: learnerY, name: 'learner_y', familyId: expect.any(String) }]);
     expect((await records.students(s.ownerId, s.teacherId)).students.map((x) => x.id)).toEqual([s.learnerId]);
+    // Review of #377: who may not ask, and which teachers are not found.
+    expect(await code(records.students(looseId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    expect(await code(records.students(salesId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    expect(await code(records.students(s.ownerId, s.unrelatedTeacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
+    const elsewhere = randomUUID();
+    const foreignTeacher = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'Elsewhere academy')`, elsewhere, `pd52-${elsewhere.slice(0, 8)}`);
+    await g.prisma.$executeRawUnsafe(`insert into chat.teacher (id, name, is_active, organization_id) values ($1::uuid, 'teacher_x', true, $2::uuid)`, foreignTeacher, elsewhere);
+    expect(await code(records.students(tsupId, foreignTeacher))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
+    await asGrantsOnly(async () => {
+      expect(await code(records.students(tsupId, s.teacherId))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    }, ['teacher_grants.record']);
   });
 });
 
@@ -369,9 +381,10 @@ describe('PD-52 PR-2: testimonials, corrections and links', () => {
 /**
  * A Teachers supervisor who holds page B's keys and none of page A's (their
  * legacy bundle trimmed for the test, then restored): a basis, grants only.
+ * `alsoTrim` takes more keys away (e.g. grants.record: view only).
  */
-async function asGrantsOnly<T>(fn: () => Promise<T>): Promise<T> {
-  const trimmed = ['teacher_supervision.view', 'teacher_supervision.record', 'teacher_attendance.view', 'teacher_attendance.record', 'teacher_attendance.decide'];
+async function asGrantsOnly<T>(fn: () => Promise<T>, alsoTrim: string[] = []): Promise<T> {
+  const trimmed = ['teacher_supervision.view', 'teacher_supervision.record', 'teacher_attendance.view', 'teacher_attendance.record', 'teacher_attendance.decide', ...alsoTrim];
   const flip = (on: boolean) => `select set_config('chat.pd040_catalogue_change', '${on ? 'on' : 'off'}', true)`;
   await g.prisma.$transaction([
     g.prisma.$executeRawUnsafe(flip(true)),
