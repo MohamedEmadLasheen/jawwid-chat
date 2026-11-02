@@ -11,6 +11,7 @@ import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../materials/data/materials_repository.dart';
+import '../../rewards/presentation/lesson_rewards_row.dart';
 import '../domain/excuse_category.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
@@ -320,6 +321,8 @@ class _LessonCard extends ConsumerWidget {
                 ),
               ),
             ),
+          // PD-55 PR-5: the child's rewards in this lesson -- shown only when there are any.
+          if (card.kind == 'lesson_report' && lessonId != null) LessonRewardsRow(lessonId: lessonId, color: foreground),
           if (card.kind == 'lesson_late_apology' || card.kind == 'schedule_change_requested')
             _Footnote(text: l10n.cardUnderReview, color: muted),
           if (movedBy != null) _Footnote(text: movedBy, color: muted),

@@ -17,6 +17,9 @@ abstract interface class RewardsRepository {
 
   /// `POST /learners/:learnerId/rewards/:eventId/undo` -- within 2 minutes, by the same teacher.
   Future<int> undo({required String learnerId, required String eventId});
+
+  /// `GET /lessons/:lessonId/rewards`: one lesson's rewards for its learner (PR-5).
+  Future<LessonRewards> forLesson(String lessonId);
 }
 
 /// A build with no rewards server: no lessons on, nothing recorded.
@@ -37,6 +40,9 @@ class NoRewardsRepository implements RewardsRepository {
 
   @override
   Future<int> undo({required String learnerId, required String eventId}) => throw UnsupportedError('no rewards server in this build');
+
+  @override
+  Future<LessonRewards> forLesson(String lessonId) async => const LessonRewards(stars: 0);
 }
 
 class HttpRewardsRepository implements RewardsRepository {
@@ -79,6 +85,22 @@ class HttpRewardsRepository implements RewardsRepository {
     final response = await _client.post<Map<String, Object?>>('/learners/$learnerId/rewards/$eventId/undo');
     return (response.data?['stars'] as num?)?.toInt() ?? 0;
   }
+
+  @override
+  Future<LessonRewards> forLesson(String lessonId) async {
+    final response = await _client.get<Map<String, Object?>>('/lessons/$lessonId/rewards');
+    return LessonRewards.fromJson(response.data ?? const {});
+  }
 }
+
+/// PD-55 PR-5: a lesson's rewards for the report card. Rewards off (404), an
+/// error, or none: no stars -- and the card shows no row, never a zero.
+final lessonRewardsProvider = FutureProvider.autoDispose.family<LessonRewards, String>((ref, lessonId) async {
+  try {
+    return await ref.watch(rewardsRepositoryProvider).forLesson(lessonId);
+  } on Object {
+    return const LessonRewards(stars: 0);
+  }
+});
 
 final rewardsRepositoryProvider = Provider<RewardsRepository>((ref) => const NoRewardsRepository());

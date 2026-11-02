@@ -5073,6 +5073,50 @@ class L10nAr extends L10n {
   }
 
   @override
+  String get rewardBadgeBronze => 'جهد رائع';
+
+  @override
+  String get rewardBadgeSilver => 'جهد مذهل';
+
+  @override
+  String get rewardBadgeGold => 'نجم متألّق';
+
+  @override
+  String rewardToNextBadge(int count, String badge) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نجمة أخرى لـ$badge',
+      many: '$count نجمة أخرى لـ$badge',
+      few: '$count نجوم أخرى لـ$badge',
+      two: 'نجمتان أخريان لـ$badge',
+      one: 'نجمة واحدة أخرى لـ$badge',
+      zero: '$badge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rewardBadgeEarned(String badge) {
+    return 'الشارة: $badge';
+  }
+
+  @override
+  String rewardReportStars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نجمة',
+      many: '$count نجمة',
+      few: '$count نجوم',
+      two: 'نجمتان',
+      one: 'نجمة واحدة',
+      zero: 'لا نجوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get legalPrivacyPolicy => 'سياسة الخصوصية';
 
   @override

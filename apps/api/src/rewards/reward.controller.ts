@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
-import { NotForStaff } from '../platform/permissions/route-access';
+import { NotForStaff, Requires } from '../platform/permissions/route-access';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { GiveRewardInput, RewardService } from './reward.service';
 
@@ -20,6 +20,17 @@ export class RewardController {
   @Get('teacher/rewards/now')
   now(@ActorId() actorId: string) {
     return this.rewards.lessonsNow(actorId);
+  }
+
+  /**
+   * PD-55 PR-5: one lesson's rewards for its learner (the report card's row).
+   * Staff need lessons.view AND to supervise the lesson's teacher; a parent or
+   * a teacher is decided in the service. Never more than one learner.
+   */
+  @Requires('lessons.view')
+  @Get('lessons/:lessonId/rewards')
+  forLesson(@ActorId() actorId: string, @Param('lessonId') lessonId: string) {
+    return this.rewards.forLesson(actorId, lessonId);
   }
 
   @NotForStaff()
