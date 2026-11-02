@@ -615,6 +615,7 @@
   "ticketSent": "تم الإرسال",
   "ticketFailed": "تعذّر الإرسال. حاول مرة أخرى.",
   "ticketNoLongerAllowed": "لم يعد بالإمكان تحديث هذه الحصة بهذه الطريقة.",
+  "certificateAlreadySuggested": "هذه الشهادة مقترحة لهذا الطالب من قبل.",
   "cardReportTitle": "تقرير الحصة",
   "cardAbsenceTitle": "غياب عن الحصة",
   "cardApologyTitle": "اعتذار",

@@ -2197,6 +2197,12 @@ abstract class L10n {
   /// **'This lesson can no longer be updated this way.'**
   String get ticketNoLongerAllowed;
 
+  /// No description provided for @certificateAlreadySuggested.
+  ///
+  /// In en, this message translates to:
+  /// **'This certificate is already suggested for this child.'**
+  String get certificateAlreadySuggested;
+
   /// No description provided for @cardReportTitle.
   ///
   /// In en, this message translates to:

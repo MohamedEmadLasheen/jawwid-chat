@@ -1280,6 +1280,10 @@ class L10nAr extends L10n {
       'لم يعد بالإمكان تحديث هذه الحصة بهذه الطريقة.';
 
   @override
+  String get certificateAlreadySuggested =>
+      'هذه الشهادة مقترحة لهذا الطالب من قبل.';
+
+  @override
   String get cardReportTitle => 'تقرير الحصة';
 
   @override
