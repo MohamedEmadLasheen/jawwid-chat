@@ -238,7 +238,8 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
   beforeEach(async () => {
     y = await otherFamily();
     // Leave: two of teacher_c's (one of them withdrawn later is not pending), one of teacher_e's (nobody's of admin_a).
-    // One-day leaves: a request may not cross a calendar year, and a two-day one did from November on.
+    // One-day leaves: a leave never crosses a calendar year, and two-day ones did once
+    // today + n landed on 31 December (CI went red on 1 November).
     await leave.request(s.teacherId, { firstDay: plusDays(today, 30), lastDay: plusDays(today, 30), reason: 'family' });
     await leave.request(s.teacherId, { firstDay: plusDays(today, 40), lastDay: plusDays(today, 40), reason: 'family' });
     await leave.request(s.unrelatedTeacherId, { firstDay: plusDays(today, 50), lastDay: plusDays(today, 50), reason: 'family' });

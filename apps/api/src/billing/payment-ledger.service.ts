@@ -22,6 +22,8 @@ export const BANK_ACCOUNT_KEY = 'billing.bank_account';
 export const INVOICE_ISSUER_KEY = 'billing.invoice_issuer';
 
 export interface RecordPaymentInput {
+  /** ADMIN-001: the client's idempotency key, used as the payment's id (gen_random_uuid() otherwise). */
+  id?: string;
   organizationId: string;
   familyId: string | null;
   trialLessonId: string | null;
@@ -131,6 +133,7 @@ export class PaymentLedger {
 
     const payment = await tx.payment.create({
       data: {
+        ...(input.id ? { id: input.id } : {}),
         organizationId: input.organizationId,
         familyId: input.familyId,
         trialLessonId: input.familyId ? null : input.trialLessonId,
