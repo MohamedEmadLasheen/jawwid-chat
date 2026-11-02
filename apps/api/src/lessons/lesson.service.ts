@@ -1122,7 +1122,7 @@ export class LessonService {
     // instead of racing to the unique index -- a P2002 inside a transaction
     // would abort it, so it cannot be caught and turned into "the card exists".
     if (opts.idempotencyKey) {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'card:' + opts.idempotencyKey}, 0))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'card:' + opts.idempotencyKey}, 0))`;
       const existing = await tx.messageCard.findUnique({ where: { idempotencyKey: opts.idempotencyKey }, select: { messageId: true } });
       if (existing) return existing.messageId;
     }
