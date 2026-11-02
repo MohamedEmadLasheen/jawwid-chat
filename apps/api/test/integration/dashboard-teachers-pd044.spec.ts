@@ -238,9 +238,11 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
   beforeEach(async () => {
     y = await otherFamily();
     // Leave: two of teacher_c's (one of them withdrawn later is not pending), one of teacher_e's (nobody's of admin_a).
-    await leave.request(s.teacherId, { firstDay: plusDays(today, 30), lastDay: plusDays(today, 31), reason: 'family' });
-    await leave.request(s.teacherId, { firstDay: plusDays(today, 40), lastDay: plusDays(today, 41), reason: 'family' });
-    await leave.request(s.unrelatedTeacherId, { firstDay: plusDays(today, 50), lastDay: plusDays(today, 51), reason: 'family' });
+    // One-day leaves: a leave never crosses a calendar year, and two-day ones did once
+    // today + n landed on 31 December (CI went red on 1 November).
+    await leave.request(s.teacherId, { firstDay: plusDays(today, 30), lastDay: plusDays(today, 30), reason: 'family' });
+    await leave.request(s.teacherId, { firstDay: plusDays(today, 40), lastDay: plusDays(today, 40), reason: 'family' });
+    await leave.request(s.unrelatedTeacherId, { firstDay: plusDays(today, 50), lastDay: plusDays(today, 50), reason: 'family' });
     // Absences, teacher-level: teacher_c's and teacher_e's, undecided.
     await discipline.recordAbsence(tsupId, s.teacherId, { occurredOn: today, note: 'a staff meeting' });
     await discipline.recordAbsence(tsupId, s.unrelatedTeacherId, { occurredOn: today, note: 'a staff meeting' });
@@ -314,7 +316,7 @@ describe('GET /dashboard/teachers -- leave, absences, lateness, feedback, certif
     g.config.invalidate();
     const small = await counted(() => all(superId));
     for (let i = 0; i < 4; i += 1) {
-      await leave.request(s.teacherId, { firstDay: plusDays(today, 60 + i * 3), lastDay: plusDays(today, 61 + i * 3), reason: 'family' });
+      await leave.request(s.teacherId, { firstDay: plusDays(today, 60 + i * 3), lastDay: plusDays(today, 60 + i * 3), reason: 'family' });
       await discipline.recordAbsence(tsupId, s.teacherId, { occurredOn: plusDays(today, -(i + 1)), note: `meeting ${i}` });
       await discipline.recordLateness(tsupId, await heldLesson(s.learnerId), { minutes: 10 + i });
     }
