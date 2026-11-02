@@ -20,6 +20,8 @@ describe('owesMakeup', () => {
     expect(owesMakeup('lesson_teacher_apology', {})).toBe(true);
     expect(owesMakeup('lesson_cancelled', { outcome: 'teacher_no_show' })).toBe(true);
     expect(owesMakeup('lesson_cancelled', { outcome: 'admin_cancelled' })).toBe(false);
+    // TEACHER-008: cancelled because of the teacher -- the card says a make-up is owed.
+    expect(owesMakeup('lesson_cancelled', { outcome: 'admin_cancelled', makeupOwed: true })).toBe(true);
     expect(owesMakeup('lesson_ruling', { decision: 'excused' })).toBe(true);
     expect(owesMakeup('lesson_ruling', { decision: 'teacher_credited' })).toBe(false);
     expect(owesMakeup('lesson_report', {})).toBe(false);

@@ -436,7 +436,8 @@ export class LessonService {
        WHERE l.organization_id = ${organizationId}::uuid
          -- An index-friendly first cut; the rule itself is chat.lesson_owes_makeup,
          -- the one PD-47's makeup_owed tasks read too (never re-implemented).
-         AND l.outcome = ANY(${causes}::text[])
+         AND (l.outcome = ANY(${causes}::text[])
+              OR ('teacher_cancelled' = ANY(${causes}::text[]) AND l.outcome = 'admin_cancelled' AND l.cancel_cause IS NOT NULL))
          AND chat.lesson_owes_makeup(l.id, ${causes}::text[])
          AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
          AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
@@ -819,11 +820,21 @@ export class LessonService {
   }
 
   /** Jawwid cancels a lesson. The reason is mandatory and the family is told. */
-  async cancel(actorId: string, lessonId: string, body: Record<string, unknown>) {
+  /**
+   * The academy cancels. `cause` (TEACHER-008) is passed only by leave,
+   * suspension and offboarding, never read from the body: such a lesson owes
+   * the family a make-up, and the card says so. A manual cancellation has none
+   * and owes nothing.
+   */
+  async cancel(actorId: string, lessonId: string, body: Record<string, unknown>, cause: TeacherCancelCause | null = null) {
     const reason = textField(body, 'reason', MAX_TEXT, true) as string;
     return this.close(actorId, lessonId, 'cancel', LessonOutcome.ADMIN_CANCELLED, reason, async (tx, lesson, _actor, lang) => {
-      await this.postCard(tx, lesson, null, CardKind.LESSON_CANCELLED, { ...this.cardBase(lesson), outcome: LessonOutcome.ADMIN_CANCELLED, reason }, lang);
-    });
+      await this.postCard(
+        tx, lesson, null, CardKind.LESSON_CANCELLED,
+        { ...this.cardBase(lesson), outcome: LessonOutcome.ADMIN_CANCELLED, reason, ...(cause ? { makeupOwed: true } : {}) },
+        lang,
+      );
+    }, null, null, cause);
   }
 
   /** The teacher did not come. Recorded by the Teachers department; a make-up is owed. */
@@ -970,6 +981,8 @@ export class LessonService {
     auditReason: string | null = null,
     /** PD-50: an excuse's reason category, written with the outcome. */
     excuseCategory: ExcuseCategory | null = null,
+    /** TEACHER-008: written in the SAME update as the outcome -- the make-up task trigger reads the row then. */
+    cancelCause: TeacherCancelCause | null = null,
   ) {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
@@ -999,6 +1012,7 @@ export class LessonService {
             outcomeBy: actor.actorId,
             outcomeAt: now,
             ...(excuseCategory ? { excuseCategory } : {}),
+            ...(cancelCause ? { cancelCause } : {}),
           },
         });
         await then(tx, lesson, actor, lang);
@@ -1453,10 +1467,18 @@ export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { r
   return acts;
 }
 
-/** The outcomes that owe a make-up (PD-15): the teacher's misses and the student's apologies. */
-export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'student_apology'] as const;
-/** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2). */
-export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show'] as const;
+/**
+ * What owes a make-up (PD-15): the teacher's misses and the student's
+ * apologies -- and (TEACHER-008) 'teacher_cancelled', a token rather than an
+ * outcome: an academy cancellation whose cancel_cause names the teacher
+ * (chat.lesson_owes_makeup reads it).
+ */
+export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'teacher_cancelled', 'student_apology'] as const;
+/** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2; TEACHER-008). */
+export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'teacher_cancelled'] as const;
+
+/** TEACHER-008: why the academy cancelled a lesson, when the teacher is the reason. Never from a request body. */
+export type TeacherCancelCause = 'teacher_leave' | 'teacher_suspended' | 'teacher_deactivated';
 
 /** PD-30: suspended by the system for payment (SubscriptionEffects' hold). */
 export function isPaymentHold(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {

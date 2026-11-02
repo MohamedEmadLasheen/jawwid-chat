@@ -113,6 +113,17 @@ describe('leave requests', () => {
     expect(bodyOf(calls('POST', /\/approve$/)[0])).toEqual({ days: ['2027-03-10', '2027-03-12'] })
   })
 
+  it('TEACHER-005: beyond the balance, the row and the dialog warn how many days will be unpaid; the balance stops at 0', async () => {
+    on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [leave({ balance: 2, unpaidDays: 1 })] }))
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/leave' })
+    const row = (await screen.findByText('Family wedding')).closest('tr')!
+    expect(within(row).getByText(/1 days will be unpaid/)).toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/2 day\(s\) will be deducted; balance after: 0/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/1 days will be unpaid/)).toBeInTheDocument()
+  })
+
   it('lessons inside the leave must be confirmed before anything is sent', async () => {
     on('GET', /\/teacher-leave-requests\?state=requested$/, () =>
       json({ requests: [leave({ collidingLessons: [{ id: 'les-1', startsAt: '2027-03-11T08:00:00Z', learnerName: 'Child Alpha' }] })] }),

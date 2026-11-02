@@ -4719,6 +4719,24 @@ class L10nEn extends L10n {
   String get boardZoomOut => 'Zoom out';
 
   @override
+  String get boardFullScreen => 'Full screen';
+
+  @override
+  String get boardExitFullScreen => 'Exit full screen';
+
+  @override
+  String get boardShowTools => 'Show tools';
+
+  @override
+  String get boardHideTools => 'Hide tools';
+
+  @override
+  String get boardPreviousPage => 'Previous page';
+
+  @override
+  String get boardNextPage => 'Next page';
+
+  @override
   String get boardZoomFit => 'Fit page';
 
   @override
@@ -4964,7 +4982,7 @@ class L10nEn extends L10n {
 
   @override
   String get rewardSoundSubtitle =>
-      'A short chime when a teacher celebrates your child.';
+      'A short sound when a teacher rewards your child: a chime, applause or a fanfare.';
 
   @override
   String rewardStarLine(int count) {
@@ -5012,4 +5030,10 @@ class L10nEn extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get legalPrivacyPolicy => 'Privacy policy';
+
+  @override
+  String get legalTerms => 'Terms of use';
 }

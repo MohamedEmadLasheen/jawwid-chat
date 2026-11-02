@@ -356,7 +356,7 @@ export class TeacherOnboardingService {
       try {
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON });
-        else await this.lessons.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON });
+        else await this.lessons.cancel(actor.actorId, lesson.id, { reason: LESSON_CANCEL_REASON }, 'teacher_deactivated');
         cancelledLessons.push(lesson.id);
       } catch (e) {
         const why = errorText(e);

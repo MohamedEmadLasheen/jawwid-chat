@@ -26,9 +26,10 @@ import 'package:jawwid_chat/shared/models/user_role.dart';
 import '../calls/w7_call_fakes.dart';
 
 class _Chime implements RewardChime {
-  int plays = 0;
+  final cues = <RewardCue>[];
+  int get plays => cues.length;
   @override
-  Future<void> play() async => plays++;
+  Future<void> play(RewardCue cue) async => cues.add(cue);
 }
 
 /// The app lock, held where a test puts it.
@@ -124,6 +125,29 @@ void main() {
       }
     });
 
+    test('PD-55 (3): each reward has its sound -- a bell for a star or sticker, applause for praise, a fanfare to celebrate', () {
+      RewardCue cue(String kind, {String? stickerKey}) => RewardCue.of(RewardGiven.fromPayload({..._payload(kind: kind, stickerKey: stickerKey), if (kind == 'praise') 'praiseKey': 'excellent'})!);
+      expect(cue('star'), RewardCue.encouragement);
+      expect(cue('sticker', stickerKey: 'rocket'), RewardCue.encouragement);
+      expect(cue('praise'), RewardCue.applause);
+      expect(cue('celebration'), RewardCue.celebration);
+    });
+
+    test('PD-55 (3): the sounds are ours, CC0, bundled, and each one is short', () {
+      final licence = File('assets/sounds/LICENSE.md').readAsStringSync();
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(licence, contains('CC0 1.0'));
+      expect(licence, contains('scripts/assets/make_reward_sounds.py'));
+      for (final c in RewardCue.values) {
+        final file = File(c.asset);
+        expect(pubspec, contains('- ${c.asset}'), reason: '${c.asset} is bundled');
+        expect(licence, contains(c.asset.split('/').last), reason: '${c.asset} is in the licence record');
+        // 22.05 kHz, 16-bit mono: under two seconds is under 88,244 bytes with its header.
+        expect(file.lengthSync(), lessThan(88244), reason: '${c.asset} is short');
+      }
+      expect(File('assets/sounds/reward_chime.wav').existsSync(), isFalse, reason: 'the old chime is gone');
+    });
+
     test('praise is general praise only -- and in the words the teacher chose', () {
       final ar = lookupL10n(const Locale('ar')), en = lookupL10n(const Locale('en'));
       expect([for (final p in Praise.values) p.words(ar, en)], ['ممتاز', 'أحسنت', 'رائع', 'بطل', 'Excellent', 'Well done', 'Great', 'Champion']);
@@ -178,7 +202,7 @@ void main() {
 
       await tester.pump(const Duration(seconds: 3));
       expect(find.byKey(const ValueKey('reward-celebration')), findsNothing);
-      expect(chime.plays, 1, reason: 'a family\'s phone chimes by default');
+      expect(chime.cues, [RewardCue.encouragement], reason: 'a family\'s phone plays by default; a star is the bell');
       await socket.close();
     });
 
@@ -221,6 +245,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text(en.rewardCelebrationLine), findsOneWidget);
       await tester.pump(const Duration(seconds: 3));
+      expect(chime.cues, [RewardCue.celebration], reason: 'the malformed frame and the other event played nothing');
       await socket.close();
     });
 

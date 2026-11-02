@@ -11,7 +11,7 @@ import '../domain/rewards.dart';
 
 /// PD-55: the celebration a child sees on the family's phone when their teacher
 /// rewards them -- a 2.5 s burst of stars and confetti over WHATEVER is on screen
-/// (a call, a chat, Settings), with one line saying what it was, and the chime
+/// (a call, a chat, Settings), with one line saying what it was, and its sound
 /// when this device has it on.
 ///
 /// It is mounted once, around the whole app (app.dart), so no screen -- and no
@@ -57,7 +57,7 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> w
     // The device's choice may still be loading on the very first reward: wait for it.
     final chime = ref.read(rewardChimeProvider);
     ref.read(rewardSoundProvider.future).then((on) {
-      if (on) chime.play();
+      if (on) chime.play(RewardCue.of(next.reward));
     }, onError: (Object _) {});
   }
 
