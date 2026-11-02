@@ -11,9 +11,11 @@ repeated here.
 - Claude owns final engineering quality. A Codex review is independent evidence, never an approval.
 
 ## Delegating to Codex
-Use the `codex-delegation` skill (`.claude/skills/codex-delegation/SKILL.md`). The workflow, routing
-rules, risk levels and approval gates are in `docs/engineering/ai-delegation.md`. The only entry point
-is `scripts/ai/codex-task.sh`; do not call `codex` directly for repository work.
+Use the global `ai-delegation` skill together with this repository's `codex-delegation` skill
+(`.claude/skills/codex-delegation/SKILL.md`). The workflow, routing rules, risk levels and approval gates
+are in `docs/engineering/ai-delegation.md`. The only entry point is `codex-delegate` (installed from
+`tools/codex-delegate/`; `scripts/ai/codex-task.sh` is the same engine). Do not call `codex` directly for
+repository work.
 
 ## Ask the owner only for
 Product or business decisions; Quran, religious or lesson content; destructive or production database
