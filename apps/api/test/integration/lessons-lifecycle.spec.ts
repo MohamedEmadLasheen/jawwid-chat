@@ -143,7 +143,8 @@ describe('1. transfers', () => {
     // The family is told who teaches now; the new teacher gets the handover in their supervision chat.
     // PD-31: the one-off the new teacher is busy for is not left behind in
     // silence -- the family hears a new time follows (pd031-scheduling.spec.ts).
-    expect((await cards()).map((c) => c.card?.kind)).toEqual(['learner_transferred', 'lesson_unscheduled']);
+    // PD-46 / CHATSCHED-001: the one-off was announced when it was added.
+    expect((await cards()).map((c) => c.card?.kind)).toEqual(['lesson_scheduled', 'learner_transferred', 'lesson_unscheduled']);
     expect((await cards()).at(0)?.card?.payload).not.toHaveProperty('reason');
     // PD-12 (reconciled 2026-10-19): the ONE supervision conversation per teacher.
     const supervisionConv = await g.prisma.conversation.findFirstOrThrow({

@@ -45,9 +45,14 @@ async function lesson(startMs: number, durationMs = HOUR / 2): Promise<string> {
   return dto.id;
 }
 
+/**
+ * The group's ticket cards. Not the `lesson_scheduled` card each fixture lesson
+ * posts when it is added (PD-46 / CHATSCHED-001): that announces the fixture,
+ * not the ticket under test, and pd046-lesson-writer.spec asserts it.
+ */
 async function cardsInGroup() {
   return g.prisma.message.findMany({
-    where: { conversationId: groupId, type: 'card' },
+    where: { conversationId: groupId, type: 'card', NOT: { card: { kind: 'lesson_scheduled' } } },
     include: { card: true },
     orderBy: { seq: 'asc' },
   });

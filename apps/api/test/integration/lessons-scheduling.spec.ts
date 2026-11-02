@@ -198,7 +198,8 @@ describe('3. the make-up a family books', () => {
     expect(booked.makeupFor).toBe(id);
     const made = await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.id } });
     expect(made.createdByKind).toBe('contact');
-    expect((await cards()).map((c) => c.card?.kind)).toEqual(['lesson_teacher_apology', 'lesson_makeup_booked']);
+    // PD-46 / CHATSCHED-001: the family first heard of the lesson itself, when it was added.
+    expect((await cards()).map((c) => c.card?.kind)).toEqual(['lesson_scheduled', 'lesson_teacher_apology', 'lesson_makeup_booked']);
 
     // Once replaced, nothing more is owed.
     expect(await code(scheduling.bookMakeup(s.parentId, id, { startsAt: after.slots[30] }))).toBe(CommErrorCode.LESSON_STATE);

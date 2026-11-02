@@ -61,8 +61,9 @@ async function lesson(startMs: number, learnerId = s.learnerId): Promise<string>
   return (await lessons.schedule(tsupId, { learnerId, startsAt: at(startMs), endsAt: at(startMs + HOUR / 2) })).id;
 }
 
+// Not the `lesson_scheduled` card a fixture lesson posts when added (PD-46 / CHATSCHED-001).
 async function cards(conversationId = groupId) {
-  return g.prisma.message.findMany({ where: { conversationId, type: 'card' }, include: { card: true }, orderBy: { seq: 'asc' } });
+  return g.prisma.message.findMany({ where: { conversationId, type: 'card', NOT: { card: { kind: 'lesson_scheduled' } } }, include: { card: true }, orderBy: { seq: 'asc' } });
 }
 
 async function thisMonth(): Promise<string> {

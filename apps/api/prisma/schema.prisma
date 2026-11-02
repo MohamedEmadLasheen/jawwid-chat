@@ -1548,7 +1548,7 @@ model MessageCard {
   kind           String
   lessonId       String? @map("lesson_id") @db.Uuid
   payload        Json    @default("{}")
-  /// PD-46: lesson:<id>:<revision>:<change> -- one card per lesson change (20261102180000).
+  /// PD-46: lesson:<id>:<revision>:<change> -- one card per lesson change (20261102240000).
   idempotencyKey String? @unique(map: "message_card_idempotency_key") @map("idempotency_key")
 
   @@map("message_card")
