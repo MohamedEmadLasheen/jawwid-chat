@@ -804,7 +804,15 @@ export class TeacherFileService {
     if (given(body.prospectId)) {
       if (out.familyId) throw invalid('prospectId', 'a record is about a family or a trial family, not both');
       // A trial family is the Teachers department's to name until Sales has its basis (PD-52 PR-5).
-      if (!whole) throw invalid('prospectId', 'is not a trial family you can record about');
+      // Until Sales has its basis (PD-52 PR-5), a trial family is named only by
+      // the Teachers department and the super admin -- the database's own rule
+      // (chat.is_lesson_manager in guard_teacher_supervision_entry_about),
+      // refused here first so the caller reads why (review of #374).
+      const [{ ok }] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId ?? ''}::uuid) AS ok`;
+      if (!whole || !ok) {
+        throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'a trial family is named only by the Teachers department and the super admin');
+      }
       const id = requireUuid('prospectId', body.prospectId);
       const prospect = await this.prisma.trialProspect.findUnique({ where: { id }, select: { id: true, organizationId: true } });
       if (!prospect || prospect.organizationId !== actor.organizationId) throw invalid('prospectId', 'is not a trial family you can record about');
