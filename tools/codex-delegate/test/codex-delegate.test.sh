@@ -46,6 +46,7 @@ check "status passed" '[ "$(res t1 status)" = passed ]'
 check "default branch prefix codex/" '[ "$(res t1 branch)" = codex/t1 ]'
 check "commit on task branch" '[ "$(git -C "$(wt t1)" log -1 --format=%s)" = "codex(t1): demo" ]'
 check "verification ran sandboxed" '[ "$(res t1 verification_sandbox)" = "workspace-write, network off" ]'
+check "a clean candidate is not reported as changed after the freeze" '[ "$(res t1 post_test_changes_discarded)" = "[]" ]'
 check "runs and worktrees are namespaced per repository" 'case "$(wt t1)" in "$SANDBOX/wt/repo-"*"/t1") true ;; *) false ;; esac'
 
 echo "2. exploit: emptying CODEOWNERS to unprotect a Code Owner path"

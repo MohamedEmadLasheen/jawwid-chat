@@ -571,8 +571,14 @@ MSG
 discard_post_test_changes() { # $1 = candidate tree
   local f
   rm -f "$ATT/post.index"
+  # Compare the WORKTREE with the frozen tree only (an index holding exactly that tree,
+  # refreshed so stat-only differences vanish): changed/deleted tracked files, plus new
+  # untracked files. Comparing against HEAD would list every candidate file.
   GIT_INDEX_FILE="$ATT/post.index" g read-tree "$1"
-  GIT_INDEX_FILE="$ATT/post.index" g status --porcelain=v1 -z --untracked-files=all | tr '\0' '\n' > "$ATT/post-test-changes.txt" || true
+  GIT_INDEX_FILE="$ATT/post.index" g update-index -q --refresh >/dev/null 2>&1 || true
+  { GIT_INDEX_FILE="$ATT/post.index" g diff-files --name-only -z | tr '\0' '\n' | sed 's/^/ M /'
+    GIT_INDEX_FILE="$ATT/post.index" g ls-files --others --exclude-standard -z | tr '\0' '\n' | sed 's/^/?? /'
+  } | sed '/^ M $/d; /^?? $/d' > "$ATT/post-test-changes.txt" || true
   if [ -s "$ATT/post-test-changes.txt" ]; then
     log "the tree changed after it was frozen (tests or leftover processes); discarding: $(cut -c4- "$ATT/post-test-changes.txt" | tr '\n' ' ')"
     GIT_INDEX_FILE="$ATT/post.index" g checkout-index -a -f
