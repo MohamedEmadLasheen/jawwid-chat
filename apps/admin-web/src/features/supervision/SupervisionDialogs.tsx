@@ -103,7 +103,12 @@ export function ApproveLeaveDialog({ request, onClose }: { request: LeaveRequest
   const [leftOpen, setLeftOpen] = useState<number | null>(null)
   const lessons = request.collidingLessons ?? []
   const missingConfirm = lessons.length > 0 && !confirmed
-  const after = request.balance === null || request.balance === undefined ? null : request.balance - days.size
+  // TEACHER-005 (owner): beyond the balance is allowed -- the ticked days fill
+  // what is left and the rest are unpaid; the balance stops at 0.
+  const known = request.balance === null || request.balance === undefined ? null : Math.max(0, request.balance)
+  const deducted = known === null ? days.size : Math.min(days.size, known)
+  const unpaid = days.size - deducted
+  const after = known === null ? null : known - deducted
 
   return (
     <Dialog
@@ -163,8 +168,13 @@ export function ApproveLeaveDialog({ request, onClose }: { request: LeaveRequest
       <p className="sv-muted" aria-live="polite">
         {request.balance === undefined
           ? tx(S.deductedOnly, { n: number(days.size) })
-          : tx(S.deducted, { n: number(days.size), b: after === null ? tx(S.noAllowance) : number(after) })}
+          : tx(S.deducted, { n: number(deducted), b: after === null ? tx(S.noAllowance) : number(after) })}
       </p>
+      {unpaid > 0 && (
+        <p className="sv-muted" role="note">
+          ⚠️ {tx(S.willBeUnpaid, { n: number(unpaid) })}
+        </p>
+      )}
       {lessons.length > 0 && (
         <div className="field">
           <span className="field__label">{tx(S.collisions)}</span>

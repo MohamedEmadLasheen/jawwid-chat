@@ -4813,6 +4813,24 @@ class L10nAr extends L10n {
   String get boardZoomOut => 'تصغير';
 
   @override
+  String get boardFullScreen => 'ملء الشاشة';
+
+  @override
+  String get boardExitFullScreen => 'الخروج من ملء الشاشة';
+
+  @override
+  String get boardShowTools => 'إظهار الأدوات';
+
+  @override
+  String get boardHideTools => 'إخفاء الأدوات';
+
+  @override
+  String get boardPreviousPage => 'الصفحة السابقة';
+
+  @override
+  String get boardNextPage => 'الصفحة التالية';
+
+  @override
   String get boardZoomFit => 'ملاءمة الصفحة';
 
   @override
@@ -5055,7 +5073,8 @@ class L10nAr extends L10n {
   String get rewardSoundTitle => 'صوت المكافآت';
 
   @override
-  String get rewardSoundSubtitle => 'نغمة قصيرة عندما يحتفل المعلّم بطفلك.';
+  String get rewardSoundSubtitle =>
+      'صوت قصير عندما يكافئ المعلّم طفلك: نغمة أو تصفيق أو احتفال.';
 
   @override
   String rewardStarLine(int count) {
@@ -5115,4 +5134,10 @@ class L10nAr extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get legalPrivacyPolicy => 'سياسة الخصوصية';
+
+  @override
+  String get legalTerms => 'شروط الاستخدام';
 }

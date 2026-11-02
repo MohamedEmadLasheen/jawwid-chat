@@ -69,19 +69,17 @@ RESET_CODE_HASH_SECRET	auth	yes	opt	req	req
 # STORAGE. Two kinds of row live here, and the difference matters when reading
 # this file against the code.
 #
-# Read by the implementation that exists today: STORAGE_SIGNING_SECRET (the API
-# refuses to start without it), STORAGE_ENDPOINT, STORAGE_SIGNED_URL_TTL_SECONDS,
-# STORAGE_LOCAL_ROOT and the ATTACHMENT_MAX_* ceilings.
-#
-# Reserved for the S3-compatible backend the seam is built for: STORAGE_REGION,
-# STORAGE_BUCKET, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY. No code reads these
-# yet -- OBJECT_STORAGE is bound to the reference SignedLocalObjectStorage and no
-# adapter exists (findings.md RT-022). They stay declared because this file
-# states the deployment contract rather than the current call graph, exactly as
-# the FCM_*/APNS_* rows do while PUSH_PROVIDER is still LoggingPushProvider, and
-# because docker-compose.yml already provisions the local S3-compatible service
-# they configure. Deleting them would take the local stack and inventory.md with
-# them. No provider has been chosen; nothing here chooses one.
+# OBJECT_STORAGE is chosen by configuration (storage.provider.ts
+# selectObjectStorage): with STORAGE_ENDPOINT, STORAGE_REGION, STORAGE_BUCKET,
+# STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY all set it is the S3-compatible
+# adapter (s3-object-storage.ts; DigitalOcean Spaces in staging and production);
+# with none set it is the local reference SignedLocalObjectStorage, which only a
+# laptop, a test run or CI (APP_ENV local / test / ci / unset) may use. Any other
+# APP_ENV -- staging, production -- with no S3 configuration REFUSES TO START,
+# and a partial S3 group refuses everywhere. STORAGE_SIGNING_SECRET signs the
+# media-route links in both modes (the API refuses to start without it);
+# STORAGE_LOCAL_ROOT and STORAGE_PUBLIC_BASE_URL configure the local reference
+# only.
 STORAGE_ENDPOINT	storage	no	req	req	req
 STORAGE_REGION	storage	no	opt	req	req
 STORAGE_BUCKET	storage	no	req	req	req

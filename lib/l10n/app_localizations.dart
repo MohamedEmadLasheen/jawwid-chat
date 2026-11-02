@@ -8125,6 +8125,42 @@ abstract class L10n {
   /// **'Zoom out'**
   String get boardZoomOut;
 
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Full screen'**
+  String get boardFullScreen;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get boardExitFullScreen;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Show tools'**
+  String get boardShowTools;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide tools'**
+  String get boardHideTools;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get boardPreviousPage;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get boardNextPage;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8569,7 +8605,7 @@ abstract class L10n {
   /// **'Your teacher is celebrating you!'**
   String get rewardCelebrationLine;
 
-  /// PD-55: Settings switch for the celebration chime.
+  /// PD-55: Settings switch for the reward sounds (chime, applause, fanfare).
   ///
   /// In en, this message translates to:
   /// **'Reward sounds'**
@@ -8578,7 +8614,7 @@ abstract class L10n {
   /// No description provided for @rewardSoundSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'A short chime when a teacher celebrates your child.'**
+  /// **'A short sound when a teacher rewards your child: a chime, applause or a fanfare.'**
   String get rewardSoundSubtitle;
 
   /// PD-55: the family's line for a star, sticker or praise.
@@ -8622,6 +8658,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 star} other{{count} stars}}'**
   String rewardReportStars(int count);
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get legalPrivacyPolicy;
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of use'**
+  String get legalTerms;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -109,7 +109,7 @@ export class AccessRolesController {
 
   @Requires('staff_accounts.view', 'access_roles.manage')
   @Get('permissions')
-  permissions() {
-    return this.accounts.permissions();
+  permissions(@CurrentActor() actor: Actor) {
+    return this.accounts.permissions(actor);
   }
 }
