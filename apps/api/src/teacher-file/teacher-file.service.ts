@@ -836,9 +836,13 @@ export class TeacherFileService {
       // (chat.is_lesson_manager, the database's rule), or -- PD-52 PR-5 -- by
       // Sales, for a trial it reads (its rows carry `prospectIds`; checked
       // below). Anyone else is refused here first so the caller reads why
-      // (review of #374).
-      const [{ ok }] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-        SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId ?? ''}::uuid) AS ok`;
+      // (review of #374). No organization: not allowed, and no query.
+      const ok =
+        !!actor.organizationId &&
+        (
+          await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS ok`
+        )[0]?.ok === true;
       if (!(whole && ok) && !page.prospectIds) {
         throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'a trial family is named only by the Teachers department, the super admin and Sales');
       }
