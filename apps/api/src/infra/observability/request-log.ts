@@ -80,6 +80,8 @@ export function requestLogMiddleware(
       const template = routeTemplate(req);
       const route = `${methodOf(req)} ${template}`;
       const actorKind = typeof req.actor?.kind === 'string' ? req.actor.kind : undefined;
+      const serverError = status >= 500 && status !== CLIENT_CLOSED;
+      const thrown = serverError ? takeRequestError(req) : undefined;
 
       logger.write(levelFor(status, template, req), 'request', 'Http', {
         request_id: requestId,
@@ -87,10 +89,13 @@ export function requestLogMiddleware(
         status,
         latency_ms: Math.round(Number(process.hrtime.bigint() - started) / 1e6),
         actor_kind: actorKind,
+        // TEACHER-027: a 5xx says what failed (P2024, P1001, a class name), so a
+        // burst of them can be told apart from the log alone. Never the message.
+        ...(serverError && thrown !== undefined ? { error_code: causeOf(thrown) } : {}),
       });
 
-      if (status >= 500 && status !== CLIENT_CLOSED) {
-        errors.captureException(takeRequestError(req) ?? new HttpServerError(status), {
+      if (serverError) {
+        errors.captureException(thrown ?? new HttpServerError(status), {
           route,
           requestId,
           actorKind,
@@ -130,6 +135,21 @@ function takeRequestError(request: object): unknown {
   const error = requestErrors.get(request);
   requestErrors.delete(request);
   return error;
+}
+
+/**
+ * A 5xx's cause as a short, closed-vocabulary label: the Prisma error code a
+ * database error carries (`code` on a request error, `errorCode` on a
+ * connection error), else the error's class name. Never its message, which can
+ * carry query values.
+ */
+export function causeOf(error: unknown): string {
+  const e = error as { code?: unknown; errorCode?: unknown; name?: unknown } | null;
+  for (const c of [e?.code, e?.errorCode]) {
+    if (typeof c === 'string' && /^P\d{4}$/.test(c)) return c;
+  }
+  if (error instanceof Error && /\b57014\b|canceling statement due to statement timeout/.test(error.message)) return '57014';
+  return typeof e?.name === 'string' && /^\w{1,64}$/.test(e.name) ? e.name : 'unknown';
 }
 
 /** Reported when a 5xx left no exception behind (a guard or middleware failed). */

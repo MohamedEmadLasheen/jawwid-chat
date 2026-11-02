@@ -13,8 +13,11 @@ import { EventEmitter } from 'node:events';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { ExecutionContext } from '@nestjs/common';
 import { JsonLogger, LogRecord } from '../../../src/infra/observability/json-logger';
+import { Prisma } from '@prisma/client';
 import {
   acceptRequestId,
+  causeOf,
+  rememberRequestError,
   RequestErrorCaptureInterceptor,
   requestLogMiddleware,
   UNMATCHED_ROUTE,
@@ -293,6 +296,44 @@ describe('5xx and the error tracker', () => {
       status: 500,
       component: 'api',
     });
+  });
+
+  it('TEACHER-027: a 5xx line names its cause -- the Prisma code, never the message', () => {
+    const h = harness();
+    const pool = new Prisma.PrismaClientKnownRequestError('Timed out fetching a new connection (secret-host:5432)', { code: 'P2024', clientVersion: '6' });
+    h.run({}, (req, res) => {
+      req.route = { path: '/api/v1/me/lessons' };
+      rememberRequestError(req, pool);
+      res.end(503);
+    });
+    expect(h.lines[0]).toMatchObject({ status: 503, level: 'error', error_code: 'P2024' });
+    expect(JSON.stringify(h.lines[0])).not.toContain('secret-host');
+    expect(h.captured[0].error).toBe(pool);
+  });
+
+  it('TEACHER-027: a 4xx line carries no cause, and a 5xx with no exception none either', () => {
+    const h = harness();
+    h.run({}, (req, res) => {
+      req.route = { path: '/api/v1/messages' };
+      rememberRequestError(req, new Error('domain'));
+      res.end(403);
+    });
+    h.run({}, (req, res) => {
+      req.route = { path: '/api/v1/me' };
+      res.end(500);
+    });
+    expect(h.lines[0]).not.toHaveProperty('error_code');
+    expect(h.lines[1]).not.toHaveProperty('error_code');
+  });
+
+  it.each([
+    ['a request error', new Prisma.PrismaClientKnownRequestError('x', { code: 'P2028', clientVersion: '6' }), 'P2028'],
+    ['a connection error', new Prisma.PrismaClientInitializationError('x', '6', 'P1001'), 'P1001'],
+    ['a statement timeout', new Error('PostgresError { code: "57014", message: "canceling statement due to statement timeout" }'), '57014'],
+    ['any other error, by class', new TypeError('value of a user'), 'TypeError'],
+    ['something that is not an error', { name: 'has spaces and more' }, 'unknown'],
+  ])('causeOf: %s', (_name, error, cause) => {
+    expect(causeOf(error)).toBe(cause);
   });
 
   it('reports a 5xx that left no exception behind as a fixed, content-free error', () => {
