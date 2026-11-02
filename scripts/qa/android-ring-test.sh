@@ -4,7 +4,7 @@
 # against a DEBUG build: DebugPushReceiver draws a push exactly as
 # JawwidMessagingService would, without Firebase.
 #
-#   1  with the app force-stopped, a call push posts a CallStyle notification
+#   1  with the app's process killed, a call push posts a CallStyle notification
 #      on the Calls channel, category call, with Answer and Decline
 #   2  tapping Answer opens MainActivity and hands the call to the call bridge
 #      (jawwid/call_native -> CallController, which then accepts it on the server)
@@ -26,7 +26,17 @@ adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
 adb shell input keyevent 82 || true            # unlock the emulator's screen
 adb install -r "$APK" >/dev/null
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
-adb shell am force-stop "$PKG"                 # the app is NOT running
+# "Killed" as a user kills it: opened once, sent home, its process killed --
+# NOT force-stopped. A force-stopped app is in Android's stopped state, where
+# neither this broadcast nor FCM itself is delivered (only a launch clears it),
+# so force-stop tests a state no ring can leave, on any phone.
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 8
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+adb shell am kill "$PKG"
+sleep 2
+adb shell pidof "$PKG" >/dev/null 2>&1 && fail "the app's process is still running after am kill"
 adb logcat -c
 
 adb shell am broadcast -n "$PKG/.DebugPushReceiver" \
