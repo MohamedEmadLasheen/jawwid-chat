@@ -384,6 +384,11 @@
   "@attachFile": {
     "description": "Attachment menu entry for a document."
   },
+  "attachVideo": "فيديو",
+  "attachRecordVideo": "تسجيل فيديو",
+  "videoRecordPermissionDenied": "يحتاج جَوِّد إلى إذن لاستخدام الكاميرا والميكروفون لتسجيل فيديو. يمكنك السماح بذلك من الإعدادات.",
+  "cancelUpload": "إلغاء الإرسال",
+  "uploadingPercent": "جارٍ الإرسال… {percent}٪",
   "attachmentPhotoLabel": "صورة",
   "@attachmentPhotoLabel": {
     "description": "Stands in for a photo where a message has no text."
@@ -1881,5 +1886,33 @@
   "materialsAgeLabel": "العمر",
   "photoLabel": "صورة",
   "photoPositionLabel": "الصورة {position} من {count}",
-  "chatDraftLabel": "مسودة:"
+  "chatDraftLabel": "مسودة:",
+  "rewardPraiseExcellent": "ممتاز",
+  "rewardPraiseWellDone": "أحسنت",
+  "rewardPraiseGreat": "رائع",
+  "rewardPraiseChampion": "بطل",
+  "rewardTrayTitle": "المكافآت",
+  "rewardTrayFor": "إلى",
+  "rewardTrayEveryone": "الجميع",
+  "rewardTrayNoLesson": "تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.",
+  "rewardTrayStar": "نجمة",
+  "rewardTrayStickers": "ملصقات",
+  "rewardTrayPraise": "ثناء",
+  "rewardTrayOwnWords": "كلماتي…",
+  "rewardTrayCelebrate": "احتفال",
+  "rewardTrayUndo": "تراجع",
+  "rewardTraySent": "أُعطيت المكافأة",
+  "rewardTrayFailed": "لم تُسجَّل المكافأة. ما زالت على السبورة.",
+  "rewardCelebrationLine": "معلّمك يحتفل بك!",
+  "rewardSoundTitle": "صوت المكافآت",
+  "rewardSoundSubtitle": "صوت قصير عندما يكافئ المعلّم طفلك: نغمة أو تصفيق أو احتفال.",
+  "rewardStarLine": "{count, plural, zero{نجمة!} one{نجمة! نجمة واحدة في هذه الحصة} two{نجمة! نجمتان في هذه الحصة} few{نجمة! {count} نجوم في هذه الحصة} many{نجمة! {count} نجمة في هذه الحصة} other{نجمة! {count} نجمة في هذه الحصة}}",
+  "rewardBadgeBronze": "جهد رائع",
+  "rewardBadgeSilver": "جهد مذهل",
+  "rewardBadgeGold": "نجم متألّق",
+  "rewardToNextBadge": "{count, plural, zero{{badge}} one{نجمة واحدة أخرى لـ{badge}} two{نجمتان أخريان لـ{badge}} few{{count} نجوم أخرى لـ{badge}} many{{count} نجمة أخرى لـ{badge}} other{{count} نجمة أخرى لـ{badge}}}",
+  "rewardBadgeEarned": "الشارة: {badge}",
+  "rewardReportStars": "{count, plural, zero{لا نجوم} one{نجمة واحدة} two{نجمتان} few{{count} نجوم} many{{count} نجمة} other{{count} نجمة}}",
+  "legalPrivacyPolicy": "سياسة الخصوصية",
+  "legalTerms": "شروط الاستخدام"
 }

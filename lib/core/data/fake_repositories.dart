@@ -10,6 +10,7 @@ import '../../shared/models/trial.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
 import 'fake_backend.dart';
+import 'http/attachment_uploader.dart' show UploadCancel;
 import 'repositories.dart';
 
 /// Repository implementations backed by [FakeBackend].
@@ -158,8 +159,13 @@ class FakeMessageRepository implements MessageRepository {
   Future<UploadedAttachment> uploadAttachment({
     required String conversationId,
     required PendingAttachment attachment,
-  }) async =>
-      backend.uploadAttachment(conversationId, attachment);
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
+  }) async {
+    final uploaded = backend.uploadAttachment(conversationId, attachment);
+    onProgress?.call(attachment.byteSize, attachment.byteSize);
+    return uploaded;
+  }
 
   @override
   Future<void> react({

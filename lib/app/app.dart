@@ -6,6 +6,7 @@ import '../design/theme.dart';
 import '../features/app_lock/presentation/app_lock_gate.dart';
 import '../features/auth/presentation/web_portal_gate.dart';
 import '../features/calls/presentation/call_presenter.dart';
+import '../features/rewards/presentation/reward_celebration.dart';
 import '../features/settings/application/theme_mode_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'router.dart';
@@ -85,9 +86,14 @@ class JawwidApp extends ConsumerWidget {
           //
           // PD-28: in a browser, an account that is not a teacher's gets the "web portal is
           // for teachers" screen in place of all of it -- calls included. A no-op on a phone.
-          child: WebPortalGate(
-            child: CallPresenter(
-              child: AppLockGate(child: child ?? const SizedBox.shrink()),
+          //
+          // PD-55: a reward's celebration plays over all of it -- a call included --
+          // and never takes a tap (`reward_celebration.dart`).
+          child: RewardCelebrationHost(
+            child: WebPortalGate(
+              child: CallPresenter(
+                child: AppLockGate(child: child ?? const SizedBox.shrink()),
+              ),
             ),
           ),
         );

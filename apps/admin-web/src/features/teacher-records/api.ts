@@ -54,6 +54,8 @@ export interface Testimonial {
   response: string | null
   /** Corrected: the reason, who and when. Shown only when asked for. */
   voided: { id: string; body: string; createdAt: string; author: Person | null } | null
+  /** Whether the caller may correct this testimonial (the recording department, the Operations Manager, the super admin). */
+  canCorrect?: boolean
   /** PD-52 (plan §11 c): when staff shared the parent's praise with the teacher (parent praise only). */
   sharedAt?: string | null
 }

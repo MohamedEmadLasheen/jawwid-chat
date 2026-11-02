@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app.dart';
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/time/time_zone_controller.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
@@ -19,6 +20,7 @@ import '../../app_lock/data/device_security_settings.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
 import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
+import '../../rewards/application/reward_feed.dart';
 import '../application/theme_mode_controller.dart';
 import 'date_time_screen.dart';
 import 'lesson_audio_about_screen.dart';
@@ -223,6 +225,16 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.notificationSettings),
           ),
+          // PD-55: the reward celebration's chime, per device. On for a family by
+          // default, off for a teacher; the phone's silent mode silences it anyway.
+          SwitchListTile(
+            key: const ValueKey('settings-reward-sound'),
+            secondary: const Icon(Icons.music_note_outlined),
+            title: Text(l10n.rewardSoundTitle),
+            subtitle: Text(l10n.rewardSoundSubtitle),
+            value: ref.watch(rewardSoundProvider).value ?? false,
+            onChanged: (on) => ref.read(rewardSoundProvider.notifier).set(on),
+          ),
           // PD-23: every device this account is signed in on.
           ListTile(
             key: const ValueKey('settings-devices'),
@@ -231,6 +243,8 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.devices),
           ),
+          // PD-56: the privacy policy and the terms of use (the owner's texts).
+          const LegalLinksTiles(),
           const Divider(),
 
           ListTile(

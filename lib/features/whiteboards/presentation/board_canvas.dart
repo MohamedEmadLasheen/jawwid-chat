@@ -822,6 +822,16 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
     ];
   }
 
+  /// PD-55: a reward stamp from the tray, in the middle of what is in view -- the
+  /// teacher then drags it where they want. One undo step; returns its id.
+  String placeStampInView({required StampKind stamp, String? text, required Color color}) {
+    final centre = BoardGeometry.clampToPage(_toPage(Offset(_viewport.width / 2, _viewport.height / 2)));
+    final size = text == null ? const Size(160, 160) : Size(math.max(220, text.length * 46.0), 110);
+    final element = StampElement(id: _newId(), stamp: stamp, rect: Rect.fromCenter(center: centre, width: size.width, height: size.height), color: color, text: text);
+    widget.onCommit([...widget.page.elements, element]);
+    return element.id;
+  }
+
   void _placeStamp(Offset at) {
     final style = widget.style;
     final text = style.stampText;

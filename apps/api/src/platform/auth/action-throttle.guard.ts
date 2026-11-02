@@ -64,6 +64,8 @@ export const ActionScope = {
   LESSON_AUDIO_READ: 'lesson_audio_read_actor',
   /** PD-39: every board write (page saves come every few seconds while a teacher draws). */
   WHITEBOARD_WRITE: 'whiteboard_write_actor',
+  /** PD-55: rewards given or withdrawn (POST /learners/:id/rewards…). */
+  REWARD_GIVE: 'reward_give_actor',
 } as const;
 
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];

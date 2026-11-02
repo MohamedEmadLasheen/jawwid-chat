@@ -23,6 +23,7 @@ import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervisi
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
 import { OffboardButton, ReactivateButton } from './Offboarding'
 import { ChangeSignInButton } from './ChangeSignIn'
+import { LessonReports } from './LessonReports'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;
@@ -116,6 +117,8 @@ function FileSections({
   onAdd: (i: EntryIntent) => void
 }) {
   const payroll = usePayroll(file)
+  // RQA-F1: one month for the monthly figures and the lesson reports they count.
+  const [month, setMonth] = useState(currentMonth)
   return (
     <>
       <SetupChecklist file={file} />
@@ -125,7 +128,9 @@ function FileSections({
       {/* PD-38: category and shift, effective-dated. */}
       <ShiftSection teacherId={file.teacher.id} />
       <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
-      <Monthly file={file} onAdd={onAdd} links={links} />
+      <Monthly file={file} onAdd={onAdd} links={links} month={month} onMonth={setMonth} />
+      {/* RQA-F1: the reports behind the on-time figure, for the same month. */}
+      <LessonReports teacherId={file.teacher.id} month={month} />
       <Complaints file={file} onAdd={onAdd} />
       {/* PD-35: evaluations and improvement plans; the teacher sees them once shared. */}
       <EvaluationsSection teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} canEditCriteria={file.access.canEditPersonal} />
@@ -384,11 +389,22 @@ function Complaints({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent
   )
 }
 
-function Monthly({ file, onAdd, links }: { file: TeacherFile; onAdd: (i: EntryIntent) => void; links?: TeacherWorkLinks }) {
+function Monthly({
+  file,
+  onAdd,
+  links,
+  month,
+  onMonth: setMonth,
+}: {
+  file: TeacherFile
+  onAdd: (i: EntryIntent) => void
+  links?: TeacherWorkLinks
+  month: string
+  onMonth: (month: string) => void
+}) {
   const tx = useCopy()
   const { number } = useI18n()
   const cal = useCalendarDate()
-  const [month, setMonth] = useState(currentMonth)
   const items = file.supervision.monthlyComments
   return (
     <Section

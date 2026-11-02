@@ -84,7 +84,7 @@ class _Uploads implements AttachmentUploader {
   Object? error;
 
   @override
-  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async {
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers, void Function(int sent, int total)? onProgress, UploadCancel? cancel}) async {
     if (error != null) throw error!;
     urls.add(uploadUrl);
   }
@@ -98,7 +98,7 @@ class _CancelAfterFirstPut implements AttachmentUploader {
   final void Function() close;
 
   @override
-  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers}) async {
+  Future<void> put(String uploadUrl, {required Uint8List bytes, required Map<String, String> headers, void Function(int sent, int total)? onProgress, UploadCancel? cancel}) async {
     await inner.put(uploadUrl, bytes: bytes, headers: headers);
     close();
   }

@@ -405,6 +405,14 @@ const Map<StampKind, IconData> kStampIcons = {
   StampKind.check: Icons.check_circle_rounded,
   StampKind.heart: Icons.favorite_rounded,
   StampKind.thumbsUp: Icons.thumb_up_rounded,
+  // PD-55: the reward stickers (the same icons as features/rewards' Sticker).
+  StampKind.medal: Icons.military_tech_rounded,
+  StampKind.trophy: Icons.emoji_events_rounded,
+  StampKind.rocket: Icons.rocket_launch_rounded,
+  StampKind.sun: Icons.wb_sunny_rounded,
+  StampKind.rainbow: Icons.looks_rounded,
+  StampKind.crown: Icons.workspace_premium_rounded,
+  StampKind.balloon: Icons.celebration_rounded,
 };
 
 void _paintStamp(Canvas canvas, StampElement s) {

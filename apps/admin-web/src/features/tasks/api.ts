@@ -37,6 +37,7 @@ export type SourceType =
   | 'feedback'
   | 'schedule_change'
   | 'makeup_owed'
+  | 'group_admin_absent'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 
 export interface Principal {

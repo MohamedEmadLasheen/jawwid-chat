@@ -57,8 +57,14 @@ export interface Rect {
   h: number
 }
 
-export type StampKind = 'star' | 'check' | 'heart' | 'thumbsUp' | 'excellentAr' | 'wellDoneAr' | 'excellentEn' | 'wellDoneEn'
-const STAMPS: readonly StampKind[] = ['star', 'check', 'heart', 'thumbsUp', 'excellentAr', 'wellDoneAr', 'excellentEn', 'wellDoneEn']
+export type StampKind =
+  | 'star' | 'check' | 'heart' | 'thumbsUp' | 'excellentAr' | 'wellDoneAr' | 'excellentEn' | 'wellDoneEn'
+  // PD-55: the reward tray's stickers, and a praise stamp carrying any words.
+  | 'medal' | 'trophy' | 'rocket' | 'sun' | 'rainbow' | 'crown' | 'balloon' | 'praise'
+const STAMPS: readonly StampKind[] = [
+  'star', 'check', 'heart', 'thumbsUp', 'excellentAr', 'wellDoneAr', 'excellentEn', 'wellDoneEn',
+  'medal', 'trophy', 'rocket', 'sun', 'rainbow', 'crown', 'balloon', 'praise',
+]
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle'
 const SHAPES: readonly ShapeKind[] = ['rect', 'ellipse', 'triangle']
 
