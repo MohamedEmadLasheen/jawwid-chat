@@ -105,7 +105,20 @@ function useBillingWrite<V>(familyId: string, fn: (v: V) => Promise<FamilyBillin
 }
 
 export function useUpdateBilling(familyId: string) {
-  return useBillingWrite(familyId, (body: BillingUpdate) => profilesApi.updateBilling(familyId, body))
+  const qc = useQueryClient()
+  const write = useBillingWrite(familyId, (body: BillingUpdate) => profilesApi.updateBilling(familyId, body))
+  // ADMIN-007: refused because someone else changed them first -- show what they are now.
+  return {
+    ...write,
+    mutate: (body: BillingUpdate, opts?: Parameters<typeof write.mutate>[1]) =>
+      write.mutate(body, {
+        ...opts,
+        onError: (...args) => {
+          void qc.invalidateQueries({ queryKey: profileKeys.billing(familyId) })
+          opts?.onError?.(...args)
+        },
+      }),
+  }
 }
 
 export function useCreateInstalments(familyId: string) {
@@ -113,8 +126,8 @@ export function useCreateInstalments(familyId: string) {
 }
 
 export function useRecordPayment(familyId: string) {
-  return useBillingWrite(familyId, (v: { id: string; paidOn: string; method: InstalmentPaymentMethod; reference?: string }) =>
-    profilesApi.recordPayment(v.id, { paidOn: v.paidOn, method: v.method, ...(v.reference ? { reference: v.reference } : {}) }),
+  return useBillingWrite(familyId, (v: { id: string; paidOn: string; method: InstalmentPaymentMethod; reference?: string; paymentId: string }) =>
+    profilesApi.recordPayment(v.id, { paidOn: v.paidOn, method: v.method, paymentId: v.paymentId, ...(v.reference ? { reference: v.reference } : {}) }),
   )
 }
 
@@ -147,7 +160,7 @@ export function useVoidPayment(familyId: string) {
 }
 
 export function useRefundPayment(familyId: string) {
-  return useBillingWrite(familyId, (v: { id: string; amountMinor: number; reason: string }) =>
-    profilesApi.refundPayment(v.id, { amountMinor: v.amountMinor, reason: v.reason }),
+  return useBillingWrite(familyId, (v: { id: string; amountMinor: number; reason: string; refundId: string }) =>
+    profilesApi.refundPayment(v.id, { amountMinor: v.amountMinor, reason: v.reason, refundId: v.refundId }),
   )
 }

@@ -552,3 +552,336 @@ describe('PD-27 over HTTP', () => {
     expect(after.json.payments.find((p: any) => p.instalmentId === id)).toMatchObject({ method: 'cash', amountMinor: 20000 });
   });
 });
+
+/**
+ * ADMIN-001 (systest c1838fdf): manual payments and refunds were not
+ * idempotent -- the same cash payment sent twice at once, then again, wrote 3
+ * payments, 3 invoices and 3 audit rows; a refund sent twice at once wrote 2.
+ * A money-recording POST now carries a client key (paymentId / refundId; the
+ * receipt's own objectKey), generated once per submit and resent on retry.
+ */
+describe('ADMIN-001: money is recorded once per submit', () => {
+  const count = async (familyId: string) => ({
+    payments: await g.prisma.payment.count({ where: { familyId } }),
+    invoices: await g.prisma.invoice.count({
+      where: { paymentId: { in: (await g.prisma.payment.findMany({ where: { familyId }, select: { id: true } })).map((p) => p.id) } },
+    }),
+    audits: await g.prisma.auditLog.count({ where: { action: 'payment.recorded', entityId: familyId } }),
+  });
+
+  it('a cash payment sent twice at once, then again with the same key: one payment, one invoice, one audit row', async () => {
+    const { f } = familyOf(20);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const body = { method: 'cash', amountMinor: 12000, paidOn: today(), reference: 'Receipt book 7', paymentId: randomUUID() };
+    const [a, b] = await Promise.all([
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, body),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, body),
+    ]);
+    expect([a.status, b.status]).toEqual([201, 201]);
+    const replay = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, body);
+    expect(replay.status).toBe(201);
+    expect(await count(f.id)).toEqual({ payments: 1, invoices: 1, audits: 1 });
+    // The answer to a replay is the family as the first submit left it.
+    expect(replay.json.payments.map((p: any) => p.id)).toEqual([body.paymentId]);
+  });
+
+  it('the same key for a different payment is refused (409) and writes nothing', async () => {
+    const { f } = familyOf(21);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const paymentId = randomUUID();
+    expect((await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5000, paidOn: today(), paymentId })).status).toBe(201);
+    const other = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5001, paidOn: today(), paymentId });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    // ...and another recorder may not replay someone else's submit either.
+    const stranger = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 5000, paidOn: today(), paymentId });
+    expect(stranger.status).toBe(409);
+    expect(await count(f.id)).toEqual({ payments: 1, invoices: 1, audits: 1 });
+  });
+
+  it('a refund sent twice at once, then again: one refund; the same key for another amount is refused', async () => {
+    const { f } = familyOf(22);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const paid = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 20000, paidOn: today(), paymentId: randomUUID() });
+    const paymentId = paid.json.payments[0].id;
+    const body = { amountMinor: 3000, reason: 'one lesson not held', refundId: randomUUID() };
+    const [a, b] = await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
+      http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body),
+    ]);
+    // The one that finds the other still in progress is told so at once (409, #358
+    // re-review); one that arrives after it finished is a replay (201).
+    const second = [a, b].find((r) => r.status !== 201);
+    expect([a, b].filter((r) => r.status === 201).length).toBeGreaterThanOrEqual(1);
+    if (second) expect({ status: second.status, code: second.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+    const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { ...body, amountMinor: 3001 });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+  });
+
+  it('"this instalment is paid" sent twice at once: one payment -- with the same key, and even with none', async () => {
+    const { f, supervisor } = familyOf(23);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Term', items: [{ amountMinor: 9000, dueDate: '2026-11-01' }, { amountMinor: 9000, dueDate: '2026-12-01' }],
+    });
+    const [first, second] = plan.json.instalments as any[];
+    const keyed = { paidOn: today(), method: 'cash', paymentId: randomUUID() };
+    const keyedAnswers = await Promise.all([
+      http(supervisor.subject, 'POST', `/instalments/${first.id}/payment`, keyed),
+      http(supervisor.subject, 'POST', `/instalments/${first.id}/payment`, keyed),
+    ]);
+    expect(keyedAnswers.map((r) => r.status)).toEqual([201, 201]);
+    expect(await g.prisma.payment.count({ where: { instalmentId: first.id } })).toBe(1);
+    // An old client sends no key: the instalment's row lock still lets only one through.
+    const unkeyed = await Promise.all([
+      http(supervisor.subject, 'POST', `/instalments/${second.id}/payment`, { paidOn: today(), method: 'cash' }),
+      http(supervisor.subject, 'POST', `/instalments/${second.id}/payment`, { paidOn: today(), method: 'cash' }),
+    ]);
+    expect(unkeyed.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await g.prisma.payment.count({ where: { instalmentId: second.id } })).toBe(1);
+  });
+
+  it('a parent\'s receipt sent twice at once, then again: one receipt; the same file for another amount is refused', async () => {
+    const { f } = familyOf(25);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const requestId = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'balance', label: 'Outstanding balance', amountMinor: 40000,
+    })).json.request.id;
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+    const grant = await http(f.parent.subject, 'POST', '/me/billing/receipts/upload', { mimeType: 'image/jpeg', byteSize: bytes.length });
+    const route = grant.json.uploadUrl.slice(grant.json.uploadUrl.indexOf('/storage/'));
+    const put = await fetch(`${base}${route}`, {
+      method: 'PUT', headers: { ...grant.json.headers, authorization: `Bearer ${await tokenFor(f.parent.subject)}` }, body: bytes,
+    });
+    expect(put.status).toBe(201);
+    const body = { objectKey: grant.json.objectKey, requestId, amountMinor: 40000, transferredOn: today(), note: 'ref 5521' };
+    const sent = await Promise.all([
+      http(f.parent.subject, 'POST', '/me/billing/receipts', body),
+      http(f.parent.subject, 'POST', '/me/billing/receipts', body),
+    ]);
+    expect(sent.map((r) => r.status)).toEqual([201, 201]);
+    expect((await http(f.parent.subject, 'POST', '/me/billing/receipts', body)).status).toBe(201);
+    expect(await g.prisma.paymentReceipt.count({ where: { familyId: f.id } })).toBe(1);
+    const other = await http(f.parent.subject, 'POST', '/me/billing/receipts', { ...body, amountMinor: 39999 });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(await g.prisma.paymentReceipt.count({ where: { familyId: f.id } })).toBe(1);
+  });
+
+  it('a void sent twice at once voids once (one audit row); the second is told it is already voided', async () => {
+    const { f } = familyOf(24);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const paid = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 1000, paidOn: today(), paymentId: randomUUID() });
+    const id = paid.json.payments[0].id;
+    const answers = await Promise.all([
+      http(m.salesManager.subject, 'POST', `/payments/${id}/void`, { reason: 'wrong family' }),
+      http(m.salesManager.subject, 'POST', `/payments/${id}/void`, { reason: 'wrong family' }),
+    ]);
+    expect(answers.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await g.prisma.auditLog.count({ where: { action: 'payment.voided', entityId: f.id } })).toBe(1);
+  });
+});
+
+/**
+ * #358 review: a duplicate CARD refund could reach Stripe twice -- the replay
+ * check and the refunded sum were read outside the lock, which was taken only
+ * after the Stripe call, whose key was not the client's refundId. And a manual
+ * payment checked what was owed outside its transaction.
+ */
+describe('ADMIN-001: a card refund reaches Stripe once per refundId; a manual payment never overpays', () => {
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  const cardPaid = async (i: number) => {
+    const { f } = familyOf(i);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'subscription', label: 'Monthly', amountMinor: 30000,
+    })).json.request;
+    await webhook(stripe.completedEvent(stripe.complete(await payByCard(tokenOf(req.link)))));
+    const card = (await http(m.superAdmin.subject, 'GET', `/families/${f.id}/billing`)).json.payments.find((p: any) => p.method === 'card');
+    const intent = (await g.prisma.payment.findUniqueOrThrow({ where: { id: card.id } })).stripePaymentIntentId as string;
+    const calls = () => stripe.refundCalls.filter((c) => c.paymentIntentId === intent);
+    return { f, paymentId: card.id as string, intent, calls };
+  };
+  afterEach(() => { stripe.onRefund = null; });
+
+  it('sent twice at once with one refundId: ONE Stripe call, keyed by the refundId; the second is told at once it is in progress; a replay later calls Stripe never again', async () => {
+    const { paymentId, calls } = await cardPaid(10);
+    const body = { amountMinor: 3000, reason: 'one lesson not held', refundId: randomUUID() };
+    stripe.onRefund = () => sleep(2500); // a slow Stripe: the first submit is still in it
+    const timed = async () => {
+      const t0 = Date.now();
+      const r = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body);
+      return { ...r, ms: Date.now() - t0 };
+    };
+    const first = timed();
+    await sleep(300);
+    const second = await timed();
+    // Refused without waiting for the first (no connection held behind a lock).
+    expect({ status: second.status, code: second.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(second.ms).toBeLessThan(1500);
+    expect((await first).status).toBe(201);
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]).toMatchObject({ amountMinor: 3000, idempotencyKey: `refund:${body.refundId}`, metadata: { refundId: body.refundId } });
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    expect(calls()).toHaveLength(1);
+    expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, amountMinor: true } }))
+      .toEqual([{ id: body.refundId, amountMinor: 3000n }]);
+  });
+
+  it('Stripe\'s webhook arriving while the refund is being recorded: one row, under the refundId, so a replay finds it and calls Stripe never again', async () => {
+    const { paymentId, calls } = await cardPaid(11);
+    // Over half the payment: the webhook's own insert would exceed it (20000 + 20000 > 30000).
+    const body = { amountMinor: 20000, reason: 'most lessons not held', refundId: randomUUID() };
+    let delivered: Promise<{ status: number; json: any }> | null = null;
+    stripe.onRefund = async (r) => {
+      // Stripe tells the webhook before it answers the API call.
+      delivered = webhook(stripe.refundEvent(r.paymentIntentId, r.id, r.amountMinor, undefined, r.metadata));
+      await Promise.race([delivered, sleep(1500)]);
+    };
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    // The webhook waited for the payment's lock, then found the refund: an answer, never a 500.
+    expect((await delivered!).status).toBe(200);
+    stripe.onRefund = null;
+    expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, recordedBy: true } }))
+      .toEqual([{ id: body.refundId, recordedBy: m.superAdmin.id }]);
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    expect(calls()).toHaveLength(1);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+  });
+
+  it('a refund Stripe made but only the webhook recorded (our transaction lost) is recorded under the refundId; the replay is answered, Stripe not called', async () => {
+    const { paymentId, intent, calls } = await cardPaid(12);
+    const body = { amountMinor: 4000, reason: 'a lesson not held', refundId: randomUUID() };
+    // Our call reached Stripe, then the recording transaction died; Stripe's webhook still arrives.
+    const made = await stripe.refund(intent, 4000, `refund:${body.refundId}`, { refundId: body.refundId, recordedBy: m.superAdmin.id });
+    expect((await webhook(stripe.refundEvent(intent, made.id, 4000, undefined, { refundId: body.refundId, recordedBy: m.superAdmin.id }))).json.outcome)
+      .toBe('refund_recorded');
+    expect(await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, recordedBy: true, stripeRefundId: true } }))
+      .toEqual([{ id: body.refundId, recordedBy: m.superAdmin.id, stripeRefundId: made.id }]);
+    const replay = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body);
+    expect(replay.status).toBe(201);
+    expect(calls()).toHaveLength(1); // only the one call above
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+    // A refundId in Stripe's metadata that is not a uuid, or a stranger as recorder, is not trusted.
+    const other = await stripe.refund(intent, 1000, 'refund:dashboard', { refundId: 'not-a-uuid', recordedBy: randomUUID() });
+    expect((await webhook(stripe.refundEvent(intent, other.id, 1000, undefined, { refundId: 'not-a-uuid', recordedBy: randomUUID() }))).json.outcome)
+      .toBe('refund_recorded');
+    expect(await g.prisma.paymentRefund.findUniqueOrThrow({ where: { stripeRefundId: other.id }, select: { recordedBy: true } }))
+      .toEqual({ recordedBy: null });
+  });
+
+  it('another refund of the same payment while one is in Stripe is refused after the lock timeout, not held for the whole call', async () => {
+    const { paymentId } = await cardPaid(14);
+    stripe.onRefund = () => sleep(8000);
+    const first = http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { amountMinor: 1000, reason: 'a lesson not held', refundId: randomUUID() });
+    await sleep(300);
+    const t0 = Date.now();
+    const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { amountMinor: 1000, reason: 'another lesson', refundId: randomUUID() });
+    const ms = Date.now() - t0;
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(ms).toBeGreaterThanOrEqual(4500);
+    expect(ms).toBeLessThan(7000);
+    expect((await first).status).toBe(201);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(1);
+  }, 30_000);
+
+  it('a NEW Stripe refund carrying a refundId already recorded (Stripe\'s 24 h key expired) is recorded as its own row, never dropped', async () => {
+    const { paymentId, intent } = await cardPaid(15);
+    const body = { amountMinor: 2000, reason: 'a lesson not held', refundId: randomUUID() };
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, body)).status).toBe(201);
+    const later = await stripe.refund(intent, 2000, `refund:${body.refundId}:after-expiry`, { refundId: body.refundId, recordedBy: m.superAdmin.id });
+    const answer = await webhook(stripe.refundEvent(intent, later.id, 2000, undefined, { refundId: body.refundId, recordedBy: m.superAdmin.id }));
+    expect({ status: answer.status, outcome: answer.json.outcome }).toEqual({ status: 200, outcome: 'refund_recorded' });
+    const rows = await g.prisma.paymentRefund.findMany({ where: { paymentId }, select: { id: true, stripeRefundId: true }, orderBy: { createdAt: 'asc' } });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.id).toBe(body.refundId);
+    expect(rows[1]).toMatchObject({ stripeRefundId: later.id });
+    expect(rows[1]!.id).not.toBe(body.refundId);
+  });
+
+  it('Stripe refusing a reused key with other parameters (as real Stripe does) records nothing', async () => {
+    const { paymentId, intent } = await cardPaid(16);
+    const refundId = randomUUID();
+    // Stripe made 4000 under this key; nothing was recorded (no webhook yet).
+    await stripe.refund(intent, 4000, `refund:${refundId}`, { refundId, recordedBy: m.superAdmin.id });
+    const other = await http(m.superAdmin.subject, 'POST', `/payments/${paymentId}/refunds`, { amountMinor: 4500, reason: 'x', refundId });
+    expect({ status: other.status, code: other.code }).toEqual({ status: 409, code: CommErrorCode.BILLING_STATE });
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId } })).toBe(0);
+  });
+
+  it('two different submits for the whole of one instalment at once: one is recorded, the other refused -- never overpaid', async () => {
+    const { f, supervisor } = familyOf(13);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Term', items: [{ amountMinor: 9000, dueDate: '2026-11-01' }, { amountMinor: 9000, dueDate: '2026-12-01' }],
+    });
+    const [first, second] = plan.json.instalments as any[];
+    const pay = (instalmentId: string, paymentId: string = randomUUID()) => http(supervisor.subject, 'POST', `/families/${f.id}/payments`, {
+      method: 'cash', amountMinor: 9000, paidOn: today(), instalmentId, paymentId,
+    });
+    const answers = await Promise.all([pay(first.id), pay(first.id)]);
+    expect(answers.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await g.prisma.payment.count({ where: { instalmentId: first.id } })).toBe(1);
+    // The same submit twice at once is one payment and two good answers, never "already paid".
+    const key = randomUUID();
+    const same = await Promise.all([pay(second.id, key), pay(second.id, key)]);
+    expect(same.map((r) => r.status)).toEqual([201, 201]);
+    expect(await g.prisma.payment.findMany({ where: { instalmentId: second.id }, select: { id: true } })).toEqual([{ id: key }]);
+    expect((await pay(second.id, key)).status).toBe(201);
+  });
+});
+
+/**
+ * ADMIN-007: two staff editing one family's billing settings at once used to
+ * be last-write-wins, and the audit's before-image was read before the
+ * transaction, so it could name values the edit never overwrote.
+ */
+describe('ADMIN-007: billing settings edits are versioned', () => {
+  it('two edits from the same version at once: one wins, the other is 409 with the current settings; the audit names the true before and after', async () => {
+    const { f } = familyOf(26);
+    const first = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED', paymentMethod: 'invoice' });
+    expect(first.status).toBe(201);
+    const version = first.json.settingsVersion as string;
+    expect(version).toEqual(expect.any(String));
+
+    const [a, b] = await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { paymentMethod: 'bank_transfer', version }),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/billing`, { currency: 'EGP', version }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([201, 409]);
+    const lost = a.status === 409 ? a : b;
+    const won = a.status === 409 ? b : a;
+    expect(lost.code).toBe(CommErrorCode.BILLING_STATE);
+    // The refusal carries what the settings are now (the winner's), with their version.
+    expect((lost.json.error as any)?.detail?.current).toMatchObject({
+      paymentMethod: won.json.paymentMethod, currency: won.json.currency, settingsVersion: won.json.settingsVersion,
+    });
+
+    // Exactly one change was recorded, and its before/after are the real ones.
+    const rows = await g.prisma.auditLog.findMany({ where: { action: 'family.billing_set', entityId: f.id }, orderBy: { id: 'asc' } });
+    expect(rows).toHaveLength(2); // the initial set, and the one winner
+    const winner = rows[1]!;
+    expect(winner.before).toEqual({ paymentMethod: 'invoice', currency: 'AED', planMonths: null });
+    expect(winner.after).toMatchObject({ paymentMethod: won.json.paymentMethod, currency: won.json.currency });
+
+    // A stale version afterwards is refused too; the current one goes through.
+    expect((await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { planMonths: 3, version })).status).toBe(409);
+    expect((await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { planMonths: 3, version: won.json.settingsVersion })).status).toBe(201);
+  });
+
+  it('an edit with no version (an older client) is still serialized and audited with the true before-image', async () => {
+    const { f } = familyOf(27);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    await Promise.all([
+      http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'EGP' }),
+      http(m.salesManager.subject, 'POST', `/families/${f.id}/billing`, { currency: 'SAR' }),
+    ]);
+    const rows = await g.prisma.auditLog.findMany({ where: { action: 'family.billing_set', entityId: f.id }, orderBy: { id: 'asc' } });
+    expect(rows).toHaveLength(3);
+    // Each before is the previous after: no edit claims to have overwritten a value it never saw.
+    expect((rows[1]!.before as any).currency).toBe('AED');
+    expect((rows[2]!.before as any).currency).toBe((rows[1]!.after as any).currency);
+  });
+});
