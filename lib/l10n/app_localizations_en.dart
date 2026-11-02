@@ -844,7 +844,7 @@ class L10nEn extends L10n {
   String get cancelUpload => 'Cancel sending';
 
   @override
-  String uploadingPercent(int percent) {
+  String uploadingPercent(String percent) {
     return 'Sending… $percent%';
   }
 

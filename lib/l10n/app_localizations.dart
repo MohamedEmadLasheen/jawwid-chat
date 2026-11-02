@@ -1537,11 +1537,11 @@ abstract class L10n {
   /// **'Cancel sending'**
   String get cancelUpload;
 
-  /// PARENT-017: how far a video's upload has gone.
+  /// PARENT-017: how far a video's upload has gone. A percentage, not a count: a String, so no plural form applies.
   ///
   /// In en, this message translates to:
   /// **'Sending… {percent}%'**
-  String uploadingPercent(int percent);
+  String uploadingPercent(String percent);
 
   /// Stands in for a photo where a message has no text.
   ///

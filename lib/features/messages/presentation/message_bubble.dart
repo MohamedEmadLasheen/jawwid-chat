@@ -966,7 +966,7 @@ class _VideoAttachment extends StatelessWidget {
               children: [
                 if (isSending)
                   Semantics(
-                    label: progress == null ? null : l10n.uploadingPercent((progress! * 100).round()),
+                    label: progress == null ? null : l10n.uploadingPercent('${(progress! * 100).round()}'),
                     child: CircularProgressIndicator(
                       key: const ValueKey('video-upload-progress'),
                       value: progress,

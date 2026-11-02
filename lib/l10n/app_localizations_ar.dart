@@ -863,7 +863,7 @@ class L10nAr extends L10n {
   String get cancelUpload => 'إلغاء الإرسال';
 
   @override
-  String uploadingPercent(int percent) {
+  String uploadingPercent(String percent) {
     return 'جارٍ الإرسال… $percent٪';
   }
 
