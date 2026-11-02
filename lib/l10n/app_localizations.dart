@@ -1513,6 +1513,36 @@ abstract class L10n {
   /// **'File'**
   String get attachFile;
 
+  /// PARENT-017: attachment menu entry for a video from the library.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachVideo;
+
+  /// PARENT-017: attachment menu entry that records a video with the camera (up to 3 minutes).
+  ///
+  /// In en, this message translates to:
+  /// **'Record video'**
+  String get attachRecordVideo;
+
+  /// PARENT-017: shown when recording a video was refused the camera or the microphone.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.'**
+  String get videoRecordPermissionDenied;
+
+  /// PARENT-017: the button on a sending video that stops its upload and takes the message back.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sending'**
+  String get cancelUpload;
+
+  /// PARENT-017: how far a video's upload has gone. A percentage, not a count: a String, so no plural form applies.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending… {percent}%'**
+  String uploadingPercent(String percent);
+
   /// Stands in for a photo where a message has no text.
   ///
   /// In en, this message translates to:
@@ -8556,6 +8586,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}'**
   String rewardStarLine(int count);
+
+  /// PD-55: the first badge in a lesson -- named for effort, never a rank.
+  ///
+  /// In en, this message translates to:
+  /// **'Great effort'**
+  String get rewardBadgeBronze;
+
+  /// No description provided for @rewardBadgeSilver.
+  ///
+  /// In en, this message translates to:
+  /// **'Amazing effort'**
+  String get rewardBadgeSilver;
+
+  /// No description provided for @rewardBadgeGold.
+  ///
+  /// In en, this message translates to:
+  /// **'Superstar'**
+  String get rewardBadgeGold;
+
+  /// PD-55: progress toward the next badge.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more star for {badge}} other{{count} more stars for {badge}}}'**
+  String rewardToNextBadge(int count, String badge);
+
+  /// No description provided for @rewardBadgeEarned.
+  ///
+  /// In en, this message translates to:
+  /// **'Badge: {badge}'**
+  String rewardBadgeEarned(String badge);
+
+  /// PD-55: the lesson report card's rewards row.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 star} other{{count} stars}}'**
+  String rewardReportStars(int count);
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get legalPrivacyPolicy;
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of use'**
+  String get legalTerms;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

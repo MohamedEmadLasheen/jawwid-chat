@@ -399,6 +399,8 @@ export interface MonthPay {
   currency: string | null
   salaryType: SalaryType | null
   paidMinutes: number
+  /** TEACHER-005: the month's unpaid leave days (shown, never priced). Absent from an older API. */
+  unpaidLeaveDays?: number
   base: string | null
   bonuses: string
   deductions: string

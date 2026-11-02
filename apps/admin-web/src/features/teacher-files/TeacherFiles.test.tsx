@@ -392,7 +392,7 @@ describe('payroll (PD-18), the super admin only', () => {
     ],
     unpriced: { bonusEntryIds: ['b-2'], violationIds: [] },
     summary: [
-      { month: '2026-10', currency: 'EGP', salaryType: 'shift', paidMinutes: 0, base: '6000.00', bonuses: '500.00', deductions: '75.00', net: '6425.00' },
+      { month: '2026-10', currency: 'EGP', salaryType: 'shift', paidMinutes: 0, unpaidLeaveDays: 2, base: '6000.00', bonuses: '500.00', deductions: '75.00', net: '6425.00' },
       { month: '2026-09', currency: null, salaryType: null, paidMinutes: 0, base: null, bonuses: '0.00', deductions: '0.00', net: null },
     ],
     ...over,
@@ -414,6 +414,8 @@ describe('payroll (PD-18), the super admin only', () => {
     const summary = screen.getByRole('region', { name: 'Financial summary' })
     const october = within(summary).getByText('October 2026').closest('tr')!
     expect(within(october).getByText(/6,425\.00/)).toBeInTheDocument()
+    // TEACHER-005: unpaid leave is shown beside the pay, never priced.
+    expect(within(october).getByText('Unpaid leave: 2 days')).toBeInTheDocument()
     // A month with no terms has no salary and no net -- a dash, never 0.
     const september = within(summary).getByText('September 2026').closest('tr')!
     expect(within(september).getAllByText('—')).toHaveLength(4)

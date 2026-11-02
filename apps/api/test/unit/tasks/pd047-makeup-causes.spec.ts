@@ -6,17 +6,23 @@
  * written once more in SQL. This holds the two to one list (department head,
  * 2026-10-29: never re-implement the rule; a family's apology is never escalated).
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { TEACHER_MAKEUP_CAUSES } from '../../../src/lessons/lesson.service';
 
 const REPO = join(__dirname, '..', '..', '..', '..', '..');
-const MIGRATION = 'supabase/migrations/20261030000000_chat_pd047_phase_b_decisions.sql';
+const DEFINITION = 'create or replace function chat.work_task_makeup_causes()';
+/** The migration that defines the function LAST is the one the database runs (TEACHER-008 redefined it). */
+function latestDefinition(): string {
+  const dir = join(REPO, 'supabase/migrations');
+  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+  const sql = files.map((f) => readFileSync(join(dir, f), 'utf8')).filter((s) => s.includes(DEFINITION)).pop() ?? '';
+  return sql.slice(sql.indexOf(DEFINITION));
+}
 
 describe('PD-47 PR-6c: the causes a make-up task owes', () => {
   it('are exactly LessonService.TEACHER_MAKEUP_CAUSES', () => {
-    const sql = readFileSync(join(REPO, MIGRATION), 'utf8');
-    const body = sql.slice(sql.indexOf('create or replace function chat.work_task_makeup_causes()'));
+    const body = latestDefinition();
     const list = /array\[([^\]]*)\]::text\[\]/.exec(body)?.[1] ?? '';
     const causes = [...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
     expect(causes).toEqual([...TEACHER_MAKEUP_CAUSES]);

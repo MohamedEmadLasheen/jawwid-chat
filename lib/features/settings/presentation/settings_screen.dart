@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app.dart';
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/time/time_zone_controller.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
@@ -242,6 +243,8 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.devices),
           ),
+          // PD-56: the privacy policy and the terms of use (the owner's texts).
+          const LegalLinksTiles(),
           const Divider(),
 
           ListTile(

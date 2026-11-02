@@ -47,6 +47,27 @@ describe('the discipline ladder', () => {
     expect(Object.fromEntries(stepsOf(same))).toEqual({ a: 1, b: 2, c: 3, d: 4, e: 5, f: 5 });
   });
 
+  it('TEACHER-013: a violation recorded after a decided one -- even one that happened earlier -- takes the NEXT step', () => {
+    // 07:00 no-show decided as a warning at step 1; then a 06:30 lateness the same day is recorded.
+    const steps = stepsOf([
+      { ...v('noshow', '2026-10-31', 'warning'), occurredAt: new Date('2026-10-31T07:00:00Z'), decidedStep: 1 },
+      { ...v('late', '2026-10-31'), occurredAt: new Date('2026-10-31T06:30:00Z') },
+    ]);
+    expect([steps.get('noshow'), steps.get('late')]).toEqual([1, 2]);
+  });
+
+  it('TEACHER-013: a decided violation keeps the step it was decided at; undecided ones follow, by time, none lost or repeated', () => {
+    const steps = stepsOf([
+      { ...v('d1', '2026-10-20', 'deduction_1'), decidedStep: 2 },
+      { ...v('d0', '2026-10-25', 'warning'), decidedStep: 1 },
+      v('u2', '2026-10-10'),
+      v('u1', '2026-10-02'),
+      { ...v('x', '2026-10-05', 'excused'), decidedStep: 1 },
+    ]);
+    // Two decided and counted (steps 1 and 2 kept), the excused one does not count; the undecided follow in time order.
+    expect(['d1', 'd0', 'x', 'u1', 'u2'].map((id) => steps.get(id))).toEqual([2, 1, 1, 3, 4]);
+  });
+
   it('only the suggested step goes without a reason; excusing always needs one', () => {
     expect(needsReason('warning', 1)).toBe(false);
     expect(needsReason('deduction_1', 1)).toBe(true);

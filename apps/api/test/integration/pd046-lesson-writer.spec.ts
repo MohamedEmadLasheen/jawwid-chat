@@ -151,12 +151,46 @@ describe('a keyed card is posted once', () => {
   });
 });
 
-describe('CHATSCHED-012: the teacher is not in the family\'s group', () => {
-  it('the lesson\'s card still goes to the learner\'s family group', async () => {
-    const conv = await g.conversations.createFamilyGroup(s.ownerId, { learnerIds: [s.learnerId], contactIds: [s.parentId], teacherIds: [] });
-    const member = await g.prisma.conversationMember.findFirst({ where: { conversationId: conv.id, actorId: s.teacherId, leftAt: null } });
-    expect(member).toBeNull();
+describe('CHATSCHED-012: which family group a lesson\'s card may go to', () => {
+  /** A second family, with its own child taught by the same teacher, and its own family group. */
+  async function otherFamily(): Promise<{ learnerId: string; groupId: string }> {
+    const [familyId, contactId, learnerId] = [randomUUID(), randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(`insert into chat.family (id, display_name, owner_id, language) values ($1::uuid, 'family_y', $2::uuid, 'ar')`, familyId, s.ownerId);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.contact (id, family_id, name, role_preset, can_message, is_active) values ($1::uuid, $2::uuid, 'parent_y', 'primary_guardian', true, true)`,
+      contactId, familyId,
+    );
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`select set_config('chat.syncing_assignment', 'on', true)`),
+      g.prisma.$executeRawUnsafe(`insert into chat.learner (id, family_id, name, teacher_id) values ($1::uuid, $2::uuid, 'learner_y', $3::uuid)`, learnerId, familyId, s.teacherId),
+    ]);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id, assigned_by) values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`,
+      learnerId, s.ownerId, s.managerId,
+    );
+    const conv = await g.conversations.createFamilyGroup(s.ownerId, { learnerIds: [learnerId], contactIds: [contactId], teacherIds: [s.teacherId] });
+    return { learnerId, groupId: conv.id };
+  }
+
+  it('a group the lesson\'s teacher has LEFT still gets the card (the old teacher closing what remains)', async () => {
+    const conv = await g.conversations.createFamilyGroup(s.ownerId, { learnerIds: [s.learnerId], contactIds: [s.parentId], teacherIds: [s.teacherId] });
+    await g.prisma.$executeRawUnsafe(`update chat.conversation_member set left_at = now() where conversation_id = $1::uuid and actor_id = $2::uuid`, conv.id, s.teacherId);
     const added = await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) });
     expect((await cardsIn(conv.id)).map((m) => [m.card?.kind, m.card?.lessonId])).toContainEqual(['lesson_scheduled', added.id]);
+  });
+
+  it('a group only a SIBLING\'s teacher was let into gets no card of this child', async () => {
+    const siblings = await g.conversations.createFamilyGroup(s.ownerId, {
+      learnerIds: [s.learnerId, s.secondLearnerId], contactIds: [s.parentId], teacherIds: [s.newTeacherId],
+    });
+    const added = await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) });
+    expect((await cardsIn(siblings.id)).filter((m) => m.card?.lessonId === added.id)).toEqual([]);
+  });
+
+  it('another family\'s group never gets it, even with the same teacher in it', async () => {
+    await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    const other = await otherFamily();
+    const added = await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(3 * DAY), endsAt: at(3 * DAY + HOUR / 2) });
+    expect((await cardsIn(other.groupId)).filter((m) => m.card?.lessonId === added.id)).toEqual([]);
   });
 });

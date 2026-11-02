@@ -7,6 +7,11 @@
 --
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261102240000_chat_pd046_card_key_and_scheduled_card.down.sql
 
+-- message_card is written by every lesson ticket: the index build and the column
+-- take locks every card insert waits on. Fail fast rather than queue behind live
+-- traffic; re-run at a quiet moment if it times out.
+set local lock_timeout = '5s';
+
 drop index if exists chat.message_card_idempotency_key;
 alter table chat.message_card drop column if exists idempotency_key;
 delete from chat.message_card_kind k

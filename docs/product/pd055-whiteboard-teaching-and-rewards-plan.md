@@ -1,5 +1,8 @@
 # PD-55 · A whiteboard for teaching children — writing, drawing, and rewards
 
+> **Revised 2026-11-02:** the Phase 1 launch scope and the PRs that replace PR-6 are in
+> [pd055-rev2-launch-scope.md](pd055-rev2-launch-scope.md).
+
 **The owner's request (2026-11-02):** "The whiteboard is not flexible enough when it comes
 to writing, drawing, and explaining lessons… make it much more flexible and user-friendly
 for writing, drawing, and teaching. Most importantly, it should include engaging

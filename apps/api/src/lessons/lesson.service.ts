@@ -453,7 +453,8 @@ export class LessonService {
        WHERE l.organization_id = ${organizationId}::uuid
          -- An index-friendly first cut; the rule itself is chat.lesson_owes_makeup,
          -- the one PD-47's makeup_owed tasks read too (never re-implemented).
-         AND l.outcome = ANY(${causes}::text[])
+         AND (l.outcome = ANY(${causes}::text[])
+              OR ('teacher_cancelled' = ANY(${causes}::text[]) AND l.outcome = 'admin_cancelled' AND l.cancel_cause IS NOT NULL))
          AND chat.lesson_owes_makeup(l.id, ${causes}::text[])
          AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
          AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
@@ -833,11 +834,21 @@ export class LessonService {
   }
 
   /** Jawwid cancels a lesson. The reason is mandatory and the family is told. */
-  async cancel(actorId: string, lessonId: string, body: Record<string, unknown>) {
+  /**
+   * The academy cancels. `cause` (TEACHER-008) is passed only by leave,
+   * suspension and offboarding, never read from the body: such a lesson owes
+   * the family a make-up, and the card says so. A manual cancellation has none
+   * and owes nothing.
+   */
+  async cancel(actorId: string, lessonId: string, body: Record<string, unknown>, cause: TeacherCancelCause | null = null) {
     const reason = textField(body, 'reason', MAX_TEXT, true) as string;
     return this.close(actorId, lessonId, 'cancel', LessonOutcome.ADMIN_CANCELLED, reason, async (tx, lesson, _actor, lang) => {
-      await this.postCard(tx, lesson, null, CardKind.LESSON_CANCELLED, { ...this.cardBase(lesson), outcome: LessonOutcome.ADMIN_CANCELLED, reason }, lang);
-    });
+      await this.postCard(
+        tx, lesson, null, CardKind.LESSON_CANCELLED,
+        { ...this.cardBase(lesson), outcome: LessonOutcome.ADMIN_CANCELLED, reason, ...(cause ? { makeupOwed: true } : {}) },
+        lang,
+      );
+    }, null, null, cause);
   }
 
   /** The teacher did not come. Recorded by the Teachers department; a make-up is owed. */
@@ -981,6 +992,8 @@ export class LessonService {
     auditReason: string | null = null,
     /** PD-50: an excuse's reason category, written with the outcome. */
     excuseCategory: ExcuseCategory | null = null,
+    /** TEACHER-008: written in the SAME update as the outcome -- the make-up task trigger reads the row then. */
+    cancelCause: TeacherCancelCause | null = null,
   ) {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
@@ -1008,6 +1021,7 @@ export class LessonService {
           outcomeBy: actor.actorId,
           outcomeAt: now,
           ...(excuseCategory ? { excuseCategory } : {}),
+          ...(cancelCause ? { cancelCause } : {}),
         });
         await then(tx, lesson, actor, lang);
         // A lesson that will not happen reminds nobody -- in the same
@@ -1100,9 +1114,15 @@ export class LessonService {
     lang: CardLanguage,
     opts: CardOptions = {},
   ): Promise<string> {
-    // PD-46 §3.4: one card per lesson change. The same change posted again (a
-    // retried request, a double tap) answers the card already there.
+    // PD-46 §3.4: one card per lesson change -- the key is (lesson, revision,
+    // change), so the same change posted twice answers the card already there.
+    // (A retried REQUEST is a new transaction: it re-reads the lesson, whose
+    // revision has moved on, and refuses or posts on its own merits.) The key is
+    // locked first, so two transactions posting the same change queue here
+    // instead of racing to the unique index -- a P2002 inside a transaction
+    // would abort it, so it cannot be caught and turned into "the card exists".
     if (opts.idempotencyKey) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'card:' + opts.idempotencyKey}, 0))`;
       const existing = await tx.messageCard.findUnique({ where: { idempotencyKey: opts.idempotencyKey }, select: { messageId: true } });
       if (existing) return existing.messageId;
     }
@@ -1179,15 +1199,20 @@ export class LessonService {
 
   /**
    * Where a lesson's card is posted: the learner's live student group, or else a
-   * live PD-8 family group that is about the learner -- the one the lesson's
-   * teacher is in, when there is one. Both belong to ONE family
+   * live PD-8 family group that is about the learner AND that this lesson's
+   * teacher is in -- or WAS in. Both belong to ONE family
    * (chat.conversation_learner holds a single family's children), so a card
    * never reaches another family.
    *
-   * CHATSCHED-012: the teacher is a preference, not a condition. After a change
-   * of teacher the old one has left the group but still closes their remaining
-   * lessons, and the family must still read those records (and may contest
-   * them), so they go to the learner's group all the same.
+   * CHATSCHED-012: after a change of teacher the old one has LEFT the group but
+   * still closes their remaining lessons, and the family must still read those
+   * records (and may contest them), so a group the teacher was ever a member of
+   * qualifies, the current one first.
+   *
+   * Never a group this teacher was never in (#420 review): a family group can
+   * hold several children with different teachers, and child A's attendance,
+   * apology or ruling (with its notes and excuse category) does not belong in a
+   * group that only sibling B's teacher was let into.
    */
   async groupFor(tx: Tx, lesson: CardSubject) {
     const own = await tx.conversation.findFirst({
@@ -1203,6 +1228,8 @@ export class LessonService {
          AND c.type = 'family_group'
          AND c.archived_at IS NULL
          AND c.organization_id = ${lesson.organizationId}::uuid
+         AND EXISTS (SELECT 1 FROM chat.conversation_member m
+                      WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid)
        ORDER BY EXISTS (SELECT 1 FROM chat.conversation_member m
                          WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid AND m.left_at IS NULL) DESC,
                 c.created_at DESC
@@ -1478,10 +1505,18 @@ export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { r
   return acts;
 }
 
-/** The outcomes that owe a make-up (PD-15): the teacher's misses and the student's apologies. */
-export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'student_apology'] as const;
-/** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2). */
-export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show'] as const;
+/**
+ * What owes a make-up (PD-15): the teacher's misses and the student's
+ * apologies -- and (TEACHER-008) 'teacher_cancelled', a token rather than an
+ * outcome: an academy cancellation whose cancel_cause names the teacher
+ * (chat.lesson_owes_makeup reads it).
+ */
+export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'teacher_cancelled', 'student_apology'] as const;
+/** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2; TEACHER-008). */
+export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'teacher_cancelled'] as const;
+
+/** TEACHER-008: why the academy cancelled a lesson, when the teacher is the reason. Never from a request body. */
+export type TeacherCancelCause = 'teacher_leave' | 'teacher_suspended' | 'teacher_deactivated';
 
 /** PD-30: suspended by the system for payment (SubscriptionEffects' hold). */
 export function isPaymentHold(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {

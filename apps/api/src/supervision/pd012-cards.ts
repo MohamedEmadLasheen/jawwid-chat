@@ -79,11 +79,13 @@ export function renderPd012CardBody(kind: string, p: Record<string, unknown>, la
         p.balance === null || p.balance === undefined
           ? null
           : `${ar ? 'الرصيد قبل الطلب' : 'Balance before this request'}: ${s(p.balance)}`,
+        unpaidWarning(p.unpaidDays, ar),
       );
     case CardKind.LEAVE_APPROVED:
       return join(
         ar ? `✅ تمت الموافقة على الإجازة: ${range()}` : `✅ Leave approved: ${range()}`,
         line(ar ? 'أيام مخصومة' : 'Days deducted', p.days),
+        typeof p.unpaidDays === 'number' && p.unpaidDays > 0 ? line(ar ? 'إجازة بدون أجر (أيام)' : 'Unpaid leave (days)', p.unpaidDays) : null,
         line(ar ? 'الرصيد المتبقي' : 'Remaining balance', p.balance),
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
@@ -120,9 +122,19 @@ export function renderPd012CardBody(kind: string, p: Record<string, unknown>, la
       return join(
         ar ? `↩️ أُلغيت الإجازة: ${range()}` : `↩️ Leave cancelled: ${range()}`,
         line(ar ? 'أيام أُعيدت إلى الرصيد' : 'Days returned to the balance', p.daysReturned),
+        typeof p.unpaidDaysCancelled === 'number' && p.unpaidDaysCancelled > 0
+          ? line(ar ? 'أيام إجازة بدون أجر أُلغيت' : 'Unpaid leave days cancelled', p.unpaidDaysCancelled)
+          : null,
         line(ar ? 'السبب' : 'Reason', p.note),
       );
     default:
       return ar ? 'تحديث' : 'Update';
   }
+}
+
+/** TEACHER-005: the warning on a request beyond the allowance. Nothing when it fits, or with no allowance. */
+function unpaidWarning(n: unknown, ar: boolean): string | null {
+  if (typeof n !== 'number' || n <= 0) return null;
+  if (ar) return n === 1 ? '⚠️ يوم واحد بدون أجر: الطلب يتجاوز الرصيد.' : `⚠️ ${n} أيام بدون أجر: الطلب يتجاوز الرصيد.`;
+  return `⚠️ ${n} ${n === 1 ? 'day' : 'days'} will be unpaid: the request is beyond the balance.`;
 }

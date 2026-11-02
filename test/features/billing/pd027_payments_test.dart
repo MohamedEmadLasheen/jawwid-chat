@@ -717,6 +717,12 @@ class _Opener implements AttachmentOpener {
 }
 
 class _Picker implements MediaPicker {
+  @override
+  Future<PendingAttachment?> pickVideo() async => null;
+
+  @override
+  Future<PendingAttachment?> recordVideo() async => null;
+
   PendingAttachment? image;
   PendingAttachment? file;
   MediaPickException? cameraError;
