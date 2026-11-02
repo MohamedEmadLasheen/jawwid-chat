@@ -47,6 +47,20 @@ check "CODEOWNERS restored in tree" '[ "$(cat "$SANDBOX/wt/t2/.github/CODEOWNERS
 check "evidence patch kept" '[ -s "$SANDBOX/ai/runs/t2/attempt-1/out-of-scope.patch" ]'
 check "allowed files committed" 'git -C "$SANDBOX/wt/t2" show --name-only HEAD | grep -q "src/a.ts"'
 
+echo "2b. hostile file names and symlinks (review findings on the wrapper itself)"
+plan t2b; cat > "$FAKE_CODEX_PLAN/1" <<'S'
+echo "export const x = 5;" > src/a.ts
+echo out > "outside file.txt"
+printf 'out' > "$(printf 'src/new\nline.ts')"
+ln -s /etc/hosts src/link.ts
+S
+bash "$WRAPPER" run --task-id t2b --brief "$BRIEF" --base main --allow 'src/*' --max-attempts 1 > /dev/null 2>&1 || true
+check "space-named out-of-scope file removed" '[ ! -e "$SANDBOX/wt/t2b/outside file.txt" ]'
+check "newline-named file rejected and removed" '[ -z "$(ls "$SANDBOX/wt/t2b/src" | grep -v "^a.ts$")" ]'
+check "symlink rejected, not committed" '! git -C "$SANDBOX/wt/t2b" show --name-only HEAD | grep -q link.ts && [ ! -L "$SANDBOX/wt/t2b/src/link.ts" ]'
+check "allowed change still committed" '[ "$(git -C "$SANDBOX/wt/t2b" show HEAD:src/a.ts)" = "export const x = 5;" ]'
+check "evidence names all three" '[ "$(wc -l < "$SANDBOX/ai/runs/t2b/attempt-1/out-of-scope.txt" | tr -d " ")" = 3 ]'
+
 echo "3. failing test -> automatic retry with feedback -> passes on attempt 2"
 plan t3
 echo 'echo "export const x = 9;" > src/a.ts' > "$FAKE_CODEX_PLAN/1"

@@ -97,8 +97,20 @@ matches_any() { # $1 = path; remaining = glob patterns
   return 1
 }
 
-changed_files() { # tracked changes and untracked files in the worktree, one per line
+changed_files() { # tracked changes and untracked files, one per line (for display and emptiness checks)
   git -C "$WT" status --porcelain --untracked-files=all | sed -E 's/^.{3}//; s/.* -> //'
+}
+
+# The same list NUL-separated, safe for any file name (spaces, newlines). Renames
+# and copies contribute both paths. Use this for every decision that matters.
+changed_files_z() { # $1 = output file
+  : > "$1"
+  local e st old
+  while IFS= read -r -d '' e; do
+    st="${e:0:2}"
+    printf '%s\0' "${e:3}" >> "$1"
+    case "$st" in R*|C*) IFS= read -r -d '' old && printf '%s\0' "$old" >> "$1" ;; esac
+  done < <(git -C "$WT" status --porcelain=v1 -z --untracked-files=all)
 }
 
 # Added lines that look like credentials. Prints matches with the value masked.
@@ -163,26 +175,37 @@ EOF
 $(protected_patterns)
 EOF
   [ "$(state_get allow_migrations)" = 1 ] || prot+=('supabase/migrations/*' 'apps/api/prisma/migrations/*')
-  : > "$ATT/out-of-scope.txt"
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    if matches_any "$f" "${prot[@]}" || ! matches_any "$f" "${allow_globs[@]}"; then
-      echo "$f" >> "$ATT/out-of-scope.txt"; bad=1
+  : > "$ATT/out-of-scope.txt"; : > "$ATT/out-of-scope.z"
+  changed_files_z "$ATT/changed.z"
+  local why
+  while IFS= read -r -d '' f; do
+    why=""
+    case "$f" in *[[:cntrl:]]*) why="control character in the file name" ;; esac
+    [ -z "$why" ] && matches_any "$f" "${prot[@]}" && why="protected path"
+    [ -z "$why" ] && ! matches_any "$f" "${allow_globs[@]}" && why="outside the allowed paths"
+    [ -z "$why" ] && [ -L "$WT/$f" ] && why="symbolic links are not accepted from delegated runs"
+    if [ -n "$why" ]; then
+      printf '%s\0' "$f" >> "$ATT/out-of-scope.z"
+      printf '%q  (%s)\n' "$f" "$why" >> "$ATT/out-of-scope.txt"; bad=1
     fi
-  done <<EOF
-$(changed_files)
-EOF
+  done < "$ATT/changed.z"
   if [ "$bad" = 1 ]; then
-    git -C "$WT" diff -- $(cat "$ATT/out-of-scope.txt") > "$ATT/out-of-scope.patch" 2>/dev/null || true
-    while IFS= read -r f; do
+    : > "$ATT/out-of-scope.patch"
+    while IFS= read -r -d '' f; do
       if git -C "$WT" ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+        git -C "$WT" diff -- "$f" >> "$ATT/out-of-scope.patch" 2>/dev/null || true
         git -C "$WT" checkout -- "$f"
       else
+        if [ -L "$WT/$f" ]; then
+          printf 'symlink %q -> %q\n' "$f" "$(readlink "$WT/$f")" >> "$ATT/out-of-scope.patch"
+        else
+          git -C "$WT" diff --no-index -- /dev/null "$WT/$f" >> "$ATT/out-of-scope.patch" 2>/dev/null || true
+        fi
         rm -f -- "$WT/$f"
       fi
-    done < "$ATT/out-of-scope.txt"
+    done < "$ATT/out-of-scope.z"
     log "reverted out-of-scope changes: $(tr '\n' ' ' < "$ATT/out-of-scope.txt")"
-    { echo "- These paths are outside your allowed scope or protected, and were reverted: $(tr '\n' ' ' < "$ATT/out-of-scope.txt"). Achieve the goal without them, or report why that is impossible."; } >> "$FEEDBACK_NEXT"
+    { echo "- These changes were reverted (outside your allowed scope, protected, a symlink, or an unsafe file name): $(tr '\n' ' ' < "$ATT/out-of-scope.txt"). Achieve the goal without them, or report why that is impossible."; } >> "$FEEDBACK_NEXT"
   fi
 
   if [ -z "$(changed_files)" ]; then
