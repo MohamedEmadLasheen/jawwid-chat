@@ -14,10 +14,10 @@
 export const PAGE_WIDTH = 1920
 export const PAGE_HEIGHT = 1080
 
-export type Layout = 'plain' | 'ruled' | 'narrow_ruled' | 'grid' | 'arabic_lines'
+export type Layout = 'plain' | 'ruled' | 'narrow_ruled' | 'grid' | 'arabic_lines' | 'dotted'
 export type Background = 'white' | 'cream' | 'grey' | 'green' | 'dark'
 
-const LAYOUTS: readonly Layout[] = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines']
+const LAYOUTS: readonly Layout[] = ['plain', 'ruled', 'narrow_ruled', 'grid', 'arabic_lines', 'dotted']
 const BACKGROUNDS: readonly Background[] = ['white', 'cream', 'grey', 'green', 'dark']
 
 /** The portal's BoardPalette (lib/design/tokens.dart); the fixture pins both. */

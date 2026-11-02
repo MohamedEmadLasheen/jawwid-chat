@@ -213,6 +213,16 @@ describe('text', () => {
     expect(calls.filter((c) => c.op === 'translate').map((c) => c.args)).toEqual([[300, 240], [-300, -240]])
   })
 
+  it('PD-55: a dotted page is read as dotted and drawn as a dot every 32 units, as the portal does', () => {
+    const dotted = parsePage({ layout: 'dotted', background: 'white', document: { v: 1, elements: [] } })
+    expect(dotted.layout).toBe('dotted')
+    const { ctx, calls } = recorder()
+    drawPage(ctx, dotted, { verse: () => ({ status: 'loading' }), label })
+    const dots = calls.filter((c) => c.op === 'arc')
+    expect(dots.length).toBe(Math.floor((1920 - 1) / 32) * Math.floor((1080 - 1) / 32))
+    expect(dots[0]!.args.slice(0, 3)).toEqual([32, 32, 2.2])
+  })
+
   it('PD-39: a text without the PD-55 fields is drawn as before: regular weight, never turned', () => {
     const plain = parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [{ id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, w: 100, h: 60, size: 40, color: '#1b1b1b' }] } })
     const { ctx, calls } = recorder()

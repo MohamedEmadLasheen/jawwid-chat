@@ -737,6 +737,7 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.line, Icons.horizontal_rule, l10n.boardToolLine),
       toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
       toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
+      toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
       if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
       const Divider(height: Spacing.spacing4),
@@ -795,7 +796,26 @@ class _ToolPanel extends StatelessWidget {
         icon: const Icon(Icons.format_line_spacing),
         onSelected: onLayout,
         itemBuilder: (_) => [
-          for (final l in PageLayout.values) CheckedPopupMenuItem(value: l, checked: page.layout == l, child: Text(_layoutName(l10n, l))),
+          // PD-55: as pictures, the four a teacher reaches for first, then the rest.
+          for (final l in _layoutOrder)
+            PopupMenuItem(
+              value: l,
+              child: Semantics(
+                selected: page.layout == l,
+                child: Row(
+                  children: [
+                    SizedBox(width: 24, child: page.layout == l ? const Icon(Icons.check, size: 20) : null),
+                    const SizedBox(width: Spacing.spacing2),
+                    KeyedSubtree(
+                      key: ValueKey('layout-thumb-${l.wire}'),
+                      child: _LayoutThumbnail(layout: l, background: page.background),
+                    ),
+                    const SizedBox(width: Spacing.spacing3),
+                    Flexible(child: Text(_layoutName(l10n, l))),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
       PopupMenuButton<PageBackground>(
@@ -832,12 +852,59 @@ class _ToolPanel extends StatelessWidget {
   }
 }
 
+const _layoutOrder = [
+  PageLayout.plain,
+  PageLayout.arabicLines,
+  PageLayout.grid,
+  PageLayout.dotted,
+  PageLayout.ruled,
+  PageLayout.narrowRuled,
+];
+
+/// PD-55: a page layout in miniature, drawn by the same painter as the page.
+class _LayoutThumbnail extends StatelessWidget {
+  const _LayoutThumbnail({required this.layout, required this.background});
+
+  final PageLayout layout;
+  final PageBackground background;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 64,
+    height: 36,
+    decoration: BoxDecoration(border: Border.all(color: JawwidTokens.of(context).colorBorderDefault)),
+    child: CustomPaint(painter: _LayoutThumbnailPainter(layout, background)),
+  );
+}
+
+class _LayoutThumbnailPainter extends CustomPainter {
+  _LayoutThumbnailPainter(this.layout, this.background);
+
+  final PageLayout layout;
+  final PageBackground background;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // A quarter of the page at a larger scale, so the rulings can be told apart.
+    canvas
+      ..save()
+      ..clipRect(Offset.zero & size)
+      ..scale(size.width * 2 / kBoardPageSize.width);
+    paintBackground(canvas, layout, background);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_LayoutThumbnailPainter old) => old.layout != layout || old.background != background;
+}
+
 String _layoutName(L10n l10n, PageLayout l) => switch (l) {
   PageLayout.plain => l10n.boardLayoutPlain,
   PageLayout.ruled => l10n.boardLayoutRuled,
   PageLayout.narrowRuled => l10n.boardLayoutNarrowRuled,
   PageLayout.grid => l10n.boardLayoutGrid,
   PageLayout.arabicLines => l10n.boardLayoutArabicLines,
+  PageLayout.dotted => l10n.boardLayoutDotted,
 };
 
 String _backgroundName(L10n l10n, PageBackground b) => switch (b) {

@@ -4708,6 +4708,9 @@ class L10nAr extends L10n {
   String get boardLayoutArabicLines => 'أسطر الخط العربي';
 
   @override
+  String get boardLayoutDotted => 'منقّط';
+
+  @override
   String get boardBackgroundWhite => 'أبيض';
 
   @override
@@ -4742,6 +4745,9 @@ class L10nAr extends L10n {
 
   @override
   String get boardToolText => 'نص';
+
+  @override
+  String get boardToolLaser => 'مؤشر الليزر';
 
   @override
   String get boardTextSmaller => 'تصغير النص';

@@ -7921,6 +7921,12 @@ abstract class L10n {
   /// **'Arabic handwriting lines'**
   String get boardLayoutArabicLines;
 
+  /// PD-55 whiteboard: a page with a dot every 32 units.
+  ///
+  /// In en, this message translates to:
+  /// **'Dotted'**
+  String get boardLayoutDotted;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -7992,6 +7998,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Text'**
   String get boardToolText;
+
+  /// PD-55 whiteboard: points without marking; the trail fades and is never saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Laser pointer'**
+  String get boardToolLaser;
 
   /// PD-55 whiteboard: the text style bar.
   ///

@@ -11,7 +11,10 @@ enum PageLayout {
   ruled('ruled'),
   narrowRuled('narrow_ruled'),
   grid('grid'),
-  arabicLines('arabic_lines');
+  arabicLines('arabic_lines'),
+
+  /// PD-55: a dot every 32 units.
+  dotted('dotted');
 
   const PageLayout(this.wire);
   final String wire;

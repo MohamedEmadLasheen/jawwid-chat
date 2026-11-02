@@ -106,6 +106,17 @@ function drawBackground(ctx: Ctx, page: BoardPage) {
       for (let x = 60; x < PAGE_WIDTH; x += 60) line(x, 0, x, PAGE_HEIGHT)
       for (let y = 60; y < PAGE_HEIGHT; y += 60) line(0, y, PAGE_WIDTH, y)
       break
+    case 'dotted':
+      // PD-55: a dot every 32 units, the rule colour a little firmer (as the portal).
+      ctx.fillStyle = scaleAlpha(rule, 1.8)
+      for (let x = 32; x < PAGE_WIDTH; x += 32) {
+        for (let y = 32; y < PAGE_HEIGHT; y += 32) {
+          ctx.beginPath()
+          ctx.arc(x, y, 2.2, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      break
     case 'arabic_lines': {
       // A baseline and a lighter, dashed upper guide per band (the letter's body).
       const band = 135
