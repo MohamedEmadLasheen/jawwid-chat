@@ -3,6 +3,7 @@
 // those PNGs: one grant per page, each PUT to its signed URL, then compose.
 // Each way it can fail says which. Nothing is exported while a verse or an
 // image is still on its way, for up to 10 s.
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -222,7 +223,15 @@ void main() {
     expect(capped.elapsedMilliseconds, lessThan(1500));
   });
 
-  Future<L10n> pumpEditor(WidgetTester tester, _Repo repo, _Uploads uploads, List<(int, String, String)> saved, {bool here = true}) async {
+  Future<L10n> pumpEditor(
+    WidgetTester tester,
+    _Repo repo,
+    _Uploads uploads,
+    List<(int, String, String)> saved, {
+    bool here = true,
+    ExportShare? share,
+    Directory? temp,
+  }) async {
     final container = ProviderContainer(
       overrides: [
         whiteboardsRepositoryProvider.overrideWithValue(repo),
@@ -230,10 +239,16 @@ void main() {
         boardDraftStoreProvider.overrideWithValue(InMemoryBoardDraftStore()),
         principalIdProvider.overrideWithValue('teacher-1'),
         exportHereProvider.overrideWithValue(here),
-        exportSaverProvider.overrideWithValue((bytes, name, mime) async {
-          saved.add((bytes.length, name, mime));
-          return ExportOutcome.saved;
-        }),
+        // A phone's real saver (temp file -> share sheet), with the sheet and the
+        // temporary directory in the test's hands; otherwise a recorder.
+        if (share != null) ...[
+          exportShareProvider.overrideWithValue(share),
+          exportTempDirProvider.overrideWithValue(() async => temp!),
+        ] else
+          exportSaverProvider.overrideWithValue((bytes, name, mime) async {
+            saved.add((bytes.length, name, mime));
+            return ExportOutcome.saved;
+          }),
       ],
     );
     addTearDown(container.dispose);
@@ -319,5 +334,68 @@ void main() {
     expect(find.text(l10n.boardExporting), findsNothing);
     expect([repo.grants, saved.length], [0, 0]);
     await drain(tester);
+  });
+
+  group('a phone or tablet: the system share sheet (owner, 2026-11-02)', () {
+    late Directory temp;
+    setUp(() => temp = Directory.systemTemp.createTempSync('pd39-share-test-'));
+    tearDown(() => temp.deleteSync(recursive: true));
+
+    test('the file is written under the board\'s name, handed to the sheet, and gone after -- shared or not', () async {
+      final seen = <(String, String, String, List<int>)>[];
+      Future<bool?> sheet(String path, String mime, String name) async {
+        seen.add((path, mime, name, File(path).readAsBytesSync()));
+        return seen.length == 1; // shared the first time, dismissed the second
+      }
+
+      final bytes = Uint8List.fromList('%PDF-1.3 board'.codeUnits);
+      expect(await shareExport(bytes, 'Al-Fatihah.pdf', 'application/pdf', share: sheet, tempDir: () async => temp), ExportOutcome.saved);
+      expect(await shareExport(bytes, 'Al-Fatihah.pdf', 'application/pdf', share: sheet, tempDir: () async => temp), ExportOutcome.cancelled);
+      expect(seen.map((s) => (s.$2, s.$3)), [('application/pdf', 'Al-Fatihah.pdf'), ('application/pdf', 'Al-Fatihah.pdf')]);
+      expect(seen.first.$4, bytes);
+      expect(seen.first.$1.endsWith('/Al-Fatihah.pdf'), isTrue);
+      expect(temp.listSync(), isEmpty, reason: 'nothing of a board is left in the cache');
+
+      // The sheet failing still cleans up.
+      await expectLater(
+        shareExport(bytes, 'x.pdf', 'application/pdf', share: (_, _, _) async => throw StateError('no sheet'), tempDir: () async => temp),
+        throwsStateError,
+      );
+      expect(temp.listSync(), isEmpty);
+    });
+
+    testWidgets('from the board menu on an iPhone: the PDF goes to the share sheet, and no browser notice', (tester) async {
+      final repo = _Repo();
+      final shared = <(String, String)>[];
+      final l10n = await pumpEditor(tester, repo, _Uploads(), [], share: (path, mime, name) async {
+        shared.add((name, mime));
+        return true;
+      }, temp: temp);
+      await choose(tester, l10n, l10n.boardExportPdf);
+      await work(tester, () => shared.isNotEmpty);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      expect(shared, [('Al-Fatihah.pdf', 'application/pdf')]);
+      expect(find.text(l10n.boardExportNotHere), findsNothing);
+      expect(find.text(l10n.boardExportSaved), findsOneWidget);
+      expect(temp.listSync(), isEmpty);
+      await drain(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('a compose that fails releases the export (#362), opens no sheet and writes no file', (tester) async {
+      final repo = _Repo()..composeErrors.addAll(List.filled(10, const AppError(AppErrorKind.unknown, code: 'COMM.WHITEBOARD_STATE')));
+      final shared = <String>[];
+      final l10n = await pumpEditor(tester, repo, _Uploads(), [], share: (path, mime, name) async {
+        shared.add(name);
+        return true;
+      }, temp: temp);
+      await choose(tester, l10n, l10n.boardExportPdf);
+      await work(tester, () => repo.released.isNotEmpty);
+      expect(repo.released, hasLength(1));
+      expect(shared, isEmpty);
+      expect(temp.listSync(), isEmpty);
+      expect(find.text(l10n.boardExportExpired), findsOneWidget);
+      await drain(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 }
