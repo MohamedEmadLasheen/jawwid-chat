@@ -167,6 +167,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.lesson_audio_read_actor': 60,
   /** initial hypothesis - PD-39 board writes (an autosave every ~2 s while drawing, plus page actions) per actor per window. */
   'abuse.throttle.whiteboard_write_actor': 240,
+  /** PD-55: rewards per teacher per window -- a celebration for a class of six is six. */
+  'abuse.throttle.reward_give_actor': 30,
   /**
    * PD-39 PR-4: board images and PDF export. OFF until the environment's
    * bucket exists with object versioning on (design §11.3, a hard
@@ -187,6 +189,16 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
    * removed only by that rule.
    */
   'whiteboards.assets_lifecycle_verified': false as boolean,
+  /**
+   * PD-55: teacher rewards during a lesson (migration 20261102130000). Off
+   * until QA has passed in an environment; off, every reward route is 404.
+   */
+  'rewards.enabled': false as boolean,
+  /** PD-55: the stars in one lesson that earn Bronze, Silver and Gold. */
+  'rewards.lesson_badge_thresholds': [3, 6, 10] as readonly number[],
+  /** PD-55: rewards count from this many minutes before a lesson to this many after it. */
+  'rewards.award_window_before_minutes': 10,
+  'rewards.award_window_after_minutes': 30,
   /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
   'abuse.realtime.frames_per_socket_per_minute': 600,
   /** PD-33: how many supervisors one backup may cover at the same time. */

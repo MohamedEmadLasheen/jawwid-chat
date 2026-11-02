@@ -281,6 +281,20 @@ export class OutboxWorker {
         return;
       }
 
+      // PD-55: a child's reward, to that child's family's LIVE contacts and to
+      // the teacher who gave it -- each to their own actor room, never a
+      // conversation. Resolved here, at delivery: a contact removed or
+      // deactivated after the award is not told.
+      case CommEvent.LEARNER_REWARD_GIVEN:
+      case CommEvent.LEARNER_REWARD_UNDONE: {
+        const learnerId = payload.learnerId as string | undefined;
+        const lessonId = payload.lessonId as string | undefined;
+        if (!learnerId || !lessonId) return;
+        const recipients = await this.rewardRecipientIds(learnerId, lessonId);
+        if (recipients.length > 0) await this.realtime.toUsers(recipients, type, payload as never);
+        return;
+      }
+
       case CommEvent.STORY_RETIRED: {
         // Same audience. A client that is showing an expired or deleted story
         // gets told to drop it rather than finding out on its next refetch --
@@ -762,6 +776,20 @@ export class OutboxWorker {
    * Never told: the person who did it. Never in any text: the task's title, an
    * amount, a card, a family or a child (a lock screen is not behind sign-in).
    */
+  /** PD-55: the learner's family's active contacts, and the lesson's teacher if still the learner's. */
+  private async rewardRecipientIds(learnerId: string, lessonId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      select c.id from chat.learner l
+        join chat.contact c on c.family_id = l.family_id and c.is_active
+       where l.id = ${learnerId}::uuid
+      union
+      select ls.teacher_id from chat.lesson ls
+        join chat.learner l on l.id = ls.learner_id and l.teacher_id = ls.teacher_id
+        join chat.teacher t on t.id = ls.teacher_id and t.is_active
+       where ls.id = ${lessonId}::uuid and ls.learner_id = ${learnerId}::uuid`;
+    return rows.map((r) => r.id);
+  }
+
   private async deliverTask(payload: Record<string, unknown>): Promise<void> {
     const taskId = payload.taskId as string | undefined;
     const change = payload.change as string | undefined;
