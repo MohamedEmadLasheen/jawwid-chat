@@ -8586,6 +8586,42 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}'**
   String rewardStarLine(int count);
+
+  /// PD-55: the first badge in a lesson -- named for effort, never a rank.
+  ///
+  /// In en, this message translates to:
+  /// **'Great effort'**
+  String get rewardBadgeBronze;
+
+  /// No description provided for @rewardBadgeSilver.
+  ///
+  /// In en, this message translates to:
+  /// **'Amazing effort'**
+  String get rewardBadgeSilver;
+
+  /// No description provided for @rewardBadgeGold.
+  ///
+  /// In en, this message translates to:
+  /// **'Superstar'**
+  String get rewardBadgeGold;
+
+  /// PD-55: progress toward the next badge.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more star for {badge}} other{{count} more stars for {badge}}}'**
+  String rewardToNextBadge(int count, String badge);
+
+  /// No description provided for @rewardBadgeEarned.
+  ///
+  /// In en, this message translates to:
+  /// **'Badge: {badge}'**
+  String rewardBadgeEarned(String badge);
+
+  /// PD-55: the lesson report card's rewards row.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 star} other{{count} stars}}'**
+  String rewardReportStars(int count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
