@@ -290,16 +290,84 @@ void main() {
       expect(read().isOffline, isFalse);
     });
 
-    test('a discarded message is dropped from the queue', () async {
+    test('a discarded message is gone: no "deleted" ghost, and what waited behind it goes (PARENT-005)', () async {
       final c = controller();
       await settle();
 
       repository.failuresRemaining = 1;
-      final clientId = c.send('مرحبا');
+      final first = c.send('one');
+      await settle();
+      // `one` backs off and holds its place; `two` waits behind it.
+      final second = c.send('two');
+      await settle();
+      expect(repository.sent.map((m) => m.body), ['one']);
+
+      c.discard(first);
+      await settle();
+      expect(read().log.byClientId(first), isNull, reason: 'a never-sent message leaves no bubble');
+      expect(read().log.byClientId(second)?.deliveryState, DeliveryState.sent);
+      expect(repository.sent.map((m) => m.body), ['one', 'two']);
+    });
+  });
+
+  group('a failed attachment never holds up the chat (PARENT-005)', () {
+    const photo = PendingAttachment(filePath: '/tmp/p.jpg', kind: MessageKind.image, mimeType: 'image/jpeg', byteSize: 1200);
+
+    test('a photo whose upload failed steps aside: the text sent after it is delivered', () async {
+      final c = controller();
       await settle();
 
-      c.discard(clientId);
-      expect(read().log.byClientId(clientId)?.isDeleted, isTrue);
+      repository.uploadFailuresRemaining = 1;
+      final photoId = c.sendAttachment(photo);
+      await settle();
+      expect(read().log.byClientId(photoId)?.deliveryState, DeliveryState.failed);
+
+      final textId = c.send('and a text');
+      await settle();
+      expect(read().log.byClientId(textId)?.deliveryState, DeliveryState.sent);
+      expect(repository.sent.map((m) => m.body), ['and a text']);
+      // The photo keeps its own Retry.
+      expect(read().log.byClientId(photoId)?.canRetry, isTrue);
+    });
+
+    test('a photo parked after its upload ran out of time is not re-sent on its own, and does not hold the text', () async {
+      final c = controller();
+      await settle();
+
+      repository
+        ..uploadFailure = const AppError(AppErrorKind.timeout, code: AppError.uploadTimeout)
+        ..uploadFailuresRemaining = 1;
+      c.sendAttachment(photo);
+      await settle();
+
+      final textId = c.send('text');
+      await settle();
+      await settle();
+      expect(read().log.byClientId(textId)?.deliveryState, DeliveryState.sent);
+      expect(repository.attachmentUploads, hasLength(1), reason: 'parked: only an explicit retry uploads it again');
+    });
+
+    test('discarding the failed photo removes it, and its retry is never scheduled again', () async {
+      final c = controller();
+      await settle();
+
+      repository.uploadFailuresRemaining = 1;
+      final photoId = c.sendAttachment(photo);
+      await settle();
+      c.discard(photoId);
+      await settle();
+      expect(read().log.byClientId(photoId), isNull);
+      expect(read().log.messages, isEmpty);
+    });
+
+    test('storage that cannot be reached is not "offline": the API answered (no banner)', () async {
+      final c = controller();
+      await settle();
+
+      repository.uploadFailuresRemaining = 1;
+      c.sendAttachment(photo);
+      await settle();
+      expect(read().isOffline, isFalse);
     });
   });
 

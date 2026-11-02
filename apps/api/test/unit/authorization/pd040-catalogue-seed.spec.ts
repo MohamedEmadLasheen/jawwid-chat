@@ -219,6 +219,20 @@ const LATER: readonly Later[] = [
       ['supervisor', 'teachers', 'whiteboards.view'],
     ],
   },
+  {
+    // PD-52: the two teacher-records pages, held by whoever holds the Teacher
+    // Supervision page's keys today (Operations and the Teachers department).
+    migration: '20261031170000_chat_pd052_teacher_records_keys.sql',
+    tag: 'pd052',
+    permissions: ['teacher_attendance.view', 'teacher_attendance.record', 'teacher_attendance.decide', 'teacher_grants.view', 'teacher_grants.record'],
+    bundles: (['manager', 'supervisor'] as const).flatMap((tier) =>
+      (['operations', 'teachers'] as const).flatMap((kind) =>
+        (
+          ['teacher_attendance.decide', 'teacher_attendance.record', 'teacher_attendance.view', 'teacher_grants.record', 'teacher_grants.view'] as const
+        ).map((key) => [tier, kind, key] as const),
+      ),
+    ),
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

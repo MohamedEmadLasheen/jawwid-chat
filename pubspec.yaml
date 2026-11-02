@@ -117,6 +117,12 @@ dependencies:
   # conditional import (lib/core/storage/browser_storage_web.dart), so the phone
   # builds never compile it.
   web: ^1.1.1
+  # PD-39 (owner, 2026-11-02): a whiteboard export on a phone or tablet goes to
+  # the system share sheet. share_plus is the Flutter Community's maintained
+  # plugin (fluttercommunity.dev); it adds exactly two packages to the lock
+  # (itself and share_plus_platform_interface) -- everything it uses was
+  # already here. The export is a temporary file, deleted after the sheet closes.
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:

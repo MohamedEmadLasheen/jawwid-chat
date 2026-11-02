@@ -38,18 +38,51 @@ class CountingObject extends Readable {
   }
 }
 
+/** Storage that sends `chunks` chunks and then goes silent (never ends, never errors). */
+class StallingObject extends Readable {
+  sent = 0;
+  closed = false;
+  constructor(readonly chunks: number, readonly total = 64 * 1024 * 1024) {
+    super();
+    this.on('close', () => (this.closed = true));
+  }
+  override _read() {
+    if (this.sent < this.chunks) {
+      this.sent++;
+      this.push(CHUNK);
+    } // else: nothing, ever
+  }
+}
+
+/** Storage that sends one chunk every `everyMs` until `total`: slow, but never silent for long. */
+class SlowObject extends Readable {
+  pulled = 0;
+  constructor(readonly total: number, readonly everyMs: number) {
+    super();
+  }
+  override _read() {
+    setTimeout(() => {
+      if (this.pulled >= this.total) return void this.push(null);
+      this.pulled += CHUNK.length;
+      this.push(CHUNK);
+    }, this.everyMs);
+  }
+}
+
 let server: Server;
 let object: CountingObject;
 let served: Promise<void>;
 /** What storage.read answers; by default the whole `object`. */
 let read: (rangeHeader?: string | string[]) => Promise<unknown>;
 let cacheControl: string | undefined;
+let stallMs: number | undefined;
 
 function deps(): MediaServeDeps {
   return {
     signer: { verify: () => true } as unknown as MediaServeDeps['signer'],
     prisma: {} as MediaServeDeps['prisma'],
     storage: { read: (_key: string, range?: string | string[]) => read(range) } as unknown as MediaServeDeps['storage'],
+    stallMs,
   };
 }
 
@@ -64,6 +97,7 @@ function express(res: ServerResponse): ResponseLike {
 beforeEach(async () => {
   read = async () => ({ mimeType: 'video/mp4', size: object.total, range: null, body: object });
   cacheControl = undefined;
+  stallMs = undefined;
   server = createServer((req, res) => {
     served = serveAuthorizedMedia(
       deps(), 'attachments', 'a1', 'original', 'actor', '0', 'sig', req, express(res),
@@ -209,4 +243,57 @@ it('a streamed body with a response that is not a Writable is a loud wiring erro
   ).rejects.toThrow('Writable');
   await until(() => object.closed);
   expect(object.destroyed).toBe(true);
+});
+
+describe('a storage body that goes silent mid-stream (stall watchdog)', () => {
+  it('while the reader is waiting for bytes: the response ends after stallMs, and the storage stream is released', async () => {
+    const stalled = new StallingObject(4);
+    stallMs = 300;
+    read = async () => ({ mimeType: 'video/mp4', size: stalled.total, range: null, body: stalled });
+    const { res } = await request();
+    const ended = new Promise<string>((r) => {
+      res.on('aborted', () => r('aborted'));
+      res.on('error', () => r('error'));
+      res.on('end', () => r('end'));
+    });
+    let received = 0;
+    res.on('data', (c: Buffer) => (received += c.length)); // a reader that keeps reading
+    const started = Date.now();
+    expect(await ended).not.toBe('end');
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(received).toBe(4 * CHUNK.length);
+    await expect(served).resolves.toBeUndefined();
+    await until(() => stalled.closed);
+    expect(stalled.destroyed).toBe(true);
+  });
+
+  it('control: a READER that pauses for longer than stallMs is not cut (back-pressure is not a stall)', async () => {
+    object = new CountingObject(16 * MB);
+    stallMs = 300;
+    const { res } = await request();
+    let received = 0;
+    let paused = false;
+    res.on('data', (c: Buffer) => {
+      received += c.length;
+      if (!paused && received > MB) {
+        paused = true;
+        res.pause();
+        setTimeout(() => res.resume(), 1_000); // the viewer paused the video
+      }
+    });
+    await new Promise((r) => res.once('end', r));
+    await served;
+    expect(received).toBe(16 * MB);
+  });
+
+  it('a storage body that is slow but keeps arriving (every stallMs / 2) is not cut', async () => {
+    const slow = new SlowObject(8 * CHUNK.length, 150);
+    stallMs = 300;
+    read = async () => ({ mimeType: 'video/mp4', size: slow.total, range: null, body: slow });
+    const { res } = await request();
+    let received = 0;
+    for await (const chunk of res) received += (chunk as Buffer).length;
+    await served;
+    expect(received).toBe(8 * CHUNK.length);
+  });
 });

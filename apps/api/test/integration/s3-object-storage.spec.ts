@@ -339,3 +339,30 @@ describe('two replicas share one bucket', () => {
     expect(auth.uploadUrl).not.toContain('/storage/');
   });
 });
+
+/**
+ * PARENT-008: a real presigned PUT for every kind of grant the API issues --
+ * each is a different caller of authorizeUpload with its own prefix and type --
+ * and the URL pins no body checksum (see test/unit/attachments/s3-presign-no-checksum.spec.ts).
+ */
+describe('every grant type uploads for real (PARENT-008)', () => {
+  const GRANTS = [
+    ['chat attachment', 'conversations/0b9a3a5e-3f1e-4a47-9a2a-2b0e7c1d1f11', 'image/jpeg'],
+    ['avatar', 'avatars/staff/0b9a3a5e-3f1e-4a47-9a2a-2b0e7c1d1f11', 'image/png'],
+    ['bank-transfer receipt', 'payment-receipts/0b9a3a5e-3f1e-4a47-9a2a-2b0e7c1d1f11', 'application/pdf'],
+    ['whiteboard asset', 'whiteboards/0b9a3a5e-3f1e-4a47-9a2a-2b0e7c1d1f11/staging', 'image/webp'],
+    ['certificate upload', 'certificate-uploads/0b9a3a5e-3f1e-4a47-9a2a-2b0e7c1d1f11/9c2d1e7f-3a4b-4c5d-8e6f-7a8b9c0d1e2f', 'application/pdf'],
+  ] as const;
+
+  for (const [what, prefix, mimeType] of GRANTS) {
+    itS3(`${what}: a 25 930-byte PUT to the signed URL is stored and reads back`, async () => {
+      const body = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(25930 - 4, 7)]);
+      const grant = await storage.authorizeUpload({ prefix, mimeType, byteSize: body.length });
+      expect([...new URL(grant.uploadUrl).searchParams.keys()].filter((k) => /checksum/i.test(k))).toEqual([]);
+      const put = await upload(grant, body);
+      expect(put.status).toBe(200);
+      const back = await fetch(await storage.signedReadUrl(grant.objectKey));
+      expect(Buffer.from(await back.arrayBuffer()).equals(body)).toBe(true);
+    });
+  }
+});

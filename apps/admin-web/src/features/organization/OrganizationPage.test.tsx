@@ -93,6 +93,15 @@ describe('children and their supervisors', () => {
     expect(screen.getByText('Child Beta')).toBeInTheDocument()
   })
 
+  it('opens on the filter the URL names, so a Dashboard tile opens the list it counted (PD-44)', async () => {
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization?tab=children&filter=unassigned' })
+    expect(await screen.findByText('Child Beta')).toBeInTheDocument()
+    expect(screen.queryByText('Child Alpha')).not.toBeInTheDocument()
+    // Choosing "All" again shows every child.
+    await chooseOption(userEvent, screen.getByRole('combobox', { name: 'Show' }), 'all')
+    expect(await screen.findByText('Child Alpha')).toBeInTheDocument()
+  })
+
   it('assigns a supervisor with a reason; without one nothing is sent', async () => {
     on('POST', /\/org\/learners\/l-2\/supervisor$/, () => json({ learnerId: 'l-2', supervisorId: 'sup-2', changed: true }, 201))
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })

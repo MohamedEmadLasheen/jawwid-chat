@@ -5,7 +5,8 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { pageRowVisible, scopeCovers } from '../platform/teacher-scope';
+import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { currentImpersonationId } from '../platform/request-context';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
@@ -18,6 +19,8 @@ export type FeedbackStatus = 'received' | 'in_review' | 'resolved';
 /** chat.parent_feedback's CHECKs; checked here first for a readable 400. */
 const BODY_MAX = 2000;
 const DAY_MS = 24 * 3_600_000;
+/** The feedback list's page size; the Dashboard tiles flag `capped` at it (PD-44). */
+const LIST_LIMIT = 500;
 /** Compiled defaults for chat.config's `feedback.limit.*` (20261026120000 seeds the same). */
 const LIMIT_DEFAULTS = { 'feedback.limit.per_child_day': 3, 'feedback.limit.per_family_day': 10 } as const;
 
@@ -178,9 +181,42 @@ export class ParentFeedbackService {
     if (query.category !== undefined && !(FEEDBACK_CATEGORIES as readonly string[]).includes(query.category)) {
       throw invalid('category: must be praise, suggestion or complaint');
     }
-    // PD-35: the feedback about the teachers in the caller's scope; of an
-    // Operations-only teacher, about the caller's own learners (P2-4).
     const page = await this.files.teacherScope.pageRowsOf(actor);
+    const { rows } = await this.listed(actor, page, query);
+    return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(rows) };
+  }
+
+  /**
+   * PD-44: the Dashboard's feedback tiles -- `list({ status })`'s length for
+   * `received` (new, nobody has taken it) and `in_review`, found as `list`
+   * finds them (listed: the same scope, the same 500 candidates, the same
+   * per-child visibility). `capped` when the candidates reached the limit.
+   * Staff off the page get no tile; non-staff are refused as there.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    // The page's own gate: it refuses a parent or a teacher outright; staff off the page get no tile.
+    const staff = (await this.conversations.requireActor(actorId)).kind === ActorKind.STAFF;
+    let gate: { actor: Actor };
+    try {
+      gate = await this.files.pageGate(actorId, (a) => a.onPage);
+    } catch (e) {
+      if (staff && e instanceof CommError && e.code === CommErrorCode.TEACHER_FILE_DENIED) return [];
+      throw e;
+    }
+    const page = await this.files.teacherScope.pageRowsOf(gate.actor);
+    const tile = async (status: 'received' | 'in_review') => {
+      const { rows, candidates } = await this.listed(gate.actor, page, { status });
+      const oldest = rows.length ? rows[rows.length - 1]!.createdAt : null;
+      return dashboardTile(`feedback.${status}`, rows.length, oldest, candidates >= LIST_LIMIT);
+    };
+    return [await tile('received'), await tile('in_review')];
+  }
+
+  /**
+   * What `list` shows: PD-35, the feedback about the teachers in the caller's
+   * scope; of an Operations-only teacher, about the caller's own learners (P2-4).
+   */
+  private async listed(actor: Actor, page: PageScope, query: { status?: string; category?: string }) {
     const scope = page.teachers;
     const found = await this.prisma.parentFeedback.findMany({
       where: {
@@ -190,10 +226,9 @@ export class ParentFeedbackService {
         ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-      take: 500,
+      take: LIST_LIMIT,
     });
-    const rows = found.filter((f) => pageRowVisible(page, f.teacherId, { learnerId: f.learnerId }));
-    return { canWrite: access.canWriteSupervision, feedback: await this.forStaff(rows) };
+    return { rows: found.filter((f) => pageRowVisible(page, f.teacherId, { learnerId: f.learnerId })), candidates: found.length };
   }
 
   /**

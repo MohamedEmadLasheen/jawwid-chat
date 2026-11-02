@@ -1,5 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useSession } from '@/core/auth/SessionProvider'
+import { holdsAny } from '@/core/permissions/capabilities'
+import { BOARD_KEYS } from '@/features/teacher-boards/api'
 import { useLessonAccess } from './hooks'
 import type { Pair } from './copy'
 
@@ -23,6 +26,8 @@ export interface TeachersTab {
   /** Relative to the area base: '' (the base), 'files', 'supervision', ... */
   segment: string
   label: Pair
+  /** PD-40: offered only to an account holding one of these keys (the server still decides each read). */
+  anyOf?: readonly string[]
 }
 
 export const TEACHERS_AREA_BASE = '/teachers'
@@ -38,6 +43,8 @@ export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'supervision', segment: 'supervision', label: { en: 'Supervision', ar: 'الإشراف' } },
   // PD-35 B5: escalation cases (the same page as /cases).
   { key: 'cases', segment: 'cases', label: { en: 'Escalations', ar: 'التصعيدات' } },
+  // PD-39: the teachers' boards, read only, for whoever may read them.
+  { key: 'boards', segment: 'boards', label: { en: 'Boards', ar: 'السبورات' }, anyOf: BOARD_KEYS },
 ]
 
 export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_BASE): string {
@@ -48,11 +55,13 @@ export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_B
 export function TeachersAreaTabs({ base = TEACHERS_AREA_BASE }: { base?: string }) {
   const { locale } = useI18n()
   const access = useLessonAccess()
+  const { staff } = useSession()
   if (TEACHERS_TABS.length < 2) return null // one page needs no tabs
   // PD-26 amendment: Operations is offered the Supervision page and nothing else of the
   // Teachers area. Until the server answers, the tabs stay as they were.
   const pageOnly = access.data !== undefined && access.data.lessonManager !== true && access.data.supervisionPage === true
-  const tabs = pageOnly ? TEACHERS_TABS.filter((t) => t.key === 'supervision') : TEACHERS_TABS
+  const held = TEACHERS_TABS.filter((t) => !t.anyOf || holdsAny(staff, t.anyOf))
+  const tabs = pageOnly ? held.filter((t) => t.key === 'supervision') : held
   return (
     <nav className="ts-tabs" aria-label={locale === 'ar' ? 'المعلمون' : 'Teachers'}>
       {tabs.map((tab) => (

@@ -2850,7 +2850,34 @@ class L10nEn extends L10n {
   String get resetFinish => 'Set password';
 
   @override
-  String get recoveryOpen => 'Trouble signing in?';
+  String get recoveryOpen => 'Parents: trouble signing in?';
+
+  @override
+  String get signInStaffResetHint =>
+      'Teachers and staff: ask your supervisor for a reset code.';
+
+  @override
+  String get changePasswordTitle => 'Change password';
+
+  @override
+  String get changePasswordCurrentLabel => 'Current password';
+
+  @override
+  String get changePasswordWrongCurrent => 'That is not your current password.';
+
+  @override
+  String get changePasswordCurrentRequired => 'Enter your current password.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'Choose a password different from your current one.';
+
+  @override
+  String get changePasswordAction => 'Change password';
+
+  @override
+  String get changePasswordDone =>
+      'Password changed. You were signed out on your other devices.';
 
   @override
   String get recoveryTitle => 'Get back into your account';
@@ -4706,6 +4733,70 @@ class L10nEn extends L10n {
 
   @override
   String get boardVerseChanged => 'Verse text updated, re-insert';
+
+  @override
+  String get boardToolImage => 'Image';
+
+  @override
+  String get boardImageAdding => 'Adding the image…';
+
+  @override
+  String get boardImageLoading => 'Loading the image…';
+
+  @override
+  String get boardImageUnavailable => 'Image unavailable';
+
+  @override
+  String get boardImageOff => 'Pictures on boards aren\'t switched on yet.';
+
+  @override
+  String get boardImageTooLarge =>
+      'This picture is too large. Use one under 10 MB, or fewer pictures on this board.';
+
+  @override
+  String get boardImageNotImage =>
+      'That file isn\'t a picture the board can show. Use a PNG, JPEG or WebP.';
+
+  @override
+  String get boardImageFailed => 'The picture couldn\'t be added. Try again.';
+
+  @override
+  String get boardExportPng => 'Export this page as a picture (PNG)';
+
+  @override
+  String get boardExportPdf => 'Export the board as a PDF';
+
+  @override
+  String get boardExporting => 'Preparing the export…';
+
+  @override
+  String get boardExportSaved => 'Exported.';
+
+  @override
+  String get boardExportOff => 'Export isn\'t switched on yet.';
+
+  @override
+  String get boardExportBusy =>
+      'Many exports are being made right now. Try again in a minute.';
+
+  @override
+  String get boardExportInProgress =>
+      'You already have exports being made. Wait a few minutes, then try again.';
+
+  @override
+  String get boardExportExpired =>
+      'The export took too long and ran out. Export again.';
+
+  @override
+  String get boardExportTooLarge =>
+      'This board is too large to export in one go.';
+
+  @override
+  String get boardExportNotHere =>
+      'Export works in the browser. Open the board there to export it.';
+
+  @override
+  String get boardExportFailed => 'The export couldn\'t be made. Try again.';
 
   @override
   String get boardDraftStale =>

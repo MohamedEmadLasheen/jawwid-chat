@@ -23,6 +23,14 @@ export const SECTIONS: readonly SectionSpec[] = [
   { key: 'lessons', title: { en: 'Lessons', ar: 'الحصص' }, requires: ['lessons.view', 'schedule.view'] },
   { key: 'enrolment', title: { en: 'Trials and new students', ar: 'الحصص التجريبية والطلاب الجدد' }, requires: ['trials.view', 'new_students.view'] },
   { key: 'billing', title: { en: 'Payments', ar: 'المدفوعات' }, requires: ['billing.view', 'parents.view'] },
+  {
+    key: 'teachers',
+    title: { en: 'Teachers', ar: 'المعلمون' },
+    // Not certificates.view alone: the route does not open on it (PD-41's Designer reaches only certificates).
+    requires: ['teacher_supervision.view', 'teacher_profiles.review'],
+  },
+  // The Organization page's own key (its lists ask org.view; org.manage is only its writes').
+  { key: 'structure', title: { en: 'Organization', ar: 'الهيكل التنظيمي' }, requires: ['org.view'] },
   // PD-47 PR-4: everyone's own tasks are self-service, so no key is needed;
   // the team, decision and super-admin tiles come only to whom they apply.
   { key: 'tasks', title: { en: 'Tasks', ar: 'المهام' }, requires: [] },
@@ -31,6 +39,8 @@ export const SECTIONS: readonly SectionSpec[] = [
 /** Today on the Schedule (its day view opens on today); the Teachers department's queue. */
 const TODAY = () => '/schedule?view=day'
 const NEEDS_ACTION = () => '/teachers/needs-action'
+/** A section of the Teacher Supervision page, which keeps its section (and filters) in the URL. */
+const SUPERVISION = (query: string) => () => `/teachers/supervision?${query}`
 
 export interface TileSpec {
   label: Bilingual
@@ -230,6 +240,74 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     icon: 'clock',
     backlog: false,
     href: () => '/parents?access=grace',
+  },
+  // PD-44 PR-6: the Teacher Supervision page's queues, the Certificates page's Pending tab, the credentials queue.
+  'leave.pending': {
+    label: { en: 'Leave requests waiting for a decision', ar: 'طلبات إجازة تنتظر القرار' },
+    icon: 'calendar',
+    backlog: true,
+    href: SUPERVISION('section=leave'),
+  },
+  'absences.open': {
+    label: { en: 'Absences waiting for a decision', ar: 'غيابات تنتظر القرار' },
+    icon: 'users',
+    backlog: true,
+    href: SUPERVISION('section=absences'),
+  },
+  'lateness.open': {
+    label: { en: 'Lateness waiting for a decision', ar: 'تأخيرات تنتظر القرار' },
+    icon: 'clock',
+    backlog: true,
+    href: SUPERVISION('section=lateness'),
+  },
+  'feedback.received': {
+    label: { en: 'New parent feedback', ar: 'آراء جديدة من أولياء الأمور' },
+    icon: 'conversations',
+    backlog: true,
+    href: SUPERVISION('section=feedback&status=received'),
+  },
+  'feedback.in_review': {
+    label: { en: 'Parent feedback in review', ar: 'آراء أولياء الأمور قيد المراجعة' },
+    icon: 'conversations',
+    backlog: false,
+    href: SUPERVISION('section=feedback&status=in_review'),
+  },
+  'certificates.student_requested': {
+    label: { en: 'Student certificates requested', ar: 'شهادات طلاب مطلوبة' },
+    icon: 'academy',
+    backlog: false,
+    href: () => '/certificates?category=student',
+  },
+  'certificates.teacher_requested': {
+    label: { en: 'Teacher certificates requested', ar: 'شهادات معلمين مطلوبة' },
+    icon: 'academy',
+    backlog: false,
+    href: () => '/certificates?category=teacher',
+  },
+  'teacher_profiles.pending': {
+    label: { en: 'Teacher credentials to review', ar: 'مؤهلات معلمين تنتظر المراجعة' },
+    icon: 'approvals',
+    backlog: true,
+    href: () => '/teacher-profiles',
+  },
+  // PD-44 PR-7: the Organization page's Children and Teachers tabs, and the Structure tab's covers.
+  'learners.unsupervised': {
+    label: { en: 'Children without a supervisor', ar: 'أطفال بلا مشرف' },
+    icon: 'users',
+    backlog: true,
+    href: () => '/organization?tab=children&filter=unassigned',
+  },
+  'teachers.unsupervised': {
+    label: { en: 'Teachers without a supervisor', ar: 'معلمون بلا مشرف' },
+    icon: 'academy',
+    backlog: true,
+    href: () => '/organization?tab=teachers',
+  },
+  'covers.active': {
+    label: { en: 'Supervisors away, covered by a backup', ar: 'مشرفون في إجازة يغطيهم البديل' },
+    icon: 'users',
+    backlog: false,
+    href: () => '/organization?tab=structure',
   },
 }
 

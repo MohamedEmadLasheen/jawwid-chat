@@ -145,8 +145,9 @@ describe('Admin Portal registry and navigation', () => {
     // Escalations. Below desktop width the drawer lists every one of them, none
     // behind a toggle. (The desktop rail's menus are covered in
     // app/Navigation.test.tsx.)
-    // PD-41: plus Certificates under People; PD-48: Lesson audio under More.
-    expect(within(nav).getAllByRole('link')).toHaveLength(30)
+    // PD-41: plus Certificates under People; PD-48: Lesson audio under More;
+    // PD-52: Attendance & complaints, its own group under People.
+    expect(within(nav).getAllByRole('link')).toHaveLength(31)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })
@@ -219,6 +220,24 @@ describe('Dashboard', () => {
       'href',
       '/admin/stories?state=draft',
     )
+  })
+
+  it("shows the manager Dashboard's sections above the inventory, each tile a link (PD-44 PR-8)", async () => {
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        '/admin/overview': OVERVIEW,
+        '/admin/conversations': CONVERSATIONS,
+        '/dashboard/chats': { generatedAt: '2026-10-31T09:00:00.000Z', tiles: [{ key: 'chats.waiting', count: 5, oldestAt: null, capped: false }] },
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: { ...superAdmin, permissions: ['chat.use'] }, route: '/admin/dashboard' })
+    const chats = await screen.findByRole('region', { name: 'Chats' })
+    expect(await within(chats).findByRole('link', { name: /Chats waiting for our reply/ })).toHaveAttribute('href', '/chat?view=waiting')
+    const attention = await screen.findByRole('region', { name: 'Needs attention' })
+    // The sections come first; the inventory stays below them.
+    expect(chats.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('QA Academy')).toBeInTheDocument()
   })
 
   it('says nothing needs attention when nothing does, rather than showing zeros', async () => {

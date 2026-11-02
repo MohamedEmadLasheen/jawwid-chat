@@ -364,6 +364,7 @@ class MessagesController extends Notifier<MessagesState> {
         clientMessageId: outgoing.clientMessageId,
         conversationId: conversationId,
         enqueuedAt: now,
+        carriesUpload: outgoing.needsUpload,
       ),
     );
     _pendingBodies[outgoing.clientMessageId] = outgoing;
@@ -396,6 +397,9 @@ class MessagesController extends Notifier<MessagesState> {
       ),
     );
 
+    // A failure while the bytes go to storage says nothing about the API: storage is
+    // another host. Only the API's own answer may say "offline" (PARENT-005).
+    var uploading = false;
     try {
       var outbound = outgoing;
 
@@ -406,6 +410,7 @@ class MessagesController extends Notifier<MessagesState> {
         final note = outbound.voiceNote;
         final attachment = outbound.pendingAttachment;
 
+        uploading = true;
         final uploaded = note != null
             ? await _messages.uploadVoiceNote(
                 conversationId: conversationId,
@@ -416,6 +421,7 @@ class MessagesController extends Notifier<MessagesState> {
                 attachment: attachment!,
               );
         if (!_alive) return;
+        uploading = false;
         outbound = outbound.withUploaded(uploaded);
         _pendingBodies[entry.clientMessageId] = outbound;
       }
@@ -453,10 +459,11 @@ class MessagesController extends Notifier<MessagesState> {
             failureCode: failure.code,
           ),
         ),
-        isOffline: failure.kind == AppErrorKind.network,
+        isOffline: !uploading && failure.kind == AppErrorKind.network,
       );
 
-      _scheduleNextDrain();
+      // What waited behind a failure that steps aside goes now (PARENT-005).
+      unawaited(drain());
     }
   }
 
@@ -465,10 +472,9 @@ class MessagesController extends Notifier<MessagesState> {
     _drainTimer?.cancel();
     if (!_alive || _outbox.isEmpty) return;
 
-    final entries = _outbox.entriesFor(conversationId);
-    if (entries.isEmpty) return;
-
-    final notBefore = entries.first.nextAttemptAt;
+    // The earliest backoff anywhere in the queue: a failed upload waits beside the
+    // messages that stepped past it, not only at the head.
+    final notBefore = _outbox.nextRetryAt(conversationId);
     if (notBefore == null) return;
 
     final delay = notBefore.difference(DateTime.now());
@@ -490,16 +496,15 @@ class MessagesController extends Notifier<MessagesState> {
     await drain();
   }
 
+  /// The user abandoned a message that was never sent: it leaves the queue AND the chat
+  /// (no "deleted" ghost: nobody else ever saw it), and what waited behind it goes
+  /// (PARENT-005).
   void discard(String clientMessageId) {
     _outbox.discard(clientMessageId);
     _pendingBodies.remove(clientMessageId);
     _discardRecording(clientMessageId);
-    state = state.copyWith(
-      log: state.log.updateOne(
-        clientMessageId,
-        (m) => m.copyWith(isDeleted: true),
-      ),
-    );
+    state = state.copyWith(log: state.log.removeLocal(clientMessageId));
+    unawaited(drain());
   }
 
   /// Called on reconnect. Resyncs from the highest sequence we hold rather than refetching

@@ -79,6 +79,20 @@ async function call(token: string | null, method: string, path: string, body?: u
 const as = async (subject: string, method: string, path: string, body?: unknown) =>
   call(await staffToken(subject), method, path, body);
 
+/**
+ * ADMIN-002: an Operations member administers only the parent accounts of the
+ * families they reach -- a family with a child they supervise (or an active
+ * backup's). Fails loudly if the seed's plan ever moves the family away.
+ */
+function familyReachedBy(staff: { id: string }, index: number, via?: { id: string }): SeedManifest['families'][number] {
+  const family = m.families[index]!;
+  const supervisorId = (via ?? staff).id;
+  if (!family.children.some((c) => c.supervisorId === supervisorId)) {
+    throw new Error(`seed family ${index} has no child supervised by ${supervisorId}`);
+  }
+  return family;
+}
+
 async function accountIdOf(subject: string): Promise<string> {
   return (await g.prisma.account.findUniqueOrThrow({ where: { subject }, select: { id: true } })).id;
 }
@@ -185,7 +199,7 @@ describe('PD-21: who may', () => {
     expect(JSON.stringify(all.json)).not.toMatch(/@|passwordHash|password_hash|codeHash|"subject"/i);
     for (const a of accounts) expect(a.allowed).toEqual({ resetPassword: true, suspend: true, reactivate: false, impersonate: true, signOut: true });
 
-    const child = m.families[2]!.children[0]!;
+    const child = familyReachedBy(supervisor, 8).children[0]!;
     const found = await as(supervisor.subject, 'GET', `/admin/accounts?q=${encodeURIComponent(child.name)}`);
     const hits = found.json.accounts as Array<{ kind: string; children: string[] }>;
     expect(hits.some((a) => a.kind === 'family' && a.children.includes(child.name))).toBe(true);
@@ -275,7 +289,7 @@ describe('PD-21: who may', () => {
 
 describe('PD-21: password reset', () => {
   it('the administrator gets a code, never a password; the person sets their own; every old session ends', async () => {
-    const parent = m.families[3]!.parent;
+    const parent = familyReachedBy(m.supervisors[0]!, 12).parent;
     const accountId = await accountIdOf(parent.subject);
     const before = await login(parent.subject);
     expect(before.status).toBe(200);

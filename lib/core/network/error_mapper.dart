@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -154,8 +155,10 @@ abstract final class ErrorMapper {
   ///
   /// The communication engine wraps it as `{ error: { code, message } }`; other services may
   /// send it flat. Both shapes are accepted, and anything unexpected yields null rather than
-  /// throwing — an error path must never itself throw.
+  /// throwing — an error path must never itself throw. A request that reads its answer as
+  /// bytes (a PDF) gets its error body as bytes too: decoded here, so its code is not lost.
   static String? _codeOf(Object? body) {
+    if (body is List<int>) body = _jsonOf(body);
     if (body is! Map) return null;
 
     final nested = body['error'];
@@ -166,5 +169,14 @@ abstract final class ErrorMapper {
 
     final flat = body['code'] ?? body['error_code'] ?? nested;
     return flat is String && flat.isNotEmpty ? flat : null;
+  }
+
+  static Object? _jsonOf(List<int> bytes) {
+    if (bytes.isEmpty || bytes.length > 64 * 1024) return null;
+    try {
+      return jsonDecode(utf8.decode(bytes));
+    } on FormatException {
+      return null;
+    }
   }
 }

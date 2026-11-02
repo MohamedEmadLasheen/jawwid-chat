@@ -2898,7 +2898,34 @@ class L10nAr extends L10n {
   String get resetFinish => 'تعيين كلمة المرور';
 
   @override
-  String get recoveryOpen => 'لا تستطيع تسجيل الدخول؟';
+  String get recoveryOpen => 'أولياء الأمور: لا تستطيع تسجيل الدخول؟';
+
+  @override
+  String get signInStaffResetHint =>
+      'المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.';
+
+  @override
+  String get changePasswordTitle => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordCurrentLabel => 'كلمة المرور الحالية';
+
+  @override
+  String get changePasswordWrongCurrent => 'هذه ليست كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordCurrentRequired => 'أدخل كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'اختر كلمة مرور مختلفة عن كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordAction => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordDone =>
+      'تم تغيير كلمة المرور. سُجِّل خروجك من أجهزتك الأخرى.';
 
   @override
   String get recoveryTitle => 'استعادة حسابك';
@@ -4800,6 +4827,69 @@ class L10nAr extends L10n {
 
   @override
   String get boardVerseChanged => 'تغيّر نص الآية، أعد إدراجها';
+
+  @override
+  String get boardToolImage => 'صورة';
+
+  @override
+  String get boardImageAdding => 'جارٍ إضافة الصورة…';
+
+  @override
+  String get boardImageLoading => 'جارٍ تحميل الصورة…';
+
+  @override
+  String get boardImageUnavailable => 'الصورة غير متاحة';
+
+  @override
+  String get boardImageOff => 'لم تُفعَّل الصور في السبورات بعد.';
+
+  @override
+  String get boardImageTooLarge =>
+      'هذه الصورة كبيرة جدًا. استخدم صورة أصغر من 10 ميغابايت، أو صورًا أقل في هذه السبورة.';
+
+  @override
+  String get boardImageNotImage =>
+      'هذا الملف ليس صورة يمكن للسبورة عرضها. استخدم PNG أو JPEG أو WebP.';
+
+  @override
+  String get boardImageFailed => 'تعذّرت إضافة الصورة. حاول مرة أخرى.';
+
+  @override
+  String get boardExportPng => 'تصدير هذه الصفحة كصورة (PNG)';
+
+  @override
+  String get boardExportPdf => 'تصدير السبورة كملف PDF';
+
+  @override
+  String get boardExporting => 'جارٍ تجهيز التصدير…';
+
+  @override
+  String get boardExportSaved => 'تم التصدير.';
+
+  @override
+  String get boardExportOff => 'لم يُفعَّل التصدير بعد.';
+
+  @override
+  String get boardExportBusy => 'يجري الآن تصدير كثير. حاول بعد دقيقة.';
+
+  @override
+  String get boardExportInProgress =>
+      'لديك عمليات تصدير قيد التجهيز. انتظر بضع دقائق ثم حاول مرة أخرى.';
+
+  @override
+  String get boardExportExpired =>
+      'استغرق التصدير وقتًا طويلًا وانتهت مهلته. صدِّر مرة أخرى.';
+
+  @override
+  String get boardExportTooLarge =>
+      'هذه السبورة أكبر من أن تُصدَّر دفعة واحدة.';
+
+  @override
+  String get boardExportNotHere =>
+      'التصدير متاح في المتصفح. افتح السبورة هناك لتصديرها.';
+
+  @override
+  String get boardExportFailed => 'تعذّر التصدير. حاول مرة أخرى.';
 
   @override
   String get boardDraftStale =>
