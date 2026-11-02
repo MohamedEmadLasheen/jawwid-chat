@@ -104,7 +104,7 @@ describe('PD-52: GET /teacher-records/access', () => {
       grants: { view: true, record: true },
       leaveBalance: true,
       amounts: true,
-      teacherFile: true,
+      opensFile: true,
     });
   });
 
@@ -116,7 +116,7 @@ describe('PD-52: GET /teacher-records/access', () => {
       grants: { view: true, record: true },
       leaveBalance: true,
       amounts: false,
-      teacherFile: true,
+      opensFile: true,
     });
   });
 
@@ -128,7 +128,7 @@ describe('PD-52: GET /teacher-records/access', () => {
       grants: { view: true, record: true },
       leaveBalance: false,
       amounts: false,
-      teacherFile: false,
+      opensFile: false,
     });
   });
 

@@ -28,7 +28,7 @@ export interface TeacherRecordsAccess {
   /** A grant's amount (PD-18 payroll). */
   amounts: boolean;
   /** The link to the Teacher File (the Teachers department's). */
-  teacherFile: boolean;
+  opensFile: boolean;
 }
 
 export const NO_TEACHER_RECORDS_ACCESS: TeacherRecordsAccess = Object.freeze({
@@ -37,7 +37,7 @@ export const NO_TEACHER_RECORDS_ACCESS: TeacherRecordsAccess = Object.freeze({
   grants: Object.freeze({ view: false, record: false }),
   leaveBalance: false,
   amounts: false,
-  teacherFile: false,
+  opensFile: false,
 });
 
 export interface TeacherRecordsInput {
@@ -73,6 +73,6 @@ export function decideTeacherRecordsAccess(input: TeacherRecordsInput): TeacherR
     },
     leaveBalance: attendanceView && basis !== 'operations',
     amounts: grantsView && file.canViewFinance && holds('teacher_files.finance'),
-    teacherFile: file.canView && holds('teacher_files.view'),
+    opensFile: file.canView && holds('teacher_files.view'),
   };
 }

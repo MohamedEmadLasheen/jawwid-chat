@@ -147,10 +147,10 @@ describe('PD-52 PR-1: the keys', () => {
       grants: { view: true, record: true },
       leaveBalance: false,
       amounts: false,
-      teacherFile: false,
+      opensFile: false,
     });
     const teachers = await records.access(tsupId);
-    expect(teachers).toMatchObject({ basis: 'teachers', attendance: { view: true, decide: true }, grants: { view: true }, leaveBalance: true, teacherFile: true });
+    expect(teachers).toMatchObject({ basis: 'teachers', attendance: { view: true, decide: true }, grants: { view: true }, leaveBalance: true, opensFile: true });
     expect((await records.access(superId)).amounts).toBe(true);
     for (const who of [salesId, looseId]) {
       expect(await records.access(who)).toMatchObject({ basis: null, attendance: { view: false }, grants: { view: false } });
