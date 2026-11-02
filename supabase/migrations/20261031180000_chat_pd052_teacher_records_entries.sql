@@ -80,16 +80,19 @@ create function chat.teaches_or_taught(p_teacher uuid, p_learner uuid, p_at time
 returns boolean
 language sql
 stable
+set search_path = chat, pg_temp
 as $$
+  -- A lesson only booked, not yet begun, is not "taught" (review of #374).
   select exists (select 1 from chat.learner l where l.id = p_learner and l.teacher_id = p_teacher)
       or exists (select 1 from chat.lesson le
                   where le.learner_id = p_learner and le.teacher_id = p_teacher
                     and le.starts_at >= p_at - chat.operations_lesson_window()
+                    and le.starts_at <= p_at
                     and (le.outcome is null or le.outcome not in ('admin_cancelled', 'rescheduled', 'student_apology', 'suspended', 'voided')));
 $$;
 
 comment on function chat.teaches_or_taught(uuid, uuid, timestamptz) is
-  'PD-52: the learner''s current teacher, or the teacher of one of their lessons in the PD-26 window (not called off).';
+  'PD-52: the learner''s current teacher, or the teacher of one of their lessons in the 30 days up to now (begun, not called off).';
 
 create function chat.guard_teacher_supervision_entry_about()
 returns trigger
@@ -138,7 +141,8 @@ begin
     end if;
     if not exists (select 1 from chat.lesson le
                     where le.prospect_id = new.trial_prospect_id and le.teacher_id = new.teacher_id
-                      and le.starts_at >= now() - chat.operations_lesson_window()) then
+                      and le.starts_at >= now() - chat.operations_lesson_window()
+                      and le.starts_at <= now()) then
       raise exception 'a record is about a trial this teacher taught' using errcode = 'check_violation';
     end if;
     -- Who may write about a trial family is PR-5's (Sales); until then only the
@@ -155,6 +159,32 @@ create trigger teacher_supervision_entry_about_is_coherent
   before insert on chat.teacher_supervision_entry
   for each row execute function chat.guard_teacher_supervision_entry_about();
 
+-- The department a staff member runs or belongs to (one at most, PD-8).
+create function chat.staff_department_kind(p_staff uuid)
+returns text
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select coalesce(
+    (select d.kind from chat.department d where d.manager_id = p_staff limit 1),
+    (select d.kind from chat.department_member m join chat.department d on d.id = m.department_id where m.staff_id = p_staff limit 1));
+$$;
+
+-- Owner decision on #374: who may correct a staff testimonial.
+create function chat.may_void_testimonial(p_staff uuid, p_author uuid, p_org uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select p_staff is not null and (
+    exists (select 1 from chat.staff s where s.id = p_staff and s.role = 'super_admin' and s.is_active and s.organization_id = p_org)
+    or chat.is_operations_manager(p_staff, p_org)
+    or (chat.staff_department_kind(p_staff) is not null
+        and chat.staff_department_kind(p_staff) = chat.staff_department_kind(p_author)));
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 3. Follow-ups, resolutions and voids (PD-10's guard, 20261018170000)
 -- ---------------------------------------------------------------------------
@@ -167,7 +197,10 @@ declare
   v_conv_org uuid;
 begin
   if new.refers_to is not null then
-    select * into v_target from chat.teacher_supervision_entry where id = new.refers_to;
+    -- The target row is locked, so a void, a resolution and an uphold of one
+    -- complaint are serialized: whichever commits first, the others see it
+    -- (review of #374).
+    select * into v_target from chat.teacher_supervision_entry where id = new.refers_to for update;
     if v_target.id is null or v_target.teacher_id <> new.teacher_id
        or (new.kind <> 'entry_void' and v_target.kind <> 'complaint')
        or (new.kind = 'entry_void' and v_target.kind not in ('complaint', 'testimonial')) then
@@ -181,6 +214,12 @@ begin
       if exists (select 1 from chat.teacher_supervision_entry r where r.refers_to = v_target.id and r.kind = 'complaint_resolution')
          or exists (select 1 from chat.teacher_violation v where v.complaint_entry_id = v_target.id) then
         raise exception 'a complaint already resolved or upheld is not voided' using errcode = 'check_violation';
+      end if;
+      -- Owner decision on #374: a testimonial is corrected by the department
+      -- that recorded it, or by the Operations Manager or the super admin.
+      if v_target.kind = 'testimonial' and not chat.may_void_testimonial(new.created_by, v_target.created_by, new.organization_id) then
+        raise exception 'a testimonial is corrected by the department that recorded it, the Operations Manager or the super admin'
+          using errcode = 'insufficient_privilege';
       end if;
     elsif exists (select 1 from chat.teacher_supervision_entry x where x.refers_to = v_target.id and x.kind = 'entry_void') then
       raise exception 'a voided complaint takes no follow-up' using errcode = 'check_violation';
@@ -198,6 +237,105 @@ begin
   ) then
     raise exception 'a complaint''s source message belongs to its conversation'
       using errcode = 'foreign_key_violation';
+  end if;
+  return new;
+end;
+$$;
+
+-- PD-26's violation guard (20261027160000), with PD-52's void check and lock.
+create or replace function chat.guard_teacher_violation()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_lesson    chat.lesson%rowtype;
+  v_complaint chat.teacher_supervision_entry%rowtype;
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'a violation is never deleted; excuse it' using errcode = 'check_violation';
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.kind in ('absence', 'complaint') then
+      if not exists (select 1 from chat.teacher t where t.id = new.teacher_id and t.organization_id = new.organization_id) then
+        raise exception 'a violation is its teacher''s, in their organization' using errcode = 'insufficient_privilege';
+      end if;
+      if not chat.may_supervise_teacher(new.recorded_by, new.teacher_id, new.organization_id) then
+        raise exception 'an absence or an upheld complaint is recorded by the Teachers department or the teacher''s Operations supervisor'
+          using errcode = 'insufficient_privilege';
+      end if;
+      if new.kind = 'complaint' then
+        -- Locked, as a void or a resolution of it locks it (PD-52, review of #374).
+        select * into v_complaint from chat.teacher_supervision_entry where id = new.complaint_entry_id for update;
+        if v_complaint.id is null or v_complaint.kind <> 'complaint' or v_complaint.teacher_id <> new.teacher_id then
+          raise exception 'an upheld complaint is a complaint about the same teacher' using errcode = 'foreign_key_violation';
+        end if;
+        -- PD-52: a complaint entered by mistake is never upheld, nor counted on the ladder.
+        if exists (select 1 from chat.teacher_supervision_entry x where x.refers_to = v_complaint.id and x.kind = 'entry_void') then
+          raise exception 'a voided complaint is not upheld' using errcode = 'check_violation';
+        end if;
+        -- It counts in the month the complaint was made.
+        new.occurred_at := v_complaint.created_at;
+      elsif new.occurred_at > now() then
+        raise exception 'an absence is recorded once it has happened' using errcode = 'check_violation';
+      end if;
+      if new.decision is not null then
+        raise exception 'a violation is recorded undecided' using errcode = 'check_violation';
+      end if;
+      new.month := chat.academy_month(new.occurred_at);
+      new.recorded_at := now();
+      return new;
+    end if;
+
+    select * into v_lesson from chat.lesson where id = new.lesson_id;
+    if v_lesson.organization_id is distinct from new.organization_id or v_lesson.teacher_id is distinct from new.teacher_id then
+      raise exception 'a violation is the lesson''s own teacher''s, in its organization'
+        using errcode = 'insufficient_privilege';
+    end if;
+    if new.kind = 'late' then
+      if v_lesson.outcome is distinct from 'held' then
+        raise exception 'lateness is recorded on a lesson that was held' using errcode = 'check_violation';
+      end if;
+      if not chat.may_supervise_learner_row(new.recorded_by, new.teacher_id, v_lesson.learner_id, new.organization_id) then
+        raise exception 'lateness is recorded by the Teachers department or the Operations supervisor of the lesson''s child' using errcode = 'insufficient_privilege';
+      end if;
+    elsif v_lesson.outcome is distinct from new.kind then
+      raise exception 'a % violation needs a lesson closed as %', new.kind, new.kind using errcode = 'check_violation';
+    end if;
+    if new.decision is not null then
+      raise exception 'a violation is recorded undecided' using errcode = 'check_violation';
+    end if;
+    new.occurred_at := v_lesson.starts_at;
+    new.month := chat.academy_month(v_lesson.starts_at);
+    new.recorded_at := now();
+    return new;
+  end if;
+
+  -- UPDATE: the decision is written once, and nothing else moves.
+  if old.decision is not null then
+    raise exception 'a violation is decided once' using errcode = 'check_violation';
+  end if;
+  if (new.id, new.organization_id, new.teacher_id, new.lesson_id, new.kind, new.occurred_at, new.month,
+      new.late_minutes, new.recorded_by, new.recorded_at, new.note, new.complaint_entry_id)
+     is distinct from
+     (old.id, old.organization_id, old.teacher_id, old.lesson_id, old.kind, old.occurred_at, old.month,
+      old.late_minutes, old.recorded_by, old.recorded_at, old.note, old.complaint_entry_id) then
+    raise exception 'only the decision on a violation may be written' using errcode = 'check_violation';
+  end if;
+  if new.decision is not null then
+    if not chat.may_supervise_teacher(new.decided_by, new.teacher_id, new.organization_id) then
+      raise exception 'a violation is decided by the teacher''s own Teachers department or Operations supervisor'
+        using errcode = 'insufficient_privilege';
+    end if;
+    if new.suspension_id is not null and not exists (
+      select 1 from chat.teacher_suspension s
+       where s.id = new.suspension_id and s.teacher_id = new.teacher_id
+         and s.kind = case new.decision when 'temporary_suspension' then 'temporary' else 'permanent' end
+    ) then
+      raise exception 'a suspension decision names that teacher''s suspension of the same kind'
+        using errcode = 'check_violation';
+    end if;
+    new.decided_at := now();
   end if;
   return new;
 end;
@@ -226,4 +364,7 @@ create trigger supervision_void_settles_its_complaint after insert on chat.teach
   execute function chat.work_task_from_supervision_void();
 
 revoke all on function chat.guard_teacher_supervision_entry_about() from public;
+revoke all on function chat.teaches_or_taught(uuid, uuid, timestamptz) from public;
+revoke all on function chat.staff_department_kind(uuid) from public;
+revoke all on function chat.may_void_testimonial(uuid, uuid, uuid) from public;
 revoke all on function chat.work_task_from_supervision_void() from public;

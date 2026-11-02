@@ -182,6 +182,14 @@ export class TeacherRecordsService {
     if (target.parentFeedbackId) {
       throw new CommError(CommErrorCode.TEACHER_FILE_CONFLICT, "a parent's own complaint is answered, never voided", 409);
     }
+    // Owner decision on #374: a testimonial is corrected by the department that
+    // recorded it, or by the Operations Manager or the super admin (the
+    // database's chat.may_void_testimonial decides; this is its readable 403).
+    if (target.kind === TESTIMONIAL) {
+      const [{ ok }] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT chat.may_void_testimonial(${actor.actorId}::uuid, ${target.createdBy}::uuid, ${target.organizationId}::uuid) AS ok`;
+      if (!ok) throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'a testimonial is corrected by the department that recorded it');
+    }
     const reason = requireText('reason', body.reason, REASON_MAX);
     const row = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
@@ -221,47 +229,87 @@ export class TeacherRecordsService {
   async summary(actorId: string, teacherId: string) {
     const { actor, access, page } = await this.ctx(actorId, (a) => a.attendance.view || a.grants.view);
     const teacher = await this.files.requireTeacher(actor, teacherId, 'page');
+    const org = teacher.organizationId;
     const [{ today }] = await this.prisma.$queryRaw<Array<{ today: string }>>`SELECT chat.academy_today()::text AS today`;
     const month = today.slice(0, 7);
     const year = today.slice(0, 4);
     const yearRange = { from: new Date(`${year}-01-01T00:00:00Z`), to: new Date(`${Number(year) + 1}-01-01T00:00:00Z`) };
+    // Review of #374: each section only for the key that covers it -- page A's
+    // (away, the ladder, open complaints) for attendance.view, page B's
+    // (grants, testimonials) for grants.view. A section not covered is null.
+    const attendance = access.attendance.view;
+    const grants = access.grants.view;
 
-    const [away, violations, complaints, bonuses, testimonials, praise] = await Promise.all([
-      this.files.awayToday([teacher.id]),
-      this.prisma.teacherViolation.findMany({
-        where: { teacherId: teacher.id, month: new Date(`${month}-01T00:00:00Z`) },
-        select: { lessonId: true, kind: true, decision: true },
-      }),
-      this.prisma.teacherSupervisionEntry.findMany({ where: { teacherId: teacher.id, kind: 'complaint' }, take: LIST_LIMIT }),
-      this.prisma.teacherSupervisionEntry.findMany({
-        where: { teacherId: teacher.id, kind: 'bonus', createdAt: { gte: yearRange.from, lt: yearRange.to } },
-        take: LIST_LIMIT,
-      }),
-      this.visibleTestimonials(actor, page, { teacherId: teacher.id, ...yearRange }),
-      this.feedback.praise(actor, page, { teacherId: teacher.id, ...yearRange }),
+    const [away, ladder, openComplaints, grantCount, testimonialCount] = await Promise.all([
+      attendance ? this.files.awayToday([teacher.id]).then((m) => m.get(teacher.id) ?? null) : null,
+      attendance ? this.ladderOf(teacher.id, month) : null,
+      attendance ? this.openComplaints(page, org, teacher.id) : null,
+      grants ? this.grantCount(page, org, teacher.id, yearRange) : null,
+      grants ? this.testimonialCount(actor, page, teacher.id, yearRange) : null,
     ]);
+    return {
+      teacher: { id: teacher.id, name: teacher.name, isActive: teacher.isActive && teacher.leftAt === null },
+      away,
+      ladder,
+      openComplaints,
+      year,
+      grants: grantCount,
+      testimonials: testimonialCount,
+      opensFile: access.opensFile,
+    };
+  }
 
+  /** The teacher's month on the ladder, whole (it sets the next step), as GET /teachers/:id/discipline counts it. */
+  private async ladderOf(teacherId: string, month: string) {
+    const violations = await this.prisma.teacherViolation.findMany({
+      where: { teacherId, month: new Date(`${month}-01T00:00:00Z`) },
+      select: { lessonId: true, kind: true, decision: true },
+    });
     const counted = (await this.standing(violations)).filter((v) => v.decision !== Decision.EXCUSED).length;
+    return { month, counted, nextStep: decisionForStep(counted + 1) };
+  }
+
+  /**
+   * Complaints neither resolved nor voided. Counted in the database when the
+   * caller sees the teacher whole; otherwise every one of the teacher's
+   * complaints is read (no cap) and narrowed to the caller's rows.
+   */
+  private async openComplaints(page: PageScope, org: string, teacherId: string): Promise<number> {
+    if (scopeCovers(page.whole, teacherId)) {
+      const [{ n }] = await this.prisma.$queryRaw<Array<{ n: number }>>`
+        SELECT count(*)::int AS n FROM chat.teacher_supervision_entry e
+         WHERE e.organization_id = ${org}::uuid AND e.teacher_id = ${teacherId}::uuid AND e.kind = 'complaint'
+           AND NOT EXISTS (SELECT 1 FROM chat.teacher_supervision_entry r
+                            WHERE r.refers_to = e.id AND r.kind IN ('complaint_resolution', 'entry_void'))`;
+      return n;
+    }
+    const complaints = await this.prisma.teacherSupervisionEntry.findMany({ where: { organizationId: org, teacherId, kind: 'complaint' } });
     const familyOf = await familiesOfComplaints(this.prisma, complaints);
-    const shownComplaints = complaints.filter((c) => pageRowVisible(page, c.teacherId, complaintAbout(c, familyOf)));
+    const shown = complaints.filter((c) => pageRowVisible(page, c.teacherId, complaintAbout(c, familyOf)));
+    if (shown.length === 0) return 0;
     const closed = await this.prisma.teacherSupervisionEntry.findMany({
-      where: { refersTo: { in: shownComplaints.map((c) => c.id) }, kind: { in: ['complaint_resolution', ENTRY_VOID] } },
+      where: { refersTo: { in: shown.map((c) => c.id) }, kind: { in: ['complaint_resolution', ENTRY_VOID] } },
       select: { refersTo: true },
     });
     const closedIds = new Set(closed.map((c) => c.refersTo));
-    const voidedTestimonials = await this.voidsOf(testimonials.map((t) => t.id));
-    const shownBonuses = bonuses.filter((b) => pageRowVisible(page, b.teacherId, aboutOf(b)));
+    return shown.filter((c) => !closedIds.has(c.id)).length;
+  }
 
-    return {
-      teacher: { id: teacher.id, name: teacher.name, isActive: teacher.isActive && teacher.leftAt === null },
-      away: away.get(teacher.id) ?? null,
-      ladder: { month, counted, nextStep: decisionForStep(counted + 1) },
-      openComplaints: shownComplaints.filter((c) => !closedIds.has(c.id)).length,
-      year,
-      grants: shownBonuses.length,
-      testimonials: testimonials.filter((t) => !voidedTestimonials.has(t.id)).length + praise.length,
-      opensFile: access.opensFile,
-    };
+  private async grantCount(page: PageScope, org: string, teacherId: string, range: { from: Date; to: Date }): Promise<number> {
+    const bonuses = await this.prisma.teacherSupervisionEntry.findMany({
+      where: { organizationId: org, teacherId, kind: 'bonus', createdAt: { gte: range.from, lt: range.to } },
+      select: { teacherId: true, learnerId: true, familyId: true, trialProspectId: true },
+    });
+    return bonuses.filter((b) => pageRowVisible(page, b.teacherId, aboutOf(b))).length;
+  }
+
+  private async testimonialCount(actor: Actor, page: PageScope, teacherId: string, range: { from: Date; to: Date }): Promise<number> {
+    const [testimonials, praise] = await Promise.all([
+      this.visibleTestimonials(actor, page, { teacherId, ...range }),
+      this.feedback.praise(actor, page, { teacherId, ...range }),
+    ]);
+    const voided = await this.voidsOf(testimonials.map((t) => t.id));
+    return testimonials.filter((t) => !voided.has(t.id)).length + praise.length;
   }
 
   // ------------------------------------------------------------------

@@ -212,8 +212,13 @@ export class ParentFeedbackService {
       throw e;
     }
     const page = await this.files.teacherScope.pageRowsOf(gate.actor);
+    // PD-52 (review of #374): as `list` does, only the categories on a page the caller holds.
+    const keys = await this.files.keysOf(gate.actor);
+    const readable = FEEDBACK_CATEGORIES.filter((c) => feedbackKeyAllows(c, 'read', keys));
     const tile = async (status: 'received' | 'in_review') => {
-      const { rows, candidates } = await this.listed(gate.actor, page, { status });
+      const listed = await this.listed(gate.actor, page, { status });
+      const candidates = listed.candidates;
+      const rows = listed.rows.filter((r) => readable.includes(r.category as FeedbackCategory));
       const oldest = rows.length ? rows[rows.length - 1]!.createdAt : null;
       return dashboardTile(`feedback.${status}`, rows.length, oldest, candidates >= LIST_LIMIT);
     };

@@ -30,6 +30,14 @@ import { TeacherFileService } from '../../src/teacher-file/teacher-file.service'
 import { TeacherRecordsService } from '../../src/teacher-file/teacher-records.service';
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { CommError } from '@platform/errors';
+import { LessonService } from '../../src/lessons/lesson.service';
+import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
+import { CardPoster } from '../../src/supervision/card-poster';
+import { DisciplineService } from '../../src/discipline/discipline.service';
+import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { TrialService } from '../../src/lessons/trial.service';
+import { NewStudentsService } from '../../src/new-students/new-students.service';
+import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { buildGraph, seed, supervise, truncate, withAssignmentGate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -37,6 +45,13 @@ const audit = new PrismaAuditService();
 const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit);
 const feedback = new ParentFeedbackService(g.prisma, g.conversations, files, audit);
 const records = new TeacherRecordsService(g.prisma, g.conversations, files, feedback, new PermissionService(g.prisma), audit);
+const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
+const supervisionChats = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
+const cards = new CardPoster(g.conversations, g.outbox, audit);
+const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
+const trialGroups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, trialGroups, new NewStudentsService(g.prisma));
+const discipline = new DisciplineService(g.prisma, g.conversations, supervisionChats, cards, lessons, g.outbox, g.config, audit, trials);
 
 jest.setTimeout(120_000);
 
@@ -339,5 +354,136 @@ describe('PD-52 PR-2: testimonials, corrections and links', () => {
     const ops = await records.summary(s.otherAdminId, s.teacherId);
     expect(ops).toMatchObject({ openComplaints: 1, testimonials: 0, opensFile: false });
     expect(await code(records.summary(s.otherAdminId, s.unrelatedTeacherId))).toBe('COMM.TEACHER_FILE_NOT_FOUND:404');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review of #374
+// ---------------------------------------------------------------------------
+
+/**
+ * A Teachers supervisor who holds page B's keys and none of page A's (their
+ * legacy bundle trimmed for the test, then restored): a basis, grants only.
+ */
+async function asGrantsOnly<T>(fn: () => Promise<T>): Promise<T> {
+  const trimmed = ['teacher_supervision.view', 'teacher_supervision.record', 'teacher_attendance.view', 'teacher_attendance.record', 'teacher_attendance.decide'];
+  const flip = (on: boolean) => `select set_config('chat.pd040_catalogue_change', '${on ? 'on' : 'off'}', true)`;
+  await g.prisma.$transaction([
+    g.prisma.$executeRawUnsafe(flip(true)),
+    g.prisma.$executeRawUnsafe(`delete from chat.legacy_permission_bundle where tier = 'supervisor' and department_kind = 'teachers' and permission_key = any($1::text[])`, trimmed),
+  ]);
+  try {
+    return await fn();
+  } finally {
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(flip(true)),
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) select 'supervisor', 'teachers', k from unnest($1::text[]) k on conflict do nothing`,
+        trimmed,
+      ),
+    ]);
+  }
+}
+
+/** Run two acts at once, many times over; return how many of each settled each way. */
+async function race(make: () => Promise<{ a: () => Promise<unknown>; b: () => Promise<unknown> }>, rounds = 5) {
+  const outcomes: Array<[string, string]> = [];
+  for (let i = 0; i < rounds; i++) {
+    const { a, b } = await make();
+    const [ra, rb] = await Promise.allSettled([a(), b()]);
+    outcomes.push([ra.status, rb.status]);
+  }
+  return outcomes;
+}
+
+describe('PD-52, review of #374', () => {
+  it('P1: a voided complaint is never upheld -- by the service, and by the database with the app bypassed', async () => {
+    const c = await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'Late.', source: 'management' });
+    await records.voidEntry(tsupId, c.id, { reason: 'Entered twice.' });
+    expect(await code(discipline.upholdComplaint(tsupId, c.id, { note: 'x' }))).toMatch(/DISCIPLINE_STATE:409$/);
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.teacher_violation (organization_id, teacher_id, kind, complaint_entry_id, occurred_at, month, recorded_by)
+         values (chat.default_organization_id(), $1::uuid, 'complaint', $2::uuid, now(), current_date, $3::uuid)`,
+        s.teacherId,
+        c.id,
+        tsupId,
+      ),
+    ).rejects.toThrow(/voided complaint is not upheld/);
+    expect(await g.prisma.teacherViolation.count({ where: { complaintEntryId: c.id } })).toBe(0);
+  });
+
+  it('P1: a void racing an uphold, or a resolution, of one complaint -- exactly one lands, every time', async () => {
+    const upheld = await race(async () => {
+      const c = await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'Rude.', source: 'management' });
+      return { a: () => records.voidEntry(tsupId, c.id, { reason: 'mistake' }), b: () => discipline.upholdComplaint(tsupId, c.id, {}) };
+    });
+    for (const [a, b] of upheld) expect([a, b].filter((x) => x === 'fulfilled')).toHaveLength(1);
+    const resolved = await race(async () => {
+      const c = await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'Rude.', source: 'management' });
+      return {
+        a: () => records.voidEntry(tsupId, c.id, { reason: 'mistake' }),
+        b: () => files.addEntry(tsupId, s.teacherId, { kind: 'complaint_resolution', body: 'Talked.', refersTo: c.id }),
+      };
+    });
+    for (const [a, b] of resolved) expect([a, b].filter((x) => x === 'fulfilled')).toHaveLength(1);
+    // And the rows agree: no complaint is both voided and upheld or resolved.
+    const [{ both }] = await g.prisma.$queryRaw<Array<{ both: number }>>`
+      SELECT count(*)::int AS both FROM chat.teacher_supervision_entry v
+       WHERE v.kind = 'entry_void'
+         AND (EXISTS (SELECT 1 FROM chat.teacher_violation x WHERE x.complaint_entry_id = v.refers_to)
+              OR EXISTS (SELECT 1 FROM chat.teacher_supervision_entry r WHERE r.refers_to = v.refers_to AND r.kind = 'complaint_resolution'))`;
+    expect(both).toBe(0);
+  });
+
+  it('P2: the strip gives each section only to the key that covers it; the feedback tiles count only the categories held', async () => {
+    await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'Late.', source: 'management' });
+    await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'praise', body: 'Kind.' });
+    await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'complaint', body: 'Short.' });
+    const whole = await records.summary(tsupId, s.teacherId);
+    expect(whole).toMatchObject({ openComplaints: 2, testimonials: 1, ladder: { counted: 0 } });
+    const tiles = (t: Array<{ key: string; count: number }>) => Object.fromEntries(t.map((x) => [x.key, x.count]));
+    expect(tiles(await feedback.dashboardCounts(tsupId))).toMatchObject({ 'feedback.received': 2 });
+
+    await asGrantsOnly(async () => {
+      expect(await records.access(tsupId)).toMatchObject({ attendance: { view: false }, grants: { view: true } });
+      expect(await records.summary(tsupId, s.teacherId)).toMatchObject({ away: null, ladder: null, openComplaints: null, testimonials: 1, grants: 0 });
+      expect(tiles(await feedback.dashboardCounts(tsupId))).toMatchObject({ 'feedback.received': 1 });
+    });
+  });
+
+  it('P3: a lesson only booked, not yet begun, does not make a teacher "taught" -- a trial in three days names no trial family', async () => {
+    const organizationId = (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
+    const prospect = await g.prisma.trialProspect.create({ data: { organizationId, displayName: 'prospect_q', createdBy: tsupId } });
+    const start = Date.now() + 3 * 86_400_000;
+    await g.prisma.lesson.create({
+      data: {
+        organizationId, kind: 'trial', prospectId: prospect.id, teacherId: s.teacherId,
+        startsAt: new Date(start), endsAt: new Date(start + 1_800_000), createdByKind: 'staff', createdBy: tsupId,
+      },
+    });
+    expect(await code(records.recordTestimonial(tsupId, s.teacherId, { body: 'x', source: 'other', prospectId: prospect.id }))).toBe('COMM.TEACHER_FILE_CONFLICT:409');
+  });
+
+  it('owner decision: a testimonial is corrected by the department that recorded it, the Operations Manager or the super admin', async () => {
+    const t = await records.recordTestimonial(tsupId, s.teacherId, { body: 'Kind words.', source: 'staff_observation' });
+    // admin_a holds grants.record (Operations) and sees the row, but did not record it.
+    expect(await code(records.voidEntry(s.ownerId, t.id, { reason: 'x' }))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, refers_to, created_by)
+         values (chat.default_organization_id(), $1::uuid, 'entry_void', 'x', $2::uuid, $3::uuid)`,
+        s.teacherId,
+        t.id,
+        s.ownerId,
+      ),
+    ).rejects.toThrow(/department that recorded it/);
+    // The Operations Manager may.
+    await records.voidEntry(s.managerId, t.id, { reason: 'Recorded for the wrong teacher.' });
+    // An Operations testimonial is Operations' to correct; the Teachers department may not.
+    const ops = await records.recordTestimonial(s.ownerId, s.teacherId, { body: 'Mother thanked her.', source: 'parent_call', learnerId: s.learnerId });
+    expect(await code(records.voidEntry(tsupId, ops.id, { reason: 'x' }))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    await records.voidEntry(superId, ops.id, { reason: 'Wrong child.' });
+    expect(await g.prisma.teacherSupervisionEntry.count({ where: { kind: 'entry_void', refersTo: ops.id } })).toBe(1);
   });
 });
