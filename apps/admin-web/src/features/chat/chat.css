@@ -612,3 +612,8 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 .cw-info-list__person { display: flex; align-items: center; gap: var(--space-2, 8px); }
 .cw-info-list__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-info-list__person time { font-size: var(--fs-xs); color: var(--text-subtle); }
+
+/* PARENT-003: the length counter near the limit, and why Send waits past it. */
+.cw-composer__count { align-self: center; font-size: var(--fs-sm); color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cw-composer__count--over { color: var(--danger); font-weight: 600; }
+.cw-composer__over { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--danger); }
