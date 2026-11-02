@@ -351,9 +351,9 @@ describe('on a phone', () => {
 
   it('in Arabic the agenda reads right to left on the 12-hour clock', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26', locale: 'ar' })
-    const lesson = await screen.findByRole('button', { name: /Child Alpha · ١:٠٠ م – ٢:٠٠ م/ })
+    const lesson = await screen.findByRole('button', { name: /Child Alpha · 1:00 م – 2:00 م/ })
     expect(document.documentElement.dir).toBe('rtl')
-    expect(lesson).toHaveTextContent('١:٠٠ م – ٢:٠٠ م')
+    expect(lesson).toHaveTextContent('1:00 م – 2:00 م')
   })
 })
 

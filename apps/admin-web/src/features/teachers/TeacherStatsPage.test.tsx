@@ -247,9 +247,9 @@ describe('readable statistics', () => {
   it('in Arabic, a count agrees with its number', async () => {
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10', locale: 'ar' })
     await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
-    expect(await screen.findByText('٦٣ حصة')).toBeInTheDocument() // 11 and more: the singular
-    expect(screen.getByText('٥ حصص')).toBeInTheDocument() // 3 to 10: the plural
-    expect(screen.queryByText('٥ حصة')).toBeNull()
+    expect(await screen.findByText('63 حصة')).toBeInTheDocument() // 11 and more: the singular
+    expect(screen.getByText('5 حصص')).toBeInTheDocument() // 3 to 10: the plural
+    expect(screen.queryByText('5 حصة')).toBeNull()
   })
 
   it('make-ups are counted once: with the month summary shown, no second, closed-only card beside it', async () => {

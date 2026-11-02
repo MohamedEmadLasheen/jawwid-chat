@@ -256,17 +256,17 @@ export function useScheduleText() {
 
 /** A calendar day ("2026-10-26") as words. A day, not an instant: no zone can move it. */
 export function dayLabel(day: string, locale: 'ar' | 'en', opts: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { ...opts, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { ...opts, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))
 }
 
 /** Minutes as hours with one decimal: 90 -> "1.5". */
 export function hoursOf(minutes: number, locale: 'ar' | 'en'): string {
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { maximumFractionDigits: 1 }).format(minutes / 60)
+  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { maximumFractionDigits: 1 }).format(minutes / 60)
 }
 
 export function percentOf(ratio: number | null, locale: 'ar' | 'en'): string {
   if (ratio === null) return '—'
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { style: 'percent', maximumFractionDigits: 0 }).format(ratio)
+  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { style: 'percent', maximumFractionDigits: 0 }).format(ratio)
 }
 
 /** A server refusal as a sentence; codes we know get our own words. */

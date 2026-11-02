@@ -31,7 +31,7 @@ function fill(text: string, values: Record<string, number>): string {
  */
 export function MonthSummaryPanel({ summary: s }: { summary: MonthSummary }) {
   const { tx, locale } = useJourneyCopy()
-  const n = (v: number) => new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB').format(v)
+  const n = (v: number) => new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB').format(v)
   const tiles: Array<{ key: string; label: string; value: number; split?: string }> = [
     { key: 'total', label: tx(S.totalScheduled), value: s.totalScheduled },
     { key: 'conducted', label: tx(S.conducted), value: s.conducted, split: fill(tx(S.conductedSplit), { r: s.completed.regular, m: s.completed.makeup }) },

@@ -16,7 +16,7 @@ export function money(minor: unknown, currency: unknown, locale: string): string
   const n = Number(minor)
   const code = str(currency)
   if (!Number.isFinite(n) || !/^[A-Z]{3}$/.test(code)) return ''
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { style: 'currency', currency: code }).format(n / 100)
+  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { style: 'currency', currency: code }).format(n / 100)
 }
 
 /** A day on the academy's calendar (YYYY-MM-DD), shown as a date. */

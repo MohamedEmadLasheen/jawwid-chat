@@ -51,7 +51,13 @@ export function rememberAccountLocale(accountId: string, locale: Locale): void {
     // A convenience; losing it must not break the app.
   }
 }
-export const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG', en: 'en-GB' }
+/**
+ * The locale each language formats with. Arabic is `ar-EG` with the Latin numbering
+ * system (`-u-nu-latn`): Western digits 0-9 in both locales, dates and times included
+ * (DD-09, docs/design/decisions.md; RQA-F3). Without the extension `ar-EG` prints
+ * Arabic-Indic digits (٠١٢٣) in Intl, beside the counts a screen shows in 0-9.
+ */
+export const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG-u-nu-latn', en: 'en-GB' }
 
 function readStoredLocale(): Locale {
   try {
