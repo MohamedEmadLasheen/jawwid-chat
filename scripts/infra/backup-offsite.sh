@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The weekly off-site copy of the database backup. Owner: infrastructure.
 #
-#   STORAGE_ENDPOINT=https://fra1.digitaloceanspaces.com STORAGE_REGION=fra1 \
-#   BACKUP_BUCKET=jawwid-backups STORAGE_ACCESS_KEY=... STORAGE_SECRET_KEY=... \
+#   BACKUP_SPACES_ENDPOINT=https://fra1.digitaloceanspaces.com BACKUP_SPACES_REGION=fra1 \
+#   BACKUP_BUCKET=jawwid-backups BACKUP_SPACES_ACCESS_KEY=... BACKUP_SPACES_SECRET_KEY=... \
 #     scripts/infra/backup-offsite.sh upload ./backups
 #   ... scripts/infra/backup-offsite.sh prune            # keeps the last 8 weeks
 #   ... scripts/infra/backup-offsite.sh list
@@ -24,9 +24,15 @@
 # BACKUP_RETENTION_DAYS (default 56 = 8 weeks) and never one inside the window,
 # and never touches anything outside backups/weekly/.
 #
+# ITS OWN BUCKET AND ITS OWN KEY, never the application's (review of #414):
+# a Spaces key is not prefix-scoped, so the app's key -- held by every API
+# instance -- could delete every backup. BACKUP_BUCKET is required, and the
+# BACKUP_SPACES_* key is a separate Spaces key limited to that bucket; there is
+# no fallback to the application's storage key.
+#
 # Requires: aws (AWS CLI v2; preinstalled on GitHub's Ubuntu runners). No
 # credential is read from or written to the repository: all of it comes from the
-# environment (the production GitHub Environment's secrets).
+# environment (the `backup` GitHub Environment's secrets).
 set -euo pipefail
 
 PREFIX="backups/weekly"
@@ -36,16 +42,19 @@ die() { echo "backup-offsite: $*" >&2; exit 1; }
 
 need_env() {
   local missing=""
-  for v in STORAGE_ENDPOINT STORAGE_REGION BACKUP_BUCKET STORAGE_ACCESS_KEY STORAGE_SECRET_KEY; do
+  for v in BACKUP_SPACES_ENDPOINT BACKUP_SPACES_REGION BACKUP_BUCKET BACKUP_SPACES_ACCESS_KEY BACKUP_SPACES_SECRET_KEY; do
     [ -n "${!v:-}" ] || missing="$missing $v"
   done
   [ -z "$missing" ] || die "missing:$missing"
   command -v aws >/dev/null 2>&1 || die "the AWS CLI (aws) is not installed"
-  export AWS_ACCESS_KEY_ID="$STORAGE_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$STORAGE_SECRET_KEY" AWS_DEFAULT_REGION="$STORAGE_REGION"
+  export AWS_ACCESS_KEY_ID="$BACKUP_SPACES_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$BACKUP_SPACES_SECRET_KEY" AWS_DEFAULT_REGION="$BACKUP_SPACES_REGION"
+  # AWS CLI 2.23+ sends new default checksums that S3-compatible stores such as
+  # Spaces reject; ask for them only when an operation requires one.
+  export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
 }
 
-s3()    { aws --endpoint-url "$STORAGE_ENDPOINT" s3 "$@"; }
-s3api() { aws --endpoint-url "$STORAGE_ENDPOINT" s3api "$@"; }
+s3()    { aws --endpoint-url "$BACKUP_SPACES_ENDPOINT" s3 "$@"; }
+s3api() { aws --endpoint-url "$BACKUP_SPACES_ENDPOINT" s3api "$@"; }
 
 # Portable "N days before YYYY-MM-DD" (GNU date, then BSD date).
 days_before() {

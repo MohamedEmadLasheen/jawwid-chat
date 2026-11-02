@@ -9,6 +9,8 @@
 #   3  an archive without its .hmac is refused (it could not be restored)
 #   4  the three files land under backups/weekly/<day>/ and are read back
 #   5  prune removes only expired weekly prefixes, never anything else
+#   6  the application's STORAGE_* key is never used: without the BACKUP_* key
+#      and BACKUP_BUCKET it refuses
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -47,8 +49,8 @@ esac
 STUB
 chmod +x "$SANDBOX/bin/aws"
 export PATH="$SANDBOX/bin:$PATH" BUCKET_DIR
-export STORAGE_ENDPOINT=https://spaces.invalid STORAGE_REGION=fra1 BACKUP_BUCKET=jawwid-backups \
-  STORAGE_ACCESS_KEY=AKIA-STUB STORAGE_SECRET_KEY=stub-secret
+export BACKUP_SPACES_ENDPOINT=https://spaces.invalid BACKUP_SPACES_REGION=fra1 BACKUP_BUCKET=jawwid-backups \
+  BACKUP_SPACES_ACCESS_KEY=AKIA-STUB BACKUP_SPACES_SECRET_KEY=stub-secret
 
 # 1 -----------------------------------------------------------------------------
 got="$(printf '2026-09-12\n2026-09-13\n2026-11-01\nnot-a-date\n../etc\n' | bash "$OFFSITE" prune-candidates 2026-11-08)"
@@ -85,5 +87,12 @@ left="$(ls "$BUCKET_DIR/backups/weekly" | paste -sd ' ' -)"
 if [ "$left" = "2026-09-13 2026-10-04 2026-11-08" ] && [ -f "$BUCKET_DIR/conversations/c1/attachment" ]; then
   ok "prune removes only expired weekly prefixes (kept: $left), nothing outside backups/weekly/"
 else fail "prune left: $left"; fi
+
+# 6 -----------------------------------------------------------------------------
+if env -u BACKUP_SPACES_ACCESS_KEY -u BACKUP_SPACES_SECRET_KEY -u BACKUP_BUCKET \
+     STORAGE_ACCESS_KEY=app STORAGE_SECRET_KEY=app STORAGE_BUCKET=app-bucket \
+     BACKUP_DAY=2026-11-15 bash "$OFFSITE" upload "$GOOD" >/dev/null 2>&1; then
+  fail "the upload ran on the application's STORAGE_* key"
+else ok "without its own BACKUP_* key and bucket it refuses; the app's key is never used"; fi
 
 [ "$FAILED" -eq 0 ] && echo "backup-offsite: pass" || { echo "backup-offsite: FAIL"; exit 1; }
