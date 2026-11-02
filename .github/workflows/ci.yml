@@ -547,6 +547,57 @@ jobs:
             || { echo "::error::G-41 FAIL — chat_app sees $app_dst rows in the copy, $app_src in the source"; exit 1; }
           echo "chat_app reads the copy as itself ($app_dst rows under RLS, same as the source)"
 
+  # ---------------------------------------------------------------------- e2e
+  # G-38 (release-qa). The parent and teacher journeys, black box: the built API
+  # and outbox worker run as real processes on fresh service containers, seeded
+  # by the real seed CLI, and driven over HTTP and a real socket.io client --
+  # sign-in, chat send and live receive through the worker -> Redis -> API
+  # relay, cross-family refusal, the lesson schedule, the parent's billing view.
+  # Everything it needs is generated inside scripts/qa/e2e-smoke.sh and deleted
+  # after; nothing here is a secret.
+  e2e:
+    name: G-38 · end-to-end smoke (parent + teacher, real API + worker)
+    runs-on: ubuntu-latest
+    needs: guards
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jawwid_chat_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_e2e
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Install the API
+        working-directory: apps/api
+        run: npm ci
+
+      - name: G-38 · end-to-end smoke
+        run: bash scripts/qa/e2e-smoke.sh
+
   # ------------------------------------------------------------------- images
   # AI #7. Deployment artifacts must build, and must not run privileged.
   images:
