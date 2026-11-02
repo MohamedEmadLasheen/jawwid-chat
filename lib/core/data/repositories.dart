@@ -421,7 +421,8 @@ abstract interface class PasswordChangeRepository {
 abstract interface class AccountDeletionRepository {
   /// `POST /me/account/delete`. A refusal is an AppError with the server's code
   /// (`AUTH.INVALID_CREDENTIALS` for a wrong password, `AUTH.ACCOUNT_LOCKED`,
-  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account). On success every session
+  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account,
+  /// `AUTH.TEACHER_DELETION_BLOCKED` while a teacher has lessons, students or payroll open). On success every session
   /// of the account has already ended on the server.
   Future<void> deleteAccount({required String password});
 }

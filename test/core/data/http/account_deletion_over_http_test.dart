@@ -69,4 +69,16 @@ void main() {
     expect(server.countOf('POST', '/auth/refresh'), 0);
     expect((await s.store.read())?.refreshToken, 'refresh-1');
   });
+
+  test('a teacher still with lessons, students or payroll: the 409 keeps its code and the session', () async {
+    server.on('POST', '/me/account/delete', [Reply.commError(409, 'AUTH.TEACHER_DELETION_BLOCKED')]);
+    final s = stack();
+    await seed(s.store);
+    await expectLater(
+      s.repo.deleteAccount(password: 'my-password'),
+      throwsA(isA<AppError>().having((e) => e.code, 'code', 'AUTH.TEACHER_DELETION_BLOCKED')),
+    );
+    expect(server.countOf('POST', '/auth/refresh'), 0);
+    expect((await s.store.read())?.refreshToken, 'refresh-1');
+  });
 }

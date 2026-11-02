@@ -135,6 +135,19 @@ void main() {
     expect(signOuts, isEmpty);
   });
 
+  testWidgets('a teacher with lessons, students or payroll open is told to contact the academy, and stays signed in', (tester) async {
+    for (final locale in const [Locale('en'), Locale('ar')]) {
+      signOuts.clear();
+      final l10n = await open(tester, role: UserRole.teacher, locale: locale);
+      repo.error = const AppError(AppErrorKind.validation, code: 'AUTH.TEACHER_DELETION_BLOCKED');
+      await submit(tester, 'my-password');
+      expect(find.text(l10n.deleteAccountTeacherBlocked), findsOneWidget);
+      expect(signOuts, isEmpty);
+      expect(find.byType(DeleteAccountScreen), findsOneWidget);
+    }
+    expect(find.textContaining('يُرجى التواصل مع الأكاديمية'), findsOneWidget);
+  });
+
   testWidgets('reads in Arabic', (tester) async {
     await open(tester, locale: const Locale('ar'));
     expect(find.text('حذف الحساب'), findsWidgets);

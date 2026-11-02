@@ -36,6 +36,8 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       'AUTH.INVALID_CREDENTIALS' => l10n.deleteAccountWrongPassword,
       'AUTH.ACCOUNT_LOCKED' || 'COMMON.RATE_LIMITED' => l10n.signupTooMany,
       'AUTH.FORBIDDEN' => l10n.deleteAccountStaff,
+      // A teacher with a lesson, a student or payroll still open: the academy closes those first.
+      'AUTH.TEACHER_DELETION_BLOCKED' => l10n.deleteAccountTeacherBlocked,
       _ => l10n.deleteAccountFailed,
     };
   }
