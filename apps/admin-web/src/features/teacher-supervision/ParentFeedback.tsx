@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -14,12 +14,28 @@ import { SectionIntro } from './SectionIntro'
 type CategoryFilter = 'all' | FeedbackCategory
 type StatusFilter = 'all' | FeedbackStatus
 
-/** PD-32 on the Teacher Supervision page: every parent's feedback, with Take and Reply. */
-export function ParentFeedbackSection({ basePath }: { basePath: string }) {
+/**
+ * PD-32 on the Teacher Supervision page: every parent's feedback, with Take and
+ * Reply. `only` fixes one category and drops its filter (PD-52: suggestions on
+ * the Attendance & Complaints page).
+ */
+export function ParentFeedbackSection({ basePath, only }: { basePath: string; only?: FeedbackCategory }) {
   const tx = useCopy()
   const { locale } = useI18n()
-  const [category, setCategory] = useState<CategoryFilter>('all')
-  const [status, setStatus] = useState<StatusFilter>('all')
+  const [picked, setCategory] = useState<CategoryFilter>('all')
+  const category: CategoryFilter = only ?? picked
+  // PD-44: the status lives in the URL (?section=feedback&status=received), so a
+  // Dashboard tile opens the list it counted.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('status')
+  const status: StatusFilter = asked === 'received' || asked === 'in_review' || asked === 'resolved' ? asked : 'all'
+  const setStatus = (next: StatusFilter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('status')
+      else p.set('status', next)
+      return p
+    }, { replace: true })
   const list = useParentFeedback({ ...(category !== 'all' ? { category } : {}), ...(status !== 'all' ? { status } : {}) })
   const take = useTakeFeedback()
   // PD-26 amendment: an Operations supervisor sees the teacher's name, not a Teacher File link.
@@ -32,17 +48,19 @@ export function ParentFeedbackSection({ basePath }: { basePath: string }) {
     <>
       <SectionIntro hint={tx(F.hint)} />
       <div className="toolbar th-filters">
-        <FilterChips<CategoryFilter>
-          label={tx(F.category)}
-          value={category}
-          onChange={setCategory}
-          options={[
-            { value: 'all', label: tx(F.allCategories) },
-            { value: 'praise', label: tx(F.praise) },
-            { value: 'suggestion', label: tx(F.suggestion) },
-            { value: 'complaint', label: tx(F.complaint) },
-          ]}
-        />
+        {!only && (
+          <FilterChips<CategoryFilter>
+            label={tx(F.category)}
+            value={category}
+            onChange={setCategory}
+            options={[
+              { value: 'all', label: tx(F.allCategories) },
+              { value: 'praise', label: tx(F.praise) },
+              { value: 'suggestion', label: tx(F.suggestion) },
+              { value: 'complaint', label: tx(F.complaint) },
+            ]}
+          />
+        )}
         <FilterChips<StatusFilter>
           label={tx(F.status)}
           value={status}

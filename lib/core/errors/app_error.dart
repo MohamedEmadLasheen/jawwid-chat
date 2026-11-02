@@ -58,7 +58,7 @@ enum AppErrorKind {
 /// [debugDetail] is intentionally kept out of anything user-visible and out of logs that
 /// could contain tokens or message bodies (§56).
 class AppError implements Exception {
-  const AppError(this.kind, {this.code, this.debugDetail, this.retryAfter});
+  const AppError(this.kind, {this.code, this.debugDetail, this.retryAfter, this.detail});
 
   final AppErrorKind kind;
 
@@ -73,6 +73,10 @@ class AppError implements Exception {
   /// body on purpose -- a per-account countdown in a response body would leak which accounts
   /// are under attack -- so it would be lost entirely if it were not carried here.
   final Duration? retryAfter;
+
+  /// The server's structured `error.detail`, when it sends one -- facts a client
+  /// acts on (CHATSCHED-013: how an ended call ended), never text to show.
+  final Map<String, Object?>? detail;
 
   /// Whether retrying the very same request could plausibly succeed.
   ///
@@ -124,6 +128,11 @@ class AppError implements Exception {
   /// exists. Every other transport failure is ambiguous about whether the server saw it.
   static const connectFailed = 'connect_failed';
   static const connectTimeout = 'connect_timeout';
+
+  /// An attachment's bytes did not finish sending within the time sized for them
+  /// (`uploadSendTimeout`). Retrying at once re-sends the whole file on the same
+  /// slow link, so the message outbox parks it for an explicit retry.
+  static const uploadTimeout = 'upload_timeout';
 
   @override
   String toString() => 'AppError(${kind.name}${code == null ? '' : ', $code'})';

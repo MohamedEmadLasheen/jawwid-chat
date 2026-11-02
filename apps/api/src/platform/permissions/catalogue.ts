@@ -137,6 +137,17 @@ const ENTRIES = {
   // Nothing of the Teacher File itself (teacher_files.*).
   'teacher_supervision.view': { label: { en: 'View the Teacher Supervision page', ar: 'عرض صفحة الإشراف على المعلمين' }, risk: 'pii', introducedBy: 'PD-26' },
   'teacher_supervision.record': { label: { en: 'Record on the Teacher Supervision page', ar: 'التسجيل في صفحة الإشراف على المعلمين' }, risk: 'pii', introducedBy: 'PD-26' },
+  // PD-52 (owner 2026-10-31): the two teacher-records pages that replace the
+  // Teacher Supervision page. Page A: leave, lateness, excuses and absences,
+  // complaints; its decisions (leave, the ladder, upholding a complaint,
+  // replying to a parent) are a key of their own. Page B: grants and
+  // testimonials. The old teacher_supervision.* keys are accepted beside these
+  // for one release (plan §6) and copied into every role that held them.
+  'teacher_attendance.view': { label: { en: 'View the Attendance & Complaints page', ar: 'عرض صفحة الحضور والتأخير والأعذار والشكاوى' }, risk: 'pii', introducedBy: 'PD-52' },
+  'teacher_attendance.record': { label: { en: 'Record lateness, absences, excuses and complaints', ar: 'تسجيل التأخير والغياب والأعذار والشكاوى' }, risk: 'pii', introducedBy: 'PD-52' },
+  'teacher_attendance.decide': { label: { en: 'Decide leave, the ladder and complaints', ar: 'البت في الإجازات والمخالفات والشكاوى' }, risk: 'pii', introducedBy: 'PD-52' },
+  'teacher_grants.view': { label: { en: 'View the Grants & Testimonials page', ar: 'عرض صفحة المنح والشهادات الطيبة' }, risk: 'pii', introducedBy: 'PD-52' },
+  'teacher_grants.record': { label: { en: 'Record grants and testimonials', ar: 'تسجيل المنح والشهادات الطيبة' }, risk: 'pii', introducedBy: 'PD-52' },
   'supervision.chats': { label: { en: "Open teachers' supervision chats", ar: 'فتح محادثات الإشراف مع المعلمين' }, risk: 'pii', introducedBy: 'PD-12' },
 
   'teacher_profiles.review': { label: { en: 'Review teacher profiles', ar: 'مراجعة ملفات المعلمين التعريفية' }, risk: 'pii', introducedBy: 'Teacher Profile V2' },

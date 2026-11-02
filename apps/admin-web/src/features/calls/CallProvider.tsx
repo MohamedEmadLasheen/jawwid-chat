@@ -9,7 +9,8 @@ import { createLiveKitMedia, type CallMediaFactory } from './callMedia'
 
 const CallContext = createContext<CallController | null>(null)
 
-const CALL_EVENTS = ['call.incoming', 'call.accepted', 'call.declined', 'call.ended'] as const
+// CHATSCHED-013: a drop (`call.interrupted`, with its deadline) and a rejoin (`call.resumed`) too.
+const CALL_EVENTS = ['call.incoming', 'call.accepted', 'call.declined', 'call.ended', 'call.interrupted', 'call.resumed'] as const
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null)
 
@@ -38,8 +39,15 @@ export function toServerEvent(event: (typeof CALL_EVENTS)[number], raw: unknown)
           callId,
           outcome: str(p.outcome) ?? '',
           durationSeconds: typeof p.durationSeconds === 'number' ? p.durationSeconds : null,
+          reason: str(p.reason),
         },
       }
+    case 'call.interrupted': {
+      const until = str(p.until)
+      const at = until ? Date.parse(until) : NaN
+      if (Number.isNaN(at)) return null
+      return { event, payload: { callId, until: at } }
+    }
     default:
       return { event, payload: { callId } }
   }

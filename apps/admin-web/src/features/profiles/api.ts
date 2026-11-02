@@ -81,6 +81,8 @@ export interface FamilyBilling {
   currency: string | null
   /** The family's plan: 1, 3, 6 or 12 months. */
   planMonths: number | null
+  /** ADMIN-007: the version of the three settings above, sent back with an edit of them. */
+  settingsVersion: string
   instalments: TimelineInstalment[]
   totals: Array<{ currency: string; paidMinor: number; outstandingMinor: number; overdueMinor: number }>
   canRecord: boolean
@@ -95,7 +97,10 @@ export interface FamilyBilling {
   cardAvailable: boolean
 }
 
-export type BillingUpdate = Partial<{ paymentMethod: PaymentMethod | null; currency: string | null; planMonths: number | null }>
+export type BillingUpdate = Partial<{ paymentMethod: PaymentMethod | null; currency: string | null; planMonths: number | null }> & {
+  /** ADMIN-007: the settingsVersion the edit was made from; a stale one is refused (409). */
+  version?: string
+}
 
 export interface NewInstalments {
   label: string
@@ -143,6 +148,8 @@ export interface NewFamilyPayment {
   instalmentId?: string
   learnerId?: string
   reference?: string
+  /** ADMIN-001: the form's idempotency key (one per opened form, resent on retry). */
+  paymentId: string
 }
 
 export interface StudentProfile {
@@ -175,7 +182,10 @@ const parent = (id: string) => `/parent-profiles/${encodeURIComponent(id)}`
 const family = (id: string) => `/families/${encodeURIComponent(id)}`
 
 export const profilesApi = {
-  parents: (q: string) => api.get<{ items: ParentListItem[]; truncated: boolean }>('/parent-profiles', q ? { q } : undefined),
+  parents: (q: string, access: ParentAccessFilter = 'all') => {
+    const params = { ...(q ? { q } : {}), ...(access !== 'all' ? { access } : {}) }
+    return api.get<{ items: ParentListItem[]; truncated: boolean }>('/parent-profiles', Object.keys(params).length ? params : undefined)
+  },
   parent: (id: string) => api.get<ParentProfile>(parent(id)),
   updateParent: (id: string, body: ParentUpdate) => api.post<ParentProfile>(parent(id), body),
   authorizePhoto: (id: string, mimeType: string, byteSize: number) =>
@@ -186,7 +196,7 @@ export const profilesApi = {
   billing: (familyId: string) => api.get<FamilyBilling>(`${family(familyId)}/billing`),
   updateBilling: (familyId: string, body: BillingUpdate) => api.post<FamilyBilling>(`${family(familyId)}/billing`, body),
   createInstalments: (familyId: string, body: NewInstalments | CustomInstalments) => api.post<FamilyBilling>(`${family(familyId)}/instalments`, body),
-  recordPayment: (id: string, body: { paidOn: string; method: InstalmentPaymentMethod; reference?: string }) =>
+  recordPayment: (id: string, body: { paidOn: string; method: InstalmentPaymentMethod; reference?: string; paymentId: string }) =>
     api.post<FamilyBilling>(`/instalments/${encodeURIComponent(id)}/payment`, body),
   voidInstalment: (id: string, reason: string) => api.post<FamilyBilling>(`/instalments/${encodeURIComponent(id)}/void`, { reason }),
 
@@ -196,19 +206,22 @@ export const profilesApi = {
   cancelPaymentRequest: (id: string, reason: string) => api.post<FamilyBilling>(`/payment-requests/${encodeURIComponent(id)}/cancel`, { reason }),
   recordFamilyPayment: (familyId: string, body: NewFamilyPayment) => api.post<FamilyBilling>(`${family(familyId)}/payments`, body),
   voidPayment: (id: string, reason: string) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/void`, { reason }),
-  refundPayment: (id: string, body: { amountMinor: number; reason: string }) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/refunds`, body),
+  refundPayment: (id: string, body: { amountMinor: number; reason: string; refundId: string }) => api.post<FamilyBilling>(`/payments/${encodeURIComponent(id)}/refunds`, body),
 
   student: (learnerId: string) => api.get<StudentProfile>(`/learners/${encodeURIComponent(learnerId)}/profile`),
 }
 
 export const profileKeys = {
   all: ['pd17-profiles'] as const,
-  parents: (q: string) => ['pd17-profiles', 'parents', q] as const,
+  parents: (q: string, access: ParentAccessFilter = 'all') => ['pd17-profiles', 'parents', q, access] as const,
   parent: (id: string) => ['pd17-profiles', 'parent', id] as const,
   billing: (familyId: string) => ['pd17-profiles', 'billing', familyId] as const,
   student: (id: string) => ['pd17-profiles', 'student', id] as const,
 }
 
 /** Where each profile lives: one URL per person, whoever opens it. */
+/** PD-44: the Parents list's subscription filter -- families with a child locked, or in the grace period. */
+export type ParentAccessFilter = 'all' | 'locked' | 'grace'
+
 export const parentPath = (id: string) => `/parents/${encodeURIComponent(id)}`
 export const studentPath = (id: string) => `/students/${encodeURIComponent(id)}`

@@ -5,10 +5,11 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { pageRowVisible, scopeCovers, type PageScope, type TeacherScope } from '../platform/teacher-scope';
 import { isLiveTeacher } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { CardKind, LeaveState } from '../communication/contracts/vocab';
+import { ActorKind, CardKind, LeaveState } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
@@ -186,17 +187,31 @@ export class LeaveService {
     }
     // PD-35: the requests of the teachers in the caller's scope.
     const page = await this.supervision.teacherScope.pageRowsOf(actor);
-    const scope = page.teachers;
     const rows = await this.prisma.teacherLeaveRequest.findMany({
-      where: {
-        organizationId: actor.organizationId,
-        ...(query.state ? { state: query.state } : {}),
-        ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
-      },
+      where: requestsWhere(actor, page.teachers, query.state),
       orderBy: query.state === LeaveState.REQUESTED ? { requestedAt: 'asc' } : { firstDay: 'desc' },
-      take: 500,
+      take: LIST_LIMIT,
     });
     return { requests: await this.dtos(rows, true, page) };
+  }
+
+  /**
+   * PD-44: the Dashboard's leave tile -- `list({ state: 'requested' })`'s
+   * length, counted over the same rows (requestsWhere, the page's scope) in
+   * one statement and capped at the list's LIST_LIMIT. Staff off the
+   * Teacher Supervision page get no tile; non-staff are refused as there.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) return [];
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const r = await this.prisma.teacherLeaveRequest.aggregate({
+      where: requestsWhere(actor, page.teachers, LeaveState.REQUESTED),
+      _count: { _all: true },
+      _min: { requestedAt: true },
+    });
+    const n = r._count._all;
+    return [dashboardTile('leave.pending', Math.min(n, LIST_LIMIT), r._min.requestedAt, n > LIST_LIMIT)];
   }
 
   /**
@@ -603,13 +618,18 @@ export class LeaveService {
   }
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) throw leaveDenied();
+    return actor;
+  }
+
+  /** The supervisor, or null for staff off the page (PD-44: no tile); anyone not staff is refused. */
+  private async supervisorOrNone(actorId: string): Promise<Actor | null> {
     const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) throw leaveDenied();
     // PD-26 amendment: the Teachers department, or an Operations supervisor for
     // the teachers of their families (narrowed below by the page scope).
-    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
-    }
-    return actor;
+    return (await this.supervision.pageAccess(actor)).canSupervise ? actor : null;
   }
 
   private async requireTeacherOf(actor: Actor, teacherId: string) {
@@ -712,4 +732,20 @@ export function todayIn(tz: string, now = new Date()): string {
 
 function langOf(actor: Actor): CardLanguage {
   return actor.locale === 'en' ? 'en' : 'ar';
+}
+
+/** The Leave requests list's page size; the Dashboard tile caps at it too (PD-44). */
+const LIST_LIMIT = 500;
+
+/** The leave requests the page lists: the organization's, of the teachers in the caller's scope. */
+function requestsWhere(actor: Actor, scope: TeacherScope, state?: string): Prisma.TeacherLeaveRequestWhereInput {
+  return {
+    organizationId: actor.organizationId,
+    ...(state ? { state } : {}),
+    ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
+  };
+}
+
+function leaveDenied(): CommError {
+  return new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
 }

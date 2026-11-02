@@ -37,6 +37,8 @@ export type NavArea =
   | 'cases'
   | 'certificates'
   | 'lesson-audio'
+  | 'teacher-attendance'
+  | 'teacher-grants'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -90,7 +92,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
     // `certificates` (PD-41) is offered under People: the page and its types.
     // `lesson-audio` (PD-48): the voice-over review page, under More.
-    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'settings']
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -104,7 +106,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
     // PD-41: the Certificates page -- offered when GET /certificates/access opens it.
     // PD-48: Lesson audio -- offered when GET /lesson-audio/access opens it (the Teachers manager).
-    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'settings']
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -122,7 +124,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // coverage hold the reviewer role server-side
     // (AuthorizationService.canReviewTeacherProfile).
     // PD-48: Lesson audio, for a Teachers supervisor (listens) -- on the server's word.
-    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio']
+    // PD-52: Attendance & Complaints -- on the server's word (GET /teacher-records/access).
+    return ['chat', 'calls', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants']
   }
   if (role === 'specialist') {
     // PD-40/PD-41: the Designer -- the Certificates page, and (PD-47) the
@@ -186,6 +189,10 @@ export interface DepartmentAccess {
   certificates?: boolean
   /** PD-48: GET /lesson-audio/access -- the account holds lesson_audio.view or .review. */
   lessonAudio?: boolean
+  /** PD-52: GET /teacher-records/access -- attendance.view, the Attendance & Complaints page. */
+  teacherAttendance?: boolean
+  /** PD-52: GET /teacher-records/access -- grants.view, the Grants & Testimonials page. */
+  teacherGrants?: boolean
 }
 
 /**
@@ -194,8 +201,9 @@ export interface DepartmentAccess {
  * department (the teachers' trials) and Operations (new students).
  */
 const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => boolean>> = {
-  // The Teachers department's area; Operations is offered its Supervision page only (PD-26 amendment).
-  teachers: (a) => a.lessonManager === true || a.supervisionPage === true,
+  // The Teachers department's area. Operations, offered its Supervision page here
+  // until PD-52, has the two teacher-records pages instead.
+  teachers: (a) => a.lessonManager === true,
   trials: (a) => a.lessonManager === true || a.sales === true || a.operations === true,
   instalments: (a) => a.billingReader === true,
   // PD-17: the Parent Profile follows the same rule as the money on it.
@@ -210,6 +218,9 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   certificates: (a) => a.certificates === true,
   // PD-48: the Lesson audio review page, for whoever may listen.
   'lesson-audio': (a) => a.lessonAudio === true,
+  // PD-52: the Attendance & Complaints page, on the server's basis-and-key answer.
+  'teacher-attendance': (a) => a.teacherAttendance === true,
+  'teacher-grants': (a) => a.teacherGrants === true,
 }
 
 /** What navigation shows: the areas this role may open, minus those the server has not confirmed. */

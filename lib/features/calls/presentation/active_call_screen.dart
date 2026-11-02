@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/repositories.dart';
+import '../../../core/realtime/call_event.dart' show CallEndReason;
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
@@ -167,7 +168,8 @@ class _StatusLine extends StatelessWidget {
       CallUiPhase.starting || CallUiPhase.outgoingRinging => l10n.callOutgoing,
       CallUiPhase.incomingRinging => l10n.callIncoming,
       CallUiPhase.connecting => l10n.callConnecting,
-      CallUiPhase.live => '',
+      // CHATSCHED-013: the other side dropped; the server waits for them.
+      CallUiPhase.live => state.interruptedUntil != null ? l10n.callWaitingForReconnect : '',
       CallUiPhase.reconnecting => l10n.callReconnecting,
       CallUiPhase.ended => endedText(l10n, state),
       CallUiPhase.failed => switch (state.failure) {
@@ -214,7 +216,11 @@ class _StatusLine extends StatelessWidget {
 /// `missed` is *"No answer"* to the caller and *"Missed call"* to the callee.
 /// *"Declined"* is plain and neutral in both directions, never "rejected"
 /// (`screens/call.md` §3).
-String endedText(L10n l10n, CallUiState state) => switch (state.outcome) {
+String endedText(L10n l10n, CallUiState state) =>
+    // CHATSCHED-013: a drop nobody came back from says so, whatever the outcome.
+    state.endReason == CallEndReason.connectionLost ? l10n.callEndedConnectionLost : _outcomeText(l10n, state);
+
+String _outcomeText(L10n l10n, CallUiState state) => switch (state.outcome) {
   CallOutcome.answered => l10n.callOutcomeAnswered,
   CallOutcome.missed =>
     state.direction == CallDirection.incoming

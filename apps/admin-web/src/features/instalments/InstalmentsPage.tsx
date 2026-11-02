@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
@@ -25,7 +25,18 @@ const STATUS_TONE: Record<InstalmentStatus, Tone> = { overdue: 'danger', due: 'w
 export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const { locale } = useI18n()
-  const [responsible, setResponsible] = useState<Responsible>('all')
+  // PD-44: the supervisor filter lives in the URL, so the Dashboard's "no
+  // billing supervisor" tile opens it (/instalments?responsible=none).
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('responsible')
+  const responsible: Responsible = asked === 'me' || asked === 'none' ? asked : 'all'
+  const setResponsible = (next: Responsible) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('responsible')
+      else p.set('responsible', next)
+      return p
+    }, { replace: true })
   const [paid, setPaid] = useState(false)
   const [beforeGoLive, setBeforeGoLive] = useState(false)
   const [assigning, setAssigning] = useState<Instalment | null>(null)

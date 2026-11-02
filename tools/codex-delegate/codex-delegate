@@ -1,0 +1,1021 @@
+#!/usr/bin/env bash
+# codex-delegate -- let a Claude lead delegate a bounded task, or an independent
+# review, to the Codex CLI, in ANY Git repository on this Mac.
+#
+# Each task gets its own Git worktree and branch. Codex runs sandboxed inside it;
+# then THIS script -- not Codex -- checks scope, scans for secrets, re-runs the
+# tests (sandboxed too), and commits. The lead reads one JSON file per task.
+#
+#   run      create the worktree, run Codex, verify, commit; auto-retries on failure
+#   retry    send review feedback to the same worktree (counts toward the attempt limit)
+#   review   read-only Codex review of the diff between two commits of a clean checkout
+#   status   print a task's result.json            (--task-id ID)
+#   list     list task runs for this repository   (--all for every repository)
+#   cleanup  remove a task's worktree (only if clean); the run directory is kept
+#   doctor   check the Codex CLI, its login and the sandbox, without spending usage
+#
+# The repository is the one containing the current directory (or --repo DIR).
+# A project may tighten the rules with a `.ai-delegation.json` at its root, read
+# from the BASE commit (so a delegated agent cannot loosen it). Projects can add
+# protections; they cannot remove the global ones.
+#
+# Written for macOS /bin/bash 3.2: no associative arrays, no mapfile.
+# Docs: tools/codex-delegate/README.md and SECURITY.md in the source repository.
+set -euo pipefail
+
+VERSION="2.1.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AI_HOME="${JAWWID_AI_HOME:-$HOME/.jawwid-ai}"
+if [ -d "$SCRIPT_DIR/templates" ]; then TEMPLATES="$SCRIPT_DIR/templates"; else TEMPLATES="$AI_HOME/engine/templates"; fi
+CODEX="${CODEX_BIN:-$HOME/.local/bin/codex}"
+# The engine's folders are resolved to physical paths once, so every path it records
+# (and later compares against) is free of symlinks.
+mkdir -p "$AI_HOME/runs" "${JAWWID_AI_WORKTREES:-$HOME/jawwid-ai-worktrees}"
+AI_HOME="$(cd "$AI_HOME" && pwd -P)"
+RUNS="$AI_HOME/runs"
+WORKTREES="$(cd "${JAWWID_AI_WORKTREES:-$HOME/jawwid-ai-worktrees}" && pwd -P)"
+PROTECTED_REPOS_FILES="$AI_HOME/protected-repos.conf $SCRIPT_DIR/global/protected-repos.conf"
+MAX_ATTEMPTS_DEFAULT=3
+CODEX_TIMEOUT_DEFAULT=1800   # seconds per Codex attempt
+TEST_TIMEOUT_DEFAULT=1800    # seconds per verification command
+LOAD_MAX="${JAWWID_LOAD_MAX:-60}"   # shared-Mac rule: wait while the 1-minute load is above this
+LOAD_WAIT_MAX=1200
+CODEX_BLOCKED_RE="usage limit|rate limit reached|exceeded your (current )?quota|not logged in|please (log|sign) in|401 Unauthorized|token (has )?expired|re-?authenticate"
+PY=/usr/bin/python3          # Apple's python3; always run with -I (no user site-packages, no cwd on path)
+# Every git command after Codex has touched a tree runs without hooks or fsmonitor,
+# so nothing the agent wrote can execute outside the sandbox through Git.
+GITSAFE=(-c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.untrackedCache=false -c core.attributesFile=/dev/null -c color.ui=never -c diff.external= -c commit.gpgSign=false -c tag.gpgSign=false -c gpg.program=false -c core.sshCommand=false)
+# A diff for scanning: every file as text, no colour, no external tool, no textconv.
+RAWDIFF=(--no-color --no-ext-diff --no-textconv --text)
+
+die() { echo "codex-delegate: $*" >&2; exit 2; }
+log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "${LOGFILE:-/dev/null}" >&2; }
+usage() { sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+valid_id() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{1,48}$ ]] || die "task id must be lowercase letters, digits and dashes (2-49 chars): $1"; }
+# Every git command on a task worktree: the real git dir is pinned (recorded before
+# the agent ever ran), so a rewritten `.git` pointer is never followed; global and
+# system config are ignored (no filters, aliases, signing or ssh commands from
+# there); the commit identity comes from the run state.
+g() {
+  local gd; gd="$(state_get gitdir)"
+  [ -n "$gd" ] || gd="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git "${GITSAFE[@]}" -C "$WT" rev-parse --absolute-git-dir)"   # runs made before 2.1
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git "${GITSAFE[@]}" \
+    -c user.name="$(state_get git_name)" -c user.email="$(state_get git_email)" \
+    --git-dir="$gd" --work-tree="$WT" -C "$WT" "$@"
+}
+# The same isolation for a checkout the engine did not create (review).
+gx() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git "${GITSAFE[@]}" -C "$1" "${@:2}"; }
+# A plain repository, or a worktree whose .git file points at <repo>/.git/worktrees/<name>.
+checkout_gitdir_sane() {
+  [ -L "$1/.git" ] && return 1
+  [ -d "$1/.git" ] && return 0
+  [ -f "$1/.git" ] || return 1
+  local target real dir_real; target="$(sed -n 's/^gitdir: //p' "$1/.git" | head -1)"
+  case "$target" in */.git/worktrees/*) ;; *) return 1 ;; esac
+  [ -d "$target" ] && [ -f "$target/commondir" ] && [ -f "$target/HEAD" ] || return 1
+  real="$(cd "$target" && pwd -P)"; dir_real="$(cd "$1" && pwd -P)"
+  # Never a git dir planted inside the engine's run or worktree folders, or inside the checkout itself.
+  case "$real/" in "$(cd "$AI_HOME" 2>/dev/null && pwd -P)/"*|"$(cd "$WORKTREES" 2>/dev/null && pwd -P)/"*|"$dir_real/"*) return 1 ;; esac
+  return 0
+}
+# Is $1 (or any folder above it) a worktree the engine created for a delegated task?
+# Every file there, including `.git`, was writable by the agent, so review never runs
+# git in one. Matched against every run's recorded worktree path, physical and logical.
+inside_task_worktree() {
+  local p logical physical
+  logical="$(cd "$1" && pwd)"; physical="$(cd "$1" && pwd -P)"
+  for p in "$logical" "$physical"; do
+    while [ -n "$p" ] && [ "$p" != / ]; do
+      if find "$RUNS" -mindepth 3 -maxdepth 3 -type f -name state -print0 2>/dev/null \
+           | xargs -0 grep -lxF -- "worktree=$p" 2>/dev/null | grep -q .; then return 0; fi
+      p="$(dirname "$p")"
+    done
+  done
+  return 1
+}
+need() { [ $# -ge 2 ] && [ -n "$2" ] || die "option $1 needs a value"; }
+
+# ---- repository discovery ----------------------------------------------------
+
+resolve_repo() { # $1 = optional --repo DIR
+  local start="${1:-$PWD}"
+  REPO="$(git -C "$start" rev-parse --show-toplevel 2>/dev/null)" || die "not inside a Git repository: $start (use --repo DIR)"
+  local common; common="$(cd "$REPO" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+  # Slug: the main checkout's folder name plus a short hash of its path, so two
+  # clones with the same name never share runs or worktrees.
+  local main_dir; main_dir="$(dirname "$common")"
+  local h; h="$(printf '%s' "$common" | shasum | cut -c1-6)"
+  SLUG="$(basename "$main_dir" | tr -c 'A-Za-z0-9._-\n' '-' | cut -c1-40)-$h"
+  ORIGIN_URL="$(git -C "$REPO" remote get-url origin 2>/dev/null || true)"
+  MAIN_DIR="$main_dir"
+}
+
+# Built in, so protection holds even if protected-repos.conf is missing (fails closed).
+# Jawwid Core: any remote whose path ends in MohamedEmadLasheen/jawwid (any host, alias,
+# port or case), its local clone, or any clone sharing its root commit, wherever it is.
+BUILTIN_PROTECTED='(^|[:/])MohamedEmadLasheen/jawwid(\.git)?/?$
+^/Users/[^/]+/Documents/jawwid-core(/|$)
+root:4d48a67c9dbf257cc14a948924ed71de17b7314f'
+protected_repo_match() { # prints the matching rule, if any
+  local f line subjects roots
+  subjects="$( { git -C "$REPO" config --get-regexp '^remote\..*\.url$' 2>/dev/null | awk '{print $2}'; echo "$REPO"; echo "$MAIN_DIR"; } )"
+  roots="$(GIT_CONFIG_GLOBAL=/dev/null git "${GITSAFE[@]}" -C "$REPO" rev-list --max-parents=0 --all 2>/dev/null || true)"
+  for f in BUILTIN $PROTECTED_REPOS_FILES; do
+    if [ "$f" != BUILTIN ] && [ ! -f "$f" ]; then continue; fi
+    while IFS= read -r line; do
+      case "$line" in ''|\#*) continue ;; esac
+      case "$line" in
+        root:*) if printf '%s\n' "$roots" | grep -qixF -- "${line#root:}"; then echo "$line"; return 0; fi; continue ;;
+      esac
+      # Case-insensitive: GitHub owner and repository names are, and so is APFS.
+      if printf '%s\n' "$subjects" | grep -Eiq -- "$line"; then echo "$line"; return 0; fi
+    done < <(if [ "$f" = BUILTIN ]; then printf '%s\n' "$BUILTIN_PROTECTED"; else cat "$f"; fi)
+  done
+  return 1
+}
+
+default_base() {
+  if [ -n "$ORIGIN_URL" ]; then
+    local head; head="$(git -C "$REPO" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+    if [ -z "$head" ]; then
+      local b; for b in main master; do git -C "$REPO" show-ref --quiet "refs/remotes/origin/$b" && { head="origin/$b"; break; }; done
+    fi
+    [ -n "$head" ] && { echo "$head"; return; }
+  fi
+  git -C "$REPO" rev-parse --abbrev-ref HEAD
+}
+
+# The project policy, read from the BASE commit. Prints shell-safe key=value lines.
+read_policy() { # $1 = base sha
+  # No policy file is normal: most repositories have none.
+  { git -C "$REPO" show "$1:.ai-delegation.json" 2>/dev/null || true; } | "$PY" -I -c '
+import json, re, sys
+raw = sys.stdin.read()
+if not raw.strip():
+    sys.exit(0)
+try:
+    p = json.loads(raw)
+except Exception as e:
+    print("policy_error=.ai-delegation.json is not valid JSON: %s" % e); sys.exit(0)
+def emit(k, v):
+    v = str(v)
+    if "\n" in v or "\r" in v:
+        print("policy_error=newline in %s" % k); return
+    print("%s=%s" % (k, v))
+pre = p.get("branch_prefix")
+if pre is not None:
+    if re.fullmatch(r"[a-z0-9][a-z0-9._/-]{0,40}[-/]", pre or "") and ".." not in pre:
+        emit("branch_prefix", pre)
+    else:
+        print("policy_error=invalid branch_prefix")
+for k in ("protected", "migration_paths"):
+    for x in p.get(k, []) or []:
+        if isinstance(x, str) and x.strip():
+            emit({"protected": "policy_protected", "migration_paths": "migration_paths"}[k], x.strip())
+for x in p.get("prepare_allow", []) or []:
+    emit("prepare_allow", x)
+lm = p.get("load_max")
+if isinstance(lm, int) and lm > 0:
+    emit("policy_load_max", lm)
+'
+}
+
+# ---- small helpers -----------------------------------------------------------
+
+load1() { sysctl -n vm.loadavg 2>/dev/null | awk '{print int($2)}'; }
+
+wait_for_load() {
+  local waited=0 max="$LOAD_MAX"
+  local pl; pl="$(state_get policy_load_max 2>/dev/null || true)"
+  [ -n "$pl" ] && [ "$pl" -lt "$max" ] && max="$pl"
+  while [ "$(load1)" -gt "$max" ]; do
+    [ "$waited" -ge "$LOAD_WAIT_MAX" ] && return 1
+    [ "$waited" -eq 0 ] && log "load $(load1) > $max: waiting (machine-load rule)"
+    sleep 30; waited=$((waited + 30))
+  done
+}
+
+# Run "$@" with a time limit in its own process group, so a timeout also stops
+# every child it started. stdin/stdout/stderr pass straight through.
+run_with_timeout() {
+  local secs="$1"; shift
+  "$PY" -I -c '
+import os, signal, subprocess, sys, time
+secs = int(sys.argv[1]); cmd = sys.argv[2:]
+p = subprocess.Popen(cmd, start_new_session=True)
+def reap():
+    # Anything the command left running in its group (a background writer) dies too.
+    try: os.killpg(p.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError): pass
+try:
+    rc = p.wait(timeout=secs); reap(); sys.exit(rc)
+except subprocess.TimeoutExpired:
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try: os.killpg(p.pid, sig)
+        except ProcessLookupError: break
+        time.sleep(5)
+    print("codex-delegate: timed out after %ds" % secs, file=sys.stderr)
+    sys.exit(124)
+' "$secs" "$@"
+}
+
+json_get() { "$PY" -I -c 'import json,sys; d=json.load(open(sys.argv[1])); v=d
+for k in sys.argv[2].split("."): v=v.get(k) if isinstance(v,dict) else None
+print("" if v is None else (json.dumps(v) if isinstance(v,(dict,list,bool)) else v))' "$1" "$2"; }
+
+# Repeated keys return every value, one per line; others return the last value.
+MULTI_KEYS=" allow tests prepare policy_protected migration_paths prepare_allow test_writable "
+state_get() {
+  [ -f "$RUN/state" ] || return 0
+  local multi=0; case "$MULTI_KEYS" in *" $1 "*) multi=1 ;; esac
+  sed -n "s/^$1=//p" "$RUN/state" | awk -v m="$multi" 'm==1{print;next}{v=$0}END{if(m==0 && NR>0)print v}'
+}
+state_set() { case "$2" in *$'\n'*) die "internal: newline in state value for $1" ;; esac; echo "$1=$2" >> "$RUN/state"; }
+
+on_exit() {
+  local rc=$?
+  if [ "${IN_TASK:-0}" = 1 ] && [ "${RESULT_WRITTEN:-0}" != 1 ] && [ -f "$RUN/state" ]; then
+    mkdir -p "$RUN/attempt-$(state_get attempts)"
+    echo "codex-delegate stopped unexpectedly (exit $rc); see the run's logs" >> "$RUN/attempt-$(state_get attempts)/problem.txt"
+    write_result error > /dev/null 2>&1 || true
+  fi
+  rm -f "$RUN/lock/pid"; rmdir "$RUN/lock" 2>/dev/null || true
+  case "$rc" in 0|1|2|3) ;; *) exit 1 ;; esac   # documented exit codes only
+}
+
+acquire_lock() {
+  if ! mkdir "$RUN/lock" 2>/dev/null; then
+    local pid; pid="$(cat "$RUN/lock/pid" 2>/dev/null || true)"
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      log "removing stale lock left by dead process $pid"
+      rm -f "$RUN/lock/pid"; rmdir "$RUN/lock" 2>/dev/null || true
+      mkdir "$RUN/lock" 2>/dev/null || die "task $TASK is locked (another agent holds $RUN/lock)"
+    else
+      die "task $TASK is already being worked on (lock $RUN/lock, pid ${pid:-?}). One agent per worktree."
+    fi
+  fi
+  echo "$$" > "$RUN/lock/pid"
+  trap 'on_exit' EXIT
+}
+
+# Paths no delegated agent may change in any repository, plus the project's own
+# additions and its Code Owner paths. Matched case-insensitively (APFS is).
+global_protected() {
+  printf '%s\n' \
+    '.github/*' '.gitlab-ci.yml' '.gitlab/*' '.circleci/*' '.buildkite/*' 'Jenkinsfile' \
+    '.husky/*' '.githooks/*' '.pre-commit-config.yaml' '.gitattributes' '*/.gitattributes' '.gitignore' '*/.gitignore' '.gitmodules' '.git' '*/.git' '.git/*' '*/.git/*' \
+    'AGENTS.md' '*/AGENTS.md' 'CLAUDE.md' '*/CLAUDE.md' 'CODEOWNERS' '*/CODEOWNERS' \
+    '.claude/*' '.agents/*' '.codex/*' '.cursor/*' '.ai-delegation.json' \
+    '.env' '*.env' '.env.*' '*/.env.*' '.envrc' '*.pem' '*.key' '*.p12' '*.pfx' '*.keystore' '*.jks' \
+    '*.mobileprovision' '*id_rsa*' '*id_ed25519*' '.npmrc' '*/.npmrc' '.pypirc' '.netrc'
+}
+protected_patterns() {
+  global_protected
+  state_get policy_protected
+  local co
+  for co in .github/CODEOWNERS CODEOWNERS docs/CODEOWNERS; do
+    git -C "$REPO" show "$(state_get base_sha):$co" 2>/dev/null | awk '!/^#/ && NF {print $1}' \
+      | "$PY" -I -c '
+import sys
+for raw in sys.stdin:
+    p = raw.strip()
+    if not p: continue
+    anchored = p.startswith("/") or ("/" in p.rstrip("/") and not p.startswith("**/"))
+    p = p.lstrip("/")
+    if p.startswith("**/"): p, anchored = p[3:], False
+    p = p.rstrip("/").replace("/**/", "/*/").replace("/**", "")
+    if not p: continue
+    for q in ([p, p + "/*"] if anchored else [p, "*/" + p, p + "/*", "*/" + p + "/*"]):
+        print(q)
+' || true
+  done
+}
+
+matches_any() { # $1 = path; remaining = glob patterns
+  local f="$1"; shift; local p
+  for p in "$@"; do
+    # shellcheck disable=SC2254
+    case "$f" in $p) return 0 ;; esac
+  done
+  return 1
+}
+matches_any_nocase() {
+  local rc=1
+  shopt -s nocasematch; matches_any "$@" && rc=0; shopt -u nocasematch
+  return "$rc"
+}
+
+changed_files() { g status --porcelain --untracked-files=all | sed -E 's/^.{3}//; s/.* -> //'; }
+
+# The same list NUL-separated, safe for any file name. Renames contribute both paths.
+changed_files_z() { # $1 = output file
+  : > "$1"
+  local e st old
+  while IFS= read -r -d '' e; do
+    st="${e:0:2}"
+    printf '%s\0' "${e:3}" >> "$1"
+    case "$st" in R*|C*) IFS= read -r -d '' old && printf '%s\0' "$old" >> "$1" ;; esac
+  done < <(g status --porcelain=v1 -z --untracked-files=all)
+}
+
+safe_rm() { # $1 = path relative to the worktree
+  # Race-safe: every directory is opened relative to its parent's file descriptor with
+  # O_NOFOLLOW, and every unlink/rmdir happens through those descriptors, so a symlink
+  # swapped in at any moment (by a process the agent left running) is never followed.
+  "$PY" -I -c '
+import os, stat, sys
+D = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+rel = sys.argv[2].rstrip("/")
+parts = [p for p in rel.split("/") if p]
+if not parts or rel.startswith("/") or ".." in parts or "." in parts: sys.exit(1)
+def remove_at(dfd, name):
+    st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+    if stat.S_ISDIR(st.st_mode):
+        sub = os.open(name, D, dir_fd=dfd)
+        try:
+            for entry in os.scandir(sub):
+                remove_at(sub, entry.name)
+        finally:
+            os.close(sub)
+        os.rmdir(name, dir_fd=dfd)
+    else:
+        os.unlink(name, dir_fd=dfd)          # files and symlinks: the link itself, never its target
+fd = os.open(sys.argv[1], D)
+try:
+    for comp in parts[:-1]:
+        nxt = os.open(comp, D, dir_fd=fd)    # fails (ELOOP/ENOTDIR) if comp is a symlink
+        os.close(fd); fd = nxt
+    try:
+        remove_at(fd, parts[-1])
+    except FileNotFoundError:
+        pass
+finally:
+    os.close(fd)
+' "$WT" "$1" 2>/dev/null || log "refused to remove $1 (unsafe path)"
+}
+
+ignored_snapshot() { # $1 = output file: ignored entries (git collapses whole ignored directories)
+  g status --porcelain=v1 -z --ignored=traditional --untracked-files=normal \
+    | tr '\0' '\n' | sed -n 's/^!! //p' | LC_ALL=C sort > "$1"
+}
+
+# Added lines that look like credentials, with the values masked.
+secret_scan() { # $1 = unified diff
+  grep -nE '^\+' "$1" | grep -E \
+    '([a-z][a-z0-9+.-]*://[^/[:space:]:@]+:[^@[:space:]/]{3,}@|[A-Z0-9_]*(SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=[^[:space:]$<{\"'"'"'][^[:space:]]{7,}|sk_(live|test)_[A-Za-z0-9]{8,}|pk_live_[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|xox[abpr]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.|(api[_-]?key|secret|password|passwd|token)["'"'"' ]*[:=][ ]*["'"'"'][^"'"'"']{8,}["'"'"'])' \
+    | sed -E 's#(://[^/[:space:]:@]+:)[^@[:space:]/]+@#\1<redacted>@#g; s/((SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=)[^[:space:]]+/\1<redacted>/g; s/(["'"'"'])[^"'"'"']{8,}(["'"'"'])/\1<redacted>\2/g; s/(sk_|pk_|AKIA|xox.-|gh._|github_pat_)[A-Za-z0-9_-]{6,}/\1<redacted>/g' || true
+}
+
+codex_version() { "$CODEX" --version 2>/dev/null | awk '{print $NF}'; }
+
+# Lockfile installs only: `[cd <relative path> && ] <install>`. No pipes, no downloads, no `..`.
+GLOBAL_PREPARE_RE='^(cd [A-Za-z0-9_./-]+ && )?(npm ci( --[a-z-]+)*|pnpm install --frozen-lockfile( --[a-z-]+)*|yarn install --(immutable|frozen-lockfile)( --[a-z-]+)*|(\$HOME/development/flutter/bin/)?(flutter|dart) pub get|go mod download|cargo fetch --locked|bundle install --frozen)$'
+prepare_allowed() {
+  [[ "$1" =~ $GLOBAL_PREPARE_RE ]] || return 1
+  case "$1" in *..*|/*) return 1 ;; esac
+  local allowed; allowed="$(state_get prepare_allow)"
+  [ -z "$allowed" ] && return 0
+  local tool; tool="$(printf '%s' "$1" | sed -E 's/^cd [^ ]+ && //; s/^\$HOME\/development\/flutter\/bin\///' | awk '{print $1" "$2}')"
+  printf '%s\n' "$allowed" | awk '{print $1" "$2}' | grep -qxF -- "$tool"
+}
+
+# ---- run / retry --------------------------------------------------------------
+
+compose_prompt() { # $1 = out file, $2 = optional feedback file
+  local allowed; allowed="$(state_get allow | tr '\n' ' ')"
+  sed "s#{{ALLOWED}}#${allowed:-the paths named in the brief}#" "$TEMPLATES/implementer-preamble.md" > "$1"
+  { echo; echo "---- TASK BRIEF ----"; cat "$RUN/brief.md"; } >> "$1"
+  if [ -n "${2:-}" ] && [ -s "$2" ]; then
+    { echo; echo "---- FEEDBACK FROM THE PREVIOUS ATTEMPT (fix these; do not undo accepted work) ----"; cat "$2"; } >> "$1"
+  fi
+}
+
+append_test() { # $1 = tests.json, $2 = command, $3 = result, $4 = details
+  "$PY" -I - "$@" <<'PYEOF'
+import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.append({"command":sys.argv[2],"result":sys.argv[3],"details":sys.argv[4]}); json.dump(d,open(p,"w"),indent=1)
+PYEOF
+}
+
+# Run one verification command inside the Codex sandbox (workspace-write: the
+# worktree and the run's temp dir are writable, nothing else; no network unless
+# the run asked for it). --test-unsandboxed is the recorded escape hatch.
+run_verification() { # $1 = command, $2 = log file
+  local cmd="$1" logf="$2"
+  if [ "$(state_get test_unsandboxed)" = 1 ]; then
+    ( cd "$WT" && TMPDIR="$RUN/tmp" run_with_timeout "$(state_get test_timeout)" bash -c "$cmd" ) > "$logf" 2>&1
+    return
+  fi
+  local roots="\"$RUN/tmp\"" w
+  while IFS= read -r w; do [ -n "$w" ] && roots="$roots, \"$w\""; done <<EOF
+$(state_get test_writable)
+EOF
+  local net=false; [ "$(state_get test_network)" = 1 ] && net=true
+  ( cd "$WT" && TMPDIR="$RUN/tmp" run_with_timeout "$(state_get test_timeout)" \
+      "$CODEX" sandbox -c 'sandbox_mode="workspace-write"' \
+        -c "sandbox_workspace_write.network_access=$net" \
+        -c "sandbox_workspace_write.writable_roots=[$roots]" \
+        -- bash -c "$cmd" ) > "$logf" 2>&1
+}
+
+# The worktree's `.git` file must still hold the pointer recorded when the engine
+# created it. The engine's git calls never follow it (the git dir is pinned), but
+# the lead's own commands would, so a change is restored and the run stops as hostile.
+gitfile_intact() {
+  local want; want="$(state_get gitfile)"
+  [ -n "$want" ] || return 0
+  if [ -L "$WT/.git" ] || [ ! -f "$WT/.git" ] || [ "$(cat "$WT/.git" 2>/dev/null)" != "$want" ]; then
+    rm -rf -- "${WT:?}/.git"; printf '%s\n' "$want" > "$WT/.git"
+    log "the worktree's .git pointer was altered; restored it and stopping (possible sandbox escape attempt)"
+    echo "The worktree's .git pointer was altered during the run; restored. Treat this run as hostile." >> "${ATT:-$RUN}/problem.txt"
+    OUTCOME=blocked; return 1
+  fi
+}
+
+one_attempt() { # $1 = feedback file (may be empty). Sets OUTCOME and writes $FEEDBACK_NEXT.
+  local n; n=$(( $(state_get attempts || echo 0) + 1 )); state_set attempts "$n"
+  ATT="$RUN/attempt-$n"; mkdir -p "$ATT" "$RUN/tmp"
+  LOGFILE="$ATT/wrapper.log"
+  FEEDBACK_NEXT="$ATT/feedback-for-next.md"; : > "$FEEDBACK_NEXT"
+  compose_prompt "$ATT/prompt.md" "${1:-}"
+
+  gitfile_intact || return 0   # OUTCOME=blocked is already set
+  ignored_snapshot "$ATT/ignored-before.txt"
+  wait_for_load || log "load still high; starting Codex anyway"
+
+  local model_args=(); local m; m="$(state_get model)"; [ -n "$m" ] && model_args=(-m "$m")
+  log "attempt $n/$(state_get max): codex $(codex_version) in $WT (workspace-write sandbox)"
+  local rc=0
+  # -a is a top-level flag in codex-cli 0.166 (not an `exec` flag). --ignore-user-config
+  # keeps the owner's personal plugins and notify hooks out of delegated runs; auth
+  # still comes from CODEX_HOME. TMPDIR points into the run dir, added as writable, so
+  # tools that need a temp file (Apple's git shim) work inside the sandbox.
+  TMPDIR="$RUN/tmp" run_with_timeout "$(state_get codex_timeout)" \
+    "$CODEX" -a never exec -C "$WT" -s workspace-write --ignore-user-config \
+      --add-dir "$RUN/tmp" --color never --json \
+      --output-schema "$TEMPLATES/result.schema.json" -o "$ATT/report.json" \
+      ${model_args[@]+"${model_args[@]}"} - \
+      < "$ATT/prompt.md" > "$ATT/codex.jsonl" 2> "$ATT/codex.stderr" || rc=$?
+  echo "$rc" > "$ATT/codex.exit"
+
+  gitfile_intact || return 0   # OUTCOME=blocked is already set
+
+  if [ "$rc" -ne 0 ] || ! "$PY" -I -c 'import json,sys; d=json.load(open(sys.argv[1])); assert isinstance(d.get("task_completed"),bool)' "$ATT/report.json" 2>/dev/null; then
+    # Only Codex's own error stream decides "blocked"; the model's text in codex.jsonl never does.
+    if tail -c 3000 "$ATT/codex.stderr" 2>/dev/null | grep -qiE "$CODEX_BLOCKED_RE"; then
+      log "codex cannot run (auth or usage limit); not retrying"
+      OUTCOME=blocked; echo "Codex could not run: auth or usage limit (exit $rc)." > "$ATT/problem.txt"; return
+    fi
+    [ "$rc" = 124 ] && echo "- Your previous run timed out after $(state_get codex_timeout)s. Keep the change smaller and finish with the JSON report." >> "$FEEDBACK_NEXT"
+    log "codex exit $rc or no valid report"
+    echo "- Your previous run ended without a valid JSON report (exit $rc). Finish the task and end with the JSON report." >> "$FEEDBACK_NEXT"
+    OUTCOME=retry; return
+  fi
+
+  # 1. Files Git ignores are invisible to the scope check, but tests would see them.
+  #    Anything ignored that the agent created is removed (and listed).
+  ignored_snapshot "$ATT/ignored-after.txt"
+  LC_ALL=C comm -13 "$ATT/ignored-before.txt" "$ATT/ignored-after.txt" > "$ATT/ignored-created.txt" || true
+  if [ -s "$ATT/ignored-created.txt" ]; then
+    local ig
+    while IFS= read -r ig; do
+      safe_rm "$ig"
+    done < "$ATT/ignored-created.txt"
+    log "removed files the agent created in ignored paths: $(tr '\n' ' ' < "$ATT/ignored-created.txt")"
+  fi
+
+  # 2. Scope: revert anything outside the allowed paths, protected, a symlink, a
+  #    nested repository or with a control character in its name.
+  local allow_globs=() prot=() f bad=0 why
+  while IFS= read -r f; do [ -n "$f" ] && allow_globs+=("$f"); done <<EOF
+$(state_get allow)
+EOF
+  while IFS= read -r f; do [ -n "$f" ] && prot+=("$f"); done <<EOF
+$(protected_patterns)
+EOF
+  if [ "$(state_get allow_migrations)" != 1 ]; then
+    while IFS= read -r f; do [ -n "$f" ] && prot+=("$f"); done <<EOF
+$(state_get migration_paths)
+EOF
+  fi
+  : > "$ATT/out-of-scope.txt"; : > "$ATT/out-of-scope.z"
+  changed_files_z "$ATT/changed.z"
+  while IFS= read -r -d '' f; do
+    why=""
+    case "$f" in *[[:cntrl:]]*) why="control character in the file name" ;; esac
+    [ -z "$why" ] && matches_any_nocase "$f" "${prot[@]}" && why="protected path"
+    [ -z "$why" ] && ! matches_any "$f" "${allow_globs[@]}" && why="outside the allowed paths"
+    [ -z "$why" ] && [ -L "$WT/${f%/}" ] && why="symbolic links are not accepted from delegated runs"
+    [ -z "$why" ] && [ -e "$WT/${f%/}/.git" ] && why="nested Git repository"
+    if [ -n "$why" ]; then
+      printf '%s\0' "$f" >> "$ATT/out-of-scope.z"
+      printf '%q  (%s)\n' "$f" "$why" >> "$ATT/out-of-scope.txt"; bad=1
+    fi
+  done < "$ATT/changed.z"
+  if [ "$bad" = 1 ]; then
+    : > "$ATT/out-of-scope.patch"
+    while IFS= read -r -d '' f; do
+      if g ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+        g diff -- "$f" >> "$ATT/out-of-scope.patch" 2>/dev/null || true
+        g checkout -- "$f"
+      else
+        if [ -L "$WT/${f%/}" ]; then
+          printf 'symlink %q -> %q\n' "$f" "$(readlink "$WT/${f%/}")" >> "$ATT/out-of-scope.patch"
+        elif [ -f "$WT/$f" ]; then
+          g diff --no-index -- /dev/null "$WT/$f" >> "$ATT/out-of-scope.patch" 2>/dev/null || true
+        fi
+        safe_rm "$f"
+      fi
+    done < "$ATT/out-of-scope.z"
+    log "reverted: $(tr '\n' ' ' < "$ATT/out-of-scope.txt")"
+    echo "- These changes were reverted (outside your allowed scope, protected, a symlink, a nested repository, or an unsafe file name): $(tr '\n' ' ' < "$ATT/out-of-scope.txt"). Achieve the goal without them, or report why that is impossible." >> "$FEEDBACK_NEXT"
+  fi
+
+  if [ -z "$(changed_files)" ]; then
+    log "no in-scope changes"
+    [ "$(json_get "$ATT/report.json" task_completed)" = "true" ] && echo "- You reported completion but no in-scope file changed." >> "$FEEDBACK_NEXT"
+    OUTCOME=retry; return
+  fi
+
+  # 3. Freeze the candidate NOW, in a private index, as a tree object. Tests run after
+  #    this and may write anything to the worktree; only this exact tree is committed.
+  local tree base_head
+  base_head="$(g rev-parse HEAD)"
+  rm -f "$ATT/candidate.index"
+  GIT_INDEX_FILE="$ATT/candidate.index" g read-tree "$base_head"
+  GIT_INDEX_FILE="$ATT/candidate.index" g add -A
+  tree="$(GIT_INDEX_FILE="$ATT/candidate.index" g write-tree)"
+  echo "$tree" > "$ATT/candidate.tree"
+  #    Secrets and file types, checked on that frozen tree.
+  g diff "${RAWDIFF[@]}" "$base_head" "$tree" > "$ATT/candidate.patch"
+  g diff --raw "$base_head" "$tree" | awk '$2 ~ /^(120000|160000)$/' > "$ATT/special-modes.txt" || true
+  if [ -s "$ATT/special-modes.txt" ]; then
+    log "symlink or submodule entries in the candidate; not committing"
+    echo "- Symlinks and submodules are not accepted from delegated runs." >> "$FEEDBACK_NEXT"
+    OUTCOME=retry; return
+  fi
+  secret_scan "$ATT/candidate.patch" > "$ATT/secret-scan.txt"
+  if [ -s "$ATT/secret-scan.txt" ]; then
+    log "possible credential in the diff; not committing (secret-scan.txt, values masked)"
+    echo "- The diff appears to contain a credential (lines: $(cut -d: -f1 "$ATT/secret-scan.txt" | tr '\n' ' ')). Remove it; use configuration, never literals." >> "$FEEDBACK_NEXT"
+    OUTCOME=retry; return
+  fi
+
+  # 4. Independent verification: the wrapper re-runs every test command itself, sandboxed.
+  ignored_snapshot "$ATT/ignored-before-tests.txt"
+  local i=0 cmd trc all_ok=1
+  echo "[]" > "$ATT/tests.json"
+  while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    i=$((i + 1))
+    if ! wait_for_load; then
+      log "test $i not run: machine load stayed high"
+      append_test "$ATT/tests.json" "$cmd" not_run "machine load stayed above the limit"
+      all_ok=0; continue
+    fi
+    log "verify $i: $cmd"
+    trc=0; run_verification "$cmd" "$ATT/test-$i.log" || trc=$?
+    local res=passed; [ "$trc" -ne 0 ] && { res=failed; all_ok=0; }
+    append_test "$ATT/tests.json" "$cmd" "$res" "exit $trc; log attempt-$n/test-$i.log"
+    if [ "$trc" -ne 0 ]; then
+      { echo "- Verification command failed (exit $trc): \`$cmd\`. Last lines:"; echo '```'; tail -n 40 "$ATT/test-$i.log"; echo '```'; } >> "$FEEDBACK_NEXT"
+    fi
+  done <<EOF
+$(state_get tests)
+EOF
+  [ "$i" -eq 0 ] && log "no --test commands given: nothing independently verified"
+  gitfile_intact || return 0   # OUTCOME=blocked is already set
+  discard_post_test_changes "$tree"
+  if [ "$all_ok" != 1 ]; then OUTCOME=retry; return; fi
+
+  # 5. Commit the frozen tree on the task branch (no hooks, no signing, pinned git dir),
+  #    then align the index with it.
+  local summary; summary="$(json_get "$ATT/report.json" summary | head -c 400)"
+  local commit; commit="$(g commit-tree "$tree" -p "$base_head" -F - <<MSG
+codex($TASK): $(state_get title)
+
+$summary
+
+Task-Id: $TASK
+Attempt: $n
+Delegated-Agent: codex-cli $(codex_version)
+Verified-By: codex-delegate $VERSION ($i command(s) re-run by the wrapper, $( [ "$(state_get test_unsandboxed)" = 1 ] && echo unsandboxed || echo sandboxed ))
+MSG
+)"
+  g update-ref -m "codex-delegate: $TASK attempt $n" "refs/heads/$(state_get branch)" "$commit" "$base_head"
+  g read-tree "$commit"
+  state_set commit "$(g rev-parse HEAD)"; state_set committed_attempt "$n"
+  log "committed $(g rev-parse --short HEAD) on $(state_get branch)"
+  if [ "$(json_get "$ATT/report.json" task_completed)" != "true" ]; then
+    log "committed, but Codex reports the task incomplete; see its outstanding_problems"
+    OUTCOME=partial; return
+  fi
+  OUTCOME=passed
+}
+
+# After the tests: anything in the worktree that differs from the frozen candidate was
+# written by a test or a leftover process. Tracked files go back to the candidate; new
+# untracked and new ignored files are removed (symlink-safe). Listed in the result.
+discard_post_test_changes() { # $1 = candidate tree
+  local f
+  rm -f "$ATT/post.index"
+  # Compare the WORKTREE with the frozen tree only (an index holding exactly that tree,
+  # refreshed so stat-only differences vanish): changed/deleted tracked files, plus new
+  # untracked files. Comparing against HEAD would list every candidate file.
+  GIT_INDEX_FILE="$ATT/post.index" g read-tree "$1"
+  GIT_INDEX_FILE="$ATT/post.index" g update-index -q --refresh >/dev/null 2>&1 || true
+  GIT_INDEX_FILE="$ATT/post.index" g diff-files --name-only -z > "$ATT/post-modified.z" || true
+  GIT_INDEX_FILE="$ATT/post.index" g ls-files --others --exclude-standard -z > "$ATT/post-untracked.z" || true
+  : > "$ATT/post-test-changes.txt"
+  while IFS= read -r -d '' f; do printf '%q\n' "$f" >> "$ATT/post-test-changes.txt"; done < "$ATT/post-modified.z"
+  while IFS= read -r -d '' f; do printf '%q\n' "$f" >> "$ATT/post-test-changes.txt"; done < "$ATT/post-untracked.z"
+  if [ -s "$ATT/post-test-changes.txt" ]; then
+    log "the tree changed after it was frozen (tests or leftover processes); discarding: $(tr '\n' ' ' < "$ATT/post-test-changes.txt")"
+    GIT_INDEX_FILE="$ATT/post.index" g checkout-index -a -f
+    while IFS= read -r -d '' f; do
+      case "$f" in *[[:cntrl:]]*) log "left in place (unsafe name, not committed): $(printf '%q' "$f")"; continue ;; esac
+      safe_rm "$f"
+    done < "$ATT/post-untracked.z"
+  fi
+  ignored_snapshot "$ATT/ignored-after-tests.txt"
+  LC_ALL=C comm -13 "$ATT/ignored-before-tests.txt" "$ATT/ignored-after-tests.txt" > "$ATT/ignored-created-by-tests.txt" || true
+  while IFS= read -r f; do [ -n "$f" ] && safe_rm "$f"; done < "$ATT/ignored-created-by-tests.txt"
+}
+
+write_result() { # $1 = final status
+  RESULT_WRITTEN=1
+  local att="$RUN/attempt-$(state_get attempts)"
+  "$PY" -I - "$RUN" "$1" "$att" "$VERSION" <<'PYEOF'
+import json, os, subprocess, sys
+run, status, att, version = sys.argv[1:5]
+st, multi = {}, {}
+for line in open(os.path.join(run, "state")):
+    k, _, v = line.rstrip("\n").partition("=")
+    st[k] = v
+    multi.setdefault(k, []).append(v)
+def load(p, default):
+    try: return json.load(open(p))
+    except Exception: return default
+def text(name):
+    p = os.path.join(att, name)
+    return open(p).read().strip() if os.path.exists(p) and os.path.getsize(p) else ""
+report = load(os.path.join(att, "report.json"), {})
+wt, commit = st.get("worktree", ""), st.get("commit", "")
+files = []
+if commit and wt and os.path.isdir(wt):
+    gitdir = st.get("gitdir") or ""
+    cmd = ["git", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
+    cmd += (["--git-dir", gitdir] if gitdir else ["-C", wt]) + ["diff", "--name-only", st.get("base_sha", ""), commit]
+    env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
+    out = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    files = [f for f in out.stdout.splitlines() if f]
+problems = list(report.get("outstanding_problems", []))
+for name in ("problem.txt", "out-of-scope.txt", "secret-scan.txt", "special-modes.txt"):
+    if text(name): problems.append(name + ": " + text(name)[:600])
+result = {
+    "engine": "codex-delegate " + version,
+    "task_id": st.get("task"), "status": status, "repository": st.get("repo"), "repo_slug": st.get("slug"),
+    "attempts": int(st.get("attempts", "0")), "max_attempts": int(st.get("max", "3")),
+    "risk": st.get("risk"), "owner_approval": st.get("owner_approval") or None,
+    "branch": st.get("branch"), "worktree": wt, "base_sha": st.get("base_sha"), "commit_sha": commit or None,
+    "codex_task_completed": report.get("task_completed"), "codex_summary": report.get("summary"),
+    "files_changed": files,
+    "files_claimed_by_codex": report.get("files_changed", []),
+    "committed_in_attempt": int(st["committed_attempt"]) if st.get("committed_attempt") else None,
+    "latest_attempt_committed": st.get("committed_attempt") == st.get("attempts"),
+    "tests_reported_by_codex": report.get("tests_executed", []),
+    "tests_verified_by_wrapper": load(os.path.join(att, "tests.json"), []),
+    "verification_sandbox": "none (owner/lead chose --test-unsandboxed)" if st.get("test_unsandboxed") == "1" else ("workspace-write, network " + ("on" if st.get("test_network") == "1" else "off")),
+    "ignored_files_removed": [l for l in text("ignored-created.txt").splitlines() if l],
+    "post_test_changes_discarded": [l for l in text("post-test-changes.txt").splitlines() if l] + [l for l in text("ignored-created-by-tests.txt").splitlines() if l],
+    "outstanding_problems": problems,
+    "run_dir": run,
+    "inspect_with": ("git -C %s show %s" % (st.get("repo"), commit)) if commit else None,
+    "inspect_note": "Inspect through the main repository, never with git inside the task worktree (its .git pointer is agent-writable).",
+}
+json.dump(result, open(os.path.join(run, "result.json"), "w"), indent=2, ensure_ascii=False)
+print(json.dumps(result, indent=2, ensure_ascii=False))
+PYEOF
+}
+
+attempt_loop() { # $1 = initial feedback file (may be empty)
+  local fb="${1:-}" max; max="$(state_get max)"
+  while :; do
+    OUTCOME=""; one_attempt "$fb"
+    case "$OUTCOME" in passed|partial|blocked) break ;; esac
+    if [ "$(state_get attempts)" -ge "$max" ]; then OUTCOME=failed; break; fi
+    if [ "$(state_get auto_retry)" != 1 ]; then OUTCOME=needs_feedback; break; fi
+    fb="$FEEDBACK_NEXT"
+    log "retrying with feedback ($(state_get attempts)/$max used)"
+  done
+  write_result "$OUTCOME" > /dev/null
+  cat "$RUN/result.json"
+  case "$OUTCOME" in passed) return 0 ;; blocked) return 3 ;; *) return 1 ;; esac
+}
+
+check_protected_repo() { # $1 = risk, $2 = approval
+  local rule; rule="$(protected_repo_match || true)"
+  [ -z "$rule" ] && return 0
+  [ "$1" = high ] && [ -n "$2" ] && { log "protected repository ($rule): proceeding on recorded owner approval"; return 0; }
+  die "this repository is protected ($rule). Delegated work here needs --risk high and --owner-approval \"<the owner's words>\"."
+}
+
+cmd_run() {
+  local brief="" base="" risk="low" approval="" title="" model="" auto=1 max="$MAX_ATTEMPTS_DEFAULT" repo_arg=""
+  local ct="$CODEX_TIMEOUT_DEFAULT" tt="$TEST_TIMEOUT_DEFAULT" allow=() tests=() prepare=() writable=() migrations=0 net=0 unsandboxed=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --task-id) need "$@"; TASK="$2"; shift 2 ;;
+      --repo) need "$@"; repo_arg="$2"; shift 2 ;;
+      --brief) need "$@"; brief="$2"; shift 2 ;;
+      --title) need "$@"; title="$2"; shift 2 ;;
+      --base) need "$@"; base="$2"; shift 2 ;;
+      --allow) need "$@"; allow+=("$2"); shift 2 ;;
+      --allow-migrations) migrations=1; shift ;;
+      --test) need "$@"; tests+=("$2"); shift 2 ;;
+      --test-network) net=1; shift ;;
+      --test-writable) need "$@"; writable+=("$2"); shift 2 ;;
+      --test-unsandboxed) unsandboxed=1; shift ;;
+      --prepare) need "$@"; prepare+=("$2"); shift 2 ;;
+      --risk) need "$@"; risk="$2"; shift 2 ;;
+      --owner-approval) need "$@"; approval="$2"; shift 2 ;;
+      --model) need "$@"; model="$2"; shift 2 ;;
+      --max-attempts) need "$@"; max="$2"; shift 2 ;;
+      --no-auto-retry) auto=0; shift ;;
+      --codex-timeout) need "$@"; ct="$2"; shift 2 ;;
+      --test-timeout) need "$@"; tt="$2"; shift 2 ;;
+      *) die "run: unknown option $1" ;;
+    esac
+  done
+  [ -n "${TASK:-}" ] || die "run: --task-id is required"; valid_id "$TASK"
+  [ -f "$brief" ] || die "run: --brief FILE is required"
+  [ ${#allow[@]} -gt 0 ] || die "run: at least one --allow PATH-GLOB is required (explicit ownership)"
+  [[ "$max" =~ ^[1-3]$ ]] || die "run: --max-attempts must be 1..3"
+  case "$risk" in
+    low|medium) ;;
+    high) [ -n "$approval" ] || die "run: high-risk work needs --owner-approval \"<the owner's words, quoted>\"" ;;
+    *) die "run: --risk must be low, medium or high" ;;
+  esac
+  [ "$migrations" = 0 ] || [ "$risk" != low ] || die "run: a migration is never low risk; use --risk medium or high"
+  [ "$unsandboxed" = 0 ] || [ "$risk" != low ] || die "run: --test-unsandboxed is never low risk; use --risk medium or high"
+  [ -x "$CODEX" ] || die "codex CLI not found at $CODEX (set CODEX_BIN)"
+  local w; for w in ${writable[@]+"${writable[@]}"}; do case "$w" in /*) ;; *) die "run: --test-writable needs an absolute path" ;; esac; done
+
+  resolve_repo "$repo_arg"
+  check_protected_repo "$risk" "$approval"
+  RUN="$RUNS/$SLUG/$TASK"; WT="$WORKTREES/$SLUG/$TASK"
+  [ -e "$RUN/state" ] && die "run: task $TASK already exists in this repository; use 'retry' or a new id"
+  [ -e "$WT" ] && die "run: $WT already exists"
+  mkdir -p "$RUN"; acquire_lock
+  LOGFILE="$RUN/setup.log"
+
+  [ -n "$ORIGIN_URL" ] && [ "${JAWWID_AI_NO_FETCH:-0}" != 1 ] && git -C "$REPO" fetch -q origin 2>/dev/null || true
+  [ -n "$base" ] || base="$(default_base)"
+  local base_sha; base_sha="$(git -C "$REPO" rev-parse --verify --quiet "$base^{commit}")" || die "run: unknown base $base"
+
+  {
+    echo "task=$TASK"; echo "repo=$REPO"; echo "slug=$SLUG"; echo "base=$base"; echo "base_sha=$base_sha"
+    echo "attempts=0"; echo "risk=$risk"; echo "model=$model"; echo "max=$max"; echo "auto_retry=$auto"
+    echo "allow_migrations=$migrations"; echo "codex_timeout=$ct"; echo "test_timeout=$tt"
+    echo "test_network=$net"; echo "test_unsandboxed=$unsandboxed"
+  } > "$RUN/state"
+  [ -n "$approval" ] && state_set owner_approval "$(printf '%s' "$approval" | tr '\n' ' ')"
+  local default_sha; default_sha="$(git -C "$REPO" rev-parse --verify --quiet "$(default_base)^{commit}" || true)"
+  if [ -n "$default_sha" ] && [ "$default_sha" != "$base_sha" ]; then read_policy "$default_sha" >> "$RUN/state"; fi
+  read_policy "$base_sha" >> "$RUN/state"
+  local perr; perr="$(state_get policy_error)"; [ -z "$perr" ] || die "project policy: $perr"
+  local prefix; prefix="$(state_get branch_prefix)"; prefix="${prefix:-codex/}"
+  local branch="$prefix$TASK"
+  git -C "$REPO" show-ref --quiet "refs/heads/$branch" && die "run: branch $branch already exists"
+  for w in "${allow[@]}"; do state_set allow "$w"; done
+  for w in ${tests[@]+"${tests[@]}"}; do state_set tests "$w"; done
+  for w in ${writable[@]+"${writable[@]}"}; do state_set test_writable "$w"; done
+  for w in ${prepare[@]+"${prepare[@]}"}; do
+    prepare_allowed "$w" || die "prepare: only lockfile installs allowed here (e.g. 'cd app && npm ci'); refused: $w"
+  done
+
+  mkdir -p "$WORKTREES/$SLUG"
+  git -C "$REPO" worktree add -q -b "$branch" "$WT" "$base_sha"
+  state_set branch "$branch"; state_set worktree "$WT"
+  state_set gitdir "$(git -C "$WT" rev-parse --absolute-git-dir)"
+  state_set gitfile "$(cat "$WT/.git")"
+  state_set git_name "$(git -C "$REPO" config user.name 2>/dev/null || echo codex-delegate)"
+  state_set git_email "$(git -C "$REPO" config user.email 2>/dev/null || echo codex-delegate@localhost)"
+  state_set title "$(printf '%s' "${title:-$(head -1 "$brief" | sed 's/^#* *//; s/^Task brief: *//')}" | tr '\n' ' ' | cut -c1-72)"
+  log "worktree $WT on $branch from $(git -C "$REPO" rev-parse --short "$base_sha") ($REPO)"
+  cp "$brief" "$RUN/brief.md"
+
+  # Dependency setup runs before Codex, outside its sandbox (it may need the network),
+  # in a tree nobody has modified yet.
+  for w in ${prepare[@]+"${prepare[@]}"}; do
+    wait_for_load || die "prepare: machine load stayed high"
+    log "prepare: $w"
+    if ! ( cd "$WT" && bash -c "$w" ) >> "$RUN/prepare.log" 2>&1; then
+      echo "prepare failed: $w (see prepare.log). Fix the command and use a new task id; 'cleanup' removes this worktree." > "$RUN/attempt-0-problem.txt"
+      mkdir -p "$RUN/attempt-0"; mv "$RUN/attempt-0-problem.txt" "$RUN/attempt-0/problem.txt"
+      write_result prepare_failed > /dev/null; cat "$RUN/result.json"; return 1
+    fi
+  done
+
+  IN_TASK=1
+  attempt_loop ""
+}
+
+load_task() { # needs TASK; uses the current repository unless --repo was given
+  valid_id "$TASK"; resolve_repo "${1:-}"
+  RUN="$RUNS/$SLUG/$TASK"
+  [ -f "$RUN/state" ] || { [ -f "$RUNS/$TASK/state" ] && RUN="$RUNS/$TASK"; }   # runs made before 2.0
+  [ -f "$RUN/state" ] || die "no such task in this repository: $TASK"
+  WT="$(state_get worktree)"
+}
+
+cmd_retry() {
+  local fb="" repo_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --task-id) need "$@"; TASK="$2"; shift 2 ;;
+      --repo) need "$@"; repo_arg="$2"; shift 2 ;;
+      --feedback) need "$@"; fb="$2"; shift 2 ;;
+      *) die "retry: unknown option $1" ;;
+    esac
+  done
+  [ -n "${TASK:-}" ] || die "retry: --task-id is required"
+  [ -f "$fb" ] || die "retry: --feedback FILE is required"
+  load_task "$repo_arg"
+  [ -n "$(state_get gitdir)" ] && [ -n "$(state_get gitfile)" ] || die "retry: this run was made by an engine older than 2.1 (no pinned git dir); start a new task instead"
+  acquire_lock
+  [ -d "$WT" ] || die "retry: worktree $WT is gone"
+  [ "$(state_get attempts)" -lt "$(state_get max)" ] || die "retry: attempt limit $(state_get max) reached; the lead takes over or re-scopes"
+  cp "$fb" "$RUN/feedback-$(( $(state_get attempts) + 1 )).md"
+  IN_TASK=1
+  attempt_loop "$fb"
+}
+
+# ---- review -------------------------------------------------------------------
+
+cmd_review() {
+  local dir="" base="" head="" focus="" model="" risk="low" approval=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --task-id) need "$@"; TASK="$2"; shift 2 ;;
+      --repo) need "$@"; dir="$2"; shift 2 ;;
+      --base) need "$@"; base="$2"; shift 2 ;;
+      --head) need "$@"; head="$2"; shift 2 ;;
+      --focus) need "$@"; focus="$2"; shift 2 ;;
+      --model) need "$@"; model="$2"; shift 2 ;;
+      --risk) need "$@"; risk="$2"; shift 2 ;;
+      --owner-approval) need "$@"; approval="$2"; shift 2 ;;
+      *) die "review: unknown option $1" ;;
+    esac
+  done
+  [ -n "${TASK:-}" ] || die "review: --task-id is required"; valid_id "$TASK"
+  # Locate the checkout root by walking up to the first `.git` entry, with no git
+  # involved, and vet its pointer before any git command reads it.
+  local top; top="$(cd "${dir:-$PWD}" && pwd)"
+  inside_task_worktree "$top" && die "review: $top is a delegated task's worktree (agent-writable). Review the commit from the main repository or a fresh worktree of it instead: git -C <repo> worktree add <dir> <commit>"
+  while [ "$top" != / ] && [ ! -e "$top/.git" ] && [ ! -L "$top/.git" ]; do top="$(dirname "$top")"; done
+  [ -e "$top/.git" ] || [ -L "$top/.git" ] || die "review: not inside a Git checkout: ${dir:-$PWD}"
+  checkout_gitdir_sane "$top" || die "review: $top has an unexpected .git pointer; refusing"
+  resolve_repo "$top"; dir="$REPO"
+  check_protected_repo "$risk" "$approval"
+  [ -n "$base" ] || base="$(default_base)"
+  head="${head:-HEAD}"
+  local head_sha base_sha
+  head_sha="$(git -C "$dir" rev-parse --verify --quiet "$head^{commit}")" || die "review: unknown head $head"
+  base_sha="$(git -C "$dir" rev-parse --verify --quiet "$base^{commit}")" || die "review: unknown base $base"
+  # Review what the branch changed since it left the base, not the base's newer commits reversed.
+  base_sha="$(git -C "$dir" merge-base "$base_sha" "$head_sha")" || die "review: $base and $head share no history"
+  [ "$(gx "$dir" rev-parse HEAD)" = "$head_sha" ] || die "review: $dir is not checked out at $head_sha; the reviewer reads source from it"
+  [ -z "$(gx "$dir" status --porcelain)" ] || die "review: $dir has uncommitted changes; review needs a clean tree"
+
+  mkdir -p "$RUNS/$SLUG/$TASK"
+  RUN="$RUNS/$SLUG/$TASK/review-$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir "$RUN" || die "review: $RUN already exists"
+  mkdir "$RUN/tmp"; LOGFILE="$RUN/review.log"
+  git "${GITSAFE[@]}" -C "$dir" diff "${RAWDIFF[@]}" "$base_sha" "$head_sha" > "$RUN/diff.patch"
+  git -C "$dir" diff --name-status "$base_sha" "$head_sha" > "$RUN/files.txt"
+  local nfiles; nfiles="$(wc -l < "$RUN/files.txt" | tr -d ' ')"
+  [ "$(grep -c '^diff --git' "$RUN/diff.patch" || true)" = "$nfiles" ] || die "review: diff/file-count mismatch; refusing an incomplete diff"
+  [ "$nfiles" -gt 0 ] || die "review: no changes between $base and $head"
+  secret_scan "$RUN/diff.patch" > "$RUN/secret-scan.txt"
+  if [ -s "$RUN/secret-scan.txt" ]; then
+    log "possible credentials in the diff: redacting before Codex sees it"
+    sed -E -i '' 's/(sk_(live|test)_|pk_live_|AKIA|gh[pousr]_|github_pat_|xox[abpr]-)[A-Za-z0-9_-]{6,}/\1<redacted>/g; s/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*/<redacted-jwt>/g; s#(://[^/[:space:]:@]+:)[^@[:space:]/]+@#\1<redacted>@#g; s/((SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*=)[^[:space:]]+/\1<redacted>/g' "$RUN/diff.patch"
+  fi
+  sed -e "s#{{DIFF_FILE}}#$RUN/diff.patch#" -e "s#{{FILE_COUNT}}#$nfiles#" "$TEMPLATES/reviewer-preamble.md" > "$RUN/prompt.md"
+  { echo; echo "Review the change $base_sha..$head_sha in $dir."; [ -f "$focus" ] && { echo; echo "---- FOCUS ----"; cat "$focus"; }; } >> "$RUN/prompt.md"
+
+  local model_args=(); [ -n "$model" ] && model_args=(-m "$model")
+  log "review: $nfiles files, codex $(codex_version), read-only sandbox, in $dir"
+  local rc=0
+  TMPDIR="$RUN/tmp" run_with_timeout "$CODEX_TIMEOUT_DEFAULT" \
+    "$CODEX" -a never exec -C "$dir" -s read-only --ignore-user-config --color never --json \
+      --output-schema "$TEMPLATES/review.schema.json" -o "$RUN/review.json" \
+      ${model_args[@]+"${model_args[@]}"} - \
+      < "$RUN/prompt.md" > "$RUN/codex.jsonl" 2> "$RUN/codex.stderr" || rc=$?
+  [ -z "$(gx "$dir" status --porcelain)" ] || log "WARNING: $dir changed during a read-only review"
+  if [ "$rc" -ne 0 ] || [ ! -s "$RUN/review.json" ]; then
+    log "review failed (exit $rc); see $RUN/codex.stderr"; tail -c 800 "$RUN/codex.stderr" >&2
+    tail -c 3000 "$RUN/codex.stderr" 2>/dev/null | grep -qiE "$CODEX_BLOCKED_RE" && exit 3
+    exit 1
+  fi
+  echo "review written to $RUN/review.json" >&2
+  cat "$RUN/review.json"
+}
+
+# ---- status / list / cleanup / doctor ----------------------------------------
+
+cmd_status() {
+  local repo_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --task-id) need "$@"; TASK="$2"; shift 2 ;;
+      --repo) need "$@"; repo_arg="$2"; shift 2 ;;
+      *) TASK="$1"; shift ;;
+    esac
+  done
+  [ -n "${TASK:-}" ] || die "status: --task-id is required"
+  load_task "$repo_arg"
+  if [ -d "$WT" ]; then ATT="$RUN"; gitfile_intact || log "WARNING: $WT's .git pointer had been altered after the run; restored. Treat the run as hostile."; fi
+  if [ -f "$RUN/result.json" ]; then cat "$RUN/result.json"; else cat "$RUN/state"; fi
+}
+
+cmd_list() {
+  local scope="$RUNS"
+  if [ "${1:-}" != --all ]; then resolve_repo ""; scope="$RUNS/$SLUG"; fi
+  [ -d "$scope" ] || { echo "no runs"; return; }
+  local f
+  find "$scope" -name state -maxdepth 3 2>/dev/null | sort | while IFS= read -r f; do
+    local d; d="$(dirname "$f")"
+    if [ -f "$d/result.json" ]; then
+      printf '%-50s %s\n' "${d#$RUNS/}" "$(json_get "$d/result.json" status) $(json_get "$d/result.json" commit_sha)"
+    else
+      printf '%-50s %s\n' "${d#$RUNS/}" "(no result yet)"
+    fi
+  done
+}
+
+cmd_cleanup() {
+  local delete_branch=0 repo_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --task-id) need "$@"; TASK="$2"; shift 2 ;;
+      --repo) need "$@"; repo_arg="$2"; shift 2 ;;
+      --delete-merged-branch) delete_branch=1; shift ;;
+      *) die "cleanup: unknown option $1" ;;
+    esac
+  done
+  [ -n "${TASK:-}" ] || die "cleanup: --task-id is required"
+  load_task "$repo_arg"; acquire_lock
+  local branch; branch="$(state_get branch)"
+  if [ -d "$WT" ]; then
+    ATT="$RUN"; gitfile_intact || die "cleanup: $WT had a tampered .git pointer (restored); inspect it before removing"
+    [ -z "$(g status --porcelain)" ] || die "cleanup: $WT has uncommitted changes; refusing (never forced)"
+    git -C "$REPO" worktree remove "$WT"   # no --force, by design
+    log "removed worktree $WT"
+  fi
+  if [ "$delete_branch" = 1 ]; then
+    [ -n "$ORIGIN_URL" ] && git -C "$REPO" fetch -q origin 2>/dev/null || true
+    local target; target="$(default_base)"
+    if git -C "$REPO" merge-base --is-ancestor "$branch" "$target"; then
+      git -C "$REPO" branch -d "$branch" && log "deleted merged branch $branch"
+    else
+      log "kept $branch: not merged into $target"
+    fi
+  fi
+  echo "run directory kept: $RUN"
+}
+
+cmd_doctor() {
+  local ok=1
+  echo "codex-delegate $VERSION (templates: $TEMPLATES)"
+  if [ -x "$CODEX" ]; then echo "codex: $("$CODEX" --version 2>&1)"; else echo "codex: NOT FOUND at $CODEX"; ok=0; fi
+  local st; st="$("$CODEX" login status 2>&1 | head -1 || true)"
+  echo "login: $st"
+  case "$st" in *"Logged in"*) ;; *) ok=0 ;; esac
+  local probe; probe="$(mktemp -d "${TMPDIR:-/tmp}/cd-doctor.XXXXXX")"
+  if ( cd "$probe" && "$CODEX" sandbox -c 'sandbox_mode="workspace-write"' -- bash -c 'echo ok > in.txt; (echo x > "$HOME/.codex-delegate-escape-probe") 2>/dev/null && echo ESCAPED || echo contained' ) 2>/dev/null | grep -q contained \
+     && [ -f "$probe/in.txt" ] && [ ! -e "$HOME/.codex-delegate-escape-probe" ]; then
+    echo "sandbox: workspace-write contains writes"
+  else
+    echo "sandbox: NOT WORKING"; ok=0
+  fi
+  rm -f "$probe/in.txt"; rmdir "$probe" 2>/dev/null || true
+  for f in "$TEMPLATES/result.schema.json" "$TEMPLATES/review.schema.json" "$TEMPLATES/implementer-preamble.md" "$TEMPLATES/reviewer-preamble.md"; do
+    [ -f "$f" ] || { echo "missing template: $f"; ok=0; }
+  done
+  echo "load: $(load1) (limit $LOAD_MAX)"
+  [ "$ok" = 1 ] && echo "doctor: OK" || { echo "doctor: PROBLEMS FOUND"; return 1; }
+}
+
+sub="${1:-}"; [ $# -gt 0 ] && shift
+case "$sub" in
+  run) cmd_run "$@" ;;
+  retry) cmd_retry "$@" ;;
+  review) cmd_review "$@" ;;
+  status) cmd_status "$@" ;;
+  list) cmd_list "$@" ;;
+  cleanup) cmd_cleanup "$@" ;;
+  doctor) cmd_doctor ;;
+  --version|version) echo "codex-delegate $VERSION" ;;
+  *) usage ;;
+esac

@@ -47,6 +47,7 @@ import { SubscriptionEffects } from '../../src/subscriptions/subscription-effect
 import { PAID_OUTCOMES } from '../../src/teacher-file/teacher-payroll.service';
 import { STRIPE_GATEWAY } from '../../src/billing/stripe.gateway';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
+import { monthsOf } from '../support/academy-month';
 import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
 
@@ -544,7 +545,9 @@ describe('PD-30 over HTTP', () => {
     const standing = () => g.prisma.lesson.count({ where: { learnerId: child.id, outcome: null, scheduleSlotId: { not: null } } });
     const before = await standing();
     expect(before).toBeGreaterThan(14);
-    const months = [today().slice(0, 7), addDays(today(), 31).slice(0, 7)];
+    // Every month the materialized lessons fall in (stats.zone) -- never "today + 31 days",
+    // which skips a month on the last day(s) of one (2026-10-31 + 31 = 2026-12-01).
+    const months = monthsOf((await g.prisma.lesson.findMany({ where: { learnerId: child.id }, select: { startsAt: true } })).map((l) => l.startsAt));
     const scheduled = async () => {
       let n = 0;
       for (const month of months) n += (await stats.teacher(m.teachersManager.id, teacher.id, month)).summary.totalScheduled;

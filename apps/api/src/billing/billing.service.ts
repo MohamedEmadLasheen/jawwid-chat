@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
-import type { FamilyInstalment } from '@prisma/client';
+import { createHash, randomUUID } from 'node:crypto';
+import { Prisma, type FamilyInstalment } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
@@ -8,17 +8,29 @@ import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
 import type { BillingAccess } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
+import { ActorKind, SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
 import { mapStructureRefusal } from '../org/org-structure.service';
 import { todayIn } from '../leave/leave.service';
-import { billingAccessOf } from './billing-access';
+import { billingAccessOf, familyInScopeSql } from './billing-access';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
-import { day, invalid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
+import { day, invalid, optionalUuid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
 import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-ledger.service';
 import { PaymentsReadService, type MoneyView } from './payments-read.service';
 import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 import { childSubscriptions, forParent } from './subscription-reads';
+import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+
+/**
+ * ADMIN-007: a family's billing settings (method, currency, plan) as one
+ * opaque version. An edit names the version it was made from; if the settings
+ * changed since, it is refused (409) with what they are now -- not silently
+ * overwritten. Content-based: two editors who set the same values never clash.
+ */
+export function billingSettingsVersion(s: { paymentMethod: string | null; currency: string | null; planMonths: number | null }): string {
+  return createHash('sha256').update(JSON.stringify([s.paymentMethod, s.currency, s.planMonths])).digest('base64url').slice(0, 16);
+}
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const RESPONSIBLE = ['all', 'me', 'none'] as const;
@@ -280,13 +292,21 @@ export class BillingService {
       planMonths = v as number | null;
     }
     if (Object.keys(next).length === 0 && planMonths === undefined) return this.presentFamily(actor, access, family.id);
+    const version = body.version === undefined || body.version === null ? undefined : requireText('version', body.version, 64);
 
-    const [before, beforeFamily] = await Promise.all([
-      this.prisma.familyBilling.findUnique({ where: { familyId: family.id } }),
-      this.prisma.family.findUniqueOrThrow({ where: { id: family.id }, select: { subscriptionPlanMonths: true } }),
-    ]);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      // ADMIN-007: one edit of a family's settings at a time, and the audit's
+      // before-image is what this edit really overwrites -- read here, under the lock.
+      await tx.$queryRaw`SELECT id FROM chat.family WHERE id = ${family.id}::uuid FOR UPDATE`;
+      const before = await tx.familyBilling.findUnique({ where: { familyId: family.id } });
+      const beforeFamily = await tx.family.findUniqueOrThrow({ where: { id: family.id }, select: { subscriptionPlanMonths: true } });
+      const current = { paymentMethod: before?.paymentMethod ?? null, currency: before?.currency ?? null, planMonths: beforeFamily.subscriptionPlanMonths };
+      if (version !== undefined && version !== billingSettingsVersion(current)) {
+        throw new CommError(CommErrorCode.BILLING_STATE, 'these billing settings were changed since you opened them', 409, {
+          current: { ...current, settingsVersion: billingSettingsVersion(current) },
+        });
+      }
       if (Object.keys(next).length > 0) {
         await tx.familyBilling.upsert({
           where: { familyId: family.id },
@@ -306,12 +326,8 @@ export class BillingService {
         action: 'family.billing_set',
         entity: 'family',
         entityId: family.id,
-        before: {
-          paymentMethod: before?.paymentMethod ?? null,
-          currency: before?.currency ?? null,
-          planMonths: beforeFamily.subscriptionPlanMonths,
-        },
-        after: { ...next, ...(planMonths !== undefined ? { planMonths } : {}) },
+        before: current,
+        after: { ...current, ...next, ...(planMonths !== undefined ? { planMonths } : {}) },
         reason: 'set on the Parent Profile',
       });
     });
@@ -462,16 +478,40 @@ export class BillingService {
     const reference = body.reference === undefined || body.reference === null || body.reference === ''
       ? null
       : requireText('reference', body.reference, 120);
+    // ADMIN-001: a replay answers before the "already paid" check the first submit made true.
+    const paymentKey = optionalUuid('paymentId', body.paymentId);
+    const samePayment = (p: { instalmentId: string | null; recordedBy: string | null; method: string; paidOn: Date; reference: string | null }) =>
+      p.instalmentId === inv.id && p.recordedBy === actor.actorId && p.method === method
+      && isoDay(p.paidOn) === paidOn && (p.reference ?? null) === reference;
+    if (paymentKey) {
+      const prior = await this.prisma.payment.findUnique({ where: { id: paymentKey } });
+      if (prior) {
+        assertReplay('payment', samePayment(prior));
+        return this.presentFamily(actor, access, inv.familyId);
+      }
+    }
     if (inv.paidOn || inv.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid or voided', 409);
     const ledger = this.requireLedger();
 
     const recorded = await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      if (paymentKey) {
+        await lockIdempotencyKey(tx, paymentKey);
+        const prior = await tx.payment.findUnique({ where: { id: paymentKey } });
+        if (prior) {
+          assertReplay('payment', samePayment(prior));
+          return null; // a concurrent duplicate: the first one wrote it
+        }
+      }
+      // Lock the instalment BEFORE reading what it still owes: two submits that
+      // arrive together (with no key, or different keys) must not both see it unpaid.
+      await tx.$queryRaw`SELECT id FROM chat.family_instalment WHERE id = ${inv.id}::uuid FOR UPDATE`;
       const paid = await ledger.standingSum(tx, { instalmentId: inv.id });
       const remaining = Number(inv.amountMinor) - paid;
       if (remaining <= 0) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already covered', 409);
       const learner = inv.learnerId ? await tx.learner.findUnique({ where: { id: inv.learnerId }, select: { name: true } }) : null;
       return ledger.record(tx, {
+        id: paymentKey ?? undefined,
         organizationId: inv.organizationId,
         familyId: inv.familyId,
         trialLessonId: null,
@@ -489,7 +529,7 @@ export class BillingService {
         auditReason: 'payment recorded',
       });
     }).catch((e) => { throw mapPaymentRefusal(e); });
-    await ledger.afterRecorded(recorded);
+    if (recorded) await ledger.afterRecorded(recorded);
     return this.presentFamily(actor, access, inv.familyId);
   }
 
@@ -558,6 +598,10 @@ export class BillingService {
       paymentMethod: (billing?.paymentMethod ?? null) as FamilyPaymentMethod | null,
       currency: billing?.currency ?? null,
       planMonths: family.subscriptionPlanMonths,
+      // ADMIN-007: send it back with an edit of these three.
+      settingsVersion: billingSettingsVersion({
+        paymentMethod: billing?.paymentMethod ?? null, currency: billing?.currency ?? null, planMonths: family.subscriptionPlanMonths,
+      }),
       instalments: timeline,
       totals: totalsOf(timeline),
       // Operations and Sales record (PD-17); the client hides nothing the server would refuse.
@@ -802,8 +846,6 @@ export class BillingService {
 
   /** The families the viewer may see. */
   private familiesInScope(actor: Actor, access: BillingAccess, org: string): Promise<FamilyRow[]> {
-    const reach = access.scope === 'reach';
-    const owned = access.scope === 'owned';
     return this.prisma.$queryRaw<FamilyRow[]>`
       SELECT f.id, f.display_name AS family_name, pc.id AS parent_id,
              pc.name AS account_name, b.supervisor_id AS billing_supervisor_id
@@ -811,8 +853,67 @@ export class BillingService {
         LEFT JOIN chat.contact pc ON pc.id = f.primary_contact_id AND pc.family_id = f.id
         LEFT JOIN chat.family_billing_supervision b ON b.family_id = f.id
        WHERE f.organization_id = ${org}::uuid
-         AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)
-         AND (${!owned} OR chat.staff_owns_family(${actor.actorId}::uuid, f.id))`;
+         AND ${familyInScopeSql(actor.actorId, access.scope, Prisma.sql`f.id`)}`;
+  }
+
+  /**
+   * PD-44: the Dashboard's instalment tiles -- the Instalments page's own
+   * counts line (`list` with no filter), in one statement over the same
+   * families (familyInScopeSql), the same open rows (not paid, not voided)
+   * and statusOf's rule against the same academy day:
+   *
+   *   instalments.overdue     due before today
+   *   instalments.due         due today
+   *   instalments.unassigned  open, with no responsible supervisor (a child's
+   *                           supervisor for a child's row, the family's
+   *                           billing supervisor for the family's own)
+   *
+   * Anyone who reads no family's money gets no tile; non-staff are refused.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const reader = await this.readerOrNone(actorId);
+    if (!reader) return [];
+    const { actor, access } = reader;
+    const org = actor.organizationId as string;
+    const today = todayIn(await this.timeZone());
+    const [r] = await this.prisma.$queryRaw<Array<{ overdue: number; overdue_oldest: Date | null; due: number; unassigned: number }>>`
+      SELECT count(*) FILTER (WHERE x.due_date < ${today}::date)::int AS overdue,
+             min(x.due_date) FILTER (WHERE x.due_date < ${today}::date) AS overdue_oldest,
+             count(*) FILTER (WHERE x.due_date = ${today}::date)::int AS due,
+             count(*) FILTER (WHERE x.responsible IS NULL)::int AS unassigned
+        FROM (
+          SELECT i.due_date,
+                 CASE WHEN i.learner_id IS NOT NULL THEN ls.supervisor_id ELSE b.supervisor_id END AS responsible
+            FROM chat.family_instalment i
+            JOIN chat.family f ON f.id = i.family_id
+            LEFT JOIN chat.family_billing_supervision b ON b.family_id = f.id
+            LEFT JOIN chat.learner l ON l.id = i.learner_id AND l.family_id = f.id
+            LEFT JOIN chat.learner_supervision ls ON ls.learner_id = l.id
+           WHERE f.organization_id = ${org}::uuid
+             AND i.organization_id = ${org}::uuid
+             AND i.voided_at IS NULL
+             AND i.paid_on IS NULL
+             AND ${familyInScopeSql(actor.actorId, access.scope, Prisma.sql`f.id`)}
+        ) x`;
+    return [
+      dashboardTile('instalments.overdue', r?.overdue ?? 0, r?.overdue_oldest ?? null),
+      dashboardTile('instalments.due', r?.due ?? 0),
+      dashboardTile('instalments.unassigned', r?.unassigned ?? 0),
+    ];
+  }
+
+  /**
+   * PD-44: the reader, or null for staff who read no family's money (their
+   * Dashboard has no billing tile); anyone who is not staff is refused as
+   * the pages refuse them.
+   */
+  async readerOrNone(actorId: string): Promise<{ actor: Actor; access: BillingAccess } | null> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) {
+      throw new CommError(CommErrorCode.BILLING_DENIED, 'a family\'s money is the Operations department\'s');
+    }
+    const access = await this.accessOf(actor);
+    return access.scope === null ? null : { actor, access };
   }
 
   async requireFamily(actor: Actor, access: BillingAccess, familyId: string) {

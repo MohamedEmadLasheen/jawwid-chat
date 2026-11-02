@@ -11,7 +11,8 @@ import { complaintAbout, familiesOfComplaints } from '../teacher-file/complaint-
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
-import { CardKind } from '../communication/contracts/vocab';
+import { ActorKind, CardKind } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
@@ -93,30 +94,70 @@ export class DisciplineService {
    * one teacher, and `late` or `cancellations` only.
    */
   async list(actorId: string, query: { state?: string; month?: string; teacherId?: string; kind?: string }) {
-    const actor = await this.requireSupervisor(actorId);
+    const supervisor = await this.supervisorOrNone(actorId);
+    // PD-52 PR-5: Sales reads the lateness on the trials it reads, and nothing else.
+    const sales = supervisor ? null : await this.salesPage(actorId);
+    const actor = supervisor ?? sales?.actor;
+    if (!actor) throw disciplineDenied();
     const state = query.state ?? 'open';
     if (!['open', 'decided', 'all'].includes(state)) throw invalid('state: open | decided | all');
     if (query.month !== undefined && !MONTH_RE.test(query.month)) throw invalid('month: YYYY-MM');
     if (query.teacherId !== undefined && !isUuid(query.teacherId)) throw invalid('teacherId: a uuid');
     if (query.kind !== undefined && !(query.kind in KIND_FILTERS)) throw invalid(`kind: ${Object.keys(KIND_FILTERS).join(' | ')}`);
 
+    if (sales) {
+      if (query.kind !== undefined && query.kind !== 'late') return { violations: [] };
+      const { rows } = await this.listed(actor, sales.page, { ...query, state, kind: 'late' });
+      const about = await this.supervision.teacherScope.lessonsAbout(rows.map((r) => r.lessonId).filter((x): x is string => !!x));
+      const trials = rows.filter((r) => r.lessonId && about.get(r.lessonId)?.prospectId);
+      return { violations: (await this.dtos(trials)).map(forSales) };
+    }
     // PD-35: the violations of the teachers in the caller's scope.
     const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const { rows } = await this.listed(actor, page, { ...query, state });
+    return { violations: await this.dtos(rows) };
+  }
+
+  /**
+   * PD-44: the Dashboard's tiles for the Teacher Supervision page's two
+   * decision queues -- Absences (`kind=absences`) and Lateness (`kind=late`),
+   * each `state=open` -- as `list` finds them (listed: the same scope, the
+   * same 500 candidates, standing() and visible()), so each count is the
+   * list's length. `capped` when the candidates reached the list's limit.
+   * Staff off the page get no tile; non-staff are refused as there.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) return [];
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const tile = async (key: string, kind: keyof typeof KIND_FILTERS) => {
+      const { rows, candidates } = await this.listed(actor, page, { state: 'open', kind });
+      return dashboardTile(key, rows.length, rows[0]?.occurredAt ?? null, candidates >= LIST_LIMIT);
+    };
+    return [await tile('absences.open', 'absences'), await tile('lateness.open', 'late')];
+  }
+
+  /** What `list` shows: the page's scope, the filters, LIST_LIMIT candidates, then standing() and visible(). */
+  private async listed(
+    actor: Actor,
+    page: PageScope,
+    query: { state: string; month?: string; teacherId?: string; kind?: string },
+  ): Promise<{ rows: TeacherViolation[]; candidates: number }> {
     const scope = page.teachers;
     const where: Prisma.TeacherViolationWhereInput = {
       organizationId: actor.organizationId,
       ...(scope.all ? {} : { AND: [{ teacherId: { in: [...scope.teacherIds] } }] }),
-      ...(state === 'open' ? { decision: null } : state === 'decided' ? { decision: { not: null } } : {}),
+      ...(query.state === 'open' ? { decision: null } : query.state === 'decided' ? { decision: { not: null } } : {}),
       ...(query.month ? { month: new Date(`${query.month}-01T00:00:00Z`) } : {}),
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
       ...(query.kind ? { kind: { in: [...KIND_FILTERS[query.kind as keyof typeof KIND_FILTERS]] } } : {}),
     };
-    const rows = await this.visible(page, await this.standing(await this.prisma.teacherViolation.findMany({
+    const found = await this.prisma.teacherViolation.findMany({
       where,
-      orderBy: state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
-      take: 500,
-    })));
-    return { violations: await this.dtos(rows) };
+      orderBy: query.state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
+      take: LIST_LIMIT,
+    });
+    return { rows: await this.visible(page, await this.standing(found)), candidates: found.length };
   }
 
   /** One teacher's month: the count that sets the next step, the violations, and their suspensions. */
@@ -159,14 +200,24 @@ export class DisciplineService {
   // ------------------------------------------------------------------
 
   async recordLateness(actorId: string, lessonId: string, body: Record<string, unknown>) {
-    const actor = await this.requireSupervisor(actorId);
+    const supervisor = await this.supervisorOrNone(actorId);
+    const sales = supervisor ? null : await this.salesPage(actorId);
+    const actor = supervisor ?? sales?.actor;
+    if (!actor) throw disciplineDenied();
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
     const lesson = await this.prisma.lesson.findFirst({ where: { id: lessonId, organizationId: actor.organizationId } });
     if (!lesson) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
-    await this.supervision.requireTeacherInPageScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
-    // P2-4: an Operations supervisor records lateness on their own families' lessons only.
-    if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), lesson.teacherId, { learnerId: lesson.learnerId })) {
-      throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+    if (sales) {
+      // PD-52 PR-5: Sales, on a trial it reads -- a regular lesson is not found.
+      if (lesson.kind !== 'trial' || !lesson.prospectId || !pageRowVisible(sales.page, lesson.teacherId, { learnerId: null, prospectId: lesson.prospectId })) {
+        throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+      }
+    } else {
+      await this.supervision.requireTeacherInPageScope(actor, lesson.teacherId, CommErrorCode.DISCIPLINE_NOT_FOUND);
+      // P2-4: an Operations supervisor records lateness on their own families' lessons only.
+      if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), lesson.teacherId, { learnerId: lesson.learnerId })) {
+        throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'lesson not found');
+      }
     }
     const minutes = body.minutes;
     if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
@@ -203,7 +254,8 @@ export class DisciplineService {
         return created;
       }),
     );
-    return { violation: (await this.dtos([row]))[0] };
+    const [dto] = await this.dtos([row]);
+    return { violation: sales ? forSales(dto!) : dto };
   }
 
   // ------------------------------------------------------------------
@@ -268,6 +320,12 @@ export class DisciplineService {
     const about = complaintAbout(complaint, await familiesOfComplaints(this.prisma, [complaint]));
     if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, about)) {
       throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    }
+    // PD-52 (review of #374): a complaint entered by mistake is never upheld. The
+    // database refuses it too, under the complaint's row lock, so a void and an
+    // uphold racing each other cannot both land.
+    if (await this.prisma.teacherSupervisionEntry.findFirst({ where: { refersTo: complaint.id, kind: 'entry_void' }, select: { id: true } })) {
+      throw stateError('this complaint was voided; it is not upheld');
     }
     const note = textField(body, 'note', false);
     const row = await this.write(() =>
@@ -570,7 +628,7 @@ export class DisciplineService {
     const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month) })));
     const lessons = await this.prisma.lesson.findMany({
       where: { id: { in: [...new Set(rows.map((r) => r.lessonId).filter((x): x is string => !!x))] } },
-      select: { id: true, kind: true, startsAt: true, outcomeNote: true, learner: { select: { name: true } } },
+      select: { id: true, kind: true, startsAt: true, outcomeNote: true, excuseCategory: true, learner: { select: { name: true } } },
     });
     const lessonOf = new Map(lessons.map((l) => [l.id, l]));
     const teachers = await this.prisma.teacher.findMany({
@@ -612,6 +670,8 @@ export class DisciplineService {
               startsAt: lesson?.startsAt.toISOString() ?? null,
               learnerName: lesson?.learner?.name ?? null,
               note: lesson?.outcomeNote ?? null,
+              // PD-50, shown on PD-52's Excuses & absences (staff only): travel | illness | exams | emergency | other.
+              excuseCategory: lesson?.excuseCategory ?? null,
             }
           : null,
         complaint: c ? { id: c.id, body: c.body, from: c.complaintSource, createdAt: c.createdAt.toISOString() } : null,
@@ -655,7 +715,8 @@ export class DisciplineService {
     const partial = rows.filter((r) => !scopeCovers(page.whole, r.teacherId));
     if (partial.length === 0) return rows;
     const scope = this.supervision.teacherScope;
-    const learnerOf = await scope.learnersOfLessons(partial.map((r) => r.lessonId).filter((x): x is string => !!x));
+    // PD-52 PR-5: a trial's row is about its trial family (Sales reads it; Operations does not).
+    const aboutOf = await scope.lessonsAbout(partial.map((r) => r.lessonId).filter((x): x is string => !!x));
     const complaintIds = partial.map((r) => r.complaintEntryId).filter((x): x is string => !!x);
     const complaints = complaintIds.length
       ? await this.prisma.teacherSupervisionEntry.findMany({
@@ -666,7 +727,7 @@ export class DisciplineService {
     const familyOf = await familiesOfComplaints(this.prisma, complaints);
     const complaintOf = new Map(complaints.map((c) => [c.id, c]));
     return rows.filter((r) => {
-      if (r.lessonId) return pageRowVisible(page, r.teacherId, { learnerId: learnerOf.get(r.lessonId) ?? null });
+      if (r.lessonId) return pageRowVisible(page, r.teacherId, aboutOf.get(r.lessonId) ?? { learnerId: null });
       const c = r.complaintEntryId ? complaintOf.get(r.complaintEntryId) : undefined;
       return pageRowVisible(page, r.teacherId, c ? complaintAbout(c, familyOf) : null);
     });
@@ -693,14 +754,27 @@ export class DisciplineService {
     );
   }
 
-  private async requireSupervisor(actorId: string): Promise<Actor> {
+  /** PD-52 PR-5: Sales on the teacher-records pages -- its rows -- or null for anyone else. */
+  private async salesPage(actorId: string): Promise<{ actor: Actor; page: PageScope } | null> {
     const actor = await this.conversations.requireActor(actorId);
+    const scope = this.supervision.teacherScope;
+    if (!(await scope.salesBasis(actor))) return null;
+    return { actor, page: await scope.salesRowsOf(actor) };
+  }
+
+  private async requireSupervisor(actorId: string): Promise<Actor> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) throw disciplineDenied();
+    return actor;
+  }
+
+  /** The supervisor, or null for staff off the page (PD-44: no tile); anyone not staff is refused. */
+  private async supervisorOrNone(actorId: string): Promise<Actor | null> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) throw disciplineDenied();
     // PD-26 amendment: the Teachers department, or an Operations supervisor for
     // the teachers of their families (narrowed below by the page scope).
-    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
-    }
-    return actor;
+    return (await this.supervision.pageAccess(actor)).canSupervise ? actor : null;
   }
 
   private async requireTeacher(actor: Actor, teacherId: string) {
@@ -814,4 +888,19 @@ async function closeLoginInTx(tx: Tx, teacherId: string, reason: string, actorId
     UPDATE chat.password_reset_code SET superseded_at = now()
      WHERE account_id = ${account.id}::uuid AND used_at IS NULL AND superseded_at IS NULL`;
   return { accountId: account.id, statusBefore: account.status, supersededCodes };
+}
+
+/** The violations list's page size; the Dashboard tiles flag `capped` at it (PD-44). */
+const LIST_LIMIT = 500;
+
+function disciplineDenied(): CommError {
+  return new CommError(CommErrorCode.DISCIPLINE_DENIED, 'discipline is the Teachers department\'s and, for the teachers of their families, Operations\'');
+}
+
+/**
+ * PD-52 PR-5: a violation as Sales reads it -- what happened and who recorded
+ * it, never the ladder: no step, suggestion or decision (plan §5.4).
+ */
+function forSales<T extends Record<string, unknown>>(v: T): T {
+  return { ...v, step: null, suggestedDecision: null, decision: null, decisionNote: null, decidedBy: null, decidedAt: null, suspension: null };
 }

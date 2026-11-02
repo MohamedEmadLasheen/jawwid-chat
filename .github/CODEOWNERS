@@ -1,18 +1,36 @@
-# PD-49: what lets approvals of children's Quran content reach children, and the
-# code that checks them. A PR that changes approvals may not change any of the
-# checking code (scripts/lessons/verify-approvals.mjs PROTECTED), so a PR never
-# checks itself; what protects the checking code is this review. Enforcing this
-# file ("Require review from Code Owners") is a branch-protection setting, the
-# owner's call -- and it must be on before the first key is added.
-/apps/lessons/src/content/approvals-keys.json @MohamedEmadLasheen
-/apps/lessons/src/content/approvals-ledger.json @MohamedEmadLasheen
-/apps/lessons/src/content/approvals/ @MohamedEmadLasheen
-/apps/lessons/src/content/quran-content.ts @MohamedEmadLasheen
-/apps/lessons/src/play/mechanics.ts @MohamedEmadLasheen
-/apps/lessons/src/play/signed.ts @MohamedEmadLasheen
-/apps/lessons/src/fonts/AmiriQuran.ttf @MohamedEmadLasheen
-/scripts/lessons/verify-approvals.mjs @MohamedEmadLasheen
-/scripts/lessons/check-quran-content.py @MohamedEmadLasheen
-/scripts/qa/guards.sh @MohamedEmadLasheen
-/.github/workflows/ @MohamedEmadLasheen
-/.github/CODEOWNERS @MohamedEmadLasheen
+# Narrow Code Owners (owner decision 2026-10-31): only the genuinely sensitive
+# files need @MohamedEmadLasheen's review. Everything else merges on the six
+# required CI checks and the department head's review.
+# A PR that changes approvals may not change the code that checks them
+# (scripts/lessons/verify-approvals.mjs PROTECTED).
+
+# Code Owners, CI and deployment workflows, and the CI release gates
+/.github/CODEOWNERS                            @MohamedEmadLasheen
+/.github/workflows/                            @MohamedEmadLasheen
+/scripts/qa/                                   @MohamedEmadLasheen
+
+# The Quran text: the verified dataset, its pins, how it is loaded, served and drawn
+/data/quran/                                   @MohamedEmadLasheen
+/scripts/db/load-quran.py                      @MohamedEmadLasheen
+/scripts/db/load-quran.sh                      @MohamedEmadLasheen
+/apps/api/src/quran/                           @MohamedEmadLasheen
+/apps/lessons/quran-pin.json                   @MohamedEmadLasheen
+/apps/lessons/src/quran/                       @MohamedEmadLasheen
+/apps/lessons/src/audio/                       @MohamedEmadLasheen
+/apps/lessons/src/fonts/AmiriQuran.ttf         @MohamedEmadLasheen
+/assets/fonts/AmiriQuran.ttf                   @MohamedEmadLasheen
+/scripts/db/check-quran-pins.py                @MohamedEmadLasheen
+/apps/api/src/cli/ingest-quran-audio.ts        @MohamedEmadLasheen
+/apps/api/src/materials/quran-surahs.ts        @MohamedEmadLasheen
+/lib/features/whiteboards/data/quran_text_repository.dart @MohamedEmadLasheen
+/supabase/migrations/*quran*                   @MohamedEmadLasheen
+
+# Lesson content and its approval: content files, approvals, signing, the checkers
+/apps/lessons/src/content/                     @MohamedEmadLasheen
+/apps/lessons/src/play/                        @MohamedEmadLasheen
+/apps/lessons/src/arabic/                      @MohamedEmadLasheen
+/apps/lessons/src/reading/                     @MohamedEmadLasheen
+/apps/lessons/src/islamic/                     @MohamedEmadLasheen
+/apps/api/src/lesson-content/                  @MohamedEmadLasheen
+/apps/api/src/lesson-audio/                    @MohamedEmadLasheen
+/scripts/lessons/                              @MohamedEmadLasheen

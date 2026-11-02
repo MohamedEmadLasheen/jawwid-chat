@@ -7,6 +7,8 @@ import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { useAddEntryFor, useSupervisionDirectory, useUpdatePersonal } from './hooks'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { AboutPicker } from '@/features/teacher-records/AboutPicker'
+import { aboutFields } from '@/features/teacher-records/api'
 
 export function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
   const tx = useCopy()
@@ -100,10 +102,13 @@ export type EntryIntent =
 export function AddEntryDialog({
   teacherId,
   intent,
+  requireAbout = false,
   onClose,
 }: {
   teacherId: string | null
   intent: EntryIntent
+  /** PD-52 PR-5 (Sales): a complaint names the student or trial it is about, and no handler. */
+  requireAbout?: boolean
   onClose: () => void
 }) {
   const tx = useCopy()
@@ -120,6 +125,8 @@ export function AddEntryDialog({
   const [source, setSource] = useState<'' | 'management' | 'parent'>(intent.kind === 'complaint' ? (intent.source ?? '') : '')
   const [handler, setHandler] = useState('')
   const [chat, setChat] = useState('')
+  // PD-52: the student or trial a complaint is about (`learner:` / `prospect:`), when known.
+  const [about, setAbout] = useState('')
   const [body, setBody] = useState('')
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [day, setDay] = useState('')
@@ -140,12 +147,18 @@ export function AddEntryDialog({
 
   // PD-26 amendment: about a teacher the caller reaches only through Operations, a
   // parent's complaint names the family chat it came from (the server requires it).
+  // PD-52: naming the student (or trial) instead says which family it is about.
   const needsChat =
-    intent.kind === 'complaint' && source === 'parent' && directory.data?.teachers.find((t) => t.id === chosen)?.operationsOnly === true
+    intent.kind === 'complaint' &&
+    !requireAbout &&
+    !about &&
+    source === 'parent' &&
+    directory.data?.teachers.find((t) => t.id === chosen)?.operationsOnly === true
   const missing = {
     teacher: !chosen,
     source: intent.kind === 'complaint' && !source,
     chat: needsChat && !chat,
+    about: intent.kind === 'complaint' && requireAbout && !about,
     body: !body.trim(),
     month: intent.kind === 'monthly_comment' && !/^\d{4}-\d{2}$/.test(month),
     day: intent.kind === 'day_off' && !/^\d{4}-\d{2}-\d{2}$/.test(day),
@@ -159,8 +172,9 @@ export function AddEntryDialog({
           kind: 'complaint',
           body: text,
           source: source || 'management',
-          ...(handler ? { handledBy: handler } : {}),
+          ...(handler && !requireAbout ? { handledBy: handler } : {}),
           ...(needsChat && chat ? { sourceConversationId: chat } : {}),
+          ...aboutFields(about),
         }
       case 'complaint_followup':
         return { kind: 'complaint_followup', body: text, refersTo: intent.refersTo }
@@ -248,19 +262,24 @@ export function AddEntryDialog({
               {touched && missing.chat && <span className="field__error">{tx(T.required)}</span>}
             </div>
           )}
-          <div className="field">
-            <label className="field__label" htmlFor={handlerId}>
-              {tx(T.handler)}
-            </label>
-            <SearchableSelect id={handlerId} className="input" value={handler} onValueChange={(v) => setHandler(v)}>
-              <option value="">{tx(T.handlerMe)}</option>
-              {(directory.data?.supervisors ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </SearchableSelect>
-          </div>
+          {/* PD-52: who it is about (Sales must name the student or trial). */}
+          <AboutPicker teacherId={chosen} value={about} onChange={setAbout} required={requireAbout} error={touched && missing.about} />
+          {/* PD-52 PR-5: a complaint Sales files is handled by the Teachers department. */}
+          {!requireAbout && (
+            <div className="field">
+              <label className="field__label" htmlFor={handlerId}>
+                {tx(T.handler)}
+              </label>
+              <SearchableSelect id={handlerId} className="input" value={handler} onValueChange={(v) => setHandler(v)}>
+                <option value="">{tx(T.handlerMe)}</option>
+                {(directory.data?.supervisors ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </SearchableSelect>
+            </div>
+          )}
         </>
       )}
       {intent.kind === 'monthly_comment' && (

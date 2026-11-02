@@ -22,6 +22,7 @@ import {
   useVoidPayment,
 } from './hooks'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { newSubmitKey } from '@/core/submit-key'
 
 function Footer({ onCancel, onSave, pending, saveLabel }: { onCancel: () => void; onSave: () => void; pending: boolean; saveLabel?: string }) {
   const tx = useCopy()
@@ -183,6 +184,8 @@ export function EditBillingDialog({ billing, onClose }: { billing: FamilyBilling
     if ((method || null) !== billing.paymentMethod) body.paymentMethod = (method || null) as PaymentMethod | null
     if ((currency || null) !== billing.currency) body.currency = currency || null
     if (Object.keys(body).length === 0) return onClose()
+    // ADMIN-007: made from what this dialog was opened on; a later change by someone else wins a 409.
+    body.version = billing.settingsVersion
     save.mutate(body, { onSuccess: onClose })
   }
   return (
@@ -473,7 +476,9 @@ export function RecordPaymentDialog({ billing, instalment, onClose }: { billing:
   const [paidOn, setPaidOn] = useState(billing.today)
   const [method, setMethod] = useState<InstalmentPaymentMethod>(billing.paymentMethod ?? 'bank_transfer')
   const [reference, setReference] = useState('')
-  const submit = () => pay.mutate({ id: instalment.id, paidOn, method, reference: reference.trim() || undefined }, { onSuccess: onClose })
+  // ADMIN-001: one key for this form, resent on every retry of it.
+  const [paymentId] = useState(newSubmitKey)
+  const submit = () => pay.mutate({ id: instalment.id, paidOn, method, reference: reference.trim() || undefined, paymentId }, { onSuccess: onClose })
   return (
     <Dialog
       title={tx(P.payTitle, { label: instalment.label })}
@@ -792,6 +797,8 @@ export function RecordFamilyPaymentDialog({
   const tx = useCopy()
   const { locale } = useI18n()
   const record = useRecordFamilyPayment(billing.familyId)
+  // ADMIN-001: one key for this form, resent on every retry of it.
+  const [paymentId] = useState(newSubmitKey)
   const [method, setMethod] = useState<NewFamilyPayment['method']>('cash')
   const [towards, setTowards] = useState('')
   const [amount, setAmount] = useState('')
@@ -827,7 +834,7 @@ export function RecordFamilyPaymentDialog({
     if (!paidOn) next.paidOn = tx(PAY.required)
     setErrors(next)
     if (Object.keys(next).length > 0 || amountMinor === null) return
-    const body: NewFamilyPayment = { method, amountMinor, paidOn }
+    const body: NewFamilyPayment = { method, amountMinor, paidOn, paymentId }
     if (towards.startsWith('r:')) body.requestId = towards.slice(2)
     if (towards.startsWith('i:')) body.instalmentId = towards.slice(2)
     if (learnerId) body.learnerId = learnerId
@@ -938,6 +945,8 @@ export function RefundPaymentDialog({ billing, payment, onClose }: { billing: Fa
   const [amount, setAmount] = useState(fromMinor(refundable, payment.currency))
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // ADMIN-001: one key for this form, resent on every retry of it.
+  const [refundId] = useState(newSubmitKey)
   const submit = () => {
     const amountMinor = toMinor(amount, payment.currency)
     const next: Record<string, string> = {}
@@ -946,7 +955,7 @@ export function RefundPaymentDialog({ billing, payment, onClose }: { billing: Fa
     if (reason.trim() === '') next.reason = tx(PAY.reasonRequired)
     setErrors(next)
     if (Object.keys(next).length > 0 || amountMinor === null) return
-    refund.mutate({ id: payment.id, amountMinor, reason: reason.trim() }, { onSuccess: onClose })
+    refund.mutate({ id: payment.id, amountMinor, reason: reason.trim(), refundId }, { onSuccess: onClose })
   }
   return (
     <Dialog

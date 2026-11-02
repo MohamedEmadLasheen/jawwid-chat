@@ -11,6 +11,8 @@ import { MediaUrlSigner } from '../../platform/media-url';
 import { isUuid } from '../conversations/conversation.service';
 import { signAvatar } from '../profile/avatar-urls';
 import { sniffCertificateFile } from '../../certificates/certificate-file';
+import { ActorKind } from '../contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../../dashboard/dashboard-tile';
 
 /**
  * The teacher's professional profile. The teacher owns it.
@@ -374,6 +376,27 @@ export class TeacherProfileService {
       pendingCertificates: profile.certificates.filter((c) => c.state === 'pending').length,
       certificates: profile.certificates.map((c) => this.toCertificateView(c)),
     }));
+  }
+
+  /**
+   * PD-44: the Dashboard's credentials tile -- `certificateReviewQueue`'s
+   * length (one row per profile with a credential waiting), counted over the
+   * same query in one statement. Staff who may not review get no tile; anyone
+   * else is refused as the queue refuses them.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.requireActor(actorId);
+    const decision = this.authz.canReviewTeacherProfile(actor);
+    if (!decision.allowed) {
+      if (actor.kind === ActorKind.STAFF && actor.isActive) return [];
+      throw new CommError(decision.code, decision.reason);
+    }
+    const r = await this.prisma.teacherProfessionalProfile.aggregate({
+      where: { ...this.orgScope(actor), certificates: { some: { state: 'pending' } } },
+      _count: { _all: true },
+      _min: { updatedAt: true },
+    });
+    return [dashboardTile('teacher_profiles.pending', r._count._all, r._min.updatedAt)];
   }
 
   async decideCertificate(

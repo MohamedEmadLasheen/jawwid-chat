@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
+import '../data/board_images.dart';
 import '../data/quran_text_repository.dart';
 import '../domain/board_elements.dart';
 import '../domain/board_page.dart';
@@ -28,8 +29,8 @@ typedef VerseSource = VerseLookup Function(VerseElement verse);
 /// a [ui.Picture] and replayed, so drawing a new stroke repaints only that
 /// stroke (the canvas's overlay), not the whole page.
 class BoardPagePainter extends CustomPainter {
-  BoardPagePainter({required this.page, this.placeholderLabel, this.verses, this.versesVersion})
-    : _cache = _PictureCache.of(page, versesVersion);
+  BoardPagePainter({required this.page, this.placeholderLabel, this.verses, this.versesVersion, this.images, this.imagesVersion})
+    : _cache = _PictureCache.of(page, versesVersion, imagesVersion);
 
   final BoardPage page;
 
@@ -41,13 +42,17 @@ class BoardPagePainter extends CustomPainter {
   final VerseSource? verses;
   final Object? versesVersion;
 
+  /// The board's images (PR-4), and what changes whenever one of them arrives.
+  final BoardImageSource? images;
+  final Object? imagesVersion;
+
   final _PictureCache _cache;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.width / kBoardPageSize.width, size.height / kBoardPageSize.height);
-    canvas.drawPicture(_cache.picture(() => _record(page, placeholderLabel, verses)));
+    canvas.drawPicture(_cache.picture(() => _record(page, placeholderLabel, verses, images)));
     canvas.restore();
   }
 
@@ -56,7 +61,8 @@ class BoardPagePainter extends CustomPainter {
       !identical(old.page.elements, page.elements) ||
       old.page.layout != page.layout ||
       old.page.background != page.background ||
-      !identical(old.versesVersion, versesVersion);
+      !identical(old.versesVersion, versesVersion) ||
+      !identical(old.imagesVersion, imagesVersion);
 }
 
 // ---------------------------------------------------------------------------
@@ -75,8 +81,13 @@ class _PictureCache {
   static const int _capacity = 16;
   static final LinkedHashMap<List<BoardElement>, _PictureCache> _recent = LinkedHashMap(equals: identical, hashCode: identityHashCode);
 
-  static _PictureCache of(BoardPage page, Object? versesVersion) {
-    final key = (page.layout, page.background, versesVersion == null ? 0 : identityHashCode(versesVersion));
+  static _PictureCache of(BoardPage page, Object? versesVersion, [Object? imagesVersion]) {
+    final key = (
+      page.layout,
+      page.background,
+      versesVersion == null ? 0 : identityHashCode(versesVersion),
+      imagesVersion == null ? 0 : identityHashCode(imagesVersion),
+    );
     final existing = _recent.remove(page.elements);
     if (existing != null && existing.key == key) {
       _recent[page.elements] = existing; // most recent last
@@ -94,7 +105,7 @@ class _PictureCache {
   ui.Picture picture(ui.Picture Function() record) => _picture ??= record();
 }
 
-ui.Picture _record(BoardPage page, String Function(BoardElement)? label, VerseSource? verses) {
+ui.Picture _record(BoardPage page, String Function(BoardElement)? label, VerseSource? verses, BoardImageSource? images) {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder, Offset.zero & kBoardPageSize);
   paintBackground(canvas, page.layout, page.background);
@@ -103,7 +114,7 @@ ui.Picture _record(BoardPage page, String Function(BoardElement)? label, VerseSo
   }
   for (final e in page.elements) {
     if (e is InkElement && e.highlight) continue;
-    paintElement(canvas, e, dark: page.background.isDark, label: label, verses: verses);
+    paintElement(canvas, e, dark: page.background.isDark, label: label, verses: verses, images: images);
   }
   return recorder.endRecording();
 }
@@ -159,7 +170,14 @@ void _dashed(Canvas canvas, Offset a, Offset b, Paint paint) {
   }
 }
 
-void paintElement(Canvas canvas, BoardElement e, {bool dark = false, String Function(BoardElement)? label, VerseSource? verses}) {
+void paintElement(
+  Canvas canvas,
+  BoardElement e, {
+  bool dark = false,
+  String Function(BoardElement)? label,
+  VerseSource? verses,
+  BoardImageSource? images,
+}) {
   switch (e) {
     case InkElement():
       paintInk(canvas, e);
@@ -178,9 +196,23 @@ void paintElement(Canvas canvas, BoardElement e, {bool dark = false, String Func
       } else {
         _paintPlaceholderBox(canvas, e.bounds, dark, label?.call(e) ?? e.kind);
       }
+    case ImageElement():
+      final found = images?.call(e.assetId);
+      final image = found?.image;
+      if (found != null && found.status == BoardImageStatus.ready && image != null) {
+        paintBoardImage(canvas, e.rect, image);
+      } else {
+        _paintPlaceholderBox(canvas, e.bounds, dark, label?.call(e) ?? e.kind);
+      }
     case OpaqueElement():
       _paintPlaceholderBox(canvas, e.bounds, dark, label?.call(e) ?? e.kind);
   }
+}
+
+/// An image filling its box (its box keeps the image's proportions), smoothed.
+void paintBoardImage(Canvas canvas, Rect rect, ui.Image image) {
+  final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+  canvas.drawImageRect(image, src, rect, Paint()..filterQuality = FilterQuality.medium);
 }
 
 const _arabicIndic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];

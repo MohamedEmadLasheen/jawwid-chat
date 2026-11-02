@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart' show Options, ResponseType;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/errors/app_error.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/board.dart';
 import '../domain/board_page.dart';
@@ -41,6 +45,53 @@ abstract interface class WhiteboardsRepository {
   Future<BoardDetail> deletePage(String boardId, String pageId, int revision);
 
   Future<BoardDetail> reorderPages(String boardId, int revision, List<String> pageIds);
+
+  /// PR-4 (design §6.3): a signed PUT for one image, for a key the server
+  /// chose. Answers 503 `COMM.WHITEBOARD_ASSETS_OFF` where images are off.
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize});
+
+  /// The upload checked and kept by the server; only then may a page name it.
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey);
+
+  /// The board's images signed again (a signed URL lives about 15 minutes).
+  Future<List<BoardAsset>> imageUrls(String boardId);
+
+  /// PR-4 (design §4.6): a signed PUT per page PNG of a PDF export, in page order.
+  Future<List<ImageGrant>> grantExport(String boardId, List<int> pageByteSizes);
+
+  /// The PDF, made by the server from the uploaded pages; nothing of it is kept there.
+  Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages);
+
+  /// An export given up on: its pages and uploads deleted on the server, so it
+  /// stops counting toward the teacher's exports in flight (review of #335).
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages);
+}
+
+/// The API's answer where images and export are not switched on (503).
+const String kAssetsOffCode = 'COMM.WHITEBOARD_ASSETS_OFF';
+
+/// What an image grant answers: the asset's id, and where and how to PUT its bytes.
+class ImageGrant {
+  const ImageGrant({required this.assetId, required this.objectKey, required this.uploadUrl, required this.headers});
+
+  final String assetId;
+
+  /// The upload's key, handed back on confirm; the server checks it is this asset's.
+  final String objectKey;
+  final String uploadUrl;
+  final Map<String, String> headers;
+
+  factory ImageGrant.fromJson(Map<String, Object?> j) {
+    final upload = j['upload'];
+    final u = upload is Map ? upload : const {};
+    final headers = u['headers'];
+    return ImageGrant(
+      assetId: j['assetId'] as String? ?? '',
+      objectKey: u['objectKey'] as String? ?? '',
+      uploadUrl: u['uploadUrl'] as String? ?? '',
+      headers: {if (headers is Map) for (final e in headers.entries) '${e.key}': '${e.value}'},
+    );
+  }
 }
 
 /// The build with no boards server: refuses rather than answering "no boards".
@@ -76,15 +127,32 @@ class NoWhiteboardsRepository implements WhiteboardsRepository {
   Future<BoardDetail> deletePage(String boardId, String pageId, int revision) async => _none();
   @override
   Future<BoardDetail> reorderPages(String boardId, int revision, List<String> pageIds) async => _none();
+  @override
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async => _none();
+  @override
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey) async => _none();
+  @override
+  Future<List<BoardAsset>> imageUrls(String boardId) async => _none();
+  @override
+  Future<List<ImageGrant>> grantExport(String boardId, List<int> pageByteSizes) async => _none();
+  @override
+  Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages) async => _none();
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async => _none();
 }
 
 /// Overridden with the HTTP implementation by the real composition root.
 final whiteboardsRepositoryProvider = Provider<WhiteboardsRepository>((ref) => const NoWhiteboardsRepository());
 
+/// How long a compose may take: the server may queue it behind its two export
+/// workers, longer than any other call's wait (review of #335).
+const Duration kComposeTimeout = Duration(seconds: 90);
+
 class HttpWhiteboardsRepository implements WhiteboardsRepository {
-  HttpWhiteboardsRepository({required ApiClient client}) : _client = client;
+  HttpWhiteboardsRepository({required ApiClient client, this.composeTimeout = kComposeTimeout}) : _client = client;
 
   final ApiClient _client;
+  final Duration composeTimeout;
 
   Future<Map<String, Object?>> _post(String path, [Map<String, Object?>? data]) async =>
       (await _client.post<Map<String, Object?>>(path, data: data ?? const {})).data ?? const {};
@@ -162,6 +230,51 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
   @override
   Future<BoardDetail> reorderPages(String boardId, int revision, List<String> pageIds) async =>
       BoardDetail.fromJson(await _post('/whiteboards/$boardId/pages/order', {'revision': revision, 'pageIds': pageIds}));
+
+  @override
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async =>
+      ImageGrant.fromJson(await _post('/whiteboards/$boardId/assets/grant', {'kind': 'image', 'contentType': contentType, 'byteSize': byteSize}));
+
+  @override
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey) async {
+    final asset = BoardAsset.fromJson((await _post('/whiteboards/$boardId/assets/$assetId/confirm', {'objectKey': objectKey}))['asset']);
+    if (asset == null) throw const FormatException('the confirm answer names no image');
+    return asset;
+  }
+
+  @override
+  Future<List<BoardAsset>> imageUrls(String boardId) async =>
+      BoardAsset.listFrom((await _client.get<Map<String, Object?>>('/whiteboards/$boardId/assets')).data?['assets']);
+
+  @override
+  Future<List<ImageGrant>> grantExport(String boardId, List<int> pageByteSizes) async {
+    final pages = (await _post('/whiteboards/$boardId/exports/grant', {
+      'pages': [for (final b in pageByteSizes) {'byteSize': b}],
+    }))['pages'];
+    return [
+      for (final p in (pages is List ? pages : const [])) if (p is Map) ImageGrant.fromJson(Map<String, Object?>.from(p)),
+    ];
+  }
+
+  @override
+  Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages) async {
+    final r = await _client.post<List<int>>(
+      '/whiteboards/$boardId/exports/compose',
+      data: {
+        'pages': [for (final p in pages) {'assetId': p.assetId, 'objectKey': p.objectKey}],
+      },
+      // A refusal's body comes back as bytes too: the error mapper decodes it.
+      options: Options(responseType: ResponseType.bytes, receiveTimeout: composeTimeout),
+    );
+    return Uint8List.fromList(r.data ?? const []);
+  }
+
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async {
+    await _client.delete<Object?>('/whiteboards/$boardId/exports', data: {
+      'pages': [for (final p in pages) {'assetId': p.assetId, 'objectKey': p.objectKey}],
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -434,4 +547,25 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
     final byId = {for (final p in b.pages) p.id: p};
     return _put(boardId, _with(b.summary), [for (final id in pageIds) byId[id]!]);
   }
+
+  // No storage behind the debug fixtures: images answer as a server with them switched off.
+  static Never _assetsOff() => throw const AppError(AppErrorKind.server, code: kAssetsOffCode);
+
+  @override
+  Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async => _assetsOff();
+
+  @override
+  Future<BoardAsset> confirmImage(String boardId, String assetId, String objectKey) async => _assetsOff();
+
+  @override
+  Future<List<BoardAsset>> imageUrls(String boardId) async => const [];
+
+  @override
+  Future<List<ImageGrant>> grantExport(String boardId, List<int> pageByteSizes) async => _assetsOff();
+
+  @override
+  Future<Uint8List> composeExport(String boardId, List<ImageGrant> pages) async => _assetsOff();
+
+  @override
+  Future<void> releaseExport(String boardId, List<ImageGrant> pages) async {}
 }

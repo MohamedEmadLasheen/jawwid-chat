@@ -714,6 +714,17 @@ model Call {
   endedAt         DateTime?    @map("ended_at") @db.Timestamptz
   durationSeconds Int?         @map("duration_seconds")
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  /// CHATSCHED-013: hung_up | declined | ring_timeout | connection_lost. Read and
+  /// written with SQL in CallService / MediaPresenceService.
+  endReason        String?   @map("end_reason")
+  /// CHATSCHED-013: when an active call fell below two in the room by a drop.
+  interruptedAt    DateTime? @map("interrupted_at") @db.Timestamptz
+  /// CHATSCHED-013: start of the open connected span.
+  connectedSince   DateTime? @map("connected_since") @db.Timestamptz
+  /// CHATSCHED-013: connected time of the closed spans.
+  connectedSeconds Int       @default(0) @map("connected_seconds")
+  /// CHATSCHED-013: the call ever had two in the media room.
+  wasConnected     Boolean   @default(false) @map("was_connected")
 
   participants CallParticipant[]
 
@@ -737,6 +748,8 @@ model CallParticipant {
   /// different facts, and only LiveKit knows the second.
   mediaJoinedAt DateTime? @map("media_joined_at") @db.Timestamptz
   mediaLeftAt   DateTime? @map("media_left_at") @db.Timestamptz
+  /// CHATSCHED-013: the latest media join; an older departure is ignored.
+  mediaLastJoinedAt DateTime? @map("media_last_joined_at") @db.Timestamptz
 
   @@unique([callId, actorId])
   @@map("call_participant")
@@ -1261,6 +1274,26 @@ model SupervisorBackup {
   @@schema("chat")
 }
 
+/// ADMIN-002: time-boxed, purpose-bound account administration over ONE family's parent accounts. SQL owns the DDL and the guard.
+model FamilyAccessGrant {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  familyId        String    @map("family_id") @db.Uuid
+  granteeId       String    @map("grantee_id") @db.Uuid
+  grantedBy       String    @map("granted_by") @db.Uuid
+  purpose         String
+  startsAt        DateTime  @default(now()) @map("starts_at") @db.Timestamptz
+  endsAt          DateTime  @map("ends_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy       String?   @map("revoked_by") @db.Uuid
+  revokeReason    String?   @map("revoke_reason")
+  expiryAuditedAt DateTime? @map("expiry_audited_at") @db.Timestamptz
+
+  @@map("family_access_grant")
+  @@schema("chat")
+}
+
 /// PD-33: a supervisor away, their backup covering for a window. Access is the
 /// backup link's activation; this row is the event, the routing input and the
 /// history (20261026130000).
@@ -1676,6 +1709,12 @@ model TeacherSupervisionEntry {
   handledBy        String?   @map("handled_by") @db.Uuid
   /// PD-32: the parent feedback an app complaint was filed as.
   parentFeedbackId String?   @unique @map("parent_feedback_id") @db.Uuid
+  /// PD-52: how a staff-recorded testimonial reached the academy (testimonials only).
+  testimonialSource String?  @map("testimonial_source")
+  /// PD-52: the student, family or trial family a complaint, testimonial or grant is about.
+  learnerId        String?   @map("learner_id") @db.Uuid
+  familyId         String?   @map("family_id") @db.Uuid
+  trialProspectId  String?   @map("trial_prospect_id") @db.Uuid
 
   @@map("teacher_supervision_entry")
   @@schema("chat")

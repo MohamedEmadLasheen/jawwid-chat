@@ -132,6 +132,14 @@ describe('the instalments page', () => {
     await waitFor(() => expect(calls('GET', /\/instalments\?responsible=none&paid=true$/)).toHaveLength(1))
   })
 
+  it('opens on the responsibility the URL names (PD-44): No billing supervisor', async () => {
+    on('GET', /\/instalments\?/, () => json(list([])))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/instalments?responsible=none' })
+    await screen.findByText('Nothing matches this filter.')
+    expect(screen.getByRole('button', { name: 'No billing supervisor' })).toHaveAttribute('aria-pressed', 'true')
+    expect(calls('GET', /\/instalments\?responsible=none$/).length).toBeGreaterThan(0)
+  })
+
   it('a server error is said, never shown as "Nothing due"', async () => {
     on('GET', /\/instalments\?/, () => json({ error: { code: 'COMM.BILLING_DENIED', message: 'no' } }, 403))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/instalments' })

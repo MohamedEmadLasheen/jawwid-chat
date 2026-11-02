@@ -8,6 +8,8 @@ import type { AuditService } from '../platform/audit.service';
 import { todayIn } from '../leave/leave.service';
 import { PaymentLedger, type RecordedPayment } from './payment-ledger.service';
 import { STRIPE_GATEWAY, toSession, type CheckoutSession, type StripeGateway } from './stripe.gateway';
+import { WEBHOOK_REFUND_REASON } from './idempotency';
+import { isUuid } from '../communication/conversations/conversation.service';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 /** Stripe refuses a session that expires sooner than 30 minutes. */
@@ -268,17 +270,40 @@ export class CheckoutService {
       await this.prisma.$transaction(async (tx) => {
         const inserted = await tx.stripeEvent.createMany({ data: [{ ...meta, outcome: 'refund_recorded' }], skipDuplicates: true });
         if (inserted.count === 0) throw new DuplicateEvent();
+        // The payment's lock first, as the API's refund takes it: a refund the
+        // API is recording right now is then seen below, never re-inserted
+        // (whose sum check would fail as a 500).
+        await tx.$queryRaw`SELECT id FROM chat.payment WHERE id = ${payment.id}::uuid FOR UPDATE`;
         if (await tx.paymentRefund.findUnique({ where: { stripeRefundId: refund.id } })) return;
+        // ADMIN-001: a refund our API asked for carries the client's refundId
+        // and its recorder. Recorded under that id, a retry of the submit finds
+        // it even if the API's own recording was lost. Trusted only as a uuid,
+        // and the recorder only as staff of the payment's organization.
+        let refundKey = isUuid(refund.metadata?.refundId) ? refund.metadata!.refundId as string : null;
+        if (refundKey && (await tx.paymentRefund.findUnique({ where: { id: refundKey } }))) {
+          // That key is already a DIFFERENT Stripe refund (the one above would have
+          // matched by its Stripe id): real money went back twice -- e.g. a retry
+          // after Stripe's 24 h key expiry. Record it as its own row and alert.
+          this.log.error(`stripe refund ${refund.id}: its refundId is already recorded as another Stripe refund; recorded separately -- check the payment ${payment.id}`);
+          refundKey = null;
+        }
+        const claimed = isUuid(refund.metadata?.recordedBy) ? refund.metadata!.recordedBy as string : null;
+        const recordedBy = claimed
+          ? (await tx.staff.findFirst({ where: { id: claimed, organizationId: payment.organizationId }, select: { id: true } }))?.id ?? null
+          : null;
         await tx.paymentRefund.create({
           data: {
+            ...(refundKey ? { id: refundKey } : {}),
             organizationId: payment.organizationId,
             paymentId: payment.id,
             amountMinor: BigInt(refund.amount),
-            reason: refund.reason ? `refunded in Stripe (${refund.reason})` : 'refunded in Stripe',
+            reason: refund.reason ? `${WEBHOOK_REFUND_REASON} (${refund.reason})` : WEBHOOK_REFUND_REASON,
             stripeRefundId: refund.id,
+            recordedBy,
           },
         });
         await this.audit.audit(tx, {
+          ...(recordedBy ? { actorId: recordedBy } : {}),
           action: 'payment.refunded',
           entity: payment.familyId ? 'family' : 'lesson',
           entityId: payment.familyId ?? (payment.trialLessonId as string),

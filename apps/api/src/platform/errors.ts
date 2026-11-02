@@ -524,6 +524,12 @@ export enum CommErrorCode {
   WHITEBOARD_STATE = 'COMM.WHITEBOARD_STATE',
   /** A limit: boards, pages, or the teacher's document storage; `detail` names which. 409. */
   WHITEBOARD_LIMIT = 'COMM.WHITEBOARD_LIMIT',
+  /**
+   * Images and export are switched off on this deployment (config
+   * `whiteboards.assets_enabled`): on only once the bucket and its versioning
+   * exist (design §11.3). 503.
+   */
+  WHITEBOARD_ASSETS_OFF = 'COMM.WHITEBOARD_ASSETS_OFF',
 
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */

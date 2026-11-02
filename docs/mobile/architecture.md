@@ -98,10 +98,13 @@ Confirmed messages sort by the server's `seq`; pending ones sort after all of th
 order. A confirmed message is never dragged back to a local state by a late retry.
 
 **`Outbox`** — the offline queue.
-Only the **head** of each conversation is eligible to send, so a stuck message cannot be
-overtaken and the user's order is preserved. Conversations are independent. A retry re-sends
-the same entry, so the id never changes. Non-retryable failures are parked for an explicit
-user retry rather than re-attempted.
+One message per conversation is in flight at a time, and a message waiting out a retry holds
+its place, so a flaky network cannot reorder the user's messages. Two failures step aside
+instead (PARENT-005): a message **parked** for an explicit user retry (a refusal, an upload
+that ran out of time), which is never re-attempted on its own, and an **upload** waiting out
+its backoff. Both already show "Not sent · Retry", and holding the queue behind them stalled
+every later message. Conversations are independent. A retry re-sends the same entry, so the
+id never changes. Discarding a never-sent message removes it from the queue and the chat.
 
 **`MessagesController`** — the pipeline.
 Compose → UUID once → echo as `queued` → outbox → on success, reconcile by client id.

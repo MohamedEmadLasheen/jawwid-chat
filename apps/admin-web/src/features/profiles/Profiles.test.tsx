@@ -87,6 +87,7 @@ function billing(over: Partial<FamilyBilling> = {}): FamilyBilling {
     paymentMethod: 'bank_transfer',
     currency: 'AED',
     planMonths: 3,
+    settingsVersion: 'sv-1',
     instalments: [
       instalment(),
       instalment({
@@ -211,6 +212,24 @@ describe('the Parent Profile', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /^Parent Renamed/ })).toBeInTheDocument()
   })
 
+  it('ADMIN-007: an edit of the payment settings names the version it was made from; a 409 shows the current settings', async () => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
+    on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
+    on('POST', /\/families\/f-1\/billing$/, () =>
+      json({ error: { code: 'COMM.BILLING_STATE', message: 'these billing settings were changed since you opened them', detail: { current: { planMonths: 12 } } } }, 409))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription and payment method' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit subscription and payment method' })
+    await chooseOption(userEvent, within(dialog).getByLabelText('Plan'), '6')
+    const readsBefore = calls('GET', /\/families\/f-1\/billing$/).length
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/families\/f-1\/billing$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/families\/f-1\/billing$/)[0])).toEqual({ planMonths: 6, version: 'sv-1' })
+    // Refused: the dialog says so, and the family's settings are read again (what someone else saved).
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    await waitFor(() => expect(calls('GET', /\/families\/f-1\/billing$/).length).toBeGreaterThan(readsBefore))
+  })
+
   it('adds a plan of instalments in minor units, records a payment once, and voids only with a reason', async () => {
     on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
     on('GET', /\/families\/f-1\/billing$/, () => json(billing()))
@@ -244,7 +263,13 @@ describe('the Parent Profile', () => {
     await userEvent.type(within(dialog).getByLabelText('Reference'), 'TRX-99')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }))
     await waitFor(() => expect(calls('POST', /\/instalments\/i-1\/payment$/)).toHaveLength(1))
-    expect(bodyOf(calls('POST', /\/instalments\/i-1\/payment$/)[0])).toEqual({ paidOn: '2026-10-21', method: 'bank_transfer', reference: 'TRX-99' })
+    expect(bodyOf(calls('POST', /\/instalments\/i-1\/payment$/)[0])).toEqual({
+      paidOn: '2026-10-21',
+      method: 'bank_transfer',
+      reference: 'TRX-99',
+      // ADMIN-001: the form's idempotency key.
+      paymentId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+    })
 
     await userEvent.click(within(first).getByRole('button', { name: 'Void' }))
     dialog = screen.getByRole('dialog', { name: 'Void: Autumn term' })
@@ -375,5 +400,25 @@ describe('PD-32: feedback about teachers on the Parent Profile', () => {
     expect(await screen.findByRole('region', { name: 'Payment information' })).toBeInTheDocument()
     await waitFor(() => expect(calls('GET', /parent-feedback$/).length).toBeGreaterThan(0))
     expect(screen.queryByRole('region', { name: 'Feedback about teachers' })).not.toBeInTheDocument()
+  })
+})
+
+describe('the Parents list, filtered by subscription (PD-44)', () => {
+  const item = { id: 'p-1', name: 'Parent One', avatarUrl: null, family: { id: 'f-1', name: 'Family One' }, childrenCount: 2 }
+
+  it('opens on the filter the URL names and asks the server for it', async () => {
+    on('GET', /\/parent-profiles\?access=locked$/, () => json({ items: [item], truncated: false }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents?access=locked' })
+    expect(await screen.findByText('Parent One')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Locked subscription' })).toHaveAttribute('aria-pressed', 'true')
+    expect(calls('GET', /\/parent-profiles\?access=locked$/).length).toBeGreaterThan(0)
+  })
+
+  it('asks for the grace period when that chip is chosen, and for everyone again with All', async () => {
+    on('GET', /\/parent-profiles(\?access=grace)?$/, () => json({ items: [item], truncated: false }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents' })
+    expect(await screen.findByText('Parent One')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Grace period' }))
+    await waitFor(() => expect(calls('GET', /\/parent-profiles\?access=grace$/).length).toBeGreaterThan(0))
   })
 })

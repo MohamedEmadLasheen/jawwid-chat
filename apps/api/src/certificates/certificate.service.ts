@@ -28,6 +28,7 @@ import { SupervisionConversationService } from '../supervision/supervision-conve
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
 import { inspectCertificateFile, sniffCertificateFile, CERTIFICATE_MIME_TYPES, MAX_CERTIFICATE_BYTES, type CertificateMime } from './certificate-file';
 import { STATES_OF_GROUP, toDesignDto, toFullDto, type CertificateView } from './certificate-dto';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService;
@@ -240,6 +241,42 @@ export class CertificateService {
       certificates: views.map((v) => (v.full ? toFullDto(v.view) : toDesignDto(v.view))),
       nextCursor: rows.length > PAGE && last ? `${last.requestedAt.toISOString()}|${last.id}` : null,
     };
+  }
+
+  /**
+   * PD-44: the Dashboard's certificate tiles -- each category's "Pending" tab
+   * (`list({ category, status: 'pending' })`: requested, waiting for the
+   * Designer to start), counted over `list`'s own query (scopePredicate) in
+   * one statement. A category's tile comes only to whom the page shows that
+   * tab (design, request or oversee, as CertificatesPage decides); staff
+   * without certificates.view get none; non-staff are refused as on the page.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const ctx = await this.ctx(actorId);
+    if (ctx.actor.kind !== ActorKind.STAFF) throw denied();
+    const a = ctx.access;
+    if (!a.view) return [];
+    const shown = [CertificateCategory.STUDENT, CertificateCategory.TEACHER].filter(
+      (c) => a.design || a.categories[c].request || a.categories[c].oversee,
+    );
+    if (shown.length === 0) return [];
+    const grouped = await this.prisma.appreciationCertificate.groupBy({
+      by: ['category'],
+      where: {
+        AND: [
+          { organizationId: ctx.actor.organizationId ?? '' },
+          { category: { in: shown } },
+          { state: { in: [...(STATES_OF_GROUP.pending ?? [])] } },
+          { OR: await this.scopePredicate(ctx) },
+        ],
+      },
+      _count: { _all: true },
+      _min: { requestedAt: true },
+    });
+    return shown.map((c) => {
+      const row = grouped.find((r) => r.category === c);
+      return dashboardTile(`certificates.${c}_requested`, row?._count._all ?? 0, row?._min.requestedAt ?? null);
+    });
   }
 
   /** The rows this caller may see at all, as a query (views() then decides full or design). */

@@ -23,6 +23,11 @@ export const P = {
   family: { en: 'Family', ar: 'الأسرة' },
   children: { en: 'Children', ar: 'الأطفال' },
   noParents: { en: 'No parents to show.', ar: 'لا يوجد أولياء أمور لعرضهم.' },
+  // PD-44: the subscription filter (a child's PD-30 state)
+  subscriptionFilter: { en: 'Subscription', ar: 'الاشتراك' },
+  allParents: { en: 'All', ar: 'الكل' },
+  accessLocked: { en: 'Locked subscription', ar: 'اشتراك مقفل' },
+  accessGrace: { en: 'Grace period', ar: 'فترة سماح' },
   truncated: { en: 'Showing the first 200. Search to narrow the list.', ar: 'تُعرض أول 200 نتيجة. ابحث لتضييق القائمة.' },
   open: { en: 'Open', ar: 'فتح' },
   back: { en: '← Parents', ar: '→ أولياء الأمور' },

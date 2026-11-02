@@ -20,5 +20,7 @@ import { CertificateTypeService } from './certificate-type.service';
   imports: [CommunicationModule, SupervisionModule, AuthModule],
   controllers: [CertificateController, CertificatesController],
   providers: [CertificateService, CertificateTypeService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
+  // PD-44: the Dashboard's Teachers section counts this page's list.
+  exports: [CertificateService],
 })
 export class CertificateModule {}

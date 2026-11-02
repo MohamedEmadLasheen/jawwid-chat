@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
@@ -365,6 +366,9 @@ class _RecordPaymentSheet extends ConsumerStatefulWidget {
 }
 
 class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
+  /// ADMIN-001: this sheet's one idempotency key -- every Save of it, a retry
+  /// after a dropped connection included, is the same payment to the server.
+  final String _paymentId = const Uuid().v4();
   late DateTime _today;
   late DateTime _paidOn;
   late BillingMethod _method;
@@ -409,6 +413,7 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
             widget.instalment.id,
             paidOn: _paidOn,
             method: _method,
+            paymentId: _paymentId,
             reference: _reference.text,
           );
       if (mounted) Navigator.of(context).pop(_SheetResult.done(billing));
