@@ -28,14 +28,14 @@ export class TeacherFileController {
   // PD-26: declared before ':teacherId', which would otherwise match them.
 
   /** Every complaint, newest first: by source (management | parent) and status. */
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_attendance.view')
   @Get('complaints')
   complaints(@ActorId() actorId: string, @Query('from') from?: string, @Query('status') status?: string) {
     return this.files.complaints(actorId, { from, status });
   }
 
   /** Every recorded reward, newest first; amounts for the super admin only. */
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_grants.view')
   @Get('rewards')
   @Header('Cache-Control', 'no-store')
   rewards(@ActorId() actorId: string, @Query('month') month?: string) {
@@ -68,7 +68,7 @@ export class TeacherFileController {
     return this.files.updatePersonal(actorId, teacherId, body ?? {});
   }
 
-  @Requires('teacher_supervision.record')
+  @Requires('teacher_supervision.record', 'teacher_attendance.record', 'teacher_attendance.decide')
   @Post(':teacherId/entries')
   addEntry(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
     return this.files.addEntry(actorId, teacherId, body ?? {});

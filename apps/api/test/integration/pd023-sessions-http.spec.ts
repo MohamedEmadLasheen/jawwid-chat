@@ -82,6 +82,20 @@ async function call(token: string | null, method: string, path: string, body?: u
   return { status: r.status, code: json.error?.code, json };
 }
 
+/**
+ * ADMIN-002: an Operations member administers only the parent accounts of the
+ * families they reach -- a family with a child they supervise (or an active
+ * backup's). Fails loudly if the seed's plan ever moves the family away.
+ */
+function familyReachedBy(staff: { id: string }, index: number, via?: { id: string }): SeedManifest['families'][number] {
+  const family = m.families[index]!;
+  const supervisorId = (via ?? staff).id;
+  if (!family.children.some((c) => c.supervisorId === supervisorId)) {
+    throw new Error(`seed family ${index} has no child supervised by ${supervisorId}`);
+  }
+  return family;
+}
+
 async function accountIdOf(subject: string): Promise<string> {
   return (await g.prisma.account.findUniqueOrThrow({ where: { subject }, select: { id: true } })).id;
 }
@@ -265,7 +279,7 @@ describe('PD-23: a person\'s own devices & sessions', () => {
   });
 
   it('a support session (PD-21) is not listed and may not end the person\'s sessions', async () => {
-    const parent = m.families[5]!.parent.subject;
+    const parent = familyReachedBy(m.supervisors[0]!, 12).parent.subject;
     const own = await login(parent, ios);
     const admin = (await login(m.supervisors[0]!.subject, web)).accessToken;
     const opened = await call(admin, 'POST', '/admin/impersonations', { accountId: await accountIdOf(parent), reason: 'help with the app' });
@@ -285,7 +299,7 @@ describe('PD-23: a person\'s own devices & sessions', () => {
 
 describe('PD-23: an administrator ends an account\'s sessions', () => {
   it('lists them and ends one with a reason, audited', async () => {
-    const parent = m.families[6]!.parent.subject;
+    const parent = familyReachedBy(m.supervisors[0]!, 16).parent.subject;
     const accountId = await accountIdOf(parent);
     const phone = await login(parent, ios);
     const supervisor = (await login(m.supervisors[0]!.subject, web)).accessToken;

@@ -28,6 +28,9 @@ import { CertificatesPage } from '@/features/certificates/CertificatesPage'
 import { LessonAudioPage } from '@/features/lesson-audio/LessonAudioPage'
 import type { Staff } from '@/shared/types/domain'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
+import { TeacherBoardsPage } from '@/features/teacher-boards/TeacherBoardsPage'
+import { BoardViewerPage } from '@/features/teacher-boards/BoardViewerPage'
+import { BOARD_KEYS } from '@/features/teacher-boards/api'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
 import { ParentProfilePage } from '@/features/profiles/ParentProfilePage'
@@ -128,6 +131,9 @@ export function AppRoutes() {
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
         {/* PD-35 B5: escalation cases -- a Teachers tab, and /cases for everyone else who opens or owns one. */}
         <Route path="/teachers/cases" element={<Area area="teachers"><CasesPage header={<TeachersAreaTabs />} /></Area>} />
+        {/* PD-39: the teachers' boards, read only; the server decides each teacher. */}
+        <Route path="/teachers/boards" element={<Area area="teachers"><RequirePermission any={BOARD_KEYS}><TeacherBoardsPage basePath="/teachers" /></RequirePermission></Area>} />
+        <Route path="/teachers/boards/:boardId" element={<Area area="teachers"><RequirePermission any={BOARD_KEYS}><BoardViewerPage basePath="/teachers" /></RequirePermission></Area>} />
         <Route path="/cases" element={<Area area="cases"><CasesPage /></Area>} />
         <Route path="/teachers/leave" element={<Navigate to="/teachers/supervision?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
@@ -208,6 +214,8 @@ export function AppRoutes() {
           path="/admin/teachers/supervision"
           element={<SuperAdminOnly><TeacherSupervisionPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
         />
+        <Route path="/admin/teachers/boards" element={<SuperAdminOnly><TeacherBoardsPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>} />
+        <Route path="/admin/teachers/boards/:boardId" element={<SuperAdminOnly><BoardViewerPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>} />
         <Route
           path="/admin/teachers/:teacherId"
           element={<SuperAdminOnly><TeacherFilePage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}

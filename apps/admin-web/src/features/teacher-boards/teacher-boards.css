@@ -1,0 +1,13 @@
+/* PD-39: the staff board viewer. Layout only; colours come from the theme tokens. */
+.tb-picker { max-width: 28rem; margin-block-end: var(--space-4); }
+.tb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.tb-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.tb-row__title { font-weight: 600; color: var(--text-link); }
+.tb-row__meta { color: var(--text-muted); font-size: var(--fs-sm); }
+.tb-kept { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text-muted); margin-block: 0 var(--space-3); }
+.tb-viewer { display: grid; gap: var(--space-2); margin-block-end: var(--space-5); }
+/* The page is 16:9 at whatever width it has; the board's own colours are drawn on it. */
+.tb-canvas { display: block; inline-size: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--border-strong); border-radius: var(--radius); }
+.tb-pager { display: flex; align-items: center; justify-content: center; gap: var(--space-3); }
+.tb-source, .tb-muted { color: var(--text-muted); font-size: var(--fs-sm); margin: 0; }
+.tb-history { margin-block-end: var(--space-5); }
