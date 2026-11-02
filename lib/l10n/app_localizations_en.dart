@@ -2866,6 +2866,13 @@ class L10nEn extends L10n {
   String get changePasswordWrongCurrent => 'That is not your current password.';
 
   @override
+  String get changePasswordCurrentRequired => 'Enter your current password.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'Choose a password different from your current one.';
+
+  @override
   String get changePasswordAction => 'Change password';
 
   @override

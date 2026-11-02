@@ -391,7 +391,8 @@ abstract interface class PasswordResetRepository {
 abstract interface class PasswordChangeRepository {
   /// `POST /auth/password/change`. A refusal is an AppError with the server's code
   /// (`AUTH.INVALID_CREDENTIALS` for a wrong current password, `AUTH.PASSWORD_TOO_WEAK`,
-  /// `COMMON.RATE_LIMITED`).
+  /// `AUTH.PASSWORD_UNCHANGED`, `COMMON.RATE_LIMITED` -- also while the account is locked).
+  /// Success rotates this device's session; the new token pair is stored before it returns.
   Future<void> change({required String currentPassword, required String newPassword});
 }
 

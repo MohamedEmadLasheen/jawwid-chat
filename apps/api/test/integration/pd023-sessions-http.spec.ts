@@ -404,41 +404,113 @@ describe('TEACHER-023: a signed-in account changes its own password', () => {
     });
   }
 
-  it('a teacher: the current password proves it; every OTHER session ends, this one stays; audited', async () => {
+  async function credentialOf(subject: string) {
+    return g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: await accountIdOf(subject) } });
+  }
+
+  it('a teacher: the current password proves it; every OTHER session ends; this one is ROTATED (old refresh token refused); audited', async () => {
     const subject = m.teachers[3]!.subject;
     const here = await login(subject, ios);
     const elsewhere = await login(subject, web);
     expect((await call(elsewhere.accessToken, 'GET', '/me')).status).toBe(200);
 
     const r = await change(here.accessToken, PASSWORD, NEW);
-    expect([r.status, r.json.ok]).toEqual([200, true]);
+    expect(r.status).toBe(200);
+    const next = r.json as unknown as Login;
+    expect(next.accessToken).toBeTruthy();
+    expect(next.refreshToken).toBeTruthy();
+    expect(next.session.id).not.toBe(here.session.id);
 
-    expect((await call(here.accessToken, 'GET', '/me')).status).toBe(200);
+    // This device carries on with the new pair; whatever was issued before is dead,
+    // so a refresh token that leaked FROM this device is worth nothing now.
+    expect((await call(next.accessToken, 'GET', '/me')).status).toBe(200);
+    expect((await call(here.accessToken, 'GET', '/me')).status).toBe(401);
+    expect((await call(null, 'POST', '/auth/refresh', { refreshToken: here.refreshToken })).status).toBe(401);
+    const renewed = await call(null, 'POST', '/auth/refresh', { refreshToken: next.refreshToken });
+    expect(renewed.status).toBe(200);
+    const kept = await g.prisma.session.findUniqueOrThrow({ where: { id: next.session.id } });
+    const old = await g.prisma.session.findUniqueOrThrow({ where: { id: here.session.id } });
+    expect(kept.deviceId).toBe(old.deviceId);
+
     expect((await call(elsewhere.accessToken, 'GET', '/me')).status).toBe(401);
+    expect((await call(null, 'POST', '/auth/refresh', { refreshToken: elsewhere.refreshToken })).status).toBe(401);
     expect((await login(subject, ios)).status).toBe(401);
-    const fresh = await fetch(`${base}/auth/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: subject, password: NEW, ...ios }),
-    });
-    expect(fresh.status).toBe(200);
+    expect((await login(subject, { ...ios, password: NEW })).status).toBe(200);
 
     const accountId = await accountIdOf(subject);
-    const rows = await g.prisma.$queryRaw<Array<{ after: { revokedSessions: number; kept: string } }>>`
+    const rows = await g.prisma.$queryRaw<Array<{ after: { revokedSessions: number; rotated: string } }>>`
       select after from chat.audit_log where action = 'account.password_changed' and entity_id = ${accountId}::uuid`;
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.after).toEqual({ revokedSessions: 1, kept: here.session.id });
+    expect(rows[0]!.after).toEqual({ revokedSessions: 1, rotated: here.session.id });
     await restore(subject);
   });
 
-  it('a wrong current password is 401 and changes nothing; a too-short new one is refused', async () => {
+  it('a wrong current password is 401, changes nothing, and counts toward the lockout; a too-short new one is refused', async () => {
     const subject = m.teachers[4]!.subject;
     const token = (await login(subject, ios)).accessToken;
+    const before = await credentialOf(subject);
     const wrong = await change(token, 'not-the-password', NEW);
     expect([wrong.status, wrong.code]).toEqual([401, 'AUTH.INVALID_CREDENTIALS']);
+    const after = await credentialOf(subject);
+    expect(after.passwordHash).toBe(before.passwordHash);
+    expect(after.failedAttempts).toBe(before.failedAttempts + 1);
     const short = await change(token, PASSWORD, 'abc');
     expect([short.status, short.code]).toEqual([400, 'AUTH.PASSWORD_TOO_WEAK']);
+    expect((await credentialOf(subject)).passwordHash).toBe(before.passwordHash);
     expect((await login(subject, ios)).status).toBe(200);
+  });
+
+  it('the new password must differ from the current one: 400, nothing changes', async () => {
+    const subject = m.teachers[6]!.subject;
+    const here = await login(subject, ios);
+    const before = await credentialOf(subject);
+    const same = await change(here.accessToken, PASSWORD, PASSWORD);
+    expect([same.status, same.code]).toEqual([400, 'AUTH.PASSWORD_UNCHANGED']);
+    expect((await credentialOf(subject)).passwordHash).toBe(before.passwordHash);
+    expect((await call(here.accessToken, 'GET', '/me')).status).toBe(200);
+  });
+
+  it('one lockout with login: an account locked by wrong logins may not change its password (429), the hash untouched', async () => {
+    const subject = m.teachers[7]!.subject;
+    const here = await login(subject, ios);
+    for (let i = 0; i < 10; i++) {
+      expect((await login(subject, { ...ios, password: `wrong-${i}` })).status).toBe(401);
+    }
+    const locked = await credentialOf(subject);
+    expect(locked.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+
+    // RATE_LIMITED, not ACCOUNT_LOCKED: a 403 ACCOUNT_LOCKED would sign the app out.
+    const r = await change(here.accessToken, PASSWORD, NEW);
+    expect([r.status, r.code]).toEqual([429, 'COMMON.RATE_LIMITED']);
+    expect((await credentialOf(subject)).passwordHash).toBe(locked.passwordHash);
+    expect((await call(here.accessToken, 'GET', '/me')).status).toBe(200);
+    await restore(subject);
+  });
+
+  it('one lockout with login: wrong guesses on change lock the account against login too', async () => {
+    const subject = m.teachers[8]!.subject;
+    const token = (await login(subject, ios)).accessToken;
+    await g.prisma.accountCredential.update({ where: { accountId: await accountIdOf(subject) }, data: { failedAttempts: 9 } });
+
+    expect((await change(token, 'not-the-password', NEW)).status).toBe(401);
+    expect((await credentialOf(subject)).lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+    const blocked = await login(subject, ios);
+    expect([blocked.status, blocked.code]).toEqual([403, 'AUTH.ACCOUNT_LOCKED']);
+    await restore(subject);
+  });
+
+  it('a support session (PD-21) may not change the person\'s password: 403, nothing changes', async () => {
+    const parent = familyReachedBy(m.supervisors[0]!, 12).parent.subject;
+    const own = await login(parent, ios);
+    const admin = (await login(m.supervisors[0]!.subject, web)).accessToken;
+    const opened = await call(admin, 'POST', '/admin/impersonations', { accountId: await accountIdOf(parent), reason: 'help with the app' });
+    expect(opened.status).toBe(201);
+    const before = await credentialOf(parent);
+
+    const r = await change(opened.json.accessToken as string, PASSWORD, NEW);
+    expect(r.status).toBe(403);
+    expect((await credentialOf(parent)).passwordHash).toBe(before.passwordHash);
+    expect((await call(own.accessToken, 'GET', '/me')).status).toBe(200);
   });
 
   it('any role: a parent and a staff member change theirs too', async () => {

@@ -104,6 +104,22 @@ void main() {
     expect(find.byType(ChangePasswordScreen), findsOneWidget);
   });
 
+  testWidgets('an empty current password says it is required -- not that it is wrong -- and nothing is sent', (tester) async {
+    final l10n = await open(tester);
+    await fill(tester, '', 'new-pass', 'new-pass');
+    expect(find.text(l10n.changePasswordCurrentRequired), findsOneWidget);
+    expect(find.text(l10n.changePasswordWrongCurrent), findsNothing);
+    expect(repo.calls, isEmpty);
+  });
+
+  testWidgets('the same password again is refused with its own message', (tester) async {
+    final l10n = await open(tester);
+    repo.error = const AppError(AppErrorKind.validation, code: 'AUTH.PASSWORD_UNCHANGED');
+    await fill(tester, 'old-pass', 'old-pass', 'old-pass');
+    expect(find.text(l10n.changePasswordUnchanged), findsOneWidget);
+    expect(find.byType(ChangePasswordScreen), findsOneWidget);
+  });
+
   testWidgets('too short, or two different new passwords: nothing is sent', (tester) async {
     final l10n = await open(tester);
     await fill(tester, 'old-pass', 'abc', 'abc');

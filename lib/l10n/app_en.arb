@@ -1567,6 +1567,8 @@
   "@changePasswordTitle": {"description": "TEACHER-023: Settings row and screen title."},
   "changePasswordCurrentLabel": "Current password",
   "changePasswordWrongCurrent": "That is not your current password.",
+  "changePasswordCurrentRequired": "Enter your current password.",
+  "changePasswordUnchanged": "Choose a password different from your current one.",
   "changePasswordAction": "Change password",
   "changePasswordDone": "Password changed. You were signed out on your other devices.",
   "recoveryTitle": "Get back into your account",

@@ -227,7 +227,12 @@ export class PasswordChangeController {
   @SelfService()
   @Post('change')
   @HttpCode(200)
-  async change(@Req() request: AuthenticatedRequest, @Body() body: unknown, @Ip() ip?: string): Promise<{ ok: true }> {
+  async change(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: unknown,
+    @Headers('user-agent') userAgent?: string,
+    @Ip() ip?: string,
+  ): Promise<TokenPairDto> {
     const { accountId, sessionId, actorId } = verified(request);
     const input = (body ?? {}) as Record<string, unknown>;
     const current = asString(input.currentPassword);
@@ -235,9 +240,10 @@ export class PasswordChangeController {
     if (!current || !next) throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
     const subject = `password-change:${accountId}`;
     await this.rateLimit.reserve(subject, sourceAddress(ip, this.addressPolicy));
-    await this.auth.changePassword(accountId, sessionId, actorId, current, next);
+    // The answer is this session's successor (the old one was rotated): the client stores it.
+    const pair = await this.auth.changePassword(accountId, sessionId, actorId, current, next, { userAgent, ip });
     await this.rateLimit.clearIdentifier(subject);
-    return { ok: true };
+    return toTokenPairDto(pair);
   }
 }
 

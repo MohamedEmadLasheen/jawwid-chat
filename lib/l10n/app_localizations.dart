@@ -5035,6 +5035,18 @@ abstract class L10n {
   /// **'That is not your current password.'**
   String get changePasswordWrongCurrent;
 
+  /// No description provided for @changePasswordCurrentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password.'**
+  String get changePasswordCurrentRequired;
+
+  /// No description provided for @changePasswordUnchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a password different from your current one.'**
+  String get changePasswordUnchanged;
+
   /// No description provided for @changePasswordAction.
   ///
   /// In en, this message translates to:

@@ -41,6 +41,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     return switch (code) {
       'AUTH.INVALID_CREDENTIALS' => l10n.changePasswordWrongCurrent,
       'AUTH.PASSWORD_TOO_WEAK' => l10n.signupPasswordTooShort,
+      'AUTH.PASSWORD_UNCHANGED' => l10n.changePasswordUnchanged,
       'COMMON.RATE_LIMITED' => l10n.signupTooMany,
       _ => l10n.signupFailed,
     };
@@ -97,7 +98,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                     autofillHints: const [AutofillHints.password],
                     decoration: InputDecoration(
                       labelText: l10n.changePasswordCurrentLabel,
-                      errorText: currentMissing ? l10n.changePasswordWrongCurrent : null,
+                      errorText: currentMissing ? l10n.changePasswordCurrentRequired : null,
                     ),
                   ),
                   const SizedBox(height: Spacing.spacing5),

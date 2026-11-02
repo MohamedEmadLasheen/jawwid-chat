@@ -2914,6 +2914,13 @@ class L10nAr extends L10n {
   String get changePasswordWrongCurrent => 'هذه ليست كلمة مرورك الحالية.';
 
   @override
+  String get changePasswordCurrentRequired => 'أدخل كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'اختر كلمة مرور مختلفة عن كلمة مرورك الحالية.';
+
+  @override
   String get changePasswordAction => 'تغيير كلمة المرور';
 
   @override

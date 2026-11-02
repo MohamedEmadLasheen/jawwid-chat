@@ -293,7 +293,7 @@ List<Override> _httpOverrides() {
     ),
     // TEACHER-023: change your own password, on the same authenticated client.
     passwordChangeRepositoryProvider.overrideWithValue(
-      HttpPasswordChangeRepository(client: client),
+      HttpPasswordChangeRepository(client: client, tokens: tokenStore),
     ),
     accountCallHistoryProvider.overrideWithValue(
       // Named after the OTHER participant, so the viewer's own id is read per call.
