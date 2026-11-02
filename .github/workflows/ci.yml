@@ -667,3 +667,60 @@ jobs:
             exit 1
           fi
           grep -q "google-services.json is missing" release.log || { cat release.log; echo "::error::the release build failed for another reason"; exit 1; }
+      - name: The debug-only push receiver is not in a release build
+        # DebugPushReceiver (src/debug) draws a push without Firebase and is exported
+        # for adb. The release manifest is merged without google-services.json (the
+        # release guard checks only assemble/bundle), and must not name it.
+        run: |
+          (cd android && ./gradlew --quiet :app:processReleaseMainManifest)
+          manifest="$(find build/app/intermediates -path '*release*' -name AndroidManifest.xml | head -1)"
+          [ -n "$manifest" ] || { echo "::error::no merged release manifest found"; exit 1; }
+          grep -q "JawwidMessagingService" "$manifest" || { echo "::error::$manifest is not the app's merged manifest"; exit 1; }
+          if grep -q "DebugPushReceiver" "$manifest"; then echo "::error::DebugPushReceiver is in the release manifest"; exit 1; fi
+          echo "release manifest ($manifest): no DebugPushReceiver"
+
+  # Store blocker S-05: the killed-app incoming-call ring, on an Android 14
+  # emulator. NOT a required check while it is being tuned (an emulator on a
+  # shared runner can be slow to boot); the owner's real phone is the final
+  # check before submission. scripts/qa/android-ring-test.sh says what it asserts.
+  android-ring:
+    name: Mobile · Android killed-app ring (emulator, API 34; not required)
+    runs-on: ubuntu-latest
+    needs: guards
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug
+      - name: Ring a killed app; Answer reaches the call bridge
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash scripts/qa/android-ring-test.sh
+      - name: Keep what the emulator showed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-ring
+          path: android-ring/
+          retention-days: 7
