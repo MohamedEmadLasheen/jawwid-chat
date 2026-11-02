@@ -36,11 +36,13 @@ const calendar = new CalendarService(g.prisma, g.conversations, lessons, g.confi
 const events = new LessonEvents(g.prisma);
 
 /** A realtime publisher that records what it was asked to deliver. */
-const sent: Array<{ via: 'users' | 'thread'; to: string[]; event: string; payload: any }> = [];
+const sent: Array<{ via: 'users' | 'thread'; to: string[]; event: string; payload: any; except?: string[] }> = [];
 const recording = {
   toUsers: async (ids: string[], event: string, payload: unknown) => void sent.push({ via: 'users', to: ids, event, payload }),
   toThread: async (id: string, event: string, payload: unknown) => void sent.push({ via: 'thread', to: [id], event, payload }),
-  toThreadAudience: async () => undefined,
+  // CHATSCHED-015: the family's room pass names who was already told by user room.
+  toThreadAudience: async (id: string, event: string, payload: unknown, audience: { exceptActors?: string[] }) =>
+    void sent.push({ via: 'thread', to: [id], event, payload, except: audience.exceptActors }),
 };
 const worker = new OutboxWorker(g.prisma, g.notifications, recording as never, g.identity);
 new LessonAudienceService(g.prisma, calendar, worker, g.identity).onModuleInit();
@@ -268,7 +270,11 @@ describe('the worker fans lesson.changed out to exactly who may see the lesson',
     expect(toUsers.to).not.toContain(s.otherAdminId);
     expect(toUsers.to).not.toContain(s.unrelatedTeacherId);
     expect(toUsers.payload).toMatchObject({ lessonId: id, change: 'created' });
-    expect(sent.filter((x) => x.via === 'thread' && x.event === CommEvent.LESSON_CHANGED).map((x) => x.to[0])).toEqual([groupId]);
+    const room = sent.filter((x) => x.via === 'thread' && x.event === CommEvent.LESSON_CHANGED);
+    expect(room.map((x) => x.to[0])).toEqual([groupId]);
+    // CHATSCHED-015 (QA RT1-pd46): the teacher and the supervisor are in the family's room too and
+    // were told by user room already -- the room pass skips exactly the people already told.
+    expect(new Set(room[0]!.except)).toEqual(new Set(toUsers.to));
     expect(await g.prisma.outboxEvent.count({ where: { idempotencyKey: `lesson:${id}:0:created`, status: 'published' } })).toBe(1);
   });
 
