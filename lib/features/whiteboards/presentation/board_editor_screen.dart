@@ -20,10 +20,12 @@ import '../application/board_editor_controller.dart';
 import '../application/board_export.dart';
 import '../application/board_image_import.dart';
 import '../application/boards_controller.dart';
+import '../data/board_emoji_font.dart';
 import '../data/board_images.dart';
 import '../data/quran_text_repository.dart';
 import '../data/whiteboards_repository.dart';
 import '../domain/board_elements.dart';
+import '../domain/board_emoji.dart';
 import '../domain/board_page.dart';
 import 'board_canvas.dart';
 import 'board_painter.dart';
@@ -77,6 +79,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   };
   double _width = 6;
   StampKind _stamp = StampKind.star;
+  /// PD-55 (4): the emoji an emoji stamp places, as last chosen.
+  String _emoji = kBoardEmoji.first.emoji[2];
   bool _gateLogged = false;
   /// PD-55: the board takes the whole screen; the tools float, and fold away.
   bool _fullScreen = false;
@@ -88,6 +92,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   void initState() {
     super.initState();
     _held = ref.read(boardEditorProvider(widget.boardId).notifier);
+    // PD-55 (4): the portal's emoji font, fetched once; the pages redraw when it lands.
+    boardEmojiFontReady.addListener(_emojiFontChanged);
+    unawaited(loadBoardEmojiFont());
     // Going to the background may be the app's last moment: the draft is
     // written and a save is tried (review of #293).
     _lifecycle = AppLifecycleListener(
@@ -122,8 +129,13 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  void _emojiFontChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    boardEmojiFontReady.removeListener(_emojiFontChanged);
     if (_fullScreen) _systemBars(hidden: false);
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
@@ -243,6 +255,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         _stamp = k;
         _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
       }),
+      onEmoji: () => _pickEmoji(context),
+      emoji: _emoji,
       onDelete: _deleteSelection,
       onVerse: () => _insertVerse(context),
       onRewards: () => _openRewards(context),
@@ -498,8 +512,21 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   String? _stampText(L10n l10n) => switch (_stamp) {
     StampKind.excellentAr || StampKind.excellentEn => l10n.boardStampExcellent,
     StampKind.wellDoneAr || StampKind.wellDoneEn => l10n.boardStampWellDone,
+    StampKind.emoji => _emoji,
     _ => null,
   };
+
+  /// PD-55 (4): the emoji picker -- a short, chosen list (kBoardEmoji), in
+  /// groups. Choosing one makes the stamp tool place it.
+  Future<void> _pickEmoji(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(context: context, showDragHandle: true, builder: (_) => const _EmojiPicker());
+    if (picked == null || !mounted) return;
+    setState(() {
+      _emoji = picked;
+      _stamp = StampKind.emoji;
+      _tool = BoardTool.stamp;
+    });
+  }
 
   double _defaultWidth(BoardTool t) => switch (t) {
     BoardTool.highlighter => 30,
@@ -850,6 +877,8 @@ class _ToolPanel extends StatelessWidget {
     required this.onColor,
     required this.onWidth,
     required this.onStamp,
+    required this.onEmoji,
+    required this.emoji,
     required this.onDelete,
     required this.onVerse,
     required this.onRewards,
@@ -868,6 +897,10 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<Color> onColor;
   final ValueChanged<double> onWidth;
   final ValueChanged<StampKind> onStamp;
+
+  /// PD-55 (4): opens the emoji picker; [emoji] is the one last chosen.
+  final VoidCallback onEmoji;
+  final String emoji;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
 
@@ -945,7 +978,30 @@ class _ToolPanel extends StatelessWidget {
         swatch(BoardPalette.tajweedIzhar, l10n.boardTajweedIzhar),
       ] else if (tool == BoardTool.stamp) ...[
         // PD-39's own stamps; PD-55's stickers and praise live in the reward tray.
-        for (final k in const [StampKind.star, StampKind.check, StampKind.heart, StampKind.thumbsUp, StampKind.excellentAr, StampKind.wellDoneAr])
+        // PD-55 (4): the emoji picker first, then PD-39's stamps and the reward
+        // stickers -- icons only, generic encouragement, no faces.
+        IconButton(
+          key: const ValueKey('board-emoji'),
+          isSelected: stamp == StampKind.emoji,
+          tooltip: l10n.boardEmoji,
+          onPressed: onEmoji,
+          icon: Text(emoji, style: const TextStyle(fontFamily: kIsWeb ? kBoardEmojiFont : null, fontSize: 22, height: 1)),
+        ),
+        for (final k in const [
+          StampKind.star,
+          StampKind.check,
+          StampKind.heart,
+          StampKind.thumbsUp,
+          StampKind.medal,
+          StampKind.trophy,
+          StampKind.rocket,
+          StampKind.sun,
+          StampKind.rainbow,
+          StampKind.crown,
+          StampKind.balloon,
+          StampKind.excellentAr,
+          StampKind.wellDoneAr,
+        ])
           IconButton(
             isSelected: stamp == k,
             tooltip: switch (k) {
@@ -1057,6 +1113,63 @@ const _layoutOrder = [
   PageLayout.ruled,
   PageLayout.narrowRuled,
 ];
+
+/// PD-55 (4): the emoji picker -- kBoardEmoji in its groups, a tap answers one.
+class _EmojiPicker extends StatelessWidget {
+  const _EmojiPicker();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    String name(String key) => switch (key) {
+      'smileys' => l10n.boardEmojiSmileys,
+      'animals' => l10n.boardEmojiAnimals,
+      'nature' => l10n.boardEmojiNature,
+      'food' => l10n.boardEmojiFood,
+      'school' => l10n.boardEmojiSchool,
+      _ => l10n.boardEmojiSymbols,
+    };
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing4, vertical: Spacing.spacing2),
+          children: [
+            Text(l10n.boardEmojiPick, style: Theme.of(context).textTheme.titleMedium),
+            for (final g in kBoardEmoji) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: Spacing.spacing4, bottom: Spacing.spacing2),
+                child: Text(name(g.key), style: Theme.of(context).textTheme.labelLarge),
+              ),
+              Wrap(
+                spacing: Spacing.spacing2,
+                runSpacing: Spacing.spacing2,
+                children: [
+                  for (final e in g.emoji)
+                    Semantics(
+                      button: true,
+                      label: e,
+                      child: InkWell(
+                        key: ValueKey('emoji-$e'),
+                        borderRadius: const BorderRadius.all(Radii.radiusMd),
+                        onTap: () => Navigator.of(context).pop(e),
+                        child: SizedBox.square(
+                          dimension: 52,
+                          child: Center(
+                            child: Text(e, style: const TextStyle(fontFamily: kIsWeb ? kBoardEmojiFont : null, fontSize: 32, height: 1)),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// PD-55: a page layout in miniature, drawn by the same painter as the page.
 class _LayoutThumbnail extends StatelessWidget {

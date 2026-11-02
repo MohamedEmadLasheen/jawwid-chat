@@ -8167,6 +8167,54 @@ abstract class L10n {
   /// **'Next page'**
   String get boardNextPage;
 
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji'**
+  String get boardEmoji;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an emoji'**
+  String get boardEmojiPick;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Smileys'**
+  String get boardEmojiSmileys;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Animals'**
+  String get boardEmojiAnimals;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Nature'**
+  String get boardEmojiNature;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get boardEmojiFood;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'School and play'**
+  String get boardEmojiSchool;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Symbols'**
+  String get boardEmojiSymbols;
+
   /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
   ///
   /// In en, this message translates to:

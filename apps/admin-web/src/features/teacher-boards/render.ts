@@ -410,8 +410,21 @@ function roundRect(ctx: Ctx, { x, y, w, h }: Rect, r: number) {
 }
 
 /** The reward stamps (§4.1): the icons as simple shapes, the words in our font. */
+/** The browser's own colour emoji fonts: staff browsers have them, nothing is downloaded. */
+export const EMOJI_FONT = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"
+
 function drawStamp(ctx: Ctx, s: Extract<BoardElement, { kind: 'stamp' }>, background: string) {
   const { x, y, w, h } = s.rect
+  if (s.stamp === 'emoji') {
+    // PD-55 (4): the emoji itself, filling its square, in its own colours (as the portal draws it).
+    ctx.save()
+    ctx.font = `${Math.round(Math.min(w, h) * 0.82)}px ${EMOJI_FONT}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(s.text ?? '', x + w / 2, y + h / 2)
+    ctx.restore()
+    return
+  }
   ctx.save()
   ctx.fillStyle = s.color
   ctx.strokeStyle = s.color

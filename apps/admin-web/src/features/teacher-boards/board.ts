@@ -61,9 +61,11 @@ export type StampKind =
   | 'star' | 'check' | 'heart' | 'thumbsUp' | 'excellentAr' | 'wellDoneAr' | 'excellentEn' | 'wellDoneEn'
   // PD-55: the reward tray's stickers, and a praise stamp carrying any words.
   | 'medal' | 'trophy' | 'rocket' | 'sun' | 'rainbow' | 'crown' | 'balloon' | 'praise'
+  // PD-55 Phase 1 (4): an emoji, the character itself in `text`.
+  | 'emoji'
 const STAMPS: readonly StampKind[] = [
   'star', 'check', 'heart', 'thumbsUp', 'excellentAr', 'wellDoneAr', 'excellentEn', 'wellDoneEn',
-  'medal', 'trophy', 'rocket', 'sun', 'rainbow', 'crown', 'balloon', 'praise',
+  'medal', 'trophy', 'rocket', 'sun', 'rainbow', 'crown', 'balloon', 'praise', 'emoji',
 ]
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle'
 const SHAPES: readonly ShapeKind[] = ['rect', 'ellipse', 'triangle']
