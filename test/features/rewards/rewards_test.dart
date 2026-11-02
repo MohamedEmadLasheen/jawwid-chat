@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/rewards/application/reward_feed.dart';
 import 'package:jawwid_chat/features/rewards/data/rewards_repository.dart';
@@ -28,6 +29,15 @@ class _Chime implements RewardChime {
   int plays = 0;
   @override
   Future<void> play() async => plays++;
+}
+
+/// The app lock, held where a test puts it.
+class _Lock extends AppLockController {
+  _Lock(this.initial);
+  final AppLockPhase initial;
+  @override
+  AppLockState build() => AppLockState(phase: initial);
+  void set(AppLockPhase phase) => state = AppLockState(phase: phase);
 }
 
 class _SoundStore implements RewardSoundStore {
@@ -131,12 +141,15 @@ void main() {
   group('the family\'s celebration', () {
     late SpySocket socket;
     late _Chime chime;
+    late _Lock lock;
 
-    List<Override> overrides({UserRole role = UserRole.parent, bool? sound}) {
+    List<Override> overrides({UserRole role = UserRole.parent, bool? sound, AppLockPhase phase = AppLockPhase.unlocked}) {
       socket = SpySocket();
       chime = _Chime();
+      lock = _Lock(phase);
       final auth = ScriptedAuth(signedIn());
       return [
+        appLockControllerProvider.overrideWith(() => lock),
         authControllerProvider.overrideWith(() => auth),
         currentRoleProvider.overrideWithValue(role),
         realtimeSocketProvider.overrideWithValue(socket),
@@ -166,6 +179,32 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
       expect(find.byKey(const ValueKey('reward-celebration')), findsNothing);
       expect(chime.plays, 1, reason: 'a family\'s phone chimes by default');
+      await socket.close();
+    });
+
+    testWidgets('never over the app lock: nothing shown or heard while locked, nothing replayed after; locking hides one playing', (tester) async {
+      await tester.pumpWidget(_app(overrides(phase: AppLockPhase.locked), screen(() {})));
+      await tester.pumpAndSettle();
+      socket.emit(rewardGivenEvent, _payload());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('reward-celebration')), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(chime.plays, 0, reason: 'a locked phone does not chime a child\'s reward');
+
+      lock.set(AppLockPhase.unlocked);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('reward-celebration')), findsNothing, reason: 'unlocking does not replay it');
+
+      socket.emit(rewardGivenEvent, _payload(stars: 4));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('reward-celebration')), findsOneWidget);
+      lock.set(AppLockPhase.locked);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('reward-celebration')), findsNothing, reason: 'the lock hides one already playing');
+      await tester.pump(const Duration(seconds: 3));
       await socket.close();
     });
 
@@ -325,6 +364,7 @@ void main() {
     testWidgets('the celebration says how far to the next badge', (tester) async {
       final socket = SpySocket();
       await tester.pumpWidget(_app([
+        appLockControllerProvider.overrideWith(() => _Lock(AppLockPhase.unlocked)),
         authControllerProvider.overrideWith(() => ScriptedAuth(signedIn())),
         currentRoleProvider.overrideWithValue(UserRole.parent),
         realtimeSocketProvider.overrideWithValue(socket),

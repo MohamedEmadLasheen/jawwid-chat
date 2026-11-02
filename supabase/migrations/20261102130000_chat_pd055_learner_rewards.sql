@@ -21,10 +21,14 @@
 --     most 40 characters;
 --   * no comparisons: nothing here aggregates across learners.
 --
--- Row-level security (the second line; the API decides first): the learner's
--- current teacher inserts, as themself; that teacher, an active contact of the
--- learner's family, and staff who supervise that teacher read. No blanket
--- policy; no update or delete for anyone.
+-- Access: owner-only, like PD-39's boards. Only the API (the table owner)
+-- reads and writes; no request role has a grant on the table or may execute
+-- its helpers. The row-level policies stay as defence in depth -- should a
+-- grant ever be added, they still say who: the learner's current teacher
+-- inserts, as themself; that teacher, an active contact of the learner's
+-- family, and staff who supervise that teacher read. No blanket policy; no
+-- update or delete for anyone. While rewards.enabled is off the guard refuses
+-- every new row, whoever writes it.
 --
 -- Rollback: db/rollback/20261102130000_pd055_learner_rewards.down.sql
 -- Idempotent where a re-run could meet it (G-19).
@@ -85,6 +89,10 @@ begin
     raise exception 'a reward is never deleted; an undo withdraws it' using errcode = 'check_violation';
   end if;
 
+  if coalesce((select (value #>> '{}')::boolean from chat.config where key = 'rewards.enabled'), false) is not true then
+    raise exception 'rewards are off' using errcode = 'check_violation';
+  end if;
+
   new.created_at := now();
 
   select ls.id, ls.learner_id, ls.teacher_id, ls.organization_id, ls.starts_at, ls.ends_at, ls.outcome
@@ -142,6 +150,7 @@ create trigger learner_reward_event_no_truncate before truncate on chat.learner_
   for each statement execute function chat.guard_learner_reward_event_truncate();
 
 -- --- Who may read and write: two questions, asked as the caller -------------------------
+-- (Used only by the policies below; no request role may execute them.)
 
 -- The writer: the caller IS this teacher, and this teacher is the learner's current teacher.
 create or replace function chat.may_reward_learner(p_learner uuid, p_teacher uuid)
@@ -177,7 +186,6 @@ $$;
 
 alter table chat.learner_reward_event enable row level security;
 revoke all on chat.learner_reward_event from public, anon, authenticated, chat_app;
-grant select, insert on chat.learner_reward_event to authenticated;
 
 drop policy if exists learner_reward_event_insert on chat.learner_reward_event;
 create policy learner_reward_event_insert on chat.learner_reward_event
@@ -191,10 +199,8 @@ create policy learner_reward_event_read on chat.learner_reward_event
 
 revoke all on function chat.guard_learner_reward_event() from public;
 revoke all on function chat.guard_learner_reward_event_truncate() from public;
-revoke all on function chat.may_reward_learner(uuid, uuid) from public;
-revoke all on function chat.may_read_learner_rewards(uuid, uuid) from public;
-grant execute on function chat.may_reward_learner(uuid, uuid) to authenticated;
-grant execute on function chat.may_read_learner_rewards(uuid, uuid) to authenticated;
+revoke all on function chat.may_reward_learner(uuid, uuid) from public, anon, authenticated, chat_app;
+revoke all on function chat.may_read_learner_rewards(uuid, uuid) from public, anon, authenticated, chat_app;
 
 -- --- Configuration --------------------------------------------------------------------
 

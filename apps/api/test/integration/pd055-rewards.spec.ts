@@ -7,9 +7,11 @@
  *     celebration; a retried tap records once;
  *   * a teacher withdraws their own reward within 2 minutes, as an 'undo' row;
  *   * a record: never updated, deleted or truncated;
- *   * RLS (the second line): the learner's family and the teacher's supervisors
- *     read, a parent of ANOTHER family reads nothing, a teacher who is not the
- *     learner's current teacher cannot insert;
+ *   * owner-only: no request role reads, writes or runs the helpers; the
+ *     policies (defence in depth) still say the learner's family and the
+ *     teacher's supervisors read, a parent of ANOTHER family reads nothing, a
+ *     teacher who is not the learner's current teacher cannot insert;
+ *   * concurrent identical gives and undos record once, without a 500;
  *   * delivery: the family's LIVE contacts and the teacher, resolved when the
  *     outbox drains.
  */
@@ -18,8 +20,7 @@ import { CommEvent } from '@communication/contracts/events';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { NotificationService } from '@communication/notifications/notification.service';
 import { RewardService, badgeOf } from '../../src/rewards/reward.service';
-import { TeacherScopeService } from '../../src/platform/teacher-scope';
-import { Scenario, buildGraph, seed, truncate } from './harness';
+import { Scenario, buildGraph, seed, truncate, withAssignmentGate } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -59,6 +60,30 @@ async function lesson(startsInMinutes = -5, length = 30, outcome: string | null 
 
 const star = (lessonId: string, extra: Record<string, unknown> = {}) => ({ lessonId, kind: 'star', clientEventId: randomUUID(), ...extra });
 
+/**
+ * Runs [first] in a transaction held open until [second] has reached the database, then
+ * commits it: [second] meets [first]'s uncommitted row, as two taps at once would.
+ */
+async function race<T>(first: (tx: typeof g.prisma) => Promise<unknown>, second: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let inserted!: () => void;
+  const ready = new Promise<void>((r) => (inserted = r));
+  const holder = g.prisma.$transaction(async (tx) => {
+    await first(tx as never);
+    inserted();
+    await gate;
+  }, { timeout: 30_000 });
+  await ready;
+  const result = second().then((v) => ({ v }), (e: unknown) => ({ e }));
+  await new Promise((r) => setTimeout(r, 750));
+  release();
+  await holder;
+  const out = await result;
+  if ('e' in out) throw out.e;
+  return out.v;
+}
+
 async function rows() {
   return g.prisma.$queryRaw<Array<{ id: string; kind: string; undoes: string | null }>>`
     select id::text, kind, undoes::text from chat.learner_reward_event order by created_at, id`;
@@ -74,25 +99,50 @@ async function asRequestRole<T>(fn: (tx: typeof g.prisma) => Promise<T>, actor: 
   }) as Promise<T>;
 }
 
+/** The policies' answer for [actor], asked as the owner (no request role may run the helpers). */
+async function asActor<T>(fn: (tx: typeof g.prisma) => Promise<T>, actor: { actorId?: string; staffId?: string }): Promise<T> {
+  return g.prisma.$transaction(async (tx) => {
+    if (actor.actorId) await tx.$executeRawUnsafe(`select set_config('chat.actor_id', '${actor.actorId}', true)`);
+    if (actor.staffId) await tx.$executeRawUnsafe(`select set_config('chat.actor_staff_id', '${actor.staffId}', true)`);
+    return fn(tx as never);
+  }) as Promise<T>;
+}
+
 async function visibleCount(actor: { actorId?: string; staffId?: string }): Promise<number> {
-  return asRequestRole(async (tx) => {
-    const [r] = await tx.$queryRaw<Array<{ n: number }>>`select count(*)::int as n from chat.learner_reward_event`;
+  return asActor(async (tx) => {
+    const [r] = await tx.$queryRaw<Array<{ n: number }>>`
+      select count(*)::int as n from chat.learner_reward_event where chat.may_read_learner_rewards(learner_id, teacher_id)`;
     return r!.n;
+  }, actor);
+}
+
+async function mayReward(teacher: string, actor: { actorId?: string; staffId?: string }): Promise<boolean> {
+  return asActor(async (tx) => {
+    const [r] = await tx.$queryRaw<Array<{ ok: boolean }>>`select chat.may_reward_learner(${s.learnerId}::uuid, ${teacher}::uuid) as ok`;
+    return r!.ok;
   }, actor);
 }
 
 beforeAll(async () => {
   await g.prisma.$connect();
 });
+let strictScopeBefore: unknown;
+beforeAll(async () => {
+  const [row] = await g.prisma.$queryRaw<Array<{ value: unknown }>>`select value from chat.config where key = 'teacher_supervisor.strict_scope'`;
+  strictScopeBefore = row?.value;
+});
 afterAll(async () => {
   await setConfig('rewards.enabled', false);
+  // Other suites read the PD-35 switch: put it back as it was.
+  if (strictScopeBefore === undefined) await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'teacher_supervisor.strict_scope'`);
+  else await setConfig('teacher_supervisor.strict_scope', strictScopeBefore);
   await g.prisma.$disconnect();
 });
 beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   await setConfig('rewards.enabled', true);
-  rewards = new RewardService(g.prisma, g.config, g.conversations, g.outbox, new TeacherScopeService(g.prisma));
+  rewards = new RewardService(g.prisma, g.config, g.conversations, g.outbox);
 });
 
 describe('giving a reward', () => {
@@ -166,6 +216,46 @@ describe('giving a reward', () => {
     await expect(rewards.lessonsNow(s.teacherId)).rejects.toMatchObject({ status: 404 });
   });
 
+  it('is off in the database too: the guard refuses every new row, even the owner\'s', async () => {
+    const l = await lesson();
+    await setConfig('rewards.enabled', false);
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.learner_reward_event (organization_id, learner_id, lesson_id, teacher_id, kind, client_event_id)
+         values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::uuid, 'star', gen_random_uuid())`,
+        s.learnerId, l, s.teacherId,
+      ),
+    ).rejects.toThrow(/rewards are off/);
+    expect(await rows()).toHaveLength(0);
+  });
+
+  it('two identical taps at once record once: the second replays the first (not a 500)', async () => {
+    const l = await lesson();
+    const tap = star(l);
+    const firstId = randomUUID();
+    const second = await race(
+      (tx) => tx.$executeRawUnsafe(
+        `insert into chat.learner_reward_event (id, organization_id, learner_id, lesson_id, teacher_id, kind, client_event_id)
+         values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid, $4::uuid, 'star', $5::uuid)`,
+        firstId, s.learnerId, l, s.teacherId, tap.clientEventId,
+      ),
+      () => rewards.give(s.teacherId, s.learnerId, tap),
+    );
+    expect(second.event.id).toBe(firstId);
+    expect(second.stars).toBe(1);
+    expect(await rows()).toHaveLength(1);
+    expect(await g.prisma.outboxEvent.count({ where: { type: CommEvent.LEARNER_REWARD_GIVEN } })).toBe(0);
+  });
+
+  it('a clientEventId already used for another lesson is a conflict, not a replay', async () => {
+    const earlier = await lesson(-40, 30); // ended 10 minutes ago: still in its window
+    const now = await lesson();
+    const tap = star(earlier);
+    await rewards.give(s.teacherId, s.learnerId, tap);
+    await expect(rewards.give(s.teacherId, s.learnerId, { ...tap, lessonId: now })).rejects.toMatchObject({ status: 409 });
+    expect(await rows()).toHaveLength(1);
+  });
+
   it('the tray\'s "For": the teacher\'s lessons on now, with each learner and their stars -- nobody else\'s', async () => {
     const now = await lesson();
     await lesson(120); // later today: not on now
@@ -202,7 +292,7 @@ describe('the tally and its badges (PR-5)', () => {
     });
   });
 
-  it('the report\'s tally: the teacher, the family and staff in the teacher scope -- a parent of ANOTHER family and another teacher get 404', async () => {
+  it('the report\'s tally: the teacher, the family and the staff who supervise the teacher (strict, whatever the PD-35 switch says) -- a parent of ANOTHER family and another teacher get 404', async () => {
     const l = await lesson();
     await rewards.give(s.teacherId, s.learnerId, star(l));
     expect((await rewards.forLesson(s.teacherId, l)).stars).toBe(1);
@@ -217,13 +307,41 @@ describe('the tally and its badges (PR-5)', () => {
     for (const who of [outsider, s.unrelatedTeacherId, s.newTeacherId]) {
       await expect(rewards.forLesson(who, l)).rejects.toMatchObject({ status: 404 });
     }
-    // Staff reach is the platform's one teacher scope (TeacherScopeService.covers,
-    // PD-35): department-wide unless TEACHER_SUPERVISOR_STRICT_SCOPE is on, as it
-    // is for every other lesson read. Whatever it answers, this answers.
-    const owner = await g.conversations.requireActor(s.ownerId);
-    const covered = await new TeacherScopeService(g.prisma).covers(owner, s.teacherId);
-    if (covered) expect((await rewards.forLesson(s.ownerId, l)).stars).toBe(1);
-    else await expect(rewards.forLesson(s.ownerId, l)).rejects.toMatchObject({ status: 404 });
+    // Staff reach is strict whatever TEACHER_SUPERVISOR_STRICT_SCOPE says: staff
+    // who supervise no teacher are told there is no such lesson -- with the
+    // department-wide switch on or off.
+    for (const strict of [false, true]) {
+      await setConfig('teacher_supervisor.strict_scope', strict);
+      await expect(rewards.forLesson(s.ownerId, l)).rejects.toMatchObject({ status: 404 });
+    }
+    // A Teachers supervisor: only once assigned this teacher -- again either way.
+    const manager = randomUUID();
+    const supervisor = randomUUID();
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'teachers_mgr', 'manager', true), ($2::uuid, 'teachers_sup', 'admin', true)`,
+      manager, supervisor,
+    );
+    const [{ id: dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.department (kind, display_name, manager_id) values ('teachers', 'teachers', $1::uuid) returning id::text as id`, manager,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, chat.default_organization_id(), $2::uuid, 'supervisor')`,
+      supervisor, dept,
+    );
+    for (const strict of [false, true]) {
+      await setConfig('teacher_supervisor.strict_scope', strict);
+      await expect(rewards.forLesson(supervisor, l)).rejects.toMatchObject({ status: 404 });
+    }
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id) values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
+      s.teacherId, supervisor,
+    );
+    for (const strict of [false, true]) {
+      await setConfig('teacher_supervisor.strict_scope', strict);
+      expect((await rewards.forLesson(supervisor, l)).stars).toBe(1);
+    }
+    // The Teachers manager supervises every teacher.
+    expect((await rewards.forLesson(manager, l)).stars).toBe(1);
     const superAdmin = randomUUID();
     await g.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
@@ -247,6 +365,38 @@ describe('withdrawing a mistaken reward', () => {
     // Another teacher cannot withdraw it.
     const { event: second } = await rewards.give(s.teacherId, s.learnerId, star(l));
     await expect(rewards.undo(s.newTeacherId, s.learnerId, second.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('two identical undos at once withdraw it once: the second changes nothing (not a 500)', async () => {
+    const l = await lesson();
+    const { event } = await rewards.give(s.teacherId, s.learnerId, star(l));
+    const second = await race(
+      (tx) => tx.$executeRawUnsafe(
+        `insert into chat.learner_reward_event (organization_id, learner_id, lesson_id, teacher_id, kind, undoes, client_event_id)
+         values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::uuid, 'undo', $4::uuid, gen_random_uuid())`,
+        s.learnerId, l, s.teacherId, event.id,
+      ),
+      () => rewards.undo(s.teacherId, s.learnerId, event.id),
+    );
+    expect(second.stars).toBe(0);
+    expect((await rows()).map((r) => r.kind)).toEqual(['star', 'undo']);
+    expect(await g.prisma.outboxEvent.count({ where: { type: CommEvent.LEARNER_REWARD_UNDONE } })).toBe(0);
+  });
+
+  it('after the learner moves to another teacher, the old teacher\'s undo is 404 (not a 500)', async () => {
+    const l = await lesson();
+    const { event } = await rewards.give(s.teacherId, s.learnerId, star(l));
+    await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${s.newTeacherId}'::uuid where id = '${s.learnerId}'::uuid`);
+    await expect(rewards.undo(s.teacherId, s.learnerId, event.id)).rejects.toMatchObject({ status: 404 });
+    expect((await rows()).map((r) => r.kind)).toEqual(['star']);
+  });
+
+  it('is off while rewards.enabled is off: 404, and nothing is withdrawn', async () => {
+    const l = await lesson();
+    const { event } = await rewards.give(s.teacherId, s.learnerId, star(l));
+    await setConfig('rewards.enabled', false);
+    await expect(rewards.undo(s.teacherId, s.learnerId, event.id)).rejects.toMatchObject({ status: 404 });
+    expect((await rows()).map((r) => r.kind)).toEqual(['star']);
   });
 
   it('not after 2 minutes -- in the API and in the database', async () => {
@@ -278,7 +428,7 @@ describe('a record', () => {
   });
 });
 
-describe('row-level security (the second line)', () => {
+describe('access: owner-only, with the policies as defence in depth', () => {
   let otherFamilyParent: string;
   let l: string;
 
@@ -314,20 +464,32 @@ describe('row-level security (the second line)', () => {
     expect(await visibleCount({ staffId: superAdmin })).toBe(2);
   });
 
-  it('a teacher who is not the learner\'s current teacher cannot insert; nobody updates or deletes', async () => {
-    const insert = (teacher: string) => (tx: typeof g.prisma) =>
+  it('the policy lets only the learner\'s current teacher, as themself, insert', async () => {
+    expect(await mayReward(s.teacherId, { actorId: s.teacherId })).toBe(true);
+    expect(await mayReward(s.teacherId, { actorId: s.newTeacherId })).toBe(false);
+    expect(await mayReward(s.newTeacherId, { actorId: s.newTeacherId })).toBe(false);
+    expect(await mayReward(s.teacherId, { actorId: s.parentId })).toBe(false);
+  });
+
+  it('a request role cannot read, insert, update or delete -- not even the learner\'s own teacher -- nor run the helpers', async () => {
+    const insert = (tx: typeof g.prisma) =>
       tx.$executeRawUnsafe(
         `insert into chat.learner_reward_event (organization_id, learner_id, lesson_id, teacher_id, kind, client_event_id)
          values (chat.default_organization_id(), $1::uuid, $2::uuid, $3::uuid, 'star', gen_random_uuid())`,
-        s.learnerId, l, teacher,
+        s.learnerId, l, s.teacherId,
       );
-    await expect(asRequestRole(insert(s.teacherId), { actorId: s.newTeacherId })).rejects.toThrow(/row-level security/);
-    await expect(asRequestRole(insert(s.newTeacherId), { actorId: s.newTeacherId })).rejects.toThrow();
-    await expect(asRequestRole(insert(s.teacherId), { actorId: s.parentId })).rejects.toThrow(/row-level security/);
-    // The learner's own teacher, as themself, may.
-    await expect(asRequestRole(insert(s.teacherId), { actorId: s.teacherId })).resolves.toBe(1);
-    await expect(asRequestRole((tx) => tx.$executeRawUnsafe(`update chat.learner_reward_event set kind = 'star'`), { actorId: s.teacherId })).rejects.toThrow();
-    await expect(asRequestRole((tx) => tx.$executeRawUnsafe(`delete from chat.learner_reward_event`), { actorId: s.teacherId })).rejects.toThrow();
+    const me = { actorId: s.teacherId };
+    await expect(asRequestRole(insert, me)).rejects.toThrow(/permission denied/);
+    await expect(asRequestRole((tx) => tx.$queryRawUnsafe(`select * from chat.learner_reward_event`), me)).rejects.toThrow(/permission denied/);
+    await expect(asRequestRole((tx) => tx.$executeRawUnsafe(`update chat.learner_reward_event set kind = 'star'`), me)).rejects.toThrow(/permission denied/);
+    await expect(asRequestRole((tx) => tx.$executeRawUnsafe(`delete from chat.learner_reward_event`), me)).rejects.toThrow(/permission denied/);
+    await expect(
+      asRequestRole((tx) => tx.$queryRawUnsafe(`select chat.may_reward_learner($1::uuid, $2::uuid)`, s.learnerId, s.teacherId), me),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      asRequestRole((tx) => tx.$queryRawUnsafe(`select chat.may_read_learner_rewards($1::uuid, $2::uuid)`, s.learnerId, s.teacherId), me),
+    ).rejects.toThrow(/permission denied/);
+    expect(await rows()).toHaveLength(2);
   });
 });
 

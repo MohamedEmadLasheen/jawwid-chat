@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../app_lock/application/app_lock_controller.dart';
 import '../application/reward_feed.dart';
 import '../domain/rewards.dart';
 
@@ -17,6 +18,10 @@ import '../domain/rewards.dart';
 /// frozen call file -- has to know about it. It never takes a tap: everything
 /// under it keeps working while it plays. With "reduce motion" on it is a
 /// gentle fade with a star, no particles; nothing flashes.
+///
+/// It sits outside the app lock (PD-23), so it says nothing while the lock covers
+/// the app or the privacy cover hides it: a reward that arrives then is not shown
+/// or heard -- not then, and not later -- and one already playing disappears.
 class RewardCelebrationHost extends ConsumerStatefulWidget {
   const RewardCelebrationHost({super.key, required this.child});
 
@@ -58,10 +63,14 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> w
 
   @override
   Widget build(BuildContext context) {
+    final lock = ref.watch(appLockControllerProvider);
+    final hidden = lock.covered || lock.obscured;
     ref.listen(rewardFeedProvider, (previous, next) {
-      if (next != null && next.seq != previous?.seq) _celebrate(next);
+      if (next == null || next.seq == previous?.seq) return;
+      if (ref.read(appLockControllerProvider).covered || ref.read(appLockControllerProvider).obscured) return;
+      _celebrate(next);
     });
-    final showing = _showing;
+    final showing = hidden ? null : _showing;
     return Stack(
       children: [
         widget.child,
