@@ -485,9 +485,11 @@ class FakeBackend {
     _maybeFail();
     conversationById(conversationId);
 
-    final ceiling = attachment.kind == MessageKind.image
-        ? 10 * 1024 * 1024
-        : 25 * 1024 * 1024;
+    final ceiling = switch (attachment.kind) {
+      MessageKind.image => 10 * 1024 * 1024,
+      MessageKind.video => 100 * 1024 * 1024,
+      _ => 25 * 1024 * 1024,
+    };
     if (attachment.byteSize <= 0 || attachment.byteSize > ceiling) {
       throw const AppError(
         AppErrorKind.server,
@@ -507,6 +509,7 @@ class FakeBackend {
       objectKey: objectKey,
       mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
+      durationMs: attachment.duration?.inMilliseconds,
     );
   }
 

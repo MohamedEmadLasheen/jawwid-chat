@@ -462,6 +462,18 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
                   Navigator.of(sheetContext).pop(AttachmentSource.photo),
             ),
             ListTile(
+              key: const ValueKey('attach-video'),
+              leading: const Icon(Icons.video_library_outlined),
+              title: Text(l10n.attachVideo),
+              onTap: () => Navigator.of(sheetContext).pop(AttachmentSource.video),
+            ),
+            ListTile(
+              key: const ValueKey('attach-record-video'),
+              leading: const Icon(Icons.videocam_outlined),
+              title: Text(l10n.attachRecordVideo),
+              onTap: () => Navigator.of(sheetContext).pop(AttachmentSource.recordVideo),
+            ),
+            ListTile(
               leading: const Icon(Icons.insert_drive_file_outlined),
               title: Text(l10n.attachFile),
               onTap: () => Navigator.of(sheetContext).pop(AttachmentSource.file),
@@ -479,7 +491,8 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
 /// authorize -> upload -> send pipeline, arriving as the same message. The
 /// source is a question about the picker and about which permission is asked
 /// for; it is not a question about the attachment.
-enum AttachmentSource { camera, photo, file }
+/// PARENT-017: `video` is a video from the library, `recordVideo` one recorded with the camera.
+enum AttachmentSource { camera, photo, video, recordVideo, file }
 
 /// What the user picked from "+": an attachment source, or a lesson ticket.
 sealed class ComposerChoice {
@@ -607,6 +620,18 @@ Future<ComposerChoice?> showComposerMenu(
                 leading: const Icon(Icons.photo_outlined),
                 title: Text(l10n.attachPhoto),
                 onTap: () => pick(const AttachmentChoice(AttachmentSource.photo)),
+              ),
+              ListTile(
+                key: const ValueKey('attach-video'),
+                leading: const Icon(Icons.video_library_outlined),
+                title: Text(l10n.attachVideo),
+                onTap: () => pick(const AttachmentChoice(AttachmentSource.video)),
+              ),
+              ListTile(
+                key: const ValueKey('attach-record-video'),
+                leading: const Icon(Icons.videocam_outlined),
+                title: Text(l10n.attachRecordVideo),
+                onTap: () => pick(const AttachmentChoice(AttachmentSource.recordVideo)),
               ),
               ListTile(
                 leading: const Icon(Icons.insert_drive_file_outlined),

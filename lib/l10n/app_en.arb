@@ -412,6 +412,31 @@
   "@attachFile": {
     "description": "Attachment menu entry for a document."
   },
+  "attachVideo": "Video",
+  "@attachVideo": {
+    "description": "PARENT-017: attachment menu entry for a video from the library."
+  },
+  "attachRecordVideo": "Record video",
+  "@attachRecordVideo": {
+    "description": "PARENT-017: attachment menu entry that records a video with the camera (up to 3 minutes)."
+  },
+  "videoRecordPermissionDenied": "Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.",
+  "@videoRecordPermissionDenied": {
+    "description": "PARENT-017: shown when recording a video was refused the camera or the microphone."
+  },
+  "cancelUpload": "Cancel sending",
+  "@cancelUpload": {
+    "description": "PARENT-017: the button on a sending video that stops its upload and takes the message back."
+  },
+  "uploadingPercent": "Sending… {percent}%",
+  "@uploadingPercent": {
+    "description": "PARENT-017: how far a video's upload has gone. A percentage, not a count: a String, so no plural form applies.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "attachmentPhotoLabel": "Photo",
   "@attachmentPhotoLabel": {
     "description": "Stands in for a photo where a message has no text."
@@ -3297,5 +3322,40 @@
   "photoPositionLabel": "Photo {position} of {count}",
   "@photoPositionLabel": {"description": "PD-37: which photo of the message is on screen, read by a screen reader. Positions, not counts: no noun follows either number, so there is no plural agreement to make.", "placeholders": {"position": {"type": "String"}, "count": {"type": "String"}}},
   "chatDraftLabel": "Draft:",
-  "@chatDraftLabel": {"description": "PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's \"Draft:\")."}
+  "@chatDraftLabel": {"description": "PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's \"Draft:\")."},
+  "rewardPraiseExcellent": "Excellent",
+  "@rewardPraiseExcellent": {"description": "PD-55: a praise stamp (general praise only)."},
+  "rewardPraiseWellDone": "Well done",
+  "rewardPraiseGreat": "Great",
+  "rewardPraiseChampion": "Champion",
+  "rewardTrayTitle": "Rewards",
+  "@rewardTrayTitle": {"description": "PD-55: the teacher's reward tray on the whiteboard."},
+  "rewardTrayFor": "For",
+  "rewardTrayEveryone": "Everyone",
+  "rewardTrayNoLesson": "Rewards count during a lesson. Now they decorate the board only.",
+  "rewardTrayStar": "Star",
+  "rewardTrayStickers": "Stickers",
+  "rewardTrayPraise": "Praise",
+  "rewardTrayOwnWords": "My own words…",
+  "rewardTrayCelebrate": "Celebrate",
+  "rewardTrayUndo": "Undo",
+  "rewardTraySent": "Reward given",
+  "rewardTrayFailed": "The reward was not recorded. It is still on the board.",
+  "rewardCelebrationLine": "Your teacher is celebrating you!",
+  "@rewardCelebrationLine": {"description": "PD-55: the family's celebration line."},
+  "rewardSoundTitle": "Reward sounds",
+  "@rewardSoundTitle": {"description": "PD-55: Settings switch for the celebration chime."},
+  "rewardSoundSubtitle": "A short chime when a teacher celebrates your child.",
+  "rewardStarLine": "{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}",
+  "@rewardStarLine": {"description": "PD-55: the family's line for a star, sticker or praise.", "placeholders": {"count": {"type": "int"}}},
+  "rewardBadgeBronze": "Great effort",
+  "@rewardBadgeBronze": {"description": "PD-55: the first badge in a lesson -- named for effort, never a rank."},
+  "rewardBadgeSilver": "Amazing effort",
+  "rewardBadgeGold": "Superstar",
+  "rewardToNextBadge": "{count, plural, =1{1 more star for {badge}} other{{count} more stars for {badge}}}",
+  "@rewardToNextBadge": {"description": "PD-55: progress toward the next badge.", "placeholders": {"count": {"type": "int"}, "badge": {"type": "String"}}},
+  "rewardBadgeEarned": "Badge: {badge}",
+  "@rewardBadgeEarned": {"placeholders": {"badge": {"type": "String"}}},
+  "rewardReportStars": "{count, plural, =1{1 star} other{{count} stars}}",
+  "@rewardReportStars": {"description": "PD-55: the lesson report card's rewards row.", "placeholders": {"count": {"type": "int"}}}
 }

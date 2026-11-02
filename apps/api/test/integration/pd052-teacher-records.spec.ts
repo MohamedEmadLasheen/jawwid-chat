@@ -455,19 +455,22 @@ describe('PD-52, review of #374', () => {
     expect(both).toBe(0);
   });
 
-  it('P2: the strip gives each section only to the key that covers it; the feedback tiles count only the categories held', async () => {
+  it('P2: the strip gives each section only to the key that covers it; the feedback tiles are the suggestions\' page\'s', async () => {
     await files.addEntry(tsupId, s.teacherId, { kind: 'complaint', body: 'Late.', source: 'management' });
     await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'praise', body: 'Kind.' });
     await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'complaint', body: 'Short.' });
+    await feedback.file(s.parentId, { learnerId: s.learnerId, category: 'suggestion', body: 'More games.' });
     const whole = await records.summary(tsupId, s.teacherId);
     expect(whole).toMatchObject({ openComplaints: 2, testimonials: 1, ladder: { counted: 0 } });
     const tiles = (t: Array<{ key: string; count: number }>) => Object.fromEntries(t.map((x) => [x.key, x.count]));
-    expect(tiles(await feedback.dashboardCounts(tsupId))).toMatchObject({ 'feedback.received': 2 });
+    // The tiles count the suggestions alone (the Attendance page's Suggestions view).
+    expect(tiles(await feedback.dashboardCounts(tsupId))).toEqual({ 'feedback.received': 1, 'feedback.in_review': 0 });
 
     await asGrantsOnly(async () => {
       expect(await records.access(tsupId)).toMatchObject({ attendance: { view: false }, grants: { view: true } });
       expect(await records.summary(tsupId, s.teacherId)).toMatchObject({ away: null, ladder: null, openComplaints: null, testimonials: 1, grants: 0 });
-      expect(tiles(await feedback.dashboardCounts(tsupId))).toMatchObject({ 'feedback.received': 1 });
+      // Without the suggestions' page, no feedback tile at all -- never the praise counted instead.
+      expect(await feedback.dashboardCounts(tsupId)).toEqual([]);
     });
   });
 

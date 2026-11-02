@@ -1513,6 +1513,36 @@ abstract class L10n {
   /// **'File'**
   String get attachFile;
 
+  /// PARENT-017: attachment menu entry for a video from the library.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachVideo;
+
+  /// PARENT-017: attachment menu entry that records a video with the camera (up to 3 minutes).
+  ///
+  /// In en, this message translates to:
+  /// **'Record video'**
+  String get attachRecordVideo;
+
+  /// PARENT-017: shown when recording a video was refused the camera or the microphone.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.'**
+  String get videoRecordPermissionDenied;
+
+  /// PARENT-017: the button on a sending video that stops its upload and takes the message back.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sending'**
+  String get cancelUpload;
+
+  /// PARENT-017: how far a video's upload has gone. A percentage, not a count: a String, so no plural form applies.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending… {percent}%'**
+  String uploadingPercent(String percent);
+
   /// Stands in for a photo where a message has no text.
   ///
   /// In en, this message translates to:
@@ -8436,6 +8466,162 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Draft:'**
   String get chatDraftLabel;
+
+  /// PD-55: a praise stamp (general praise only).
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get rewardPraiseExcellent;
+
+  /// No description provided for @rewardPraiseWellDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Well done'**
+  String get rewardPraiseWellDone;
+
+  /// No description provided for @rewardPraiseGreat.
+  ///
+  /// In en, this message translates to:
+  /// **'Great'**
+  String get rewardPraiseGreat;
+
+  /// No description provided for @rewardPraiseChampion.
+  ///
+  /// In en, this message translates to:
+  /// **'Champion'**
+  String get rewardPraiseChampion;
+
+  /// PD-55: the teacher's reward tray on the whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards'**
+  String get rewardTrayTitle;
+
+  /// No description provided for @rewardTrayFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For'**
+  String get rewardTrayFor;
+
+  /// No description provided for @rewardTrayEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get rewardTrayEveryone;
+
+  /// No description provided for @rewardTrayNoLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards count during a lesson. Now they decorate the board only.'**
+  String get rewardTrayNoLesson;
+
+  /// No description provided for @rewardTrayStar.
+  ///
+  /// In en, this message translates to:
+  /// **'Star'**
+  String get rewardTrayStar;
+
+  /// No description provided for @rewardTrayStickers.
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers'**
+  String get rewardTrayStickers;
+
+  /// No description provided for @rewardTrayPraise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise'**
+  String get rewardTrayPraise;
+
+  /// No description provided for @rewardTrayOwnWords.
+  ///
+  /// In en, this message translates to:
+  /// **'My own words…'**
+  String get rewardTrayOwnWords;
+
+  /// No description provided for @rewardTrayCelebrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Celebrate'**
+  String get rewardTrayCelebrate;
+
+  /// No description provided for @rewardTrayUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get rewardTrayUndo;
+
+  /// No description provided for @rewardTraySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Reward given'**
+  String get rewardTraySent;
+
+  /// No description provided for @rewardTrayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The reward was not recorded. It is still on the board.'**
+  String get rewardTrayFailed;
+
+  /// PD-55: the family's celebration line.
+  ///
+  /// In en, this message translates to:
+  /// **'Your teacher is celebrating you!'**
+  String get rewardCelebrationLine;
+
+  /// PD-55: Settings switch for the celebration chime.
+  ///
+  /// In en, this message translates to:
+  /// **'Reward sounds'**
+  String get rewardSoundTitle;
+
+  /// No description provided for @rewardSoundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A short chime when a teacher celebrates your child.'**
+  String get rewardSoundSubtitle;
+
+  /// PD-55: the family's line for a star, sticker or praise.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}'**
+  String rewardStarLine(int count);
+
+  /// PD-55: the first badge in a lesson -- named for effort, never a rank.
+  ///
+  /// In en, this message translates to:
+  /// **'Great effort'**
+  String get rewardBadgeBronze;
+
+  /// No description provided for @rewardBadgeSilver.
+  ///
+  /// In en, this message translates to:
+  /// **'Amazing effort'**
+  String get rewardBadgeSilver;
+
+  /// No description provided for @rewardBadgeGold.
+  ///
+  /// In en, this message translates to:
+  /// **'Superstar'**
+  String get rewardBadgeGold;
+
+  /// PD-55: progress toward the next badge.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more star for {badge}} other{{count} more stars for {badge}}}'**
+  String rewardToNextBadge(int count, String badge);
+
+  /// No description provided for @rewardBadgeEarned.
+  ///
+  /// In en, this message translates to:
+  /// **'Badge: {badge}'**
+  String rewardBadgeEarned(String badge);
+
+  /// PD-55: the lesson report card's rewards row.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 star} other{{count} stars}}'**
+  String rewardReportStars(int count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

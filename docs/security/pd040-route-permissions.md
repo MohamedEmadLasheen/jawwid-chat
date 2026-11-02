@@ -10,12 +10,10 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-566 routes.
+567 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
-| GET | `/api/v1/account-deletion` | public | `account-deletion/account-deletion.controller.ts#AccountDeletionPageController.page` |
-| POST | `/api/v1/account-deletion` | public | `account-deletion/account-deletion.controller.ts#AccountDeletionPageController.submit` |
 | GET | `/api/v1/admin/access-roles` | staff_accounts.view | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.roles` |
 | POST | `/api/v1/admin/access-roles` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.define` |
 | POST | `/api/v1/admin/access-roles/:roleId` | access_roles.manage | `staff-accounts/staff-accounts.controller.ts#AccessRolesController.update` |
@@ -234,6 +232,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/learners/:id/transfer` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.transfer` |
 | GET | `/api/v1/learners/:id/transfer-preview` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transferPreview` |
 | GET | `/api/v1/learners/:id/transfers` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transfers` |
+| POST | `/api/v1/learners/:learnerId/rewards` | not for staff | `rewards/reward.controller.ts#RewardController.give` |
+| POST | `/api/v1/learners/:learnerId/rewards/:eventId/undo` | not for staff | `rewards/reward.controller.ts#RewardController.undo` |
 | GET | `/api/v1/lesson-audio/:lesson` | self-service | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.learner` |
 | GET | `/api/v1/lesson-audio/access` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.access` |
 | POST | `/api/v1/lesson-audio/clips/:clipId/approve` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.approve` |
@@ -271,6 +271,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/lessons/:id/report/edit` | lessons.manage | `lessons/journey.controller.ts#JourneyController.editReport` |
 | POST | `/api/v1/lessons/:id/teacher-apology` | lessons.manage | `lessons/lesson.controller.ts#LessonController.teacherApology` |
 | POST | `/api/v1/lessons/:id/teacher-no-show` | lessons.manage | `lessons/lesson.controller.ts#LessonController.teacherNoShow` |
+| GET | `/api/v1/lessons/:lessonId/rewards` | lessons.view | `rewards/reward.controller.ts#RewardController.forLesson` |
 | GET | `/api/v1/lessons/access` | self-service | `lessons/stats.controller.ts#StatsController.access` |
 | POST | `/api/v1/lessons/blocked/:id/dismiss` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.dismissBlocked` |
 | POST | `/api/v1/lessons/blocked/:id/schedule` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.scheduleBlocked` |
@@ -296,7 +297,6 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/materials/quran/surahs` | self-service | `materials/materials.controller.ts#MaterialsController.surahs` |
 | POST | `/api/v1/materials/recitations/:surah/open` | materials.view | `materials/materials.controller.ts#MaterialsController.openRecitation` |
 | GET | `/api/v1/me` | self-service | `platform/auth/auth.controller.ts#MeController.me` |
-| POST | `/api/v1/me/account/delete` | self-service | `account-deletion/account-deletion.controller.ts#AccountDeletionController.delete` |
 | DELETE | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.remove` |
 | POST | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.commit` |
 | POST | `/api/v1/me/avatar/upload` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.upload` |
@@ -509,6 +509,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teacher-records/testimonials` | teacher_supervision.view | teacher_grants.view | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.testimonials` |
 | GET | `/api/v1/teacher-supervision/directory` | teacher_supervision.view | teacher_attendance.view | teacher_grants.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.directory` |
 | GET | `/api/v1/teacher-supervision/teachers/:teacherId/held-lessons` | teacher_supervision.view | teacher_attendance.view | teacher_grants.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.heldLessons` |
+| GET | `/api/v1/teacher/rewards/now` | not for staff | `rewards/reward.controller.ts#RewardController.now` |
 | POST | `/api/v1/teachers` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.add` |
 | POST | `/api/v1/teachers/:id/absences` | teacher_supervision.record | teacher_attendance.record | `discipline/discipline.controller.ts#DisciplineController.absence` |
 | GET | `/api/v1/teachers/:id/availability` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.availability` |

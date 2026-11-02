@@ -831,6 +831,24 @@ class L10nEn extends L10n {
   String get attachFile => 'File';
 
   @override
+  String get attachVideo => 'Video';
+
+  @override
+  String get attachRecordVideo => 'Record video';
+
+  @override
+  String get videoRecordPermissionDenied =>
+      'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.';
+
+  @override
+  String get cancelUpload => 'Cancel sending';
+
+  @override
+  String uploadingPercent(String percent) {
+    return 'Sending… $percent%';
+  }
+
+  @override
   String get attachmentPhotoLabel => 'Photo';
 
   @override
@@ -4887,4 +4905,111 @@ class L10nEn extends L10n {
 
   @override
   String get chatDraftLabel => 'Draft:';
+
+  @override
+  String get rewardPraiseExcellent => 'Excellent';
+
+  @override
+  String get rewardPraiseWellDone => 'Well done';
+
+  @override
+  String get rewardPraiseGreat => 'Great';
+
+  @override
+  String get rewardPraiseChampion => 'Champion';
+
+  @override
+  String get rewardTrayTitle => 'Rewards';
+
+  @override
+  String get rewardTrayFor => 'For';
+
+  @override
+  String get rewardTrayEveryone => 'Everyone';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'Rewards count during a lesson. Now they decorate the board only.';
+
+  @override
+  String get rewardTrayStar => 'Star';
+
+  @override
+  String get rewardTrayStickers => 'Stickers';
+
+  @override
+  String get rewardTrayPraise => 'Praise';
+
+  @override
+  String get rewardTrayOwnWords => 'My own words…';
+
+  @override
+  String get rewardTrayCelebrate => 'Celebrate';
+
+  @override
+  String get rewardTrayUndo => 'Undo';
+
+  @override
+  String get rewardTraySent => 'Reward given';
+
+  @override
+  String get rewardTrayFailed =>
+      'The reward was not recorded. It is still on the board.';
+
+  @override
+  String get rewardCelebrationLine => 'Your teacher is celebrating you!';
+
+  @override
+  String get rewardSoundTitle => 'Reward sounds';
+
+  @override
+  String get rewardSoundSubtitle =>
+      'A short chime when a teacher celebrates your child.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'A star! $count stars this lesson',
+      one: 'A star! 1 star this lesson',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rewardBadgeBronze => 'Great effort';
+
+  @override
+  String get rewardBadgeSilver => 'Amazing effort';
+
+  @override
+  String get rewardBadgeGold => 'Superstar';
+
+  @override
+  String rewardToNextBadge(int count, String badge) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more stars for $badge',
+      one: '1 more star for $badge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rewardBadgeEarned(String badge) {
+    return 'Badge: $badge';
+  }
+
+  @override
+  String rewardReportStars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stars',
+      one: '1 star',
+    );
+    return '$_temp0';
+  }
 }

@@ -431,6 +431,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       picked = switch (source) {
         AttachmentSource.camera => await picker.captureImage(),
         AttachmentSource.photo => await picker.pickImage(),
+        AttachmentSource.video => await picker.pickVideo(),
+        AttachmentSource.recordVideo => await picker.recordVideo(),
         AttachmentSource.file => await picker.pickFile(),
       };
     } on MediaPickException catch (failure) {
@@ -498,12 +500,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   void _sayPickFailed(MediaPickFailure reason, AttachmentSource source) {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final isCamera = source == AttachmentSource.camera;
+    final isCamera = source == AttachmentSource.camera || source == AttachmentSource.recordVideo;
 
     final text = switch (reason) {
-      MediaPickFailure.permissionDenied => isCamera
-          ? l10n.cameraPermissionDenied
-          : l10n.attachmentPermissionDenied,
+      // Recording a video needs the camera AND the microphone: name both.
+      MediaPickFailure.permissionDenied => source == AttachmentSource.recordVideo
+          ? l10n.videoRecordPermissionDenied
+          : isCamera
+              ? l10n.cameraPermissionDenied
+              : l10n.attachmentPermissionDenied,
       MediaPickFailure.tooLarge => l10n.attachmentTooLarge,
       MediaPickFailure.typeNotAllowed => l10n.attachmentTypeNotAllowed,
       MediaPickFailure.unsupported =>
@@ -1460,6 +1465,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                             _guard(() => controller.toggleReaction(message, emoji)),
                     onOpenAttachment: (attachment) =>
                         _openAttachment(message, attachment),
+                    // PARENT-017: a sending video shows how far it is, and can be taken back.
+                    uploadProgress: state.uploadProgress[message.clientMessageId],
+                    onCancelUpload: message.isPending && message.id == null
+                        ? () => controller.cancelUpload(message.clientMessageId)
+                        : null,
                   ),
                 ),
               ],

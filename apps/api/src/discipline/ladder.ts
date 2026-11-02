@@ -45,12 +45,22 @@ export interface CountedViolation {
   /** The month it counts in, YYYY-MM-01. */
   month: string;
   decision: string | null;
+  /** TEACHER-013: the step a DECIDED violation was decided at (teacher_violation.suggested_step). */
+  decidedStep?: number | null;
 }
 
 /**
- * The step each violation stands at: 1 + the counted (not excused) violations
- * of the SAME TEACHER in the same month before it, ordered by when they happened
- * (then by id, so two at the same moment are still ordered). Capped at 5.
+ * The step each violation stands at, in the same teacher's month (capped at 5).
+ *
+ * TEACHER-013 (department head, 2026-11-02): a decided violation keeps the step
+ * it was decided at -- its warning was given, its deduction may be in payroll,
+ * and a violation recorded later (even one that happened earlier) never
+ * rewrites it. An undecided violation's step follows the month's decided,
+ * counted ones: 1 + those + the undecided ones that happened before it (then by
+ * id, so two at the same moment are still ordered). So a lateness back-dated
+ * before a decided warning is suggested at the next step, never a second step 1:
+ * no step is lost or repeated, and the month's count (counted + 1 = the next
+ * step) agrees with every row. Excused violations are kept, never counted.
  */
 export function stepsOf(violations: readonly CountedViolation[]): Map<string, number> {
   const out = new Map<string, number>();
@@ -59,12 +69,18 @@ export function stepsOf(violations: readonly CountedViolation[]): Map<string, nu
     const key = `${v.teacherId}|${v.month}`;
     byTeacherMonth.set(key, [...(byTeacherMonth.get(key) ?? []), v]);
   }
+  const byTime = (a: CountedViolation, b: CountedViolation) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.id.localeCompare(b.id);
   for (const list of byTeacherMonth.values()) {
-    const ordered = [...list].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.id.localeCompare(b.id));
+    const decided = list.filter((v) => v.decision !== null).sort(byTime);
+    // A decided one without a stored step (older rows) is ranked as before, among the decided.
     let counted = 0;
-    for (const v of ordered) {
-      out.set(v.id, Math.min(counted + 1, LADDER.length));
+    for (const v of decided) {
+      out.set(v.id, Math.min(v.decidedStep ?? counted + 1, LADDER.length));
       if (v.decision !== Decision.EXCUSED) counted += 1;
+    }
+    for (const v of list.filter((x) => x.decision === null).sort(byTime)) {
+      out.set(v.id, Math.min(counted + 1, LADDER.length));
+      counted += 1;
     }
   }
   return out;
