@@ -223,6 +223,17 @@ describe('text', () => {
     expect(dots[0]!.args.slice(0, 3)).toEqual([32, 32, 2.2])
   })
 
+  it('PD-55: a tall page is read as tall and drawn 1080 x 1920; a page without a shape is wide', () => {
+    const tall = parsePage({ layout: 'dotted', background: 'white', shape: 'tall', document: { v: 1, elements: [] } })
+    expect(tall.shape).toBe('tall')
+    const { ctx, calls } = recorder()
+    drawPage(ctx, tall, { verse: () => ({ status: 'loading' }), label })
+    expect(calls.find((c) => c.op === 'fillRect')!.args).toEqual([0, 0, 1080, 1920])
+    expect(calls.filter((c) => c.op === 'arc').length).toBe(Math.floor((1080 - 1) / 32) * Math.floor((1920 - 1) / 32))
+    expect(parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [] } }).shape).toBe('wide')
+    expect(parsePage({ layout: 'plain', background: 'white', shape: 'hexagon', document: { v: 1, elements: [] } }).shape).toBe('wide')
+  })
+
   it('PD-39: a text without the PD-55 fields is drawn as before: regular weight, never turned', () => {
     const plain = parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [{ id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, w: 100, h: 60, size: 40, color: '#1b1b1b' }] } })
     const { ctx, calls } = recorder()

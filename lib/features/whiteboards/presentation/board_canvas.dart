@@ -288,10 +288,11 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
 
   // -- geometry ----------------------------------------------------------------
 
-  double get _fit => math.min(_viewport.width / kBoardPageSize.width, _viewport.height / kBoardPageSize.height) * 0.96;
+  /// The page in page units: wide 1920 x 1080 or tall 1080 x 1920 (PD-55).
+  Size get _page => widget.page.size;
+  double get _fit => math.min(_viewport.width / _page.width, _viewport.height / _page.height) * 0.96;
   double get _scale => _fit * _view.zoom;
-  Offset get _origin =>
-      Offset(_viewport.width / 2, _viewport.height / 2) + _view.pan - Offset(kBoardPageSize.width, kBoardPageSize.height) * _scale / 2;
+  Offset get _origin => Offset(_viewport.width / 2, _viewport.height / 2) + _view.pan - Offset(_page.width, _page.height) * _scale / 2;
 
   Offset _toPage(Offset screen) => (screen - _origin) / _scale;
 
@@ -459,7 +460,7 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
       kind == PointerDeviceKind.stylus || kind == PointerDeviceKind.invertedStylus ? p.clamp(0.05, 1.0) : 0.5;
 
   void _begin(BoardTool tool, Offset p, double pressure, PointerDeviceKind kind) {
-    final at = BoardGeometry.clampToPage(p);
+    final at = BoardGeometry.clampToPage(p, _page);
     setState(() {
       _start = at;
       _current = at;
@@ -495,7 +496,7 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
   }
 
   void _update(BoardTool tool, Offset p, double pressure, PointerDeviceKind kind) {
-    final at = BoardGeometry.clampToPage(p);
+    final at = BoardGeometry.clampToPage(p, _page);
     switch (_drag) {
       case _Drag.draw:
         _live.add(StrokePoint(at.dx, at.dy, _pressure(pressure, kind)));
@@ -896,9 +897,19 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
     final offset = Offset(24.0 * _pasteCount, 24.0 * _pasteCount);
     // A copy is the element's own JSON under a new id: a verse stays a
     // reference, an image names the same asset, an unknown kind is kept as it came.
-    final pasted = [for (final e in _clipboard) BoardElement.fromJson({...e.toJson(), 'id': _newId()}).translated(offset)];
+    var pasted = [for (final e in _clipboard) BoardElement.fromJson({...e.toJson(), 'id': _newId()}).translated(offset)];
+    // PD-55: copied from a page of another shape, it may land off this one: moved back on.
+    final back = _backOnPage(pasted.map((e) => e.bounds).reduce((a, b) => a.expandToInclude(b)));
+    if (back != Offset.zero) pasted = [for (final e in pasted) e.translated(back)];
     widget.onCommit([...widget.page.elements, ...pasted]);
     setState(() => _selected = {for (final e in pasted) e.id});
+  }
+
+  /// How far to move [bounds] so it lies on this page: as far onto it as fits,
+  /// its top-left corner first when it is larger than the page.
+  Offset _backOnPage(Rect bounds) {
+    double shift(double lo, double hi, double max) => hi > max ? math.max(max - hi, -lo) : (lo < 0 ? -lo : 0);
+    return Offset(shift(bounds.left, bounds.right, _page.width), shift(bounds.top, bounds.bottom, _page.height));
   }
 
   /// Removes the selection: one undo step.
@@ -984,7 +995,7 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
               child: ListenableBuilder(
                 listenable: _view,
                 builder: (context, _) {
-                  final pageSize = kBoardPageSize * _scale;
+                  final pageSize = _page * _scale;
                   // The page sits where the pointer maths puts it: physical screen
                   // coordinates, and paper that is never mirrored for a
                   // right-to-left app.
@@ -1011,6 +1022,7 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
                                   imagesVersion: widget.imagesVersion,
                                 ),
                                 foregroundPainter: _OverlayPainter(
+                                  page: _page,
                                   live: _drag == _Drag.draw && _live.isNotEmpty
                                       ? InkElement(
                                           id: 'live',
@@ -1329,6 +1341,7 @@ class _SelectionActions extends StatelessWidget {
 /// dragged, the marquee and the selection.
 class _OverlayPainter extends CustomPainter {
   _OverlayPainter({
+    required this.page,
     this.live,
     required this.liveRevision,
     this.preview,
@@ -1342,6 +1355,9 @@ class _OverlayPainter extends CustomPainter {
     this.eraserRing,
     this.laser,
   });
+
+  /// The page in page units (PD-55: wide or tall).
+  final Size page;
 
   final InkElement? live;
   final int liveRevision;
@@ -1365,13 +1381,13 @@ class _OverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
-    canvas.scale(size.width / kBoardPageSize.width, size.height / kBoardPageSize.height);
+    canvas.scale(size.width / page.width, size.height / page.height);
     if (live != null) paintInk(canvas, live!);
     if (preview != null) paintElement(canvas, preview!);
     final outline = Paint()
       ..color = BoardPalette.selection
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 * kBoardPageSize.width / size.width;
+      ..strokeWidth = 2 * page.width / size.width;
     if (marquee != null) {
       canvas.drawRect(marquee!, Paint()..color = BoardPalette.selection.withValues(alpha: 0.08));
       canvas.drawRect(marquee!, outline);
@@ -1384,7 +1400,7 @@ class _OverlayPainter extends CustomPainter {
     }
     final trail = laser;
     if (trail != null && trail.isNotEmpty) {
-      final scale = kBoardPageSize.width / size.width;
+      final scale = page.width / size.width;
       for (var i = 1; i < trail.length; i++) {
         final (a, _) = trail[i - 1];
         final (b, life) = trail[i];
@@ -1423,6 +1439,7 @@ class _OverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_OverlayPainter old) =>
+      old.page != page ||
       old.liveRevision != liveRevision ||
       old.preview != preview ||
       old.marquee != marquee ||

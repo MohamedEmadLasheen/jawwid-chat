@@ -8131,6 +8131,18 @@ abstract class L10n {
   /// **'Next page'**
   String get boardNextPage;
 
+  /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
+  ///
+  /// In en, this message translates to:
+  /// **'Wide page'**
+  String get boardWidePage;
+
+  /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
+  ///
+  /// In en, this message translates to:
+  /// **'Tall page'**
+  String get boardTallPage;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:

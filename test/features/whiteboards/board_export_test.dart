@@ -113,6 +113,13 @@ void main() {
     expect(sniffBoardImage(png), 'image/png');
   });
 
+  test('PD-55: a tall page is drawn upright, 1080 x 1920 -- the frame the server accepts for it', () async {
+    const tall = BoardPage(id: 'p1', position: 0, layout: PageLayout.dotted, background: PageBackground.white, shape: PageShape.tall, elements: [_shape]);
+    final png = await renderPagePng(tall, const PageInk());
+    final frame = (await (await ui.instantiateImageCodec(png)).getNextFrame()).image;
+    expect([frame.width, frame.height], [1080, 1920]);
+  });
+
   test('the file is named after the board, safely', () {
     expect(exportName('Al-Fatihah: week 2/3', 'pdf'), 'Al-Fatihah week 2 3.pdf');
     expect(exportName('   ', 'png'), 'board.png');

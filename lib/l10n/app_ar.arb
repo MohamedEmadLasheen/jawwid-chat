@@ -1823,6 +1823,8 @@
   "boardHideTools": "إخفاء الأدوات",
   "boardPreviousPage": "الصفحة السابقة",
   "boardNextPage": "الصفحة التالية",
+  "boardWidePage": "صفحة عريضة",
+  "boardTallPage": "صفحة طولية",
   "boardZoomFit": "ملاءمة الصفحة",
   "boardDeleteSelection": "حذف المحدد",
   "boardCopy": "نسخ",
