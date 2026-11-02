@@ -123,13 +123,16 @@ export class LeaveService {
         });
         const conv = await this.supervision.ensureInTx(tx, actor.actorId, actor.organizationId as string, null);
         const balance = await this.balanceOf(tx, actor.actorId, Number(firstDay.slice(0, 4)));
+        const days = daysBetween(firstDay, lastDay).length;
         const payload = {
           leaveRequestId: row.id,
           firstDay,
           lastDay,
-          days: daysBetween(firstDay, lastDay).length,
+          days,
           reason,
           balance: balance.balance,
+          // TEACHER-005: the warning, to the teacher and the approver alike (both read this card).
+          unpaidDays: unpaidFor(balance.balance, days),
         };
         const messageId = await this.cards.post(tx, conv, actor, {
           kind: CardKind.LEAVE_REQUESTED,
@@ -368,8 +371,12 @@ export class LeaveService {
           data: { state: LeaveState.APPROVED, decidedBy: actor.actorId, decisionNote: note },
         });
         const alreadyOff = new Set(await this.daysAlreadyOff(tx, row.teacherId, chosen));
-        const toWrite = chosen.filter((d) => !alreadyOff.has(d));
-        for (const day of toWrite) {
+        const toWrite = chosen.filter((d) => !alreadyOff.has(d)).sort();
+        // TEACHER-005: the days fill what the balance has left, in date order;
+        // the rest are unpaid leave. No allowance: nothing to exceed.
+        const before = (await this.balanceOf(tx, row.teacherId, year)).balance;
+        const covered = before === null ? toWrite.length : Math.max(0, before);
+        for (const [i, day] of toWrite.entries()) {
           await tx.teacherDayOff.create({
             data: {
               organizationId: row.organizationId,
@@ -378,17 +385,22 @@ export class LeaveService {
               reason: `Leave: ${row.reason}`.slice(0, 500),
               createdBy: actor.actorId,
               leaveRequestId: row.id,
+              unpaid: i >= covered,
             },
           });
         }
+        const unpaidDays = Math.max(0, toWrite.length - covered);
         const balance = await this.balanceOf(tx, row.teacherId, year);
-        await this.postToTeacher(tx, row, actor, CardKind.LEAVE_APPROVED, { days: toWrite.length, balance: balance.balance, note }, teacher);
+        await this.postToTeacher(
+          tx, row, actor, CardKind.LEAVE_APPROVED,
+          { days: toWrite.length - unpaidDays, unpaidDays, balance: balance.balance, note }, teacher,
+        );
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'teacher_leave.approved',
           entity: 'teacher_leave_request',
           entityId: row.id,
-          after: { days: toWrite, collidingLessons: colliding.map((l) => l.id) },
+          after: { days: toWrite, unpaidDays: toWrite.slice(covered), collidingLessons: colliding.map((l) => l.id) },
           reason: note ?? 'leave approved',
         });
       }),
@@ -488,10 +500,12 @@ export class LeaveService {
         (SELECT count(*)::int FROM chat.teacher_day_off o
           WHERE o.teacher_id = ${teacherId}::uuid
             AND o.suspension_id IS NULL -- a suspension is not leave (PD-12 S2)
+            AND NOT o.unpaid            -- TEACHER-005: unpaid leave is not drawn from the allowance
             AND extract(year FROM o.day) = ${year}) AS used`;
     const allowance = rows[0]?.allowance ?? null;
     const used = rows[0]?.used ?? 0;
-    return { year, allowance, used, balance: allowance === null ? null : allowance - used };
+    // Never below 0 (owner, TEACHER-005): an allowance lowered after the fact reads as used up, not owed.
+    return { year, allowance, used, balance: allowance === null ? null : Math.max(0, allowance - used) };
   }
 
   // ------------------------------------------------------------------
@@ -585,6 +599,9 @@ export class LeaveService {
         endedAt: r.endedAt?.toISOString() ?? null,
         // For the approver: what approving would do, computed now.
         balance: withCollisions && open && whole ? (await this.balanceOf(this.prisma, r.teacherId, year)).balance : undefined,
+        // TEACHER-005: the days beyond the allowance -- projected while open, recorded once approved.
+        // It speaks of the balance, so it is shown where the balance is (the teacher; the Teachers department).
+        unpaidDays: whole ? await this.unpaidDaysOf(r, open, year) : undefined,
         collidingLessons:
           withCollisions && open
             ? (await this.collidingLessons(r.teacherId, firstDay, lastDay, tz)).map((l) => ({
@@ -596,6 +613,11 @@ export class LeaveService {
       });
     }
     return out;
+  }
+
+  private async unpaidDaysOf(r: TeacherLeaveRequest, open: boolean, year: number): Promise<number | null> {
+    if (open) return unpaidFor((await this.balanceOf(this.prisma, r.teacherId, year)).balance, daysBetween(isoDate(r.firstDay), isoDate(r.lastDay)).length);
+    return this.prisma.teacherDayOff.count({ where: { leaveRequestId: r.id, unpaid: true } });
   }
 
   private async staffNames(ids: string[]): Promise<Map<string, string>> {
@@ -748,4 +770,9 @@ function requestsWhere(actor: Actor, scope: TeacherScope, state?: string): Prism
 
 function leaveDenied(): CommError {
   return new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
+}
+
+/** TEACHER-005: how many of `days` leave days the balance does not cover; null while no allowance is set. */
+export function unpaidFor(balance: number | null, days: number): number | null {
+  return balance === null ? null : Math.max(0, days - Math.max(0, balance));
 }
