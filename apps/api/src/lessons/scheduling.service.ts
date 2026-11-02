@@ -1295,12 +1295,24 @@ export class SchedulingService {
       RETURNING id::text AS id`;
     const slotIds = [...ended.map((e) => e.id), ...endedSlotIds];
     if (slotIds.length > 0) {
+      // CHATSCHED-009: a lesson whose exact instant a new weekly time keeps (same
+      // weekday, start and length on the new clock) is NOT closed and re-created:
+      // a change of teacher that keeps the times left a closed "rescheduled"
+      // twin beside every weekly lesson. It stays, open, as the same lesson;
+      // the materializer will not create it twice (chat.skip_moved_occurrence).
       const moved = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT l.id::text AS id FROM chat.lesson l
          WHERE l.schedule_slot_id = ANY(${slotIds}::uuid[])
            AND l.outcome IS NULL
            AND l.starts_at > now()
-           AND l.starts_at >= (${from}::date::timestamp AT TIME ZONE ${timezone})`;
+           AND l.starts_at >= (${from}::date::timestamp AT TIME ZONE ${timezone})
+           AND NOT EXISTS (
+             SELECT 1 FROM unnest(${slots.map((x) => x.weekday)}::int[], ${slots.map((x) => x.startMinute)}::int[],
+                                  ${slots.map((x) => x.durationMinutes)}::int[]) AS k(weekday, start_minute, duration_minutes)
+              WHERE extract(isodow FROM l.starts_at AT TIME ZONE ${timezone}) = k.weekday
+                AND extract(hour FROM l.starts_at AT TIME ZONE ${timezone}) * 60
+                    + extract(minute FROM l.starts_at AT TIME ZONE ${timezone}) = k.start_minute
+                AND l.ends_at - l.starts_at = make_interval(mins => k.duration_minutes))`;
       if (moved.length > 0) {
         await this.lessons.writer.updateMany(tx, 'moved', { id: { in: moved.map((m) => m.id) } }, {
           outcome: LessonOutcome.RESCHEDULED,
