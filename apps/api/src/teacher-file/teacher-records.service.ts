@@ -75,6 +75,7 @@ export class TeacherRecordsService {
     const praise = await this.feedback.praise(actor, page, { teacherId, ...range });
 
     const names = await this.names(staffRows, [...voids.values()]);
+    const mayCorrect = access.grants.record ? await this.mayVoidTestimonials(actor, staffRows) : new Set<string | null>();
     const staff = staffRows
       .map((r) => ({
         id: r.id,
@@ -91,6 +92,8 @@ export class TeacherRecordsService {
         status: null,
         response: null,
         voided: voids.has(r.id) ? brief(voids.get(r.id) as Entry, names.staff) : null,
+        // Review of #377: offer Correct only where chat.may_void_testimonial would allow it.
+        canCorrect: !voids.has(r.id) && mayCorrect.has(r.createdBy),
       }))
       .filter((t) => query.voided === 'include' || t.voided === null);
     const parents = praise.map((f) => ({
@@ -108,6 +111,7 @@ export class TeacherRecordsService {
       status: f.status,
       response: f.response,
       voided: null,
+      canCorrect: false,
     }));
     const testimonials = [...staff, ...parents].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id));
     return { canRecord: access.grants.record, testimonials };
@@ -409,6 +413,20 @@ export class TeacherRecordsService {
       return pageRowVisible(page, row.teacherId, complaintAbout(row, await familiesOfComplaints(this.prisma, [row])));
     }
     return pageRowVisible(page, row.teacherId, aboutOf(row));
+  }
+
+  /**
+   * The authors whose testimonials the caller may correct: the database's own
+   * chat.may_void_testimonial (the recording department, the Operations
+   * Manager, the super admin), asked once per distinct author.
+   */
+  private async mayVoidTestimonials(actor: Actor, rows: Array<{ createdBy: string | null }>): Promise<Set<string | null>> {
+    const authors = [...new Set(rows.map((r) => r.createdBy).filter((x): x is string => x !== null))];
+    if (authors.length === 0 || !actor.organizationId) return new Set();
+    const ok = await this.prisma.$queryRaw<Array<{ author: string }>>`
+      SELECT a::text AS author FROM unnest(${authors}::uuid[]) a
+       WHERE chat.may_void_testimonial(${actor.actorId}::uuid, a, ${actor.organizationId}::uuid)`;
+    return new Set(ok.map((r) => r.author));
   }
 
   private async voidsOf(ids: string[]): Promise<Map<string, Entry>> {

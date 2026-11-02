@@ -488,6 +488,12 @@ describe('PD-52, review of #374', () => {
     const t = await records.recordTestimonial(tsupId, s.teacherId, { body: 'Kind words.', source: 'staff_observation' });
     // admin_a holds grants.record (Operations) and sees the row, but did not record it.
     expect(await code(records.voidEntry(s.ownerId, t.id, { reason: 'x' }))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    // Review of #377: the list offers Correct exactly where the database allows it.
+    const canCorrect = async (who: string) => (await records.testimonials(who, {})).testimonials.find((x) => x.id === t.id)?.canCorrect;
+    expect(await canCorrect(s.ownerId)).toBe(false);
+    expect(await canCorrect(tsupId)).toBe(true);
+    expect(await canCorrect(s.managerId)).toBe(true);
+    expect(await canCorrect(superId)).toBe(true);
     await expect(
       g.prisma.$executeRawUnsafe(
         `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, refers_to, created_by)

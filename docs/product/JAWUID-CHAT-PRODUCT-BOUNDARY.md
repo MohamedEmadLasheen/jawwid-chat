@@ -3654,6 +3654,84 @@ and `/dashboard/cases`.
 
 ---
 
+### PD-52 · Teacher records in two pages: Attendance & complaints, Grants & testimonials
+
+**Closed 2026-11-02**, after the product owner approved the plan's
+recommendations a–g on 2026-10-31. Plan: `pd052-teacher-records-pages-plan.md`.
+Admin guide: `../admin/pd052-teacher-records.md`.
+
+**Decision.** PD-26's Teacher Supervision page is split into two Admin Portal
+pages:
+
+- **Attendance & complaints:** leave, lateness, excuses and absences, and
+  complaints, with parents' suggestions behind a filter.
+- **Grants & testimonials:** grants, the parents' praise and the staff's
+  testimonials.
+
+Operations, the Teachers department and Sales work on them, each by its own
+basis. Parents' complaints and praise arrive automatically, and staff can add
+entries by hand.
+
+**Canonical rule.**
+
+- **One source per record.**
+  - A parent's praise is read in place from `chat.parent_feedback`, never
+    copied.
+  - A staff testimonial is a `testimonial` row in
+    `chat.teacher_supervision_entry`.
+  - A mistake is corrected by an `entry_void` row with a reason, once. The
+    table stays append-only.
+- **Scope is the service's and the database's, never the client's.** Pages
+  offer what `GET /teacher-records/access` returns.
+  - The Teachers department works in its PD-35 scope.
+  - Operations works on its own families' rows (PD-26 amendment).
+  - Sales works on its trials and owned families, records but never decides,
+    and sees no teacher-level rows.
+  - An out-of-scope row answers 404.
+- **A testimonial is corrected** by the department that recorded it, the
+  Operations Manager or the super admin (`chat.may_void_testimonial`). The page
+  offers Correct only there.
+- **The teacher is never told** of a complaint or praise. The only exception
+  is when staff deliberately share a praise: one card in the teacher's
+  supervision chat, with the child's first name and the parent's words, never
+  the parent's name.
+
+**Implementation phase.** Ten PRs (plan §9):
+
+- PR-1 #369: the keys.
+- PR-2 #374: links, testimonials, voids, the strip.
+- PR-3 #376 and PR-4 #377: the two pages.
+- PR-5 #383: the Sales basis.
+- PR-6 #389: notifications.
+- PR-7 #391: the app's two shortcuts.
+- PR-8 #397: sharing praise.
+- PR-9: this close-out.
+
+**Consequences.**
+
+- Five PD-40 keys: `teacher_attendance.view/record/decide` and
+  `teacher_grants.view/record`, copied from the old keys' holders.
+- Two PD-34 rules: `teacher_complaint_received` and `teacher_praise_received`.
+- One card kind: `teacher_praise_shared`.
+- Old `/teachers/supervision` links redirect to the matching section.
+
+**Deprecated behaviour.**
+
+- PD-26's single Supervision page, now only a redirect.
+- `teacher_supervision.view` / `.record`, which every route still accepts for
+  one release. A later PR removes them once no role holds them, together with
+  moving `/dashboard/teachers` and dropping `GET /lessons/access.supervisionPage`.
+
+**Not changed.**
+
+- Publishing a parent's words (the teacher's profile, Stories) still needs that
+  parent's consent and is a later decision (plan §11 e).
+- Grants are corrected in PD-18 payroll, not voided.
+
+**Closed.** 2026-11-02.
+
+---
+
 ### Decisions still open after PD-1 to PD-36
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.

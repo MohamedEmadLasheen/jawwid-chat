@@ -59,6 +59,7 @@ function testimonial(over: Partial<Testimonial> = {}): Testimonial {
     status: null,
     response: null,
     voided: null,
+    canCorrect: true,
     ...over,
   }
 }
@@ -70,6 +71,7 @@ const praise = testimonial({
   author: null,
   parent: { id: 'p-1', name: 'Parent Alpha' },
   status: 'received',
+  canCorrect: false,
 })
 
 beforeEach(() => {
@@ -198,6 +200,17 @@ describe('PD-52 page B: testimonials', () => {
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Your reply' }), 'Thank you!')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send reply' }))
     await waitFor(() => expect(calls('POST', /\/pf-1\/reply$/)).toHaveLength(1))
+  })
+
+  it('offers Correct only on the testimonials the server says the caller may correct (review of #377)', async () => {
+    on('GET', /\/teacher-records\/testimonials/, () =>
+      json({ canRecord: true, testimonials: [testimonial(), testimonial({ id: 'ts-2', body: 'Recorded by Sales.', canCorrect: false })] }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials' })
+    const mine = (await screen.findByText('The parents thanked her on the phone.')).closest('li')!
+    expect(within(mine).getByRole('button', { name: 'Correct' })).toBeInTheDocument()
+    const theirs = screen.getByText('Recorded by Sales.').closest('li')!
+    expect(within(theirs).queryByRole('button', { name: 'Correct' })).not.toBeInTheDocument()
   })
 
   it('without grants.record: no Record, Correct, Take or Reply', async () => {
