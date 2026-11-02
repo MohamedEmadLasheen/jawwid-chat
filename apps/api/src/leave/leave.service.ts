@@ -234,6 +234,7 @@ export class LeaveService {
                ORDER BY a.set_at DESC, a.id DESC LIMIT 1) AS allowance,
              (SELECT count(*)::int FROM chat.teacher_day_off o
                WHERE o.teacher_id = t.id AND o.suspension_id IS NULL
+                 AND NOT o.unpaid -- TEACHER-005: as balanceOf, paid days only
                  AND extract(year FROM o.day) = ${year}) AS used,
              (SELECT count(*)::int FROM chat.teacher_leave_request r
                WHERE r.teacher_id = t.id AND r.state = 'requested') AS pending,
@@ -253,7 +254,7 @@ export class LeaveService {
         name: r.name,
         isActive: r.active,
         ...(scopeCovers(page.whole, r.id)
-          ? { allowance: r.allowance, used: r.used, balance: r.allowance === null ? null : r.allowance - r.used }
+          ? { allowance: r.allowance, used: r.used, balance: r.allowance === null ? null : Math.max(0, r.allowance - r.used) }
           : {}),
         pendingRequests: r.pending,
         away: r.away_kind && r.away_until ? { kind: r.away_kind, until: isoDate(r.away_until) } : null,
@@ -374,6 +375,9 @@ export class LeaveService {
         const toWrite = chosen.filter((d) => !alreadyOff.has(d)).sort();
         // TEACHER-005: the days fill what the balance has left, in date order;
         // the rest are unpaid leave. No allowance: nothing to exceed.
+        // Two approvals for one teacher at once must not both see the whole balance:
+        // the teacher's row orders them (#398 review).
+        await tx.$queryRaw`SELECT 1 FROM chat.teacher WHERE id = ${row.teacherId}::uuid FOR UPDATE`;
         const before = (await this.balanceOf(tx, row.teacherId, year)).balance;
         const covered = before === null ? toWrite.length : Math.max(0, before);
         for (const [i, day] of toWrite.entries()) {
@@ -463,28 +467,32 @@ export class LeaveService {
     const teacher = await this.conversations.requireActor(row.teacherId);
     const today = todayIn(await this.timeZone());
     let returned = 0;
+    let unpaidCancelled = 0;
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         await tx.teacherLeaveRequest.update({
           where: { id: row.id },
           data: { state: LeaveState.CANCELLED, endedBy: actor.actorId, endedAt: new Date() },
         });
+        // TEACHER-005: of the days given back, the paid ones return to the balance;
+        // the unpaid ones are simply no longer leave. Reported apart (#398 review).
+        unpaidCancelled = await tx.teacherDayOff.count({ where: { leaveRequestId: row.id, day: { gte: asDate(today) }, unpaid: true } });
         const removed = await tx.teacherDayOff.deleteMany({
           where: { leaveRequestId: row.id, day: { gte: asDate(today) } },
         });
-        returned = removed.count;
-        await this.postToTeacher(tx, row, actor, CardKind.LEAVE_CANCELLED, { daysReturned: returned, note }, teacher);
+        returned = removed.count - unpaidCancelled;
+        await this.postToTeacher(tx, row, actor, CardKind.LEAVE_CANCELLED, { daysReturned: returned, unpaidDaysCancelled: unpaidCancelled, note }, teacher);
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'teacher_leave.cancelled',
           entity: 'teacher_leave_request',
           entityId: row.id,
-          after: { daysReturned: returned },
+          after: { daysReturned: returned, unpaidDaysCancelled: unpaidCancelled },
           reason: note,
         });
       }),
     );
-    return { request: await this.dtoById(row.id, actor), daysReturned: returned };
+    return { request: await this.dtoById(row.id, actor), daysReturned: returned, unpaidDaysCancelled: unpaidCancelled };
   }
 
   // ------------------------------------------------------------------

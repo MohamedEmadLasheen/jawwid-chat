@@ -122,6 +122,9 @@ export function renderPd012CardBody(kind: string, p: Record<string, unknown>, la
       return join(
         ar ? `↩️ أُلغيت الإجازة: ${range()}` : `↩️ Leave cancelled: ${range()}`,
         line(ar ? 'أيام أُعيدت إلى الرصيد' : 'Days returned to the balance', p.daysReturned),
+        typeof p.unpaidDaysCancelled === 'number' && p.unpaidDaysCancelled > 0
+          ? line(ar ? 'أيام إجازة بدون أجر أُلغيت' : 'Unpaid leave days cancelled', p.unpaidDaysCancelled)
+          : null,
         line(ar ? 'السبب' : 'Reason', p.note),
       );
     default:

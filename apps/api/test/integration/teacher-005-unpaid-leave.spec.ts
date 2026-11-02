@@ -149,14 +149,31 @@ describe('TEACHER-005: leave beyond the allowance', () => {
     expect(await unpaidDaysOf(r.id)).toEqual([]);
   });
 
-  it('cancelled before it starts, its unpaid days go with it', async () => {
+  it('cancelled before it starts, its unpaid days go with it -- reported apart from the paid days returned (#398 review)', async () => {
     await allowance(1);
     const r = await requested('05-04', '05-06');
     await leave.approve(tsupId, r.id, {});
     expect(await unpaidDaysOf(r.id)).toHaveLength(2);
-    await leave.cancel(tsupId, r.id, { note: 'plans changed' });
+    const out = await leave.cancel(tsupId, r.id, { note: 'plans changed' });
+    expect(out).toMatchObject({ daysReturned: 1, unpaidDaysCancelled: 2 });
     expect(await unpaidDaysOf(r.id)).toEqual([]);
     expect((await balance()).balance).toBe(1);
+  });
+
+  it('the supervision overview reads the same balance: paid days only, never below 0 (#398 review)', async () => {
+    await allowance(2);
+    await leave.approve(tsupId, (await requested('03-10', '03-12')).id, {});
+    const row = (await leave.overview(tsupId, String(NEXT_YEAR))).teachers.find((t) => t.id === s.teacherId);
+    expect(row).toMatchObject({ allowance: 2, used: 2, balance: 0 });
+  });
+
+  it('two approvals for one teacher at once share the balance: it is spent once (#398 review)', async () => {
+    await allowance(2);
+    const a = await requested('06-01', '06-02');
+    const b = await requested('06-08', '06-09');
+    await Promise.all([leave.approve(tsupId, a.id, {}), leave.approve(tsupId, b.id, {})]);
+    expect((await unpaidDaysOf(a.id)).length + (await unpaidDaysOf(b.id)).length).toBe(2);
+    expect(await balance()).toMatchObject({ used: 2, balance: 0 });
   });
 
   it('payroll (PD-18) shows the month\'s unpaid leave days, and the pay is the same before and after: no formula', async () => {
