@@ -571,7 +571,7 @@ export class DisciplineService {
       try {
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
-        else await this.lessons.cancel(actorId, lesson.id, { reason });
+        else await this.lessons.cancel(actorId, lesson.id, { reason }, 'teacher_suspended');
         cancelled.push(lesson.id);
       } catch (e) {
         const why = e instanceof Error ? e.message : String(e);

@@ -75,6 +75,9 @@ export const S = {
   reason: { en: 'Reason', ar: 'السبب' },
   balanceNow: { en: 'Balance now', ar: 'الرصيد الحالي' },
   noAllowance: { en: 'No allowance set', ar: 'لم يُحدَّد رصيد' },
+  // TEACHER-005: the approver's warning, and the record once approved.
+  willBeUnpaid: { en: '{n} days will be unpaid', ar: 'سيكون {n} يوم بدون أجر' },
+  unpaidLeave: { en: 'Unpaid leave: {n} days', ar: 'إجازة بدون أجر: {n} يوم' },
   lessonsInside: { en: '{n} lesson(s) inside', ar: 'حصص داخل الإجازة: {n}' },
   noLeave: { en: 'No leave requests here.', ar: 'لا توجد طلبات إجازة هنا.' },
   approve: { en: 'Approve', ar: 'اعتماد' },

@@ -74,6 +74,10 @@ const ALLOWED: ReadonlyArray<string> = [
   // whether the admin-only Teacher File holds a phone or an e-mail. It returns
   // a boolean, never the value; server-only like the writer above.
   'exists (select 1 from chat.teacher_file f where f.teacher_id = t.id and num_nonnulls(f.phone, f.email) > 0),',
+  // PD-56 (store compliance): chat.erase_account clears the admin-only phone and
+  // e-mail when a teacher deletes their account. It only removes them: nothing
+  // is read, returned or copied.
+  'update chat.teacher_file set phone = null, email = null where teacher_id = r.id;',
 ];
 
 /** Strip comments so prose about phone privacy is not mistaken for a column. */

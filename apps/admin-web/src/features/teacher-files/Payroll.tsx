@@ -193,6 +193,9 @@ function Summary({ finance }: { finance: TeacherFinance }) {
                   {m.salaryType === 'hourly' && (
                     <span className="tf-muted tf-kpi__hint"> {tx(P.paidHours, { h: number(Math.round((m.paidMinutes / 60) * 10) / 10) })}</span>
                   )}
+                  {(m.unpaidLeaveDays ?? 0) > 0 && (
+                    <span className="tf-muted tf-kpi__hint"> {tx(P.unpaidLeave, { n: number(m.unpaidLeaveDays as number) })}</span>
+                  )}
                 </td>
                 <td>{m.currency ? money(m.bonuses, m.currency) : tx(P.none)}</td>
                 <td>{m.currency ? money(m.deductions, m.currency) : tx(P.none)}</td>

@@ -122,6 +122,35 @@ export async function backfillFamilyContactKeys(db: Db, opts: { apply: boolean; 
   return { apply: opts.apply, parents: sources.length, keys: plan.inserts.length, already: plan.already, collisions: plan.collisions, unreadable: plan.unreadable, ready };
 }
 
+/**
+ * PD-56: the keys a parent's own e-mails and phone make -- their sign-in, and
+ * the parent file's e-mail and phone -- for every contact of one account,
+ * active or not. chat.erase_account deletes exactly these, so the same e-mail
+ * signing up again starts a new family (never relinked to the old one), while
+ * another parent of the family keeps theirs. Hashes only, nothing else returned.
+ */
+export async function contactKeyHashesOfAccount(db: Pick<PrismaClient, '$queryRaw'>, accountId: string): Promise<string[]> {
+  const sources = await db.$queryRaw<ParentKeySource[]>`
+    SELECT f.id::text AS "familyId", f.organization_id::text AS "organizationId", f.country_code AS "countryCode",
+           c.id::text AS "contactId", a.subject, pf.email AS "fileEmail", pf.phone AS "filePhone"
+      FROM chat.contact c
+      JOIN chat.family f ON f.id = c.family_id
+      JOIN chat.account a ON a.id = c.account_id
+      LEFT JOIN chat.parent_file pf ON pf.contact_id = c.id
+     WHERE c.account_id = ${accountId}::uuid`;
+  const keys = new Set<string>();
+  for (const s of sources) {
+    for (const e of [s.subject, s.fileEmail]) {
+      if (e && e.trim() !== '' && !e.startsWith('erased:')) keys.add(contactKeyHash('email', normaliseEmailForKey(e)));
+    }
+    if (s.filePhone && s.filePhone.trim() !== '') {
+      const e164 = e164ForKey(s.filePhone, s.countryCode);
+      if (e164 && e164 !== 'ambiguous') keys.add(contactKeyHash('phone', e164));
+    }
+  }
+  return [...keys];
+}
+
 async function readyFlag(db: Db): Promise<boolean> {
   const [row] = await db.$queryRaw<Array<{ ready: boolean }>>`
     SELECT coalesce((SELECT value = 'true'::jsonb FROM chat.config WHERE key = 'intake.contact_keys_ready'), false) AS ready`;

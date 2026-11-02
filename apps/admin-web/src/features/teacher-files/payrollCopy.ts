@@ -71,6 +71,8 @@ export const P = {
   deductions: { en: 'Deductions', ar: 'الخصومات' },
   net: { en: 'Net', ar: 'الصافي' },
   paidHours: { en: '{h} paid hours', ar: '{h} ساعة مدفوعة' },
+  // TEACHER-005: shown beside the pay; no amount is deducted for it automatically.
+  unpaidLeave: { en: 'Unpaid leave: {n} days', ar: 'إجازة بدون أجر: {n} يوم' },
   none: { en: '—', ar: '—' },
 
   bonusHistory: { en: 'Bonus history', ar: 'سجل المكافآت' },

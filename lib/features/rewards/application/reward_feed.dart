@@ -46,9 +46,30 @@ class RewardFeed extends Notifier<({int seq, RewardGiven reward})?> {
 
 final rewardFeedProvider = NotifierProvider<RewardFeed, ({int seq, RewardGiven reward})?>(RewardFeed.new);
 
-// -- the chime -----------------------------------------------------------------------
+// -- the sounds ----------------------------------------------------------------------
 
-/// Where the "play the chime" choice is kept, per device.
+/// PD-55: which sound a reward plays (assets/sounds/LICENSE.md: our own, CC0).
+enum RewardCue {
+  /// A star or a sticker: two bright bell notes.
+  encouragement('assets/sounds/reward_encouragement.wav'),
+
+  /// A praise stamp: a short round of applause.
+  applause('assets/sounds/reward_applause.wav'),
+
+  /// A celebration: a little fanfare.
+  celebration('assets/sounds/reward_celebration.wav');
+
+  const RewardCue(this.asset);
+  final String asset;
+
+  static RewardCue of(RewardGiven reward) => switch (reward.kind) {
+    'celebration' => celebration,
+    'praise' => applause,
+    _ => encouragement,
+  };
+}
+
+/// Where the "play reward sounds" choice is kept, per device.
 abstract interface class RewardSoundStore {
   Future<bool?> read();
   Future<void> write(bool on);
@@ -68,7 +89,7 @@ class SharedPreferencesRewardSoundStore implements RewardSoundStore {
 
 final rewardSoundStoreProvider = Provider<RewardSoundStore>((ref) => const SharedPreferencesRewardSoundStore());
 
-/// Whether the chime plays on this device. Until the person chooses: ON on a
+/// Whether reward sounds play on this device. Until the person chooses: ON on a
 /// family's phone, OFF for a teacher and in the browser (the teacher portal) --
 /// the child hears it, the teacher's class does not (plan §3 B2).
 class RewardSound extends AsyncNotifier<bool> {
@@ -95,9 +116,9 @@ class RewardSound extends AsyncNotifier<bool> {
 
 final rewardSoundProvider = AsyncNotifierProvider<RewardSound, bool>(RewardSound.new);
 
-/// Plays the chime. A seam, so a test hears nothing.
+/// Plays a reward's sound. A seam, so a test hears nothing.
 abstract interface class RewardChime {
-  Future<void> play();
+  Future<void> play(RewardCue cue);
 }
 
 /// just_audio, made to stay quiet when the phone is: it never takes over the
@@ -108,17 +129,17 @@ class JustAudioRewardChime implements RewardChime {
   AudioPlayer? _player;
 
   @override
-  Future<void> play() async {
+  Future<void> play(RewardCue cue) async {
     try {
       final player = _player ??= AudioPlayer(handleInterruptions: false, handleAudioSessionActivation: false, androidApplyAudioAttributes: false);
       await player.setAndroidAudioAttributes(
         const AndroidAudioAttributes(contentType: AndroidAudioContentType.sonification, usage: AndroidAudioUsage.notificationEvent),
       );
-      await player.setAsset('assets/sounds/reward_chime.wav');
+      await player.setAsset(cue.asset);
       await player.seek(Duration.zero);
       unawaited(player.play());
     } on Object {
-      // A chime that cannot play is not a failure: the celebration is still seen.
+      // A sound that cannot play is not a failure: the celebration is still seen.
     }
   }
 }

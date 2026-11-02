@@ -62,3 +62,19 @@
 
 /* PD-43: the teacher's and their login's history. */
 .tf-history { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+
+/* RQA-F1: the lesson reports behind the monthly on-time figure. */
+.tf-report-counts { display: flex; flex-wrap: wrap; gap: 8px; margin-block-end: 12px; }
+.tf-report-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.tf-report { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.tf-report__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tf-report__when { color: var(--text-muted); font-size: var(--fs-sm); }
+.tf-report__open { margin-inline-start: auto; font-size: var(--fs-sm); }
+.tf-report__body { margin: 8px 0 0; display: grid; gap: 4px; }
+.tf-report__body dd { margin: 0; }
+.tf-report__field { display: grid; grid-template-columns: minmax(96px, max-content) 1fr; gap: 8px; }
+.tf-report__field dt { color: var(--text-muted); }
+@media (max-width: 560px) {
+  .tf-report__field { grid-template-columns: 1fr; gap: 0; }
+  .tf-report__open { margin-inline-start: 0; }
+}

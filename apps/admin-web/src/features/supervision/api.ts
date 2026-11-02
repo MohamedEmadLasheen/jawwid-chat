@@ -33,6 +33,11 @@ export interface LeaveRequest {
    * set. Absent for an Operations supervisor: the allowance is the Teachers department's.
    */
   balance?: number | null
+  /**
+   * TEACHER-005: days beyond the allowance -- projected while requested,
+   * recorded once approved; null with no allowance. Absent where the balance is.
+   */
+  unpaidDays?: number | null
   /** Open requests only: lessons approving would cancel. No name for a child of another family (Operations). */
   collidingLessons?: Array<{ id: string; startsAt: string; learnerName: string | null }>
 }
