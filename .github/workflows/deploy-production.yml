@@ -340,6 +340,10 @@ jobs:
           APP_ENV: production
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          # The runner's own pg_dump is 16, and pg_dump refuses a server newer than
+          # itself: without this the backup fails against Postgres 17 and the
+          # deployment stops here. backup-db.sh runs pg_dump from this image.
+          PG_IMAGE: postgres:17-alpine
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Upload the pre-deployment backup
