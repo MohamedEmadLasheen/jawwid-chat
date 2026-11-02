@@ -57,6 +57,8 @@ export const H = {
     ar: 'اعتذار المعلم في المحادثة، أو حصة أُغلقت كغياب له، يُسجَّل هنا تلقائيًا. سجّل الغياب بنفسك فقط عندما لا توجد حصة لإغلاقها.',
   },
   recordAbsence: { en: 'Record an absence', ar: 'تسجيل غياب' },
+  // PD-52: PD-50's reason, staff only.
+  excuseCategory: { en: 'Reason', ar: 'السبب' },
 
   // Lateness
   latenessHint: {

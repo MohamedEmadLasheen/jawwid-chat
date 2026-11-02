@@ -606,7 +606,7 @@ export class DisciplineService {
     const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month) })));
     const lessons = await this.prisma.lesson.findMany({
       where: { id: { in: [...new Set(rows.map((r) => r.lessonId).filter((x): x is string => !!x))] } },
-      select: { id: true, kind: true, startsAt: true, outcomeNote: true, learner: { select: { name: true } } },
+      select: { id: true, kind: true, startsAt: true, outcomeNote: true, excuseCategory: true, learner: { select: { name: true } } },
     });
     const lessonOf = new Map(lessons.map((l) => [l.id, l]));
     const teachers = await this.prisma.teacher.findMany({
@@ -648,6 +648,8 @@ export class DisciplineService {
               startsAt: lesson?.startsAt.toISOString() ?? null,
               learnerName: lesson?.learner?.name ?? null,
               note: lesson?.outcomeNote ?? null,
+              // PD-50, shown on PD-52's Excuses & absences (staff only): travel | illness | exams | emergency | other.
+              excuseCategory: lesson?.excuseCategory ?? null,
             }
           : null,
         complaint: c ? { id: c.id, body: c.body, from: c.complaintSource, createdAt: c.createdAt.toISOString() } : null,

@@ -198,6 +198,10 @@ class HttpAuthRepository implements AuthRepository {
   @override
   Stream<void> get sessionRevoked => const Stream<void>.empty();
 
+  /// A `TokenPairDto` answered outside login and refresh (TEACHER-023: a password change
+  /// rotates this device's session). Read like a refresh: it never moves `remembered`.
+  static AuthSession sessionFrom(Map<String, Object?>? body) => _session(body);
+
   /// `TokenPairDto` -> [AuthSession].
   static AuthSession _session(Map<String, Object?>? body, {bool fromLogin = false}) {
     final access = body?['accessToken'];

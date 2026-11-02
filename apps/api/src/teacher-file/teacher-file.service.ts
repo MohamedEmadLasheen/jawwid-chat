@@ -808,8 +808,13 @@ export class TeacherFileService {
       // the Teachers department and the super admin -- the database's own rule
       // (chat.is_lesson_manager in guard_teacher_supervision_entry_about),
       // refused here first so the caller reads why (review of #374).
-      const [{ ok }] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
-        SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId ?? ''}::uuid) AS ok`;
+      // No organization: not allowed, and no query (an empty id would fail the uuid cast).
+      const ok =
+        !!actor.organizationId &&
+        (
+          await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT chat.is_lesson_manager(${actor.actorId}::uuid, ${actor.organizationId}::uuid) AS ok`
+        )[0]?.ok === true;
       if (!whole || !ok) {
         throw new CommError(CommErrorCode.TEACHER_FILE_DENIED, 'a trial family is named only by the Teachers department and the super admin');
       }

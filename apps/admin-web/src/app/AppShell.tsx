@@ -18,6 +18,7 @@ import { useInstalmentAccess } from '@/features/instalments/hooks'
 import { useMaterialsAccess } from '@/features/materials/hooks'
 import { useCertificateAccess } from '@/features/certificates/hooks'
 import { useLessonAudioAccess } from '@/features/lesson-audio/hooks'
+import { useTeacherRecordsAccess } from '@/features/teacher-records/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
@@ -64,9 +65,15 @@ function useDestinations(): Destination[] {
   // PD-48: the Lesson audio page, for whoever may listen (the Pronunciation reviewer included).
   const lessonAudioAccess = useLessonAudioAccess(operator)
   const lessonAudio = lessonAudioAccess.data?.view === true
+  // PD-52: the teacher-records pages, on the server's basis-and-key answer.
+  const recordsAccess = useTeacherRecordsAccess(operator)
+  const teacherAttendance = recordsAccess.data?.attendance.view === true
   return useMemo(
-    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio }) : []),
-    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio],
+    () =>
+      staff
+        ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance })
+        : [],
+    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance],
   )
 }
 
