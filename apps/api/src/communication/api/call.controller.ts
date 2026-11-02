@@ -4,6 +4,8 @@ import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.gu
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { Requires } from '../../platform/permissions/route-access';
+import { CommError, CommErrorCode } from '../../platform/errors';
+import { CallEndReason } from '../contracts/vocab';
 
 @Controller('calls')
 @UseFilters(CommErrorFilter)
@@ -58,8 +60,15 @@ export class CallController {
    */
   @Requires('calls.use')
   @Post(':id/end')
-  async end(@ActorId() actorId: string, @Param('id') id: string) {
-    await this.calls.end(id, actorId);
+  async end(@ActorId() actorId: string, @Param('id') id: string, @Body() body?: unknown) {
+    // CHATSCHED-013 (review 2 of #367): the ONE thing a client may say about an
+    // ending -- that it gave up rejoining. Any other reason is refused; the
+    // outcome is still the server's, from the call's locked state.
+    const reason = body && typeof body === 'object' ? (body as Record<string, unknown>).reason : undefined;
+    if (reason !== undefined && reason !== CallEndReason.CONNECTION_LOST) {
+      throw new CommError(CommErrorCode.VALIDATION, 'reason: only connection_lost', 400);
+    }
+    await this.calls.end(id, actorId, { connectionLost: reason === CallEndReason.CONNECTION_LOST });
     return { ok: true };
   }
 

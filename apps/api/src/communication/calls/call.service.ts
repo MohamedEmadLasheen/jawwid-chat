@@ -38,17 +38,42 @@ const DEFAULT_HISTORY_PAGE = 30;
  * (`was_connected` -- not "some seconds were counted", which a sub-second span
  * rounds to 0, sending such a call back to `answered_at` and counting the very
  * gap this excludes): the closed spans (`connected_seconds`) plus the one still
- * open, so a drop and the wait for a rejoin are not counted. A call that never reached two in the
- * room -- or an environment that receives no LiveKit webhooks -- keeps the
- * locked rule: from `answered_at` (accepting is the act being timed), and 0
- * when nobody answered.
+ * open, so a drop and the wait for a rejoin are not counted.
+ *
+ * A call that never reached two in the room -- or an environment that receives
+ * no LiveKit webhooks -- keeps the locked rule: from `answered_at` (accepting is
+ * the act being timed), and 0 when nobody answered. But never past a drop the
+ * server saw (`interrupted_at`): the grace is not talk time (review 2 of #367).
+ * This is a hang-up's duration; a lost connection's is [durationLost].
  */
 const DURATION_AT_END = Prisma.sql`
   case
     when c.was_connected
       then c.connected_seconds + coalesce(greatest(0, round(extract(epoch from (now() - c.connected_since))))::int, 0)
     when c.answered_at is not null
-      then greatest(0, round(extract(epoch from (now() - c.answered_at))))::int
+      then greatest(0, round(extract(epoch from (least(now(), coalesce(c.interrupted_at, now())) - c.answered_at))))::int
+    else 0
+  end`;
+
+/**
+ * How long after its drop a client stops rejoining and gives up: the server's
+ * grace and this much more (the apps' MediaRejoiner / REJOIN_GIVE_UP_MS).
+ */
+const CLIENT_GIVE_UP_SLACK_SECONDS = 30;
+
+/**
+ * CHATSCHED-013 (review 2 of #367): a call ended because the connection was
+ * lost lasted its CONNECTED TIME and nothing else -- 0 when it never had two
+ * in the room (no `answered_at` fallback: that would count the grace). A span
+ * still open is one the server never saw close (the room's `left` did not
+ * come); it is closed where the client's give-up puts the drop, [capSeconds]
+ * before now, and never before it opened.
+ */
+const durationLost = (capSeconds: number) => Prisma.sql`
+  case
+    when c.was_connected
+      then c.connected_seconds + coalesce(greatest(0, round(extract(epoch from (
+             greatest(c.connected_since, now() - make_interval(secs => ${capSeconds}::double precision)) - c.connected_since))))::int, 0)
     else 0
   end`;
 const MAX_HISTORY_PAGE = 100;
@@ -699,9 +724,10 @@ export class CallService {
    * relationship was revoked mid-conversation must still be hangable, or it sits
    * ACTIVE forever. See that method for the full reasoning.
    */
-  async end(callId: string, actorId: string): Promise<void> {
+  async end(callId: string, actorId: string, opts: { connectionLost?: boolean } = {}): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
     const call = await this.requireLiveParticipant(callId, actor);
+    const graceSeconds = opts.connectionLost ? await this.config.get('call.reconnect_grace_seconds') : 0;
 
     await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockCall(tx, callId);
@@ -709,6 +735,21 @@ export class CallService {
       // Terminal. Whatever ended it -- a decline, a sweep, another device's
       // hang-up -- owns the outcome, and this does not get to relabel it.
       if (locked.status === CallStatus.ENDED) return;
+
+      // CHATSCHED-013 (review 2 of #367): a client that gave up rejoining ends
+      // the call as `connection_lost` -- otherwise, with the room's `left` never
+      // delivered, it stays active for ever. Only for a live (answered) call,
+      // and only from a participant still on it; it is never a hang-up.
+      if (opts.connectionLost) {
+        if (locked.status !== CallStatus.ACTIVE) {
+          throw new CommError(CommErrorCode.VALIDATION, 'connection_lost ends only a call that was answered', 400);
+        }
+        if (call.participants.find((p) => p.actorId === actor.actorId)?.leftAt) {
+          throw new CommError(CommErrorCode.CALL_PARTICIPANT_LEFT, 'this participant has already left the call', 409);
+        }
+      }
+      const reason = opts.connectionLost ? CallEndReason.CONNECTION_LOST : CallEndReason.HUNG_UP;
+      const duration = opts.connectionLost ? durationLost(graceSeconds + CLIENT_GIVE_UP_SLACK_SECONDS) : DURATION_AT_END;
 
       const now = new Date();
       // Duration is connected time when both sides reached the room (the gap
@@ -719,13 +760,13 @@ export class CallService {
            set status = 'ended',
                ended_at = ${now},
                outcome = case when c.answered_at is null then 'missed' else 'answered' end,
-               end_reason = ${CallEndReason.HUNG_UP},
-               duration_seconds = ${DURATION_AT_END},
+               end_reason = ${reason},
+               duration_seconds = ${duration},
                interrupted_at = null
          where c.id = ${callId}::uuid
         returning outcome, duration_seconds as duration`;
       const resolved = ended!.outcome;
-      const duration = ended!.duration;
+      const seconds = ended!.duration;
 
       await tx.callParticipant.updateMany({
         where: { callId, leftAt: null },
@@ -735,15 +776,15 @@ export class CallService {
         callId,
         conversationId: call.conversationId,
         outcome: resolved,
-        durationSeconds: duration,
-        reason: CallEndReason.HUNG_UP,
+        durationSeconds: seconds,
+        reason,
       });
       await this.audit.event(tx, {
         familyId: call.familyId,
         actorKind: actor.kind,
         actorId: actor.actorId,
         type: 'call_ended',
-        payload: { callId, outcome: resolved, durationSeconds: duration, reason: CallEndReason.HUNG_UP },
+        payload: { callId, outcome: resolved, durationSeconds: seconds, reason },
       });
     });
   }
@@ -888,7 +929,7 @@ export class CallService {
                ended_at = now(),
                outcome = case when c.answered_at is null then 'missed' else 'answered' end,
                end_reason = ${CallEndReason.CONNECTION_LOST},
-               duration_seconds = ${DURATION_AT_END}
+               duration_seconds = ${durationLost(graceSeconds + CLIENT_GIVE_UP_SLACK_SECONDS)}
          where c.id in (
            select id from chat.call
             where status = 'active'
@@ -1192,7 +1233,17 @@ export class CallService {
     // its status or its participants can be read off the refusal.
     this.requireCallOrganization(actor, call.organizationId);
     if (call.status === CallStatus.ENDED) {
-      throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
+      // Review 2 of #367: a participant rejoining after it ended (offline, it
+      // never heard `call.ended`) is told how it ended -- a hang-up while they
+      // were away is a hang-up, not "connection lost". Anyone else, only that
+      // it ended.
+      const mine = call.participants.some((p) => p.actorId === actor.actorId);
+      throw new CommError(
+        CommErrorCode.CALL_ALREADY_ENDED,
+        'this call has ended',
+        409,
+        mine ? { endReason: call.endReason, outcome: call.outcome, durationSeconds: call.durationSeconds } : undefined,
+      );
     }
 
     const participant = call.participants.find((p) => p.actorId === actor.actorId);

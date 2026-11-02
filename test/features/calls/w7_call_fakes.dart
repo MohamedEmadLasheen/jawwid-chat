@@ -44,6 +44,7 @@ class FakeCalls implements CallRepository {
   final acceptCalls = <String>[];
   final declineCalls = <String>[];
   final endCalls = <String>[];
+  final endConnectionLost = <bool>[];
   final tokenCalls = <String>[];
 
   String nextCallId = 'call_1';
@@ -88,8 +89,9 @@ class FakeCalls implements CallRepository {
   }
 
   @override
-  Future<void> end({required String callId}) async {
+  Future<void> end({required String callId, bool connectionLost = false}) async {
     endCalls.add(callId);
+    endConnectionLost.add(connectionLost);
     if (endError != null) throw endError!;
   }
 

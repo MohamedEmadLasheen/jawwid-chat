@@ -728,7 +728,7 @@ abstract interface class CallRepository {
   /// accepting one on 2026-09-27 -- a participant naming their own call history
   /// is false history through the front door -- so the parameter is gone rather
   /// than left here to be rediscovered and silently ignored.
-  Future<void> end({required String callId});
+  Future<void> end({required String callId, bool connectionLost = false});
 
   /// `GET /calls/history/:conversationId`.
   ///

@@ -729,6 +729,22 @@ void main() {
       expect(stateOf(container).phase, CallUiPhase.reconnecting);
     });
 
+    test('CHATSCHED-013 (review 2 of #367): a rejoin refused because the other side HUNG UP while we were away ends as a hang-up, with the server\'s duration', () async {
+      final container = await liveOutgoing();
+      room.announceConnected = false;
+      room.announcePublished = false;
+      calls.tokenError = const AppError(
+        AppErrorKind.forbidden,
+        code: WireErrors.callAlreadyEnded,
+        detail: {'endReason': 'hung_up', 'outcome': 'answered', 'durationSeconds': 42},
+      );
+      room.drop();
+      await settle();
+      final ended = stateOf(container);
+      expect([ended.phase, ended.endReason, ended.outcome, ended.duration], [CallUiPhase.ended, CallEndReason.hungUp, CallOutcome.answered, const Duration(seconds: 42)]);
+      expect(calls.endCalls, isEmpty, reason: 'it was already over: nothing to end');
+    });
+
     test('CHATSCHED-013 (review of #367): rejoining is bounded -- past the grace and 30 s more, the call is over here too', () async {
       final container = await liveOutgoing(rejoinLimit: const Duration(milliseconds: 500));
       room.announceConnected = false;
@@ -742,6 +758,10 @@ void main() {
       await settle();
       final ended = stateOf(container);
       expect([ended.phase, ended.endReason], [CallUiPhase.ended, CallEndReason.connectionLost]);
+      // Review 2 of #367: and the server is told, so the call does not stay
+      // active for ever when the room's `left` never arrives.
+      expect(calls.endCalls, ['call_1']);
+      expect(calls.endConnectionLost, [true]);
       final tries = calls.tokenCalls.length;
       await Future<void>.delayed(const Duration(milliseconds: 2100));
       await settle();

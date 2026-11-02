@@ -25,3 +25,6 @@ alter table chat.call
   drop column if exists connected_since,
   drop column if exists interrupted_at,
   drop column if exists end_reason;
+
+-- The ledger forgets it, so scripts/db/apply.sh applies it again on the way forward.
+delete from chat.schema_migrations where version = '20261031160000_chat_pd053_call_connection_grace';

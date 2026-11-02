@@ -341,6 +341,91 @@ describe('duration (review of #367)', () => {
   });
 });
 
+describe('a rejoin refused because the call is over (review 2 of #367)', () => {
+  it('tells a participant HOW it ended -- a hang-up while they were away is a hang-up -- and a non-participant nothing more', async () => {
+    const { callId } = await connectedDirectCall(120);
+    await g.calls.end(callId, s.ownerId);
+    const ended = await row(callId);
+    await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
+      code: 'COMM.CALL_ALREADY_ENDED',
+      detail: { endReason: 'hung_up', outcome: 'answered', durationSeconds: ended.duration_seconds },
+    });
+    const outsider = await g.calls.issueToken(callId, s.unrelatedTeacherId).catch((e: { detail?: unknown }) => e);
+    expect((outsider as { detail?: unknown }).detail).toBeUndefined();
+  });
+});
+
+describe('a client that gave up rejoining ends the call (review 2 of #367)', () => {
+  it('as connection_lost -- never hung_up -- with the connected time only, the unknown drop closed at the client\'s cap', async () => {
+    // Connected 300 s ago; this device dropped and the room's `left` never came.
+    const { callId } = await connectedDirectCall(300);
+    await g.calls.end(callId, s.parentId, { connectionLost: true });
+    const ended = await row(callId);
+    expect([ended.status, ended.outcome, ended.end_reason]).toEqual(['ended', 'answered', 'connection_lost']);
+    // The client gives up (grace + 30) s after its drop: 300 - 90 = 210 connected.
+    expect(ended.duration_seconds).toBeGreaterThanOrEqual(208);
+    expect(ended.duration_seconds).toBeLessThanOrEqual(213);
+    const endedEvents = (await events(callId)).filter((e) => e.type === CommEvent.CALL_ENDED);
+    expect(endedEvents).toHaveLength(1);
+    expect(endedEvents[0]!.payload).toMatchObject({ reason: 'connection_lost', durationSeconds: ended.duration_seconds });
+  });
+
+  it('a drop the server already saw keeps its own connected time', async () => {
+    const { callId, roomName } = await connectedDirectCall(300);
+    await presence.participantLeft({ roomName, identity: s.parentId, at: ago(200) });
+    await g.calls.end(callId, s.parentId, { connectionLost: true });
+    const ended = await row(callId);
+    expect(ended.end_reason).toBe('connection_lost');
+    expect(ended.duration_seconds).toBeGreaterThanOrEqual(99);
+    expect(ended.duration_seconds).toBeLessThanOrEqual(101);
+  });
+
+  it('only from a participant of a live call: a ringing call refuses the reason, an ended one keeps its own', async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const ringing = await g.calls.start(conv.id, s.ownerId);
+    await expect(g.calls.end(ringing.callId, s.ownerId, { connectionLost: true })).rejects.toMatchObject({ code: 'COMMON.VALIDATION' });
+    expect((await row(ringing.callId)).status).toBe('ringing');
+    await g.calls.end(ringing.callId, s.ownerId);
+
+    const { callId } = await connectedDirectCall(60);
+    await expect(g.calls.end(callId, s.unrelatedTeacherId, { connectionLost: true })).rejects.toBeTruthy();
+    await g.calls.end(callId, s.ownerId);
+    await g.calls.end(callId, s.parentId, { connectionLost: true });
+    expect((await row(callId)).end_reason).toBe('hung_up');
+    expect((await events(callId)).filter((e) => e.type === CommEvent.CALL_ENDED)).toHaveLength(1);
+  });
+});
+
+describe('a call that never had two in the room (review 2 of #367)', () => {
+  it('ended by the sweep: 0 s, never the grace', async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const { callId, roomName } = await g.calls.start(conv.id, s.ownerId);
+    await g.calls.accept(callId, s.parentId);
+    await g.prisma.$executeRaw`update chat.call set answered_at = now() - make_interval(secs => 200) where id = ${callId}::uuid`;
+    // One side joined and left; the other never arrived.
+    await presence.participantJoined({ roomName, identity: s.ownerId, at: ago(150) });
+    await presence.participantLeft({ roomName, identity: s.ownerId, at: ago(140) });
+    await g.prisma.$executeRaw`update chat.call set interrupted_at = now() - make_interval(secs => ${grace + 1}) where id = ${callId}::uuid`;
+    expect(await g.calls.endInterruptedCalls()).toBe(1);
+    expect(await row(callId)).toMatchObject({ end_reason: 'connection_lost', duration_seconds: 0, outcome: 'answered' });
+  });
+
+  it('hung up during the grace: timed from the answer only up to the drop', async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const { callId, roomName } = await g.calls.start(conv.id, s.ownerId);
+    await g.calls.accept(callId, s.parentId);
+    await g.prisma.$executeRaw`update chat.call set answered_at = now() - make_interval(secs => 100) where id = ${callId}::uuid`;
+    await presence.participantJoined({ roomName, identity: s.ownerId, at: ago(90) });
+    await presence.participantLeft({ roomName, identity: s.ownerId, at: ago(40) });
+    await g.calls.end(callId, s.parentId);
+    const ended = await row(callId);
+    expect(ended.end_reason).toBe('hung_up');
+    // answered 100 s ago, dropped 40 s ago: 60 s, not 100.
+    expect(ended.duration_seconds).toBeGreaterThanOrEqual(59);
+    expect(ended.duration_seconds).toBeLessThanOrEqual(62);
+  });
+});
+
 describe('history', () => {
   it('both sides see the same connected duration and the reason', async () => {
     const { conversationId, callId, roomName } = await connectedDirectCall(250);

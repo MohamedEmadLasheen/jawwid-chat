@@ -140,6 +140,15 @@ export class CallController {
   private rejoinAttempts = 0
   private rejoinTimer: ReturnType<typeof setTimeout> | null = null
   private static readonly REJOIN_WAITS_MS = [0, 1000, 2000, 4000, 8000]
+  /**
+   * Review 2 of #367: rejoining stops this long after the drop -- the server's
+   * 60 s grace and 30 s more -- and the call ends here and, best effort, on the
+   * server (as the Flutter app does). An offline browser never hears
+   * `call.ended`, and with the room's `left` never delivered nothing else
+   * would end the call there.
+   */
+  static readonly REJOIN_GIVE_UP_MS = 90_000
+  private rejoinStartedAt: number | null = null
   private rejoining = false
   private alive = true
 
@@ -524,9 +533,18 @@ export class CallController {
       if (!this.alive || this.media !== media) return
       const c = classify(e)
       // CHATSCHED-013: a REJOIN refused because the call is over -- we were away
-      // past the server's grace and never heard `call.ended`. Connection lost.
+      // and never heard `call.ended`. The server says how it ended (review 2 of
+      // #367): a hang-up while we were away is a hang-up; connection lost only
+      // when it does not say.
       if (c.failure === 'alreadyOver') {
-        return this.goTerminal({ outcome: null, endReason: this.rejoining ? 'connection_lost' : null })
+        const detail = (c.error?.detail ?? {}) as { endReason?: unknown; outcome?: unknown; durationSeconds?: unknown }
+        if (!this.rejoining) return this.goTerminal({ outcome: null, endReason: null })
+        return this.goTerminal({
+          outcome: typeof detail.outcome === 'string' ? detail.outcome : null,
+          durationSeconds: typeof detail.durationSeconds === 'number' ? detail.durationSeconds : null,
+          endReason: typeof detail.endReason === 'string' ? detail.endReason : 'connection_lost',
+          authoritative: true,
+        })
       }
       if (this.rejoining && c.failure === 'network') {
         this.patch({ phase: 'reconnecting', failure: 'network' })
@@ -580,11 +598,17 @@ export class CallController {
     if (!this.alive || this.rejoinTimer || this.isOver()) return
     const waits = CallController.REJOIN_WAITS_MS
     const wait = waits[Math.min(this.rejoinAttempts, waits.length - 1)]!
+    if (this.rejoinAttempts === 0) this.rejoinStartedAt = this.now()
     this.rejoinAttempts++
     this.rejoinTimer = setTimeout(() => {
       this.rejoinTimer = null
       const callId = this.state.callId
       if (!this.alive || this.isOver() || !callId) return
+      if (this.rejoinStartedAt !== null && this.now() - this.rejoinStartedAt >= CallController.REJOIN_GIVE_UP_MS) {
+        void this.api.end(callId, { connectionLost: true }).catch(() => undefined)
+        this.goTerminal({ outcome: null, endReason: 'connection_lost' })
+        return
+      }
       void this.connectMedia(callId)
     }, wait)
   }
@@ -593,6 +617,7 @@ export class CallController {
     if (this.rejoinTimer) clearTimeout(this.rejoinTimer)
     this.rejoinTimer = null
     this.rejoinAttempts = 0
+    this.rejoinStartedAt = null
   }
 
   private async teardownMedia(): Promise<void> {

@@ -267,6 +267,12 @@ class CallController extends Notifier<CallUiState> {
     giveUpAfter: _rejoinLimit,
     onGiveUp: () {
       if (!_alive || state.isTerminal) return;
+      final callId = state.callId;
+      // Review 2 of #367: the server is told too, best effort -- with the room's
+      // `left` never delivered, nothing else would end the call there.
+      if (callId != null) {
+        unawaited(_calls?.end(callId: callId, connectionLost: true).catchError((Object _) {}));
+      }
       _goTerminal(outcome: state.outcome, reason: CallEndReason.connectionLost);
     },
   );
@@ -900,9 +906,26 @@ class CallController extends Notifier<CallUiState> {
         if (_rejoining && _rejoinFoundCallOver(snapshot)) {
           // CHATSCHED-013: the SERVER refused the rejoin because the call ended
           // while we were away (a phone offline past the grace never hears
-          // `call.ended`). Over, as connection lost; the outcome stays the
-          // server's to say.
-          _goTerminal(outcome: state.outcome, reason: CallEndReason.connectionLost);
+          // `call.ended`). It says how (review 2 of #367): a hang-up while we
+          // were away is a hang-up; connection lost only when it does not say.
+          final detail = snapshot.refusalDetail ?? const {};
+          final seconds = detail['durationSeconds'];
+          _goTerminal(
+            outcome: switch (detail['outcome']) {
+              'answered' => CallOutcome.answered,
+              'missed' => CallOutcome.missed,
+              'declined' => CallOutcome.declined,
+              _ => state.outcome,
+            },
+            duration: seconds is int && seconds >= 0 ? Duration(seconds: seconds) : null,
+            reason: switch (detail['endReason']) {
+              'hung_up' => CallEndReason.hungUp,
+              'declined' => CallEndReason.declined,
+              'ring_timeout' => CallEndReason.ringTimeout,
+              _ => CallEndReason.connectionLost,
+            },
+            authoritative: true,
+          );
           return;
         }
         if (_rejoining) {

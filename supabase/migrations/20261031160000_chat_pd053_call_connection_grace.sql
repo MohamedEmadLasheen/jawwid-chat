@@ -70,6 +70,12 @@ update chat.call
                     end
  where status = 'ended' and end_reason is null;
 
+-- The backfill fires chat.call's deferred triggers; run them now, inside this
+-- migration's transaction (scripts/db/apply.sh wraps each file in one), or the
+-- index below fails with "pending trigger events" on any database that already
+-- holds ended calls -- production -- while a fresh one passes.
+set constraints all immediate;
+
 -- The sweep's lookup: few rows, only live interrupted calls.
 create index if not exists call_interrupted_idx
   on chat.call (interrupted_at)
