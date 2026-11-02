@@ -3,6 +3,7 @@ import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
+import { TeacherLessonReportsService } from './teacher-lesson-reports.service';
 import { Requires } from '../platform/permissions/route-access';
 
 /**
@@ -17,6 +18,7 @@ export class TeacherFileController {
   constructor(
     private readonly files: TeacherFileService,
     private readonly payroll: TeacherPayrollService,
+    private readonly reports: TeacherLessonReportsService,
   ) {}
 
   @Requires('teacher_files.view')
@@ -54,6 +56,19 @@ export class TeacherFileController {
   @Post('finance/deduction-defaults')
   setDeductionDefault(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.payroll.setDeductionDefault(actorId, body ?? {});
+  }
+
+  /** RQA-F1: the month's lessons with their report status and content (read-only), cursor-paged. */
+  @Requires('teacher_files.view')
+  @Get(':teacherId/lesson-reports')
+  lessonReports(
+    @ActorId() actorId: string,
+    @Param('teacherId') teacherId: string,
+    @Query('month') month?: string,
+    @Query('status') status?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.reports.list(actorId, teacherId, { month, status, cursor });
   }
 
   @Requires('teacher_files.view')
