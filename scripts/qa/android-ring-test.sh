@@ -60,6 +60,7 @@ dump=""
 # A cold start for a broadcast on a shared CI emulator can take well over 15 s
 # (seen: 8 s before the process even started); the ring itself lasts 45 s.
 for _ in $(seq 1 40); do
+  dump="$(adb shell dumpsys notification --noredact)"
   grep -q "pkg=$PKG" <<<"$dump" && break
   sleep 1
 done
