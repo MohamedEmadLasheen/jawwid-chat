@@ -8,6 +8,7 @@ import { LoginRateLimiter } from '../platform/auth/login-rate-limit';
 import { SelfService } from '../platform/permissions/route-access';
 import { AccountDeletionService } from './account-deletion.service';
 import { renderDeletionPage, type DeletionLang, type DeletionPageState } from './account-deletion-page';
+import { formTokenValid, issueFormToken } from './deletion-form-token';
 
 /**
  * PD-56: `POST /me/account/delete {password}` -- the signed-in parent or
@@ -79,6 +80,8 @@ export class AccountDeletionPageController {
     const input = (body ?? {}) as Record<string, unknown>;
     const username = typeof input.username === 'string' ? input.username.trim() : '';
     const password = passwordOf(body);
+    // Anti-forgery first: a POST this page did not render is refused unread.
+    if (!formTokenValid(input.token)) return send(res, 400, l, { kind: 'form', error: 'expired' });
     if (!username || !password || input.confirm !== 'yes') return send(res, 400, l, { kind: 'form', error: 'incomplete' });
     const key = `account-delete-web:${username.toLowerCase()}`;
     try {
@@ -88,12 +91,16 @@ export class AccountDeletionPageController {
       return send(res, 200, l, { kind: 'done' });
     } catch (e) {
       if (!(e instanceof AuthError)) throw e;
+      // Unknown, wrong password and locked read the same -- the page never says
+      // whether an account exists. Past the password: staff, or a teacher with
+      // something still open.
       const error: NonNullable<Extract<DeletionPageState, { kind: 'form' }>['error']> =
         e.code === AuthErrorCode.RATE_LIMITED ? 'rate_limited'
-        : e.code === AuthErrorCode.ACCOUNT_LOCKED ? 'locked'
         : e.code === AuthErrorCode.FORBIDDEN ? 'staff'
+        : e.code === AuthErrorCode.TEACHER_DELETION_BLOCKED ? 'teacher_blocked'
         : 'invalid';
-      return send(res, e.code === AuthErrorCode.RATE_LIMITED ? 429 : e.code === AuthErrorCode.FORBIDDEN ? 403 : 401, l, { kind: 'form', error });
+      const status = { rate_limited: 429, staff: 403, teacher_blocked: 409 } as Record<string, number>;
+      return send(res, status[error] ?? 401, l, { kind: 'form', error });
     }
   }
 }
@@ -112,5 +119,5 @@ function send(res: HtmlResponse, status: number, lang: DeletionLang, state: Dele
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`);
-  res.status(status).send(renderDeletionPage(lang, state, nonce));
+  res.status(status).send(renderDeletionPage(lang, state, nonce, issueFormToken()));
 }

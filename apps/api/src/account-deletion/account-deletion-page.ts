@@ -2,7 +2,7 @@ import { escapeHtml } from '../billing/pay-page';
 
 export type DeletionLang = 'ar' | 'en';
 export type DeletionPageState =
-  | { kind: 'form'; error?: 'incomplete' | 'invalid' | 'locked' | 'rate_limited' | 'staff' }
+  | { kind: 'form'; error?: 'incomplete' | 'expired' | 'invalid' | 'rate_limited' | 'staff' | 'teacher_blocked' }
   | { kind: 'done' };
 
 const T = {
@@ -22,17 +22,18 @@ const T = {
       'الرسائل التي أرسلتها تبقى في المحادثات باسم «مستخدم محذوف»، لأن الطرف الآخر يحتفظ بسجله',
       'سجلات الأبناء لدى الأكاديمية لا تُحذف، ويُبلَّغ فريق العمل لمتابعتها',
     ],
-    username: 'البريد الإلكتروني الذي تسجّل به الدخول',
+    username: 'اسم الدخول (البريد الإلكتروني)',
     password: 'كلمة المرور',
     confirm: 'أفهم أن الحذف نهائي ولا يمكن التراجع عنه',
     submit: 'حذف حسابي نهائيًا',
     done: 'تم حذف حسابك. خرجت من جميع الأجهزة، ويمكنك إغلاق هذه الصفحة.',
     errors: {
       incomplete: 'اكتب البريد الإلكتروني وكلمة المرور، وأكّد أنك تفهم أن الحذف نهائي.',
-      invalid: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
-      locked: 'الحساب مقفل مؤقتًا بعد محاولات كثيرة. حاول لاحقًا.',
+      expired: 'انتهت صلاحية الصفحة. أعد المحاولة من هذه الصفحة.',
+      invalid: 'اسم الدخول أو كلمة المرور غير صحيحة.',
       rate_limited: 'محاولات كثيرة. حاول مرة أخرى بعد قليل.',
       staff: 'حسابات فريق العمل تُغلق عن طريق الإدارة.',
+      teacher_blocked: 'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.',
     },
     other: 'English',
   },
@@ -52,24 +53,25 @@ const T = {
       'Messages you sent stay in their conversations as "Deleted user": the other members keep their history',
       'Your children’s records at the academy are not deleted; the staff are told so they can follow up',
     ],
-    username: 'The e-mail address you sign in with',
+    username: 'Your sign-in name (e-mail)',
     password: 'Password',
     confirm: 'I understand that deleting is final and cannot be undone',
     submit: 'Delete my account for good',
     done: 'Your account has been deleted. You are signed out everywhere; you can close this page.',
     errors: {
       incomplete: 'Enter your e-mail address and password, and confirm that you understand deleting is final.',
-      invalid: 'The e-mail address or password is not right.',
-      locked: 'The account is locked for a while after too many attempts. Try again later.',
+      expired: 'This page expired. Please try again from this page.',
+      invalid: 'The sign-in name or password is not right.',
       rate_limited: 'Too many attempts. Try again in a little while.',
       staff: 'Staff accounts are closed by the administration.',
+      teacher_blocked: 'Please contact the academy to close your lessons and payroll before deleting your account.',
     },
     other: 'العربية',
   },
 } as const;
 
 /** PD-56: the public account-deletion page. No script; every value escaped. */
-export function renderDeletionPage(lang: DeletionLang, state: DeletionPageState, nonce: string): string {
+export function renderDeletionPage(lang: DeletionLang, state: DeletionPageState, nonce: string, formToken: string): string {
   const t = T[lang];
   const e = escapeHtml;
   const list = (items: readonly string[]) => `<ul>${items.map((i) => `<li>${e(i)}</li>`).join('')}</ul>`;
@@ -79,7 +81,8 @@ export function renderDeletionPage(lang: DeletionLang, state: DeletionPageState,
       ? `<p class="ok" role="status">${e(t.done)}</p>`
       : `${state.error ? `<p class="err" role="alert">${e(t.errors[state.error])}</p>` : ''}
 <form method="post" action="?lang=${lang}">
-  <label>${e(t.username)}<input name="username" type="email" autocomplete="username" required dir="ltr"></label>
+  <input type="hidden" name="token" value="${e(formToken)}">
+  <label>${e(t.username)}<input name="username" type="text" inputmode="email" autocapitalize="none" spellcheck="false" autocomplete="username" required dir="ltr"></label>
   <label>${e(t.password)}<input name="password" type="password" autocomplete="current-password" required dir="ltr"></label>
   <label class="check"><input name="confirm" type="checkbox" value="yes" required> ${e(t.confirm)}</label>
   <button type="submit">${e(t.submit)}</button>

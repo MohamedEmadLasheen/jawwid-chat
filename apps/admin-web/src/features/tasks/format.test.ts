@@ -113,9 +113,9 @@ describe('PD-56: an erased account leaves work for staff', () => {
     expect(sourceLink(task('family_without_account', 'f1', { familyName: 'family_x', count: 0 }))).toBeNull()
   })
 
-  it('a teacher who deleted their account leads to the Teacher File, to move the students', () => {
-    const t = task('teacher_account_deleted', 't1', { teacherId: 't1', count: 3 })
-    expect(titleOf(t, en, fmt)).toBe('A teacher deleted their account: move their 3 students and lessons')
+  it('a teacher who deleted their account (nothing was left open) leads to the Teacher File, to record the departure', () => {
+    const t = task('teacher_account_deleted', 't1', { teacherId: 't1', count: 0 })
+    expect(titleOf(t, en, fmt)).toBe('A teacher deleted their account: record their departure')
     expect(sourceLink(t)).toBe('/teachers/files/t1')
   })
 

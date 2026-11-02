@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AuthService } from '../platform/auth/auth.service';
 import { AuthError, AuthErrorCode } from '../platform/auth/auth.errors';
 import { PrismaService } from '../platform/prisma.service';
+import { contactKeyHashesOfAccount } from '../parent-profile/family-contact-keys';
 import { OBJECT_STORAGE } from '../platform/tokens';
 import type { ObjectStorage } from '../communication/attachments/object-storage';
 
@@ -57,9 +58,17 @@ export class AccountDeletionService {
   private async erase(accountId: string, kind: string): Promise<Erasure> {
     // Staff close through an administrator (PD-21); said only once the password was right.
     if (kind !== 'family' && kind !== 'teacher') throw new AuthError(AuthErrorCode.FORBIDDEN);
+    // A parent's PD-42 contact keys are server-keyed hashes: made here, deleted there.
+    const contactKeys = kind === 'family' ? await contactKeyHashesOfAccount(this.prisma, accountId) : [];
     const { erasure, revoked } = await this.prisma.$transaction(async (tx) => {
       const [row] = await tx.$queryRaw<Array<{ r: Erasure }>>`
-        SELECT chat.erase_account(${accountId}::uuid, ${ACCOUNT_DELETED_REASON}) AS r`;
+        SELECT chat.erase_account(${accountId}::uuid, ${ACCOUNT_DELETED_REASON}, ${contactKeys}::text[]) AS r`.catch((e: unknown) => {
+        // A teacher with a lesson, a student or payroll still open: refused before any write.
+        if (String((e as Error)?.message ?? '').includes('TEACHER_DELETION_BLOCKED')) {
+          throw new AuthError(AuthErrorCode.TEACHER_DELETION_BLOCKED);
+        }
+        throw e;
+      });
       const revokedCount = await this.auth.revokeAccountSessionsInTx(tx, accountId, ACCOUNT_DELETED_REASON, {
         revokedBy: accountId,
         actorId: row.r.principalIds[0] ?? accountId,

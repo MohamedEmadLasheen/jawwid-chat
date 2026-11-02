@@ -193,8 +193,8 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
     ar: 'عائلة بلا أحد يمكنه تسجيل الدخول: {family}، {count} من الأبناء',
   },
   teacher_account_deleted: {
-    en: 'A teacher deleted their account: move their {count} students and lessons',
-    ar: 'معلم حذف حسابه: انقل طلابه ({count}) وحصصه',
+    en: 'A teacher deleted their account: record their departure',
+    ar: 'معلم حذف حسابه: سجّل مغادرته',
   },
 }
 

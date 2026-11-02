@@ -80,7 +80,8 @@ export const SOURCE_TYPES = [
   // PD-47 PR-6c: the Teachers department's decisions (chat.work_task_sweep_decisions).
   // `feedback` is a parent's (PD-32): read only through chat.work_task_feedback_*.
   'complaint', 'feedback', 'schedule_change', 'makeup_owed',
-  // PD-56: an erased account's leftovers (chat.erase_account, settled by chat.work_task_sweep_erasure).
+  // PD-56: after an erasure -- a family nobody can sign in to (settled by chat.work_task_sweep_erasure),
+  // and a teacher's departure (a notice, withdrawn when raised: the Teachers manager acknowledges it).
   'family_without_account', 'teacher_account_deleted',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
