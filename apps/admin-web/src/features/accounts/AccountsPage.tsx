@@ -22,6 +22,8 @@ import { D, isSessionGone } from '@/features/devices/copy'
 import { SessionList, useDeviceName } from '@/features/devices/SessionList'
 import '@/features/devices/devices.css'
 import { AccountsTabs } from '@/features/staff-accounts/AccountsTabs'
+import { FamilyAccessRecord, GrantFamilyAccessDialog, useFamilyAccess } from './FamilyAccess'
+import { F } from './familyAccessCopy'
 import './accounts.css'
 
 type Kind = 'all' | 'family' | 'teacher' | 'staff'
@@ -58,6 +60,10 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
   const [q, setQ] = useState('')
   const [kind, setKind] = useState<Kind>('all')
   const [pending, setPending] = useState<AccountPending | null>(null)
+  const [granting, setGranting] = useState<AccountSummary | null>(null)
+  // ADMIN-002: a grantor (the Operations Manager, the super admin) may open one family to one Operations staff member.
+  const access = useFamilyAccess()
+  const grantees = access.data?.canGrant === true ? (access.data.grantees ?? []) : null
   const deferred = useDeferredValue(q.trim())
   const list = useAccounts(deferred, kind)
   const accounts = list.data?.accounts ?? []
@@ -122,6 +128,11 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                     <td>{a.lastLoginAt ? dateTime(a.lastLoginAt) : tx(A.never)}</td>
                     <td>
                       <AccountActionButtons account={a} onAct={setPending} />
+                      {grantees && a.kind === 'family' && a.familyId && (
+                        <button type="button" className="btn btn--sm" onClick={() => setGranting(a)}>
+                          {tx(F.grantButton)}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -130,10 +141,14 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
           </div>
           {list.data?.truncated && <p className="field__hint">{tx(A.truncated)}</p>}
         </QueryBoundary>
+        <FamilyAccessRecord />
         <SupportRecord />
       </div>
 
       <AccountActionDialogs pending={pending} onChange={setPending} />
+      {granting && grantees && (
+        <GrantFamilyAccessDialog account={granting} grantees={grantees} onClose={() => setGranting(null)} />
+      )}
     </div>
   )
 }

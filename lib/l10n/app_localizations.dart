@@ -5008,8 +5008,56 @@ abstract class L10n {
   /// No description provided for @recoveryOpen.
   ///
   /// In en, this message translates to:
-  /// **'Trouble signing in?'**
+  /// **'Parents: trouble signing in?'**
   String get recoveryOpen;
+
+  /// TEACHER-023: under the parents' recovery link on the sign-in screen; self-service recovery is for parents only.
+  ///
+  /// In en, this message translates to:
+  /// **'Teachers and staff: ask your supervisor for a reset code.'**
+  String get signInStaffResetHint;
+
+  /// TEACHER-023: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordTitle;
+
+  /// No description provided for @changePasswordCurrentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get changePasswordCurrentLabel;
+
+  /// No description provided for @changePasswordWrongCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not your current password.'**
+  String get changePasswordWrongCurrent;
+
+  /// No description provided for @changePasswordCurrentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password.'**
+  String get changePasswordCurrentRequired;
+
+  /// No description provided for @changePasswordUnchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a password different from your current one.'**
+  String get changePasswordUnchanged;
+
+  /// No description provided for @changePasswordAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordAction;
+
+  /// No description provided for @changePasswordDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed. You were signed out on your other devices.'**
+  String get changePasswordDone;
 
   /// No description provided for @recoveryTitle.
   ///

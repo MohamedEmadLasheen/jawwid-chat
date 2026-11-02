@@ -2898,7 +2898,34 @@ class L10nAr extends L10n {
   String get resetFinish => 'تعيين كلمة المرور';
 
   @override
-  String get recoveryOpen => 'لا تستطيع تسجيل الدخول؟';
+  String get recoveryOpen => 'أولياء الأمور: لا تستطيع تسجيل الدخول؟';
+
+  @override
+  String get signInStaffResetHint =>
+      'المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.';
+
+  @override
+  String get changePasswordTitle => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordCurrentLabel => 'كلمة المرور الحالية';
+
+  @override
+  String get changePasswordWrongCurrent => 'هذه ليست كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordCurrentRequired => 'أدخل كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'اختر كلمة مرور مختلفة عن كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordAction => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordDone =>
+      'تم تغيير كلمة المرور. سُجِّل خروجك من أجهزتك الأخرى.';
 
   @override
   String get recoveryTitle => 'استعادة حسابك';

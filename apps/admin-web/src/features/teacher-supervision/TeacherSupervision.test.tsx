@@ -38,6 +38,14 @@ const bodyOf = (call: unknown[] | undefined) => {
 const supervisor = makeStaff({ id: 's-1', name: 'Supervisor One', role: 'admin' })
 const roster = { teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, timezone: null }], learners: [] }
 const access = { canEditPersonal: false, canWriteSupervision: true, canViewFinance: false }
+const fullAccess = {
+  basis: 'teachers',
+  attendance: { view: true, record: true, decide: true },
+  grants: { view: true, record: true },
+  leaveBalance: true,
+  amounts: false,
+  opensFile: true,
+}
 
 function violation(over: Partial<Violation> = {}): Violation {
   return {
@@ -121,6 +129,8 @@ beforeEach(() => {
     }),
   )
   on('GET', /\/lessons\/access$/, () => json({ lessonManager: true, sales: false, operations: false, calendar: true, supervisionPage: true }))
+  // PD-52: the Attendance & Complaints page asks what to offer.
+  on('GET', /\/teacher-records\/access$/, () => json(fullAccess))
   on('GET', /\/teacher-files$/, () =>
     json({ access, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, studentCount: 3, openComplaints: 1, away: null }], supervisors: [{ id: 's-2', name: 'Supervisor Two' }] }),
   )
@@ -531,6 +541,7 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
   const opsSupervisor = makeStaff({ id: 'o-1', name: 'Ops One', role: 'admin' })
   function asOperations() {
     on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: false, operations: true, calendar: true, supervisionPage: true }))
+    on('GET', /\/teacher-records\/access$/, () => json({ ...fullAccess, basis: 'operations', leaveBalance: false, opensFile: false }))
     on('GET', /\/teacher-supervision\/directory$/, () =>
       json({
         basis: 'operations',
@@ -549,7 +560,7 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     expect(teachersPath({ lessonManager: false, operations: true, supervisionPage: false })).toBeUndefined()
   })
 
-  it('shows only the Supervision tab of the Teachers area, and no Teacher File links', async () => {
+  it('lands on Attendance & complaints (PD-52), outside the Teachers area, with no Teacher File links', async () => {
     asOperations()
     on('GET', /\/teacher-leave-overview$/, () =>
       // As the server sends it to Operations: no allowance, no days used, no balance.
@@ -557,8 +568,8 @@ describe('PD-26 amendment: the Operations Supervision team (owner 2026-10-27)', 
     )
     on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
     renderWithProviders(<AppRoutes />, { staff: opsSupervisor, route: '/teachers/supervision' })
-    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
-    await waitFor(() => expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Supervision']))
+    expect(await screen.findByRole('heading', { name: 'Attendance & complaints' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Teachers' })).not.toBeInTheDocument()
     const row = (await screen.findByText('Teacher One')).closest('tr')!
     expect(within(row).queryByRole('link')).not.toBeInTheDocument()
     // The balance column is the Teachers department's: not there at all, not "Not tracked".
