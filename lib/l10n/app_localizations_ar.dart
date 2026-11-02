@@ -4795,6 +4795,15 @@ class L10nAr extends L10n {
   String get boardDeleteSelection => 'حذف المحدد';
 
   @override
+  String get boardCopy => 'نسخ';
+
+  @override
+  String get boardPaste => 'لصق';
+
+  @override
+  String get boardDuplicate => 'تكرار';
+
+  @override
   String get boardColour => 'اللون';
 
   @override

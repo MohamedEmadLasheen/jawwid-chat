@@ -112,7 +112,7 @@ class BoardViewController extends ChangeNotifier {
   }
 }
 
-enum _Drag { none, draw, erase, shape, move, resize, rotate, marquee, pan, pinch }
+enum _Drag { none, draw, erase, shape, move, resize, rotate, marquee, lasso, pan, pinch }
 
 /// PD-55: the text sizes the style bar steps through (page units).
 const kBoardTextSizes = <double>[24, 32, 48, 64, 96, 144];
@@ -176,6 +176,14 @@ class BoardCanvasState extends State<BoardCanvas> {
   Offset? _lastDownAtScreen;
   final _editorKey = GlobalKey();
   final _styleBarKey = GlobalKey();
+
+  // PD-55 PR-2: the lasso's loop, what the stroke is drawn with, where the
+  // eraser is, and the copied elements (kept across pages).
+  List<Offset> _lasso = [];
+  PointerDeviceKind _liveKind = PointerDeviceKind.mouse;
+  Offset? _eraserAt;
+  List<BoardElement> _clipboard = const [];
+  int _pasteCount = 0;
 
   @override
   void didUpdateWidget(BoardCanvas oldWidget) {
@@ -259,7 +267,8 @@ class BoardCanvasState extends State<BoardCanvas> {
 
   // -- pointers -----------------------------------------------------------------
 
-  bool _isPen(PointerEvent e) => e.kind == PointerDeviceKind.stylus || e.kind == PointerDeviceKind.invertedStylus;
+  bool _isPen(PointerEvent e) => _isPenKind(e.kind);
+  bool _isPenKind(PointerDeviceKind kind) => kind == PointerDeviceKind.stylus || kind == PointerDeviceKind.invertedStylus;
 
   bool _inside(GlobalKey key, Offset global) {
     final box = key.currentContext?.findRenderObject();
@@ -360,6 +369,8 @@ class BoardCanvasState extends State<BoardCanvas> {
       _working = null;
       _start = null;
       _current = null;
+      _lasso = [];
+      _eraserAt = null;
     });
   }
 
@@ -426,11 +437,13 @@ class BoardCanvasState extends State<BoardCanvas> {
         case BoardTool.pen:
         case BoardTool.highlighter:
           _drag = _Drag.draw;
+          _liveKind = kind;
           _live = [StrokePoint(at.dx, at.dy, _pressure(pressure, kind))];
         case BoardTool.eraser:
         case BoardTool.areaEraser:
           _drag = _Drag.erase;
           _working = widget.page.elements;
+          _eraserAt = at;
           _eraseAt(tool, at);
         case BoardTool.rect:
         case BoardTool.ellipse:
@@ -455,7 +468,18 @@ class BoardCanvasState extends State<BoardCanvas> {
         _live.add(StrokePoint(at.dx, at.dy, _pressure(pressure, kind)));
         setState(() => _liveRevision++);
       case _Drag.erase:
-        setState(() => _eraseAt(tool, at));
+        setState(() {
+          // PD-55: all along the way since the last report, so a fast sweep
+          // erases what it crossed and not only where the pointer landed.
+          final from = _eraserAt ?? at;
+          final steps = math.max(1, ((at - from).distance / (_eraserRadius * 0.75)).ceil());
+          for (var i = 1; i <= steps; i++) {
+            _eraseAt(tool, Offset.lerp(from, at, i / steps)!);
+          }
+          _eraserAt = at;
+        });
+      case _Drag.lasso:
+        setState(() => _lasso.add(at));
       case _Drag.shape:
       case _Drag.move:
       case _Drag.resize:
@@ -479,7 +503,8 @@ class BoardCanvasState extends State<BoardCanvas> {
         if (_live.isEmpty) return;
         final stroke = InkElement(
           id: _newId(),
-          points: BoardGeometry.simplify(_live),
+          // A pen is drawn as it came; a finger or a mouse is steadied (PD-55).
+          points: BoardGeometry.simplify(_isPenKind(_liveKind) ? _live : BoardGeometry.steady(_live)),
           color: widget.style.color,
           width: widget.style.width,
           highlight: tool == BoardTool.highlighter,
@@ -498,6 +523,9 @@ class BoardCanvasState extends State<BoardCanvas> {
       case _Drag.marquee:
         if (start == null || current == null) return;
         setState(() => _selected = BoardGeometry.within(widget.page.elements, Rect.fromPoints(start, current)));
+      case _Drag.lasso:
+        final loop = _lasso;
+        setState(() => _selected = BoardGeometry.inLasso(widget.page.elements, loop));
       case _Drag.rotate:
         if (current == null) return;
         widget.onCommit(_rotated(current));
@@ -519,8 +547,18 @@ class BoardCanvasState extends State<BoardCanvas> {
     return true;
   }
 
+  /// How far the erasers reach from the pointer, in page units (14 px on screen).
+  double get _eraserRadius => 14 / _scale.clamp(0.1, 10);
+
+  /// PD-55: the ring the eraser shows while erasing; null otherwise.
+  @visibleForTesting
+  Rect? get eraserRing {
+    final at = _eraserAt;
+    return at == null ? null : Rect.fromCircle(center: at, radius: _eraserRadius);
+  }
+
   void _eraseAt(BoardTool tool, Offset at) {
-    final radius = 14 / _scale.clamp(0.1, 10);
+    final radius = _eraserRadius;
     final current = _working ?? widget.page.elements;
     _working = tool == BoardTool.areaEraser
         ? BoardGeometry.eraseArea(current, at, radius, _newId)
@@ -788,7 +826,62 @@ class BoardCanvasState extends State<BoardCanvas> {
       return;
     }
     _selected = {};
-    _drag = _Drag.marquee;
+    // PD-55: a freehand lasso; Shift keeps the rectangle.
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _drag = _Drag.marquee;
+    } else {
+      _drag = _Drag.lasso;
+      _lasso = [at];
+    }
+  }
+
+  // -- PD-55: copy, paste, duplicate ------------------------------------------------
+
+  /// Copies the selection (bottom first); nothing on the page changes.
+  void copySelection() {
+    if (_selected.isEmpty) return;
+    // A state change: the bar's Paste comes on.
+    setState(() {
+      _clipboard = [
+        for (final e in widget.page.elements)
+          if (_selected.contains(e.id)) e,
+      ];
+      _pasteCount = 0;
+    });
+  }
+
+  /// Pastes the copy on top, each paste 24 units further on; the pasted
+  /// elements are the selection after. One undo step.
+  void paste() {
+    if (_clipboard.isEmpty || widget.readOnly) return;
+    _pasteCount++;
+    final offset = Offset(24.0 * _pasteCount, 24.0 * _pasteCount);
+    // A copy is the element's own JSON under a new id: a verse stays a
+    // reference, an image names the same asset, an unknown kind is kept as it came.
+    final pasted = [for (final e in _clipboard) BoardElement.fromJson({...e.toJson(), 'id': _newId()}).translated(offset)];
+    widget.onCommit([...widget.page.elements, ...pasted]);
+    setState(() => _selected = {for (final e in pasted) e.id});
+  }
+
+  /// Removes the selection: one undo step.
+  void deleteSelection() {
+    if (_selected.isEmpty || widget.readOnly) return;
+    final gone = _selected;
+    widget.onCommit([
+      for (final e in widget.page.elements)
+        if (!gone.contains(e.id)) e,
+    ]);
+    setState(() => _selected = {});
+  }
+
+  /// Copy and paste in one undo step.
+  void duplicateSelection() {
+    final keep = _clipboard;
+    final count = _pasteCount;
+    copySelection();
+    paste();
+    _clipboard = keep.isEmpty ? _clipboard : keep;
+    _pasteCount = keep.isEmpty ? _pasteCount : count;
   }
 
   /// The page with the selection moved or resized from [a] to [b].
@@ -894,6 +987,9 @@ class BoardCanvasState extends State<BoardCanvas> {
                                   marquee: _drag == _Drag.marquee && _start != null && _current != null
                                       ? Rect.fromPoints(_start!, _current!)
                                       : null,
+                                  lasso: _drag == _Drag.lasso ? _lasso : null,
+                                  lassoRevision: _lasso.length,
+                                  eraserRing: eraserRing,
                                   selection: _drag == _Drag.move || _drag == _Drag.resize || _drag == _Drag.rotate ? null : _selectionBounds,
                                   handle: _handleSize,
                                   rotateHandle: _drag == _Drag.none ? _rotateHandle : null,
@@ -965,6 +1061,32 @@ extension on BoardCanvasState {
         ),
       );
     }
+    final actions = edit == null && _selected.isNotEmpty && !widget.readOnly && _drag == _Drag.none
+        ? _SelectionActions(
+            canPaste: _clipboard.isNotEmpty,
+            onCopy: copySelection,
+            onPaste: paste,
+            onDuplicate: duplicateSelection,
+            onDelete: deleteSelection,
+          )
+        : null;
+    final bounds = _selectionBounds;
+    if (styled == null && actions != null && bounds != null) {
+      // PD-55: the selection's own actions, just below it.
+      final left = (_origin.dx + bounds.left * _scale).clamp(8.0, math.max(8.0, _viewport.width - _SelectionActions.width - 8)).toDouble();
+      out.add(
+        PositionedDirectional(
+          start: left,
+          top: _origin.dy + bounds.bottom * _scale + 12,
+          child: Material(
+            key: _styleBarKey,
+            elevation: 4,
+            borderRadius: Radii.card,
+            child: Padding(padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing1), child: actions),
+          ),
+        ),
+      );
+    }
     if (styled != null && !widget.readOnly && _drag != _Drag.rotate) {
       final r = styled.bounds;
       final top = _origin.dy + r.top * _scale;
@@ -989,6 +1111,7 @@ extension on BoardCanvasState {
             onBold: () => _restyle(bold: !(edit?.bold ?? styled.bold)),
             onColor: (c) => _restyle(color: c),
             onDone: finishTextEdit,
+            actions: actions,
           ),
         ),
       );
@@ -1012,6 +1135,7 @@ class _TextStyleBar extends StatelessWidget {
     required this.onBold,
     required this.onColor,
     required this.onDone,
+    this.actions,
   });
 
   final double fontSize;
@@ -1025,10 +1149,14 @@ class _TextStyleBar extends StatelessWidget {
   final ValueChanged<Color> onColor;
   final VoidCallback onDone;
 
+  /// A selected (not typed) text's selection actions, after its style.
+  final Widget? actions;
+
   static const _target = BoxConstraints(minWidth: 48, minHeight: 48);
 
-  /// Its widest (typing: three buttons, six colours and Done), for placing it.
-  static const width = 10 * 48.0 + 2 * Spacing.spacing1;
+  /// Its widest (selected: three buttons, six colours and the selection's
+  /// four actions), for placing it.
+  static const width = 13 * 48.0 + 2 * Spacing.spacing1;
 
   @override
   Widget build(BuildContext context) {
@@ -1103,10 +1231,57 @@ class _TextStyleBar extends StatelessWidget {
                   onPressed: onDone,
                   icon: const Icon(Icons.check),
                 ),
+              ?actions,
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// PD-55: copy, paste, duplicate and delete for what is selected. 48 px targets.
+class _SelectionActions extends StatelessWidget {
+  const _SelectionActions({required this.canPaste, required this.onCopy, required this.onPaste, required this.onDuplicate, required this.onDelete});
+
+  final bool canPaste;
+  final VoidCallback onCopy;
+  final VoidCallback onPaste;
+  final VoidCallback onDuplicate;
+  final VoidCallback onDelete;
+
+  static const width = 4 * 48.0 + 2 * Spacing.spacing1;
+  static const _target = BoxConstraints(minWidth: 48, minHeight: 48);
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(key: const ValueKey('board-sel-copy'), constraints: _target, tooltip: l10n.boardCopy, onPressed: onCopy, icon: const Icon(Icons.copy_outlined)),
+        IconButton(
+          key: const ValueKey('board-sel-paste'),
+          constraints: _target,
+          tooltip: l10n.boardPaste,
+          onPressed: canPaste ? onPaste : null,
+          icon: const Icon(Icons.paste_outlined),
+        ),
+        IconButton(
+          key: const ValueKey('board-sel-duplicate'),
+          constraints: _target,
+          tooltip: l10n.boardDuplicate,
+          onPressed: onDuplicate,
+          icon: const Icon(Icons.control_point_duplicate_outlined),
+        ),
+        IconButton(
+          key: const ValueKey('board-sel-delete'),
+          constraints: _target,
+          tooltip: l10n.boardDeleteSelection,
+          onPressed: onDelete,
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
     );
   }
 }
@@ -1123,6 +1298,9 @@ class _OverlayPainter extends CustomPainter {
     required this.handle,
     this.rotateHandle,
     this.rotateStem,
+    this.lasso,
+    this.lassoRevision = 0,
+    this.eraserRing,
   });
 
   final InkElement? live;
@@ -1135,6 +1313,11 @@ class _OverlayPainter extends CustomPainter {
   /// PD-55: where the selected text's rotate handle is, and where its stem starts.
   final Offset? rotateHandle;
   final Offset? rotateStem;
+
+  /// PD-55 PR-2: the lasso's loop as drawn so far, and the eraser's ring.
+  final List<Offset>? lasso;
+  final int lassoRevision;
+  final Rect? eraserRing;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1149,6 +1332,17 @@ class _OverlayPainter extends CustomPainter {
     if (marquee != null) {
       canvas.drawRect(marquee!, Paint()..color = BoardPalette.selection.withValues(alpha: 0.08));
       canvas.drawRect(marquee!, outline);
+    }
+    final loop = lasso;
+    if (loop != null && loop.length > 1) {
+      final path = Path()..addPolygon(loop, true);
+      canvas.drawPath(path, Paint()..color = BoardPalette.selection.withValues(alpha: 0.08));
+      canvas.drawPath(path, outline);
+    }
+    final ring = eraserRing;
+    if (ring != null) {
+      canvas.drawOval(ring, Paint()..color = BoardPalette.selection.withValues(alpha: 0.10));
+      canvas.drawOval(ring, outline);
     }
     if (selection != null) {
       canvas.drawRect(selection!.inflate(4), outline);
@@ -1173,5 +1367,8 @@ class _OverlayPainter extends CustomPainter {
       old.selection != selection ||
       old.rotateHandle != rotateHandle ||
       old.rotateStem != rotateStem ||
+      old.lassoRevision != lassoRevision ||
+      !identical(old.lasso, lasso) ||
+      old.eraserRing != eraserRing ||
       !identical(old.live, live);
 }

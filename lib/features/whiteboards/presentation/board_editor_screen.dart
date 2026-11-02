@@ -200,6 +200,14 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): _controller.undo,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): _controller.redo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): _controller.redo,
+        // PD-55: copy, paste, duplicate. Inside a text being typed, Ctrl/Cmd+C and V
+        // are the text's own (handled before these); D is held back here.
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true): () => _onSelection((c) => c.copySelection()),
+        const SingleActivator(LogicalKeyboardKey.keyC, meta: true): () => _onSelection((c) => c.copySelection()),
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): () => _onSelection((c) => c.paste()),
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true): () => _onSelection((c) => c.paste()),
+        const SingleActivator(LogicalKeyboardKey.keyD, control: true): () => _onSelection((c) => c.duplicateSelection()),
+        const SingleActivator(LogicalKeyboardKey.keyD, meta: true): () => _onSelection((c) => c.duplicateSelection()),
         const SingleActivator(LogicalKeyboardKey.delete): _deleteSelection,
         const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelection,
         const SingleActivator(LogicalKeyboardKey.escape): () => _canvas.currentState?.clearSelection(),
@@ -330,6 +338,13 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     BoardTool.text => 6,
     _ => _width > 16 ? 6 : _width,
   };
+
+  /// A selection action from a shortcut or the panel -- never while a text is being typed.
+  void _onSelection(void Function(BoardCanvasState canvas) act) {
+    final c = _canvas.currentState;
+    if (c == null || c.isEditingText) return;
+    act(c);
+  }
 
   void _deleteSelection() {
     final c = _canvas.currentState;
