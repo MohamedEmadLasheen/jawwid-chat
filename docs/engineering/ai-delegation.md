@@ -100,8 +100,13 @@ What `run` does, in order:
    Usage-limit or authentication errors stop immediately with status `blocked`.
 10. Writes `result.json`.
 
-Result statuses: `passed`, `partial` (committed but Codex reports unfinished items), `failed` (attempts
-exhausted), `blocked` (Codex could not run), `needs_feedback` (auto-retry off).
+| Status | Meaning | Lead's next action |
+| --- | --- | --- |
+| `passed` | Changes were committed and Codex reports the task complete. | Review the result and continue. |
+| `partial` | Changes were committed, but Codex reports unfinished items. | Read the outstanding problems and finish or re-scope the work. |
+| `failed` | The allowed attempts were exhausted without a successful result. | Read the feedback and take the task or re-scope it. |
+| `blocked` | Codex could not run because of an auth or usage limit; no retry. | Fall back to a Claude builder; resolve login if needed. |
+| `needs_feedback` | Auto-retry is off after a failed attempt. | Read the feedback and retry or re-scope the task. |
 
 `result.json` carries: task id, status, attempts, branch, worktree, base and commit SHAs, Codex's own
 report (completion, summary, files, the tests it says it ran, outstanding problems), the tests the
