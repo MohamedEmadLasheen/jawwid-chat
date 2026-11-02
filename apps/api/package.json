@@ -11,7 +11,8 @@
     "prisma:push": "prisma db push --skip-generate",
     "test": "jest --runInBand",
     "test:unit": "jest --selectProjects unit",
-    "test:int": "jest --selectProjects integration --runInBand --forceExit"
+    "test:int": "jest --selectProjects integration --runInBand --forceExit",
+    "test:e2e": "jest --selectProjects e2e --runInBand"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1139.0",
@@ -51,6 +52,7 @@
     "@types/pdfkit": "^0.17.7",
     "jest": "^29.7.0",
     "prisma": "^6.0.0",
+    "socket.io-client": "^4.8.3",
     "ts-jest": "^29.2.5",
     "typescript": "^5.7.0"
   }

@@ -310,6 +310,8 @@ lint, typecheck, unit, integration, security and migration validation.
 
 ## 20. End-to-end suite (`tests/e2e/`)
 
+> **2026-11-02 (G-38, Phase 1):** the automated part of this section is the black-box smoke `apps/api/test/e2e/smoke.e2e.ts`, run by `scripts/qa/e2e-smoke.sh` and the CI job `e2e` against the real API and worker. Its scope is the parent and teacher journeys: sign-in, live chat both ways, isolation, the lesson schedule and billing. The flows listed below that it does not cover remain manual (final acceptance, device plans). E2E-005 (approval) and E2E-006 (coverage) predate PD-14 and PD-3 and no longer describe the product.
+
 | ID | Flow |
 |---|---|
 | E2E-001 | Parent ↔ Admin conversation |
