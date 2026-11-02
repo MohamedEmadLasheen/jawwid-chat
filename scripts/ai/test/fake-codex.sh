@@ -13,7 +13,9 @@ for ((i = 0; i < ${#args[@]}; i++)); do
     --version) echo "codex-cli 0.0.0-fake"; exit 0 ;;
   esac
 done
-cat > /dev/null   # the prompt arrives on stdin
+prompt="$(cat)"   # the prompt arrives on stdin, as with the real CLI
+[ -n "$prompt" ] || { echo "No prompt provided via stdin." >&2; exit 1; }
+printf '%s' "$prompt" | grep -q -- '---- TASK BRIEF ----' || { echo "fake codex: prompt lacks the brief" >&2; exit 1; }
 counter="$FAKE_CODEX_PLAN/.count"
 n=$(( $(cat "$counter" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$counter"
 step="$FAKE_CODEX_PLAN/$n"

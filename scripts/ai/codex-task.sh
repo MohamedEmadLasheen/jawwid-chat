@@ -55,7 +55,9 @@ wait_for_load() {
 # Run "$@" with a time limit; stdin/stdout/stderr are whatever the caller redirected.
 run_with_timeout() {
   local secs="$1"; shift
-  "$@" & local pid=$!
+  # `<&0` is required: bash points a background job's stdin at /dev/null unless
+  # it is redirected explicitly, which silently dropped Codex's prompt.
+  "$@" <&0 & local pid=$!
   ( sleep "$secs"; kill -TERM "$pid" 2>/dev/null ) & local watchdog=$!
   local rc=0; wait "$pid" || rc=$?
   kill "$watchdog" 2>/dev/null || true; wait "$watchdog" 2>/dev/null || true
