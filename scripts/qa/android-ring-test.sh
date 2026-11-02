@@ -34,9 +34,21 @@ adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 8
 adb shell input keyevent KEYCODE_HOME
 sleep 2
-adb shell am kill "$PKG"
-sleep 2
+# `am kill` kills only a process Android already counts as cached; right after
+# Home it may not be yet, so ask again for a while. If it is still alive, end it
+# from inside its own uid (run-as, a debug build): a plain process death, as the
+# low-memory killer does it -- never force-stop.
+for _ in $(seq 1 10); do
+  adb shell am kill "$PKG"
+  sleep 1
+  adb shell pidof "$PKG" >/dev/null 2>&1 || break
+done
+if pid="$(adb shell pidof "$PKG" 2>/dev/null)" && [ -n "$pid" ]; then
+  adb shell run-as "$PKG" kill -9 $pid || true
+  sleep 2
+fi
 adb shell pidof "$PKG" >/dev/null 2>&1 && fail "the app's process is still running after am kill"
+adb shell dumpsys package "$PKG" | grep -q "stopped=true" && fail "the app is in the stopped state; a push could never reach it"
 adb logcat -c
 
 adb shell am broadcast -n "$PKG/.DebugPushReceiver" \
