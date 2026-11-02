@@ -4835,6 +4835,30 @@ class L10nAr extends L10n {
   String get boardNextPage => 'الصفحة التالية';
 
   @override
+  String get boardEmoji => 'رموز تعبيرية';
+
+  @override
+  String get boardEmojiPick => 'اختر رمزًا تعبيريًا';
+
+  @override
+  String get boardEmojiSmileys => 'وجوه مبتسمة';
+
+  @override
+  String get boardEmojiAnimals => 'حيوانات';
+
+  @override
+  String get boardEmojiNature => 'طبيعة';
+
+  @override
+  String get boardEmojiFood => 'طعام';
+
+  @override
+  String get boardEmojiSchool => 'المدرسة واللعب';
+
+  @override
+  String get boardEmojiSymbols => 'رموز';
+
+  @override
   String get boardZoomFit => 'ملاءمة الصفحة';
 
   @override

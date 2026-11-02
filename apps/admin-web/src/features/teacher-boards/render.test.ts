@@ -243,6 +243,21 @@ describe('text', () => {
     expect(texts()).toContain('بطل')
   })
 
+  it('PD-55 (4): an emoji stamp is read as an emoji and drawn as its own character, in an emoji font, centred in its square', () => {
+    const page = parsePage({
+      layout: 'plain',
+      background: 'white',
+      document: { v: 1, elements: [{ id: 'e1', kind: 'stamp', stamp: 'emoji', x: 100, y: 100, w: 140, h: 140, color: '#000000', text: '🦉' }] },
+    })
+    const stamp = page.elements[0]!
+    expect(stamp.kind === 'stamp' && stamp.stamp).toBe('emoji')
+    const { ctx, calls } = recorder()
+    drawPage(ctx, page, { verse: () => ({ status: 'loading' }), label })
+    const text = calls.find((c) => c.op === 'fillText')!
+    expect(text.args.slice(0, 3)).toEqual(['🦉', 170, 170])
+    expect(text.state.font).toMatch(/Color Emoji/)
+  })
+
   it('PD-39: a text without the PD-55 fields is drawn as before: regular weight, never turned', () => {
     const plain = parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [{ id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, w: 100, h: 60, size: 40, color: '#1b1b1b' }] } })
     const { ctx, calls } = recorder()
