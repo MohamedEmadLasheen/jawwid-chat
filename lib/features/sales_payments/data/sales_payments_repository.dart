@@ -17,10 +17,15 @@ abstract interface class SalesPaymentsRepository {
   Future<FamilyBilling> familyBilling(String familyId);
 
   /// Records a payment against an open instalment; answers the family's billing as it now is.
+  ///
+  /// [paymentId] is the submit's idempotency key (ADMIN-001): generated once per
+  /// opened form and sent again on every retry of it, so the server records the
+  /// money once however often the request arrives.
   Future<FamilyBilling> recordPayment(
     String instalmentId, {
     required DateTime paidOn,
     required BillingMethod method,
+    required String paymentId,
     String? reference,
   });
 
@@ -41,7 +46,13 @@ class NoSalesPaymentsRepository implements SalesPaymentsRepository {
   Future<FamilyBilling> familyBilling(String familyId) async => _none();
 
   @override
-  Future<FamilyBilling> recordPayment(String instalmentId, {required DateTime paidOn, required BillingMethod method, String? reference}) async =>
+  Future<FamilyBilling> recordPayment(
+    String instalmentId, {
+    required DateTime paidOn,
+    required BillingMethod method,
+    required String paymentId,
+    String? reference,
+  }) async =>
       _none();
 
   @override

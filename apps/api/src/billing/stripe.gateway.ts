@@ -63,7 +63,8 @@ export interface StripeGateway {
   createCheckout(input: CheckoutInput): Promise<CheckoutSession>;
   retrieveCheckout(sessionId: string): Promise<CheckoutSession>;
   expireCheckout(sessionId: string): Promise<void>;
-  refund(paymentIntentId: string, amountMinor: number, idempotencyKey: string): Promise<RefundResult>;
+  /** `metadata` travels with the refund to the webhook (refund.metadata). */
+  refund(paymentIntentId: string, amountMinor: number, idempotencyKey: string, metadata?: Record<string, string>): Promise<RefundResult>;
   /** Throws on any signature, tolerance or parse failure. */
   verifyWebhook(rawBody: Buffer, signature: string | undefined): Stripe.Event;
 }
@@ -126,9 +127,9 @@ export class StripeSdkGateway implements StripeGateway {
     await this.requireClient().checkout.sessions.expire(sessionId);
   }
 
-  async refund(paymentIntentId: string, amountMinor: number, idempotencyKey: string): Promise<RefundResult> {
+  async refund(paymentIntentId: string, amountMinor: number, idempotencyKey: string, metadata: Record<string, string> = {}): Promise<RefundResult> {
     const refund = await this.requireClient().refunds.create(
-      { payment_intent: paymentIntentId, amount: amountMinor },
+      { payment_intent: paymentIntentId, amount: amountMinor, metadata },
       { idempotencyKey },
     );
     return { id: refund.id, amountMinor: refund.amount, status: refund.status ?? null };
