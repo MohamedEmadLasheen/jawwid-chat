@@ -19,7 +19,7 @@ PKG=com.jawwid.jawwid_chat
 APK="${APK:-build/app/outputs/flutter-apk/app-debug.apk}"
 OUT="${OUT:-android-ring}"
 mkdir -p "$OUT"
-fail() { echo "::error title=android-ring::$*"; adb logcat -d -s 'JawwidPush:*' 'AndroidRuntime:E' || true; adb shell dumpsys notification --noredact > "$OUT/notifications.txt" || true; adb logcat -d > "$OUT/logcat.txt" || true; exit 1; }
+fail() { echo "::error title=android-ring::$*"; adb logcat -d -s 'JawwidPush:*' 'AndroidRuntime:E' || true; adb logcat -d -b events | grep -E 'notification_(enqueue|cancel|canceled)' | grep -F "$PKG" || true; adb shell dumpsys notification --noredact > "$OUT/notifications.txt" || true; adb logcat -d > "$OUT/logcat.txt" || true; exit 1; }
 
 adb wait-for-device
 adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
