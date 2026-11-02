@@ -299,6 +299,12 @@ export class DisciplineService {
     if (!pageRowVisible(await this.supervision.teacherScope.pageRowsOf(actor), complaint.teacherId, about)) {
       throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
     }
+    // PD-52 (review of #374): a complaint entered by mistake is never upheld. The
+    // database refuses it too, under the complaint's row lock, so a void and an
+    // uphold racing each other cannot both land.
+    if (await this.prisma.teacherSupervisionEntry.findFirst({ where: { refersTo: complaint.id, kind: 'entry_void' }, select: { id: true } })) {
+      throw stateError('this complaint was voided; it is not upheld');
+    }
     const note = textField(body, 'note', false);
     const row = await this.write(() =>
       this.prisma.$transaction(async (tx) => {

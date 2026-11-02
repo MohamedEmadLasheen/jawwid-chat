@@ -159,4 +159,39 @@ describe('PD-52 over HTTP', () => {
     const owner = await call(await login(m.superAdmin.subject), 'GET', '/teacher-records/access');
     expect(owner.json).toMatchObject({ basis: 'super_admin', attendance: { decide: true }, grants: { record: true } });
   });
+
+  it('review of #374: a grants-only caller WITH a basis gets page B\'s sections and categories only', async () => {
+    const tsup = m.teacherSupervisors[0]!;
+    const family = m.families[0]!;
+    const child = family.children[0]!;
+    const parentToken = await login(family.parent.subject);
+    expect((await call(parentToken, 'POST', '/me/feedback', { learnerId: child.id, category: 'praise', body: 'Kind.' })).status).toBe(201);
+    expect((await call(parentToken, 'POST', '/me/feedback', { learnerId: child.id, category: 'suggestion', body: 'More homework.' })).status).toBe(201);
+
+    const trimmed = ['teacher_supervision.view', 'teacher_supervision.record', 'teacher_attendance.view', 'teacher_attendance.record', 'teacher_attendance.decide'];
+    const flip = `select set_config('chat.pd040_catalogue_change', 'on', true)`;
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(flip),
+      g.prisma.$executeRawUnsafe(`delete from chat.legacy_permission_bundle where tier = 'supervisor' and department_kind = 'teachers' and permission_key = any($1::text[])`, trimmed),
+    ]);
+    try {
+      const token = await login(tsup.subject);
+      expect((await call(token, 'GET', '/teacher-records/access')).json).toMatchObject({ basis: 'teachers', attendance: { view: false }, grants: { view: true } });
+      const strip = await call(token, 'GET', `/teacher-records/teachers/${child.teacherId}/summary`);
+      expect(strip.status).toBe(200);
+      expect(strip.json).toMatchObject({ away: null, ladder: null, openComplaints: null, grants: expect.any(Number), testimonials: expect.any(Number) });
+      const list = await call(token, 'GET', '/parent-feedback');
+      expect(list.status).toBe(200);
+      expect([...new Set((list.json.feedback as Array<{ category: string }>).map((f) => f.category))]).toEqual(['praise']);
+      expect((await call(token, 'GET', '/parent-feedback?category=suggestion')).status).toBe(403);
+    } finally {
+      await g.prisma.$transaction([
+        g.prisma.$executeRawUnsafe(flip),
+        g.prisma.$executeRawUnsafe(
+          `insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) select 'supervisor', 'teachers', k from unnest($1::text[]) k on conflict do nothing`,
+          trimmed,
+        ),
+      ]);
+    }
+  });
 });

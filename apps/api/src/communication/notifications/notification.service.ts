@@ -29,6 +29,18 @@ export interface ScheduleInput {
   variables?: Record<string, unknown>;
   scheduledAt: Date;
   respectQuietHours?: boolean;
+  /** The caller already wrote the Center entry and links it (the PD-34 pipeline's own emits). */
+  entryWritten?: boolean;
+}
+
+/**
+ * ADMIN-011: told of every delivery row scheduled by a producer not on the
+ * PD-34 pipeline, so the person's Center entry exists when the row does --
+ * not when its push goes or finally fails. The pipeline registers itself; in
+ * a process without one, its adoption sweep is the backstop.
+ */
+export interface ScheduledDeliveryListener {
+  scheduled(deliveryId: string, intendedAt: Date): Promise<void>;
 }
 
 /**
@@ -46,6 +58,7 @@ const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 @Injectable()
 export class NotificationService {
   private readonly log = new Logger(NotificationService.name);
+  private listener: ScheduledDeliveryListener | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -81,6 +94,11 @@ export class NotificationService {
       if (!conv || conv.organizationId !== org) return null;
     }
     return org;
+  }
+
+  /** ADMIN-011: the PD-34 pipeline, told of each row scheduled outside it. */
+  onScheduled(listener: ScheduledDeliveryListener): void {
+    this.listener = listener;
   }
 
   /**
@@ -119,6 +137,7 @@ export class NotificationService {
           scheduledAt,
         },
       });
+      await this.tellScheduled(created.id, input);
       return created.id;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -127,9 +146,23 @@ export class NotificationService {
           where: { dedupeKey: input.dedupeKey },
           select: { id: true },
         });
-        if (existing) return existing.id;
+        if (existing) {
+          // A replay also mends an entry the first call failed to write; the entry is idempotent.
+          await this.tellScheduled(existing.id, input);
+          return existing.id;
+        }
       }
       throw e;
+    }
+  }
+
+  /** The Center entry is a side effect of the delivery: its failure is logged and left to the adoption sweep. */
+  private async tellScheduled(deliveryId: string, input: ScheduleInput): Promise<void> {
+    if (!this.listener || input.entryWritten) return;
+    try {
+      await this.listener.scheduled(deliveryId, input.scheduledAt);
+    } catch (e) {
+      this.log.error(`center entry for ${input.ruleKey ?? input.templateKey} not written: ${(e as Error).name}`);
     }
   }
 
