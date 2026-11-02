@@ -254,12 +254,22 @@ class CallController extends Notifier<CallUiState> {
   /// once, then on a growing wait) until the media is back or the SERVER ends
   /// the call -- 60 s after the drop, as connection lost. It used to try once
   /// and then say "reconnecting" for ever. Bounded by the server's grace, not
-  /// by a count: the call itself is what stops it.
-  late final MediaRejoiner _rejoiner = MediaRejoiner(() {
-    final callId = state.callId;
-    if (!_alive || state.isTerminal || callId == null) return;
-    unawaited(_media?.connect(callId: callId));
-  });
+  /// by a count: the call itself is what stops it -- and, for a phone that is
+  /// offline and never hears `call.ended`, by [callRejoinLimitProvider] (the
+  /// grace and 30 s more), after which the call is over here too.
+  Duration _rejoinLimit = MediaRejoiner.defaultGiveUpAfter;
+  late final MediaRejoiner _rejoiner = MediaRejoiner(
+    () {
+      final callId = state.callId;
+      if (!_alive || state.isTerminal || callId == null) return;
+      unawaited(_media?.connect(callId: callId));
+    },
+    giveUpAfter: _rejoinLimit,
+    onGiveUp: () {
+      if (!_alive || state.isTerminal) return;
+      _goTerminal(outcome: state.outcome, reason: CallEndReason.connectionLost);
+    },
+  );
 
   /// True between a drop and audio coming back.
   ///
@@ -283,6 +293,7 @@ class CallController extends Notifier<CallUiState> {
       _calls = null;
     }
     _audio = ref.watch(audioRouteProvider);
+    _rejoinLimit = ref.read(callRejoinLimitProvider);
 
     // Terminal events, and incoming calls, from the session's own client (W3).
     //
@@ -886,16 +897,18 @@ class CallController extends Notifier<CallUiState> {
 
       case CallMediaPhase.failed:
         final failure = _classifyMedia(snapshot.failure);
-        if (_rejoining && failure == CallUiFailure.notAllowed) {
-          // CHATSCHED-013: the rejoin was refused a token -- the call ended while
-          // we were away (a phone offline past the grace never hears
+        if (_rejoining && _rejoinFoundCallOver(snapshot)) {
+          // CHATSCHED-013: the SERVER refused the rejoin because the call ended
+          // while we were away (a phone offline past the grace never hears
           // `call.ended`). Over, as connection lost; the outcome stays the
           // server's to say.
           _goTerminal(outcome: state.outcome, reason: CallEndReason.connectionLost);
           return;
         }
         if (_rejoining) {
-          // Still inside the server's grace as far as we know: try again.
+          // Still inside the server's grace as far as we know -- and a token
+          // request that never got an answer (offline, a timeout) says nothing
+          // about the call (review of #367): try again.
           next = next.copyWith(phase: CallUiPhase.reconnecting, failure: CallUiFailure.network);
           state = next;
           _rejoiner.schedule();
@@ -974,6 +987,13 @@ class CallController extends Notifier<CallUiState> {
       null => CallUiFailure.network,
     };
   }
+
+  /// Only the server saying so ends a call we are rejoining: the call is over, or
+  /// we are no longer in it. Anything else -- above all a request that never
+  /// reached the server -- is a reason to try again, as Admin Web does.
+  bool _rejoinFoundCallOver(CallMediaSnapshot snapshot) =>
+      snapshot.failure == CallMediaFailure.tokenUnavailable &&
+      (snapshot.refusalCode == WireErrors.callAlreadyEnded || snapshot.refusalCode == WireErrors.callParticipantLeft);
 
   bool _alreadyOver(String? code) =>
       code == WireErrors.callAlreadyEnded ||

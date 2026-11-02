@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../data/repositories.dart';
+import '../errors/app_error.dart';
 import '../logging/redacting_logger.dart';
 import 'media_room.dart';
 import 'microphone_permission.dart';
@@ -72,6 +73,7 @@ class CallMediaSnapshot {
     this.microphoneMuted = false,
     this.remoteAudioParticipants = const <RemoteAudio>{},
     this.failure,
+    this.refusalCode,
   });
 
   final CallMediaPhase phase;
@@ -86,6 +88,13 @@ class CallMediaSnapshot {
   final Set<RemoteAudio> remoteAudioParticipants;
 
   final CallMediaFailure? failure;
+
+  /// With [CallMediaFailure.tokenUnavailable]: the server's code when the server
+  /// answered and refused (`COMM.CALL_ALREADY_ENDED`, ...); null when no answer came
+  /// -- offline, a timeout, a dropped socket. CHATSCHED-013 (review of #367): a phone
+  /// that loses Wi-Fi mid-call fails its rejoin's token request too, and only a
+  /// refusal may end the call; this layer does not decide which, it passes it on.
+  final String? refusalCode;
 
   bool get hasRemoteAudio => remoteAudioParticipants.isNotEmpty;
 
@@ -102,6 +111,7 @@ class CallMediaSnapshot {
         remoteAudioParticipants:
             remoteAudioParticipants ?? this.remoteAudioParticipants,
         failure: clearFailure ? null : (failure ?? this.failure),
+        refusalCode: clearFailure || failure != null ? null : refusalCode,
       );
 
   @override
@@ -213,10 +223,11 @@ class CallMediaClient {
       try {
         grant = await _calls.mediaToken(callId: callId);
       } catch (error) {
-        // The server refused, or the call is gone. Which of those it is belongs
-        // to the caller reading the AppError, not to this layer guessing.
+        // The server refused, the call is gone, or the request never got an answer.
+        // Which of those it is belongs to the caller, read from the server's code --
+        // not to this layer guessing.
         _log.warn('call media: no token, not joining');
-        _fail(CallMediaFailure.tokenUnavailable);
+        _fail(CallMediaFailure.tokenUnavailable, refusalCode: error is AppError ? error.code : null);
         return;
       }
       if (_disposed) return;
@@ -347,8 +358,8 @@ class CallMediaClient {
     }
   }
 
-  void _fail(CallMediaFailure failure) {
-    _emit(CallMediaSnapshot(phase: CallMediaPhase.failed, failure: failure));
+  void _fail(CallMediaFailure failure, {String? refusalCode}) {
+    _emit(CallMediaSnapshot(phase: CallMediaPhase.failed, failure: failure, refusalCode: refusalCode));
   }
 
   /// Drop the room and the subscription to it. Safe to call repeatedly, and

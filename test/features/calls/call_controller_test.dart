@@ -25,11 +25,13 @@ import 'package:jawwid_chat/core/call_media/media_room.dart';
 import 'package:jawwid_chat/core/call_media/microphone_permission.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
+import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/calls/application/call_capability.dart';
 import 'package:jawwid_chat/features/calls/application/call_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_media_providers.dart';
+import 'package:jawwid_chat/features/calls/application/media_rejoiner.dart';
 
 import 'w7_call_fakes.dart';
 
@@ -50,6 +52,7 @@ void main() {
   ProviderContainer build({
     bool signedInSession = true,
     bool canSwitchSpeaker = true,
+    Duration? rejoinLimit,
   }) {
     calls = FakeCalls();
     room = FakeRoom();
@@ -69,6 +72,7 @@ void main() {
         mediaRoomFactoryProvider.overrideWithValue(() => room),
         microphonePermissionProvider.overrideWithValue(mic),
         audioRouteProvider.overrideWithValue(audio),
+        if (rejoinLimit != null) callRejoinLimitProvider.overrideWithValue(rejoinLimit),
       ],
     );
     addTearDown(container.dispose);
@@ -84,10 +88,12 @@ void main() {
   Future<ProviderContainer> ready({
     bool signedInSession = true,
     bool canSwitchSpeaker = true,
+    Duration? rejoinLimit,
   }) async {
     final container = build(
       signedInSession: signedInSession,
       canSwitchSpeaker: canSwitchSpeaker,
+      rejoinLimit: rejoinLimit,
     );
     container.read(callControllerProvider);
     await settle();
@@ -99,8 +105,8 @@ void main() {
       c.read(callControllerProvider.notifier);
 
   /// Drive an outgoing call all the way to [CallUiPhase.live].
-  Future<ProviderContainer> liveOutgoing() async {
-    final container = await ready();
+  Future<ProviderContainer> liveOutgoing({Duration? rejoinLimit}) async {
+    final container = await ready(rejoinLimit: rejoinLimit);
     final controller = controllerOf(container);
     await controller.start(
       conversationId: 'conv_1',
@@ -683,6 +689,63 @@ void main() {
       final ended = stateOf(container);
       expect([ended.phase, ended.endReason], [CallUiPhase.ended, CallEndReason.connectionLost]);
       expect(calls.endCalls, isEmpty);
+    });
+
+    test('CHATSCHED-013 (review of #367): a rejoin whose token request never reaches the server (offline) keeps rejoining -- it does not end the call',
+        () async {
+      final container = await liveOutgoing();
+      room.announceConnected = false;
+      room.announcePublished = false;
+      calls.tokenError = const AppError(AppErrorKind.network);
+      final before = calls.tokenCalls.length;
+      room.drop();
+      await settle();
+      expect(calls.tokenCalls.length, before + 1, reason: 'the first rejoin went at once');
+      expect(stateOf(container).phase, CallUiPhase.reconnecting, reason: 'offline is not "the call is over"');
+      expect(stateOf(container).endReason, isNull);
+
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await settle();
+      expect(calls.tokenCalls.length, before + 2, reason: 'and again, after its wait');
+      expect(stateOf(container).phase, CallUiPhase.reconnecting);
+
+      // The network is back: the next rejoin gets its token and the call is live again.
+      calls.tokenError = null;
+      room.announceConnected = true;
+      room.announcePublished = true;
+      await Future<void>.delayed(const Duration(milliseconds: 2100));
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.live);
+      expect(calls.endCalls, isEmpty);
+    });
+
+    test('CHATSCHED-013: a refusal that is not "the call is over" is tried again too', () async {
+      final container = await liveOutgoing();
+      room.announceConnected = false;
+      room.announcePublished = false;
+      calls.tokenError = refusal(WireErrors.notConversationMember);
+      room.drop();
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.reconnecting);
+    });
+
+    test('CHATSCHED-013 (review of #367): rejoining is bounded -- past the grace and 30 s more, the call is over here too', () async {
+      final container = await liveOutgoing(rejoinLimit: const Duration(milliseconds: 500));
+      room.announceConnected = false;
+      room.announcePublished = false;
+      calls.tokenError = const AppError(AppErrorKind.network);
+      room.drop();
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.reconnecting);
+      // The second rejoin is due at 1 s, past the (shortened) limit: it is not made.
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await settle();
+      final ended = stateOf(container);
+      expect([ended.phase, ended.endReason], [CallUiPhase.ended, CallEndReason.connectionLost]);
+      final tries = calls.tokenCalls.length;
+      await Future<void>.delayed(const Duration(milliseconds: 2100));
+      await settle();
+      expect(calls.tokenCalls, hasLength(tries), reason: 'no rejoining after the call is over');
     });
 
     test('A12. an unreachable room fails, and offers a retry', () async {
