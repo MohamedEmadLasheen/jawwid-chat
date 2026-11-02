@@ -175,9 +175,15 @@ begin
   -- correction of a complaint, or anything about the teacher alone.
   if chat.sales_basis(new.created_by) is not null and new.kind in ('complaint', 'complaint_followup', 'testimonial', 'bonus', 'entry_void') then
     if new.refers_to is not null then
-      select * into v_target from chat.teacher_supervision_entry where id = new.refers_to;
+      -- Locked, as the follow-up guard locks it (20261031180000): a void, a
+      -- follow-up and a resolution of one entry serialize (review of #383).
+      select * into v_target from chat.teacher_supervision_entry where id = new.refers_to for update;
       if v_target.id is not null and (new.kind <> 'entry_void' or v_target.kind = 'testimonial')
          and (v_target.learner_id is not null or v_target.trial_prospect_id is not null)
+         -- A testimonial is corrected only by the department that recorded it,
+         -- the Operations Manager or the super admin -- Sales included (owner
+         -- decision on #374; the follow-up guard checks every author too).
+         and (new.kind <> 'entry_void' or chat.may_void_testimonial(new.created_by, v_target.created_by, new.organization_id))
          and chat.may_record_teacher_row(new.created_by, new.teacher_id, v_target.learner_id, v_target.trial_prospect_id, new.organization_id) then
         return new;
       end if;

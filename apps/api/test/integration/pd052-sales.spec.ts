@@ -264,4 +264,37 @@ describe('PD-52 PR-5: Sales', () => {
     expect(picker.students.map((x) => x.id)).toEqual([s.learnerId]);
     expect(picker.trials).toEqual([{ id: prospectId, name: 'prospect_q' }]);
   });
+
+  it('6. review of #383: Sales cannot void another department\'s testimonial, even straight into the database; two voids at once land once', async () => {
+    // A Teachers-department testimonial about learner_l, a child Sales reaches.
+    const theirs = await records.recordTestimonial(tsupId, s.teacherId, { body: 'Patient with him.', source: 'staff_observation', learnerId: s.learnerId });
+    expect(await code(records.voidEntry(salesId, theirs.id, { reason: 'x' }))).toBe('COMM.TEACHER_FILE_DENIED:403');
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, refers_to, created_by)
+         values (chat.default_organization_id(), $1::uuid, 'entry_void', 'x', $2::uuid, $3::uuid)`,
+        s.teacherId,
+        theirs.id,
+        salesId,
+      ),
+    ).rejects.toThrow(/department that recorded it|Teachers department/);
+    expect(await g.prisma.teacherSupervisionEntry.count({ where: { kind: 'entry_void', refersTo: theirs.id } })).toBe(0);
+
+    // Its own: two voids at once, straight into the database -- exactly one lands, every round.
+    for (let round = 0; round < 5; round++) {
+      const mine = await records.recordTestimonial(salesId, s.teacherId, { body: `Thanks ${round}.`, source: 'parent_call', learnerId: s.learnerId });
+      const insert = (reason: string) =>
+        g.prisma.$executeRawUnsafe(
+          `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, refers_to, created_by)
+           values (chat.default_organization_id(), $1::uuid, 'entry_void', $2, $3::uuid, $4::uuid)`,
+          s.teacherId,
+          reason,
+          mine.id,
+          salesId,
+        );
+      const settled = await Promise.allSettled([insert('first'), insert('second')]);
+      expect(settled.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+      expect(await g.prisma.teacherSupervisionEntry.count({ where: { kind: 'entry_void', refersTo: mine.id } })).toBe(1);
+    }
+  });
 });
