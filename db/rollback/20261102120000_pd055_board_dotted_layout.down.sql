@@ -7,8 +7,9 @@
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261102120000_pd055_board_dotted_layout.down.sql
 
 update chat.whiteboard_page set layout = 'plain' where layout = 'dotted';
--- The update fires the page's deferred triggers; run them before the ALTER, or
--- it fails with "pending trigger events" whenever a dotted page existed.
+-- A precaution (whiteboard_page has no deferred triggers today): should one be
+-- added, its events run before the ALTER instead of failing it with "pending
+-- trigger events" inside this one transaction -- the fault #367's migration had.
 set constraints all immediate;
 alter table chat.whiteboard_page drop constraint if exists whiteboard_page_layout_check;
 alter table chat.whiteboard_page add constraint whiteboard_page_layout_check
