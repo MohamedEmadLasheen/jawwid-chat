@@ -6,9 +6,14 @@
 /// people offered are the user's own conversations.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart' hide Page;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/realtime/call_event.dart';
+import 'package:jawwid_chat/features/calls/application/call_session.dart';
+import 'package:jawwid_chat/features/calls/data/account_call_history.dart';
 import 'package:jawwid_chat/features/calls/domain/scheduled_call.dart';
 import 'package:jawwid_chat/features/calls/presentation/calls_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -37,6 +42,7 @@ void main() {
     CallOutcome outcome = CallOutcome.answered,
     CallHistoryDirection? direction,
     bool isGroup = false,
+    bool inProgress = false,
   }) => CallHistoryEntry(
     id: id,
     conversationId: conversationId,
@@ -44,6 +50,7 @@ void main() {
     startedAt: DateTime.now().subtract(const Duration(hours: 1)),
     outcome: outcome,
     isGroup: isGroup,
+    inProgress: inProgress,
     duration: const Duration(minutes: 2),
     direction: direction,
   );
@@ -447,4 +454,66 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  // CHATSCHED-016 (CHATSCHED-013 retest): killed and relaunched within the 60 s grace, the Calls
+  // tab showed the call as a red "Missed" until a pull-to-refresh.
+  testWidgets('a call that has not ended is "In progress", never "Missed"', (tester) async {
+    await tester.pumpWidget(
+      callsHarness(
+        home: const CallsScreen(),
+        conversations: [people],
+        calls: PerConversationCalls({}),
+        scheduledCalls: RecordingScheduled(),
+        history: StaticHistory([entry(id: 'grace', direction: CallHistoryDirection.incoming, outcome: CallOutcome.missed, inProgress: true)]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(l10n.callOutcomeInProgress), findsOneWidget);
+    expect(find.textContaining(l10n.callOutcomeMissed), findsNothing);
+    expect(find.byIcon(Icons.call_missed), findsNothing);
+    expect(find.byIcon(Icons.call_received), findsOneWidget);
+  });
+
+  testWidgets('when the server says the call ended, its row becomes its outcome without a pull-to-refresh', (tester) async {
+    final events = StreamController<CallEvent>.broadcast();
+    addTearDown(events.close);
+    final history = SequencedHistory([
+      [entry(id: 'grace', direction: CallHistoryDirection.incoming, outcome: CallOutcome.missed, inProgress: true)],
+      [entry(id: 'grace', direction: CallHistoryDirection.incoming, outcome: CallOutcome.answered)],
+    ]);
+    await tester.pumpWidget(
+      callsHarness(
+        home: const CallsScreen(),
+        conversations: [people],
+        calls: PerConversationCalls({}),
+        scheduledCalls: RecordingScheduled(),
+        history: history,
+        extra: [callEventsProvider.overrideWith((ref) => events.stream)],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining(l10n.callOutcomeInProgress), findsOneWidget);
+    expect(history.reads, 1);
+
+    events.add(const CallEnded(callId: 'grace', conversationId: 'd1', outcome: CallOutcome.answered, duration: Duration(seconds: 44)));
+    await tester.pumpAndSettle();
+
+    expect(history.reads, 2);
+    expect(find.textContaining(l10n.callOutcomeInProgress), findsNothing);
+    expect(find.textContaining(l10n.callOutcomeAnswered), findsOneWidget);
+    expect(find.textContaining(l10n.callOutcomeMissed), findsNothing);
+  });
+}
+
+/// Answers the account history with the next page each time it is read.
+class SequencedHistory implements AccountCallHistoryRepository {
+  SequencedHistory(this.pages);
+
+  final List<List<CallHistoryEntry>> pages;
+  int reads = 0;
+
+  @override
+  Future<Page<CallHistoryEntry>> page({String? cursor}) async =>
+      Page(items: pages[(reads++).clamp(0, pages.length - 1)]);
 }

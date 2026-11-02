@@ -157,6 +157,7 @@
   "callOutcomeAnswered": "تم الرد",
   "callOutcomeMissed": "فائتة",
   "callOutcomeDeclined": "مرفوضة",
+  "callOutcomeInProgress": "جارية",
   "callDuration": "{minutes} د {seconds} ث",
   "@callDuration": {
     "placeholders": {

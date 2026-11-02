@@ -353,6 +353,9 @@ class L10nEn extends L10n {
   String get callOutcomeDeclined => 'Declined';
 
   @override
+  String get callOutcomeInProgress => 'In progress';
+
+  @override
   String callDuration(int minutes, int seconds) {
     return '${minutes}m ${seconds}s';
   }

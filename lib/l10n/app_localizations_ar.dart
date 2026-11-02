@@ -361,6 +361,9 @@ class L10nAr extends L10n {
   String get callOutcomeDeclined => 'مرفوضة';
 
   @override
+  String get callOutcomeInProgress => 'جارية';
+
+  @override
   String callDuration(int minutes, int seconds) {
     return '$minutes د $seconds ث';
   }
