@@ -412,6 +412,31 @@
   "@attachFile": {
     "description": "Attachment menu entry for a document."
   },
+  "attachVideo": "Video",
+  "@attachVideo": {
+    "description": "PARENT-017: attachment menu entry for a video from the library."
+  },
+  "attachRecordVideo": "Record video",
+  "@attachRecordVideo": {
+    "description": "PARENT-017: attachment menu entry that records a video with the camera (up to 3 minutes)."
+  },
+  "videoRecordPermissionDenied": "Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.",
+  "@videoRecordPermissionDenied": {
+    "description": "PARENT-017: shown when recording a video was refused the camera or the microphone."
+  },
+  "cancelUpload": "Cancel sending",
+  "@cancelUpload": {
+    "description": "PARENT-017: the button on a sending video that stops its upload and takes the message back."
+  },
+  "uploadingPercent": "Sending… {percent}%",
+  "@uploadingPercent": {
+    "description": "PARENT-017: how far a video's upload has gone.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "attachmentPhotoLabel": "Photo",
   "@attachmentPhotoLabel": {
     "description": "Stands in for a photo where a message has no text."

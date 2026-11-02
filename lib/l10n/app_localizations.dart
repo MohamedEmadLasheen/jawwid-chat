@@ -1513,6 +1513,36 @@ abstract class L10n {
   /// **'File'**
   String get attachFile;
 
+  /// PARENT-017: attachment menu entry for a video from the library.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachVideo;
+
+  /// PARENT-017: attachment menu entry that records a video with the camera (up to 3 minutes).
+  ///
+  /// In en, this message translates to:
+  /// **'Record video'**
+  String get attachRecordVideo;
+
+  /// PARENT-017: shown when recording a video was refused the camera or the microphone.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.'**
+  String get videoRecordPermissionDenied;
+
+  /// PARENT-017: the button on a sending video that stops its upload and takes the message back.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sending'**
+  String get cancelUpload;
+
+  /// PARENT-017: how far a video's upload has gone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending… {percent}%'**
+  String uploadingPercent(int percent);
+
   /// Stands in for a photo where a message has no text.
   ///
   /// In en, this message translates to:

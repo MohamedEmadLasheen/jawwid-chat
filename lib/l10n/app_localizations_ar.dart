@@ -850,6 +850,24 @@ class L10nAr extends L10n {
   String get attachFile => 'ملف';
 
   @override
+  String get attachVideo => 'فيديو';
+
+  @override
+  String get attachRecordVideo => 'تسجيل فيديو';
+
+  @override
+  String get videoRecordPermissionDenied =>
+      'يحتاج جَوِّد إلى إذن لاستخدام الكاميرا والميكروفون لتسجيل فيديو. يمكنك السماح بذلك من الإعدادات.';
+
+  @override
+  String get cancelUpload => 'إلغاء الإرسال';
+
+  @override
+  String uploadingPercent(int percent) {
+    return 'جارٍ الإرسال… $percent٪';
+  }
+
+  @override
   String get attachmentPhotoLabel => 'صورة';
 
   @override

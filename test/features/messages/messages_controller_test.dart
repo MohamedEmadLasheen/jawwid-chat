@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/data/http/attachment_uploader.dart' show UploadCancel;
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/features/messages/application/messages_controller.dart';
@@ -101,6 +102,8 @@ class _RecordingMessageRepository implements MessageRepository {
   Future<UploadedAttachment> uploadAttachment({
     required String conversationId,
     required PendingAttachment attachment,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   }) async {
     attachmentUploads.add(attachment);
     if (uploadFailuresRemaining > 0) {
