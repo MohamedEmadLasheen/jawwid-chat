@@ -4744,6 +4744,21 @@ class L10nAr extends L10n {
   String get boardToolText => 'نص';
 
   @override
+  String get boardTextSmaller => 'تصغير النص';
+
+  @override
+  String get boardTextBigger => 'تكبير النص';
+
+  @override
+  String get boardTextBold => 'عريض';
+
+  @override
+  String get boardTextColour => 'لون النص';
+
+  @override
+  String get boardTextDone => 'تم';
+
+  @override
   String get boardToolRect => 'مستطيل';
 
   @override
@@ -4799,12 +4814,6 @@ class L10nAr extends L10n {
 
   @override
   String get boardTajweedIzhar => 'الإظهار';
-
-  @override
-  String get boardTextTitle => 'نص';
-
-  @override
-  String get boardTextHint => 'اكتب هنا';
 
   @override
   String get boardElementUnknown => 'لا يظهر في هذا الإصدار';

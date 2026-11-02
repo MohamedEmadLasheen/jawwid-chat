@@ -147,6 +147,8 @@ class BoardGeometry {
     return switch (e) {
       InkElement(:final points, :final width) => _nearPolyline(points.map((p) => p.offset).toList(), point, width / 2 + slop),
       LineElement(:final from, :final to, :final width) => _distanceToSegment(point, from, to) <= width / 2 + slop,
+      // PD-55: a turned text is hit where it is drawn.
+      TextElement() => e.box.inflate(slop).contains(e.toBox(point)),
       _ => true,
     };
   }

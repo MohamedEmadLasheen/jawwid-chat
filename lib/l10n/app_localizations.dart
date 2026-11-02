@@ -7993,6 +7993,36 @@ abstract class L10n {
   /// **'Text'**
   String get boardToolText;
 
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get boardTextSmaller;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bigger text'**
+  String get boardTextBigger;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get boardTextBold;
+
+  /// PD-55 whiteboard: a quick colour on the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Text colour'**
+  String get boardTextColour;
+
+  /// PD-55 whiteboard: ends typing a text on the board.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get boardTextDone;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8106,18 +8136,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Izhar'**
   String get boardTajweedIzhar;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Text'**
-  String get boardTextTitle;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Write here'**
-  String get boardTextHint;
 
   /// PD-39 whiteboard.
   ///

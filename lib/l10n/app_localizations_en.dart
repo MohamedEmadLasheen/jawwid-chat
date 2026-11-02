@@ -4650,6 +4650,21 @@ class L10nEn extends L10n {
   String get boardToolText => 'Text';
 
   @override
+  String get boardTextSmaller => 'Smaller text';
+
+  @override
+  String get boardTextBigger => 'Bigger text';
+
+  @override
+  String get boardTextBold => 'Bold';
+
+  @override
+  String get boardTextColour => 'Text colour';
+
+  @override
+  String get boardTextDone => 'Done';
+
+  @override
   String get boardToolRect => 'Rectangle';
 
   @override
@@ -4705,12 +4720,6 @@ class L10nEn extends L10n {
 
   @override
   String get boardTajweedIzhar => 'Izhar';
-
-  @override
-  String get boardTextTitle => 'Text';
-
-  @override
-  String get boardTextHint => 'Write here';
 
   @override
   String get boardElementUnknown => 'Not shown in this version';

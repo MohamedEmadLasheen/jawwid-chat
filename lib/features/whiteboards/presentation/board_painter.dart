@@ -358,22 +358,36 @@ TextDirection textDirectionOf(String text) {
   return TextDirection.ltr;
 }
 
-TextPainter layoutBoardText(String text, double fontSize, Color color, double maxWidth) {
+/// The board's text style: one place, so the painter, the export and the
+/// in-place editor (PD-55) lay text out identically.
+TextStyle boardTextStyle(double fontSize, Color color, {bool bold = false}) =>
+    TextStyle(fontFamily: kBoardFont, fontSize: fontSize, color: color, height: 1.4, fontWeight: bold ? FontWeight.w700 : FontWeight.w400);
+
+TextPainter layoutBoardText(String text, double fontSize, Color color, double maxWidth, {bool bold = false}) {
   final dir = textDirectionOf(text);
   return TextPainter(
-    text: TextSpan(
-      text: text,
-      style: TextStyle(fontFamily: kBoardFont, fontSize: fontSize, color: color, height: 1.4),
-    ),
+    text: TextSpan(text: text, style: boardTextStyle(fontSize, color, bold: bold)),
     textDirection: dir,
     textAlign: dir == TextDirection.rtl ? TextAlign.right : TextAlign.left,
   )..layout(maxWidth: maxWidth);
 }
 
 void _paintText(Canvas canvas, TextElement t) {
-  final tp = layoutBoardText(t.text, t.fontSize, t.color, t.size.width);
+  final tp = layoutBoardText(t.text, t.fontSize, t.color, t.size.width, bold: t.bold);
   final dx = tp.textDirection == TextDirection.rtl ? t.size.width - tp.width : 0.0;
+  if (t.rotation == 0) {
+    tp.paint(canvas, t.topLeft + Offset(dx, 0));
+    return;
+  }
+  // PD-55: turned about the box's centre.
+  final c = t.box.center;
+  canvas
+    ..save()
+    ..translate(c.dx, c.dy)
+    ..rotate(t.rotation)
+    ..translate(-c.dx, -c.dy);
   tp.paint(canvas, t.topLeft + Offset(dx, 0));
+  canvas.restore();
 }
 
 /// Icon stamps are Material icons drawn as glyphs; text stamps are our font.

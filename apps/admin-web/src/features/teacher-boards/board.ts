@@ -59,7 +59,8 @@ export type BoardElement =
   | { kind: 'ink'; id: string; highlight: boolean; points: StrokePoint[]; color: string; width: number }
   | { kind: 'shape'; id: string; shape: ShapeKind; rect: Rect; stroke: string; fill: string | null; width: number }
   | { kind: 'line'; id: string; arrow: boolean; bothEnds: boolean; x1: number; y1: number; x2: number; y2: number; color: string; width: number }
-  | { kind: 'text'; id: string; text: string; rect: Rect; size: number; color: string }
+  /** PD-55: `bold` and `rotation` (radians, about the box's centre) are optional; a PD-39 text has neither. */
+  | { kind: 'text'; id: string; text: string; rect: Rect; size: number; color: string; bold: boolean; rotation: number }
   | { kind: 'stamp'; id: string; stamp: StampKind; rect: Rect; color: string; text: string | null }
   | { kind: 'verse'; id: string; ref: VerseRef; rect: Rect; size: number; color: string }
   /** PR-4: an image names its board asset; the board answer signs its URL. */
@@ -157,7 +158,16 @@ export function parseElement(j: Json): BoardElement {
         width: num(j.width, 4),
       }
     case 'text':
-      return { kind: 'text', id, text: typeof j.text === 'string' ? j.text : '', rect: rectOf(j, 300, 60), size: num(j.size, 48), color: color(j.color) }
+      return {
+        kind: 'text',
+        id,
+        text: typeof j.text === 'string' ? j.text : '',
+        rect: rectOf(j, 300, 60),
+        size: num(j.size, 48),
+        color: color(j.color),
+        bold: j.bold === true,
+        rotation: num(j.rotation, 0),
+      }
     case 'stamp':
       return {
         kind: 'stamp',
