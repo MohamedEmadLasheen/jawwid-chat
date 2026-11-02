@@ -43,6 +43,7 @@ import { TeacherPayrollService } from '../../src/teacher-file/teacher-payroll.se
 import { SupervisionService } from '../../src/lessons/supervision.service';
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { offsetInOneYear } from './calendar-safe';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -262,7 +263,9 @@ describe('5. money and the Teacher File stay where they were', () => {
 
 describe('6. leave and complaints, with the Teachers department\'s rights', () => {
   it('decides her teacher\'s leave request; not another\'s', async () => {
-    const req = await leave.request(s.teacherId, { firstDay: plusDays(today, 30), lastDay: plusDays(today, 31), reason: 'family' });
+    // A leave never crosses a calendar year: a month out, moved past 31 December when it would.
+    const n = offsetInOneYear(today, 30, 0, 1);
+    const req = await leave.request(s.teacherId, { firstDay: plusDays(today, n), lastDay: plusDays(today, n + 1), reason: 'family' });
     expect((await leave.list(ops(), { state: 'requested' })).requests.map((r) => r.id)).toEqual([req.request.id]);
     await expect(leave.approve(ops(), req.request.id, {})).resolves.toBeDefined();
   });
@@ -403,9 +406,10 @@ describe('8. the scope\'s time bound (P2-3): a lesson ties its teacher for chat.
 
 describe('9. leave allowance is the Teachers department\'s (P1-1): absent for Operations, at the server', () => {
   it('overview, one teacher\'s leave, and a request\'s balance', async () => {
-    const year = Number(today.slice(0, 4));
+    const n = offsetInOneYear(today, 30, 0, 1);
+    const year = Number(plusDays(today, n).slice(0, 4)); // the leave's own year
     await leave.setAllowance(tmgrId, s.teacherId, { year, days: 21 });
-    const req = await leave.request(s.teacherId, { firstDay: plusDays(today, 30), lastDay: plusDays(today, 31), reason: 'family' });
+    const req = await leave.request(s.teacherId, { firstDay: plusDays(today, n), lastDay: plusDays(today, n + 1), reason: 'family' });
 
     const mine = (await leave.overview(ops())).teachers.find((t) => t.id === s.teacherId);
     expect(mine).toBeDefined();
@@ -552,10 +556,11 @@ describe('12. a parent\'s complaint is about a family (re-review, P2-A)', () => 
 
 describe('13. leave responses, as Operations reads them (re-review)', () => {
   it('approve, decline and cancel answer without a balance', async () => {
-    const year = Number(today.slice(0, 4));
+    const [na, nb] = [offsetInOneYear(today, 40, 0, 1), offsetInOneYear(today, 50, 0, 1)];
+    const year = Number(plusDays(today, na).slice(0, 4)); // the approved leave's own year
     await leave.setAllowance(tmgrId, s.teacherId, { year, days: 21 });
-    const a = await leave.request(s.teacherId, { firstDay: plusDays(today, 40), lastDay: plusDays(today, 41), reason: 'family' });
-    const b = await leave.request(s.teacherId, { firstDay: plusDays(today, 50), lastDay: plusDays(today, 51), reason: 'family' });
+    const a = await leave.request(s.teacherId, { firstDay: plusDays(today, na), lastDay: plusDays(today, na + 1), reason: 'family' });
+    const b = await leave.request(s.teacherId, { firstDay: plusDays(today, nb), lastDay: plusDays(today, nb + 1), reason: 'family' });
     const answers = [
       (await leave.approve(ops(), a.request.id, {})).request,
       (await leave.decline(ops(), b.request.id, { note: 'busy week' })).request,
@@ -566,9 +571,12 @@ describe('13. leave responses, as Operations reads them (re-review)', () => {
 
   it('a colliding lesson of another family comes without the child\'s name; hers is named', async () => {
     const y = await otherFamily();
-    await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(30 * DAY), endsAt: at(30 * DAY + HOUR / 2) });
-    await lessons.schedule(tsupId, { learnerId: y.learnerId, startsAt: at(30 * DAY + 2 * HOUR), endsAt: at(30 * DAY + 2.5 * HOUR) });
-    await leave.request(s.teacherId, { firstDay: plusDays(today, 29), lastDay: plusDays(today, 32), reason: 'family' });
+    // The lessons on day n + 1, the leave n .. n + 3 around them, inside one calendar year.
+    const n = offsetInOneYear(today, 29, 0, 3);
+    const day = (n + 1) * DAY;
+    await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(day), endsAt: at(day + HOUR / 2) });
+    await lessons.schedule(tsupId, { learnerId: y.learnerId, startsAt: at(day + 2 * HOUR), endsAt: at(day + 2.5 * HOUR) });
+    await leave.request(s.teacherId, { firstDay: plusDays(today, n), lastDay: plusDays(today, n + 3), reason: 'family' });
     const [mine] = (await leave.list(ops(), { state: 'requested' })).requests;
     expect(mine.collidingLessons?.map((l) => l.learnerName)).toEqual(['learner_l', null]);
     const [theirs] = (await leave.list(tsupId, { state: 'requested' })).requests;
