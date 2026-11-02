@@ -10,6 +10,7 @@ import { TeacherScopeService, pageRowVisible, scopeCovers, type PageScope } from
 import { complaintAbout, familiesOfComplaints, familyOfConversation } from './complaint-family';
 import type { TeacherFileAccess, TeacherFilePageAccess, TeachersDepartmentRole } from '../platform/teacher-file-policy';
 import { OPERATIONS_ENTRY_KINDS, teacherFilePageAccess } from '../platform/teacher-file-policy';
+import { decidePd012StaffAccess } from '../platform/pd012-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { ActorKind, ConversationType, StaffRole } from '../communication/contracts/vocab';
@@ -625,6 +626,20 @@ export class TeacherFileService {
    * as it is; an Operations supervisor passes with the page's writes only
    * (teacherFilePageAccess). Callers narrow by teacherScope.pageScopeOf.
    */
+  /**
+   * PD-52: what the teacher-records pages' access answer is decided from -- the
+   * caller's basis and their department rights BEFORE the basis adjusts them
+   * (decideTeacherRecordsAccess applies it, as pageGate does). Never throws.
+   */
+  async recordsInputs(actor: Actor) {
+    const teachersRole = await this.teachersDepartmentRole(actor);
+    return {
+      basis: await this.teacherScope.pageBasis(actor),
+      pd012: decidePd012StaffAccess(actor, teachersRole),
+      file: this.authz.teacherFileAccess(actor, { organizationId: actor.organizationId ?? '', teachersDepartmentRole: teachersRole }),
+    };
+  }
+
   async pageGate(actorId: string, needs: (a: TeacherFilePageAccess) => boolean) {
     const actor = await this.conversations.requireActor(actorId);
     const basis = await this.teacherScope.pageBasis(actor);

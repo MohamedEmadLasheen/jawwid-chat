@@ -81,6 +81,19 @@ const DEPARTMENT_MANAGER = k(
   'tasks.manage',
 );
 
+/**
+ * PD-52: the Attendance & Complaints and the Grants & Testimonials pages --
+ * every key, for whoever works the Teacher Supervision page today (the
+ * services narrow by TeacherScopeService.pageRowsOf, as before).
+ */
+const TEACHER_RECORDS = k(
+  'teacher_attendance.view',
+  'teacher_attendance.record',
+  'teacher_attendance.decide',
+  'teacher_grants.view',
+  'teacher_grants.record',
+);
+
 /** Operations supervisors: their families' money, contact record, lessons and journey (PD-8, PD-15, PD-17). */
 const OPERATIONS_MEMBER = k(
   'org.covers',
@@ -111,6 +124,8 @@ const OPERATIONS_MEMBER = k(
   // the Teacher File itself: no teacher_files.* key.
   'teacher_supervision.view',
   'teacher_supervision.record',
+  // PD-52: the two teacher-records pages, on the same basis (plan §6).
+  ...TEACHER_RECORDS,
   // PD-41: an Operations supervisor requests their students' certificates,
   // approves the design, sends it and publishes its Story (owner 2026-10-28).
   'certificates.view',
@@ -133,6 +148,7 @@ const TEACHERS_MEMBER = k(
   'certificates.story',
   'teacher_supervision.view',
   'teacher_supervision.record',
+  ...TEACHER_RECORDS,
   'supervision.chats',
   'teacher_files.view',
   'teacher_files.supervise',

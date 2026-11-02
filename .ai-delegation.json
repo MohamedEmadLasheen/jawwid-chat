@@ -1,0 +1,18 @@
+{
+  "branch_prefix": "claude/codex-",
+  "protected": [
+    "scripts/ai/*",
+    "tools/codex-delegate/*",
+    "docs/product/pd-registry/*",
+    "docs/product/migration-slots/*"
+  ],
+  "migration_paths": [
+    "supabase/migrations/*",
+    "apps/api/prisma/migrations/*"
+  ],
+  "prepare_allow": [
+    "npm ci",
+    "flutter pub get"
+  ],
+  "load_max": 60
+}
