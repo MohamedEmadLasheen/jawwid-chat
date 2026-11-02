@@ -284,6 +284,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${APNS_PRODUCTION}
+      - key: APNS_VOIP_ENABLED
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_VOIP_ENABLED}
       - key: LIVEKIT_URL
         scope: RUN_TIME
         type: GENERAL
@@ -665,6 +669,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${APNS_PRODUCTION}
+      - key: APNS_VOIP_ENABLED
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_VOIP_ENABLED}
       - key: LIVEKIT_URL
         scope: RUN_TIME
         type: GENERAL
