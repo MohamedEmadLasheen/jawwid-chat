@@ -318,17 +318,40 @@ changed_files_z() { # $1 = output file
   done < <(g status --porcelain=v1 -z --untracked-files=all)
 }
 
-safe_rm() { # $1 = path relative to the worktree; never through a symlinked component
+safe_rm() { # $1 = path relative to the worktree
+  # Race-safe: every directory is opened relative to its parent's file descriptor with
+  # O_NOFOLLOW, and every unlink/rmdir happens through those descriptors, so a symlink
+  # swapped in at any moment (by a process the agent left running) is never followed.
   "$PY" -I -c '
-import os, shutil, sys
-root = os.path.realpath(sys.argv[1]); rel = sys.argv[2].rstrip("/")
-if not rel or rel.startswith("/") or ".." in rel.split("/"): sys.exit(1)
-parent = os.path.join(root, os.path.dirname(rel)) if os.path.dirname(rel) else root
-if os.path.realpath(parent) != os.path.normpath(parent): sys.exit(1)
-target = os.path.join(parent, os.path.basename(rel))
-if os.path.islink(target) or os.path.isfile(target): os.unlink(target)
-elif os.path.isdir(target): shutil.rmtree(target)
-' "$WT" "$1" || log "refused to remove $1 (unsafe path)"
+import os, stat, sys
+D = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+rel = sys.argv[2].rstrip("/")
+parts = [p for p in rel.split("/") if p]
+if not parts or rel.startswith("/") or ".." in parts or "." in parts: sys.exit(1)
+def remove_at(dfd, name):
+    st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+    if stat.S_ISDIR(st.st_mode):
+        sub = os.open(name, D, dir_fd=dfd)
+        try:
+            for entry in os.scandir(sub):
+                remove_at(sub, entry.name)
+        finally:
+            os.close(sub)
+        os.rmdir(name, dir_fd=dfd)
+    else:
+        os.unlink(name, dir_fd=dfd)          # files and symlinks: the link itself, never its target
+fd = os.open(sys.argv[1], D)
+try:
+    for comp in parts[:-1]:
+        nxt = os.open(comp, D, dir_fd=fd)    # fails (ELOOP/ENOTDIR) if comp is a symlink
+        os.close(fd); fd = nxt
+    try:
+        remove_at(fd, parts[-1])
+    except FileNotFoundError:
+        pass
+finally:
+    os.close(fd)
+' "$WT" "$1" 2>/dev/null || log "refused to remove $1 (unsafe path)"
 }
 
 ignored_snapshot() { # $1 = output file: ignored entries (git collapses whole ignored directories)

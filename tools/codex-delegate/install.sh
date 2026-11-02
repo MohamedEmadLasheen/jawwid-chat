@@ -103,11 +103,11 @@ is_ours() { # $1 = file
   head -3 "$1" | grep -q '^# codex-delegate' && return 0
   return 1
 }
-put_owned() { # $1 = source, $2 = target
+put_owned() { # $1 = source, $2 = target, $3 = mode (default 644)
   if [ -f "$2" ] && ! is_ours "$2"; then
     say "SKIPPED (not ours; rename or remove it to install): $2"; problems=$((problems + 1)); return 0
   fi
-  put_file "$1" "$2" 644
+  put_file "$1" "$2" "${3:-644}"
 }
 merge_protected() { # create if missing; append default rules that are absent; never remove
   local target="$AI_HOME/protected-repos.conf" src="$SRC/global/protected-repos.conf" line missing=""
@@ -127,7 +127,7 @@ case "$MODE" in
     [ "$MODE" = --install ] && MODE=install
     command -v git >/dev/null || { say "git is required"; exit 1; }
     [ -x /usr/bin/python3 ] || { say "/usr/bin/python3 is required"; exit 1; }
-    put_file "$SRC/codex-delegate" "$BIN_DIR/codex-delegate" 755
+    put_owned "$SRC/codex-delegate" "$BIN_DIR/codex-delegate" 755
     for t in "$SRC"/templates/*; do put_file "$t" "$AI_HOME/engine/templates/$(basename "$t")" 644; done
     merge_protected
     put_block "$SRC/global/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md"

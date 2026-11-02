@@ -54,4 +54,7 @@ env JAWWID_AI_HOME="$H4/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H4/bin2" CLAUDE_CON
 env JAWWID_AI_HOME="$H4/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H4/bin" CLAUDE_CONFIG_HOME="$H4/.claude" CODEX_HOME="$H4/.codex" AGENTS_SKILLS_HOME="$H4/.agents/skills" bash "$INSTALL" --uninstall > "$H4/ulog" 2>&1 || true
 check "uninstall never deletes a foreign codex-delegate binary" 'grep -q "someone else" "$H4/bin/codex-delegate"'
 check "uninstall writes through a symlinked CLAUDE.md" '[ -L "$H4/.claude/CLAUDE.md" ] && ! grep -q "codex-delegate:begin" "$H4/dotfiles/CLAUDE.md" && grep -qx mine "$H4/dotfiles/CLAUDE.md"'
+H5="$H/fifth"; mkdir -p "$H5/bin"; printf '#!/bin/sh\necho not the engine\n' > "$H5/bin/codex-delegate"; chmod +x "$H5/bin/codex-delegate"
+rc5=0; env JAWWID_AI_HOME="$H5/.jawwid-ai" CODEX_DELEGATE_BIN_DIR="$H5/bin" CLAUDE_CONFIG_HOME="$H5/.claude" CODEX_HOME="$H5/.codex" AGENTS_SKILLS_HOME="$H5/.agents/skills" bash "$INSTALL" > "$H5/log" 2>&1 || rc5=$?
+check "install never overwrites a foreign codex-delegate binary" 'grep -q "not the engine" "$H5/bin/codex-delegate" && grep -q "not ours" "$H5/log" && [ "$rc5" = 1 ]'
 echo; echo "$pass passed, $fail failed"; [ "$fail" -eq 0 ]
