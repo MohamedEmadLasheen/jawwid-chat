@@ -70,12 +70,14 @@ export class FamilyAccessService {
     const family = await this.prisma.family.findFirst({ where: { id: familyId, organizationId: org }, select: { id: true } });
     if (!family) throw invalid('familyId: no such family');
 
-    const startsAt = new Date();
-    const endsAt = new Date(startsAt.getTime() + hours * 3_600_000);
     const row = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.familyAccessGrant.create({
-        data: { organizationId: org, familyId, granteeId, grantedBy: actor.actorId, purpose, startsAt, endsAt },
-      });
+      // One clock: the database's now() opens the window, as it decides whether the grant is active.
+      const [{ id }] = await tx.$queryRaw<Array<{ id: string }>>`
+        INSERT INTO chat.family_access_grant (organization_id, family_id, grantee_id, granted_by, purpose, ends_at)
+        VALUES (${org}::uuid, ${familyId}::uuid, ${granteeId}::uuid, ${actor.actorId}::uuid, ${purpose},
+                now() + make_interval(hours => ${hours}::int))
+        RETURNING id::text AS id`;
+      const created = await tx.familyAccessGrant.findUniqueOrThrow({ where: { id } });
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'family_access.granted',
@@ -86,8 +88,8 @@ export class FamilyAccessService {
       });
       return created;
     });
-    this.log.log(`family access ${row.id}: staff ${granteeId} on family ${familyId} until ${endsAt.toISOString()}, by ${actor.actorId}`);
-    return (await this.dtos([row]))[0]!;
+    this.log.log(`family access ${row.id}: staff ${granteeId} on family ${familyId} until ${row.endsAt.toISOString()}, by ${actor.actorId}`);
+    return (await this.dtos([row], await dbNow(this.prisma)))[0]!;
   }
 
   /**
@@ -99,7 +101,7 @@ export class FamilyAccessService {
     actor: Actor,
   ): Promise<{ grants: FamilyAccessGrantDto[]; canGrant: boolean; grantees?: Array<{ id: string; name: string }> }> {
     const org = requireStaff(actor);
-    const now = new Date();
+    const now = await dbNow(this.prisma);
     const canGrant = await this.mayGrant(actor, org);
     const rows = canGrant
       ? await this.prisma.familyAccessGrant.findMany({
@@ -111,7 +113,7 @@ export class FamilyAccessService {
           where: { organizationId: org, granteeId: actor.actorId, revokedAt: null, startsAt: { lte: now }, endsAt: { gt: now } },
           orderBy: { endsAt: 'asc' },
         });
-    const grants = await this.dtos(rows);
+    const grants = await this.dtos(rows, now);
     return canGrant ? { grants, canGrant, grantees: await this.grantees(actor, org) } : { grants, canGrant };
   }
 
@@ -141,29 +143,33 @@ export class FamilyAccessService {
     if (!row || !(row.grantedBy === actor.actorId || (await this.mayGrant(actor, org)))) {
       throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such grant of yours');
     }
-    const now = new Date();
-    if (row.revokedAt || row.endsAt <= now) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, 'this grant has already ended', 409);
     const updated = await this.prisma.$transaction(async (tx) => {
-      const done = await tx.familyAccessGrant.update({
-        where: { id: row.id },
-        data: { revokedAt: now, revokedBy: actor.actorId, revokeReason: reason },
-      });
+      // Conditional, on the database's clock: of two revokes at once (or a revoke
+      // and the end of the window) exactly one changes the row; the other is a 409.
+      const claimed = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE chat.family_access_grant
+           SET revoked_at = now(), revoked_by = ${actor.actorId}::uuid, revoke_reason = ${reason}
+         WHERE id = ${row.id}::uuid AND revoked_at IS NULL AND ends_at > now()
+        RETURNING id::text AS id`;
+      if (claimed.length === 0) return null;
+      const done = await tx.familyAccessGrant.findUniqueOrThrow({ where: { id: row.id } });
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'family_access.revoked',
         entity: 'family_access_grant',
         entityId: row.id,
-        after: { ...facts(done), endedAt: now.toISOString(), revokedBy: actor.actorId },
+        after: { ...facts(done), endedAt: done.revokedAt!.toISOString(), revokedBy: actor.actorId },
         reason,
       });
       return done;
     });
-    return (await this.dtos([updated]))[0]!;
+    if (!updated) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, 'this grant has already ended', 409);
+    return (await this.dtos([updated], await dbNow(this.prisma)))[0]!;
   }
 
   /** The grant that lets `granteeId` administer this family's parent accounts now, if any. */
-  async activeGrant(granteeId: string, familyId: string, at: Date = new Date()): Promise<FamilyAccessGrant | null> {
-    return activeGrant(this.prisma, granteeId, familyId, at);
+  async activeGrant(granteeId: string, familyId: string): Promise<FamilyAccessGrant | null> {
+    return activeGrant(this.prisma, granteeId, familyId);
   }
 
   /**
@@ -171,7 +177,8 @@ export class FamilyAccessService {
    * unrevoked, written once (expiry_audited_at). Access already ended at
    * ends_at -- this is the log, not the lock.
    */
-  async sweepExpired(now: Date = new Date()): Promise<number> {
+  async sweepExpired(at?: Date): Promise<number> {
+    const now = at ?? (await dbNow(this.prisma));
     const due = await this.prisma.familyAccessGrant.findMany({
       where: { revokedAt: null, expiryAuditedAt: null, endsAt: { lte: now } },
       orderBy: { endsAt: 'asc' },
@@ -180,7 +187,11 @@ export class FamilyAccessService {
     let written = 0;
     for (const row of due) {
       const done = await this.prisma.$transaction(async (tx) => {
-        const claimed = await tx.familyAccessGrant.updateMany({ where: { id: row.id, expiryAuditedAt: null }, data: { expiryAuditedAt: now } });
+        // Not if a revoke got there first: a grant ends once, revoked or expired.
+        const claimed = await tx.familyAccessGrant.updateMany({
+          where: { id: row.id, expiryAuditedAt: null, revokedAt: null },
+          data: { expiryAuditedAt: now },
+        });
         if (claimed.count === 0) return false;
         await this.audit.audit(tx, {
           actorId: null,
@@ -231,7 +242,8 @@ export class FamilyAccessService {
     return rows[0]?.ok === true;
   }
 
-  private async dtos(rows: FamilyAccessGrant[]): Promise<FamilyAccessGrantDto[]> {
+  /** `now` is the database's: one clock says whether a grant is active. */
+  private async dtos(rows: FamilyAccessGrant[], now: Date): Promise<FamilyAccessGrantDto[]> {
     if (rows.length === 0) return [];
     const [families, staff] = await Promise.all([
       this.prisma.family.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.familyId))] } }, select: { id: true, displayName: true } }),
@@ -242,7 +254,6 @@ export class FamilyAccessService {
     ]);
     const familyName = new Map(families.map((f) => [f.id, f.displayName]));
     const staffName = new Map(staff.map((x) => [x.id, x.name]));
-    const now = new Date();
     return rows.map((r) => ({
       id: r.id,
       family: { id: r.familyId, name: familyName.get(r.familyId) ?? '' },
@@ -257,15 +268,10 @@ export class FamilyAccessService {
   }
 }
 
-/** The grant that lets `granteeId` administer this family's parent accounts at `at`, if any. */
-export async function activeGrant(
-  prisma: PrismaService,
-  granteeId: string,
-  familyId: string,
-  at: Date = new Date(),
-): Promise<FamilyAccessGrant | null> {
+/** The grant that lets `granteeId` administer this family's parent accounts now (the database's now()), if any. */
+export async function activeGrant(prisma: PrismaService, granteeId: string, familyId: string): Promise<FamilyAccessGrant | null> {
   const [row] = await prisma.$queryRaw<Array<{ id: string | null }>>`
-    SELECT chat.family_access_grant_active(${granteeId}::uuid, ${familyId}::uuid, ${at}::timestamptz)::text AS id`;
+    SELECT chat.family_access_grant_active(${granteeId}::uuid, ${familyId}::uuid)::text AS id`;
   return row?.id ? prisma.familyAccessGrant.findUnique({ where: { id: row.id } }) : null;
 }
 
@@ -280,8 +286,10 @@ export async function recordUse(
   grant: FamilyAccessGrant,
   accessorId: string,
   act: string,
-  accountId: string,
+  /** The account acted on -- or, for the Accounts list, every account of the family it showed. */
+  account: string | string[],
 ): Promise<void> {
+  const target = Array.isArray(account) ? { accountIds: account } : { accountId: account };
   // Its own transaction: the use is logged when access is granted, whatever the act after it does.
   await prisma.$transaction((tx) =>
     audit.audit(tx, {
@@ -289,10 +297,16 @@ export async function recordUse(
       action: 'family_access.used',
       entity: 'family_access_grant',
       entityId: grant.id,
-      after: { ...facts(grant), accessorId, act, accountId },
+      after: { ...facts(grant), accessorId, act, ...target },
       reason: grant.purpose,
     }),
   );
+}
+
+/** The database's clock. */
+export async function dbNow(prisma: PrismaService): Promise<Date> {
+  const [{ now }] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() AS now`;
+  return now;
 }
 
 /** The owner's four fields: who authorized, who was granted, the reason, the window. */

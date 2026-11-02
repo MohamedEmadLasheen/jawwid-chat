@@ -1344,9 +1344,9 @@ A grant opens account administration (and a support session) of ONE family's par
 
 **POST /admin/family-access-grants** — Request `{ familyId, granteeId, purpose (1–500), hours? (1–168, default 24) }`. Response `201 FamilyAccessGrantDto`. Errors: `COMM.ACCOUNT_ADMIN_DENIED` 403 (not a grantor) · `COMMON.VALIDATION` 400 (self, not Operations staff, unknown family, purpose, hours).
 
-**POST /admin/family-access-grants/:grantId/revoke** — Request `{ reason }`. Response `200 FamilyAccessGrantDto`. The grantor, the Operations Manager or the super admin. Errors: `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404 · `COMM.ACCOUNT_ADMIN_STATE` 409 (already ended or revoked).
+**POST /admin/family-access-grants/:grantId/revoke** — Request `{ reason }`. Response `200 FamilyAccessGrantDto`. The grantor, the Operations Manager or the super admin. A conditional update on the database's clock: of two revokes at once one wins, the other is the 409. Errors: `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404 · `COMM.ACCOUNT_ADMIN_STATE` 409 (already ended or revoked).
 
-Audit (entity `family_access_grant`; every row carries the authorizer `grantedBy`, the accessor `granteeId`/`accessorId`, the reason = the purpose, and the window `startsAt`/`endsAt`): `family_access.granted`; `family_access.used` once per act under the grant (`act`, `accountId`); `family_access.revoked` and `family_access.expired` (the worker's sweep, once per grant, `FAMILY_ACCESS_SWEEP_MS`) with the actual `endedAt`.
+Audit (entity `family_access_grant`; every row carries the authorizer `grantedBy`, the accessor `granteeId`/`accessorId`, the reason = the purpose, and the window `startsAt`/`endsAt`): `family_access.granted`; `family_access.used` once per act under the grant (`act`, `accountId`) — and once per request per grant whose family an Accounts list showed (`act: 'list'`, `accountIds`); `family_access.revoked` and `family_access.expired` (the worker's sweep, once per grant, `FAMILY_ACCESS_SWEEP_MS`) with the actual `endedAt`.
 
 ### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-21)
 
@@ -1367,7 +1367,7 @@ Every route runs on the **administrator's own** token. Permission: `canAdministe
 **GET /admin/impersonations** (`?accountId=`) — the record: the super admin's whole organization, anyone else their own; newest first, at most 100. **GET /admin/impersonations/:id/actions** — its trail: `{ session, actions: [{ method, route, status, at }] }` (route templates; never a body).
 
 **On the support token** (the account's own routes, as that person):
-- every request re-checks the support session (not ended or expired), the administrator's own session, account and permission — any of them gone ends it (`401`);
+- every request re-checks the support session (not ended or expired), the administrator's own session, account, permission and scope (a grant revoked or run out) — any of them gone ends it (`401`), with an `impersonation.ended` audit row (`after.endedBy: 'system'`, the reason) as Exit writes (ADMIN-013);
 - reads are allowed and send no receipt; writes only from the allowlist (`SupportSessionInterceptor`: sending a message, the person's own profile / photos / teacher profile / leave requests, star, delete-for-me, chat preferences) — anything else `COMM.SUPPORT_SESSION_FORBIDDEN` 403;
 - every request is recorded in `chat.impersonation_action`; every audit row written carries `impersonation_id`; every message sent carries it and is served with `MessageDto.sentBySupport: true`;
 - `POST /auth/refresh` has nothing to present; `POST /auth/logout` is refused; the realtime gateway refuses the token.

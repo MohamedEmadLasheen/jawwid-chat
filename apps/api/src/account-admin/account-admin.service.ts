@@ -132,6 +132,7 @@ export class AccountAdminService {
     const like = q ? { contains: q, mode: Prisma.QueryMode.insensitive } : undefined;
     // PD-42 S3: under the Sales switch 'own', a Sales member sees the parents of their own families only.
     const owned = await this.salesOwnedFamilies(actor, standing);
+    const scope = await this.scope.listFilter(actor);
 
     const rows = await this.prisma.account.findMany({
       where: {
@@ -140,7 +141,7 @@ export class AccountAdminService {
         // Never the caller's own, never the super admin's.
         NOT: [{ staff: { id: actor.actorId } }, { staff: { role: StaffRole.SUPER_ADMIN } }],
         // TEACHER-011: a teacher account within the caller's teacher scope only.
-        AND: [await this.scope.listFilter(actor)],
+        AND: [scope.where],
         ...(owned ? { contacts: { some: { familyId: { in: owned } } } } : {}),
         ...(like
           ? {
@@ -167,9 +168,11 @@ export class AccountAdminService {
       take: LIST_LIMIT + 1,
     });
 
+    const shown = rows.slice(0, LIST_LIMIT);
+    await this.logGrantedViews(actor, shown, scope.grantedFamilies);
     return {
       truncated: rows.length > LIST_LIMIT,
-      accounts: rows.slice(0, LIST_LIMIT).map((row) => this.summary(actor, row, standing)),
+      accounts: shown.map((row) => this.summary(actor, row, standing)),
       administers: kinds,
     };
   }
@@ -401,6 +404,23 @@ export class AccountAdminService {
   }
 
   /**
+   * ADMIN-002: a list that shows a family only an exceptional grant opened is a
+   * use of that grant -- the parent's name, the family's and the children's are
+   * on the screen. One 'used' row (act 'list') per such grant per request.
+   */
+  private async logGrantedViews(actor: Actor, shown: AccountRow[], grantedFamilies: Map<string, string>) {
+    if (grantedFamilies.size === 0) return;
+    const byGrant = new Map<string, string[]>();
+    for (const row of shown) {
+      const grantId = grantedFamilies.get(row.contacts[0]?.familyId ?? '');
+      if (grantId) byGrant.set(grantId, [...(byGrant.get(grantId) ?? []), row.id]);
+    }
+    if (byGrant.size === 0) return;
+    const grants = await this.prisma.familyAccessGrant.findMany({ where: { id: { in: [...byGrant.keys()] } } });
+    for (const grant of grants) await recordUse(this.audit, this.prisma, grant, actor.actorId, 'list', byGrant.get(grant.id)!);
+  }
+
+  /**
    * TEACHER-011 / ADMIN-002: an account outside the caller's scope (a teacher
    * not theirs, a family they do not reach) reads as not found; one opened
    * only by an exceptional grant is allowed, and this use is logged.
@@ -408,7 +428,8 @@ export class AccountAdminService {
   private async requireInScope(actor: Actor, row: AccountRow, act: string) {
     const decision = await this.scope.decide(actor, { kind: row.kind, teacherId: row.teacher?.id, familyId: row.contacts[0]?.familyId });
     if (!decision.allowed) {
-      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'this account is outside your scope');
+      // Word for word what an absent account says: out of scope is not told apart from absent.
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'no such account');
     }
     if (decision.grant) await recordUse(this.audit, this.prisma, decision.grant, actor.actorId, act, row.id);
   }
