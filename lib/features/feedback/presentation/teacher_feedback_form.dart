@@ -21,11 +21,16 @@ class TeacherFeedbackFormScreen extends ConsumerStatefulWidget {
     required this.learnerId,
     required this.childName,
     this.teacherName,
+    this.initialCategory,
   });
 
   final String learnerId;
   final String childName;
   final String? teacherName;
+
+  /// PD-52 (plan §11 g): a shortcut on the child's card opens the form on its kind.
+  /// The parent can still choose another before sending.
+  final FeedbackCategory? initialCategory;
 
   @override
   ConsumerState<TeacherFeedbackFormScreen> createState() => _TeacherFeedbackFormScreenState();
@@ -33,7 +38,7 @@ class TeacherFeedbackFormScreen extends ConsumerStatefulWidget {
 
 class _TeacherFeedbackFormScreenState extends ConsumerState<TeacherFeedbackFormScreen> {
   final _body = TextEditingController();
-  FeedbackCategory? _category;
+  late FeedbackCategory? _category = widget.initialCategory;
   bool _tried = false;
   bool _busy = false;
   String? _error;
