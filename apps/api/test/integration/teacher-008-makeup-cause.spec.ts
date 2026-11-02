@@ -34,6 +34,8 @@ import { NewStudentsService } from '../../src/new-students/new-students.service'
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
 import { TeacherOnboardingService } from '../../src/teacher-file/teacher-onboarding.service';
+import { LessonRecordService } from '../../src/lessons/lesson-record.service';
+import { TaskService } from '../../src/tasks/task.service';
 import type { MailSender } from '../../src/account-recovery/recovery-delivery';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
@@ -55,6 +57,9 @@ const onboarding = new TeacherOnboardingService(
   g.prisma, new TeacherFileService(g.prisma, g.authz, g.conversations, audit, scope), supervision,
   new PasswordResetService(g.prisma, auth, audit), auth, lessons, trials, mailer, g.notifications, scope,
 );
+
+const records = new LessonRecordService(g.prisma, lessons, g.conversations, g.outbox, audit);
+const tasks = new TaskService(g.prisma, g.outbox);
 
 jest.setTimeout(120_000);
 
@@ -190,6 +195,42 @@ describe('TEACHER-008: cancelled because of the teacher, a make-up is owed', () 
       },
     });
     expect(await owed()).not.toContain(l.id);
+  });
+
+  it('PD-47 raises the makeup_owed task for it (#396 review, P1): the task rule reads the cause, not the outcome alone', async () => {
+    const config = ['tasks.raise_after_seconds', 'tasks.since.makeup_owed'];
+    const saved = await g.prisma.config.findMany({ where: { key: { in: config } } });
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.teacher_supervisor_assignment (teacher_id, organization_id, supervisor_id, assigned_by)
+       values ($1::uuid, chat.default_organization_id(), $2::uuid, $3::uuid)`, s.teacherId, tsupId, tmgrId,
+    );
+    await g.prisma.$executeRawUnsafe(`insert into chat.config (key, value) values ('tasks.raise_after_seconds', '0'::jsonb)
+                                      on conflict (key) do update set value = excluded.value`);
+    await g.prisma.$executeRawUnsafe(`insert into chat.config (key, value) values ('tasks.since.makeup_owed', to_jsonb('2000-01-01T00:00:00Z'::text))
+                                      on conflict (key) do update set value = excluded.value`);
+    try {
+      const l = await lessonIn(48 * HOUR);
+      const day = cairoDay(l.startsAt);
+      const { request } = await leave.request(s.teacherId, { firstDay: day, lastDay: day, reason: 'family' });
+      await leave.approve(tsupId, request.id, { cancelCollidingLessons: true });
+      await tasks.sweep();
+      const raised = await g.prisma.$queryRaw<Array<{ n: number }>>`
+        SELECT count(*)::int AS n FROM chat.work_task WHERE source_type = 'makeup_owed' AND source_id = ${l.id}::uuid AND state <> 'done'`;
+      expect(raised[0]!.n).toBe(1);
+    } finally {
+      await g.prisma.config.deleteMany({ where: { key: { in: config } } });
+      for (const c of saved) await g.prisma.config.create({ data: { key: c.key, value: c.value as never, scope: c.scope } });
+    }
+  });
+
+  it('a correction of such a lesson clears the cause -- never a 500 from the database (#396 review, P2)', async () => {
+    const l = await lessonIn(48 * HOUR);
+    const day = cairoDay(l.startsAt);
+    const { request } = await leave.request(s.teacherId, { firstDay: day, lastDay: day, reason: 'family' });
+    await leave.approve(tsupId, request.id, { cancelCollidingLessons: true });
+    await records.correct(tsupId, l.id, { outcome: 'teacher_apology', reason: 'the teacher apologised before the leave' });
+    expect(await row(l.id)).toMatchObject({ outcome: 'teacher_apology', cancelCause: null });
+    expect(await owed()).toContain(l.id); // a teacher's apology owes one too
   });
 
   it('the database keeps the cause honest: one of three, and only on an academy cancellation', async () => {
