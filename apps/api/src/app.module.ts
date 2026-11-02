@@ -10,6 +10,7 @@ import { LessonModule } from './lessons/lesson.module';
 import { TeacherFileModule } from './teacher-file/teacher-file.module';
 import { SupervisionModule } from './supervision/supervision.module';
 import { CertificateModule } from './certificates/certificate.module';
+import { RewardModule } from './rewards/reward.module';
 import { LeaveModule } from './leave/leave.module';
 import { DisciplineModule } from './discipline/discipline.module';
 import { BillingModule } from './billing/billing.module';
@@ -65,6 +66,7 @@ import { TaskModule } from './tasks/task.module';
     TeacherFileModule,
     SupervisionModule,
     CertificateModule,
+    RewardModule,
     LeaveModule,
     DisciplineModule,
     BillingModule,

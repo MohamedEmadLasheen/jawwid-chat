@@ -1,6 +1,6 @@
 # Jawwid Chat — Defect Log
 
-Owner: AI #5 · Opened 2026-09-05
+Owner: AI #5 · Opened 2026-09-05 · Every JC re-checked against `main` @ `12189c9e` on 2026-11-02 by release-qa (closure record at the end)
 Severity: **P0** breach/corruption/blocked-MVP · **P1** major workflow broken ·
 **P2** important · **P3** minor.
 
@@ -15,7 +15,7 @@ Status values: OPEN · IN PROGRESS · FIXED · VERIFIED · WONTFIX
 | **Severity** | **P0 — MVP is unbuildable as currently architected** |
 | **Area** | Backend schema + communication authorization |
 | **Owner agent** | AI #1 (schema, authorization) · AI #2 (communication engine) |
-| **Status** | OPEN |
+| **Status** | **FIXED — closed 2026-11-02** (see the closure record at the end) |
 | **Found** | 2026-09-05, static review of live code |
 
 ### Evidence
@@ -72,7 +72,7 @@ path for groups or calls.
 | **Severity** | **P0 — correct rule, structurally incompatible implementation** |
 | **Area** | `apps/api/src/platform/authorization.service.ts` |
 | **Owner agent** | AI #1 |
-| **Status** | OPEN |
+| **Status** | **FIXED — closed 2026-11-02** (see the closure record at the end) |
 | **Depends on** | JC-001 |
 
 ### Evidence
@@ -119,7 +119,7 @@ promotion, add-member escalation, and calling parity.
 | **Severity** | **P0 — blocks Teacher mobile app and Student Groups** |
 | **Area** | `apps/api/src/platform/types.ts`, `prisma/schema.prisma` (`StaffRole`), `supabase/migrations/*` (`chat.staff.role` CHECK) |
 | **Owner agent** | AI #1 |
-| **Status** | OPEN |
+| **Status** | **FIXED — closed 2026-11-02** (see the closure record at the end) |
 
 ### Evidence
 
@@ -161,7 +161,7 @@ to a parent. QA specifies the behaviour, not the table design.
 | **Severity** | P3 |
 | **Area** | `supabase/migrations/20260905090000_chat_foundation.sql` |
 | **Owner agent** | AI #1 |
-| **Status** | OPEN |
+| **Status** | **OPEN — re-checked 2026-11-02, still present** (see the closure record at the end) |
 
 The functions document *"raise if a key is missing rather than silently
 defaulting."* They detect a missing **row** (`v IS NULL` after `SELECT INTO`) but
@@ -339,7 +339,7 @@ denied, and the system actor.
 |---|---|
 | **Severity** | P1 (functional gap, introduced deliberately by the JC-005 fix) |
 | **Owner agent** | AI #1 |
-| **Status** | OPEN |
+| **Status** | **CLOSED BY DESIGN 2026-11-02** — superseded by PD-3/PD-8; the surviving predicate is built (see the closure record) |
 
 Both paths now fail closed. "Reply as assist" and manual escalation cannot
 succeed until `AuthorizationService` evaluates the real preconditions
@@ -356,7 +356,7 @@ permitted and the denied case.
 | **Severity** | **P1** (P0 if any code path can set `conversation.type`) |
 | **Area** | `supabase/migrations/20260905093000_chat_communication.sql` |
 | **Owner** | **AI #2** |
-| **Status** | OPEN — reproduced against the live integration database |
+| **Status** | **FIXED — verified** (`ed3216d8`, 2026-09-06; closed in this log 2026-11-02) |
 | **Test** | `apps/api/test/integration/schema-invariants.spec.ts` → *"JC-008: converting a teacher+parent GROUP into a DIRECT conversation must be rejected"* — **currently failing** |
 
 **Expected.** A teacher and a family contact can never be alone together in a
@@ -411,7 +411,7 @@ the identical shape and therefore the same gap on `chat.call.type`.
 | **Severity** | **P0** (architectural) |
 | **Area** | migrations, `db/test/00_core_shim.sql`, `apps/api/prisma/` |
 | **Owner** | **AI #1** |
-| **Status** | OPEN — partially improving |
+| **Status** | **FIXED for the cited facts — closed 2026-11-02**; the Prisma residual is tracked by release gate G-21 (see the closure record) |
 | **Detail** | `docs/release/database-decision.md` (DB-1…DB-5) |
 
 **Expected.** Jawwid Chat owns its own PostgreSQL database, does not depend on
@@ -455,7 +455,7 @@ payloads and delivery semantics, which are in no document available to QA.
 | **Severity** | **P0** (silent schema divergence, runtime-only failure) |
 | **Area** | `090500_chat_logs_and_state_cache.sql` vs `093200_chat_shared_logs.sql` |
 | **Owner** | **AI #1 + AI #2** (joint) |
-| **Status** | OPEN — reproduced |
+| **Status** | **OPEN, downgraded to P3 on 2026-11-02** — no runtime impact any more; the dead DDL remains (see the closure record) |
 | **Test** | `schema-invariants.spec.ts` → *"JC-010"* — 2 tests, **passing** (they pin the broken state) |
 
 **Expected.** One definition of `chat.event_log` and `chat.audit_log`.
@@ -566,3 +566,33 @@ integration schema invariants).
 
 Removing a manifest line is deliberate and reviewable — the file states it may
 be done only when the defect is closed by design, never to make a build green.
+
+---
+
+## Closure record — 2026-11-02 (release gate G-39, Phase 1)
+
+This log was last edited on 2026-09-06, so every JC still read OPEN while the code had moved on. Each defect below was re-checked on `main` @ `12189c9e`:
+- The fix is cited by commit, and by PR where one exists. The repository has been hosted since 2026-09-24, so earlier fixes have no PR.
+- The proof is cited by the test that runs in CI. The `api` job runs `test/unit/**`; the `migrations` job runs the SQL suites and `test/integration/**`.
+- The last completed main CI run, 41471455277 on `0d1a1f50`, passed all 8 jobs.
+
+Bug defects from the final acceptance run (TEACHER-*, PARENT-*, ADMIN-*, CHATSCHED-*) are tracked separately, in `docs/qa/release-gate.md` §2b and the acceptance defect log.
+
+| JC | Was | Now | Fixed by | Proven by |
+|---|---|---|---|---|
+| JC-001 | P0, OPEN | **FIXED** | `b2bb94ee` (2026-09-06: conversation model, approval, notifications and calling, with the group types). `21afe5bd` (OD-01 conversation model). Staff-provisioned student groups and their membership checks: `a360ed32` (PR #55). Voice calls 1:1 and group: the M4 workstreams. Approval was later **retired** by PD-14 (2026-10-20: nothing is held), so the "approvals" third of this defect is closed by design, not by code. | `student-group-provisioning.spec.ts`, `groups-approval-calls.spec.ts` ("student groups", "PD-14: nothing is held…"), `membership-authorization.spec.ts`, `call-media-token.spec.ts`, `call-accept-decline.spec.ts` |
+| JC-002 | P0, OPEN | **FIXED** | Conversations now carry an explicit `type` and member set, with BR-1 checked at creation and on every membership change, in both the API and the database: `b2bb94ee`, `21afe5bd`, `ed3216d8` (the structural backstop, `20260905093300_chat_br1_structural_backstop.sql`). Re-versioned by PD-6 (`d02809dd`, PR #28) and PD-7 (2026-10-14: no teacher↔parent 1:1 in any case). | `br1-conformance.spec.ts` (PD-7), `communication-engine.spec.ts` "BR-1 (PD-7) — the database refuses…", `schema-invariants.spec.ts` "BR-1 database backstop (PD-7)", `db/tests/br1_invariants.sql` |
+| JC-003 | P0, OPEN | **FIXED** | The teacher is its own identity (`chat.teacher`) with its own sessions: `3c2da2c5` (PR #5, identity schema), `dd33a57a` (runtime authentication). Teacher↔Admin replies: `4b8cb5ae` (PR #31). Group access for assigned learners is derived server-side (PD-8, `90a0f619`, PR #38). | `authentication.spec.ts` "resolves a TEACHER from chat.teacher…" and "an offboarded teacher loses a live session at once", `def001-teacher-admin-reply.spec.ts`, `realtime-authentication.spec.ts` test 2 |
+| JC-004 | P3, OPEN | **OPEN** (unchanged) | Not fixed. `chat.config_num()` in `20260905090000_chat_foundation.sql` still raises only on a missing row; a JSON `null` value still returns SQL NULL. No later migration redefines it or adds a `jsonb_typeof` check on `chat.config.value`. | — Fix: a forward migration that redefines the accessors with `jsonb_typeof(v) = 'null'` raising, or adds `CHECK (jsonb_typeof(value) <> 'null')`. Not a Phase 1 blocker: only operators write `chat.config`. |
+| JC-005 | P0 | FIXED — verified (2026-09-05) | `fa53ba75`; re-applied after the JC-011 regression by `46a08508` | `jc005-jc006-regression.spec.ts` (protected) |
+| JC-006 | P1 | FIXED — verified (2026-09-05) | `fa53ba75`; re-applied by `46a08508` | `jc005-jc006-regression.spec.ts` (protected) |
+| JC-007 | P1, OPEN | **CLOSED BY DESIGN** | The defect asked for the on-duty assist predicate. PD-3 superseded `on_duty()` as the assignment function, and PD-8 retired on-duty, ownership and the sticky window as access grants, so that predicate will never exist. The surviving requirement (assist and escalation possible, but never from a client-supplied field) is built: `steppingIn` in `apps/api/src/platform/authorization.service.ts`, `90a0f619` (PR #38, PD-8). A department manager or the super admin may step in as ASSIST or ESCALATION; a supervisor may not label their own reply. | Unit `staff-scope.spec.ts` "…step in as ASSIST, or ESCALATION…" and "a supervisor may not record their own reply as an assist or an escalation (JC-005)"; integration `staff-scope-revocation.spec.ts` "family ownership, on_duty() and a live sticky window grant nothing (PD-8 retired all three)" |
+| JC-008 | P1, OPEN | **FIXED** | `ed3216d8` (2026-09-06): type-immutability triggers on `chat.conversation` and `chat.call` (`call_type_immutable`), so a group can no longer become a teacher+parent `direct` by `UPDATE` (red team RT-024). | `schema-invariants.spec.ts` "JC-008 / RT-024: converting a teacher+parent GROUP into a DIRECT conversation must be rejected" — the test that was failing now passes in CI |
+| JC-009 | P0, OPEN | **FIXED for the cited facts** | The merged lineage never reads Core's database. `20260905090900_chat_core_integration.sql` defines Chat's own Core inbox (`chat.core_parent_inbox`, `chat.core_event`, `chat.record_core_event`), fed by signed webhooks (`apps/api/src/core-boundary`). No migration on `main` references `public.profiles` (`git log -S` finds none). CI builds the database from empty on plain `postgres:17`. **Residual, tracked as release gate G-21, not here:** Prisma can still `db push`, and the `db:drift` check that `schema.prisma` mentions does not exist. | CI `migrations` job (apply from empty, re-apply as a no-op); `core-webhook-auth.spec.ts` |
+| JC-010 | P0, OPEN | **OPEN, downgraded to P3** | Not removed. `20260905093200_chat_shared_logs.sql` still carries `create table if not exists chat.event_log` in the second shape, a silent no-op. **The runtime failure is gone:** every writer now uses AI #1's shape. Prisma maps `actorKind` to `actor_type` (`schema.prisma` `model EventLog`), and `audit.service.ts` writes through it. No code writes `actor_kind`. What remains is dead DDL that would mislead a reader. | `schema-invariants.spec.ts` "JC-010 — duplicate event_log definitions" (protected) still pins *which* shape won, so a reorder of the two migrations fails CI. Remaining fix: a forward migration that drops the duplicate append-only trigger, and a comment in `093200` marking its `event_log`/`audit_log` blocks as superseded. The test then asserts the reconciled schema, per the original acceptance criteria. |
+| JC-011 | P0 | FIXED (2026-09-06) | `46a08508`, `c0d755a4` | `scripts/qa/check-protected-tests.sh` in CI `guards` |
+
+**Result for G-39:**
+- No P0 or P1 from this log is open.
+- Two P3s remain open: JC-004 and JC-010.
+

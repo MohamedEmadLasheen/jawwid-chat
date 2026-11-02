@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart' as selector;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:video_player/video_player.dart';
 
 import '../../shared/models/message.dart';
 import '../data/repositories.dart';
@@ -56,13 +61,87 @@ abstract interface class MediaPicker {
 
   /// One file of any allowed type. Null when the user backed out.
   Future<PendingAttachment?> pickFile();
+
+  /// PARENT-017: one video from the device's library. Null when the user backed out.
+  /// Bounded by [AttachmentLimits.videoBytes] (the server's limit).
+  Future<PendingAttachment?> pickVideo();
+
+  /// PARENT-017: one video RECORDED with the camera, at most
+  /// [AttachmentLimits.videoMaxDuration] long. Null when the user backed out.
+  /// Needs the camera and the microphone.
+  Future<PendingAttachment?> recordVideo();
+}
+
+/// How long a video is, read from the file itself. A seam so tests never open a
+/// platform player; null when it cannot be read (the bubble then shows no length).
+typedef VideoDurationProbe = Future<Duration?> Function(String path);
+
+/// The real probe: opens the file in the platform player just long enough to
+/// read its duration.
+Future<Duration?> probeVideoDuration(String path) async {
+  final controller = VideoPlayerController.file(File(path));
+  try {
+    await controller.initialize().timeout(const Duration(seconds: 5));
+    final d = controller.value.duration;
+    return d > Duration.zero ? d : null;
+  } on Object {
+    return null;
+  } finally {
+    unawaited(controller.dispose());
+  }
 }
 
 /// The real thing: the system photo library and the system file picker.
 class PluginMediaPicker implements MediaPicker {
-  PluginMediaPicker({ImagePicker? images}) : _images = images ?? ImagePicker();
+  PluginMediaPicker({ImagePicker? images, VideoDurationProbe? probe})
+      : _images = images ?? ImagePicker(),
+        _probe = probe ?? probeVideoDuration;
 
   final ImagePicker _images;
+  final VideoDurationProbe _probe;
+
+  @override
+  Future<PendingAttachment?> pickVideo() => _video(ImageSource.gallery);
+
+  @override
+  Future<PendingAttachment?> recordVideo() => _video(ImageSource.camera);
+
+  /// One video: the size is checked before the preview (as for a file), and
+  /// the duration read from the file for the bubble. A recording is capped at
+  /// [AttachmentLimits.videoMaxDuration] by the camera itself; a library video
+  /// is bounded by size only (the server's limit is bytes, not seconds).
+  Future<PendingAttachment?> _video(ImageSource source) async {
+    final XFile? picked;
+    try {
+      picked = await _images.pickVideo(
+        source: source,
+        maxDuration: source == ImageSource.camera ? AttachmentLimits.videoMaxDuration : null,
+      );
+    } on Exception catch (error) {
+      throw MediaPickException(_imageFailure(error), detail: error.toString());
+    }
+    if (picked == null) return null;
+    final mimeType = _videoMime(picked);
+    if (mimeType == null) {
+      throw MediaPickException(MediaPickFailure.typeNotAllowed, detail: 'video type of ${picked.name}');
+    }
+    final described = await _describe(file: picked, kind: MessageKind.video, mimeType: mimeType, fileName: picked.name);
+    final duration = kIsWeb ? null : await _probe(picked.path);
+    return described.withDuration(duration);
+  }
+
+  /// The three containers the server accepts (mp4, mov, webm). iOS records
+  /// QuickTime; a library video is whatever the user has.
+  static String? _videoMime(XFile file) {
+    final reported = file.mimeType;
+    if (reported != null && AttachmentLimits.videoMimeTypes.contains(reported)) return reported;
+    return switch (p.extension(file.path.isEmpty ? file.name : file.path).toLowerCase()) {
+      '.mp4' || '.m4v' => 'video/mp4',
+      '.mov' || '.qt' => 'video/quicktime',
+      '.webm' => 'video/webm',
+      _ => null,
+    };
+  }
 
   @override
   Future<PendingAttachment?> pickImage() => _image(ImageSource.gallery);
@@ -268,7 +347,13 @@ class PluginMediaPicker implements MediaPicker {
 /// something the server would accept, which is the safer direction.
 abstract final class AttachmentLimits {
   static const imageBytes = 10 * 1024 * 1024;
+  /// The server's ATTACHMENT_MAX_BYTES_VIDEO default (100 MB).
   static const videoBytes = 100 * 1024 * 1024;
+  /// PARENT-017: the longest video the camera records for a chat (3 minutes):
+  /// about 60-100 MB at a phone's default quality, so inside [videoBytes].
+  static const videoMaxDuration = Duration(minutes: 3);
+  /// The server's video allow-list (attachment.service.ts ALLOWED_MIME).
+  static const videoMimeTypes = {'video/mp4', 'video/quicktime', 'video/webm'};
   static const voiceBytes = 16 * 1024 * 1024;
   static const fileBytes = 25 * 1024 * 1024;
 

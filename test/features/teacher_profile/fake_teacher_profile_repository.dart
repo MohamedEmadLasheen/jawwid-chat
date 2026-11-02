@@ -161,6 +161,12 @@ class FakeTeacherProfileRepository implements TeacherProfileRepository {
 
 /// A picker that returns whatever the test put in it.
 class FakeCertificatePicker implements MediaPicker {
+  @override
+  Future<PendingAttachment?> pickVideo() async => null;
+
+  @override
+  Future<PendingAttachment?> recordVideo() async => null;
+
   FakeCertificatePicker({this.file});
 
   PendingAttachment? file;

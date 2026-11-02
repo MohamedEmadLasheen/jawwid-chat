@@ -134,6 +134,10 @@ class AppError implements Exception {
   /// slow link, so the message outbox parks it for an explicit retry.
   static const uploadTimeout = 'upload_timeout';
 
+  /// PARENT-017: the user cancelled an attachment's upload. Not a failure to
+  /// show or retry: the message is discarded.
+  static const uploadCancelled = 'upload_cancelled';
+
   @override
   String toString() => 'AppError(${kind.name}${code == null ? '' : ', $code'})';
 }

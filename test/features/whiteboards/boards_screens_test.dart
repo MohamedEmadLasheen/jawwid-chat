@@ -275,6 +275,20 @@ void main() {
     expect(find.text(l10n.boardSaved), findsOneWidget);
   });
 
+  testWidgets('PD-55: the editor\'s Rewards opens the tray, and a star from it lands on the page', (tester) async {
+    await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await tester.ensureVisible(find.byKey(const ValueKey('board-rewards')));
+    await tester.tap(find.byKey(const ValueKey('board-rewards')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('reward-no-lesson')), findsOneWidget, reason: 'no rewards server here: decorate only');
+    await tester.tap(find.byKey(const ValueKey('reward-star')));
+    await tester.pumpAndSettle();
+    final stamp = container.read(boardEditorProvider('b1')).value!.page.elements.single as StampElement;
+    expect(stamp.stamp, StampKind.star);
+    await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('a Tajweed highlighter colour stays with the highlighter: the next pen stroke is ink', (tester) async {
     final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
     await tester.tap(find.byTooltip(l10n.boardToolHighlighter));

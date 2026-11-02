@@ -850,6 +850,24 @@ class L10nAr extends L10n {
   String get attachFile => 'ملف';
 
   @override
+  String get attachVideo => 'فيديو';
+
+  @override
+  String get attachRecordVideo => 'تسجيل فيديو';
+
+  @override
+  String get videoRecordPermissionDenied =>
+      'يحتاج جَوِّد إلى إذن لاستخدام الكاميرا والميكروفون لتسجيل فيديو. يمكنك السماح بذلك من الإعدادات.';
+
+  @override
+  String get cancelUpload => 'إلغاء الإرسال';
+
+  @override
+  String uploadingPercent(String percent) {
+    return 'جارٍ الإرسال… $percent٪';
+  }
+
+  @override
   String get attachmentPhotoLabel => 'صورة';
 
   @override
@@ -4998,4 +5016,121 @@ class L10nAr extends L10n {
 
   @override
   String get chatDraftLabel => 'مسودة:';
+
+  @override
+  String get rewardPraiseExcellent => 'ممتاز';
+
+  @override
+  String get rewardPraiseWellDone => 'أحسنت';
+
+  @override
+  String get rewardPraiseGreat => 'رائع';
+
+  @override
+  String get rewardPraiseChampion => 'بطل';
+
+  @override
+  String get rewardTrayTitle => 'المكافآت';
+
+  @override
+  String get rewardTrayFor => 'إلى';
+
+  @override
+  String get rewardTrayEveryone => 'الجميع';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.';
+
+  @override
+  String get rewardTrayStar => 'نجمة';
+
+  @override
+  String get rewardTrayStickers => 'ملصقات';
+
+  @override
+  String get rewardTrayPraise => 'ثناء';
+
+  @override
+  String get rewardTrayOwnWords => 'كلماتي…';
+
+  @override
+  String get rewardTrayCelebrate => 'احتفال';
+
+  @override
+  String get rewardTrayUndo => 'تراجع';
+
+  @override
+  String get rewardTraySent => 'أُعطيت المكافأة';
+
+  @override
+  String get rewardTrayFailed => 'لم تُسجَّل المكافأة. ما زالت على السبورة.';
+
+  @override
+  String get rewardCelebrationLine => 'معلّمك يحتفل بك!';
+
+  @override
+  String get rewardSoundTitle => 'صوت المكافآت';
+
+  @override
+  String get rewardSoundSubtitle => 'نغمة قصيرة عندما يحتفل المعلّم بطفلك.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'نجمة! $count نجمة في هذه الحصة',
+      many: 'نجمة! $count نجمة في هذه الحصة',
+      few: 'نجمة! $count نجوم في هذه الحصة',
+      two: 'نجمة! نجمتان في هذه الحصة',
+      one: 'نجمة! نجمة واحدة في هذه الحصة',
+      zero: 'نجمة!',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rewardBadgeBronze => 'جهد رائع';
+
+  @override
+  String get rewardBadgeSilver => 'جهد مذهل';
+
+  @override
+  String get rewardBadgeGold => 'نجم متألّق';
+
+  @override
+  String rewardToNextBadge(int count, String badge) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نجمة أخرى لـ$badge',
+      many: '$count نجمة أخرى لـ$badge',
+      few: '$count نجوم أخرى لـ$badge',
+      two: 'نجمتان أخريان لـ$badge',
+      one: 'نجمة واحدة أخرى لـ$badge',
+      zero: '$badge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rewardBadgeEarned(String badge) {
+    return 'الشارة: $badge';
+  }
+
+  @override
+  String rewardReportStars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نجمة',
+      many: '$count نجمة',
+      few: '$count نجوم',
+      two: 'نجمتان',
+      one: 'نجمة واحدة',
+      zero: 'لا نجوم',
+    );
+    return '$_temp0';
+  }
 }

@@ -13,11 +13,42 @@ import '../../network/error_mapper.dart';
 /// authenticated client would send the user's access token there — so the two
 /// stacks are kept apart structurally rather than by remembering not to.
 abstract interface class AttachmentUploader {
+  /// [onProgress] reports bytes sent so far of the total (PARENT-017: a video's
+  /// bubble shows it); [cancel] stops the transfer, which then fails with
+  /// [AppError.uploadCancelled].
   Future<void> put(
     String uploadUrl, {
     required Uint8List bytes,
     required Map<String, String> headers,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   });
+}
+
+/// A handle to stop one upload (PARENT-017: "Cancel" on a sending video).
+class UploadCancel {
+  final CancelToken _token = CancelToken();
+
+  bool get isCancelled => _token.isCancelled;
+
+  /// Completes when [cancel] is called: an uploader other than Dio's (a test's,
+  /// a future native one) stops on it.
+  Future<void> get whenCancelled => _token.whenCancel.then((_) {});
+
+  void cancel() {
+    if (!_token.isCancelled) _token.cancel('cancelled by the user');
+  }
+}
+
+/// The body in pieces, so storage's read of it reports progress as it goes
+/// rather than all at once at the end.
+const uploadChunkBytes = 64 * 1024;
+
+Stream<List<int>> _chunks(Uint8List bytes) async* {
+  for (var start = 0; start < bytes.length; start += uploadChunkBytes) {
+    final end = start + uploadChunkBytes < bytes.length ? start + uploadChunkBytes : bytes.length;
+    yield Uint8List.sublistView(bytes, start, end);
+  }
 }
 
 /// The shortest time an upload is given to send its body: what every upload had before.
@@ -60,12 +91,16 @@ class DioAttachmentUploader implements AttachmentUploader {
     String uploadUrl, {
     required Uint8List bytes,
     required Map<String, String> headers,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   }) async {
     final sendTimeout = uploadSendTimeout(bytes.length);
     try {
       await _dio.put<void>(
         uploadUrl,
-        data: Stream<List<int>>.value(bytes),
+        data: _chunks(bytes),
+        onSendProgress: onProgress == null ? null : (sent, total) => onProgress(sent, total > 0 ? total : bytes.length),
+        cancelToken: cancel?._token,
         options: Options(
           headers: {
             ...headers,
@@ -82,6 +117,13 @@ class DioAttachmentUploader implements AttachmentUploader {
     } on AppError {
       rethrow;
     } catch (error) {
+      if (error is DioException && error.type == DioExceptionType.cancel) {
+        throw const AppError(
+          AppErrorKind.unknown,
+          code: AppError.uploadCancelled,
+          debugDetail: 'the upload was cancelled',
+        );
+      }
       if (error is DioException && error.type == DioExceptionType.sendTimeout) {
         // Still a timeout (same message to the user); the code says it was
         // the upload, so the outbox parks it rather than re-sending the whole
