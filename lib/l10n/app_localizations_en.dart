@@ -1238,6 +1238,10 @@ class L10nEn extends L10n {
       'This lesson can no longer be updated this way.';
 
   @override
+  String get certificateAlreadySuggested =>
+      'This certificate is already suggested for this child.';
+
+  @override
   String get cardReportTitle => 'Lesson report';
 
   @override
