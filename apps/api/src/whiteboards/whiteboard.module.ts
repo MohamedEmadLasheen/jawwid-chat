@@ -4,18 +4,19 @@ import { CommunicationModule } from '../communication/communication.module';
 import { AuthModule } from '../platform/auth/auth.module';
 import { OBJECT_STORAGE } from '../platform/tokens';
 import { TeacherBoardsController, WhiteboardController } from './whiteboard.controller';
+import { WhiteboardAssetService } from './whiteboard-asset.service';
 import { WhiteboardService } from './whiteboard.service';
 
 /**
  * PD-39: the teacher whiteboard (docs/product/pd039-whiteboard-design.md).
- * Object storage is here for the purge (a board's images go with it); the
- * asset routes arrive with PR-4. AuthModule gives PermissionService (PD-40);
+ * Object storage holds a board's images (PR-4), signed only by
+ * WhiteboardAssetService, and the purge deletes them with the board. AuthModule gives PermissionService (PD-40);
  * CommunicationModule the NotificationService the retention notice goes through.
  */
 @Module({
   imports: [CommunicationModule, AuthModule],
   controllers: [WhiteboardController, TeacherBoardsController],
-  providers: [WhiteboardService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
+  providers: [WhiteboardService, WhiteboardAssetService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
   exports: [WhiteboardService],
 })
 export class WhiteboardModule {}

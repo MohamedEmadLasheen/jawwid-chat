@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-545 routes.
+555 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -28,6 +28,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/admin/accounts/:accountId/suspend` | accounts.administer | `account-admin/account-admin.controller.ts#AccountAdminController.suspend` |
 | GET | `/api/v1/admin/conversations` | admin.inspect | `admin/admin.controller.ts#AdminController.conversations` |
 | GET | `/api/v1/admin/conversations/:id/messages` | admin.inspect | `admin/admin.controller.ts#AdminController.messages` |
+| GET | `/api/v1/admin/family-access-grants` | accounts.administer | `account-admin/family-access.controller.ts#FamilyAccessController.list` |
+| POST | `/api/v1/admin/family-access-grants` | accounts.administer | `account-admin/family-access.controller.ts#FamilyAccessController.grant` |
+| POST | `/api/v1/admin/family-access-grants/:grantId/revoke` | accounts.administer | `account-admin/family-access.controller.ts#FamilyAccessController.revoke` |
 | GET | `/api/v1/admin/impersonations` | self-service | `account-admin/impersonation.controller.ts#ImpersonationController.list` |
 | POST | `/api/v1/admin/impersonations` | accounts.support_session | `account-admin/impersonation.controller.ts#ImpersonationController.start` |
 | GET | `/api/v1/admin/impersonations/:id/actions` | self-service | `account-admin/impersonation.controller.ts#ImpersonationController.actions` |
@@ -469,6 +472,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teacher-boards/:id` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.review` |
 | GET | `/api/v1/teacher-boards/:id/access-log` | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.accessLog` |
 | POST | `/api/v1/teacher-boards/:id/copy` | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.copy` |
+| GET | `/api/v1/teacher-boards/teachers` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.teachers` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
@@ -549,7 +553,13 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.list` |
 | POST | `/api/v1/whiteboards` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.create` |
 | GET | `/api/v1/whiteboards/:id` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.open` |
+| GET | `/api/v1/whiteboards/:id/assets` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.imageUrls` |
+| POST | `/api/v1/whiteboards/:id/assets/:assetId/confirm` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.confirmImage` |
+| POST | `/api/v1/whiteboards/:id/assets/grant` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.grantImage` |
 | POST | `/api/v1/whiteboards/:id/duplicate` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.duplicate` |
+| DELETE | `/api/v1/whiteboards/:id/exports` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.releaseExport` |
+| POST | `/api/v1/whiteboards/:id/exports/compose` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.composeExport` |
+| POST | `/api/v1/whiteboards/:id/exports/grant` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.grantExport` |
 | POST | `/api/v1/whiteboards/:id/pages` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.addPage` |
 | POST | `/api/v1/whiteboards/:id/pages/:pageId` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.savePage` |
 | POST | `/api/v1/whiteboards/:id/pages/:pageId/delete` | not for staff | `whiteboards/whiteboard.controller.ts#WhiteboardController.deletePage` |

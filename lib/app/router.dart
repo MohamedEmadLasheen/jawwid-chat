@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../features/billing/presentation/my_payments_screen.dart';
 import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
+import '../features/conversations/application/realtime_keeper.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/lessons/presentation/child_schedule_screen.dart';
 import '../features/lessons/presentation/teacher_schedule_screen.dart';
@@ -155,6 +158,37 @@ abstract final class Routes {
   /// PD-31: one child's weekly times and lessons for the next four weeks, read-only,
   /// with "Change lesson time". The family's own; the server decides.
   static String childSchedule(String learnerId) => '/children/$learnerId/schedule';
+}
+
+/// The tab pages of the signed-in shell (the [ShellRoute] below), and the old address
+/// that forwards into one ([Routes.myPayments] -> [Routes.subscriptions]).
+///
+/// A tab is GONE to, never pushed (PARENT-021). Pushing one over the open shell put a
+/// second page with the same key on the stack: "View payments" in the Notification
+/// Center crashed the parent app (`!keyReservation.contains(key)`), and a release build
+/// showed a broken screen. Kept beside the shell; a test holds the two together.
+const shellTabPaths = <String>{
+  Routes.chats,
+  Routes.calls,
+  Routes.settings,
+  Routes.schedule,
+  Routes.salesPayments,
+  Routes.boards,
+  Routes.subscriptions,
+  Routes.myPayments,
+};
+
+/// Whether [location] (a path, with or without a query) is one of the shell's tabs.
+bool isShellTab(String location) => shellTabPaths.contains(Uri.parse(location).path);
+
+/// Open [location] from a screen pushed over the shell: a tab is gone to, anything
+/// else (a conversation, a child's schedule) is pushed with a Back.
+void openFromOverlay(GoRouter router, String location) {
+  if (isShellTab(location)) {
+    router.go(location);
+  } else {
+    unawaited(router.push(location));
+  }
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -512,6 +546,8 @@ class _RoleShell extends ConsumerWidget {
     // Live chat for as long as a signed-in shell is on screen: the list and
     // open threads follow the server without a pull-to-refresh.
     ref.watch(chatRealtimeProvider);
+    // ... and comes back after the API restarts (PARENT-015).
+    ref.watch(realtimeKeeperProvider);
 
     // Android back on another tab returns to Chats first, and only Back on Chats
     // leaves the app -- the start-destination rule of every Android app with a tab
