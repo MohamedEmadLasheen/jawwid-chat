@@ -9,6 +9,10 @@ You stay responsible for planning, decomposition, review, integration and final 
 only to you and never moves text, code or reports between agents. Project `CLAUDE.md` / `AGENTS.md`
 rules always win over this skill.
 
+The command is `~/.local/bin/codex-delegate`. Use the full path from the Bash tool: that directory is on the
+login shell's PATH but may not be on the tool shell's. Run it from inside the target repository, or pass
+`--repo <dir>`.
+
 ## 1. Route each piece
 | Piece | Who |
 |---|---|
