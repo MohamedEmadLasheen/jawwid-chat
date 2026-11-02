@@ -342,7 +342,29 @@ class TextElement extends BoardElement {
 
 /// The reward stamps (design §4.1): drawn from bundled icons and our font,
 /// never emoji (they render as boxes in the browser build).
-enum StampKind { star, check, heart, thumbsUp, excellentAr, wellDoneAr, excellentEn, wellDoneEn }
+enum StampKind {
+  star,
+  check,
+  heart,
+  thumbsUp,
+  excellentAr,
+  wellDoneAr,
+  excellentEn,
+  wellDoneEn,
+
+  /// PD-55: the reward tray's stickers (the closed catalogue in features/rewards).
+  medal,
+  trophy,
+  rocket,
+  sun,
+  rainbow,
+  crown,
+  balloon,
+
+  /// PD-55: a praise stamp with any words in [StampElement.text] -- the tray's
+  /// رائع, بطل, Great, Champion, or the teacher's own.
+  praise,
+}
 
 class StampElement extends BoardElement {
   const StampElement({required String id, required this.stamp, required this.rect, required this.color, this.text}) : super(id);

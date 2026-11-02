@@ -54,7 +54,9 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CONVERSATION_ARCHIVED` | 403 | Archived conversations are readable, never writable. |
 | `COMM.REPLY_TARGET_CROSS_CONVERSATION` | 403 | A reply must target the same conversation. |
 | `COMM.EMPTY_MESSAGE` | 400 | Text needs a body; media needs an attachment. |
+| `COMM.MESSAGE_TOO_LONG` | 400 | PARENT-003. A body (a text, a caption, an edit) is over 4000 characters, counted as a person sees them (grapheme clusters), or over 16000 UTF-16 code units. The clients count the same way and stop at the limit. |
 | `COMM.ATTACHMENT_TOO_LARGE` | 400 | Over the configured per-kind limit. |
+| `COMM.ATTACHMENT_NOT_UPLOADED` | 409 | PARENT-023. The attachment's object is not in storage, or is another size or type than declared (the ones its upload was authorized for). Upload it again, then send with the same `clientMessageId`. |
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Someone else decided first. Refresh the queue. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | A rejection must state a reason. |

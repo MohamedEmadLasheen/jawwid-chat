@@ -14,6 +14,7 @@ import '../../../core/media/media_picker.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../rewards/presentation/reward_tray.dart';
 import '../application/board_editor_controller.dart';
 import '../application/board_export.dart';
 import '../application/board_image_import.dart';
@@ -76,6 +77,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   double _width = 6;
   StampKind _stamp = StampKind.star;
   bool _gateLogged = false;
+  /// PD-55: the board takes the whole screen; the tools float, and fold away.
+  bool _fullScreen = false;
+  bool _toolsOpen = true;
   late final AppLifecycleListener _lifecycle;
   late final BoardEditorController _held;
 
@@ -97,8 +101,29 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  void _setFullScreen(bool on) {
+    if (_fullScreen == on) return;
+    setState(() {
+      _fullScreen = on;
+      _toolsOpen = true;
+    });
+    _view.fit();
+    _systemBars(hidden: on);
+  }
+
+  /// The status and navigation bars go with the app bar (a phone or tablet; a browser keeps its own).
+  void _systemBars({required bool hidden}) {
+    if (kIsWeb) return;
+    unawaited(
+      hidden
+          ? SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky)
+          : SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values),
+    );
+  }
+
   @override
   void dispose() {
+    if (_fullScreen) _systemBars(hidden: false);
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
     // (its keep-alive) until every page is on the server.
@@ -122,7 +147,13 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       }
     });
     return PopScope(
-      onPopInvokedWithResult: (_, _) {
+      // In full screen, Back leaves full screen first, then the board.
+      canPop: !_fullScreen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _setFullScreen(false);
+          return;
+        }
         _canvas.currentState?.finishTextEdit();
         unawaited(_controller.persistNow());
         unawaited(_controller.flush());
@@ -194,6 +225,51 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       images: images.lookup,
       imagesVersion: imagesVersion,
     );
+    Widget toolPanel(bool vertical) => _ToolPanel(
+      vertical: vertical,
+      tool: _tool,
+      color: _color,
+      width: _width,
+      stamp: _stamp,
+      page: page,
+      onTool: (t) => setState(() {
+        _tool = t;
+        _width = _defaultWidth(t);
+      }),
+      onColor: (c) => setState(() => _setColor(c)),
+      onWidth: (w) => setState(() => _width = w),
+      onStamp: (k) => setState(() {
+        _stamp = k;
+        _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
+      }),
+      onDelete: _deleteSelection,
+      onVerse: () => _insertVerse(context),
+      onRewards: () => _openRewards(context),
+      onImage: s.imagesSupported ? () => _insertImage(context) : null,
+      onLayout: _controller.setLayout,
+      onBackground: _controller.setBackground,
+    );
+    final banners = <Widget>[
+      if (s.save == SaveStatus.conflict) _ConflictBanner(onReload: _controller.reload, onCopy: () => _saveAsCopy(context, s)),
+      if (s.save == SaveStatus.failed) _FailedBanner(code: s.failureCode),
+      if (s.draftStale)
+        MaterialBanner(
+          leading: const Icon(Icons.history),
+          content: Text(l10n.boardDraftStale),
+          actions: [
+            TextButton(onPressed: _controller.discardStaleDraft, child: Text(l10n.boardDraftStaleDiscard)),
+            FilledButton(onPressed: _controller.keepStaleDraft, child: Text(l10n.boardDraftStaleKeep)),
+          ],
+        ),
+      if (s.draftNotKept && s.save != SaveStatus.saved)
+        MaterialBanner(
+          leading: const Icon(Icons.sd_card_alert_outlined),
+          content: Text(l10n.boardDraftNotKept),
+          actions: const [SizedBox.shrink()],
+        ),
+      if (s.canEdit && blockedByDevice)
+        MaterialBanner(content: Text(l10n.boardEditNeedsLargerScreen), actions: const [SizedBox.shrink()]),
+    ];
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): _controller.undo,
@@ -214,7 +290,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
+        child: _fullScreen
+            ? _fullScreenEditor(context, s, editable: editable, canvas: canvas, banners: banners, tools: toolPanel)
+            : Scaffold(
           appBar: AppBar(
             title: InkWell(
               onTap: editable ? () => _rename(context, s) : null,
@@ -235,54 +313,12 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
           ),
           body: Column(
             children: [
-              if (s.save == SaveStatus.conflict) _ConflictBanner(onReload: _controller.reload, onCopy: () => _saveAsCopy(context, s)),
-              if (s.save == SaveStatus.failed) _FailedBanner(code: s.failureCode),
-              if (s.draftStale)
-                MaterialBanner(
-                  leading: const Icon(Icons.history),
-                  content: Text(l10n.boardDraftStale),
-                  actions: [
-                    TextButton(onPressed: _controller.discardStaleDraft, child: Text(l10n.boardDraftStaleDiscard)),
-                    FilledButton(onPressed: _controller.keepStaleDraft, child: Text(l10n.boardDraftStaleKeep)),
-                  ],
-                ),
-              if (s.draftNotKept && s.save != SaveStatus.saved)
-                MaterialBanner(
-                  leading: const Icon(Icons.sd_card_alert_outlined),
-                  content: Text(l10n.boardDraftNotKept),
-                  actions: const [SizedBox.shrink()],
-                ),
-              if (s.canEdit && blockedByDevice)
-                MaterialBanner(content: Text(l10n.boardEditNeedsLargerScreen), actions: const [SizedBox.shrink()]),
+              ...banners,
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, c) {
                     final wide = c.maxWidth >= 700;
-                    final tools = editable
-                        ? _ToolPanel(
-                            vertical: wide,
-                            tool: _tool,
-                            color: _color,
-                            width: _width,
-                            stamp: _stamp,
-                            page: page,
-                            onTool: (t) => setState(() {
-                              _tool = t;
-                              _width = _defaultWidth(t);
-                            }),
-                            onColor: (c) => setState(() => _setColor(c)),
-                            onWidth: (w) => setState(() => _width = w),
-                            onStamp: (k) => setState(() {
-                              _stamp = k;
-                              _stampColor = k.index >= StampKind.excellentAr.index ? BoardPalette.stampGreen : BoardPalette.stampGold;
-                            }),
-                            onDelete: _deleteSelection,
-                            onVerse: () => _insertVerse(context),
-                            onImage: s.imagesSupported ? () => _insertImage(context) : null,
-                            onLayout: _controller.setLayout,
-                            onBackground: _controller.setBackground,
-                          )
-                        : null;
+                    final tools = editable ? toolPanel(wide) : null;
                     final view = Stack(
                       children: [
                         Positioned.fill(
@@ -291,7 +327,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                         PositionedDirectional(
                           end: Spacing.spacing4,
                           bottom: Spacing.spacing4,
-                          child: _ZoomControls(view: _view),
+                          child: _ZoomControls(view: _view, onFullScreen: () => _setFullScreen(true)),
                         ),
                       ],
                     );
@@ -327,6 +363,137 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  /// PD-55: the board on the whole screen. What the app bar and the page strip
+  /// held floats over the page: leave full screen, undo and redo, the save
+  /// state, and the page. The tools float at the bottom (a phone) or along the
+  /// start edge (wider), and fold down to one button.
+  Widget _fullScreenEditor(
+    BuildContext context,
+    EditorState s, {
+    required bool editable,
+    required Widget canvas,
+    required List<Widget> banners,
+    required Widget Function(bool vertical) tools,
+  }) {
+    final l10n = L10n.of(context);
+    final tokens = JawwidTokens.of(context);
+    final wide = MediaQuery.sizeOf(context).width >= 700;
+    final last = s.pages.length - 1;
+    final toolsOpen = editable && _toolsOpen;
+    final hideTools = IconButton(
+      key: const ValueKey('board-hide-tools'),
+      tooltip: l10n.boardHideTools,
+      onPressed: () => setState(() => _toolsOpen = false),
+      icon: const Icon(Icons.expand_more),
+    );
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: ColoredBox(color: tokens.colorSurfaceMuted, child: canvas)),
+          SafeArea(
+            child: Stack(
+              children: [
+                PositionedDirectional(
+                  top: Spacing.spacing2,
+                  start: Spacing.spacing2,
+                  end: Spacing.spacing2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: Spacing.spacing2,
+                        runSpacing: Spacing.spacing2,
+                        children: [
+                          _Floating(
+                            children: [
+                              IconButton(
+                                key: const ValueKey('board-exit-full-screen'),
+                                tooltip: l10n.boardExitFullScreen,
+                                onPressed: () => _setFullScreen(false),
+                                icon: const Icon(Icons.fullscreen_exit),
+                              ),
+                              if (editable) ...[
+                                IconButton(tooltip: l10n.boardUndo, onPressed: s.canUndo ? _controller.undo : null, icon: const Icon(Icons.undo)),
+                                IconButton(tooltip: l10n.boardRedo, onPressed: s.canRedo ? _controller.redo : null, icon: const Icon(Icons.redo)),
+                              ],
+                            ],
+                          ),
+                          _Floating(
+                            children: [
+                              _SaveChip(status: s.save, readOnly: !s.canEdit),
+                              IconButton(
+                                tooltip: l10n.boardPreviousPage,
+                                onPressed: s.current > 0 ? () => _controller.goTo(s.current - 1) : null,
+                                icon: const Icon(Icons.navigate_before),
+                              ),
+                              Semantics(
+                                label: l10n.boardPageOf('${s.current + 1}', '${s.pages.length}'),
+                                excludeSemantics: true,
+                                child: Text(
+                                  key: const ValueKey('board-page-indicator'),
+                                  '${s.current + 1} / ${s.pages.length}',
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: l10n.boardNextPage,
+                                onPressed: s.current < last ? () => _controller.goTo(s.current + 1) : null,
+                                icon: const Icon(Icons.navigate_next),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      ...banners,
+                    ],
+                  ),
+                ),
+                if (toolsOpen && wide)
+                  PositionedDirectional(
+                    start: Spacing.spacing2,
+                    top: 72,
+                    bottom: Spacing.spacing2,
+                    child: _Floating(vertical: true, children: [Flexible(child: tools(true)), hideTools]),
+                  ),
+                if (toolsOpen && !wide)
+                  PositionedDirectional(
+                    start: Spacing.spacing2,
+                    end: Spacing.spacing2,
+                    bottom: Spacing.spacing2,
+                    child: _Floating(children: [Expanded(child: tools(false)), hideTools]),
+                  ),
+                if (editable && !toolsOpen)
+                  PositionedDirectional(
+                    start: Spacing.spacing3,
+                    bottom: Spacing.spacing3,
+                    child: _Floating(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('board-show-tools'),
+                          tooltip: l10n.boardShowTools,
+                          onPressed: () => setState(() => _toolsOpen = true),
+                          icon: const Icon(Icons.brush_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                PositionedDirectional(
+                  end: Spacing.spacing3,
+                  bottom: toolsOpen && !wide ? 56 + Spacing.spacing5 : Spacing.spacing3,
+                  child: _ZoomControls(view: _view),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static bool _isTextStamp(StampKind k) =>
+      const {StampKind.excellentAr, StampKind.wellDoneAr, StampKind.excellentEn, StampKind.wellDoneEn, StampKind.praise}.contains(k);
+
   String? _stampText(L10n l10n) => switch (_stamp) {
     StampKind.excellentAr || StampKind.excellentEn => l10n.boardStampExcellent,
     StampKind.wellDoneAr || StampKind.wellDoneEn => l10n.boardStampWellDone,
@@ -338,6 +505,20 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     BoardTool.text => 6,
     _ => _width > 16 ? 6 : _width,
   };
+
+  /// PD-55: the reward tray over the board. A reward lands in the middle of the view.
+  void _openRewards(BuildContext context) {
+    final canvas = _canvas.currentState;
+    if (canvas == null) return;
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId),
+      ),
+    );
+  }
 
   /// A selection action from a shortcut or the panel -- never while a text is being typed.
   void _onSelection(void Function(BoardCanvasState canvas) act) {
@@ -667,6 +848,7 @@ class _ToolPanel extends StatelessWidget {
     required this.onStamp,
     required this.onDelete,
     required this.onVerse,
+    required this.onRewards,
     required this.onImage,
     required this.onLayout,
     required this.onBackground,
@@ -684,6 +866,9 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<StampKind> onStamp;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
+
+  /// PD-55: the reward tray.
+  final VoidCallback onRewards;
   /// Null where the server has no images (or said they are off): no button.
   final VoidCallback? onImage;
   final ValueChanged<PageLayout> onLayout;
@@ -740,6 +925,13 @@ class _ToolPanel extends StatelessWidget {
       toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
       IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
       if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      // PD-55: after the inserts, so nothing PD-39 placed moves; the floating dock (PR-6) regroups.
+      IconButton(
+        key: const ValueKey('board-rewards'),
+        tooltip: l10n.rewardTrayTitle,
+        onPressed: onRewards,
+        icon: const Icon(Icons.emoji_events_outlined),
+      ),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
         swatch(BoardPalette.highlighter, l10n.boardToolHighlighter),
@@ -748,7 +940,8 @@ class _ToolPanel extends StatelessWidget {
         swatch(BoardPalette.tajweedIkhfa, l10n.boardTajweedIkhfa),
         swatch(BoardPalette.tajweedIzhar, l10n.boardTajweedIzhar),
       ] else if (tool == BoardTool.stamp) ...[
-        for (final k in StampKind.values.where((k) => k != StampKind.excellentEn && k != StampKind.wellDoneEn))
+        // PD-39's own stamps; PD-55's stickers and praise live in the reward tray.
+        for (final k in const [StampKind.star, StampKind.check, StampKind.heart, StampKind.thumbsUp, StampKind.excellentAr, StampKind.wellDoneAr])
           IconButton(
             isSelected: stamp == k,
             tooltip: switch (k) {
@@ -915,10 +1108,33 @@ String _backgroundName(L10n l10n, PageBackground b) => switch (b) {
   PageBackground.dark => l10n.boardBackgroundDark,
 };
 
+/// PD-55: a group of controls floating over the full-screen board.
+class _Floating extends StatelessWidget {
+  const _Floating({required this.children, this.vertical = false});
+
+  final List<Widget> children;
+  final bool vertical;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    elevation: 3,
+    borderRadius: const BorderRadius.all(Radii.radiusLg),
+    clipBehavior: Clip.antiAlias,
+    color: JawwidTokens.of(context).colorSurfaceRaised,
+    child: Padding(
+      padding: const EdgeInsets.all(Spacing.spacing1),
+      child: vertical ? Column(mainAxisSize: MainAxisSize.min, children: children) : Row(mainAxisSize: MainAxisSize.min, children: children),
+    ),
+  );
+}
+
+
 class _ZoomControls extends StatelessWidget {
-  const _ZoomControls({required this.view});
+  const _ZoomControls({required this.view, this.onFullScreen});
 
   final BoardViewController view;
+  /// PD-55: where the board can go full screen (null once it is).
+  final VoidCallback? onFullScreen;
 
   @override
   Widget build(BuildContext context) {
@@ -933,6 +1149,7 @@ class _ZoomControls extends StatelessWidget {
           IconButton(tooltip: l10n.boardZoomOut, onPressed: () => view.zoomBy(1 / 1.25), icon: const Icon(Icons.zoom_out)),
           IconButton(tooltip: l10n.boardZoomFit, onPressed: view.fit, icon: const Icon(Icons.fit_screen_outlined)),
           IconButton(tooltip: l10n.boardZoomIn, onPressed: () => view.zoomBy(1.25), icon: const Icon(Icons.zoom_in)),
+          if (onFullScreen != null) IconButton(tooltip: l10n.boardFullScreen, onPressed: onFullScreen, icon: const Icon(Icons.fullscreen)),
         ],
       ),
     );

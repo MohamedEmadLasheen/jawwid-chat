@@ -180,6 +180,13 @@ describe('RT-039: no deployed API on the localhost:3000 storage default', () => 
       expect(() => selectObjectStorage({ APP_ENV }, silent)).toThrow(/localhost:3000/);
     }
   });
+  it('production refuses the local storage even when its own variables are set', () => {
+    // STORAGE_LOCAL_ROOT and STORAGE_PUBLIC_BASE_URL configure the local reference
+    // only; they are never a way for a deployed API to keep its files on its disk.
+    expect(() =>
+      selectObjectStorage({ APP_ENV: 'production', STORAGE_LOCAL_ROOT: '/data', STORAGE_PUBLIC_BASE_URL: 'https://api.example/api/v1/storage' }, silent),
+    ).toThrow(/APP_ENV=production with no S3 configuration/);
+  });
   it('a deployed API with S3 configured is unaffected', () => {
     expect(selectObjectStorage({ ...s3Env(), APP_ENV: 'production' }, silent).kind).toBe('s3');
   });

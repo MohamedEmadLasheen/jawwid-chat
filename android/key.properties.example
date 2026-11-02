@@ -1,0 +1,7 @@
+# PD-56: copy to android/key.properties (git-ignored) on the machine that builds
+# for Google Play. Never commit the real file or the keystore.
+# storeFile is relative to android/ or absolute.
+storeFile=/secure/path/jawwid-upload.jks
+storePassword=
+keyAlias=jawwid-upload
+keyPassword=

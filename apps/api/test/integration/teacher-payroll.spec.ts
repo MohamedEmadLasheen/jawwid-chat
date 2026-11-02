@@ -337,6 +337,7 @@ describe('4. amounts', () => {
     const f = await http(owner(), 'GET', `/teacher-files/${t()}/finance`);
     expect(f.json.summary[0]).toEqual({
       month, currency: 'EGP', salaryType: 'shift', paidMinutes: 0, base: '6000.00', bonuses: '450.50', deductions: '100.25', net: '6350.25',
+      unpaidLeaveDays: 0, // TEACHER-005: shown beside the pay, never priced
     });
     expect(f.json.summary).toHaveLength(6);
     expect(f.json.adjustments.filter((a: { live: boolean }) => a.live)).toHaveLength(3);

@@ -54,6 +54,7 @@ import '../features/messages/data/receipt_repository.dart';
 import '../features/messages/data/typing_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
+import '../features/rewards/data/rewards_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
@@ -248,6 +249,8 @@ List<Override> _httpOverrides() {
     whiteboardsRepositoryProvider.overrideWithValue(
       HttpWhiteboardsRepository(client: client),
     ),
+    // PD-55: rewards during a lesson (every route 404 until rewards.enabled is on).
+    rewardsRepositoryProvider.overrideWithValue(HttpRewardsRepository(client: client)),
     // PD-39 PR-3: the verified Quran text (the shared dataset), for verses on a board.
     quranTextRepositoryProvider.overrideWithValue(
       HttpQuranTextRepository(client: client),

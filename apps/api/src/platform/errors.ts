@@ -76,8 +76,17 @@ export enum CommErrorCode {
   MESSAGE_NOT_FOUND = 'COMM.MESSAGE_NOT_FOUND',
   REPLY_TARGET_CROSS_CONVERSATION = 'COMM.REPLY_TARGET_CROSS_CONVERSATION',
   EMPTY_MESSAGE = 'COMM.EMPTY_MESSAGE',
+  /** PARENT-003: the body is longer than MESSAGE_MAX_CHARACTERS (4000) characters. 400. */
+  MESSAGE_TOO_LONG = 'COMM.MESSAGE_TOO_LONG',
   ATTACHMENT_TOO_LARGE = 'COMM.ATTACHMENT_TOO_LARGE',
   ATTACHMENT_TYPE_NOT_ALLOWED = 'COMM.ATTACHMENT_TYPE_NOT_ALLOWED',
+  /**
+   * PARENT-023: the attachment's object is not in storage, or is not what the
+   * upload was authorized for (another size or type). 409: upload it (again),
+   * then send. Without this a message pointed at nothing and its bubble could
+   * never play.
+   */
+  ATTACHMENT_NOT_UPLOADED = 'COMM.ATTACHMENT_NOT_UPLOADED',
   /**
    * An attachment names an object outside the conversation it was sent to.
    * A policy refusal, not a validation error: the key may be perfectly

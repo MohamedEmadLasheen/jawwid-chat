@@ -262,6 +262,59 @@ void main() {
     });
   }
 
+  testWidgets('PD-52 (review of #391): the card unmounted while the form is open -- sending still refreshes and thanks', (tester) async {
+    final repo = FakeFeedbackRepository(children: const [FeedbackChild(learnerId: 'learner-1', name: 'Ahmad', teacherName: 'Ustadh Yusuf')]);
+    final showCard = ValueNotifier(true);
+    final container = ProviderContainer(overrides: [
+      feedbackRepositoryProvider.overrideWithValue(repo),
+      currentRoleProvider.overrideWithValue(UserRole.parent),
+      principalIdProvider.overrideWithValue('parent_1'),
+    ]);
+    addTearDown(container.dispose);
+    // Keep the list alive so a refresh after the send is observable.
+    container.listen(myFeedbackProvider, (_, _) {});
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('en'),
+          theme: JawwidTheme.light(isArabic: false),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: const [
+            L10n.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showCard,
+              builder: (_, show, _) =>
+                  show ? const TeacherFeedbackEntry(learnerId: 'learner-1', childName: 'Ahmad') : const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect((await container.read(myFeedbackProvider.future)).items, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('feedback-praise-learner-1')));
+    await tester.pumpAndSettle();
+    // The profile rebuilds under the open form and the card is gone.
+    showCard.value = false;
+    await tester.pumpAndSettle();
+    expect(find.byType(TeacherFeedbackEntry, skipOffstage: false), findsNothing);
+
+    await tester.enterText(find.byKey(const ValueKey('feedback-body')), 'Words for the school.');
+    await tester.tap(find.byKey(const ValueKey('feedback-submit')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(repo.submitted, hasLength(1));
+    expect(find.text('Thank you. Your feedback has reached the administration.'), findsOneWidget);
+    expect((await container.read(myFeedbackProvider.future)).items, hasLength(1));
+  });
+
   testWidgets('PD-52: a shortcut only preselects -- the parent may still choose another kind', (tester) async {
     final repo = FakeFeedbackRepository(children: const [FeedbackChild(learnerId: 'learner-1', name: 'Ahmad', teacherName: 'Ustadh Yusuf')]);
     await tester.pumpWidget(profile(repo));

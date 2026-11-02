@@ -19,7 +19,8 @@ export const MAKEUP_OWED_CARD_KINDS: readonly string[] = [
 ];
 
 export function owesMakeup(kind: string, p: Record<string, unknown>): boolean {
-  if (kind === CardKind.LESSON_CANCELLED) return p.outcome === LessonOutcome.TEACHER_NO_SHOW;
+  // TEACHER-008: a cancellation because of the teacher (leave, suspension, leaving) says so with makeupOwed.
+  if (kind === CardKind.LESSON_CANCELLED) return p.outcome === LessonOutcome.TEACHER_NO_SHOW || p.makeupOwed === true;
   if (kind === CardKind.LESSON_RULING) return p.decision === RulingDecision.EXCUSED;
   return kind === CardKind.LESSON_APOLOGY || kind === CardKind.LESSON_TEACHER_APOLOGY;
 }

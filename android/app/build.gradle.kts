@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -26,6 +28,22 @@ gradle.taskGraph.whenReady {
     }
 }
 
+// PD-56 (store compliance): the release key. android/key.properties is git-ignored
+// and holds storeFile, storePassword, keyAlias and keyPassword (docs/mobile/
+// android-release-signing.md). Without it -- or with a field missing -- a release
+// build FAILS: it is never signed with the debug key. Debug builds need nothing.
+val releaseKeyFile = rootProject.file("key.properties")
+val releaseKey = Properties().apply { if (releaseKeyFile.exists()) releaseKeyFile.inputStream().use { load(it) } }
+val releaseKeyFields = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val releaseKeyProblem: String? = when {
+    !releaseKeyFile.exists() -> "android/key.properties is missing"
+    else -> releaseKeyFields.filter { releaseKey.getProperty(it).isNullOrBlank() }
+        .takeIf { it.isNotEmpty() }?.let { "android/key.properties lacks ${it.joinToString()}" }
+        ?: rootProject.file(releaseKey.getProperty("storeFile")).let { store ->
+            if (store.exists()) null else "the keystore android/key.properties names does not exist: ${store.path}"
+        }
+}
+
 android {
     namespace = "com.jawwid.jawwid_chat"
     compileSdk = flutter.compileSdkVersion
@@ -51,12 +69,36 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseKeyProblem == null) {
+            create("release") {
+                storeFile = rootProject.file(releaseKey.getProperty("storeFile"))
+                storePassword = releaseKey.getProperty("storePassword")
+                keyAlias = releaseKey.getProperty("keyAlias")
+                keyPassword = releaseKey.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // The upload key Google Play App Signing knows; never the debug key.
+            signingConfig = if (releaseKeyProblem == null) signingConfigs.getByName("release") else null
         }
+    }
+}
+
+// A release artefact without the release key is refused before anything is built.
+gradle.taskGraph.whenReady {
+    val releaseArtefact = allTasks.any { task ->
+        task.project == project && task.name.contains("Release") &&
+            (task.name.startsWith("assemble") || task.name.startsWith("bundle") || task.name.startsWith("package"))
+    }
+    if (releaseArtefact && releaseKeyProblem != null) {
+        throw GradleException(
+            "Release signing: $releaseKeyProblem. A release build is never signed with the debug key; " +
+                "see docs/mobile/android-release-signing.md."
+        )
     }
 }
 

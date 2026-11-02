@@ -10,6 +10,7 @@ import { LessonModule } from './lessons/lesson.module';
 import { TeacherFileModule } from './teacher-file/teacher-file.module';
 import { SupervisionModule } from './supervision/supervision.module';
 import { CertificateModule } from './certificates/certificate.module';
+import { RewardModule } from './rewards/reward.module';
 import { LeaveModule } from './leave/leave.module';
 import { DisciplineModule } from './discipline/discipline.module';
 import { BillingModule } from './billing/billing.module';
@@ -17,6 +18,7 @@ import { ParentRecordModule } from './parent-profile/parent-record.module';
 import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
+import { AccountDeletionModule } from './account-deletion/account-deletion.module';
 import { StaffAccountsModule } from './staff-accounts/staff-accounts.module';
 import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 import { MaterialsModule } from './materials/materials.module';
@@ -65,6 +67,7 @@ import { TaskModule } from './tasks/task.module';
     TeacherFileModule,
     SupervisionModule,
     CertificateModule,
+    RewardModule,
     LeaveModule,
     DisciplineModule,
     BillingModule,
@@ -72,6 +75,8 @@ import { TaskModule } from './tasks/task.module';
     CoreBoundaryModule,
     ScheduledCallModule,
     AccountAdminModule,
+    // PD-56: a parent or teacher deletes their own account (store compliance).
+    AccountDeletionModule,
     StaffAccountsModule,
     // PD-25: parents recover their own account from the sign-in screen.
     AccountRecoveryModule,

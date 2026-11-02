@@ -392,6 +392,7 @@ describe('D · push payloads carry no message content, link, key or token', () =
     await notifications.registerDevice({ actorId: s.parentId, token: `rt037-${randomUUID()}`, platform: 'android', isVoip: false });
     const secret = `TOP-SECRET-${randomUUID()}`;
     const auth = await g.attachments.authorizeUpload({ conversationId: groupId, actorId: s.ownerId, kind: 'image', mimeType: 'image/png', byteSize: bytes.length });
+    await new LocalFsBlobStore().put(auth.objectKey, 'image/png', bytes);
     await g.messages.send({ conversationId: groupId, senderId: s.ownerId, type: 'image', body: secret, clientMessageId: randomUUID(),
       attachments: [{ kind: 'image', objectKey: auth.objectKey, mimeType: 'image/png', byteSize: bytes.length }] });
     const worker = new (g.outboxWorker.constructor as never as new (...a: unknown[]) => typeof g.outboxWorker)(g.prisma, notifications, { toThread: async () => undefined, toUsers: async () => undefined }, g.identity);

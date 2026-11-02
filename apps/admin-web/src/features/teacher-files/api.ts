@@ -193,6 +193,8 @@ export interface FirstLogin {
   code?: string
   expiresAt: string
   emailed: boolean
+  /** TEACHER-002: the same add again; the code was given the first time and is not issued again. */
+  alreadyIssued?: boolean
 }
 
 /** PD-43: a Teacher File's sign-in -- `none` until the teacher has a login. */
@@ -399,6 +401,8 @@ export interface MonthPay {
   currency: string | null
   salaryType: SalaryType | null
   paidMinutes: number
+  /** TEACHER-005: the month's unpaid leave days (shown, never priced). Absent from an older API. */
+  unpaidLeaveDays?: number
   base: string | null
   bonuses: string
   deductions: string
