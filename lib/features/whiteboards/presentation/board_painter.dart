@@ -58,7 +58,7 @@ class BoardPagePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
-    canvas.scale(size.width / kBoardPageSize.width, size.height / kBoardPageSize.height);
+    canvas.scale(size.width / page.size.width, size.height / page.size.height);
     canvas.drawPicture(_cache.picture(() => _record(page, placeholderLabel, verses, images)));
     canvas.restore();
   }
@@ -116,8 +116,8 @@ class _PictureCache {
 
 ui.Picture _record(BoardPage page, String Function(BoardElement)? label, VerseSource? verses, BoardImageSource? images) {
   final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder, Offset.zero & kBoardPageSize);
-  paintBackground(canvas, page.layout, page.background);
+  final canvas = Canvas(recorder, Offset.zero & page.size);
+  paintBackground(canvas, page.layout, page.background, page.size);
   for (final e in page.elements) {
     if (e is InkElement && e.highlight) paintInk(canvas, e);
   }
@@ -128,14 +128,14 @@ ui.Picture _record(BoardPage page, String Function(BoardElement)? label, VerseSo
   return recorder.endRecording();
 }
 
-/// The page colour and its rulings.
-void paintBackground(Canvas canvas, PageLayout layout, PageBackground background) {
-  final page = Offset.zero & kBoardPageSize;
+/// The page colour and its rulings, on a page of [size] (wide unless said; PD-55).
+void paintBackground(Canvas canvas, PageLayout layout, PageBackground background, [Size size = kBoardPageSize]) {
+  final page = Offset.zero & size;
   canvas.drawRect(page, Paint()..color = background.color);
   final line = Paint()
     ..color = background.isDark ? BoardPalette.ruleOnDark : BoardPalette.ruleOnLight
     ..strokeWidth = 1.5;
-  final w = kBoardPageSize.width, h = kBoardPageSize.height;
+  final w = size.width, h = size.height;
   switch (layout) {
     case PageLayout.plain:
       break;

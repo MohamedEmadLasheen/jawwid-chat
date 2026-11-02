@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -588,7 +589,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     final picked = await pickVerse(context);
     final s = ref.read(boardEditorProvider(widget.boardId)).value;
     if (picked == null || s == null || !mounted) return;
-    const width = 1400.0, size = 64.0;
+    final page = s.page.size;
+    // As wide as most of the page: 1400 on a wide page, the page less its margins on a tall one.
+    final width = math.min(1400.0, page.width - 120), size = 64.0;
     final height = verseHeight(picked.text, size, width);
     final verse = VerseElement(
       id: 'v${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}',
@@ -598,8 +601,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       datasetId: picked.text.datasetId,
       rangeSha256: picked.text.rangeSha256,
       rect: Rect.fromLTWH(
-        (kBoardPageSize.width - width) / 2,
-        ((kBoardPageSize.height - height) / 2).clamp(24, double.infinity),
+        (page.width - width) / 2,
+        ((page.height - height) / 2).clamp(24, double.infinity),
         width,
         height,
       ),
@@ -627,8 +630,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     try {
       final picked = await ref.read(mediaPickerProvider).pickImage();
       if (picked == null || !mounted) return;
-      final pageId = ref.read(boardEditorProvider(widget.boardId)).value?.page.id;
-      if (pageId == null) return;
+      final startedOn = ref.read(boardEditorProvider(widget.boardId)).value?.page;
+      if (startedOn == null) return;
+      final pageId = startedOn.id;
       say(l10n.boardImageAdding);
       final bytes = await ref.read(boardImageBytesProvider)(picked.filePath);
       if (!mounted) return;
@@ -639,7 +643,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       ref.read(boardImagesProvider(widget.boardId).notifier).remember(asset, prepared.image);
       final placed = prepared;
       prepared = null; // the board's images hold it now
-      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height));
+      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height, page: startedOn.size));
       messenger.hideCurrentSnackBar();
     } on MediaPickException catch (e) {
       say(switch (e.reason) {
@@ -1324,7 +1328,8 @@ class _PageBar extends ConsumerWidget {
                       child: Directionality(
                         textDirection: TextDirection.ltr,
                         child: CustomPaint(
-                          size: const Size(128, 72),
+                          // Each page in its own frame: 16:9, or 9:16 when tall (PD-55).
+                          size: Size(72 * state.pages[i].size.width / state.pages[i].size.height, 72),
                           painter: BoardPagePainter(
                             page: state.pages[i],
                             verses: verses,
@@ -1342,10 +1347,22 @@ class _PageBar extends ConsumerWidget {
             ),
             Text(l10n.boardPageOf('${state.current + 1}', '${state.pages.length}'), style: Theme.of(context).textTheme.labelMedium),
             if (editable) ...[
-              IconButton(
+              // PD-55: a new page is wide or tall; its shape is for good.
+              PopupMenuButton<PageShape>(
                 tooltip: l10n.boardAddPage,
-                onPressed: state.pages.length >= 50 ? null : c.addPage,
+                enabled: state.pages.length < 50,
                 icon: const Icon(Icons.note_add_outlined),
+                onSelected: (shape) => c.addPage(shape: shape),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: PageShape.wide,
+                    child: ListTile(leading: const Icon(Icons.crop_landscape), title: Text(l10n.boardWidePage)),
+                  ),
+                  PopupMenuItem(
+                    value: PageShape.tall,
+                    child: ListTile(leading: const Icon(Icons.crop_portrait), title: Text(l10n.boardTallPage)),
+                  ),
+                ],
               ),
               PopupMenuButton<String>(
                 tooltip: l10n.boardMore,

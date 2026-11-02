@@ -223,6 +223,17 @@ describe('text', () => {
     expect(dots[0]!.args.slice(0, 3)).toEqual([32, 32, 2.2])
   })
 
+  it('PD-55: a tall page is read as tall and drawn 1080 x 1920; a page without a shape is wide', () => {
+    const tall = parsePage({ layout: 'dotted', background: 'white', shape: 'tall', document: { v: 1, elements: [] } })
+    expect(tall.shape).toBe('tall')
+    const { ctx, calls } = recorder()
+    drawPage(ctx, tall, { verse: () => ({ status: 'loading' }), label })
+    expect(calls.find((c) => c.op === 'fillRect')!.args).toEqual([0, 0, 1080, 1920])
+    expect(calls.filter((c) => c.op === 'arc').length).toBe(Math.floor((1080 - 1) / 32) * Math.floor((1920 - 1) / 32))
+    expect(parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [] } }).shape).toBe('wide')
+    expect(parsePage({ layout: 'plain', background: 'white', shape: 'hexagon', document: { v: 1, elements: [] } }).shape).toBe('wide')
+  })
+
   it('PD-55: a reward sticker is read as itself and drawn as a sticker badge, never as some other stamp; free praise is drawn as its words', () => {
     const rewards = parsePage({
       layout: 'plain',

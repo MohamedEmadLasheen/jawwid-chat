@@ -86,6 +86,12 @@ final passwordChangeRepositoryProvider = Provider<PasswordChangeRepository>((ref
   return const NoPasswordChangeRepository();
 });
 
+/// PD-56: delete your own account (parents and teachers). Overridden at startup with the
+/// HTTP implementation on the session's client.
+final accountDeletionRepositoryProvider = Provider<AccountDeletionRepository>((ref) {
+  return const NoAccountDeletionRepository();
+});
+
 /// PD-25: a parent recovers their own account (forgot password / forgot e-mail). Overridden
 /// at startup with the HTTP implementation; the default offers no self-service way in.
 final accountRecoveryRepositoryProvider = Provider<AccountRecoveryRepository>((ref) {

@@ -10,9 +10,16 @@
  * shown as a labelled box, never dropped.
  */
 
-/** The page every board is drawn on (design §4.2). */
+/** The page every board is drawn on (design §4.2): a wide page. */
 export const PAGE_WIDTH = 1920
 export const PAGE_HEIGHT = 1080
+
+/** PD-55: a page is wide (1920 x 1080) or tall (1080 x 1920), fixed when it was created. */
+export type PageShape = 'wide' | 'tall'
+
+export function pageSize(shape: PageShape): { width: number; height: number } {
+  return shape === 'tall' ? { width: PAGE_HEIGHT, height: PAGE_WIDTH } : { width: PAGE_WIDTH, height: PAGE_HEIGHT }
+}
 
 export type Layout = 'plain' | 'ruled' | 'narrow_ruled' | 'grid' | 'arabic_lines' | 'dotted'
 export type Background = 'white' | 'cream' | 'grey' | 'green' | 'dark'
@@ -90,6 +97,7 @@ export interface BoardPage {
   position: number
   layout: Layout
   background: Background
+  shape: PageShape
   elements: BoardElement[]
 }
 
@@ -216,6 +224,8 @@ export function parsePage(j: Json): BoardPage {
     position: num(j.position, 0),
     layout: LAYOUTS.includes(j.layout as Layout) ? (j.layout as Layout) : 'plain',
     background: BACKGROUNDS.includes(j.background as Background) ? (j.background as Background) : 'white',
+    // A page from before PD-55 has no shape: it is wide.
+    shape: j.shape === 'tall' ? 'tall' : 'wide',
     elements: raw.filter((e): e is Json => !!e && typeof e === 'object' && !Array.isArray(e)).map(parseElement),
   }
 }

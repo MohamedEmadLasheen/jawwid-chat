@@ -1,8 +1,7 @@
 import {
-  PAGE_HEIGHT,
-  PAGE_WIDTH,
   PALETTE,
   drawOrder,
+  pageSize,
   isDarkBackground,
   verseBody,
   type AyahsAnswer,
@@ -18,7 +17,8 @@ import {
  * PD-39: a board page drawn for staff, read-only, the way the teacher's portal
  * paints it (lib/features/whiteboards/presentation/board_painter.dart):
  * background and rulings, every highlighter stroke, then the rest in order.
- * Pure drawing on a 2D context in page units (1920 x 1080); the caller scales.
+ * Pure drawing on a 2D context in page units (1920 x 1080, or 1080 x 1920 for a
+ * tall page); the caller scales.
  */
 
 export const BOARD_FONT = "'IBM Plex Sans Arabic', sans-serif"
@@ -81,6 +81,7 @@ export function drawPage(ctx: Ctx, page: BoardPage, opts: DrawOptions): void {
 }
 
 function drawBackground(ctx: Ctx, page: BoardPage) {
+  const { width: PAGE_WIDTH, height: PAGE_HEIGHT } = pageSize(page.shape)
   ctx.fillStyle = PALETTE[page.background]
   ctx.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT)
   const rule = isDarkBackground(page.background) ? PALETTE.ruleOnDark : PALETTE.ruleOnLight
