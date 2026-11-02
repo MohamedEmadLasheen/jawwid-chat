@@ -194,4 +194,20 @@ describe('PD-52 over HTTP', () => {
       ]);
     }
   });
+
+  it('review of #374: an Operations Manager naming a trial family is refused with a clear 403, never a 500', async () => {
+    const child = m.families[0]!.children[0]!;
+    const prospect = await g.prisma.trialProspect.create({ data: { organizationId: orgId, displayName: 'QA Prospect', createdBy: m.superAdmin.id } });
+    const start = Date.now() - 2 * 3_600_000;
+    await g.prisma.lesson.create({
+      data: {
+        organizationId: orgId, kind: 'trial', prospectId: prospect.id, teacherId: child.teacherId,
+        startsAt: new Date(start), endsAt: new Date(start + 1_800_000), createdByKind: 'staff', createdBy: m.superAdmin.id,
+      },
+    });
+    const token = await login(m.operationsManager.subject);
+    const r = await call(token, 'POST', `/teachers/${child.teacherId}/testimonials`, { body: 'Lovely trial.', source: 'other', prospectId: prospect.id });
+    expect({ status: r.status, code: r.code }).toEqual({ status: 403, code: CommErrorCode.TEACHER_FILE_DENIED });
+    expect(await g.prisma.teacherSupervisionEntry.count({ where: { trialProspectId: prospect.id } })).toBe(0);
+  });
 });
