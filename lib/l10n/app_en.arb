@@ -160,6 +160,7 @@
   "callOutcomeAnswered": "Answered",
   "callOutcomeMissed": "Missed",
   "callOutcomeDeclined": "Declined",
+  "callOutcomeInProgress": "In progress",
   "callDuration": "{minutes}m {seconds}s",
   "@callDuration": {
     "placeholders": {

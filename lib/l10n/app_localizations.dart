@@ -703,6 +703,12 @@ abstract class L10n {
   /// **'Declined'**
   String get callOutcomeDeclined;
 
+  /// No description provided for @callOutcomeInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get callOutcomeInProgress;
+
   /// No description provided for @callDuration.
   ///
   /// In en, this message translates to:
