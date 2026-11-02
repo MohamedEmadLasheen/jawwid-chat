@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-563 routes.
+566 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -232,6 +232,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/learners/:id/transfer` | students.manage | `lessons/lifecycle.controller.ts#LifecycleController.transfer` |
 | GET | `/api/v1/learners/:id/transfer-preview` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transferPreview` |
 | GET | `/api/v1/learners/:id/transfers` | students.view | `lessons/lifecycle.controller.ts#LifecycleController.transfers` |
+| POST | `/api/v1/learners/:learnerId/rewards` | not for staff | `rewards/reward.controller.ts#RewardController.give` |
+| POST | `/api/v1/learners/:learnerId/rewards/:eventId/undo` | not for staff | `rewards/reward.controller.ts#RewardController.undo` |
 | GET | `/api/v1/lesson-audio/:lesson` | self-service | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.learner` |
 | GET | `/api/v1/lesson-audio/access` | lesson_audio.view | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.access` |
 | POST | `/api/v1/lesson-audio/clips/:clipId/approve` | lesson_audio.review | `lesson-audio/lesson-audio.controller.ts#LessonAudioController.approve` |
@@ -506,6 +508,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teacher-records/testimonials` | teacher_supervision.view | teacher_grants.view | `teacher-file/teacher-records.controller.ts#TeacherRecordsController.testimonials` |
 | GET | `/api/v1/teacher-supervision/directory` | teacher_supervision.view | teacher_attendance.view | teacher_grants.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.directory` |
 | GET | `/api/v1/teacher-supervision/teachers/:teacherId/held-lessons` | teacher_supervision.view | teacher_attendance.view | teacher_grants.view | `teacher-file/teacher-supervision.controller.ts#TeacherSupervisionController.heldLessons` |
+| GET | `/api/v1/teacher/rewards/now` | not for staff | `rewards/reward.controller.ts#RewardController.now` |
 | POST | `/api/v1/teachers` | teachers.create | `teacher-file/teacher-onboarding.controller.ts#TeacherOnboardingController.add` |
 | POST | `/api/v1/teachers/:id/absences` | teacher_supervision.record | teacher_attendance.record | `discipline/discipline.controller.ts#DisciplineController.absence` |
 | GET | `/api/v1/teachers/:id/availability` | schedule.view | `lessons/scheduling.controller.ts#SchedulingController.availability` |

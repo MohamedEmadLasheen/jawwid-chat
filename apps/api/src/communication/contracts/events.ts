@@ -100,6 +100,15 @@ export const CommEvent = {
   STORY_PUBLISHED: 'story.published',
   STORY_RETIRED: 'story.retired',
   /**
+   * PD-55: a teacher rewarded a learner during their lesson (or celebrated
+   * them). To the learner's live family contacts and the teacher, each to
+   * their own actor room -- never a conversation room. Resolved when the
+   * outbox drains, so a contact removed meanwhile is not told.
+   */
+  LEARNER_REWARD_GIVEN: 'learner.reward_given',
+  /** PD-55: the teacher withdrew a mistaken reward (within 2 minutes). Same audience. */
+  LEARNER_REWARD_UNDONE: 'learner.reward_undone',
+  /**
    * PD-9: a lesson closed with its outcome -- what Core needs to keep billing,
    * credits and payroll right. Carries no conversationId on purpose: it is for
    * Core, never fanned out to a thread.
@@ -409,6 +418,27 @@ export interface StoryRetiredPayload {
   at: string;
 }
 
+/** PD-55: what the family's app needs to celebrate -- nothing about anyone else's child. */
+export interface LearnerRewardGivenPayload {
+  learnerId: string;
+  lessonId: string;
+  eventId: string;
+  kind: 'star' | 'sticker' | 'praise' | 'celebration';
+  stickerKey: string | null;
+  praiseKey: string | null;
+  praiseText: string | null;
+  /** This learner's stars in this lesson, after this reward. */
+  stars: number;
+}
+
+export interface LearnerRewardUndonePayload {
+  learnerId: string;
+  lessonId: string;
+  /** The reward withdrawn. */
+  eventId: string;
+  stars: number;
+}
+
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
@@ -439,6 +469,8 @@ export interface CommEventPayloads {
   [CommEvent.CONVERSATION_READ]: ConversationReadPayload;
   [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
+  [CommEvent.LEARNER_REWARD_GIVEN]: LearnerRewardGivenPayload;
+  [CommEvent.LEARNER_REWARD_UNDONE]: LearnerRewardUndonePayload;
   [CommEvent.LESSON_CLOSED]: LessonClosedPayload;
   [CommEvent.LESSON_MAKEUP_RESOLVED]: LessonMakeupResolvedPayload;
   [CommEvent.LESSON_CHANGED]: LessonChangedPayload;

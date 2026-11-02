@@ -4980,4 +4980,77 @@ class L10nAr extends L10n {
 
   @override
   String get chatDraftLabel => 'مسودة:';
+
+  @override
+  String get rewardPraiseExcellent => 'ممتاز';
+
+  @override
+  String get rewardPraiseWellDone => 'أحسنت';
+
+  @override
+  String get rewardPraiseGreat => 'رائع';
+
+  @override
+  String get rewardPraiseChampion => 'بطل';
+
+  @override
+  String get rewardTrayTitle => 'المكافآت';
+
+  @override
+  String get rewardTrayFor => 'إلى';
+
+  @override
+  String get rewardTrayEveryone => 'الجميع';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.';
+
+  @override
+  String get rewardTrayStar => 'نجمة';
+
+  @override
+  String get rewardTrayStickers => 'ملصقات';
+
+  @override
+  String get rewardTrayPraise => 'ثناء';
+
+  @override
+  String get rewardTrayOwnWords => 'كلماتي…';
+
+  @override
+  String get rewardTrayCelebrate => 'احتفال';
+
+  @override
+  String get rewardTrayUndo => 'تراجع';
+
+  @override
+  String get rewardTraySent => 'أُعطيت المكافأة';
+
+  @override
+  String get rewardTrayFailed => 'لم تُسجَّل المكافأة. ما زالت على السبورة.';
+
+  @override
+  String get rewardCelebrationLine => 'معلّمك يحتفل بك!';
+
+  @override
+  String get rewardSoundTitle => 'صوت المكافآت';
+
+  @override
+  String get rewardSoundSubtitle => 'نغمة قصيرة عندما يحتفل المعلّم بطفلك.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'نجمة! $count نجمة في هذه الحصة',
+      many: 'نجمة! $count نجمة في هذه الحصة',
+      few: 'نجمة! $count نجوم في هذه الحصة',
+      two: 'نجمة! نجمتان في هذه الحصة',
+      one: 'نجمة! نجمة واحدة في هذه الحصة',
+      zero: 'نجمة!',
+    );
+    return '$_temp0';
+  }
 }
