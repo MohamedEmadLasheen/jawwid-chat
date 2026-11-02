@@ -1,0 +1,17 @@
+# PD-56 PR-G: the launch screen -- the owner's logo on its own white, in light and
+# dark mode alike (the logo's teal wordmark has no dark-background variant).
+# Regenerate with: ~/development/flutter/bin/dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/brand/splash-logo.png
+  color_dark: "#FFFFFF"
+  image_dark: assets/brand/splash-logo.png
+  android_12:
+    image: assets/brand/splash-android12-1152.png
+    color: "#FFFFFF"
+    image_dark: assets/brand/splash-android12-1152.png
+    color_dark: "#FFFFFF"
+  ios: true
+  android: true
+  web: false
+  fullscreen: false
