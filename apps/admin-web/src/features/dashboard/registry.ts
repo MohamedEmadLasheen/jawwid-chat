@@ -1,5 +1,6 @@
 import type { Bilingual } from '@/features/admin/copy'
 import type { IconName } from '@/shared/components/Icon'
+import { ATTENDANCE_PATH } from '@/features/teacher-records/paths'
 import type { DashboardSectionKey } from './api'
 
 /**
@@ -41,6 +42,8 @@ const TODAY = () => '/schedule?view=day'
 const NEEDS_ACTION = () => '/teachers/needs-action'
 /** A section of the Teacher Supervision page, which keeps its section (and filters) in the URL. */
 const SUPERVISION = (query: string) => () => `/teachers/supervision?${query}`
+/** PD-52: the parents' suggestions, behind the Attendance page's Complaints section (its Suggestions view). */
+const SUGGESTIONS = (status: 'received' | 'in_review') => () => `${ATTENDANCE_PATH}?section=complaints&view=suggestions&status=${status}`
 
 export interface TileSpec {
   label: Bilingual
@@ -260,17 +263,18 @@ export const TILES: Readonly<Record<string, TileSpec>> = {
     backlog: true,
     href: SUPERVISION('section=lateness'),
   },
+  // The parents' suggestions only (complaints and praise have their own flows): the Suggestions view, that status.
   'feedback.received': {
-    label: { en: 'New parent feedback', ar: 'آراء جديدة من أولياء الأمور' },
+    label: { en: 'New parent suggestions', ar: 'اقتراحات جديدة من أولياء الأمور' },
     icon: 'conversations',
     backlog: true,
-    href: SUPERVISION('section=feedback&status=received'),
+    href: SUGGESTIONS('received'),
   },
   'feedback.in_review': {
-    label: { en: 'Parent feedback in review', ar: 'آراء أولياء الأمور قيد المراجعة' },
+    label: { en: 'Parent suggestions in review', ar: 'اقتراحات أولياء الأمور قيد المراجعة' },
     icon: 'conversations',
     backlog: false,
-    href: SUPERVISION('section=feedback&status=in_review'),
+    href: SUGGESTIONS('in_review'),
   },
   'certificates.student_requested': {
     label: { en: 'Student certificates requested', ar: 'شهادات طلاب مطلوبة' },

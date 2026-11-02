@@ -39,6 +39,7 @@ export function titleOf(t: Pick<TaskSummary, 'title' | 'source' | 'titleParams'>
     label: str(p.label),
     balance: str(p.balance),
     count: str(p.count),
+    group: str(p.groupTitle),
     prospect: str(p.prospectName),
     name: str(p.printedName),
     when: typeof p.startsAt === 'string' ? fmt.dateTime(p.startsAt) : '',
@@ -125,6 +126,9 @@ export function sourceLink(t: Pick<TaskSummary, 'source' | 'titleParams'>): stri
     case 'schedule_change':
     case 'makeup_owed':
       return '/teachers/needs-action'
+    case 'group_admin_absent':
+      // The source is the spell; its group comes with the title.
+      return typeof t.titleParams?.conversationId === 'string' ? `/chat/${encodeURIComponent(t.titleParams.conversationId)}` : null
     case 'teacher_unsupervised':
       // The source is the spell; its teacher comes with the title.
       return typeof t.titleParams?.teacherId === 'string' ? `/teachers/files/${encodeURIComponent(t.titleParams.teacherId)}` : null

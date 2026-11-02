@@ -134,6 +134,8 @@ export class LessonRecordService {
           // admin_cancelled must name its reason; every other correction's
           // reason is internal and lives on the correction row.
           outcomeNote: to === LessonOutcome.ADMIN_CANCELLED ? reason : null,
+          // TEACHER-008: a correction is the record's own account, never a teacher-caused cancellation.
+          cancelCause: null,
           excuseCategory: categoryAfterCorrection(lesson.outcome, to, lesson.excuseCategory),
           outcomeByKind: ActorKind.STAFF,
           outcomeBy: actor.actorId,
@@ -258,7 +260,8 @@ export class LessonRecordService {
               correctedBy: actor.actorId,
             },
           });
-          const updated = await this.lessons.writer.update(tx, 'outcome', lesson.id, { outcome: LessonOutcome.VOIDED, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
+          // TEACHER-008: a voided lesson carries no cancellation cause.
+          const updated = await this.lessons.writer.update(tx, 'outcome', lesson.id, { outcome: LessonOutcome.VOIDED, outcomeNote: null, cancelCause: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
           await this.lessons.emitClosed(tx, updated, true);
         }
         await this.audit.audit(tx, {

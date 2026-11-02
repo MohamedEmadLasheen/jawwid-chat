@@ -63,12 +63,39 @@ enum Praise {
   };
 }
 
+/// PD-55 PR-5: a lesson's badge, at the configured thresholds -- named for effort, never a rank.
+enum RewardBadge {
+  bronze,
+  silver,
+  gold;
+
+  static RewardBadge? parse(Object? wire) => values.where((b) => b.name == wire).firstOrNull;
+
+  String label(L10n l10n) => switch (this) {
+    RewardBadge.bronze => l10n.rewardBadgeBronze,
+    RewardBadge.silver => l10n.rewardBadgeSilver,
+    RewardBadge.gold => l10n.rewardBadgeGold,
+  };
+
+  /// The badge after this one, if any.
+  RewardBadge? get next => this == RewardBadge.gold ? null : RewardBadge.values[index + 1];
+}
+
+/// "N more stars for (the next badge)", or the badge itself once the last is earned -- null with no tally.
+String? rewardProgress(L10n l10n, {required int stars, RewardBadge? badge, int? nextBadgeAt}) {
+  if (nextBadgeAt != null && nextBadgeAt > stars) {
+    final coming = badge?.next ?? RewardBadge.bronze;
+    return l10n.rewardToNextBadge(nextBadgeAt - stars, coming.label(l10n));
+  }
+  return badge == null ? null : l10n.rewardBadgeEarned(badge.label(l10n));
+}
+
 /// A custom praise is at most this long (the server's limit).
 const kRewardPraiseMaxLength = 40;
 
 /// A lesson of the teacher's that is on now, with its learner: one "For" chip.
 class RewardLesson {
-  const RewardLesson({required this.lessonId, required this.learnerId, required this.learnerName, required this.stars});
+  const RewardLesson({required this.lessonId, required this.learnerId, required this.learnerName, required this.stars, this.badge, this.nextBadgeAt});
 
   final String lessonId;
   final String learnerId;
@@ -76,12 +103,39 @@ class RewardLesson {
 
   /// This learner's stars in this lesson so far.
   final int stars;
+  final RewardBadge? badge;
+  final int? nextBadgeAt;
 
   factory RewardLesson.fromJson(Map<String, Object?> json) => RewardLesson(
     lessonId: json['lessonId']! as String,
     learnerId: json['learnerId']! as String,
     learnerName: json['learnerName'] as String? ?? '',
     stars: (json['stars'] as num?)?.toInt() ?? 0,
+    badge: RewardBadge.parse(json['badge']),
+    nextBadgeAt: (json['nextBadgeAt'] as num?)?.toInt(),
+  );
+}
+
+/// PD-55 PR-5: one learner's rewards in one lesson -- the report card's row.
+class LessonRewards {
+  const LessonRewards({required this.stars, this.badge, this.nextBadgeAt, this.praise = const []});
+
+  final int stars;
+  final RewardBadge? badge;
+  final int? nextBadgeAt;
+
+  /// The praise given, oldest first: a stamp, or the teacher's own words.
+  final List<({Praise? praise, String? text})> praise;
+
+  factory LessonRewards.fromJson(Map<String, Object?> json) => LessonRewards(
+    stars: (json['stars'] as num?)?.toInt() ?? 0,
+    badge: RewardBadge.parse(json['badge']),
+    nextBadgeAt: (json['nextBadgeAt'] as num?)?.toInt(),
+    praise: [
+      if (json['praise'] case final List list)
+        for (final p in list)
+          if (p is Map) (praise: Praise.parse(p['key']), text: p['text'] is String ? p['text'] as String : null),
+    ],
   );
 }
 
@@ -139,6 +193,8 @@ class RewardGiven {
     this.sticker,
     this.praise,
     this.praiseText,
+    this.badge,
+    this.nextBadgeAt,
   });
 
   final String learnerId;
@@ -151,6 +207,8 @@ class RewardGiven {
   final Sticker? sticker;
   final Praise? praise;
   final String? praiseText;
+  final RewardBadge? badge;
+  final int? nextBadgeAt;
 
   bool get isCelebration => kind == 'celebration';
 
@@ -171,6 +229,8 @@ class RewardGiven {
       sticker: Sticker.parse(payload['stickerKey']),
       praise: Praise.parse(payload['praiseKey']),
       praiseText: text is String && text.length <= kRewardPraiseMaxLength ? text : null,
+      badge: RewardBadge.parse(payload['badge']),
+      nextBadgeAt: payload['nextBadgeAt'] is num ? (payload['nextBadgeAt'] as num).toInt() : null,
     );
   }
 }

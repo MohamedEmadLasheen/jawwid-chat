@@ -114,6 +114,11 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                                   {tx(S.balanceNow)}: {r.balance === null ? tx(S.noAllowance) : number(r.balance)}
                                 </span>
                               )}
+                              {r.state === 'requested' && (r.unpaidDays ?? 0) > 0 && (
+                                <span className="sv-muted" role="note">
+                                  ⚠️ {tx(S.willBeUnpaid, { n: number(r.unpaidDays as number) })}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td>
