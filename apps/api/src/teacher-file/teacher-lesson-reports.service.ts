@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { CommError, CommErrorCode } from '../platform/errors';
+import { pageRowVisible, type PageScope } from '../platform/teacher-scope';
 import { TeacherFileService } from './teacher-file.service';
 
 /**
@@ -22,7 +23,12 @@ import { TeacherFileService } from './teacher-file.service';
  * lesson_report task). Other outcomes owe no report and are not listed.
  *
  * Access is the Teacher File's: its gate (`canView`), then the caller's
- * teacher scope (requireTeacher) -- teacher-level, as the tile's is.
+ * teacher scope (requireTeacher) -- teacher-level, as the tile's is, so the
+ * COUNTS are the teacher's whole month. Each ROW is also read against the
+ * caller's per-child page scope (pageRowVisible, department head 2026-11-02):
+ * a lesson about a child or family outside it keeps its status and time, so the
+ * totals still add up, but shows as "another family" -- no child, no family,
+ * no report content, no links.
  */
 export const REPORT_STATUSES = ['on_time', 'late', 'pending', 'missing'] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
@@ -43,6 +49,7 @@ interface Row {
   learner_id: string | null;
   learner_name: string | null;
   family_id: string | null;
+  prospect_id: string | null;
   prospect_name: string | null;
   report_id: string | null;
   lesson_number: number | null;
@@ -121,7 +128,7 @@ export class TeacherLessonReportsService {
       SELECT c.id::text AS id, c.kind, c.starts_at, c.ends_at,
              to_char(c.starts_at AT TIME ZONE ${zone}, 'YYYY-MM-DD') AS day,
              c.status, c.learner_id::text AS learner_id, ln.name AS learner_name, ln.family_id::text AS family_id,
-             p.display_name AS prospect_name,
+             c.prospect_id::text AS prospect_id, p.display_name AS prospect_name,
              r.lesson_id::text AS report_id, r.lesson_number, r.lesson_total, r.covered, r.covered_topics, r.next_tasks,
              r.homework, r.rating, r.note, r.submitted_at, r.updated_at, r.version,
              r.entered_by_kind, r.entered_by::text AS entered_by,
@@ -141,6 +148,7 @@ export class TeacherLessonReportsService {
 
     const page = rows.slice(0, LESSON_REPORTS_PAGE);
     const last = page[page.length - 1];
+    const scope = await this.files.teacherScope.pageRowsOf(actor);
     return {
       teacherId: teacher.id,
       month: counts!.month,
@@ -153,15 +161,33 @@ export class TeacherLessonReportsService {
         pending: counts!.pending,
         missing: counts!.missing,
       },
-      lessons: page.map((r) => this.dto(r, grace)),
+      lessons: page.map((r) => this.dto(r, grace, scope, teacher.id)),
       nextCursor: rows.length > LESSON_REPORTS_PAGE && last ? encodeCursor(last.starts_at, last.id) : null,
     };
   }
 
-  private dto(r: Row, graceHours: number) {
+  private dto(r: Row, graceHours: number, scope: PageScope, teacherId: string) {
     const delayMinutes = r.submitted_at
       ? Math.max(0, Math.round((r.submitted_at.getTime() - r.ends_at.getTime()) / 60_000))
       : null;
+    const base = {
+      id: r.id,
+      kind: r.kind,
+      startsAt: r.starts_at.toISOString(),
+      endsAt: r.ends_at.toISOString(),
+      day: r.day,
+      status: r.status,
+    };
+    if (!pageRowVisible(scope, teacherId, { learnerId: r.learner_id, prospectId: r.prospect_id })) {
+      // Another family's lesson: counted, never named.
+      return {
+        ...base,
+        anotherFamily: true as const,
+        learner: null,
+        prospectName: null,
+        report: r.report_id ? { submittedAt: r.submitted_at!.toISOString(), delayMinutes, graceHours } : null,
+      };
+    }
     return {
       id: r.id,
       kind: r.kind,
@@ -170,6 +196,7 @@ export class TeacherLessonReportsService {
       /** The lesson's day in the academy's zone: the Schedule's day view opens on it. */
       day: r.day,
       status: r.status,
+      anotherFamily: false as const,
       learner: r.learner_id ? { id: r.learner_id, name: r.learner_name, familyId: r.family_id } : null,
       /** A trial is named by its prospect, never by its form (G-07). */
       prospectName: r.learner_id ? null : r.prospect_name,

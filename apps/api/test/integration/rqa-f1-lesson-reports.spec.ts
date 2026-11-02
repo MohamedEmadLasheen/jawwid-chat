@@ -13,6 +13,9 @@
  *                    complete; the counts never change with the page or filter
  *   access           the Teacher File's own gate: whoever the file refuses,
  *                    this refuses alike
+ *   per-child rows   the counts are the teacher's whole month; a row about a
+ *                    child outside the viewer's page scope (pageRowVisible) is
+ *                    "another family": status and time, no names, no content
  *
  * Synthetic fixtures only (G-16).
  */
@@ -23,6 +26,7 @@ import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { StatsService } from '../../src/lessons/stats.service';
 import { TeacherFileService } from '../../src/teacher-file/teacher-file.service';
+import { TeacherScopeService, type PageScope } from '@platform/teacher-scope';
 import { LESSON_REPORTS_PAGE, TeacherLessonReportsService } from '../../src/teacher-file/teacher-lesson-reports.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -179,6 +183,54 @@ describe('the month\'s lessons and their reports', () => {
     const late = await allPages('2026-09', 'late');
     expect(late.seen.map((r) => r.id)).toEqual([ids[0]]);
     expect(late.counts[0]).toEqual(counts[0]);
+  });
+});
+
+describe('a row outside the viewer\'s per-child page scope', () => {
+  /**
+   * The Teacher File admits only the super admin and the Teachers department
+   * today, whose page scope covers their teachers whole. The rows are read
+   * against the page scope regardless, so an Operations-shaped scope -- the
+   * teacher reached only through the viewer's own children -- is given here
+   * through the real service, the way pageRowsOf answers an Operations
+   * supervisor (whole: none; learnerIds: theirs).
+   */
+  function asOperations(learnerIds: string[]) {
+    const real = new TeacherScopeService(g.prisma);
+    const scope = Object.create(real) as TeacherScopeService;
+    scope.pageRowsOf = async (): Promise<PageScope> => ({
+      teachers: { all: false, teacherIds: new Set([s.teacherId]) },
+      whole: { all: false, teacherIds: new Set() },
+      learnerIds: new Set(learnerIds),
+      familyIds: new Set(),
+    });
+    const scopedFiles = new TeacherFileService(g.prisma, g.authz, g.conversations, audit, scope);
+    return new TeacherLessonReportsService(g.prisma, scopedFiles, g.config);
+  }
+
+  it('an Operations-shaped viewer sees the full counts but no child, family, content or link outside their children', async () => {
+    const day = (d: number) => new Date(Date.UTC(2026, 8, d, 15));
+    const reported = await lessonAt(day(2));
+    await lessons.report(s.teacherId, reported, { covered: 'Surat al-Fatiha', note: 'staff only' });
+    await lessonAt(day(8));
+
+    const whole = await reports.list(tsupId, s.teacherId, { month: '2026-09' });
+    const outside = await asOperations([]).list(tsupId, s.teacherId, { month: '2026-09' });
+    expect(outside.counts).toEqual(whole.counts);
+    expect(outside.lessons.map((l) => [l.id, l.status])).toEqual(whole.lessons.map((l) => [l.id, l.status]));
+    for (const l of outside.lessons) {
+      expect(l).toMatchObject({ anotherFamily: true, learner: null, prospectName: null });
+      expect(JSON.stringify(l)).not.toMatch(/Fatiha|staff only|learner_l/);
+    }
+    // The late one keeps when it was written, so its status reads the same.
+    expect(outside.lessons.find((l) => l.id === reported)!.report).toEqual({
+      submittedAt: expect.any(String), delayMinutes: expect.any(Number), graceHours: 24,
+    });
+
+    // Their own child: named, with the report, as the Teachers department sees it.
+    const own = await asOperations([s.learnerId]).list(tsupId, s.teacherId, { month: '2026-09' });
+    expect(own.lessons).toEqual(whole.lessons);
+    expect(whole.lessons.every((l) => l.anotherFamily === false)).toBe(true);
   });
 });
 

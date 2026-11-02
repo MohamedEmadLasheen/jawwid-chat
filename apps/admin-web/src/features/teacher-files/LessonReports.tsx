@@ -23,24 +23,32 @@ export interface LessonReportRow {
   endsAt: string
   day: string
   status: ReportStatus
+  /** Outside the viewer's per-child scope: counted, never named -- no child, family, content or links. */
+  anotherFamily: boolean
   learner: { id: string; name: string | null; familyId: string | null } | null
   prospectName: string | null
-  report: {
-    lessonNumber: number | null
-    lessonTotal: number | null
-    covered: string | null
-    coveredTopics: string[]
-    nextTasks: string[]
-    homework: string | null
-    rating: number | null
-    note: string | null
-    submittedAt: string
-    updatedAt: string
-    version: number | null
+  report: AnotherFamilyReport | FullReport | null
+}
+
+/** What a row outside the viewer's scope keeps: when it was written, so its status reads the same. */
+export interface AnotherFamilyReport {
+  submittedAt: string
+  delayMinutes: number | null
+  graceHours: number
+}
+
+export interface FullReport extends AnotherFamilyReport {
+  lessonNumber: number | null
+  lessonTotal: number | null
+  covered: string | null
+  coveredTopics: string[]
+  nextTasks: string[]
+  homework: string | null
+  rating: number | null
+  note: string | null
+  updatedAt: string
+  version: number | null
     enteredBy: { kind: string | null; id: string; name: string | null } | null
-    delayMinutes: number | null
-    graceHours: number
-  } | null
 }
 
 export interface LessonReportsPage {
@@ -71,8 +79,8 @@ export function useLessonReports(teacherId: string, month: string, status: Repor
 }
 
 /** The Schedule's day view, filtered to the lesson's teacher and child: the lesson itself. */
-export function lessonLink(teacherId: string, row: Pick<LessonReportRow, 'day' | 'learner'>): string | null {
-  if (!row.learner) return null
+export function lessonLink(teacherId: string, row: Pick<LessonReportRow, 'day' | 'learner' | 'anotherFamily'>): string | null {
+  if (!row.learner || row.anotherFamily) return null
   const q = new URLSearchParams({ view: 'day', date: row.day, teacherIds: teacherId, learnerIds: row.learner.id })
   return `/schedule?${q.toString()}`
 }
@@ -102,6 +110,7 @@ const R = {
   late: { en: '{h} h {m} min after the end', ar: 'بعد نهاية الحصة بـ{h} س و{m} د' },
   openLesson: { en: 'Open the lesson', ar: 'افتح الحصة' },
   trial: { en: 'Trial: {name}', ar: 'تجربة: {name}' },
+  anotherFamily: { en: 'Another family', ar: 'عائلة أخرى' },
   none: { en: 'No lessons to show for this month.', ar: 'لا توجد حصص لعرضها في هذا الشهر.' },
   more: { en: 'Show more', ar: 'عرض المزيد' },
   loadingMore: { en: 'Loading…', ar: 'جارٍ التحميل…' },
@@ -186,8 +195,8 @@ function ReportItem({ teacherId, row }: { teacherId: string; row: LessonReportRo
   const list = (items: string[]) => items.join(locale === 'ar' ? '، ' : ', ') || null
   const s = STATUS[row.status]
   const link = lessonLink(teacherId, row)
-  const rep = row.report
-  const delay = rep && row.status === 'late' && rep.delayMinutes !== null ? rep.delayMinutes : null
+  const rep = row.report && 'updatedAt' in row.report ? row.report : null
+  const delay = row.report && row.status === 'late' && row.report.delayMinutes !== null ? row.report.delayMinutes : null
   return (
     <li className="tf-report">
       <div className="tf-report__head">
@@ -195,7 +204,9 @@ function ReportItem({ teacherId, row }: { teacherId: string; row: LessonReportRo
           {tx(s.label)}
         </Badge>
         <span className="tf-report__when">{dateTime(row.startsAt)}</span>
-        {row.learner ? (
+        {row.anotherFamily ? (
+          <span className="tf-muted">{tx(R.anotherFamily)}</span>
+        ) : row.learner ? (
           <Link to={studentPath(row.learner.id)} dir="auto">
             {row.learner.name}
           </Link>

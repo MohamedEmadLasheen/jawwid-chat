@@ -530,6 +530,7 @@ describe('lesson reports (RQA-F1)', () => {
     endsAt: '2026-10-20T16:30:00Z',
     day: startsAt.slice(0, 10),
     status,
+    anotherFamily: false,
     learner: { id: 'l-1', name: 'Child Alpha', familyId: 'f-1' },
     prospectName: null,
     report,
@@ -598,6 +599,20 @@ describe('lesson reports (RQA-F1)', () => {
       expect(new URL(String(calls('GET', /lesson-reports\?/).at(-1)![0]), 'http://x').searchParams.get('status')).toBe('late'),
     )
     expect(within(section).getByRole('button', { name: /^Late/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('a lesson of another family shows its status and delay, never a name, content or link', async () => {
+    on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
+      json(page([{ ...row('ls-9', 'late', { submittedAt: '2026-10-22T10:00:00Z', delayMinutes: 2 * 24 * 60, graceHours: 24 }), anotherFamily: true, learner: null }], null)),
+    )
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Lesson reports' })
+    const [item] = await within(section).findAllByRole('listitem')
+    expect(within(item!).getByText('Another family')).toBeInTheDocument()
+    expect(within(item!).getByText('Late')).toBeInTheDocument()
+    expect(within(item!).getByText('48 h 0 min after the end')).toBeInTheDocument()
+    expect(within(item!).queryByRole('link')).toBeNull()
+    expect(within(item!).queryByText(/Written by/)).toBeNull()
   })
 
   it('a trial names its prospect and has no lesson or child link', async () => {
