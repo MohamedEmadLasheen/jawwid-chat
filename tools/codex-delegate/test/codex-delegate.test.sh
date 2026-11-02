@@ -291,5 +291,17 @@ check "from a subfolder of a task worktree: refused" 'grep -q "task.s worktree" 
 mine="$SANDBOX/wt/mine"; git -C "$REPO" worktree add -q -b mine "$mine" main; echo "x" > "$mine/src/m.ts"; git -C "$mine" add -A; git -C "$mine" commit -q -m mine
 check "an owner worktree inside the engine's worktree folder is reviewed normally" 'grep -q "\"verdict\"" <<<"$( cd "$mine" && bash "$ENGINE" review --task-id r22 --base main 2>&1 )"'
 
+echo "19. symlinked worktree folder; a planted FIFO named state"
+ln -s "$SANDBOX/wt" "$SANDBOX/wtlink"
+plan t50; echo 'echo "export const x = 50;" > src/a.ts' > "$FAKE_CODEX_PLAN/1"
+JAWWID_AI_WORKTREES="$SANDBOX/wtlink" run --task-id t50 --brief "$BRIEF" --allow 'src/*' || true
+real50="$(cd "$(JAWWID_AI_WORKTREES="$SANDBOX/wtlink" res t50 worktree)" && pwd -P)"
+check "recorded worktree path is physical" '[ "$(JAWWID_AI_WORKTREES="$SANDBOX/wtlink" res t50 worktree)" = "$real50" ]'
+check "review from the physical path of a task worktree: refused" 'grep -q "task.s worktree" <<<"$( cd "$real50" && bash "$ENGINE" review --task-id r30 --base main 2>&1 || true )"'
+mkfifo "$(res t1 run_dir)/tmp/state" 2>/dev/null || true
+mkdir -p "$(res t1 run_dir)/tmp/x/y"; mkfifo "$(res t1 run_dir)/tmp/x/y/state" 2>/dev/null || true
+check "a FIFO named state never hangs review" '( cd "$mine" && /usr/bin/python3 -I -c "import subprocess,sys; r=subprocess.run(sys.argv[1:],capture_output=True,timeout=60); sys.exit(0 if b\"verdict\" in r.stdout else 1)" bash "$ENGINE" review --task-id r31 --base main )'
+rm -f "$(res t1 run_dir)/tmp/state" "$(res t1 run_dir)/tmp/x/y/state"
+
 echo; echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

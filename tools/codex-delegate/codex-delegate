@@ -28,8 +28,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AI_HOME="${JAWWID_AI_HOME:-$HOME/.jawwid-ai}"
 if [ -d "$SCRIPT_DIR/templates" ]; then TEMPLATES="$SCRIPT_DIR/templates"; else TEMPLATES="$AI_HOME/engine/templates"; fi
 CODEX="${CODEX_BIN:-$HOME/.local/bin/codex}"
+# The engine's folders are resolved to physical paths once, so every path it records
+# (and later compares against) is free of symlinks.
+mkdir -p "$AI_HOME/runs" "${JAWWID_AI_WORKTREES:-$HOME/jawwid-ai-worktrees}"
+AI_HOME="$(cd "$AI_HOME" && pwd -P)"
 RUNS="$AI_HOME/runs"
-WORKTREES="${JAWWID_AI_WORKTREES:-$HOME/jawwid-ai-worktrees}"
+WORKTREES="$(cd "${JAWWID_AI_WORKTREES:-$HOME/jawwid-ai-worktrees}" && pwd -P)"
 PROTECTED_REPOS_FILES="$AI_HOME/protected-repos.conf $SCRIPT_DIR/global/protected-repos.conf"
 MAX_ATTEMPTS_DEFAULT=3
 CODEX_TIMEOUT_DEFAULT=1800   # seconds per Codex attempt
@@ -82,7 +86,8 @@ inside_task_worktree() {
   logical="$(cd "$1" && pwd)"; physical="$(cd "$1" && pwd -P)"
   for p in "$logical" "$physical"; do
     while [ -n "$p" ] && [ "$p" != / ]; do
-      grep -rqxF "worktree=$p" "$RUNS" --include=state 2>/dev/null && return 0
+      if find "$RUNS" -mindepth 3 -maxdepth 3 -type f -name state -print0 2>/dev/null \
+           | xargs -0 grep -lxF -- "worktree=$p" 2>/dev/null | grep -q .; then return 0; fi
       p="$(dirname "$p")"
     done
   done
@@ -634,7 +639,11 @@ report = load(os.path.join(att, "report.json"), {})
 wt, commit = st.get("worktree", ""), st.get("commit", "")
 files = []
 if commit and wt and os.path.isdir(wt):
-    out = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-C", wt, "diff", "--name-only", st.get("base_sha", ""), commit], capture_output=True, text=True)
+    gitdir = st.get("gitdir") or ""
+    cmd = ["git", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
+    cmd += (["--git-dir", gitdir] if gitdir else ["-C", wt]) + ["diff", "--name-only", st.get("base_sha", ""), commit]
+    env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
+    out = subprocess.run(cmd, capture_output=True, text=True, env=env)
     files = [f for f in out.stdout.splitlines() if f]
 problems = list(report.get("outstanding_problems", []))
 for name in ("problem.txt", "out-of-scope.txt", "secret-scan.txt", "special-modes.txt"):
