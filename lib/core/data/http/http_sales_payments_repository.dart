@@ -136,6 +136,34 @@ class HttpSalesPaymentsRepository implements SalesPaymentsRepository {
       ));
     }
 
+    // ADMIN-012: the payments towards no instalment (recorded by hand, a paid
+    // request). The instalment ones are already shown with their instalment.
+    final otherPayments = <SalesFamilyPayment>[];
+    for (final raw in (d['payments'] as List?) ?? const []) {
+      if (raw is! Map || raw['instalmentId'] != null) continue;
+      final id = _text(raw['id']);
+      final amount = _whole(raw['amountMinor']);
+      final currency = _text(raw['currency']);
+      final paidOn = parseCalendarDay(raw['paidOn']);
+      if (id == null || amount == null || currency == null || paidOn == null) continue;
+      final child = raw['child'] is Map ? raw['child'] as Map : null;
+      final voided = raw['voided'] is Map ? raw['voided'] as Map : null;
+      otherPayments.add(SalesFamilyPayment(
+        id: id,
+        amountMinor: amount,
+        refundedMinor: _whole(raw['refundedMinor']) ?? 0,
+        currency: currency,
+        paidOn: paidOn,
+        method: BillingMethod.tryParse(raw['method']),
+        reference: _text(raw['reference']),
+        childName: _text(child?['name']),
+        recordedByName: _nameOf(raw['recordedBy']),
+        voided: voided == null
+            ? null
+            : SalesVoid(reason: _text(voided['reason']) ?? '', at: AppClock.parse(voided['at']), byName: _nameOf(voided['by'])),
+      ));
+    }
+
     return FamilyBilling(
       familyId: _text(d['familyId']) ?? fallbackFamilyId,
       today: parseCalendarDay(d['today']),
@@ -144,6 +172,7 @@ class HttpSalesPaymentsRepository implements SalesPaymentsRepository {
       planMonths: _whole(d['planMonths']),
       canRecord: d['canRecord'] == true,
       instalments: instalments,
+      otherPayments: otherPayments,
       totals: [
         for (final t in (d['totals'] as List?) ?? const [])
           if (t is Map && _text(t['currency']) != null)

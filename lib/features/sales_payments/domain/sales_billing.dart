@@ -104,6 +104,40 @@ class SalesInstalment {
   final SalesVoid? voided;
 }
 
+/// ADMIN-012: a payment of the family towards no instalment -- recorded by hand,
+/// or a paid request. Shown so nobody chases or records it again.
+class SalesFamilyPayment {
+  const SalesFamilyPayment({
+    required this.id,
+    required this.amountMinor,
+    required this.currency,
+    required this.paidOn,
+    this.refundedMinor = 0,
+    this.method,
+    this.reference,
+    this.childName,
+    this.recordedByName,
+    this.voided,
+  });
+
+  final String id;
+  final int amountMinor;
+
+  /// What was given back on it (Stripe or staff).
+  final int refundedMinor;
+  final String currency;
+  final DateTime paidOn;
+  final BillingMethod? method;
+  final String? reference;
+
+  /// The child it is for; null for the whole family.
+  final String? childName;
+
+  /// Who on staff recorded it; null for a card payment Stripe confirmed.
+  final String? recordedByName;
+  final SalesVoid? voided;
+}
+
 /// One family's billing, as `GET /families/:id/billing` (and every write) answers it.
 class FamilyBilling {
   const FamilyBilling({
@@ -113,6 +147,7 @@ class FamilyBilling {
     this.currency,
     this.planMonths,
     this.instalments = const [],
+    this.otherPayments = const [],
     this.totals = const [],
     this.canRecord = false,
   });
@@ -127,6 +162,10 @@ class FamilyBilling {
 
   /// In the server's order (due date).
   final List<SalesInstalment> instalments;
+
+  /// ADMIN-012: the family's payments towards no instalment, in the server's order.
+  /// The instalment ones are shown with their instalment. "Paid" in [totals] counts both.
+  final List<SalesFamilyPayment> otherPayments;
   final List<BillingTotal> totals;
 
   /// Whether this viewer may record a payment or void an instalment. Advisory: the server

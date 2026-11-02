@@ -3355,6 +3355,14 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get salesOtherPaymentsTitle => 'Other payments';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'Refunded $amount';
+  }
+
+  @override
   String salesVoidedReason(String reason) {
     return 'Voided: $reason';
   }

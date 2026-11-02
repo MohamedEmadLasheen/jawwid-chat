@@ -5743,6 +5743,18 @@ abstract class L10n {
   /// **'Voided by {name}: {reason}'**
   String salesVoidedBy(String name, String reason);
 
+  /// ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request).
+  ///
+  /// In en, this message translates to:
+  /// **'Other payments'**
+  String get salesOtherPaymentsTitle;
+
+  /// ADMIN-012: how much of a payment was refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String salesRefundedAmount(String amount);
+
   /// A voided instalment whose voiding staff member is not known.
   ///
   /// In en, this message translates to:
