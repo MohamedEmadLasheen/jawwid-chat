@@ -71,8 +71,8 @@ abstract interface class StoryVideoPlayer {
   Future<void> play();
   Future<void> pause();
 
-  /// Move to [position] (CHATSCHED-013 -> CHATSCHED-010: a chat video can be
-  /// scrubbed). The platform player asks the media route for that byte range.
+  /// Move to [position] (CHATSCHED-010: a chat video can be scrubbed). The
+  /// platform player asks the media route for that byte range.
   Future<void> seek(Duration position);
 
   /// Release the current video without disposing the seam, so the next [load] starts clean.
