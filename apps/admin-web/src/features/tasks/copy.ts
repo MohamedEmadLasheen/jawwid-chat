@@ -152,6 +152,7 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   feedback: { en: 'Parent feedback', ar: 'ملاحظة وليّ أمر' },
   schedule_change: { en: 'New lesson times', ar: 'طلب مواعيد جديدة' },
   makeup_owed: { en: 'Make-up owed', ar: 'حصة تعويضية مستحقة' },
+  group_admin_absent: { en: 'Group without an admin', ar: 'مجموعة بلا مشرف' },
 }
 
 /** A system task's title, from its source now (`titleParams`). */
@@ -186,6 +187,10 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   feedback: { en: 'Answer a parent about {teacher}: {learner}', ar: 'أجب وليّ الأمر بشأن {teacher}: {learner}' },
   schedule_change: { en: 'Decide on new lesson times: {learner}', ar: 'قرّر بشأن المواعيد الجديدة: {learner}' },
   makeup_owed: { en: 'Make sure a lesson is made up: {learner}, {when}', ar: 'تأكّد من تعويض الحصة: {learner}، {when}' },
+  group_admin_absent: {
+    en: 'Add an admin to the group: {group} (the teacher and parents cannot write until then)',
+    ar: 'أضف مشرفًا إلى المجموعة: {group} (لا يستطيع المعلم وأولياء الأمور الكتابة حتى ذلك الحين)',
+  },
 }
 
 export const EVENT_LABEL: Record<TaskEvent['kind'], Pair> = {
