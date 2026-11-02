@@ -3796,7 +3796,11 @@ the row is scheduled for now, whatever the push does after (ADMIN-011, 2026-11-0
 it used to wait for the push to be sent or to fail five times, about 15 minutes
 for anyone without a device token). A row scheduled for later is adopted by the
 worker once it is due, and a row waiting on a retry after a failed push is adopted
-at once.
+at once. The entry follows its push: when dispatch cancels the push (the recipient
+is no longer active, RT-032; they left the conversation) the entry is withdrawn
+with it. So an entry can be visible and then withdrawn: under quiet hours the
+entry shows at once while its push waits, for hours, and goes if that deferred
+push is then cancelled.
 
 **Not changed.** Call pushes (W7/W8, closed): the dispatcher, routing, templates
 and VoIP gate are untouched; a sent missed call is adopted into the Center by the

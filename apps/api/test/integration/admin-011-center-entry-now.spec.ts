@@ -157,4 +157,70 @@ describe('ADMIN-011: the Center entry is written at once, independent of push', 
     expect((await delivery(row.id)).itemId).toBe(entry!.id);
     expect(await pipeline.adoptLegacy()).toBe(0);
   });
+
+  it('RECIPIENT_INACTIVE: the entry is written at once and withdrawn when dispatch cancels the push (RT-032)', async () => {
+    const { notifications } = wired(ok);
+    const account = await g.prisma.account.create({ data: { subject: `p-${randomUUID()}@admin011.test`, kind: 'family', status: 'suspended', isActive: false } });
+    await g.prisma.contact.update({ where: { id: s.parentId }, data: { accountId: account.id } });
+    const id = (await paymentReceived(notifications))!;
+    expect(await entries()).toHaveLength(1);
+
+    expect(await drain(notifications, id)).toMatchObject({ status: 'cancelled', failureCode: 'RECIPIENT_INACTIVE' });
+    const [entry] = await entries();
+    expect(entry).toMatchObject({ cancelReason: 'RECIPIENT_INACTIVE' });
+    expect(entry!.cancelledAt).not.toBeNull();
+  });
+
+  it('the race: the worker cancels the delivery between the read and the link -- the entry is withdrawn, never left visible', async () => {
+    const { pipeline } = wired(ok);
+    const row = await g.prisma.notification.create({
+      data: {
+        dedupeKey: `payment_received:${randomUUID()}:${s.parentId}`, templateKey: 'payment_received', eventType: 'payment_received',
+        recipientId: s.parentId, locale: 'en', status: 'scheduled', scheduledAt: new Date(),
+      },
+    });
+    // The entry is created; the cancel lands right after, before the link.
+    const create = g.prisma.notificationItem.create.bind(g.prisma.notificationItem);
+    const spy = jest.spyOn(g.prisma.notificationItem, 'create').mockImplementation(((args: never) =>
+      create(args).then(async (item) => {
+        await g.prisma.notification.update({ where: { id: row.id }, data: { status: 'cancelled', failureCode: 'RECIPIENT_INACTIVE' } });
+        return item;
+      })) as never);
+    try {
+      await pipeline.scheduled(row.id, new Date(Date.now() - 1000));
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await delivery(row.id)).itemId).toBeNull();
+    const [entry] = await entries();
+    expect(entry!.cancelledAt).not.toBeNull();
+    expect(entry!.cancelReason).toBe('RECIPIENT_INACTIVE');
+    expect(await pipeline.adoptLegacy()).toBe(0);
+  });
+
+  it('a listener that throws never fails the producer: the delivery is scheduled and its id returned', async () => {
+    const { notifications } = wired(ok);
+    notifications.onScheduled({ scheduled: async () => { throw new Error('listener down'); } });
+    const id = await paymentReceived(notifications);
+    expect(id).toEqual(expect.any(String));
+    expect((await delivery(id!)).status).toBe('scheduled');
+    expect(await entries()).toHaveLength(0);
+  });
+
+  it('the immediate path and the sweep at once: one entry, linked, whichever wins', async () => {
+    const row = await g.prisma.notification.create({
+      data: {
+        dedupeKey: `payment_received:${randomUUID()}:${s.parentId}`, templateKey: 'payment_received', eventType: 'payment_received',
+        recipientId: s.parentId, locale: 'en', status: 'scheduled', attempts: 1, failureCode: 'NO_DEVICE_TOKEN',
+        scheduledAt: new Date(Date.now() + 4 * MIN),
+      },
+    });
+    const { pipeline } = wired(ok);
+    const [, adopted] = await Promise.all([pipeline.scheduled(row.id, new Date(Date.now() - 1000)), pipeline.adoptLegacy()]);
+    const all = await entries();
+    expect(all).toHaveLength(1);
+    expect((await delivery(row.id)).itemId).toBe(all[0]!.id);
+    expect(adopted).toBeLessThanOrEqual(1);
+    expect(await pipeline.adoptLegacy()).toBe(0);
+  });
 });

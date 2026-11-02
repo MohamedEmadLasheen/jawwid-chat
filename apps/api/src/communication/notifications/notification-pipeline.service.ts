@@ -716,7 +716,10 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
     let adopted = 0;
     for (const n of rows) {
       const waiting = n.status === NotificationStatus.SCHEDULED;
-      if (await this.adoptRow(n, n.sentAt ?? (waiting ? now : n.scheduledAt))) adopted += 1;
+      // A row waiting on a retry: its scheduled_at is the retry's, not the producer's.
+      // Here (a process without the listener) every producer schedules "now", so
+      // the row's creation is the producer's moment.
+      if (await this.adoptRow(n, n.sentAt ?? (waiting ? n.createdAt : n.scheduledAt))) adopted += 1;
     }
     return adopted;
   }
@@ -747,8 +750,28 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
       visibleAt,
     }, false);
     if (!item) return false;
-    await this.prisma.notification.updateMany({ where: { id: n.id, itemId: null }, data: { itemId: item.id } });
-    return true;
+    // Link only a delivery not yet cancelled. The trigger that makes an entry
+    // follow its delivery (notification_item_follows_delivery) fires on a status
+    // change; a delivery the worker cancelled (RECIPIENT_INACTIVE, AUDIENCE)
+    // between our read and this write would leave the entry visible forever.
+    // The row lock orders this UPDATE against the cancel: whichever is second
+    // sees the other.
+    const linked = await this.prisma.notification.updateMany({
+      where: { id: n.id, itemId: null, status: { not: NotificationStatus.CANCELLED } },
+      data: { itemId: item.id },
+    });
+    if (linked.count > 0) return true;
+    // Cancelled first: withdraw the entry as the trigger would have (READ and MUTED
+    // withdraw the push, never the entry), unless another live delivery holds it.
+    await this.prisma.$executeRaw`
+      UPDATE chat.notification_item i
+         SET cancelled_at = now(), cancel_reason = coalesce(n.failure_code, 'delivery_cancelled'), updated_at = now()
+        FROM chat.notification n
+       WHERE n.id = ${n.id}::uuid AND n.status = 'cancelled' AND n.item_id IS NULL
+         AND coalesce(n.failure_code, '') NOT IN ('READ', 'MUTED')
+         AND i.id = ${item.id}::uuid AND i.cancelled_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM chat.notification o WHERE o.item_id = i.id AND o.status <> 'cancelled')`;
+    return false;
   }
 
   /** Retention: delivery rows after notification.delivery_retention_days, entries after item_retention_days. */
