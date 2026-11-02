@@ -132,6 +132,12 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       return ar ? `▶️ عادت حصص ${learner}` : `▶️ ${learner}'s lessons have resumed`;
     case CardKind.TEACHER_BONUS:
       return join(ar ? '🏅 مكافأة' : '🏅 A bonus for you', line(ar ? 'السبب' : 'Reason', p.reason));
+    // PD-52 (plan §11 c): the child's first name and the parent's words -- never the parent's name.
+    case CardKind.TEACHER_PRAISE_SHARED:
+      return join(
+        ar ? `💐 ثناء من ولي أمر ${String(p.childFirstName ?? '')}` : `💐 Praise from ${String(p.childFirstName ?? '')}'s parent`,
+        ar ? `«${String(p.body ?? '')}»` : `“${String(p.body ?? '')}”`,
+      );
     case CardKind.SUBSCRIPTION_GRACE:
       return ar
         ? `⏳ انتهت حصص اشتراك ${learner}. ${graceLeftLabel(Number(p.graceLeft), true)} حتى التجديد.`

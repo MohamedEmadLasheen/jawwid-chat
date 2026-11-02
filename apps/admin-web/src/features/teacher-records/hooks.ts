@@ -57,6 +57,11 @@ export function useRecordTestimonial() {
   })
 }
 
+export function useSharePraise() {
+  const refresh = useRefresh()
+  return useMutation({ mutationFn: (feedbackId: string) => teacherRecordsApi.sharePraise(feedbackId), onSettled: refresh })
+}
+
 export function useVoidEntry() {
   const refresh = useRefresh()
   return useMutation({ mutationFn: ({ id, reason }: { id: string; reason: string }) => teacherRecordsApi.voidEntry(id, reason), onSettled: refresh })

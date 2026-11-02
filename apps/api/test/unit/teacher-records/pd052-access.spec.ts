@@ -76,6 +76,7 @@ describe('PD-52: the new keys open what the old keys opened, page by page', () =
       'POST /parent-feedback/:id/reply',
       'POST /parent-feedback/:id/take',
       'POST /teacher-records/entries/:id/void',
+      'POST /teacher-records/praise/:id/share',
       'POST /teachers/:id/bonus',
       'POST /teachers/:id/testimonials',
     ]);

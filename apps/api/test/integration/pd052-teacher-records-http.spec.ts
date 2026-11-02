@@ -4,7 +4,9 @@
  *     teacher_grants key is refused page B's reads, the void, and a take or
  *     reply on a parent's complaint;
  *   - GET /teacher-records/access answers a parent, a teacher and Sales with
- *     nothing offered (200, never an error).
+ *     nothing offered (200, never an error);
+ *   - PR-8: POST /teacher-records/praise/:id/share is wired (Nest injects
+ *     SupervisionService), refused without a basis, and once only.
  *
  * Synthetic people only (G-20).
  */
@@ -211,5 +213,23 @@ describe('PD-52 over HTTP', () => {
     const r = await call(token, 'POST', `/teachers/${child.teacherId}/testimonials`, { body: 'Lovely trial.', source: 'other', prospectId: prospect.id });
     expect({ status: r.status, code: r.code }).toEqual({ status: 403, code: CommErrorCode.TEACHER_FILE_DENIED });
     expect(await g.prisma.teacherSupervisionEntry.count({ where: { trialProspectId: prospect.id } })).toBe(0);
+  });
+
+  it('PR-8: sharing praise over HTTP -- refused without a basis, 201 for the Operations Manager, then 409', async () => {
+    const family = m.families[m.families.length - 1]!; // the earlier tests spend family 0's daily feedback limit
+    const child = family.children[0]!;
+    const filed = await call(await login(family.parent.subject), 'POST', '/me/feedback', { learnerId: child.id, category: 'praise', body: 'Thank you for your patience.' });
+    expect(filed.status).toBe(201);
+    const id = (filed.json as { id: string }).id;
+
+    expect((await call(await login(specialist.subject), 'POST', `/teacher-records/praise/${id}/share`)).status).toBe(403);
+    const ops = await login(m.operationsManager.subject);
+    const shared = await call(ops, 'POST', `/teacher-records/praise/${id}/share`);
+    expect(shared.status).toBe(201);
+    expect(shared.json).toMatchObject({ feedbackId: id, conversationId: expect.any(String), messageId: expect.any(String) });
+    const again = await call(ops, 'POST', `/teacher-records/praise/${id}/share`);
+    expect({ status: again.status, code: again.code }).toEqual({ status: 409, code: CommErrorCode.TEACHER_FILE_CONFLICT });
+    const listed = await call(ops, 'GET', `/teacher-records/testimonials?teacher=${child.teacherId}`);
+    expect((listed.json.testimonials as Array<{ id: string; sharedAt: string | null }>).find((t) => t.id === id)?.sharedAt).toEqual(expect.any(String));
   });
 });

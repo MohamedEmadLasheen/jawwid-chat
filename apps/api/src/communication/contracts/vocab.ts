@@ -348,6 +348,8 @@ export const CardKind = {
   LEARNER_RETURN_SOON: 'learner_return_soon',
   LEARNER_RESUMED: 'learner_resumed',
   TEACHER_BONUS: 'teacher_bonus',
+  /** PD-52 (plan §11 c): a parent's praise, shared by staff in the teacher's supervision chat. */
+  TEACHER_PRAISE_SHARED: 'teacher_praise_shared',
   /** PD-12: posted in the teacher supervision conversation. */
   CERTIFICATE_REQUESTED: 'certificate_requested',
   /** PD-12: posted in the learner's group, carrying the certificate file as its attachment. */

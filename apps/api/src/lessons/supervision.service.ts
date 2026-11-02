@@ -250,6 +250,24 @@ export class SupervisionService {
     return { id: entry.id, kind: entry.kind, conversationId };
   }
 
+  /**
+   * PD-52 (plan §11 c): a parent's praise, shared by staff with the teacher -- a
+   * card in the teacher's supervision chat, with the child's first name and the
+   * parent's words, never the parent's name. In the caller's transaction; the
+   * caller has decided who may share it. The app shows the server's text (an
+   * unknown card kind keeps its plain body), so no app change is needed.
+   */
+  async sharePraiseInTx(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    teacher: { id: string; organizationId: string },
+    praise: { feedbackId: string; childFirstName: string; body: string },
+  ) {
+    const chat = await this.supervisionChats.ensureInTx(tx, teacher.id, teacher.organizationId, actor.actorId);
+    const messageId = await this.lessons.postCardInto(tx, chat, null, actor, CardKind.TEACHER_PRAISE_SHARED, { ...praise }, 'ar');
+    return { conversationId: chat.id, messageId };
+  }
+
   /** Who may record a bonus for this teacher: the Teachers department and the super admin (see supervisedTeacher). */
   async requireSupervisedTeacher(actor: Actor, teacherId: string) {
     return this.supervisedTeacher(actor, teacherId);
