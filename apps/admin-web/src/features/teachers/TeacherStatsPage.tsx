@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useI18n } from '@/core/i18n/I18nProvider'
+import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
+import { HOURS, LESSONS, countLabel, durationLabel } from '@/core/i18n/counts'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -163,6 +164,7 @@ function TeacherDetailView({
   onBack: () => void
 }) {
   const tx = useCopy()
+  const fmt = useFormat()
   const q = useTeacherDetail(id, month)
   const d = q.data
 
@@ -173,7 +175,7 @@ function TeacherDetailView({
       </button>
       <PageHeader
         title={d?.teacher.name ?? tx(T.title)}
-        subtitle={tx(T.detailSubtitle, { month })}
+        subtitle={tx(T.detailSubtitle, { month: fmt.month(month) })}
         actions={
           <div className="ts-head-actions">
             {d && <TotalBox detail={d} />}
@@ -223,11 +225,11 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
         </Fact>
         <Fact title={tx(T.reports)}>
           <Metric label={tx(T.onTime)} value={`${fmt.percent(d.reports.onTimeRate)} · ${fmt.number(d.reports.onTime)}/${fmt.number(d.reports.reports)}`} />
-          <Metric label={tx(T.medianDelay)} value={fmt.minutes(d.reports.medianDelayMinutes)} />
+          <Metric label={tx(T.medianDelay)} value={fmt.duration(d.reports.medianDelayMinutes)} />
         </Fact>
         <Fact title={tx(T.replies)}>
           <Metric label={tx(T.answered)} value={fmt.percent(d.replies.rate)} hint={tx(T.familyMessages, { n: fmt.number(d.replies.familyMessages) })} />
-          <Metric label={tx(T.medianReply)} value={fmt.minutes(d.replies.medianReplyMinutes)} />
+          <Metric label={tx(T.medianReply)} value={fmt.duration(d.replies.medianReplyMinutes)} />
         </Fact>
         <Fact title={tx(T.workload)}>
           {d.workload.availableMinutes === null ? (
@@ -253,9 +255,13 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
             <Metric label={tx(T.moves)} value={fmt.number(d.movesByTeacher)} hint={tx(T.movesHint)} />
           </Fact>
         )}
-        <Fact title={tx(T.makeups)}>
-          <Metric label={tx(T.makeups)} value={tx(T.makeupsHeld, { held: fmt.number(d.makeups.held), n: fmt.number(d.makeups.lessons) })} />
-        </Fact>
+        {/* RQA-F8: the month summary above already counts make-ups (completed, scheduled, total);
+            a second, closed-only count beside it read as a contradiction ("2" vs "0 of 0"). */}
+        {!d.summary && (
+          <Fact title={tx(T.makeups)}>
+            <Metric label={tx(T.makeupsClosed)} value={tx(T.makeupsHeld, { held: fmt.number(d.makeups.held), n: fmt.number(d.makeups.lessons) })} />
+          </Fact>
+        )}
         <Fact title={tx(T.trials)}>
           <Metric label={tx(T.trialsTotal)} value={fmt.number(d.trials.total)} />
           <Metric label={tx(T.trialsConducted)} value={fmt.number(d.trials.conducted)} />
@@ -271,7 +277,7 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
       </section>
 
       <p className="ts-muted ts-previous">
-        {tx(T.previous, { h: fmt.hoursNumber(d.previous.held.minutes), month: d.previous.month })}
+        {tx(T.previous, { hours: fmt.hours(d.previous.held.minutes), month: fmt.month(d.previous.month) })}
       </p>
     </>
   )
@@ -354,16 +360,26 @@ function useFormat() {
   const tx = useCopy()
   return useMemo(() => {
     const hoursNumber = (minutes: number) => number(Math.round((minutes / 60) * 10) / 10)
+    // RQA-F2: the noun agrees with the number in Arabic ("٣ حصص", "ساعتان"), not a fixed singular.
+    const hoursOf = (minutes: number) => {
+      const h = Math.round((minutes / 60) * 10) / 10
+      return countLabel(h, number(h), HOURS, locale)
+    }
+    const lessonsOf = (n: number) => countLabel(n, number(n), LESSONS, locale)
+    const monthFmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], { month: 'long', year: 'numeric', timeZone: 'UTC' })
     return {
       number,
       hoursNumber,
-      hours: (minutes: number | null) => (minutes === null ? tx(T.none) : tx(T.hours, { h: hoursNumber(minutes) })),
+      hours: (minutes: number | null) => (minutes === null ? tx(T.none) : hoursOf(minutes)),
       minutes: (m: number | null) => (m === null ? tx(T.none) : tx(T.minutesLong, { m: number(m) })),
+      /** RQA-F8: "3 days 19 h", not "5,506 minutes". */
+      duration: (m: number | null) => (m === null ? tx(T.none) : durationLabel(m, number, locale)),
+      /** RQA-F8: "October 2026" / "أكتوبر ٢٠٢٦", never the raw "2026-10". */
+      month: (ym: string) => (/^\d{4}-\d{2}$/.test(ym) ? monthFmt.format(new Date(`${ym}-01T00:00:00Z`)) : ym),
       percent: (r: number | null) =>
         r === null ? tx(T.none) : new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { style: 'percent', maximumFractionDigits: 0 }).format(r),
-      lessons: (n: number) => (n === 1 ? tx(T.lessonOne) : tx(T.lessons, { n: number(n) })),
-      lessonsHours: (b: Bucket) =>
-        b.lessons === 1 ? tx(T.lessonOneHours, { h: hoursNumber(b.minutes) }) : tx(T.lessonsHours, { n: number(b.lessons), h: hoursNumber(b.minutes) }),
+      lessons: lessonsOf,
+      lessonsHours: (b: Bucket) => `${lessonsOf(b.lessons)} · ${hoursOf(b.minutes)}`,
     }
   }, [number, locale, tx])
 }

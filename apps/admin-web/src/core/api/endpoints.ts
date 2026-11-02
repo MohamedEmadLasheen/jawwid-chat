@@ -52,6 +52,7 @@ export function toStaff(actor: ActorDto): Staff {
     role: actor.staffRole as Staff['role'],
     presence: 'online',
     is_active: actor.isActive,
+    locale: actor.locale,
     ...(actor.permissions ? { permissions: actor.permissions } : {}),
   }
 }

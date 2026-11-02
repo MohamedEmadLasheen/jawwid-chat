@@ -131,7 +131,7 @@ describe('leave requests', () => {
     on('POST', /\/teacher-leave-requests\/r-1\/approve$/, () => json({ request: leave({ state: 'approved' }), cancelledLessons: 1, notCancelled: [] }))
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/leave' })
     const row = (await screen.findByText('Family wedding')).closest('tr')!
-    expect(within(row).getByText('1 lesson(s) inside')).toBeInTheDocument()
+    expect(within(row).getByText('1 lesson inside')).toBeInTheDocument()
     await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Child Alpha')).toBeInTheDocument()

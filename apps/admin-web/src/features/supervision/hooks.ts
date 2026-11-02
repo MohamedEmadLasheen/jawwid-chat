@@ -5,6 +5,7 @@ import {
   type ApproveBody,
   type LeaveState,
 } from './api'
+import { supervisionHubKeys } from '@/features/teacher-supervision/api'
 
 export function useLeaveRequests(state?: LeaveState) {
   return useQuery({ queryKey: supervisionKeys.leave(state), queryFn: () => supervisionApi.leaveRequests(state), staleTime: 15_000 })
@@ -30,6 +31,8 @@ function useRefreshAll() {
     void qc.invalidateQueries({ queryKey: supervisionKeys.allTeacherLeave })
     // A leave approval writes day_off entries the Teacher File shows.
     void qc.invalidateQueries({ queryKey: ['teacher-files'] })
+    // RQA-F6: the Supervision page's per-teacher leave row ("1 waiting") is its own query.
+    void qc.invalidateQueries({ queryKey: supervisionHubKeys.leave().slice(0, 2) })
   }
 }
 

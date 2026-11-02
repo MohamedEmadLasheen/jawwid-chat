@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { LESSONS, countLabel } from '@/core/i18n/counts'
 import { Badge, type Tone } from '@/shared/components/Badge'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -131,7 +132,7 @@ export function LeaveRequestsList({ basePath }: { basePath: string }) {
                               )}
                               {lessons > 0 && (
                                 <Badge tone="warn" dot>
-                                  {tx(S.lessonsInside, { n: number(lessons) })}
+                                  {tx(S.lessonsInside, { lessons: countLabel(lessons, number(lessons), LESSONS, locale) })}
                                 </Badge>
                               )}
                             </div>
