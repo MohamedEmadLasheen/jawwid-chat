@@ -13,8 +13,8 @@ import { zonesOf } from '../platform/time-zone.service';
 import { OBJECT_STORAGE } from '../platform/tokens';
 import type { Actor } from '../platform/types';
 import { WhiteboardAssetService, keptKey, type AssetRow, type AssetView } from './whiteboard-asset.service';
-import { BACKGROUNDS, LAYOUTS, checkDocument } from './whiteboard-document';
-import { EXPORT_PAGE_MAX, EXPORT_PAGE_MAX_BYTES, EXPORT_TOTAL_MAX_BYTES } from './whiteboard-export';
+import { BACKGROUNDS, LAYOUTS, SHAPES, checkDocument } from './whiteboard-document';
+import { EXPORT_PAGE_BOUND, EXPORT_PAGE_MAX, EXPORT_PAGE_MAX_BYTES, EXPORT_PAGE_MAX_TALL, EXPORT_TOTAL_MAX_BYTES } from './whiteboard-export';
 import { acquireExportSlot, runExportWorker } from './whiteboard-export-runner';
 import { BOARD_IMAGE_MAX_BYTES, BOARD_IMAGE_TYPES } from './whiteboard-image';
 
@@ -67,6 +67,7 @@ interface PageRow {
   position: number;
   layout: string;
   background: string;
+  shape: string;
   document: unknown;
   updated_at: Date;
 }
@@ -91,7 +92,8 @@ export interface BoardDetail extends BoardSummary {
   teacherId: string;
   /** False for every reader but the owning teacher (and for the owner in a support session). */
   canEdit: boolean;
-  pages: Array<{ id: string; position: number; layout: string; background: string; document: unknown; updatedAt: string }>;
+  /** shape (PD-55): 'wide' or 'tall', fixed when the page was created. */
+  pages: Array<{ id: string; position: number; layout: string; background: string; shape: string; document: unknown; updatedAt: string }>;
   /** PR-4: the board's images, each with a short-lived signed URL (§6.3). */
   assets: AssetView[];
 }
@@ -227,6 +229,8 @@ export class WhiteboardService {
     const { teacherId, organizationId } = this.writer(actor);
     const title = this.title(body.title);
     const lessonId = body.lessonId == null ? null : this.uuid(body.lessonId, 'lessonId');
+    // PD-55: the first page's shape; wide unless the client asks for tall.
+    const shape = this.choice(body.shape, SHAPES, 'shape', 'wide');
     return this.write(async (tx) => {
       await this.lockTeacher(tx, teacherId);
       await this.assertBoardRoom(tx, teacherId);
@@ -234,7 +238,7 @@ export class WhiteboardService {
         INSERT INTO chat.whiteboard (organization_id, teacher_id, lesson_id, title)
         VALUES (${organizationId}::uuid, ${teacherId}::uuid, ${lessonId}::uuid, ${title})
         RETURNING id::text AS id`;
-      await tx.$executeRaw`INSERT INTO chat.whiteboard_page (board_id, position) VALUES (${id}::uuid, 0)`;
+      await tx.$executeRaw`INSERT INTO chat.whiteboard_page (board_id, position, shape) VALUES (${id}::uuid, 0, ${shape})`;
       return this.detail(tx, await this.ownBoard(tx, id, teacherId, organizationId), true);
     });
   }
@@ -318,6 +322,8 @@ export class WhiteboardService {
     const { teacherId, organizationId } = this.writer(actor);
     const layout = this.choice(body.layout, LAYOUTS, 'layout', 'plain');
     const background = this.choice(body.background, BACKGROUNDS, 'background', 'white');
+    // PD-55: chosen now, kept for good. A client that does not say adds a wide page (as before).
+    const shape = this.choice(body.shape, SHAPES, 'shape', 'wide');
     return this.write(async (tx) => {
       const board = await this.bump(tx, boardId, teacherId, organizationId, body.revision);
       const count = Number(board.page_count);
@@ -325,8 +331,8 @@ export class WhiteboardService {
       const position = this.position(body.position, count);
       await this.openGap(tx, board.id, position);
       await tx.$executeRaw`
-        INSERT INTO chat.whiteboard_page (board_id, position, layout, background)
-        VALUES (${board.id}::uuid, ${position}, ${layout}, ${background})`;
+        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, shape)
+        VALUES (${board.id}::uuid, ${position}, ${layout}, ${background}, ${shape})`;
       return this.detail(tx, await this.ownBoard(tx, board.id, teacherId, organizationId), true);
     });
   }
@@ -339,10 +345,18 @@ export class WhiteboardService {
     if (!checked.ok) throw checked.tooLarge ? pageTooLarge() : invalid(checked.reason);
     const layout = body.layout === undefined ? null : this.choice(body.layout, LAYOUTS, 'layout', 'plain');
     const background = body.background === undefined ? null : this.choice(body.background, BACKGROUNDS, 'background', 'white');
+    // PD-55: the shape the client drew the page in. An app built before shapes sends none.
+    const shape = body.shape === undefined ? null : this.choice(body.shape, SHAPES, 'shape', 'wide');
     return this.write(async (tx) => {
       await this.lockTeacher(tx, teacherId);
       const board = await this.bump(tx, boardId, teacherId, organizationId, body.revision);
-      await this.assertPage(tx, board.id, page);
+      const target = await this.assertPage(tx, board.id, page);
+      // A tall page drawn by an app that does not know it is tall would be saved in a
+      // wide frame: refused, so that app can show the page but never change it.
+      if (target.shape === 'tall' && shape !== 'tall') {
+        throw invalid('shape: this page is tall; update the app to edit it');
+      }
+      if (shape !== null && shape !== target.shape) throw invalid(`shape: this page is ${target.shape}`);
       await this.assertAssets(tx, board.id, checked.value.assetIds);
       const [row] = await tx.$queryRaw<Array<{ updated_at: Date }>>`
         UPDATE chat.whiteboard_page
@@ -367,8 +381,8 @@ export class WhiteboardService {
       const source = await this.assertPage(tx, board.id, page);
       await this.openGap(tx, board.id, source.position + 1);
       await tx.$executeRaw`
-        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
-        SELECT board_id, ${source.position + 1}, layout, background, document
+        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, shape, document)
+        SELECT board_id, ${source.position + 1}, layout, background, shape, document
           FROM chat.whiteboard_page WHERE id = ${page}::uuid`;
       await this.assertQuota(tx, teacherId);
       return this.detail(tx, await this.ownBoard(tx, board.id, teacherId, organizationId), true);
@@ -748,7 +762,7 @@ export class WhiteboardService {
     const sizes = body.pages.map((p, i) => {
       const size = (p as Record<string, unknown> | null)?.byteSize;
       if (typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > EXPORT_PAGE_MAX_BYTES) {
-        throw invalid(`pages[${i}].byteSize: an export page is 1-${EXPORT_PAGE_MAX_BYTES} bytes (at most ${EXPORT_PAGE_MAX.width} x ${EXPORT_PAGE_MAX.height} px)`);
+        throw invalid(`pages[${i}].byteSize: an export page is 1-${EXPORT_PAGE_MAX_BYTES} bytes (at most ${EXPORT_PAGE_MAX.width} x ${EXPORT_PAGE_MAX.height} px, ${EXPORT_PAGE_MAX_TALL.width} x ${EXPORT_PAGE_MAX_TALL.height} tall)`);
       }
       return size;
     });
@@ -896,7 +910,7 @@ export class WhiteboardService {
       const pngs: Buffer[] = [];
       for (const a of asked) {
         const row = byId.get(a.id) as AssetRow;
-        const pinned = await this.assets.pin(a.objectKey as string, row.object_key, { contentType: 'image/png', byteSize: Number(row.byte_size) }, EXPORT_PAGE_MAX);
+        const pinned = await this.assets.pin(a.objectKey as string, row.object_key, { contentType: 'image/png', byteSize: Number(row.byte_size) }, EXPORT_PAGE_BOUND);
         kept.push(row.object_key);
         pngs.push(pinned.bytes);
       }
@@ -1155,11 +1169,11 @@ export class WhiteboardService {
     throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, `the board is at revision ${board.revision}: reload it, or save your page as a copy`, 409);
   }
 
-  private async assertPage(tx: Tx, boardId: string, pageId: string): Promise<{ position: number }> {
-    const [page] = await tx.$queryRaw<Array<{ position: number }>>`
-      SELECT position FROM chat.whiteboard_page WHERE id = ${pageId}::uuid AND board_id = ${boardId}::uuid`;
+  private async assertPage(tx: Tx, boardId: string, pageId: string): Promise<{ position: number; shape: string }> {
+    const [page] = await tx.$queryRaw<Array<{ position: number; shape: string }>>`
+      SELECT position, shape FROM chat.whiteboard_page WHERE id = ${pageId}::uuid AND board_id = ${boardId}::uuid`;
     if (!page) throw new CommError(CommErrorCode.WHITEBOARD_NOT_FOUND, 'no such page on this board');
-    return { position: Number(page.position) };
+    return { position: Number(page.position), shape: page.shape };
   }
 
   /** An image names only a ready asset of THIS board (§6.3): 403, never a stored foreign key. */
@@ -1274,20 +1288,20 @@ export class WhiteboardService {
     if (now.some((a) => !plan.renamed.has(a.id))) throw new CommError(CommErrorCode.WHITEBOARD_CONFLICT, 'the board changed while it was being copied; try again', 409);
     if (plan.images.length === 0) {
       await tx.$executeRaw`
-        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
-        SELECT ${id}::uuid, position, layout, background, document
+        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, shape, document)
+        SELECT ${id}::uuid, position, layout, background, shape, document
           FROM chat.whiteboard_page WHERE board_id = ${source.id}::uuid`;
       return id;
     }
-    const pages = await tx.$queryRaw<Array<{ position: number; layout: string; background: string; document: { v: number; elements: Array<Record<string, unknown>> } }>>`
-      SELECT position, layout, background, document FROM chat.whiteboard_page WHERE board_id = ${source.id}::uuid`;
+    const pages = await tx.$queryRaw<Array<{ position: number; layout: string; background: string; shape: string; document: { v: number; elements: Array<Record<string, unknown>> } }>>`
+      SELECT position, layout, background, shape, document FROM chat.whiteboard_page WHERE board_id = ${source.id}::uuid`;
     for (const p of pages) {
       const elements = (p.document?.elements ?? []).map((e) =>
         e.kind === 'image' && typeof e.assetId === 'string' && plan.renamed.has(e.assetId.toLowerCase()) ? { ...e, assetId: plan.renamed.get(e.assetId.toLowerCase()) } : e,
       );
       await tx.$executeRaw`
-        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, document)
-        VALUES (${id}::uuid, ${p.position}, ${p.layout}, ${p.background}, ${JSON.stringify({ ...p.document, elements })}::jsonb)`;
+        INSERT INTO chat.whiteboard_page (board_id, position, layout, background, shape, document)
+        VALUES (${id}::uuid, ${p.position}, ${p.layout}, ${p.background}, ${p.shape}, ${JSON.stringify({ ...p.document, elements })}::jsonb)`;
     }
     for (const [i, a] of plan.images.entries()) {
       const to = plan.renamed.get(a.id) as string;
@@ -1378,7 +1392,7 @@ export class WhiteboardService {
 
   private async detail(tx: Tx, board: BoardRow, canEdit: boolean): Promise<BoardDetail> {
     const pages = await tx.$queryRaw<PageRow[]>`
-      SELECT id::text AS id, position, layout, background, document, updated_at
+      SELECT id::text AS id, position, layout, background, shape, document, updated_at
         FROM chat.whiteboard_page WHERE board_id = ${board.id}::uuid ORDER BY position`;
     const assets = await this.boardImages(tx, board);
     return {
@@ -1391,6 +1405,7 @@ export class WhiteboardService {
         position: Number(p.position),
         layout: p.layout,
         background: p.background,
+        shape: p.shape,
         document: p.document,
         updatedAt: p.updated_at.toISOString(),
       })),

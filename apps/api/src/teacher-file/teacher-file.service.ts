@@ -940,7 +940,9 @@ export class TeacherFileService {
     const person = (id: string | null) => (id ? { id, name: nameOf.get(id) ?? '' } : null);
     return {
       teacherId: teacher.id,
-      events: rows.map((r) => ({
+      // TEACHER-002: spending a first sign-in code writes the reset's own row and
+      // account.activated in one transaction -- one event, shown once, as the activation.
+      events: rows.filter((r) => !(r.action === 'account.password_reset_completed' && firstLoginReset(r.after))).map((r) => ({
         at: r.at.toISOString(),
         action: r.action,
         actor: person(r.actorId),
@@ -1285,6 +1287,11 @@ const HISTORY_TEACHER_ACTIONS = [
   'teacher.offboarded',
   'teacher.reactivated',
 ] as const;
+
+/** A reset row written by spending a first sign-in code (its activation is the history line). */
+function firstLoginReset(after: unknown): boolean {
+  return (after as { purpose?: unknown } | null)?.purpose === 'first_login';
+}
 
 /** ...and their login's (entity 'account'). Session bookkeeping is not history. */
 const HISTORY_ACCOUNT_ACTIONS = [

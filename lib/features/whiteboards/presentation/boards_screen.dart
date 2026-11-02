@@ -10,6 +10,7 @@ import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/boards_controller.dart';
 import '../domain/board.dart';
+import '../domain/board_page.dart';
 
 /// PD-39: the teacher's Boards tab (design §2): the boards in use, newest
 /// first, and Deleted boards -- restorable for 30 days, then deleted for good
@@ -54,10 +55,14 @@ class _BoardsScreenState extends ConsumerState<BoardsScreen> {
 
   Future<void> _create(BuildContext context) async {
     final l10n = L10n.of(context);
+    // PD-55: on a phone held upright the first page is tall -- the bigger writing
+    // area there; anywhere else it is wide, as before. Add page offers both.
+    final screen = MediaQuery.sizeOf(context);
+    final shape = screen.height > screen.width && screen.shortestSide < 600 ? PageShape.tall : PageShape.wide;
     final title = await askBoardTitle(context, title: l10n.boardsNew, action: l10n.boardsCreate, initial: l10n.boardsUntitled);
     if (title == null || !context.mounted) return;
     try {
-      final id = await ref.read(boardsProvider.notifier).create(title);
+      final id = await ref.read(boardsProvider.notifier).create(title, shape: shape);
       if (context.mounted) await context.push(Routes.board(id));
     } on Object catch (e) {
       if (context.mounted) _snack(context, ErrorPresenter.present(asAppErrorOf(e), l10n).title);

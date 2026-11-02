@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/crash/crash_reporting.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/billing/presentation/my_payments_screen.dart';
@@ -27,6 +28,7 @@ import '../features/sales_payments/presentation/sales_payments_screen.dart';
 import '../features/sessions/presentation/devices_screen.dart';
 import '../features/settings/presentation/change_password_screen.dart';
 import '../features/settings/presentation/date_time_screen.dart';
+import '../features/settings/presentation/delete_account_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
 import '../features/student_profile/presentation/student_profile_screen.dart';
@@ -83,6 +85,9 @@ abstract final class Routes {
 
   /// TEACHER-023: change your own password, any role.
   static const changePassword = '/settings/password';
+
+  /// PD-56: delete your own account (parents and teachers).
+  static const deleteAccount = '/settings/delete-account';
 
   /// PD-12: a teacher's own leave balance and requests.
   static const myLeave = '/settings/leave';
@@ -227,6 +232,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: Routes.splash,
+    // PD-56: the crash reports' navigation breadcrumbs (none unless crash reporting is on).
+    observers: crashReportingObservers(),
     refreshListenable: notifier,
     redirect: (context, state) => _redirect(ref, state.matchedLocation),
     routes: [
@@ -334,6 +341,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.changePassword,
         pageBuilder: (context, state) => _page(state, const ChangePasswordScreen()),
+      ),
+      GoRoute(
+        path: Routes.deleteAccount,
+        pageBuilder: (context, state) => _page(state, const DeleteAccountScreen()),
       ),
       GoRoute(
         path: Routes.myLeave,
