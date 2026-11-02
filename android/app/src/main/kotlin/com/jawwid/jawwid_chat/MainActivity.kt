@@ -1,61 +1,110 @@
 package com.jawwid.jawwid_chat
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricManager
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Push-token plumbing for voice calls (W8-W1).
+ * Push tokens (W8-W1) and Android's half of the native call contract (store
+ * blocker S-05).
  *
- * THIS FILE REPORTS TOKENS, and today it reports none. It does not present a
- * call, answer one or decline one; a received push will be handled by the
- * native call layer W8-W3 builds, and the call itself still arrives over the
- * app's existing realtime connection.
+ * ## The FCM token
  *
- * ## Why there is no FCM token here yet
+ * `start` (from push_tokens.dart, after sign-in) asks Firebase Messaging for
+ * this device's token and reports it on `jawwid/push_tokens` as
+ * `android`/`standard`. Firebase is configured by `android/app/google-services.json`
+ * from the owner's Firebase project. A DEBUG build without that file runs with
+ * push off (`start` reports nothing, as before); a RELEASE build without it
+ * fails at build time (android/app/build.gradle.kts). A token rotated while no
+ * engine is running is kept (PushTokenStore) and reported on the next start.
  *
- * Obtaining one requires the Firebase SDK on the Gradle classpath AND an
- * `android/app/google-services.json` issued by a Firebase project. Neither
- * exists in this repository, and adding the Gradle plugin without the
- * configuration file breaks every Android build — including a developer's.
+ * `start` is also where Android 13+'s POST_NOTIFICATIONS is asked for: after
+ * sign-in, when a notification first matters, never at launch.
  *
- * That is **provider configuration**, not implementation, and W8-W1 was
- * explicitly scoped to keep the two apart. The channel, the contract and the
- * Dart side above it are complete and tested; the last step is an infrastructure
- * one:
+ * ## The call channel
  *
- *   1. add `google-services.json` from the Firebase project,
- *   2. add the `com.google.gms.google-services` plugin and
- *      `firebase-messaging` to `android/app/build.gradle.kts`,
- *   3. call `FirebaseMessaging.getInstance().token` here and pass the result to
- *      [reportToken], and add a `FirebaseMessagingService` for rotations.
- *
- * Until then `start` is honest: it reports nothing rather than pretending a
- * token exists. The Dart side treats "no token" as "push is unavailable on this
- * build", which is exactly what it is.
+ * `jawwid/call_native` speaks the contract iOS's CallKitBridge speaks
+ * (lib/core/call_native/call_presentation.dart): Dart says `ready` and
+ * `dismiss`; native reports `onIncoming`, `onAnswer`, `onDecline`. Answer and a
+ * tap on the ring open this activity with a call intent (JawwidPush), on a cold
+ * start or a warm one, and are handed to Flutter once it is ready.
  *
  * ## Why a FlutterFragmentActivity
  *
  * PD-23's app lock uses `local_auth`, whose BiometricPrompt is a Fragment and needs a
  * FragmentActivity host. FlutterFragmentActivity offers the same `configureFlutterEngine`
- * hook FlutterActivity did, so the push-token channel below is unchanged.
+ * hook FlutterActivity did, so the channels below are unchanged.
  */
 class MainActivity : FlutterFragmentActivity() {
     private var channel: MethodChannel? = null
+    private var callChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // A cold start from Answer or a tap on the ring: queued until Dart is ready.
+        JawwidPush.onCallIntent(applicationContext, intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        JawwidPush.onCallIntent(applicationContext, intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        JawwidPush.inForeground = true
+    }
+
+    override fun onPause() {
+        JawwidPush.inForeground = false
+        super.onPause()
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        callChannel?.let { JawwidPush.detach(it) }
+        callChannel = null
+        if (attached === this) attached = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        attached = this
 
         val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
         )
         this.channel = channel
+
+        val callChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JawwidPush.CALL_CHANNEL_NAME)
+        this.callChannel = callChannel
+        callChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "ready" -> {
+                    JawwidPush.attach(callChannel)
+                    result.success(null)
+                }
+                "dismiss" -> {
+                    call.argument<String>("callId")?.let { JawwidPush.cancelCall(applicationContext, it) }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -117,22 +166,37 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * Ask the platform for a push token.
+     * Ask Firebase for this device's push token, and for permission to show
+     * notifications (Android 13+).
      *
-     * A no-op until Firebase is configured — see the class comment. It
-     * deliberately does not throw: an Android build without push works, it
-     * simply will not notify while closed.
+     * It never throws: a debug build without google-services.json has no
+     * Firebase app, and then reports nothing -- push is simply off on that build.
      */
     private fun startRegistering() {
-        // Intentionally empty. See the class comment for the three steps that
-        // complete this, and why they are configuration rather than code.
+        JawwidPush.ensureChannels(applicationContext)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST)
+        }
+        if (FirebaseApp.getApps(applicationContext).isEmpty()) return
+        PushTokenStore.load(applicationContext)?.let { reportToken(it) }
+        try {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                if (!token.isNullOrEmpty()) {
+                    PushTokenStore.save(applicationContext, token)
+                    reportToken(token)
+                }
+            }
+        } catch (e: IllegalStateException) {
+            // Firebase present but not initialised for messaging: push stays off.
+        }
     }
 
     /**
      * Hand a token to Flutter. `kind` is always "standard": FCM has no VoIP
      * channel, which is why the server routes Android calls to ordinary tokens.
      */
-    @Suppress("unused")
     fun reportToken(token: String) {
         channel?.invokeMethod(
             "onToken",
@@ -143,6 +207,17 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         /** Shared with `push_tokens.dart`. One string, three places. */
         private const val CHANNEL_NAME = "jawwid/push_tokens"
+
+        private const val NOTIFICATION_PERMISSION_REQUEST = 4601
+
+        /** The activity whose engine is live, for a token rotated by JawwidMessagingService. */
+        @Volatile
+        private var attached: MainActivity? = null
+
+        fun reportTokenIfAttached(token: String) {
+            val activity = attached ?: return
+            activity.runOnUiThread { activity.reportToken(token) }
+        }
 
         /** Shared with `device_security_settings.dart`. */
         private const val SECURITY_SETTINGS_CHANNEL = "jawwid/device_security_settings"

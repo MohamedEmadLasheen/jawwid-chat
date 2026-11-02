@@ -4,6 +4,28 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Store blocker S-05: Firebase (push) is configured by google-services.json from the
+// owner's Firebase project, never committed (.gitignore). A DEBUG build without it runs
+// with push off, so a developer's machine and CI keep building; a RELEASE build without it
+// fails here, before anything is signed, because a store build that cannot ring is not one.
+val hasGoogleServices = file("google-services.json").exists()
+if (hasGoogleServices) {
+    apply(plugin = "com.google.gms.google-services")
+}
+gradle.taskGraph.whenReady {
+    val releasing = allTasks.any { t ->
+        t.project == project && (t.name.startsWith("assemble") || t.name.startsWith("bundle")) && t.name.contains("Release")
+    }
+    if (releasing && !hasGoogleServices) {
+        throw GradleException(
+            "android/app/google-services.json is missing. A release build needs it for push " +
+                "notifications and call rings (Firebase Cloud Messaging). Download it from the " +
+                "Firebase project (Project settings > Your apps > Android, package " +
+                "com.jawwid.jawwid_chat) and place it at android/app/google-services.json.",
+        )
+    }
+}
+
 android {
     namespace = "com.jawwid.jawwid_chat"
     compileSdk = flutter.compileSdkVersion
@@ -53,4 +75,10 @@ dependencies {
     // crashes on Android 8 and below (minSdk is 24). local_auth_android brings
     // biometric/fragment/core, not appcompat, so the theme's parent comes from here.
     implementation("androidx.appcompat:appcompat:1.7.1")
+
+    // Store blocker S-05: push. Firebase Messaging only (no Analytics), versions from the BoM.
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    // NotificationCompat.CallStyle (the incoming-call notification) is core 1.9+.
+    implementation("androidx.core:core-ktx:1.13.1")
 }
