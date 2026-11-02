@@ -1,4 +1,4 @@
--- Roll back 20261102170000_chat_teacher008_cancel_cause (TEACHER-008: a lesson
+-- Roll back 20261102250000_chat_teacher008_cancel_cause (TEACHER-008: a lesson
 -- cancelled because of the teacher owes a make-up).
 --
 -- Restores chat.lesson_owes_makeup and chat.work_task_makeup_causes() to their
@@ -8,7 +8,7 @@
 -- raised for one is left to the PD-47 sweep. Roll back the API release with
 -- it: LessonService writes cancel_cause and lists 'teacher_cancelled'.
 --
---   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261102170000_teacher008_cancel_cause.down.sql
+--   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261102250000_teacher008_cancel_cause.down.sql
 
 create or replace function chat.lesson_owes_makeup(p_lesson uuid, p_causes text[])
 returns boolean
@@ -297,4 +297,4 @@ alter table chat.lesson drop constraint if exists lesson_cancel_cause;
 alter table chat.lesson drop column if exists cancel_cause;
 
 -- The ledger forgets it, so scripts/db/apply.sh applies it again on the way forward.
-delete from chat.schema_migrations where version = '20261102170000_chat_teacher008_cancel_cause';
+delete from chat.schema_migrations where version = '20261102250000_chat_teacher008_cancel_cause';
