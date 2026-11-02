@@ -217,12 +217,16 @@ export class OutboxWorker {
       case CommEvent.CALL_INCOMING:
       case CommEvent.CALL_ACCEPTED:
       case CommEvent.CALL_DECLINED:
-      case CommEvent.CALL_ENDED: {
+      case CommEvent.CALL_ENDED:
+      // CHATSCHED-013: to the participants, like the rest of the lifecycle.
+      case CommEvent.CALL_INTERRUPTED:
+      case CommEvent.CALL_RESUMED: {
         // Push, for the two lifecycle moments that have a seeded rule. A socket
         // only reaches a client that is already connected; these are how a call
         // reaches a phone in someone's pocket.
         if (type === CommEvent.CALL_INCOMING) await this.notifyIncomingCall(payload);
         if (type === CommEvent.CALL_ENDED) await this.notifyMissedCall(payload);
+        if (type === CommEvent.CALL_ENDED) await this.notifyConnectionLost(payload);
 
         const participants = await this.callParticipantIds(payload);
         if (participants.length === 0) {
@@ -614,6 +618,36 @@ export class OutboxWorker {
         conversationId: call.conversationId,
         // Push privacy (owner decision 2026-10-14): no caller name is stored
         // or rendered -- the templates are generic.
+        variables: {},
+      });
+    }
+  }
+
+  /**
+   * CHATSCHED-013 (owner requirement 4): a 1:1 call that ended because the
+   * connection was lost is pushed to both people, so a phone in the background
+   * learns it too (the in-app `call.ended` carries the reason for an open
+   * one). Group calls are not pushed: the group carried on, or emptied
+   * together. Generic text, no name (push privacy, 2026-10-14).
+   */
+  private async notifyConnectionLost(payload: Record<string, unknown>): Promise<void> {
+    if (payload.reason !== 'connection_lost') return;
+    const callId = payload.callId as string | undefined;
+    if (!callId) return;
+
+    const call = await this.prisma.call.findUnique({ where: { id: callId }, include: { participants: true } });
+    if (!call || call.type !== 'direct') return;
+
+    for (const participant of call.participants) {
+      const recipient = await this.identity.resolveActor(participant.actorId);
+      if (!recipient || !recipient.isActive) continue;
+      if (recipient.organizationId !== call.organizationId) continue; // RT-031
+      await this.notifications.scheduleByRule('call_connection_lost', {
+        dedupeKey: `call_connection_lost:${callId}:${participant.actorId}`,
+        recipientId: participant.actorId,
+        locale: recipient.locale,
+        familyId: call.familyId,
+        conversationId: call.conversationId,
         variables: {},
       });
     }

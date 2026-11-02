@@ -45,6 +45,8 @@ export interface AccountCallRow {
   startedAt: string
   endedAt: string | null
   durationSeconds: number | null
+  /** CHATSCHED-013: hung_up | declined | ring_timeout | connection_lost; null while live (or an older API). */
+  endReason?: string | null
   participants: Array<{
     actorId: string
     actorKind: string

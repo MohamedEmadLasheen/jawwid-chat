@@ -63,6 +63,14 @@ export const CommEvent = {
   /** The call reached a terminal state and carries its outcome. */
   CALL_ENDED: 'call.ended',
   /**
+   * CHATSCHED-013: an active call fell below two connected participants by an
+   * unexpected media departure. It ends as `connection_lost` at `until` unless
+   * somebody rejoins first.
+   */
+  CALL_INTERRUPTED: 'call.interrupted',
+  /** CHATSCHED-013: a rejoin within the grace brought the call back. */
+  CALL_RESUMED: 'call.resumed',
+  /**
    * MEDIA PRESENCE, not application acceptance: this participant is actually
    * connected to the LiveKit room.
    *
@@ -313,6 +321,19 @@ export interface CallEndedPayload {
   conversationId: string;
   outcome: string;
   durationSeconds: number | null;
+  /**
+   * CHATSCHED-013: why it ended (CallEndReason). Optional on the wire: a
+   * client from before it ignores the field and still reads the outcome.
+   */
+  reason?: string;
+}
+
+/** CHATSCHED-013: `call.interrupted` (with `until`) and `call.resumed`. */
+export interface CallConnectionPayload {
+  callId: string;
+  conversationId: string;
+  /** When the call ends as connection_lost unless someone rejoins (ISO). */
+  until?: string;
 }
 
 /**
@@ -401,6 +422,8 @@ export interface CommEventPayloads {
   [CommEvent.CALL_ACCEPTED]: CallParticipantPayload;
   [CommEvent.CALL_DECLINED]: CallParticipantPayload;
   [CommEvent.CALL_ENDED]: CallEndedPayload;
+  [CommEvent.CALL_INTERRUPTED]: CallConnectionPayload;
+  [CommEvent.CALL_RESUMED]: CallConnectionPayload;
   [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;

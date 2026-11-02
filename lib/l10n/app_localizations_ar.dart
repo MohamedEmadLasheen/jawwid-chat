@@ -318,6 +318,16 @@ class L10nAr extends L10n {
   String get callReconnecting => 'جارٍ إعادة الاتصال…';
 
   @override
+  String get callWaitingForReconnect =>
+      'انقطع الاتصال. بانتظار عودة الطرف الآخر…';
+
+  @override
+  String get callEndedConnectionLost => 'انتهت المكالمة: انقطع الاتصال';
+
+  @override
+  String get callHistoryConnectionLost => 'انقطع الاتصال';
+
+  @override
   String get callAccept => 'قبول';
 
   @override
@@ -2898,7 +2908,34 @@ class L10nAr extends L10n {
   String get resetFinish => 'تعيين كلمة المرور';
 
   @override
-  String get recoveryOpen => 'لا تستطيع تسجيل الدخول؟';
+  String get recoveryOpen => 'أولياء الأمور: لا تستطيع تسجيل الدخول؟';
+
+  @override
+  String get signInStaffResetHint =>
+      'المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.';
+
+  @override
+  String get changePasswordTitle => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordCurrentLabel => 'كلمة المرور الحالية';
+
+  @override
+  String get changePasswordWrongCurrent => 'هذه ليست كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordCurrentRequired => 'أدخل كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'اختر كلمة مرور مختلفة عن كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordAction => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordDone =>
+      'تم تغيير كلمة المرور. سُجِّل خروجك من أجهزتك الأخرى.';
 
   @override
   String get recoveryTitle => 'استعادة حسابك';

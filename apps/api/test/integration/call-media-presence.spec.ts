@@ -55,7 +55,7 @@ beforeEach(async () => {
   process.env.LIVEKIT_API_KEY = API_KEY;
   process.env.LIVEKIT_API_SECRET = API_SECRET;
 
-  presence = new MediaPresenceService(g.prisma, new OutboxService());
+  presence = new MediaPresenceService(g.prisma, new OutboxService(), g.config);
   verifier = new LiveKitWebhookVerifier();
 });
 

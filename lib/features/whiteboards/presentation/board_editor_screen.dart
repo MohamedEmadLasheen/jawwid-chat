@@ -483,7 +483,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         final ink = _pageInk(label);
         await settleForExport(s.pages, ink);
         final pngs = [for (final p in s.pages) await renderPagePng(p, ink)];
-        final pdf = await exportPdf(ref.read(whiteboardsRepositoryProvider), ref.read(boardUploaderProvider), widget.boardId, pngs);
+        // Closing the editor mid-export lets the export go on the server.
+        final pdf = await exportPdf(ref.read(whiteboardsRepositoryProvider), ref.read(boardUploaderProvider), widget.boardId, pngs, cancelled: () => !mounted);
         return ref.read(exportSaverProvider)(pdf, exportName(s.board.title, 'pdf'), 'application/pdf');
       });
 

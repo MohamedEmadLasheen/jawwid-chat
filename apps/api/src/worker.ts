@@ -13,6 +13,7 @@ import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
 import { SupervisorCoverService } from './org/supervisor-cover.service';
+import { FamilyAccessService } from './account-admin/family-access.service';
 import { MentionService } from './communication/mentions/mention.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
@@ -28,6 +29,7 @@ import { createErrorTracker, type ErrorTracker } from './infra/observability/err
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
 import { LessonEvents } from './lessons/lesson-events';
+import { setDatabasePoolRole } from './platform/database-pool';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -98,6 +100,13 @@ const NOTIFICATION_PURGE_MS = 24 * 60 * 60_000;
  * the "welcome back" push can be. Idempotent claims, so every replica may run it.
  */
 const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
+
+/**
+ * ADMIN-002: how often grants of family access that ran out are logged
+ * ('family_access.expired'). Access already ended at ends_at -- this is the
+ * record of it, so a minute is plenty.
+ */
+const FAMILY_ACCESS_SWEEP_MS = Number(process.env.FAMILY_ACCESS_SWEEP_MS ?? 60_000);
 
 /**
  * PD-36: how often summonses a seat answered are closed and unanswered ones
@@ -203,6 +212,8 @@ function report(log: Logger, what: string, route: string, e: unknown): void {
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
 
+  // Its own, smaller pool (DATABASE_WORKER_POOL_MAX): set before Nest builds PrismaService.
+  setDatabasePoolRole('worker');
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger,
@@ -216,6 +227,7 @@ async function bootstrap(): Promise<void> {
   const paymentReminders = app.get(PaymentReminders);
   const pipeline = app.get(NotificationPipeline);
   const covers = app.get(SupervisorCoverService);
+  const familyAccess = app.get(FamilyAccessService);
   const mentions = app.get(MentionService);
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
@@ -273,6 +285,7 @@ async function bootstrap(): Promise<void> {
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
   let nextCoverSweep = 0;
+  let nextFamilyAccessSweep = 0;
   let nextMentionSweep = 0;
   let nextSignupFailurePurge = 0;
   let nextNotificationAdopt = 0;
@@ -366,6 +379,14 @@ async function bootstrap(): Promise<void> {
         // The calls it did not expire are still ringing and still match.
         report(log, 'call sweep', 'calls.expireRinging', e);
       }
+      // CHATSCHED-013: a call that dropped and was not rejoined within the
+      // grace ends as connection_lost. Same single-statement claim, so it is
+      // safe on every replica and against a rejoin racing it.
+      try {
+        await calls.endInterruptedCalls();
+      } catch (e) {
+        report(log, 'call sweep', 'calls.endInterrupted', e);
+      }
     }
 
     // Lessons from regular times, their reminders and (hourly, inside the
@@ -397,6 +418,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCoverSweep = Date.now() + COVER_SWEEP_MS;
+      }
+    }
+
+    // ADMIN-002: grants of family access that ran out -- the 'expired' log row, once each.
+    if (Date.now() >= nextFamilyAccessSweep) {
+      draining = true;
+      try {
+        await familyAccess.sweepExpired();
+      } catch (e) {
+        report(log, 'family access sweep', 'accounts.family_access', e);
+      } finally {
+        draining = false;
+        nextFamilyAccessSweep = Date.now() + FAMILY_ACCESS_SWEEP_MS;
       }
     }
 

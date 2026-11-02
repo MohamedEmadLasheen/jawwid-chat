@@ -14,6 +14,7 @@ import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_parent_signup_repository.dart';
+import '../core/data/http/http_password_change_repository.dart';
 import '../core/data/http/http_password_reset_repository.dart';
 import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_sales_payments_repository.dart';
@@ -289,6 +290,10 @@ List<Override> _httpOverrides() {
     // every live session on the account.
     callRepositoryProvider.overrideWithValue(
       HttpCallRepository(client: client),
+    ),
+    // TEACHER-023: change your own password, on the same authenticated client.
+    passwordChangeRepositoryProvider.overrideWithValue(
+      HttpPasswordChangeRepository(client: client, tokens: tokenStore),
     ),
     accountCallHistoryProvider.overrideWithValue(
       // Named after the OTHER participant, so the viewer's own id is read per call.

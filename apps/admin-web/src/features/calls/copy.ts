@@ -20,6 +20,10 @@ export interface CallCopy {
   cancel: string
   connecting: string
   reconnecting: string
+  /** CHATSCHED-013: the other side dropped; the server waits up to 60 s for them. */
+  waitingForReconnect: string
+  /** CHATSCHED-013: ended because the connection was lost. */
+  endedConnectionLost: string
   live: string
   waitingForAudio: string
   mute: string
@@ -63,6 +67,8 @@ const ar: CallCopy = {
   cancel: 'إلغاء',
   connecting: 'جارٍ تجهيز الصوت…',
   reconnecting: 'جارٍ إعادة الاتصال…',
+  waitingForReconnect: 'انقطع الاتصال. بانتظار عودة الطرف الآخر…',
+  endedConnectionLost: 'انتهت المكالمة: انقطع الاتصال',
   live: 'المكالمة جارية',
   waitingForAudio: 'بانتظار صوت الطرف الآخر',
   mute: 'كتم الميكروفون',
@@ -113,6 +119,8 @@ const en: CallCopy = {
   cancel: 'Cancel',
   connecting: 'Connecting…',
   reconnecting: 'Reconnecting…',
+  waitingForReconnect: 'Connection lost. Waiting for them to reconnect…',
+  endedConnectionLost: 'Call ended: the connection was lost',
   live: 'In call',
   waitingForAudio: 'Waiting for the other side’s audio',
   mute: 'Mute',

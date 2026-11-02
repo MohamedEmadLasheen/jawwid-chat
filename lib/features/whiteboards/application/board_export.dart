@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:cross_file/cross_file.dart';
 import 'package:file_selector/file_selector.dart' as selector;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/data/http/attachment_uploader.dart';
 import '../../../core/errors/app_error.dart';
@@ -90,40 +92,68 @@ const int kComposeTries = 4;
 /// A compose turned away because the workers are busy (429) is asked again
 /// with the SAME grants, after the server's Retry-After or a growing wait
 /// (review of #335): new grants would leave these pending for an hour,
-/// counting toward the teacher's five exports in flight.
+/// counting toward the teacher's five exports in flight. Given up on in any
+/// way after its grant -- an upload that fails, a refusal, still busy after
+/// the last try, or [cancelled] (the editor closed) -- the export is
+/// released on the server at once, quietly.
 Future<Uint8List> exportPdf(
   WhiteboardsRepository repo,
   AttachmentUploader uploads,
   String boardId,
   List<Uint8List> pngs, {
   Future<void> Function(Duration) wait = _wait,
+  bool Function()? cancelled,
 }) async {
   final List<ImageGrant> grants;
   try {
     grants = await repo.grantExport(boardId, [for (final p in pngs) p.length]);
-    if (grants.length != pngs.length) throw const ExportException(ExportOutcome.failed);
-    for (var i = 0; i < pngs.length; i++) {
-      await uploads.put(grants[i].uploadUrl, bytes: pngs[i], headers: grants[i].headers);
-    }
-  } on ExportException {
-    rethrow;
   } on AppError catch (e) {
     throw ExportException(_grantRefusal(e));
   } on Object {
     throw const ExportException(ExportOutcome.failed);
   }
-  for (var attempt = 1; ; attempt++) {
-    try {
-      return await repo.composeExport(boardId, grants);
-    } on AppError catch (e) {
-      if (e.kind == AppErrorKind.rateLimited && attempt < kComposeTries) {
-        await wait(e.retryAfter ?? Duration(seconds: 2 << attempt));
-        continue;
-      }
-      throw ExportException(_composeRefusal(e));
-    } on Object {
-      throw const ExportException(ExportOutcome.failed);
+  try {
+    if (grants.length != pngs.length) throw const ExportException(ExportOutcome.failed);
+    void stopIfCancelled() {
+      if (cancelled?.call() ?? false) throw const ExportException(ExportOutcome.cancelled);
     }
+
+    for (var i = 0; i < pngs.length; i++) {
+      stopIfCancelled();
+      try {
+        await uploads.put(grants[i].uploadUrl, bytes: pngs[i], headers: grants[i].headers);
+      } on Object {
+        throw const ExportException(ExportOutcome.failed);
+      }
+    }
+    for (var attempt = 1; ; attempt++) {
+      stopIfCancelled();
+      try {
+        return await repo.composeExport(boardId, grants);
+      } on AppError catch (e) {
+        if (e.kind == AppErrorKind.rateLimited && attempt < kComposeTries) {
+          await wait(e.retryAfter ?? Duration(seconds: 2 << attempt));
+          continue;
+        }
+        throw ExportException(_composeRefusal(e));
+      } on Object {
+        throw const ExportException(ExportOutcome.failed);
+      }
+    }
+  } on ExportException {
+    await _release(repo, boardId, grants);
+    rethrow;
+  }
+}
+
+/// Lets an export go on the server; a failure here changes nothing for the
+/// teacher (what is not released runs out within the hour).
+Future<void> _release(WhiteboardsRepository repo, String boardId, List<ImageGrant> grants) async {
+  if (grants.isEmpty) return;
+  try {
+    await repo.releaseExport(boardId, grants);
+  } on Object {
+    // Quietly: the export's own outcome is what the teacher hears.
   }
 }
 
@@ -157,34 +187,102 @@ String exportName(String title, String extension) {
 }
 
 /// Where an export goes: a download in the browser, a save dialog on a
-/// desktop. A phone or tablet has no place to put a file without more
-/// plugins; there the teacher is told to export from the browser.
+/// desktop, the system share sheet on a phone or tablet (owner, 2026-11-02).
 typedef ExportSaver = Future<ExportOutcome> Function(Uint8List bytes, String name, String mimeType);
 
-/// The saver the editor uses (tests put a recorder in its place).
-final exportSaverProvider = Provider<ExportSaver>((ref) => saveExport);
+/// The system share sheet for one file: true when it was shared, false when the
+/// person closed the sheet, null when the platform has no sheet.
+typedef ExportShare = Future<bool?> Function(String path, String mimeType, String name);
 
-/// Whether this build has somewhere to put an export: the browser, or a
-/// desktop's save dialog. Asked BEFORE anything is drawn or sent (review of
-/// #335): elsewhere an export would take a worker and an audit row for a
-/// file never saved.
+Future<bool?> _shareWithSystem(String path, String mimeType, String name) async {
+  // An iPad shows the sheet as a popover, which needs somewhere to point:
+  // the middle of the screen (a phone ignores it).
+  final view = ui.PlatformDispatcher.instance.views.first;
+  final size = view.physicalSize / view.devicePixelRatio;
+  final result = await SharePlus.instance.share(ShareParams(
+    files: [XFile(path, mimeType: mimeType, name: name)],
+    fileNameOverrides: [name],
+    sharePositionOrigin: ui.Rect.fromCenter(center: ui.Offset(size.width / 2, size.height / 2), width: 1, height: 1),
+  ));
+  return switch (result.status) {
+    ShareResultStatus.success => true,
+    ShareResultStatus.dismissed => false,
+    ShareResultStatus.unavailable => null,
+  };
+}
+
+final exportShareProvider = Provider<ExportShare>((ref) => _shareWithSystem);
+
+/// Where a phone keeps an export while the sheet is open (tests use their own).
+final exportTempDirProvider = Provider<Future<Directory> Function()>((ref) => getTemporaryDirectory);
+
+/// The saver the editor uses (tests put a recorder in its place).
+final exportSaverProvider = Provider<ExportSaver>((ref) {
+  final share = ref.watch(exportShareProvider);
+  final tempDir = ref.watch(exportTempDirProvider);
+  return (bytes, name, mimeType) => saveExport(bytes, name, mimeType, share: share, tempDir: tempDir);
+});
+
+bool get _isPhone => defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android;
+
+/// Whether this build has somewhere to put an export: the browser, a
+/// desktop's save dialog, or a phone's share sheet. Asked BEFORE anything is
+/// drawn or sent (review of #335): elsewhere an export would take a worker and
+/// an audit row for a file never saved.
 bool canSaveExportHere() =>
     kIsWeb ||
+    _isPhone ||
     defaultTargetPlatform == TargetPlatform.macOS ||
     defaultTargetPlatform == TargetPlatform.windows ||
     defaultTargetPlatform == TargetPlatform.linux;
 
 final exportHereProvider = Provider<bool>((ref) => canSaveExportHere());
 
-Future<ExportOutcome> saveExport(Uint8List bytes, String name, String mimeType) async {
-  final file = XFile.fromData(bytes, mimeType: mimeType, name: name);
+Future<ExportOutcome> saveExport(
+  Uint8List bytes,
+  String name,
+  String mimeType, {
+  ExportShare share = _shareWithSystem,
+  Future<Directory> Function() tempDir = getTemporaryDirectory,
+}) async {
   if (kIsWeb) {
-    await file.saveTo(name); // the browser downloads it
+    await XFile.fromData(bytes, mimeType: mimeType, name: name).saveTo(name); // the browser downloads it
     return ExportOutcome.saved;
   }
+  if (_isPhone) return shareExport(bytes, name, mimeType, share: share, tempDir: tempDir);
   if (!canSaveExportHere()) return ExportOutcome.notHere;
   final where = await selector.getSaveLocation(suggestedName: name);
   if (where == null) return ExportOutcome.cancelled;
-  await file.saveTo(where.path);
+  await XFile.fromData(bytes, mimeType: mimeType, name: name).saveTo(where.path);
   return ExportOutcome.saved;
+}
+
+/// A phone or tablet: the file, under its board's name, in a folder of its own
+/// in the app's temporary directory, handed to the system share sheet -- and
+/// the folder deleted when the sheet closes, whatever happened (nothing of a
+/// board is left lying in a cache).
+Future<ExportOutcome> shareExport(
+  Uint8List bytes,
+  String name,
+  String mimeType, {
+  required ExportShare share,
+  required Future<Directory> Function() tempDir,
+}) async {
+  final folder = await (await tempDir()).createTemp('jawwid-export-');
+  try {
+    final file = File('${folder.path}/$name');
+    await file.writeAsBytes(bytes, flush: true);
+    final shared = await share(file.path, mimeType, name);
+    return switch (shared) {
+      true => ExportOutcome.saved,
+      false => ExportOutcome.cancelled,
+      null => ExportOutcome.notHere,
+    };
+  } finally {
+    try {
+      await folder.delete(recursive: true);
+    } on Object {
+      // The OS clears its temporary directory on its own; nothing to tell the teacher.
+    }
+  }
 }

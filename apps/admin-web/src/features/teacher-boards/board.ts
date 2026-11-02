@@ -6,8 +6,8 @@
  * The three agree through one fixture: test/fixtures/whiteboards/page-every-kind.json.
  *
  * Every default below is the portal's own, so a page looks the same in both.
- * An element this viewer cannot draw -- an image (PR-4), a newer kind, a
- * malformed one -- is shown as a labelled box, never dropped.
+ * An element this viewer cannot draw -- a newer kind, a malformed one -- is
+ * shown as a labelled box, never dropped.
  */
 
 /** The page every board is drawn on (design §4.2). */
@@ -62,6 +62,8 @@ export type BoardElement =
   | { kind: 'text'; id: string; text: string; rect: Rect; size: number; color: string }
   | { kind: 'stamp'; id: string; stamp: StampKind; rect: Rect; color: string; text: string | null }
   | { kind: 'verse'; id: string; ref: VerseRef; rect: Rect; size: number; color: string }
+  /** PR-4: an image names its board asset; the board answer signs its URL. */
+  | { kind: 'image'; id: string; assetId: string; rect: Rect }
   /** Not drawn here: shown as a box labelled with its kind. */
   | { kind: 'opaque'; id: string; type: string; rect: Rect }
 
@@ -165,6 +167,9 @@ export function parseElement(j: Json): BoardElement {
         color: color(j.color),
         text: typeof j.text === 'string' ? j.text : null,
       }
+    case 'image':
+      if (typeof j.assetId === 'string' && j.assetId) return { kind: 'image', id, assetId: j.assetId.toLowerCase(), rect: rectOf(j, 400, 300) }
+      break
     case 'verse': {
       const t = j.transform && typeof j.transform === 'object' ? (j.transform as Json) : {}
       const s = j.style && typeof j.style === 'object' ? (j.style as Json) : {}

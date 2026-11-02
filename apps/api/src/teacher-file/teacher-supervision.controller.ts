@@ -17,14 +17,14 @@ export class TeacherSupervisionController {
   constructor(private readonly files: TeacherFileService) {}
 
   /** The teachers the caller works on (and who is away today), and who may handle a complaint. */
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_attendance.view', 'teacher_grants.view')
   @Get('directory')
   directory(@ActorId() actorId: string) {
     return this.files.directory(actorId);
   }
 
   /** One teacher's held lessons of the last two weeks, `kind=regular|trial`, for recording lateness. */
-  @Requires('teacher_supervision.view')
+  @Requires('teacher_supervision.view', 'teacher_attendance.view', 'teacher_grants.view')
   @Get('teachers/:teacherId/held-lessons')
   heldLessons(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Query('kind') kind?: string) {
     return this.files.heldLessons(actorId, teacherId, kind);

@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lookupVerse, verseKey, type BoardPage, type VerseLookup, type VerseRef } from './board'
-import { teacherBoardsApi, teacherBoardsKeys } from './api'
+import { teacherBoardsApi, teacherBoardsKeys, type BoardAssetJson } from './api'
+import type { ImageLookup } from './render'
 
 /**
  * Every read here is logged by the server (§10 1c), so none is repeated behind
@@ -72,4 +73,73 @@ export function useVerseTexts(page: BoardPage | null): (ref: VerseRef) => VerseL
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `settled` stands for `results`
   }, [refs, settled])
+}
+
+/** An image is kept no larger than this on its long side: the page's own width. */
+export const MAX_IMAGE_EDGE = 1920
+
+/**
+ * One image, from its signed URL (an <img> request: the storage origin is in
+ * img-src), then kept at most [MAX_IMAGE_EDGE] on its long side: an 8,000 px
+ * photo is not held at full size (review of #336).
+ */
+async function loadImage(url: string): Promise<CanvasImageSource> {
+  const img = new Image()
+  img.decoding = 'async'
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('image not loaded'))
+    img.src = url
+  })
+  const long = Math.max(img.naturalWidth, img.naturalHeight)
+  if (long <= MAX_IMAGE_EDGE || typeof createImageBitmap !== 'function') return img
+  const k = MAX_IMAGE_EDGE / long
+  const bitmap = await createImageBitmap(img, {
+    resizeWidth: Math.max(1, Math.round(img.naturalWidth * k)),
+    resizeHeight: Math.max(1, Math.round(img.naturalHeight * k)),
+    resizeQuality: 'high',
+  })
+  img.src = '' // the full-size decode is let go
+  return bitmap
+}
+
+/**
+ * PR-4: the board's images, from the signed URLs the board answer carried,
+ * loaded only when the page on view names them (`wanted`), once each. One that
+ * fails, or is not among the board's signed images, shows as unavailable; a
+ * URL that has run out does too, and opening the board again signs anew (and
+ * is logged, as every open is).
+ *
+ * Under StrictMode an effect is cleaned up and run again (review of #336):
+ * a load once started is never abandoned by a cleanup, only by the viewer
+ * closing, so the second run finds it in flight and the answer still lands.
+ */
+export function useBoardImages(assets: BoardAssetJson[] | undefined, wanted: Iterable<string>): (assetId: string) => ImageLookup {
+  const [loaded, setLoaded] = useState<Record<string, ImageLookup>>({})
+  const started = useRef(new Set<string>())
+  const open = useRef(true)
+  useEffect(() => {
+    open.current = true
+    return () => {
+      open.current = false
+    }
+  }, [])
+  const want = [...new Set([...wanted].map((id) => id.toLowerCase()))].sort().join(',')
+  useEffect(() => {
+    const byId = new Map((assets ?? []).map((a) => [a.id.toLowerCase(), a]))
+    for (const id of want ? want.split(',') : []) {
+      const a = byId.get(id)
+      if (!a || started.current.has(id)) continue
+      started.current.add(id)
+      loadImage(a.url).then(
+        (source) => open.current && setLoaded((s) => ({ ...s, [id]: { status: 'ready', source } })),
+        () => open.current && setLoaded((s) => ({ ...s, [id]: { status: 'unavailable' } })),
+      )
+    }
+  }, [assets, want])
+  const known = useMemo(() => new Set((assets ?? []).map((a) => a.id.toLowerCase())), [assets])
+  return useCallback(
+    (assetId: string): ImageLookup => loaded[assetId] ?? (known.has(assetId) ? { status: 'loading' } : { status: 'unavailable' }),
+    [loaded, known],
+  )
 }
