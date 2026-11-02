@@ -88,6 +88,10 @@ beforeEach(() => {
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
   on('GET', /\/teacher-files$/, () => json({ access: { canEditPersonal: false, canWriteSupervision: true }, teachers: TEACHERS }))
   on('GET', /\/teacher-files\/t-1$/, () => json(file()))
+  // RQA-F1: the lesson reports section reads its own route; empty unless a test says otherwise.
+  on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
+    json({ teacherId: 't-1', month: '2026-10', zone: 'Africa/Cairo', counts: { reports: 0, onTime: 0, late: 0, pending: 0, missing: 0 }, lessons: [], nextCursor: null }),
+  )
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -515,5 +519,95 @@ describe('payroll (PD-18), the super admin only', () => {
     expect(await within(employment).findByText(/switched off on this server/)).toBeInTheDocument()
     expect(within(employment).queryByRole('button', { name: 'Set payment method' })).not.toBeInTheDocument()
     expect(within(employment).queryByRole('button', { name: 'Show account details' })).not.toBeInTheDocument()
+  })
+})
+
+describe('lesson reports (RQA-F1)', () => {
+  const row = (id: string, status: string, report: Record<string, unknown> | null, startsAt = '2026-10-20T16:00:00Z') => ({
+    id,
+    kind: 'regular',
+    startsAt,
+    endsAt: '2026-10-20T16:30:00Z',
+    day: startsAt.slice(0, 10),
+    status,
+    learner: { id: 'l-1', name: 'Child Alpha', familyId: 'f-1' },
+    prospectName: null,
+    report,
+  })
+  const report = {
+    lessonNumber: 7, lessonTotal: 12, covered: 'Surat al-Fil', coveredTopics: ['madd', 'ghunna'], nextTasks: ['revise'], homework: 'ayat 1-3',
+    rating: 4, note: 'Needs more listening.', submittedAt: '2026-10-22T10:00:00Z', updatedAt: '2026-10-22T10:00:00Z', version: 1,
+    enteredBy: { kind: 'teacher', id: 't-1', name: 'Teacher One' }, delayMinutes: 1050 + 24 * 60, graceHours: 24,
+  }
+  const page = (lessons: unknown[], nextCursor: string | null, counts = { reports: 9, onTime: 8, late: 1, pending: 2, missing: 3 }) => ({
+    teacherId: 't-1', month: '2026-10', zone: 'Africa/Cairo', counts, lessons, nextCursor,
+  })
+
+  beforeEach(() => {
+    on('GET', /\/teachers\/t-1\/availability$/, () => json({ teacherId: 't-1', timezone: 'Africa/Cairo', windows: [], daysOff: [] }))
+    on('GET', /\/lessons\?/, () => json({ lessons: [] }))
+    // The monthly figures are not what these tests read: refused, so that section shows its own error.
+    on('GET', /\/stats\/teachers\/t-1\?month=/, () => json({ error: { code: 'COMM.LESSON_DENIED', message: 'not here' } }, 403))
+  })
+
+  it('shows the month\'s counts, each lesson\'s status and report, and links to the child and the lesson', async () => {
+    on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
+      json(page([row('ls-1', 'late', report), row('ls-2', 'missing', null, '2026-10-19T16:00:00Z')], null)),
+    )
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Lesson reports' })
+    const filters = await within(section).findByRole('group')
+    expect(within(filters).getByRole('button', { name: /All · Reports 9/ })).toHaveAttribute('aria-pressed', 'true')
+    for (const [label, n] of [['On time', 8], ['Late', 1], ['Awaiting report', 2], ['Missing', 3]] as const) {
+      expect(within(filters).getByRole('button', { name: new RegExp(`${label} ${n}`) })).toBeInTheDocument()
+    }
+    const items = await within(section).findAllByRole('listitem')
+    expect(items).toHaveLength(2)
+    expect(within(items[0]!).getByText('Surat al-Fil')).toBeInTheDocument()
+    expect(within(items[0]!).getByText('Needs more listening.')).toBeInTheDocument()
+    expect(within(items[0]!).getByText('Lesson 7 of 12')).toBeInTheDocument()
+    expect(within(items[0]!).getByText('madd, ghunna')).toBeInTheDocument()
+    expect(within(items[0]!).getByText('41 h 30 min after the end')).toBeInTheDocument()
+    expect(within(items[0]!).getByRole('link', { name: 'Child Alpha' })).toHaveAttribute('href', '/students/l-1')
+    expect(within(items[0]!).getByRole('link', { name: 'Open the lesson' })).toHaveAttribute(
+      'href', '/schedule?view=day&date=2026-10-20&teacherIds=t-1&learnerIds=l-1',
+    )
+    expect(within(items[1]!).getByText('Missing')).toBeInTheDocument()
+    expect(within(items[1]!).queryByText('Surat al-Fil')).toBeNull()
+  })
+
+  it('asks for the same month as the monthly figures, a status when filtered, and the next page by its cursor', async () => {
+    on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, (url) =>
+      json(url.includes('cursor=c2') ? page([row('ls-3', 'late', report, '2026-10-02T16:00:00Z')], null) : page([row('ls-1', 'late', report)], 'c2')),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Lesson reports' })
+    await within(section).findByText('Surat al-Fil')
+    const statsMonth = new URL(String(calls('GET', /\/stats\/teachers\/t-1\?month=/)[0]![0]), 'http://x').searchParams.get('month')
+    const first = new URL(String(calls('GET', /lesson-reports\?/)[0]![0]), 'http://x')
+    expect(first.searchParams.get('month')).toBe(statsMonth)
+    expect(first.searchParams.has('status')).toBe(false)
+
+    await user.click(within(section).getByRole('button', { name: 'Show more' }))
+    await waitFor(() => expect(within(section).getAllByRole('listitem')).toHaveLength(2))
+    expect(new URL(String(calls('GET', /lesson-reports\?/).at(-1)![0]), 'http://x').searchParams.get('cursor')).toBe('c2')
+
+    await user.click(within(section).getByRole('button', { name: /^Late/ }))
+    await waitFor(() =>
+      expect(new URL(String(calls('GET', /lesson-reports\?/).at(-1)![0]), 'http://x').searchParams.get('status')).toBe('late'),
+    )
+    expect(within(section).getByRole('button', { name: /^Late/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('a trial names its prospect and has no lesson or child link', async () => {
+    on('GET', /\/teacher-files\/t-1\/lesson-reports\?/, () =>
+      json(page([{ ...row('tr-1', 'on_time', { ...report, delayMinutes: 30 }), kind: 'trial', learner: null, prospectName: 'Prospect P' }], null)),
+    )
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Lesson reports' })
+    const [item] = await within(section).findAllByRole('listitem')
+    expect(within(item!).getByText('Trial: Prospect P')).toBeInTheDocument()
+    expect(within(item!).queryByRole('link')).toBeNull()
   })
 })
