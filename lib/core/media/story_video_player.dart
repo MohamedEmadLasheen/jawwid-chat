@@ -71,6 +71,10 @@ abstract interface class StoryVideoPlayer {
   Future<void> play();
   Future<void> pause();
 
+  /// Move to [position] (CHATSCHED-013 -> CHATSCHED-010: a chat video can be
+  /// scrubbed). The platform player asks the media route for that byte range.
+  Future<void> seek(Duration position);
+
   /// Release the current video without disposing the seam, so the next [load] starts clean.
   Future<void> stop();
 
@@ -222,6 +226,17 @@ class VideoPlayerStoryVideoPlayer implements StoryVideoPlayer {
       await controller.pause();
     } catch (_) {
       // A pause that fails is not worth surfacing: the reader is leaving anyway.
+    }
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    final controller = _controller;
+    if (_disposed || controller == null || !controller.value.isInitialized) return;
+    try {
+      await controller.seekTo(position);
+    } catch (_) {
+      // A seek that fails leaves the video where it was; nothing to surface.
     }
   }
 
