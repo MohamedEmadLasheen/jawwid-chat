@@ -250,6 +250,65 @@ void main() {
     expect(_only(h.commits.single).rotation, closeTo(math.pi / 2, 0.001), reason: 'snapped to 90 degrees');
   });
 
+  testWidgets('a page change while typing keeps the text -- on the page it was typed on, never the new one (review of #384)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final key = GlobalKey<BoardCanvasState>();
+    final commits = <List<BoardElement>>[];
+    final committedTo = <(String, List<BoardElement>)>[];
+    final pageA = _page([]);
+    final pageB = BoardPage(id: 'p2', position: 1, layout: PageLayout.plain, background: PageBackground.white, elements: [_text('other', 'On B')]);
+    Widget canvas(BoardPage page) => MaterialApp(
+      localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+      home: Scaffold(
+        body: BoardCanvas(
+          key: key,
+          page: page,
+          tool: BoardTool.text,
+          style: const ToolStyle(color: _ink, width: 6),
+          readOnly: false,
+          onCommit: commits.add,
+          onCommitTo: (id, elements) => committedTo.add((id, elements)),
+        ),
+      ),
+    );
+    await tester.pumpWidget(canvas(pageA));
+    await tester.pumpAndSettle();
+    await tester.tapAt(key.currentState!.screenOf(const Offset(900, 500)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(EditableText), 'Typed on A');
+    await tester.pumpWidget(canvas(pageB));
+    await tester.pumpAndSettle();
+
+    expect(commits, isEmpty, reason: 'nothing committed to the page now shown');
+    expect(committedTo, hasLength(1));
+    expect(committedTo.single.$1, 'p1');
+    expect(_only(committedTo.single.$2).text, 'Typed on A');
+    expect(find.byType(EditableText), findsNothing);
+  });
+
+  testWidgets('with the pen, a quick second tap draws -- the double-tap shortcut is for select, hand and text only', (tester) async {
+    final h = _Harness();
+    await h.pump(tester, elements: [_text('t1', 'Hello')], tool: BoardTool.pen);
+    final at = h.state.screenOf(const Offset(450, 330));
+    await tester.tapAt(at);
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tapAt(at);
+    await tester.pumpAndSettle();
+    expect(find.byType(EditableText), findsNothing);
+  });
+
+  testWidgets('a turned text grows about its centre when re-edited', (tester) async {
+    final h = _Harness();
+    await h.pump(tester, elements: [_text('t1', 'Hi', rotation: math.pi / 2)], tool: BoardTool.text);
+    await h.tapPage(tester, const Offset(600, 340));
+    await tester.enterText(find.byType(EditableText), 'Hi there, a much longer line');
+    await h.tapPage(tester, const Offset(1500, 900));
+    final t = _only(h.commits.single);
+    expect(t.box.center.dx, closeTo(600, 1));
+    expect(t.box.center.dy, closeTo(340, 20));
+  });
+
   group('the text element', () {
     test('bold and rotation round-trip; a PD-39 text without them reads as before and saves the same bytes', () {
       final old = {'id': 't1', 'kind': 'text', 'text': 'Hi', 'x': 1, 'y': 2, 'w': 30, 'h': 20, 'size': 24, 'color': '#1b1b1f'};

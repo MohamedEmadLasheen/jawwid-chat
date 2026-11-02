@@ -172,6 +172,49 @@ void main() {
     expect(find.text(l10n.boardUnsaved), findsOneWidget);
   });
 
+  Future<void> typeOnBoard(WidgetTester tester, L10n l10n, String text) async {
+    await tester.tap(find.byTooltip(l10n.boardToolText));
+    await tester.pump();
+    await tester.tapAt(tester.getCenter(find.byType(BoardCanvas)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(EditableText), text);
+    await tester.pump();
+  }
+
+  testWidgets('PD-55 (review of #384): Back while typing keeps the text', (tester) async {
+    final l10n = await pump(
+      tester,
+      Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await typeOnBoard(tester, l10n, 'Kept on Back');
+    await tester.pageBack();
+    await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    // Leaving saves the board -- with the text that was being typed in it.
+    expect((repo.saved.last.elements.single as TextElement).text, 'Kept on Back');
+  });
+
+  testWidgets('PD-55 (review of #384): going to the background while typing keeps the text', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await typeOnBoard(tester, l10n, 'Kept in the background');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    final page = container.read(boardEditorProvider('b1')).value!.page;
+    expect((page.elements.single as TextElement).text, 'Kept in the background');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('a Tajweed highlighter colour stays with the highlighter: the next pen stroke is ink', (tester) async {
     final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
     await tester.tap(find.byTooltip(l10n.boardToolHighlighter));
