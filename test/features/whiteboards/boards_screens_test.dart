@@ -5,6 +5,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -152,6 +153,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.saved.single.elements.single, isA<InkElement>());
     expect(find.text(l10n.boardSaved), findsOneWidget);
+  });
+
+  testWidgets('PD-55: the editor\'s Text tool types on the page -- no dialog -- and Backspace edits the words, never the selection', (tester) async {
+    final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+    await tester.tap(find.byTooltip(l10n.boardToolText));
+    await tester.pump();
+    final centre = tester.getCenter(find.byType(BoardCanvas));
+    await tester.tapAt(centre);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.enterText(find.byType(EditableText), 'Helloo');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    final text = container.read(boardEditorProvider('b1')).value!.page.elements.single as TextElement;
+    expect(text.text, 'Hello');
+    expect(find.text(l10n.boardUnsaved), findsOneWidget);
   });
 
   testWidgets('a Tajweed highlighter colour stays with the highlighter: the next pen stroke is ink', (tester) async {
