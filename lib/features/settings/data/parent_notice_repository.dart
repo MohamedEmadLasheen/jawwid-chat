@@ -9,6 +9,11 @@ import '../../../core/network/api_client.dart';
 
 const kLessonAudioNoticeKey = 'lesson_audio';
 
+/// Phase 2 switch. The learning materials (and their lesson audio) are postponed until
+/// after launch (owner 2026-11-03), so a parent is not shown the "About lesson audio" row
+/// in Settings nor asked the notice at sign-in. Turn on with the lessons in Phase 2.
+const kLessonAudioNoticeLive = false;
+
 /// The version of the notice THIS app shows (apps/api/src/lesson-audio/parent-notices.ts).
 /// An app showing another version than the server's current one asks nothing: the
 /// parent would acknowledge a text they were not shown.
