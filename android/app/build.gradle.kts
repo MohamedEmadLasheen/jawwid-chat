@@ -6,6 +6,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// PD-32 amendment: FCM needs the Firebase project's google-services.json, which is not
+// committed (it is the project's, like the signing key). Without it the plugin is not
+// applied, the build still builds, and the app simply receives no pushes on Android.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // PD-56 (store compliance): the release key. android/key.properties is git-ignored
 // and holds storeFile, storePassword, keyAlias and keyPassword (docs/mobile/
 // android-release-signing.md). Without it -- or with a field missing -- a release
@@ -97,4 +104,9 @@ dependencies {
     // crashes on Android 8 and below (minSdk is 26 since PD-56). local_auth_android brings
     // biometric/fragment/core, not appcompat, so the theme's parent comes from here.
     implementation("androidx.appcompat:appcompat:1.7.1")
+    // PD-32 amendment: ordinary pushes (FCM, data-only) drawn by the app.
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("androidx.core:core-ktx:1.13.1")
+    testImplementation("junit:junit:4.13.2")
 }

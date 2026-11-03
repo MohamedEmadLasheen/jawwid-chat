@@ -22,6 +22,10 @@ abstract interface class NotificationsRepository {
   /// `POST /me/notifications/{id}/acted` -- the button was used.
   Future<void> acted(String id);
 
+  /// `POST /notifications/{notificationId}/opened` -- this account tapped the push with
+  /// that delivery id (PD-32 amendment). The server accepts it from the recipient only.
+  Future<void> pushOpened(String notificationId);
+
   /// `GET /me/notification-settings`.
   Future<NotificationSettings> settings();
 
@@ -58,6 +62,9 @@ class NoNotificationsRepository implements NotificationsRepository {
 
   @override
   Future<void> acted(String id) async => throw _unavailable;
+
+  @override
+  Future<void> pushOpened(String notificationId) async {}
 
   @override
   Future<NotificationSettings> settings() async => throw _unavailable;
@@ -121,6 +128,11 @@ class HttpNotificationsRepository implements NotificationsRepository {
   @override
   Future<void> acted(String id) async {
     await _client.post<Map<String, Object?>>('/me/notifications/${Uri.encodeComponent(id)}/acted');
+  }
+
+  @override
+  Future<void> pushOpened(String notificationId) async {
+    await _client.post<Map<String, Object?>>('/notifications/${Uri.encodeComponent(notificationId)}/opened');
   }
 
   @override
@@ -327,6 +339,12 @@ class FakeNotificationsRepository implements NotificationsRepository {
     actedIds.add(id);
     await markRead(ids: [id]);
   }
+
+  /// The delivery ids [pushOpened] was called with, in order.
+  final List<String> openedPushes = [];
+
+  @override
+  Future<void> pushOpened(String notificationId) async => openedPushes.add(notificationId);
 
   @override
   Future<NotificationSettings> settings() async => _settings;

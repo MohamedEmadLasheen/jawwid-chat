@@ -542,7 +542,8 @@ export interface FamilyFeedbackNoticePayload {
   organizationId: string;
   feedbackId: string;
   contactId: string;
-  notice: 'replied' | 'complaint_in_review' | 'complaint_resolved';
+  /** complaint_resolved: resolved with a reply to read; complaint_closed: resolved without one. */
+  notice: 'replied' | 'complaint_in_review' | 'complaint_resolved' | 'complaint_closed';
 }
 
 /** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */

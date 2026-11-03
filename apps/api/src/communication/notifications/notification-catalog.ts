@@ -109,6 +109,7 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   feedback_replied: { version: 1, category: 'conversation', inbox: 'inbox.feedback_replied', action: 'open_feedback' },
   feedback_complaint_in_review: { version: 1, category: 'conversation', inbox: 'inbox.feedback_complaint_in_review', action: 'open_feedback' },
   feedback_complaint_resolved: { version: 1, category: 'conversation', inbox: 'inbox.feedback_complaint_resolved', action: 'open_feedback' },
+  feedback_complaint_closed: { version: 1, category: 'conversation', inbox: 'inbox.feedback_complaint_closed', action: 'open_feedback' },
   task_returned: { version: 1, category: 'task', inbox: 'inbox.task_returned', action: 'open_task' },
   task_out_of_scope: { version: 1, category: 'task', inbox: 'inbox.task_out_of_scope', action: 'open_task' },
   task_overdue: { version: 1, category: 'task', inbox: 'inbox.task_overdue', action: 'open_task' },

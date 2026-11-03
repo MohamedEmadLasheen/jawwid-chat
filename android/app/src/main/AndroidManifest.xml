@@ -45,6 +45,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- PD-32 amendment: FCM's entry point for data-only pushes (drawn by the app) and
+             token rotations. Not exported: only Firebase, inside this app, starts it. Inert
+             in a build without a Firebase project. -->
+        <service
+            android:name=".JawwidMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

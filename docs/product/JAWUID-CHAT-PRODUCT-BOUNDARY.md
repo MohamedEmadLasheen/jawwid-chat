@@ -3211,9 +3211,11 @@ complaint in review  an app complaint moves received -> in_review (taken,
                      replied to, or followed up) -> "Your complaint has been
                      received and is being reviewed." / «تم استلام شكواك، ويجري
                      العمل على مراجعتها.»
-complaint resolved   its PD-26 resolution -> "Your complaint has been resolved.
-                     You can view the administration's reply." / «تم التعامل مع
-                     شكواك، يمكنك الاطلاع على رد الإدارة.»
+complaint resolved   its PD-26 resolution, with a reply to the parent -> "Your
+                     complaint has been resolved. You can view the administration's
+                     reply." / «تم التعامل مع شكواك، يمكنك الاطلاع على رد الإدارة.»
+                     Without a reply -> "Your complaint has been addressed and
+                     closed." / «تم التعامل مع شكواك وإغلاق الشكوى.»
 who is told          the filing parent only (not the family's other parent, never
                      the teacher); once per item and kind (dedupe key)
 how                  outbox event family_feedback.notice, written in the same
@@ -3223,7 +3225,19 @@ how                  outbox event family_feedback.notice, written in the same
                      the words, the reply, the teacher or the child. A push that
                      fails is retried; the reply is never undone.
 opens                Center action open_feedback (feedbackId) -> the app's
-                     /feedback/:id, that one item with its reply
+                     /feedback/:id, that one item with its reply. The push
+                     carries the same action (kind + allowlisted ids only), so a
+                     tap on the push opens the same item.
+push on the phone    iOS: alert pushes shown by iOS when closed or in the
+                     background; while open, a banner (chat excepted, which the
+                     app shows itself). Android: data-only FCM, drawn by the app
+                     in every state (chat quiet while open), and only in a build
+                     with the Firebase project's google-services.json. A tap is
+                     held natively until Dart listens, waits for the stored
+                     session, and is dropped if none comes back (never carried
+                     into the next sign-in). Android taps carry an install nonce
+                     (the launcher activity is exported). Permission to notify
+                     is asked when a session starts. Calls are untouched.
 unread dot           per item, per parent account: a reply with no row in
                      chat.parent_feedback_reply_seen for that account. Cleared by
                      opening that reply (POST /me/feedback/:id/reply-seen); an

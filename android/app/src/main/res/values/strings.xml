@@ -4,4 +4,7 @@
          Arabic one is in values-ar, and the phone's language picks between them.
          test/l10n/android_launcher_label_test.dart keeps both equal to the ARBs. -->
     <string name="app_name">Jawwid</string>
+    <!-- PD-32 amendment: the notification channel ordinary pushes are drawn on, as named in
+         the phone's settings; the same words as the ARBs' notificationsCenterTitle. -->
+    <string name="push_channel_name">Notifications</string>
 </resources>

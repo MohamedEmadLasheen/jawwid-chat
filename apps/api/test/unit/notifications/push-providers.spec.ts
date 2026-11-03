@@ -245,6 +245,25 @@ describe('FCM', () => {
     } as Response);
   }
 
+  it('PD-32 amendment: an ordinary push carries its title and body in its data (the app draws it); a call push does not', async () => {
+    replyWith(200, {});
+    const provider = new FcmPushProvider(config, auth as never);
+    const ordinary = message({
+      title: 'Jawwid',
+      body: 'The administration has replied to your feedback.',
+      data: { eventType: 'feedback_replied', notificationId: 'n_2', actionKind: 'open_feedback', feedbackId: 'f-1' },
+    });
+    await provider.send(ordinary);
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(sent.message.data).toEqual({ ...ordinary.data, title: 'Jawwid', body: 'The administration has replied to your feedback.' });
+    expect(sent.message).not.toHaveProperty('notification');
+
+    await provider.send(message());
+    const call = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
+    expect(call.message.data).toEqual(message().data);
+    expect(call.message.data).not.toHaveProperty('title');
+  });
+
   it('a 200 is a success, sent data-only with high priority', async () => {
     replyWith(200, {});
     const provider = new FcmPushProvider(config, auth as never);

@@ -183,7 +183,8 @@ describe('2. a parent\'s app complaint: in review, then resolved -- once each', 
     await worker.drain(100);
 
     expect((await feedback.mine(s.parentId)).feedback[0].status).toBe('resolved');
-    expect((await notices()).map((e) => (e.payload as { notice: string }).notice)).toEqual(['complaint_resolved', 'replied']);
+    // Resolved before the reply existed: "addressed and closed", then the reply.
+    expect((await notices()).map((e) => (e.payload as { notice: string }).notice)).toEqual(['complaint_closed', 'replied']);
   });
 
   it('a first reply to a received complaint also moves it into review, and says both', async () => {
@@ -208,6 +209,105 @@ describe('2. a parent\'s app complaint: in review, then resolved -- once each', 
     expect(await code(feedback.reply(tsupId, complaint.id, { response: 'Done.', resolve: true }))).toBe(CommErrorCode.FEEDBACK_STATE);
     await worker.drain(100);
     expect(await items(s.parentId)).toEqual([]);
+  });
+});
+
+describe('2b. the resolution\'s wording follows whether there is a reply (owner, 2026-11-03)', () => {
+  const rendered = async (eventType: string) => {
+    const [entry] = await items(s.parentId, eventType);
+    return g.prisma.notificationTemplate.findMany({ where: { key: entry!.templateKey } });
+  };
+
+  it('resolved with a reply: "resolved -- view the reply"; without one: "addressed and closed" -- once, in both languages', async () => {
+    const answered = await file('complaint');
+    const silent = await file('complaint', 'another complaint');
+    for (const f of [answered, silent]) {
+      const entry = await g.prisma.teacherSupervisionEntry.findUniqueOrThrow({ where: { parentFeedbackId: f.id } });
+      if (f === answered) await feedback.reply(tsupId, f.id, { response: 'We spoke with the teacher.' });
+      await files.addEntry(tsupId, s.teacherId, { kind: 'complaint_resolution', body: 'Internal.', refersTo: entry.id });
+    }
+    await worker.drain(100);
+
+    const resolved = await items(s.parentId, 'feedback_complaint_resolved');
+    const closed = await items(s.parentId, 'feedback_complaint_closed');
+    expect(resolved.map((i) => i.subjectId)).toEqual([answered.id]);
+    expect(closed.map((i) => i.subjectId)).toEqual([silent.id]);
+    expect(closed[0]?.action).toEqual({ kind: 'open_feedback', feedbackId: silent.id });
+    expect(await pushes(s.parentId, 'feedback_complaint_closed')).toHaveLength(1);
+    expect((await rendered('feedback_complaint_resolved')).map((t) => t.body).sort()).toEqual(
+      ['Your complaint has been resolved. You can view the administration\'s reply.', 'تم التعامل مع شكواك، يمكنك الاطلاع على رد الإدارة.'].sort(),
+    );
+    expect((await rendered('feedback_complaint_closed')).map((t) => t.body).sort()).toEqual(
+      ['Your complaint has been addressed and closed.', 'تم التعامل مع شكواك وإغلاق الشكوى.'].sort(),
+    );
+  });
+});
+
+describe('2c. the push itself: what a tap opens, and only the parent\'s own', () => {
+  it('the dispatched push carries the entry\'s action (kind and feedback id) and the generic text -- nothing else', async () => {
+    const orgId = (await g.prisma.contact.findUniqueOrThrow({ where: { id: s.parentId } })).organizationId;
+    await g.prisma.deviceToken.create({ data: { organizationId: orgId, actorId: s.parentId, token: `pd032-tap-${s.parentId}`, platform: 'android' } });
+    await g.prisma.deviceToken.create({ data: { organizationId: orgId, actorId: s.otherParentId, token: `pd032-tap-${s.otherParentId}`, platform: 'android' } });
+    const sent: Array<{ token: string; title: string; body: string; data: Record<string, string> }> = [];
+    const spy = jest.spyOn((g.notifications as unknown as { push: { send: (m: never) => Promise<unknown> } }).push, 'send').mockImplementation(async (m) => {
+      sent.push(m);
+      return { ok: true };
+    });
+    try {
+      const filed = await file('praise');
+      await feedback.reply(tsupId, filed.id, { response: 'private reply text' });
+      await worker.drain(100);
+      await g.notifications.dispatchDue(new Date(Date.now() + 60_000));
+
+      expect(sent).toHaveLength(1);
+      expect(sent[0]!.token).toBe(`pd032-tap-${s.parentId}`);
+      const [push] = await pushes(s.parentId, 'feedback_replied');
+      expect(sent[0]!.data).toEqual({ eventType: 'feedback_replied', notificationId: push!.id, actionKind: 'open_feedback', feedbackId: filed.id });
+      expect(JSON.stringify(sent)).not.toMatch(/secret|private reply|learner_l|teacher_t|parent_p/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('2d. a delivery never carries another person\'s entry', () => {
+  it('a delivery row pointing at someone else\'s Center entry sends no action from it', async () => {
+    const orgId = (await g.prisma.contact.findUniqueOrThrow({ where: { id: s.parentId } })).organizationId;
+    await g.prisma.deviceToken.create({ data: { organizationId: orgId, actorId: s.otherParentId, token: `pd032-x-${s.otherParentId}`, platform: 'android' } });
+    const filed = await file('praise');
+    await feedback.reply(tsupId, filed.id, { response: 'Thanks.' });
+    await worker.drain(100);
+    const [theirs] = await items(s.parentId, 'feedback_replied');
+    // A delivery for the OTHER parent, wrongly linked to the filing parent's entry.
+    await g.prisma.notification.create({
+      data: {
+        organizationId: orgId,
+        dedupeKey: `feedback_replied:${filed.id}:${s.otherParentId}:forged`,
+        templateKey: 'feedback_replied',
+        eventType: 'feedback_replied',
+        recipientId: s.otherParentId,
+        locale: 'ar',
+        channel: 'push',
+        priority: 'normal',
+        status: 'scheduled',
+        scheduledAt: new Date(),
+        itemId: theirs!.id,
+      },
+    });
+    const sent: Array<{ token: string; data: Record<string, string> }> = [];
+    const spy = jest.spyOn((g.notifications as unknown as { push: { send: (m: never) => Promise<unknown> } }).push, 'send').mockImplementation(async (m) => {
+      sent.push(m);
+      return { ok: true };
+    });
+    try {
+      await g.notifications.dispatchDue(new Date(Date.now() + 60_000));
+    } finally {
+      spy.mockRestore();
+    }
+    const forged = sent.find((m) => m.token === `pd032-x-${s.otherParentId}`);
+    expect(forged).toBeDefined();
+    expect(forged!.data).not.toHaveProperty('actionKind');
+    expect(forged!.data).not.toHaveProperty('feedbackId');
   });
 });
 

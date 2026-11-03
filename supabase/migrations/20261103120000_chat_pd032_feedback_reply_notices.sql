@@ -7,7 +7,9 @@
 --   feedback_complaint_in_review a parent's app complaint moves received ->
 --                                in review (taken, replied to, or followed up)
 --   feedback_complaint_resolved  a parent's app complaint is resolved (its
---                                PD-26 resolution on the Teacher File)
+--                                PD-26 resolution on the Teacher File) and
+--                                the administration has replied to it
+--   feedback_complaint_closed    ... resolved with no reply to the parent
 --
 -- Told: the parent who filed it (chat.parent_feedback.contact_id), once per
 -- feedback and kind (the dedupe key). A Notification Center entry that opens
@@ -45,10 +47,11 @@ insert into chat.notification_rule
   (key, event_type, offset_seconds, template_key, recipient_role, channel, priority, respect_quiet_hours) values
   ('feedback_replied',             'feedback_replied',             0, 'feedback_replied',             'parent', 'push', 'normal', true),
   ('feedback_complaint_in_review', 'feedback_complaint_in_review', 0, 'feedback_complaint_in_review', 'parent', 'push', 'normal', true),
-  ('feedback_complaint_resolved',  'feedback_complaint_resolved',  0, 'feedback_complaint_resolved',  'parent', 'push', 'normal', true)
+  ('feedback_complaint_resolved',  'feedback_complaint_resolved',  0, 'feedback_complaint_resolved',  'parent', 'push', 'normal', true),
+  ('feedback_complaint_closed',    'feedback_complaint_closed',    0, 'feedback_complaint_closed',    'parent', 'push', 'normal', true)
 on conflict (key) do nothing;
 
--- The wording the owner approved (2026-11-03). The push and the Center entry say the same.
+-- The wording the owner approved (2026-11-03; the "closed" pair the same day). The push and the Center entry say the same.
 insert into chat.notification_template (key, locale, title, body)
 select v.key, v.locale, v.title, v.body
   from (values
@@ -63,6 +66,10 @@ select v.key, v.locale, v.title, v.body
     ('inbox.feedback_complaint_in_review', 'en', 'Jawwid', 'Your complaint has been received and is being reviewed.'),
     ('inbox.feedback_complaint_in_review', 'ar', 'جَوِّد', 'تم استلام شكواك، ويجري العمل على مراجعتها.'),
     ('inbox.feedback_complaint_resolved', 'en', 'Jawwid', 'Your complaint has been resolved. You can view the administration''s reply.'),
-    ('inbox.feedback_complaint_resolved', 'ar', 'جَوِّد', 'تم التعامل مع شكواك، يمكنك الاطلاع على رد الإدارة.')
+    ('inbox.feedback_complaint_resolved', 'ar', 'جَوِّد', 'تم التعامل مع شكواك، يمكنك الاطلاع على رد الإدارة.'),
+    ('feedback_complaint_closed', 'en', 'Jawwid', 'Your complaint has been addressed and closed.'),
+    ('feedback_complaint_closed', 'ar', 'جَوِّد', 'تم التعامل مع شكواك وإغلاق الشكوى.'),
+    ('inbox.feedback_complaint_closed', 'en', 'Jawwid', 'Your complaint has been addressed and closed.'),
+    ('inbox.feedback_complaint_closed', 'ar', 'جَوِّد', 'تم التعامل مع شكواك وإغلاق الشكوى.')
   ) as v(key, locale, title, body)
  where not exists (select 1 from chat.notification_template t where t.key = v.key and t.locale = v.locale);

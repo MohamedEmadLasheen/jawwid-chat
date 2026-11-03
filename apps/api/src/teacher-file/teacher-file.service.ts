@@ -1170,11 +1170,15 @@ export async function advanceParentFeedback(
     data: { status: to },
   });
   if (moved.count !== 1) return;
+  // Read after the update, so under its row lock: a reply racing this resolution
+  // has either committed (and is counted) or waits behind it.
   const feedback = await tx.parentFeedback.findUniqueOrThrow({
     where: { id: complaint.parentFeedbackId },
-    select: { id: true, contactId: true, organizationId: true },
+    select: { id: true, contactId: true, organizationId: true, parentResponse: true },
   });
-  await tellParent(tx, outbox, feedback, to === 'resolved' ? 'complaint_resolved' : 'complaint_in_review');
+  // Owner, 2026-11-03: "resolved -- view the reply" only when there is a reply to view.
+  const notice = to === 'in_review' ? 'complaint_in_review' : feedback.parentResponse !== null ? 'complaint_resolved' : 'complaint_closed';
+  await tellParent(tx, outbox, feedback, notice);
 }
 
 /** PD-32: the parent feedback an app complaint was filed as, for the staff who handle it. */

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { JWT } from 'google-auth-library';
 import type { PushMessage, PushProvider, PushResult } from './push.provider';
+import { isCallNotification } from './call-push-routing';
 
 /**
  * FCM HTTP v1, behind the existing [PushProvider] seam.
@@ -94,7 +95,13 @@ export class FcmPushProvider implements PushProvider {
             token: message.token,
             // DATA ONLY. No `notification` block: the client decides what to
             // show, and a call push must reach code rather than a banner.
-            data: message.data,
+            // PD-32 amendment: an ordinary push also carries its rendered
+            // title and body (the same generic text an iOS lock screen shows),
+            // because a data-only message is drawn by the app, which has only
+            // what it is sent. A call's data is unchanged.
+            data: isCallNotification(message.data.eventType ?? '')
+              ? message.data
+              : { ...message.data, title: message.title, body: message.body },
             android: { priority: 'high' },
           },
         }),

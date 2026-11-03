@@ -24,6 +24,7 @@ const FEEDBACK_NOTICE_RULES: Readonly<Record<string, string>> = {
   replied: 'feedback_replied',
   complaint_in_review: 'feedback_complaint_in_review',
   complaint_resolved: 'feedback_complaint_resolved',
+  complaint_closed: 'feedback_complaint_closed',
 };
 
 @Injectable()
