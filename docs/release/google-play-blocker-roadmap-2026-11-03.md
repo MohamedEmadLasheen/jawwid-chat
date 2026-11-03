@@ -162,7 +162,9 @@ The decision is implemented, **uncommitted**, in `~/dev/jawwid-push-acceptance`.
 | #449's notification layer replaces the body of `JawwidPush.showMessage`: nonce, allowlist, Center routing, clearing at sign-out, `PushPayloadTest` | Done |
 | #449's duplicate Android classes are dropped (`PushPresenter.kt` is deleted); `7ef999eb` is dropped | Done |
 | Call Answer and Open carry the nonce (`JawwidPush.activityIntent`), and `MainActivity` checks it with `PushPayload.isTrustedTap` | Done. Kotlin test `aCraftedCallIntentWithoutTheNonceIsIgnored`. |
-| Conflict markers | None remain in the eight conflicted files. They still show as unmerged (`UU` / `AA`) in that tree's index, so **they must be staged before the commit**, and the build and tests run on the committed tree. |
+| Conflict markers and index | None remain, and the index has no unmerged entries (re-checked). The tree is still **uncommitted**: committing waits for the owner's approval, and the build and tests then run on the committed tree. |
+| Nonce comparison | Constant-time (`MessageDigest.isEqual`); Kotlin tests 13 of 13, as reported by that session |
+| An end-to-end test of `MainActivity`'s call-intent path | **Gap, recorded rather than faked.** It needs Robolectric or an instrumented test, and the project has neither. It goes into #408's emulator ring test in CI (`scripts/qa/android-ring-test.sh`, a Code Owner path). |
 | #411 (call foreground service) | Not yet layered. It stacks on top afterwards (WP-5). |
 | `ci.yml` emulator-runner SHA pin (§4 finding 1) | Not in that tree, because `ci.yml` is a Code Owner file. It is done on #408's branch, with the owner's approval. |
 | Play: the merged release manifest declares `USE_FULL_SCREEN_INTENT` (from #408) | The full-screen intent declaration in Play Console is **required** (§9 item 4, WP-6 permission set) |
