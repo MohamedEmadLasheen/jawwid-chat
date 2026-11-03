@@ -69,6 +69,8 @@ None of these is a secret.
   foreground-service or exact-alarm permission, so no Play permission declaration
   form is needed.
 - Every native library is 16 KB page aligned (Play's requirement for target SDK 35+).
+- `NSPhotoLibraryAddUsageDescription`: the share sheet's "Save Image" for a board
+  exported as PNG needs it, or iOS terminates the app.
 - Every usage string in Arabic and English (`ar.lproj` and `en.lproj`
   `InfoPlist.strings`).
 
