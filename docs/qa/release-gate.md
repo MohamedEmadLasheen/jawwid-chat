@@ -26,11 +26,12 @@ The codebase is far from the September picture. The P0s that blocked it then
 (512 rows) found **3 P1s, and all 3 are fixed**. What blocks Phase 1 now is mostly
 **not** chat behaviour. It falls into four groups.
 
-1. **The store requirements are not built** (§2a):
-   - in-app account deletion (App Store 5.1.1(v), Google Play account deletion policy);
-   - the iOS privacy manifest;
-   - Android push (no FCM client) and Android release signing;
-   - the iOS release entitlement, which is still `aps-environment = development`.
+1. **Store requirements still open** (§2a, re-verified 2026-11-03). Deletion, the privacy manifest, signing,
+   the release entitlement and crash reporting are now built. Still open:
+   - no way to report content (S-09);
+   - card checkout and the store payment rules (S-10);
+   - Android push (S-05);
+   - the owner decisions and store forms in §2c.
 2. **There is no production environment.** Phase 1 has no server to point the store builds at. It needs the owner's accounts and keys: `docs/infrastructure/production-readiness.md`.
 3. **Calls do not ring when the app is closed**, on either platform. The iOS PushKit/CallKit path exists but is switched off and has never run on a device. Android has no call UI.
 4. **Gates still open:**
@@ -56,20 +57,38 @@ The codebase is far from the September picture. The P0s that blocked it then
 
 ---
 
-## 2a. Phase 1 store-submission gates (new, 2026-11-02)
+## 2a. Phase 1 store-submission gates (new 2026-11-02; re-verified 2026-11-03)
 
-These did not exist in September because no store submission was planned. Each one is a hard blocker for its store.
+Each one is a hard blocker for its store. Re-verified on 2026-11-03 against `main` @ `c7ca895c`
+by reading the code and building a signed release AAB and an unsigned iOS release build.
 
-| # | Gate | Status | Evidence on `main` |
+| # | Gate | Status | Evidence |
 |---|---|---|---|
-| **S-01** | Users can delete their own account in the app, and the server erases or anonymises it (App Store 5.1.1(v); Google Play account deletion, with a web link too) | **FAIL — not built** | There is no client or server self-deletion: nothing in `lib/` or `apps/api/src` matches delete-account or account-deletion. Only admin-side suspend exists (`POST /admin/accounts/:id/suspend`, `docs/security/DEACTIVATION.md`). It needs a product decision on what is erased and what is kept (payments, lesson records, audit), then the build. |
-| **S-02** | iOS privacy manifest (`PrivacyInfo.xcprivacy`) and accurate App Privacy / Data safety answers | **FAIL — not built** | There is no `PrivacyInfo.xcprivacy` in `ios/`. |
-| **S-03** | iOS release build signs with the owner's distribution team and the production push entitlement | **FAIL** | `ios/Runner/Runner.entitlements` still says `aps-environment = development`, and its own comment says release must be `production`. `project.pbxproj` names team `L4GWGYV6SN`. The system-test builds override it with the paid team `KX683HAR3Y`, but the repository doesn't. |
-| **S-04** | Android release build is signed with an upload key and builds as an AAB | **FAIL** | `android/app/build.gradle.kts:36`: the release build type uses `signingConfigs.getByName("debug")` (TODO). There is no `key.properties`, and no AAB build has been recorded. |
-| **S-05** | Android receives push (messages, lesson reminders, calls) | **FAIL — not built** | The server half is done (`fcm.provider.ts`, high-priority data messages). The client half is missing: no `firebase_messaging`, no `google-services.json`, and `MainActivity.kt` `startRegistering()` is empty on purpose. |
-| **S-06** | An incoming call rings when the app is closed (iOS: PushKit + CallKit; Android: high-priority FCM + a full-screen call notification) | **FAIL** | iOS: `AppDelegate.swift` and `CallKitBridge.swift` exist, but the server gate `APNS_VOIP_ENABLED` defaults to off and is in no manifest, app spec or deploy workflow, so production cannot turn it on. Commit `d612e9ff` records it as never run on a device. Android: no ConnectionService or full-screen intent. QA rows `device:D-14`/`D-17b` are BLOCKED as LAUNCH BLOCKER. |
-| **S-07** | Production crash reporting in the app | **FAIL — not built** | The API and worker have Sentry behind a privacy allowlist (`monitoring.md` §3a). The Flutter app has no crash reporter (`pubspec.yaml`). |
-| **S-08** | A production backend exists for the store builds (`JAWWID_API_BASE_URL`) | **FAIL — owner credentials** | The deploy path is code-complete (`.do/app.production.yaml`, `deploy-production.yml`). No DigitalOcean app, domain, bucket, push key, LiveKit project or Sentry DSN exists yet. See `production-readiness.md`. |
+| **S-01** | Users can delete their own account in the app, and the server erases it; Google Play also needs a web link | **PASS, one risk** | Settings → Delete account for parents and teachers (`settings_screen.dart`), then `POST /me/account/delete`. The public web page is `GET/POST /account-deletion`. **Risk:** a teacher with open lessons or payroll is told to "contact the academy" (`TEACHER_DELETION_BLOCKED`). Apple rejects deletion that needs contacting someone. Open owner decision O-3 (§2c). |
+| **S-02** | iOS privacy manifest, and accurate App Privacy / Data safety answers | **PASS** (manifest) | `ios/Runner/PrivacyInfo.xcprivacy`. Crash data was added 2026-11-03. The store forms are filled by the owner (§2c). |
+| **S-03** | iOS release signs with the distribution team and the production push entitlement | **PASS** (config) | Team `KX683HAR3Y`; Release uses `RunnerRelease.entitlements` (`production`). It has not yet been signed with a distribution certificate. |
+| **S-04** | Android release is signed with an upload key, as an AAB | **PASS** | A release AAB built and signed from `key.properties`; without it the build refuses. Every native library is 16 KB aligned. |
+| **S-05** | Android receives push | **FAIL** | No FCM client. Needs the owner's Firebase project (`google-services.json`) plus code. Android shows no notifications while the app is closed. |
+| **S-06** | An incoming call rings when the app is closed | **FAIL** | iOS: PushKit and CallKit are built, and every VoIP push reports a call, but it is off on the server (`APNS_VOIP_ENABLED`) and has never run on a device. Android: no call UI. |
+| **S-07** | Production crash reporting in the app | **PASS** (code) | Sentry, release only, with personal data scrubbed (`lib/core/crash/crash_reporting.dart`). `build-store.sh` passes `SENTRY_DSN` through since 2026-11-03. Before that, every store build had it off. The app DSN is the owner's. |
+| **S-08** | A production backend exists for the store builds | **FAIL, owner** | `docs/infrastructure/production-readiness.md`. |
+| **S-09** | Content can be reported (App Store 1.2; Google Play user-generated content policy) | **FAIL, not built** | Chat (text, voice, photo, video), stories and feedback have no "report" action, and the API has no report endpoint. The community is closed and supervised by staff, which helps, but Apple still expects a report mechanism. Owner decision O-1 (§2c). |
+| **S-10** | Payments follow App Store 3.1 and Google Play's payments policy | **RISK, owner** | The Pay sheet opens Stripe Checkout in the browser ("Pay by card"), and offers a bank transfer. App Store 3.1.3(d) exempts live one-to-one services only; group classes do not qualify. Owner decision O-2 (§2c). |
+| **S-11** | iOS asks for notification permission | **PASS** (since 2026-11-03) | `AppDelegate.startRegistering` requests authorization when a session begins. Before that, no banner, sound or badge could ever show. |
+
+### 2c. What the owner must decide or provide before submission
+
+- **O-1 Report content (S-09).** Recommended: a "Report" action on messages and stories that files a report to staff moderation, which staff review in Admin Web. It needs an API endpoint, a migration slot, and app and Admin Web UI.
+- **O-2 Card payments (S-10).** Option (a): keep "Pay by card" and argue 3.1.3(d) in the review notes. This holds only if every paid service is live one-to-one. Option (b), recommended because it is the safest: hide the card checkout link in the store builds and show only the amounts due, with "pay through the academy". Check Google Play's payments policy for the same flow.
+- **O-3 Teacher deletion (S-01).** Recommended: turn the block into "deletion requested", which the academy completes within a stated time. Do not send the teacher to contact the academy.
+- **Review access.** Demo parent and teacher accounts with realistic data, and their passwords in the App Review and Play notes. Sign-up needs a WhatsApp code that a reviewer cannot receive.
+- **Store forms:**
+  - App Privacy and Data safety must match the manifest: crash data, and the device time zone (declared as coarse location).
+  - Turn on Sentry's "don't store IP addresses".
+  - Target audience: adults (parents and teachers). Do not choose the Kids category.
+  - The age rating must reflect unrestricted messaging between users.
+  - Remove China mainland from App Store availability: CallKit apps are not allowed there.
+- **Credentials:** the production backend (S-08), the APNs key, Firebase (S-05), the iOS distribution certificate, the Android upload keystore, and the app's Sentry DSN.
 
 The device test plan for these builds is `docs/qa/submission-device-test-plan.md`.
 
