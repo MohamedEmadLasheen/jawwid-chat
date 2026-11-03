@@ -251,6 +251,7 @@ class _EntryTile extends ConsumerWidget {
         InboxActionKind.openStories => l10n.notificationsActionOpenStories,
         InboxActionKind.openCalls => l10n.notificationsActionOpenCalls,
         InboxActionKind.openTask => l10n.notificationsActionOpenTask,
+        InboxActionKind.openFeedback => l10n.notificationsActionOpenFeedback,
       };
 }
 
@@ -274,4 +275,7 @@ String? routeFor(InboxAction action, UserRole? role) => switch (action.kind) {
       // PD-47 PR-4: a teacher's tasks are the Schedule's To do; staff on the phone have
       // no Tasks screen yet (plan §3.12), so no button rather than one that leads nowhere.
       InboxActionKind.openTask => role == UserRole.teacher ? Routes.schedule : null,
+      // PD-32 amendment: the one item the reply is about -- a parent's only.
+      InboxActionKind.openFeedback =>
+        role == UserRole.parent && action.feedbackId != null ? Routes.feedbackItem(action.feedbackId!) : null,
     };

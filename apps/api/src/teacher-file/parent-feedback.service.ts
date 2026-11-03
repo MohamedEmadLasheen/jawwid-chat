@@ -14,6 +14,7 @@ import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { TeacherFileService, mapTimelineRefusal } from './teacher-file.service';
 import { feedbackKeyAllows } from '../platform/teacher-records-policy';
+import { tellParent } from './feedback-notice';
 
 export const FEEDBACK_CATEGORIES = ['praise', 'suggestion', 'complaint'] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
@@ -79,9 +80,10 @@ export class ParentFeedbackService {
       }),
     ]);
     const names = await this.names(rows);
+    const seen = await this.seenBy(contact.id, rows);
     return {
       children: learners.map((l) => ({ learnerId: l.id, name: l.name, teacherName: l.teacher?.name ?? null })),
-      feedback: rows.map((r) => forParent(r, names)),
+      feedback: rows.map((r) => forParent(r, names, seen)),
     };
   }
 
@@ -185,7 +187,28 @@ export class ParentFeedbackService {
     ).catch((e: unknown) => {
       throw e instanceof CommError ? e : serializationAsLimit(e);
     });
-    return forParent(row, await this.names([row]));
+    // Just filed: no reply, so nothing to be unread.
+    return forParent(row, await this.names([row]), new Set());
+  }
+
+  /**
+   * PD-32 amendment: this parent account opened the administration's reply to
+   * one item, so its unread dot goes -- for this account only. Idempotent. An
+   * item with no reply yet records nothing (the reply that comes later is new).
+   */
+  async replySeen(actorId: string, id: string) {
+    const { contact } = await this.requireParent(actorId);
+    const notFound = () => new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'no such feedback in your family');
+    if (!isUuid(id)) throw notFound();
+    const row = await this.prisma.parentFeedback.findFirst({
+      where: { id: id.toLowerCase(), familyId: contact.familyId, organizationId: contact.organizationId },
+      select: { id: true, parentResponse: true },
+    });
+    if (!row) throw notFound();
+    if (row.parentResponse !== null) {
+      await this.prisma.parentFeedbackReplySeen.createMany({ data: [{ feedbackId: row.id, contactId: contact.id }], skipDuplicates: true });
+    }
+    return { id: row.id, replyUnread: false };
   }
 
   // ------------------------------------------------------------------
@@ -304,7 +327,9 @@ export class ParentFeedbackService {
           data: { handledBy: actor.actorId },
         });
       }
-      await tx.parentFeedback.updateMany({ where: { id: row.id, status: 'received' }, data: { status: 'in_review' } });
+      const moved = await tx.parentFeedback.updateMany({ where: { id: row.id, status: 'received' }, data: { status: 'in_review' } });
+      // PD-32 amendment: the parent of an app complaint is told it is being reviewed.
+      if (moved.count === 1 && row.category === 'complaint') await tellParent(tx, this.outbox, row, 'complaint_in_review');
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'parent_feedback.taken',
@@ -337,15 +362,25 @@ export class ParentFeedbackService {
       throw new CommError(CommErrorCode.FEEDBACK_STATE, 'a complaint is resolved by its resolution on the Teacher File', 409);
     }
     await this.write(async (tx) => {
+      // Read again inside the write, under the row's lock: whether this is the FIRST
+      // reply (the parent is told) or a change to one already sent (nobody is told),
+      // and the status now -- a resolution saved meanwhile is never moved back to
+      // "in review", nor announced after it.
+      const [before] = await tx.$queryRaw<Array<{ parentResponse: string | null; status: string }>>`
+        SELECT parent_response AS "parentResponse", status FROM chat.parent_feedback WHERE id = ${row.id}::uuid FOR UPDATE`;
+      if (!before) throw new CommError(CommErrorCode.FEEDBACK_NOT_FOUND, 'feedback not found');
       await tx.parentFeedback.update({
         where: { id: row.id },
         data: {
           parentResponse: response,
           respondedBy: actor.actorId,
           respondedAt: new Date(),
-          ...(resolve ? { status: 'resolved' } : row.status === 'received' ? { status: 'in_review' } : {}),
+          ...(resolve ? { status: 'resolved' } : before.status === 'received' ? { status: 'in_review' } : {}),
         },
       });
+      // PD-32 amendment: a complaint a reply moves into review says so, then the reply.
+      if (before.status === 'received' && row.category === 'complaint') await tellParent(tx, this.outbox, row, 'complaint_in_review');
+      if (before.parentResponse === null) await tellParent(tx, this.outbox, row, 'replied');
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'parent_feedback.replied',
@@ -436,6 +471,17 @@ export class ParentFeedbackService {
   }
 
   /** The signed-in parent, in their own session -- never staff acting as them (PD-21). */
+  /** The items of [rows] whose reply this parent account has opened. */
+  private async seenBy(contactId: string, rows: ReadonlyArray<{ id: string; parentResponse: string | null }>): Promise<Set<string>> {
+    const answered = rows.filter((r) => r.parentResponse !== null).map((r) => r.id);
+    if (!answered.length) return new Set();
+    const seen = await this.prisma.parentFeedbackReplySeen.findMany({
+      where: { contactId, feedbackId: { in: answered } },
+      select: { feedbackId: true },
+    });
+    return new Set(seen.map((x) => x.feedbackId));
+  }
+
   private async requireParent(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const denied = () => new CommError(CommErrorCode.FEEDBACK_DENIED, 'feedback about a teacher is filed by the child\'s parent');
@@ -521,7 +567,11 @@ export class ParentFeedbackService {
 }
 
 /** What a parent reads back: their own words, the status and the reply. Nothing internal. */
-function forParent(r: ParentFeedback, names: { learner: Map<string, string>; teacher: Map<string, string> }) {
+function forParent(
+  r: ParentFeedback,
+  names: { learner: Map<string, string>; teacher: Map<string, string> },
+  seen: ReadonlySet<string>,
+) {
   return {
     id: r.id,
     learnerId: r.learnerId,
@@ -532,6 +582,8 @@ function forParent(r: ParentFeedback, names: { learner: Map<string, string>; tea
     status: r.status as FeedbackStatus,
     response: r.parentResponse,
     respondedAt: r.respondedAt,
+    /** PD-32 amendment: a reply this parent account has not opened yet. */
+    replyUnread: r.parentResponse !== null && !seen.has(r.id),
     createdAt: r.createdAt,
   };
 }

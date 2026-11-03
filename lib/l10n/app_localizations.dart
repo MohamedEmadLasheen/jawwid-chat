@@ -6985,6 +6985,24 @@ abstract class L10n {
   /// **'Reply from the administration'**
   String get feedbackResponseLabel;
 
+  /// PD-32 amendment: a reply this account has not opened yet, beside its unread dot.
+  ///
+  /// In en, this message translates to:
+  /// **'New reply from the administration'**
+  String get feedbackNewReply;
+
+  /// PD-32 amendment: under feedbackNewReply; tapping shows the reply and clears the dot.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to read it'**
+  String get feedbackOpenReply;
+
+  /// PD-32 amendment: a notification opened an item the family no longer has.
+  ///
+  /// In en, this message translates to:
+  /// **'This feedback is no longer available.'**
+  String get feedbackItemGone;
+
   /// PD-32: over the category chips.
   ///
   /// In en, this message translates to:
@@ -7620,6 +7638,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Open my To do'**
   String get notificationsActionOpenTask;
+
+  /// PD-32 amendment: the button on a feedback reply / complaint notice; opens that one item.
+  ///
+  /// In en, this message translates to:
+  /// **'View feedback'**
+  String get notificationsActionOpenFeedback;
 
   /// PD-48: owner-approved 2026-10-29, word for word (design §17 Q7). Parent Settings row and page title.
   ///

@@ -149,6 +149,12 @@ export const CommEvent = {
   TEACHER_COMPLAINT_RECEIVED: 'teacher_records.complaint_received',
   TEACHER_PRAISE_RECEIVED: 'teacher_records.praise_received',
   /**
+   * PD-32 amendment, for PD-34 to deliver to the parent who filed a feedback
+   * item: the first reply to it, and an app complaint going into review or
+   * being resolved. Ids only; the parent reads the item through /me/feedback.
+   */
+  FAMILY_FEEDBACK_NOTICE: 'family_feedback.notice',
+  /**
    * PD-47: a task changed (created, commented, disputed, returned, reassigned,
    * completed, removed, its due date). A refetch signal, not content: ids and
    * the revision only. No conversationId.
@@ -490,6 +496,7 @@ export interface CommEventPayloads {
   [CommEvent.CASE_DUE_SOON]: CaseDueSoonPayload;
   [CommEvent.TEACHER_COMPLAINT_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TEACHER_PRAISE_RECEIVED]: TeacherRecordReceivedPayload;
+  [CommEvent.FAMILY_FEEDBACK_NOTICE]: FamilyFeedbackNoticePayload;
   [CommEvent.TASK_CHANGED]: TaskChangedPayload;
 }
 
@@ -525,6 +532,17 @@ export interface TeacherRecordReceivedPayload {
   learnerId: string | null;
   familyId: string | null;
   recordedBy: string | null;
+}
+
+/**
+ * PD-32 amendment. Ids only -- never the feedback's words or the reply.
+ * `contactId` is the parent who filed it (the one told); `notice` what happened.
+ */
+export interface FamilyFeedbackNoticePayload {
+  organizationId: string;
+  feedbackId: string;
+  contactId: string;
+  notice: 'replied' | 'complaint_in_review' | 'complaint_resolved';
 }
 
 /** PD-35 B5. Ids only: PD-34 reads the case through its own authorized path. */

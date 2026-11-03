@@ -2446,6 +2446,18 @@ model ParentFeedback {
   @@schema("chat")
 }
 
+/// PD-32 amendment: the parent accounts that have opened the administration's
+/// reply to a feedback item (the app's unread dot). 20261103120000 owns the DDL.
+model ParentFeedbackReplySeen {
+  feedbackId String   @map("feedback_id") @db.Uuid
+  contactId  String   @map("contact_id") @db.Uuid
+  seenAt     DateTime @default(now()) @map("seen_at") @db.Timestamptz
+
+  @@id([feedbackId, contactId])
+  @@map("parent_feedback_reply_seen")
+  @@schema("chat")
+}
+
 /// PD-21: a one-time code an administrator issues so a person can set a new
 /// password. 20261022100000_chat_pd021_password_reset.sql owns the DDL and the
 /// rules (who may issue one; forward-only; never deleted). Hash only.

@@ -1165,6 +1165,10 @@ abstract interface class FeedbackRepository {
     required FeedbackCategory category,
     required String body,
   });
+
+  /// PD-32 amendment: `POST /me/feedback/:id/reply-seen` -- this account opened the
+  /// administration's reply to one item, so its unread dot goes (for this account only).
+  Future<void> markReplySeen(String feedbackId);
 }
 
 /// PD-32: the refusals the feedback screens answer in their own words.
@@ -1199,6 +1203,9 @@ class NoFeedbackRepository implements FeedbackRepository {
     required String body,
   }) =>
       throw UnsupportedError('no feedback server in this build');
+
+  @override
+  Future<void> markReplySeen(String feedbackId) async {}
 }
 
 /// PD-47: the person's own tasks (the teacher's "To do"). Every method is one endpoint;

@@ -3198,6 +3198,41 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 
 **Closed.** 2026-10-26.
 
+**Amendment (owner, 2026-11-03): the parent is told when the administration
+answers.** So parents feel their feedback is acknowledged.
+
+```
+first reply          staff write the FIRST reply to praise, a suggestion or a
+                     complaint -> the parent who filed it gets a push and a
+                     Center entry: "The administration has replied to your
+                     feedback." / «ردّت الإدارة على ملاحظتك.» Changing a reply
+                     already sent tells no one.
+complaint in review  an app complaint moves received -> in_review (taken,
+                     replied to, or followed up) -> "Your complaint has been
+                     received and is being reviewed." / «تم استلام شكواك، ويجري
+                     العمل على مراجعتها.»
+complaint resolved   its PD-26 resolution -> "Your complaint has been resolved.
+                     You can view the administration's reply." / «تم التعامل مع
+                     شكواك، يمكنك الاطلاع على رد الإدارة.»
+who is told          the filing parent only (not the family's other parent, never
+                     the teacher); once per item and kind (dedupe key)
+how                  outbox event family_feedback.notice, written in the same
+                     transaction -> OutboxWorker -> PD-34 pipeline. Category
+                     'conversation' (the parent's own push switch for it applies),
+                     quiet hours kept, the family's language. Generic texts: never
+                     the words, the reply, the teacher or the child. A push that
+                     fails is retried; the reply is never undone.
+opens                Center action open_feedback (feedbackId) -> the app's
+                     /feedback/:id, that one item with its reply
+unread dot           per item, per parent account: a reply with no row in
+                     chat.parent_feedback_reply_seen for that account. Cleared by
+                     opening that reply (POST /me/feedback/:id/reply-seen); an
+                     edited reply does not bring it back.
+unchanged            the complaint lifecycle and its resolution rules
+```
+
+Migration `20261103120000_chat_pd032_feedback_reply_notices`.
+
 ---
 
 ### PD-33 · Hand over to backup: a temporary cover with automatic return
