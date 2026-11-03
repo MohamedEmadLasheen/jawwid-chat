@@ -99,7 +99,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
     if (!RegExp(r'^[0-9]{6}$').hasMatch(_code.text.trim()) || _password.text.length < kPasswordMinLength || _password.text != _confirm.text) {
       return;
     }
-    if (!_noticeTicked) return;
+    if (kLessonAudioNoticeLive && !_noticeTicked) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -109,7 +109,8 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
             email: _email.text.trim(),
             code: _code.text.trim(),
             password: _password.text,
-            lessonAudioNotice: kLessonAudioNoticeVersion,
+            // Phase 2: no notice shown, so none acknowledged (the server records nothing).
+            lessonAudioNotice: kLessonAudioNoticeLive ? kLessonAudioNoticeVersion : null,
           );
       if (!mounted) return;
       Navigator.of(context).pop<ParentSignupResult>((email: _email.text.trim(), password: _password.text));
@@ -197,7 +198,9 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                         errorText: passwordsDiffer ? l10n.signupPasswordsDiffer : null,
                       ),
                     ),
-                    // PD-48: the owner's approved line, ticked to finish; the notice is one tap away.
+                    // PD-48: the owner's approved line, ticked to finish; the notice is one tap
+                    // away -- from Phase 2, with the lessons ([kLessonAudioNoticeLive]).
+                    if (kLessonAudioNoticeLive) ...[
                     const SizedBox(height: Spacing.spacing4),
                     CheckboxListTile(
                       key: const ValueKey('signup-lesson-audio'),
@@ -217,6 +220,7 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
                         child: Text(l10n.lessonAudioAboutTitle),
                       ),
                     ),
+                    ],
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: Spacing.spacing3),
