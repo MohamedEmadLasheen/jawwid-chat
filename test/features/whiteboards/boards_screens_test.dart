@@ -432,6 +432,29 @@ void main() {
       expect(find.byType(BoardEditorScreen), findsNothing);
     });
 
+    testWidgets('full screen has its own Back: it leaves the board in one tap, and the system bars come back', (tester) async {
+      final l10n = await pump(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        size: const Size(844, 390),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('board-full-screen-back')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardEditorScreen), findsNothing);
+      expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
+    });
+
     testWidgets('on a wide screen the tools float along the side; the page bar is replaced by previous / next', (tester) async {
       repo.pages = const [
         BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: []),
