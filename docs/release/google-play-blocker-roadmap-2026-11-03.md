@@ -117,7 +117,7 @@ Nothing starts until the owner says "go". These are the packages that **could** 
 | Line | Where | What only it has | What it lacks |
 |---|---|---|---|
 | **#408** `claude/android-push-fcm` (head `0874cbd3`) | open PR, CI green | The **incoming-call ring**: CallStyle Answer/Decline, a full-screen intent with the Android 14+ `canUseFullScreenIntent()` fallback, `CallActionReceiver`, and `jawwid/call_native` on Android. Also: the token store, the Firebase Gradle wiring (a release build refuses without `google-services.json`), and the CI Android jobs and emulator ring test. **#411**, stacked on it, has the call foreground service. | Tap intents carry **no install nonce**. Both the message tap and the call Answer/Open intents target the exported `MainActivity`. Routing is limited to "conversation or Center". |
-| **`674765a1`** / `24c10f39` | local `claude/pd032-feedback-reply-notifications`, worktree `~/dev/jawwid-pd032-push`; continued in `~/dev/jawwid-push-acceptance` (`claude/push-acceptance`) | **Nonce-protected tap intents** with allowlisted ids; routing by the Notification Center's action kinds; notifications cleared at sign-out; Kotlin unit tests (`PushPayloadTest`); the iOS `UNUserNotificationCenter` delegate and launch handling; Dart `push_opens.dart` and `push_open_coordinator.dart` | **It never draws or routes call pushes**, by design. No call ring and no foreground service. |
+| **`674765a1`** / `24c10f39` | **draft PR #449** `claude/pd032-feedback-reply-notifications`, worktree `~/dev/jawwid-pd032-push`; taken to acceptance in `~/dev/jawwid-push-acceptance` (`claude/push-acceptance`) | **Nonce-protected tap intents** with allowlisted ids; routing by the Notification Center's action kinds; notifications cleared at sign-out; Kotlin unit tests (`PushPayloadTest`); the iOS `UNUserNotificationCenter` delegate and launch handling; Dart `push_opens.dart` and `push_open_coordinator.dart` | **It never draws or routes call pushes**, by design. No call ring and no foreground service. |
 | **`7ef999eb`** | local, unpushed, on `claude/store-release-readiness` (worktree `~/dev/jawwid-release-review`) | Nothing the other two lack. Its own session already decided to drop it (commit `8a8e6715`). | — |
 
 All three create or edit:
@@ -138,10 +138,12 @@ Only one can merge as it stands.
    - the Dart open coordinator, plus the iOS delegate and launch handling.
 3. **The install nonce is extended to #408's call intents** (Answer and Open, in `JawwidPush.activityIntent`, around :205). `MainActivity` is exported, so another app must not be able to fire an "answer" intent. The server still re-authorizes every accept, but the client must not be the weak point.
 4. 674765a1's duplicate Android classes are **dropped** after their logic has moved: its `JawwidMessagingService`, `PushBridge` and its Firebase Gradle lines. `7ef999eb` is **dropped**.
-5. The PD-32 server and feedback parts of 674765a1 stay with PD-32:
-   - `call-push-routing.ts`, `notification.service.ts`, `outbox.worker.ts`;
-   - the feedback notices and the PD-32 migration `20261103120000`.
-   - That migration needs its slot file before merge.
+5. The PD-32 parts stay on **draft PR #449** (`claude/pd032-feedback-reply-notifications`), as that PR's body already describes:
+   - the server parts (`call-push-routing.ts`, `notification.service.ts`, `outbox.worker.ts`);
+   - the feedback notices, `docs/release/push-setup.md`, and the iOS and Dart tests;
+   - migration `20261103120000`, whose slot file `docs/product/migration-slots/20261103120000.md` (`pr: 449`) is already on #449 and passes `guards.sh pd-registry`.
+   - **The merge keeps that slot file as it is and adds no second one.**
+   - The #449 session agreed to this split on 2026-11-03 and is not editing the files being merged.
 
 **Who does it.** The push-acceptance session (`~/dev/jawwid-push-acceptance`), which already owns taking that work to acceptance.
 - This plan's packages touch **none** of these files until G0 has merged:
@@ -227,7 +229,7 @@ Not reportable:
 ### 5.3 Database (shared migration with WP-2)
 
 Migration `20261104100000_chat_pd057_reports_blocks.sql`, with the slot claimed in the same PR.
-- The slot must sort after `main` **and** after the PD-32 slot `20261103120000`.
+- The slot must sort after `main` **and** after #449's slot `20261103120000`.
 - It follows the fail-closed pattern of `20261026120000_chat_pd032_parent_feedback_signup_code.sql`:
   - `enable row level security`;
   - `revoke all … from public, anon, authenticated, chat_app`;
@@ -842,7 +844,7 @@ Engineering creates and registers nothing. This section is the owner's checklist
 | Worktree | Branch | Session | Owns | This plan |
 |---|---|---|---|---|
 | `~/dev/jawwid-chat` | `main` (clean, behind origin) | — | — | not touched |
-| `~/dev/jawwid-pd032-push` | `claude/pd032-feedback-reply-notifications` (`829bdf90`) | "Parent feedback admin interface" | PD-32; `674765a1` | not touched; G0 decision sent |
+| `~/dev/jawwid-pd032-push` | `claude/pd032-feedback-reply-notifications` (draft PR #449) | "Parent feedback admin interface" | PD-32; `674765a1`; slot `20261103120000` | not touched; G0 split agreed 2026-11-03 |
 | `~/dev/jawwid-push-acceptance` | `claude/push-acceptance` (`24c10f39`) | "App store release readiness" | push acceptance (G0) | not touched; G0 decision sent |
 | `~/dev/jawwid-release-review` | `claude/store-release-readiness` (#447, 4 commits ahead) | "App store release readiness" | the two-store report; `7ef999eb` | not touched |
 | `~/dev/jawwid-play-review` | `claude/google-play-readiness` (#448) | this session | this plan and report | the only tree changed |
@@ -857,7 +859,7 @@ Engineering creates and registers nothing. This section is the owner's checklist
 | `realtime.gateway.ts` | #439 | WP-2 filters in `message-audience.ts` instead |
 | `AndroidManifest.xml`, `MainActivity.kt` | #408, #411, #447, 674765a1, 7ef999eb | G0 first; WP-5 on #411; WP-6 last |
 | `scripts/mobile/build-store.sh` | #447 | Nothing in this plan edits it before #447 merges |
-| `notification-catalog.ts`, `router.dart`, `settings_screen.dart`, `parent_signup_screen.dart` | 674765a1 (PD-32) | Additions only; rebase after PD-32 |
+| `notification-catalog.ts`, `router.dart`, `settings_screen.dart`, `parent_signup_screen.dart` | #449 (PD-32) | Additions only; rebase after #449 |
 | `app_ar.arb`, `app_en.arb` | most PRs | New keys in a new block |
 | `.github/workflows/ci.yml`, `scripts/qa/**` | #408 | Code Owner approval (A-5) |
 
