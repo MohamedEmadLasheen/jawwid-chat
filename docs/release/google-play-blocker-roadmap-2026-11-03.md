@@ -152,6 +152,29 @@ Only one can merge as it stands.
   - `fcm.provider.ts`, `call-push-routing.ts`.
 - Nothing in another session's tree is changed by this plan. The decision is sent to the sessions involved (§12).
 
+**G0 status (2026-11-03, checked read-only by the lead)**
+
+The decision is implemented, **uncommitted**, in `~/dev/jawwid-push-acceptance`. Its base is `24c10f39` (#449), with #408's changes applied 3-way from their merge-base.
+
+| Item | State |
+|---|---|
+| #408 is the Android base, and the call ring is unchanged | Done |
+| #449's notification layer replaces the body of `JawwidPush.showMessage`: nonce, allowlist, Center routing, clearing at sign-out, `PushPayloadTest` | Done |
+| #449's duplicate Android classes are dropped (`PushPresenter.kt` is deleted); `7ef999eb` is dropped | Done |
+| Call Answer and Open carry the nonce (`JawwidPush.activityIntent`), and `MainActivity` checks it with `PushPayload.isTrustedTap` | Done. Kotlin test `aCraftedCallIntentWithoutTheNonceIsIgnored`. |
+| Conflict markers | None remain in the eight conflicted files. They still show as unmerged (`UU` / `AA`) in that tree's index, so **they must be staged before the commit**, and the build and tests run on the committed tree. |
+| #411 (call foreground service) | Not yet layered. It stacks on top afterwards (WP-5). |
+| `ci.yml` emulator-runner SHA pin (§4 finding 1) | Not in that tree, because `ci.yml` is a Code Owner file. It is done on #408's branch, with the owner's approval. |
+| Play: the merged release manifest declares `USE_FULL_SCREEN_INTENT` (from #408) | The full-screen intent declaration in Play Console is **required** (§9 item 4, WP-6 permission set) |
+
+Evidence: `docs/release/push-notification-acceptance.md` in that worktree.
+
+Still to do:
+- commit;
+- run CI on the committed tree;
+- stack #411;
+- the device rows.
+
 **G0 acceptance criteria**
 1. There is one Android push implementation on one branch, based on #408 and stacked under #411.
 2. Every notification tap intent, message and call alike, carries and checks the install nonce. A Kotlin unit test shows a crafted intent without the nonce is ignored.
