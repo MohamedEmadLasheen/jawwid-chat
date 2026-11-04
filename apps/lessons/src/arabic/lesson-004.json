@@ -1,0 +1,1781 @@
+{
+  "lesson": 4,
+  "kind": "reading",
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-4/lib/lessonData.ts, read as text from the quarantined copy, never built or run), as a reading lesson (P0-5c). The vowel drills are kept as drills; real verbs of the fatha stage and the mixed stage are words. Stage-4 items that are not words as vowelled are left out and listed. No mark was added: every old item is fully vowelled."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-4 (read as text, never built or run)",
+    "sha256": {
+      "lib/lessonData.ts": "d18d38f06acbbb704df5853476fcd9322945a71a667fe1937f5b3aa4fc58c3f5",
+      "components/FinalTest.tsx": "f288730ad3f3ed5921c287ed91adc8426ce4174e3ac39f349a1e95f6b32b70f8"
+    }
+  },
+  "retiredIds": [],
+  "stages": [
+    {
+      "id": "fatha",
+      "name": "الْفَتْحَةْ",
+      "items": [
+        {
+          "id": "fatha-001",
+          "kind": "syllables",
+          "text": "بَتَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-002",
+          "kind": "syllables",
+          "text": "دَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-003",
+          "kind": "syllables",
+          "text": "سَمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-004",
+          "kind": "syllables",
+          "text": "نَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-005",
+          "kind": "syllables",
+          "text": "كَتَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-006",
+          "kind": "syllables",
+          "text": "جَمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-007",
+          "kind": "syllables",
+          "text": "سَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-008",
+          "kind": "syllables",
+          "text": "حَمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-009",
+          "kind": "syllables",
+          "text": "فَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-010",
+          "kind": "syllables",
+          "text": "لَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-011",
+          "kind": "syllables",
+          "text": "رَمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-012",
+          "kind": "syllables",
+          "text": "قَدَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-013",
+          "kind": "syllables",
+          "text": "هَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-014",
+          "kind": "syllables",
+          "text": "وَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-015",
+          "kind": "syllables",
+          "text": "طَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-016",
+          "kind": "syllables",
+          "text": "ظَهَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-017",
+          "kind": "syllables",
+          "text": "عَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-018",
+          "kind": "syllables",
+          "text": "غَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-019",
+          "kind": "syllables",
+          "text": "صَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-020",
+          "kind": "syllables",
+          "text": "ضَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-021",
+          "kind": "word",
+          "text": "نَبَتَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-022",
+          "kind": "word",
+          "text": "كَتَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-023",
+          "kind": "syllables",
+          "text": "جَمَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-024",
+          "kind": "word",
+          "text": "سَبَحَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-025",
+          "kind": "word",
+          "text": "دَرَسَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-026",
+          "kind": "word",
+          "text": "حَمَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-027",
+          "kind": "syllables",
+          "text": "فَرَحَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-028",
+          "kind": "syllables",
+          "text": "لَبَسَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-029",
+          "kind": "syllables",
+          "text": "رَمَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-030",
+          "kind": "word",
+          "text": "قَدَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-031",
+          "kind": "word",
+          "text": "هَبَطَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-032",
+          "kind": "word",
+          "text": "وَرَدَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-033",
+          "kind": "word",
+          "text": "طَبَخَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-034",
+          "kind": "word",
+          "text": "ظَهَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-035",
+          "kind": "syllables",
+          "text": "عَلَمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-036",
+          "kind": "word",
+          "text": "غَرَسَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-037",
+          "kind": "word",
+          "text": "صَبَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-038",
+          "kind": "word",
+          "text": "ضَرَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-039",
+          "kind": "word",
+          "text": "خَرَجَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-040",
+          "kind": "word",
+          "text": "دَخَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-041",
+          "kind": "word",
+          "text": "فَتَحَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-042",
+          "kind": "word",
+          "text": "مَسَحَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-043",
+          "kind": "word",
+          "text": "نَشَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-044",
+          "kind": "word",
+          "text": "بَدَأَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-045",
+          "kind": "word",
+          "text": "حَفَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-046",
+          "kind": "word",
+          "text": "سَكَنَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-047",
+          "kind": "syllables",
+          "text": "عَمَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-048",
+          "kind": "syllables",
+          "text": "بَحَرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-049",
+          "kind": "syllables",
+          "text": "جَبَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-050",
+          "kind": "word",
+          "text": "حَصَدَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-051",
+          "kind": "word",
+          "text": "خَبَزَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-052",
+          "kind": "word",
+          "text": "ذَهَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-053",
+          "kind": "syllables",
+          "text": "رَكَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-054",
+          "kind": "word",
+          "text": "زَرَعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-055",
+          "kind": "syllables",
+          "text": "شَرَبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "fatha-056",
+          "kind": "word",
+          "text": "طَلَبَ",
+          "was": null,
+          "review": null
+        }
+      ],
+      "vowel": "fatha"
+    },
+    {
+      "id": "kasra",
+      "name": "الْكَسْرَةْ",
+      "items": [
+        {
+          "id": "kasra-001",
+          "kind": "syllables",
+          "text": "بِتِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-002",
+          "kind": "syllables",
+          "text": "دِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-003",
+          "kind": "syllables",
+          "text": "سِمِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-004",
+          "kind": "syllables",
+          "text": "نِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-005",
+          "kind": "syllables",
+          "text": "كِتِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-006",
+          "kind": "syllables",
+          "text": "جِمِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-007",
+          "kind": "syllables",
+          "text": "سِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-008",
+          "kind": "syllables",
+          "text": "حِمِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-009",
+          "kind": "syllables",
+          "text": "فِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-010",
+          "kind": "syllables",
+          "text": "لِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-011",
+          "kind": "syllables",
+          "text": "رِمِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-012",
+          "kind": "syllables",
+          "text": "قِدِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-013",
+          "kind": "syllables",
+          "text": "هِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-014",
+          "kind": "syllables",
+          "text": "وِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-015",
+          "kind": "syllables",
+          "text": "طِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-016",
+          "kind": "syllables",
+          "text": "ظِهِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-017",
+          "kind": "syllables",
+          "text": "عِلِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-018",
+          "kind": "syllables",
+          "text": "غِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-019",
+          "kind": "syllables",
+          "text": "صِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-020",
+          "kind": "syllables",
+          "text": "ضِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-021",
+          "kind": "syllables",
+          "text": "كِتِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-022",
+          "kind": "syllables",
+          "text": "نِمِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-023",
+          "kind": "syllables",
+          "text": "حِمِلِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-024",
+          "kind": "syllables",
+          "text": "فِرِحِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-025",
+          "kind": "syllables",
+          "text": "لِبِسِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-026",
+          "kind": "syllables",
+          "text": "رِمِلِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-027",
+          "kind": "syllables",
+          "text": "قِدِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-028",
+          "kind": "syllables",
+          "text": "هِبِطِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-029",
+          "kind": "syllables",
+          "text": "وِرِدِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-030",
+          "kind": "syllables",
+          "text": "طِبِخِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-031",
+          "kind": "syllables",
+          "text": "ظِهِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-032",
+          "kind": "syllables",
+          "text": "عِلِمِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-033",
+          "kind": "syllables",
+          "text": "غِرِسِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-034",
+          "kind": "syllables",
+          "text": "صِبِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-035",
+          "kind": "syllables",
+          "text": "ضِرِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-036",
+          "kind": "syllables",
+          "text": "خِرِجِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-037",
+          "kind": "syllables",
+          "text": "دِخِلِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-038",
+          "kind": "syllables",
+          "text": "فِتِحِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-039",
+          "kind": "syllables",
+          "text": "مِسِحِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-040",
+          "kind": "syllables",
+          "text": "نِشِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-041",
+          "kind": "syllables",
+          "text": "حِفِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-042",
+          "kind": "syllables",
+          "text": "سِكِنِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-043",
+          "kind": "syllables",
+          "text": "عِمِلِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-044",
+          "kind": "syllables",
+          "text": "بِحِرِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-045",
+          "kind": "syllables",
+          "text": "جِبِلِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-046",
+          "kind": "syllables",
+          "text": "حِصِدِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-047",
+          "kind": "syllables",
+          "text": "خِبِزِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-048",
+          "kind": "syllables",
+          "text": "ذِهِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-049",
+          "kind": "syllables",
+          "text": "رِكِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-050",
+          "kind": "syllables",
+          "text": "زِرِعِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-051",
+          "kind": "syllables",
+          "text": "شِرِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-052",
+          "kind": "syllables",
+          "text": "طِلِبِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-053",
+          "kind": "syllables",
+          "text": "فِهِمِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-054",
+          "kind": "syllables",
+          "text": "عِرِفِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-055",
+          "kind": "syllables",
+          "text": "سِمِعِ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "kasra-056",
+          "kind": "syllables",
+          "text": "نِظِرِ",
+          "was": null,
+          "review": null
+        }
+      ],
+      "vowel": "kasra"
+    },
+    {
+      "id": "damma",
+      "name": "الضَّمَّةْ",
+      "items": [
+        {
+          "id": "damma-001",
+          "kind": "syllables",
+          "text": "بُتُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-002",
+          "kind": "syllables",
+          "text": "دُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-003",
+          "kind": "syllables",
+          "text": "سُمُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-004",
+          "kind": "syllables",
+          "text": "نُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-005",
+          "kind": "syllables",
+          "text": "كُتُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-006",
+          "kind": "syllables",
+          "text": "جُمُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-007",
+          "kind": "syllables",
+          "text": "سُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-008",
+          "kind": "syllables",
+          "text": "حُمُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-009",
+          "kind": "syllables",
+          "text": "فُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-010",
+          "kind": "syllables",
+          "text": "لُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-011",
+          "kind": "syllables",
+          "text": "رُمُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-012",
+          "kind": "syllables",
+          "text": "قُدُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-013",
+          "kind": "syllables",
+          "text": "هُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-014",
+          "kind": "syllables",
+          "text": "وُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-015",
+          "kind": "syllables",
+          "text": "طُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-016",
+          "kind": "syllables",
+          "text": "ظُهُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-017",
+          "kind": "syllables",
+          "text": "عُلُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-018",
+          "kind": "syllables",
+          "text": "غُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-019",
+          "kind": "syllables",
+          "text": "صُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-020",
+          "kind": "syllables",
+          "text": "ضُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-021",
+          "kind": "syllables",
+          "text": "كُتُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-022",
+          "kind": "syllables",
+          "text": "نُطُقُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-023",
+          "kind": "syllables",
+          "text": "حُمُلُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-024",
+          "kind": "syllables",
+          "text": "فُرُحُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-025",
+          "kind": "syllables",
+          "text": "لُبُسُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-026",
+          "kind": "syllables",
+          "text": "رُمُلُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-027",
+          "kind": "syllables",
+          "text": "قُدُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-028",
+          "kind": "syllables",
+          "text": "هُبُطُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-029",
+          "kind": "syllables",
+          "text": "وُرُدُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-030",
+          "kind": "syllables",
+          "text": "طُبُخُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-031",
+          "kind": "syllables",
+          "text": "ظُهُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-032",
+          "kind": "syllables",
+          "text": "عُلُمُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-033",
+          "kind": "syllables",
+          "text": "غُرُسُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-034",
+          "kind": "syllables",
+          "text": "صُبُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-035",
+          "kind": "syllables",
+          "text": "ضُرُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-036",
+          "kind": "syllables",
+          "text": "خُرُجُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-037",
+          "kind": "syllables",
+          "text": "دُخُلُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-038",
+          "kind": "syllables",
+          "text": "فُتُحُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-039",
+          "kind": "syllables",
+          "text": "مُسُحُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-040",
+          "kind": "syllables",
+          "text": "نُشُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-041",
+          "kind": "syllables",
+          "text": "حُفُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-042",
+          "kind": "syllables",
+          "text": "سُكُنُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-043",
+          "kind": "syllables",
+          "text": "عُمُلُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-044",
+          "kind": "syllables",
+          "text": "بُحُرُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-045",
+          "kind": "syllables",
+          "text": "جُبُلُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-046",
+          "kind": "syllables",
+          "text": "حُصُدُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-047",
+          "kind": "syllables",
+          "text": "خُبُزُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-048",
+          "kind": "syllables",
+          "text": "ذُهُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-049",
+          "kind": "syllables",
+          "text": "رُكُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-050",
+          "kind": "syllables",
+          "text": "زُرُعُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-051",
+          "kind": "syllables",
+          "text": "شُرُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-052",
+          "kind": "syllables",
+          "text": "طُلُبُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-053",
+          "kind": "syllables",
+          "text": "فُهُمُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-054",
+          "kind": "syllables",
+          "text": "عُرُفُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-055",
+          "kind": "syllables",
+          "text": "سُمُعُ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "damma-056",
+          "kind": "syllables",
+          "text": "نُظُرُ",
+          "was": null,
+          "review": null
+        }
+      ],
+      "vowel": "damma"
+    },
+    {
+      "id": "mixed",
+      "name": "حَرَكَاتٌ مُخْتَلِفَةْ",
+      "items": [
+        {
+          "id": "mixed-001",
+          "kind": "word",
+          "text": "نُظِرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-002",
+          "kind": "word",
+          "text": "سَمِعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-003",
+          "kind": "word",
+          "text": "كُتِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-004",
+          "kind": "word",
+          "text": "فَهِمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-005",
+          "kind": "word",
+          "text": "حَسِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-006",
+          "kind": "word",
+          "text": "لَعِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-007",
+          "kind": "word",
+          "text": "شَرِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-008",
+          "kind": "word",
+          "text": "ضَحِكَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-009",
+          "kind": "word",
+          "text": "فَرِحَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-010",
+          "kind": "word",
+          "text": "سَكُتَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-011",
+          "kind": "word",
+          "text": "كَبُرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-012",
+          "kind": "word",
+          "text": "صَغُرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-013",
+          "kind": "word",
+          "text": "بَعُدَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-014",
+          "kind": "word",
+          "text": "قَرُبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-015",
+          "kind": "word",
+          "text": "حَسُنَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-016",
+          "kind": "word",
+          "text": "عُلِمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-017",
+          "kind": "word",
+          "text": "فُهِمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-018",
+          "kind": "word",
+          "text": "كُسِرَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-019",
+          "kind": "word",
+          "text": "فُتِحَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-020",
+          "kind": "word",
+          "text": "ضُرِبَ",
+          "was": null,
+          "review": "CHECK: «was beaten» -- suitable for a young child's reading drill?"
+        },
+        {
+          "id": "mixed-021",
+          "kind": "word",
+          "text": "سُمِعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-022",
+          "kind": "word",
+          "text": "قُتِلَ",
+          "was": null,
+          "review": "CHECK: «was killed» -- suitable for a young child's reading drill?"
+        },
+        {
+          "id": "mixed-023",
+          "kind": "word",
+          "text": "جَلَسَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-024",
+          "kind": "word",
+          "text": "حَفِظَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-025",
+          "kind": "word",
+          "text": "نَشِطَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-026",
+          "kind": "word",
+          "text": "تَعِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-027",
+          "kind": "word",
+          "text": "مَرِضَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-028",
+          "kind": "word",
+          "text": "غَضِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-029",
+          "kind": "word",
+          "text": "كَرُمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-030",
+          "kind": "word",
+          "text": "شَرُفَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-031",
+          "kind": "word",
+          "text": "عَظُمَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-032",
+          "kind": "word",
+          "text": "ظَرُفَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-033",
+          "kind": "word",
+          "text": "لَطُفَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-034",
+          "kind": "word",
+          "text": "خُبِزَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-035",
+          "kind": "word",
+          "text": "طُبِخَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-036",
+          "kind": "word",
+          "text": "غُسِلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-037",
+          "kind": "word",
+          "text": "حُفِظَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-038",
+          "kind": "word",
+          "text": "سَأَلَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-039",
+          "kind": "word",
+          "text": "جَمَعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-040",
+          "kind": "word",
+          "text": "وَضَعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-041",
+          "kind": "word",
+          "text": "رَفَعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-042",
+          "kind": "word",
+          "text": "قَطَعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-043",
+          "kind": "word",
+          "text": "مَنَعَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-044",
+          "kind": "word",
+          "text": "عَجِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-045",
+          "kind": "word",
+          "text": "رَكِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-046",
+          "kind": "word",
+          "text": "هَرِبَ",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "mixed-047",
+          "kind": "word",
+          "text": "طَرِبَ",
+          "was": null,
+          "review": null
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "fatha-q1",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "بَتَ",
+        "بِتِ",
+        "بُتُ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "fatha-q2",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "دِرِ",
+        "دَرَ",
+        "دُرُ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "fatha-q3",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "سِمِ",
+        "سُمُ",
+        "سَمَ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "fatha-q4",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "نَبَ",
+        "نِبِ",
+        "نُبُ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "fatha-q5",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "كِتِ",
+        "كَتَ",
+        "كُتُ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "fatha-q6",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "نُظِرَ",
+        "سَمِعَ",
+        "نَبَتَ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "fatha-q7",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "كَتَبَ",
+        "كُتِبَ",
+        "نُظِرَ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "fatha-q8",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "كِتِبِ",
+        "جَمَلَ",
+        "نِمِرِ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "fatha-q9",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "نُظِرَ",
+        "سَمِعَ",
+        "سَبَحَ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "fatha-q10",
+      "kind": "vowel",
+      "stage": "fatha",
+      "options": [
+        "دَرَسَ",
+        "نُظِرَ",
+        "سَمِعَ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "kasra-q1",
+      "kind": "vowel",
+      "stage": "kasra",
+      "options": [
+        "بِتِ",
+        "بَتَ",
+        "بُتُ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "kasra-q2",
+      "kind": "vowel",
+      "stage": "kasra",
+      "options": [
+        "دَرَ",
+        "دِرِ",
+        "دُرُ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "kasra-q3",
+      "kind": "vowel",
+      "stage": "kasra",
+      "options": [
+        "سَمَ",
+        "سُمُ",
+        "سِمِ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "kasra-q4",
+      "kind": "vowel",
+      "stage": "kasra",
+      "options": [
+        "كِتِبِ",
+        "كُتُبُ",
+        "جَمَلَ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "kasra-q5",
+      "kind": "vowel",
+      "stage": "kasra",
+      "options": [
+        "جَمَلَ",
+        "نِمِرِ",
+        "فَرَحَ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "damma-q1",
+      "kind": "vowel",
+      "stage": "damma",
+      "options": [
+        "بُتُ",
+        "بَتَ",
+        "بِتِ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "damma-q2",
+      "kind": "vowel",
+      "stage": "damma",
+      "options": [
+        "دَرَ",
+        "دُرُ",
+        "دِرِ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "damma-q3",
+      "kind": "vowel",
+      "stage": "damma",
+      "options": [
+        "كِتِبِ",
+        "جَمَلَ",
+        "كُتُبُ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "damma-q4",
+      "kind": "vowel",
+      "stage": "damma",
+      "options": [
+        "نُطُقُ",
+        "جَمَلَ",
+        "فَرَحَ"
+      ],
+      "answer": 0,
+      "review": null
+    }
+  ]
+}
