@@ -1119,6 +1119,7 @@ export class RealtimeGateway
           const actor = actors[i];
           if (!actor || !audience) return true;
           if (audience.onlyActors && !audience.onlyActors.includes(actor.actorId)) return false;
+          if (audience.exceptActors?.includes(actor.actorId)) return false;
           if (audience.countableOnly) {
             const m = members.get(actor.actorId);
             if (!m || !isCountableReader(m)) return false;

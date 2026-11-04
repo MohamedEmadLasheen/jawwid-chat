@@ -1,6 +1,14 @@
 import { Logger } from '@nestjs/common';
 import { JWT } from 'google-auth-library';
 import type { PushMessage, PushProvider, PushResult } from './push.provider';
+import { isCallNotification } from './call-push-routing';
+
+/**
+ * How long FCM keeps a call push for a device that is offline. A ring
+ * delivered after the call stopped ringing is worse than none (PARENT
+ * store-blocker S-05): it would put a dead call on a lock screen.
+ */
+export const FCM_CALL_TTL = '45s';
 
 /**
  * FCM HTTP v1, behind the existing [PushProvider] seam.
@@ -93,9 +101,14 @@ export class FcmPushProvider implements PushProvider {
           message: {
             token: message.token,
             // DATA ONLY. No `notification` block: the client decides what to
-            // show, and a call push must reach code rather than a banner.
-            data: message.data,
-            android: { priority: 'high' },
+            // show, and a call push must reach code rather than a banner. The
+            // rendered title and body ride IN the data, because an Android app
+            // that is not running has nothing else to draw them from.
+            data: { ...message.data, title: message.title, body: message.body },
+            android: {
+              priority: 'high',
+              ...(isCallNotification(message.data.eventType ?? '') ? { ttl: FCM_CALL_TTL } : {}),
+            },
           },
         }),
       });

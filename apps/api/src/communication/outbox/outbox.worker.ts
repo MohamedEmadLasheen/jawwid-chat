@@ -291,9 +291,14 @@ export class OutboxWorker {
         const readers = this.lessonAudience
           ? await this.lessonAudience.staffFor(payload.organizationId as string, [{ teacherId, learnerId }])
           : [];
-        await this.realtime.toUsers([...new Set([teacherId, ...readers])], type, payload as never);
+        const told = [...new Set([teacherId, ...readers])];
+        await this.realtime.toUsers(told, type, payload as never);
+        // CHATSCHED-015: the teacher and the staff above are members of the family's
+        // conversations too; told once already, the room pass skips them. Without
+        // the audience variant (a recording fake) the room gets it as before.
         for (const id of (payload.conversationIds as string[] | undefined) ?? []) {
-          await this.realtime.toThread(id, type, payload as never);
+          if (this.realtime.toThreadAudience) await this.realtime.toThreadAudience(id, type, payload as never, { exceptActors: told });
+          else await this.realtime.toThread(id, type, payload as never);
         }
         return;
       }

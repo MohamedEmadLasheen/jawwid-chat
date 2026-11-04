@@ -14,7 +14,7 @@ import 'recovery_widgets.dart';
 ///
 ///   * I forgot my password  -> a code by e-mail            (when the deployment sends e-mail)
 ///   * I forgot my e-mail    -> a code by WhatsApp           (when it sends WhatsApp)
-///   * I have a code from the academy -> the PD-21 reset    (always)
+///   * I have a set-up or reset code -> the PD-21 reset    (always)
 ///
 /// A way the server has not switched on is not offered at all, rather than offered and then
 /// failing; the supervisor stays the fallback for everything.

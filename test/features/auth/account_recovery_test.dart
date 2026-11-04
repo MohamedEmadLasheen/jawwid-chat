@@ -74,6 +74,35 @@ void main() {
       expect(find.text('Still stuck? Your supervisor can send you a one-time reset code.'), findsOneWidget);
     });
 
+    // PD-43 PR-5: a new teacher is given a first sign-in ("set-up") code, not only a reset code,
+    // so the entry to the code screen and the screen itself say both.
+    for (final c in const [
+      (
+        Locale('en'),
+        'I have a set-up or reset code',
+        'Your supervisor gave you a one-time set-up or reset code.',
+        'Set your password',
+      ),
+      (
+        Locale('ar'),
+        'لديّ رمز الدخول الأول أو رمز إعادة التعيين',
+        'أعطاك مشرفك رمز الدخول الأول أو رمز إعادة التعيين، وهو يعمل مرة واحدة.',
+        'تعيين كلمة المرور',
+      ),
+    ]) {
+      testWidgets('the code entry and the code screen name the set-up code too (${c.$1.languageCode})', (tester) async {
+        phone(tester);
+        recovery.optionsError = const AppError(AppErrorKind.network);
+        await tester.pumpWidget(app(const AccountRecoveryScreen(), locale: c.$1));
+        await tester.pumpAndSettle();
+        expect(find.text(c.$2), findsOneWidget);
+        expect(find.text(c.$3), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('recovery-have-code')));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: find.byType(AppBar), matching: find.text(c.$4)), findsOneWidget);
+      });
+    }
+
     testWidgets('with nothing switched on -- or no server -- it points to the supervisor', (tester) async {
       phone(tester);
       recovery.optionsError = const AppError(AppErrorKind.network);

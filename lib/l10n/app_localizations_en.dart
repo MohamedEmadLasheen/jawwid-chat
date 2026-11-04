@@ -2859,10 +2859,10 @@ class L10nEn extends L10n {
   String get signupFailed => 'Something went wrong. Try again.';
 
   @override
-  String get resetOpen => 'Forgot your password? I have a reset code';
+  String get resetOpen => 'Forgot your password? I have a set-up or reset code';
 
   @override
-  String get resetTitle => 'Set a new password';
+  String get resetTitle => 'Set your password';
 
   @override
   String get resetIntro =>
@@ -2889,7 +2889,7 @@ class L10nEn extends L10n {
 
   @override
   String get signInStaffResetHint =>
-      'Teachers and staff: ask your supervisor for a reset code.';
+      'Teachers and staff: ask your supervisor for a set-up or reset code.';
 
   @override
   String get changePasswordTitle => 'Change password';
@@ -2940,11 +2940,11 @@ class L10nEn extends L10n {
       'We\'ll send a code on WhatsApp to the phone number the academy has for you.';
 
   @override
-  String get recoveryHaveCode => 'I have a code from the academy';
+  String get recoveryHaveCode => 'I have a set-up or reset code';
 
   @override
   String get recoveryHaveCodeHint =>
-      'Your supervisor gave you a one-time reset code.';
+      'Your supervisor gave you a one-time set-up or reset code.';
 
   @override
   String get recoveryStillStuck =>

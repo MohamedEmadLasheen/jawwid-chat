@@ -161,6 +161,111 @@ describe('2. booking', () => {
     await trials.book(tsupId, { prospectId, teacherId: s.teacherId, startsAt: slots[9] });
   });
 
+  it('PD-45: a booking may carry the family\'s location; it is kept beside the prospect and read back only by Sales, to pre-fill the form', async () => {
+    await openAllWeek();
+    const { slots } = await trials.slots(salesId, s.teacherId, '30');
+    expect(await code(trials.book(salesId, {
+      prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'EG', subdivisionCode: 'AE-DU' },
+    }))).toBe(CommErrorCode.VALIDATION);
+    expect(await code(trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'UK' } }))).toBe(CommErrorCode.VALIDATION);
+    const t = await trials.book(salesId, {
+      prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'eg', subdivisionCode: 'eg-gz' },
+    });
+    // BR-2: the trial, its card and its events never carry it.
+    expect(JSON.stringify(t)).not.toMatch(/EG-GZ|Giza|الجيزة|subdivision/);
+    expect(JSON.stringify(await trials.get(s.teacherId, t.id))).not.toMatch(/EG-GZ|subdivision/);
+    const leaked = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `select ((select count(*) from chat.message where body like '%EG-GZ%') + (select count(*) from chat.outbox_event where payload::text like '%EG-GZ%'))::int as n`,
+    );
+    expect(leaked[0]!.n).toBe(0);
+
+    expect(await trials.subscriptionPrefill(salesId, t.id)).toEqual({
+      location: {
+        country: { code: 'EG', en: 'Egypt', ar: 'مصر' },
+        subdivision: { code: 'EG-GZ', en: 'Giza', ar: 'الجيزة' },
+        label: { en: 'Governorate', ar: 'المحافظة' },
+      },
+    });
+    // A Teachers-department manager (tsupId: the 'manager' standing) may book, and so write
+    // it, but never reads it back; the trial's own teacher never does.
+    expect(await code(trials.subscriptionPrefill(tsupId, t.id))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(trials.subscriptionPrefill(s.teacherId, t.id))).toBe(CommErrorCode.LESSON_DENIED);
+
+    // Re-booking the SAME prospect with a location overwrites the one it had (by anyone who may book) ...
+    await trials.book(tsupId, { prospectId, teacherId: s.teacherId, startsAt: slots[7], location: { countryCode: 'AE' } });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'AE' }, subdivision: null });
+    await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[9], location: { countryCode: 'SA', subdivisionCode: 'SA-01' } });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'SA' }, subdivision: { code: 'SA-01' } });
+    expect(await g.prisma.trialProspectLocation.count({ where: { prospectId } })).toBe(1);
+    // ... and one without a location leaves it.
+    await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[11] });
+    expect((await trials.subscriptionPrefill(salesId, t.id)).location).toMatchObject({ country: { code: 'SA' } });
+
+    const other = (await trials.createProspect(salesId, { displayName: 'prospect_r' })).id;
+    const bare = await trials.book(salesId, { prospectId: other, teacherId: s.teacherId, startsAt: slots[13] });
+    expect(await trials.subscriptionPrefill(salesId, bare.id)).toEqual({ location: null });
+  });
+
+  it('PD-45: the pre-fill is the trial desk\'s -- another organization\'s Sales, and staff off the trial desk, read nothing', async () => {
+    await openAllWeek();
+    const { slots } = await trials.slots(salesId, s.teacherId, '30');
+    const t = await trials.book(salesId, {
+      prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'EG', subdivisionCode: 'EG-GZ' },
+    });
+    const refusedWithNothing = async (actorId: string, expected: string) => {
+      let caught: unknown;
+      try {
+        await trials.subscriptionPrefill(actorId, t.id);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(CommError);
+      const e = caught as CommError;
+      expect(e.code).toBe(expected);
+      expect(e.status).toBe(expected.endsWith('_NOT_FOUND') ? 404 : 403);
+      expect(JSON.stringify({ message: e.message, detail: e.detail ?? null })).not.toMatch(/EG-GZ|Giza|الجيزة|"EG"/);
+    };
+
+    // (a) A Sales-department member of ANOTHER organization -- the trial desk at
+    // home -- gets "not found": the trial is looked up inside the caller's own
+    // organization first, so it is not even told that the trial exists.
+    const [org2, sales2] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_two')`, org2, `org-two-${org2.slice(0, 8)}`,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active, organization_id) values ($1::uuid, 'sales_two', 'admin', true, $2::uuid)`, sales2, org2,
+    );
+    const [{ id: sales2Dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.department (organization_id, kind, display_name) values ($1::uuid, 'sales', 'sales') returning id::text as id`, org2,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, $2::uuid, $3::uuid, 'supervisor')`,
+      sales2, org2, sales2Dept,
+    );
+    await trials.createProspect(sales2, { displayName: 'prospect_two' }); // the trial desk in its own organization
+    await refusedWithNothing(sales2, CommErrorCode.LESSON_NOT_FOUND);
+
+    // (c) Staff off the trial desk: a supervisor in no department and a finance
+    // account have no trial standing at all, so "not found". (The Teachers
+    // department and the trial's own teacher: the test above, LESSON_DENIED.)
+    const [loose, finance] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'loose_a', 'admin', true), ($2::uuid, 'finance_a', 'finance', true)`,
+      loose, finance,
+    );
+    await refusedWithNothing(loose, CommErrorCode.LESSON_NOT_FOUND);
+    await refusedWithNothing(finance, CommErrorCode.LESSON_NOT_FOUND);
+
+    // The contract as built: Operations IS the trial desk (owner, 2026-10-21,
+    // "Sales and Operations work trials alike"), so its manager and supervisors
+    // hold the Sales standing and read the pre-fill -- admin_b too, an Operations
+    // supervisor with no charge over any family.
+    for (const ops of [s.managerId, s.ownerId, s.otherAdminId]) {
+      expect((await trials.subscriptionPrefill(ops, t.id)).location).toMatchObject({ country: { code: 'EG' }, subdivision: { code: 'EG-GZ' } });
+    }
+  });
+
   it('the lesson pages never see a trial', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     expect(await code(lessons.get(tsupId, id))).toBe(CommErrorCode.LESSON_NOT_FOUND);

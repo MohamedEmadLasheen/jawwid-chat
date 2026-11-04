@@ -347,7 +347,8 @@ describe('4. the New Students page', () => {
         prospectName: 'prospect_j',
         trialTeacher: expect.objectContaining({ id: s.teacherId }),
         recordedBy: { id: salesId, name: 'sales_j' },
-        parent: { name: 'parent_j', email: EMAIL, phone: PHONE },
+        // PD-45: the form's location, named when Sales gave one (none here).
+        parent: { name: 'parent_j', email: EMAIL, phone: PHONE, location: null },
         payment: { currency: 'EGP', method: 'invoice' },
         children: [
           expect.objectContaining({
