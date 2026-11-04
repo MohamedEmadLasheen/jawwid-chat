@@ -92,7 +92,10 @@ async function department(kind: string, staffIds: string[]) {
 }
 
 /** A trial that took place an hour ago, for which Sales recorded "subscribed" with a form. */
-async function subscribedTrial(email: string | null = EMAIL, location?: unknown): Promise<string> {
+/** PD-45 Q1: a new Sales form carries a location; most fixtures only need some valid one. */
+const FORM_LOCATION = { countryCode: 'EG', subdivisionCode: 'EG-C' };
+
+async function subscribedTrial(email: string | null = EMAIL, location: unknown = FORM_LOCATION): Promise<string> {
   trialsMade += 1;
   const prospectId = (await trials.createProspect(salesId, { displayName: `prospect_${randomUUID().slice(0, 6)}` })).id;
   // A different hour for each trial of a test: one teacher, never two at once.
@@ -107,7 +110,7 @@ async function subscribedTrial(email: string | null = EMAIL, location?: unknown)
   await trials.outcome(salesId, lesson.id, {
     result: 'subscribed',
     subscription: {
-      parent: { name: 'parent_p', email, phone: '+99 000 333 444', ...(location === undefined ? {} : { location }) },
+      parent: { name: 'parent_p', email, phone: '+99 000 333 444', location },
       children: [
         { name: 'child_p1', age: 8, course: 'course_p', teacherId: s.teacherId, packagePrice: 1000, lessonPrice: 125,
           schedule: [{ weekday: 1, time: '17:00' }] },
@@ -671,8 +674,62 @@ describe('PD-45: the family\'s location, from Sales\' form to the family', () =>
     expect(keys.map((k) => ({ hash: k.keyHash, source: k.source }))).toEqual([{ hash: contactKeyHash('phone', '+971507658888'), source: 'rekey' }]);
   });
 
-  it('a form without a location is still recorded and assigned (it becomes required with the new form, PR-3b)', async () => {
-    const done = await enrolment.assign(s.managerId, trialId, { supervisorId: s.ownerId });
+  // PD-45 Q1 (owner, 2026-10-28), PR-3b: this test used to assert the location was OPTIONAL on a new
+  // Sales form ("a form without a location is still recorded and assigned"). It is now required.
+  it('Q1: a NEW Sales form without a location is refused, and nothing is recorded', async () => {
+    const prospectId = (await trials.createProspect(salesId, { displayName: 'prospect_q1' })).id;
+    const startsAt = new Date(Date.now() - 50 * 60 * MIN);
+    const lesson = await g.prisma.lesson.create({
+      data: { organizationId: await org(), kind: 'trial', prospectId, teacherId: s.teacherId, startsAt, endsAt: new Date(startsAt.getTime() + 45 * MIN), createdByKind: 'staff', createdBy: salesId },
+    });
+    const subscription = (parent: Record<string, unknown>) => ({
+      parent: { name: 'parent_q1', email: null, phone: '+99 000 333 777', ...parent },
+      children: [{ name: 'child_q1', age: 8, course: 'course_q1', teacherId: s.teacherId, packagePrice: 100, lessonPrice: 10, schedule: [{ weekday: 2, time: '17:00' }] }],
+      payment: { currency: 'EGP', method: 'invoice' },
+    });
+    const refused = [
+      {},                                                    // left out
+      { location: null },                                    // cleared
+      { location: { countryCode: 'EG' } },                   // Egypt has governorates: one is required
+      { location: { countryCode: 'EG', subdivisionCode: null } },
+    ];
+    for (const parent of refused) {
+      expect(await code(trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: subscription(parent) }))).toBe(CommErrorCode.VALIDATION);
+    }
+    // Nothing was written: no outcome, no form.
+    expect(await g.prisma.trialOutcome.count({ where: { lessonId: lesson.id } })).toBe(0);
+    expect(await forms.get(await org(), lesson.id)).toBeNull();
+    // A country with no subdivisions in the list needs only the country (Anguilla).
+    await trials.outcome(salesId, lesson.id, { result: 'subscribed', subscription: subscription({ location: { countryCode: 'AI' } }) });
+    expect((await forms.get(await org(), lesson.id))!.parent.location).toMatchObject({ countryCode: 'AI', subdivisionCode: null });
+  });
+
+  it('Q1: a trial corrected back to "subscribed" needs the location too', async () => {
+    const id = await subscribedTrial();
+    await trials.correct(salesId, id, { result: 'not_subscribed', reason: 'price', why: 'q1' });
+    const parent = { name: 'parent_p', email: null, phone: '+99 000 333 444' };
+    const back = (p: Record<string, unknown>) => ({
+      result: 'subscribed', why: 'q1 back',
+      subscription: {
+        parent: p,
+        children: [{ name: 'child_p1', age: 8, course: 'course_p', teacherId: s.teacherId, packagePrice: 1, lessonPrice: 1, schedule: [{ weekday: 1, time: '17:00' }] }],
+        payment: { currency: 'EGP', method: 'invoice' },
+      },
+    });
+    expect(await code(trials.correct(salesId, id, back(parent)))).toBe(CommErrorCode.VALIDATION);
+    await trials.correct(salesId, id, back({ ...parent, location: FORM_LOCATION }));
+    expect((await forms.get(await org(), id))!.parent.location).toMatchObject(FORM_LOCATION);
+  });
+
+  it('Q1 leaves edits alone: a form recorded without a location (before PR-3b) is still editable and assignable', async () => {
+    // A form from before the rule is written straight into its table, as old rows are.
+    const id = await subscribedTrial();
+    await g.prisma.trialSubscription.update({ where: { lessonId: id }, data: { countryCode: null, subdivisionCode: null, updatedBy: salesId } });
+    const edit = (await forms.get(await org(), id))!;
+    const body = { parent: { name: 'parent_edited', email: edit.parent.email, phone: edit.parent.phone }, children: edit.children.map((c) => ({ ...c, teacherId: c.teacher.id })), payment: edit.payment };
+    await trials.updateSubscription(salesId, id, { subscription: body });
+    expect((await forms.get(await org(), id))!.parent).toMatchObject({ name: 'parent_edited', location: null });
+    const done = await enrolment.assign(s.managerId, id, { supervisorId: s.ownerId });
     expect(await g.prisma.family.findUniqueOrThrow({ where: { id: done.familyId } })).toMatchObject({ countryCode: null, subdivisionCode: null, locationSource: null });
   });
 });

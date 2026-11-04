@@ -27,6 +27,7 @@ import { StatsService } from '../../src/lessons/stats.service';
 import { EnrollmentService } from '../../src/lessons/enrollment.service';
 import { monthOf as academyMonth, sumCounts } from '../support/academy-month';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -58,11 +59,12 @@ async function code(p: Promise<unknown>): Promise<string> {
 }
 
 async function lesson(startMs: number, learnerId = s.learnerId): Promise<string> {
-  return (await lessons.schedule(tsupId, { learnerId, startsAt: at(startMs), endsAt: at(startMs + HOUR / 2) })).id;
+  return (await addLesson(g, lessons, tsupId, { learnerId, startsAt: at(startMs), endsAt: at(startMs + HOUR / 2) })).id;
 }
 
+// Not the `lesson_scheduled` card a fixture lesson posts when added (PD-46 / CHATSCHED-001).
 async function cards(conversationId = groupId) {
-  return g.prisma.message.findMany({ where: { conversationId, type: 'card' }, include: { card: true }, orderBy: { seq: 'asc' } });
+  return g.prisma.message.findMany({ where: { conversationId, type: 'card', NOT: { card: { kind: 'lesson_scheduled' } } }, include: { card: true }, orderBy: { seq: 'asc' } });
 }
 
 async function thisMonth(): Promise<string> {

@@ -487,14 +487,16 @@ export async function recordSignInEmail(
  * active parent's number is keyed as the new country reads it. A reading
  * another family holds refuses the change. Recorded keys (intake, Assign, the
  * backfill, a changed number) are never touched. The caller holds the family's
- * row lock. Inside the caller's transaction.
+ * row lock. Inside the caller's transaction. `actorId` is the staff member who
+ * changed the country, or null when the parent did (PD-45 PR-4, /me/location):
+ * a contact key names staff only.
  */
 export async function rekeyPhonesForCountry(
   tx: Prisma.TransactionClient,
   familyId: string,
   organizationId: string,
   country: string | null,
-  actorId: string,
+  actorId: string | null,
 ): Promise<void> {
   // The guard lets a 'rekey' key go only while this setting names its family (20261030050000).
   await tx.$executeRaw`SELECT set_config('chat.rekeying_family', ${familyId}, true)`;
@@ -517,7 +519,7 @@ export async function rekeyPhonesForCountry(
  */
 async function keyPhoneReading(
   tx: Prisma.TransactionClient,
-  input: { familyId: string; organizationId: string; phone: string; country: string | null; actorId: string; source: 'record' | 'rekey' },
+  input: { familyId: string; organizationId: string; phone: string; country: string | null; actorId: string | null; source: 'record' | 'rekey' },
 ): Promise<void> {
   const reading = e164ForKey(input.phone, input.country);
   if (!reading || reading === 'ambiguous') return;

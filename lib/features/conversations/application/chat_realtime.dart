@@ -6,6 +6,8 @@ import '../../../app/providers.dart';
 import '../../../core/realtime/call_realtime_client.dart';
 import '../../../core/realtime/chat_signal.dart';
 import '../../calls/application/call_session.dart';
+import '../../lessons/presentation/lesson_card_view.dart' show lessonNowProvider;
+import '../../lessons/presentation/lesson_ticket_sheet.dart' show lessonTicketsProvider;
 import '../../messages/application/away_teachers.dart';
 import '../../messages/application/marks_providers.dart';
 import '../../messages/application/messages_controller.dart';
@@ -135,6 +137,10 @@ class ChatRealtimeCoordinator {
         final thread = _openThread(id);
         if (thread != null) unawaited(thread.refreshLatest());
         _scheduleListRefresh();
+      case ChatSignalKind.lessonChanged:
+        // PD-46 / CHATSCHED-002: an open chat's time cards re-read where their lessons
+        // stand, and its "+" its tickets. Only what a screen is showing is re-read.
+        signal.conversationIds.forEach(_refreshLessons);
       case ChatSignalKind.reconnected:
         // Anything may have happened while the socket was down.
         _catchUpEverything();
@@ -147,11 +153,22 @@ class ChatRealtimeCoordinator {
   void _catchUpEverything() {
     if (_disposed) return;
     for (final conversationId in _requested) {
+      // A lesson.changed may have been missed too.
+      _refreshLessons(conversationId);
       final thread = _openThread(conversationId);
       if (thread == null) continue;
       unawaited(thread.resync().then((_) => thread.refreshLatest()));
     }
     _scheduleListRefresh();
+  }
+
+  /// PD-46: an open chat's lesson footers and "+" tickets re-read. Only if a screen
+  /// is showing them: nothing is loaded for a chat that is not open.
+  void _refreshLessons(String conversationId) {
+    final now = lessonNowProvider(conversationId);
+    if (_ref.exists(now)) _ref.invalidate(now);
+    final tickets = lessonTicketsProvider(conversationId);
+    if (_ref.exists(tickets)) _ref.invalidate(tickets);
   }
 
   /// PD-26: an open chat's "on leave until" notice re-reads its member list. Only

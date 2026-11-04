@@ -120,6 +120,21 @@ export const TR = {
   editForm: { en: 'Edit subscription', ar: 'تعديل الاشتراك' },
   parentSection: { en: 'Parent', ar: 'ولي الأمر' },
   parentName: { en: 'Parent\'s name', ar: 'اسم ولي الأمر' },
+  location: { en: 'Location', ar: 'الموقع' },
+  locationHint: {
+    en: 'Where the family lives. The country is required, and so is the governorate, emirate or state when the country has them.',
+    ar: 'مكان إقامة العائلة. الدولة مطلوبة، وكذلك المحافظة أو الإمارة أو الولاية إذا كان للدولة تقسيمات.',
+  },
+  locationNeeded: {
+    en: 'Choose the family\'s country, and its governorate, emirate or state.',
+    ar: 'اختر دولة العائلة، ومحافظتها أو إمارتها أو ولايتها.',
+  },
+  locationFromBooking: { en: 'From the booking. Confirm it or change it.', ar: 'من الحجز. أكِّده أو غيِّره.' },
+  bookingLocation: { en: 'Location (optional)', ar: 'الموقع (اختياري)' },
+  bookingLocationHint: {
+    en: 'Where the family lives, if you know it. It pre-fills the subscription form for Sales and is never shown to the teacher.',
+    ar: 'مكان إقامة العائلة إن كان معروفًا. يُعبّأ به نموذج الاشتراك لدى المبيعات ولا يظهر للمعلم أبدًا.',
+  },
   parentEmail: { en: 'E-mail (optional)', ar: 'البريد الإلكتروني (اختياري)' },
   email: { en: 'E-mail', ar: 'البريد الإلكتروني' },
   parentPhone: { en: 'Phone number', ar: 'رقم الهاتف' },

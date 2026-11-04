@@ -102,7 +102,7 @@ async function subscribedTrial(): Promise<string> {
   await trials.outcome(salesId, lesson.id, {
     result: 'subscribed',
     subscription: {
-      parent: { name: 'parent_q', email: EMAIL, phone: '+99 000 777 888' },
+      parent: { name: 'parent_q', email: EMAIL, phone: '+99 000 777 888', location: { countryCode: 'EG', subdivisionCode: 'EG-C' } },
       children: [
         { name: 'child_q1', age: 9, course: 'course_q', teacherId: s.teacherId, packagePrice: 1250.5, lessonPrice: 125,
           schedule: [{ weekday: 2, time: '17:00' }] },

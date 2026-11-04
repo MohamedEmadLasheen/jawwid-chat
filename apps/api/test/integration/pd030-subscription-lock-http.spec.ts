@@ -49,6 +49,8 @@ import { STRIPE_GATEWAY } from '../../src/billing/stripe.gateway';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { monthsOf } from '../support/academy-month';
 import { buildGraph, truncate } from './harness';
+import { addLesson } from './lesson-fixture';
+import { LessonService } from '../../src/lessons/lesson.service';
 import { FakeStripe } from './fake-stripe';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
@@ -136,11 +138,11 @@ function family() {
 let slotHour = 30;
 async function pastLesson(childId: string): Promise<string> {
   slotHour += 1; // never two lessons of one teacher at one time
-  const r = await http(m.teachersManager.subject, 'POST', '/lessons', {
+  // Added before it began (PD-46 PR-2c refuses a past start over HTTP), through
+  // the app's own LessonService: the subscription lock applies as it did then.
+  return (await addLesson(g, app.get(LessonService), m.teachersManager.id, {
     learnerId: childId, startsAt: at(-slotHour * HOUR), endsAt: at(-slotHour * HOUR + HOUR / 2),
-  });
-  expect(r.status).toBe(201);
-  return r.json.id as string;
+  })).id;
 }
 
 async function report(teacherSubject: string, lessonId: string, lessonNumber?: number) {
@@ -387,6 +389,12 @@ describe('PD-30 over HTTP', () => {
     expect(await access(child.id)).toMatchObject({ held: true });
     const held = await g.prisma.lesson.findUniqueOrThrow({ where: { id: future.json.id } });
     expect(held).toMatchObject({ outcome: 'suspended', outcomeByKind: 'system', outcomeBy: null, outcomeNote: 'subscription' });
+    // PD-46: the hold's raw UPDATE announces what it suspended, in its own
+    // transaction -- `paused`, at the revision it produced -- and leaves
+    // nothing of it for the sweep.
+    const pausedSignal = await g.prisma.outboxEvent.findMany({ where: { idempotencyKey: `lesson:${held.id}:${held.revision}:paused` } });
+    expect(pausedSignal).toHaveLength(1);
+    expect(await g.prisma.lessonChangeUnannounced.count({ where: { lessonId: held.id } })).toBe(0);
     // The teacher's Schedule says "suspended" -- nothing financial reaches a teacher; staff read why.
     const asTeacher = (await http(teacher.subject, 'GET', '/lessons')).json.lessons.find((l: any) => l.id === future.json.id);
     expect(asTeacher).toMatchObject({ outcome: 'suspended', outcomeNote: null });

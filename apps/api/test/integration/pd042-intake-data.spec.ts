@@ -24,6 +24,7 @@ import { LessonService } from '../../src/lessons/lesson.service';
 import { lessonPosition } from '../../src/billing/subscription-reads';
 import { contactKeyHash } from '../../src/new-students/contact-key';
 import { activateBackup, buildGraph, seed, truncate, type Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
 
@@ -208,7 +209,7 @@ async function usedLesson(learnerId: string) {
   // The zone is pinned to about noon (pinAcademyNoon): there is always room today.
   if (back < 60) throw new Error(`no room left today for lesson ${lessonsMade} (since midnight: ${since}s); the zone pin did not hold`);
   const startsAt = new Date(Date.now() - back * 1000);
-  const dto = await lessons.schedule(tsupId, { learnerId, startsAt: startsAt.toISOString(), endsAt: new Date(startsAt.getTime() + 3 * MIN).toISOString() });
+  const dto = await addLesson(g, lessons, tsupId, { learnerId, startsAt: startsAt.toISOString(), endsAt: new Date(startsAt.getTime() + 3 * MIN).toISOString() });
   await lessons.absence(s.teacherId, dto.id, {});
 }
 

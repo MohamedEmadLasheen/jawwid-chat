@@ -46,6 +46,7 @@ import { CertificateService } from '../../src/certificates/certificate.service';
 import { CertificateTypeService } from '../../src/certificates/certificate-type.service';
 import type { DashboardTile } from '../../src/dashboard/dashboard-tile';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 import { statementCounter } from './statement-counter';
 
 const counter = statementCounter();
@@ -116,7 +117,7 @@ function plusDays(day: string, n: number): string {
 /** A lesson of `learnerId` with its teacher, held `ago` before now. */
 async function heldLesson(learnerId = s.learnerId): Promise<string> {
   const start = -3 * HOUR - (slot++ % 20) * 40 * 60_000;
-  const id = (await lessons.schedule(tsupId, { learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
+  const id = (await addLesson(g, lessons, tsupId, { learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
   await lessons.report(s.teacherId, id, { covered: 'Al-Mulk' });
   return id;
 }

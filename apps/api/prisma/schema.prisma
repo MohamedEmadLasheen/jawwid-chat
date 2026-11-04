@@ -1391,6 +1391,8 @@ model Lesson {
   /// teacher booked) / system (materialized from a slot).
   createdByKind        String         @default("staff") @map("created_by_kind")
   createdBy            String?        @map("created_by") @db.Uuid
+  /// PD-46 (CHATSCHED-007): the Idempotency-Key of the POST /lessons that created it; unique per createdBy.
+  createKey            String?        @map("create_key")
   scheduleSlotId       String?        @map("schedule_slot_id") @db.Uuid
   /// PD-31: the lesson this one replaces after a move (that row is rescheduled). Insert only.
   movedFrom            String?        @unique @map("moved_from") @db.Uuid
@@ -1550,6 +1552,8 @@ model MessageCard {
   kind           String
   lessonId       String? @map("lesson_id") @db.Uuid
   payload        Json    @default("{}")
+  /// PD-46: lesson:<id>:<revision>:<change> -- one card per lesson change (20261102240000).
+  idempotencyKey String? @unique(map: "message_card_idempotency_key") @map("idempotency_key")
 
   @@map("message_card")
   @@schema("chat")

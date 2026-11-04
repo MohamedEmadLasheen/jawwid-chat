@@ -98,7 +98,7 @@ async function pastTrial(startsAt: Date, teacherId = s.teacherId): Promise<strin
 
 function form(over: Record<string, unknown> = {}) {
   return {
-    parent: { name: 'parent_j', email: EMAIL, phone: PHONE },
+    parent: { name: 'parent_j', email: EMAIL, phone: PHONE, location: { countryCode: 'EG', subdivisionCode: 'EG-C' } },
     children: [
       { name: 'child_j1', age: 8, course: 'course_j', teacherId: s.teacherId, packagePrice: 1234.5, lessonPrice: 154.25,
         schedule: [{ weekday: 4, time: '18:30' }, { weekday: 1, time: '17:00' }] },
@@ -347,8 +347,8 @@ describe('4. the New Students page', () => {
         prospectName: 'prospect_j',
         trialTeacher: expect.objectContaining({ id: s.teacherId }),
         recordedBy: { id: salesId, name: 'sales_j' },
-        // PD-45: the form's location, named when Sales gave one (none here).
-        parent: { name: 'parent_j', email: EMAIL, phone: PHONE, location: null },
+        // PD-45: the form's location, named (required on a new form, owner Q1).
+        parent: { name: 'parent_j', email: EMAIL, phone: PHONE, location: expect.objectContaining({ countryCode: 'EG', subdivisionCode: 'EG-C' }) },
         payment: { currency: 'EGP', method: 'invoice' },
         children: [
           expect.objectContaining({

@@ -56,9 +56,26 @@ export interface ScheduleSlot {
   time: string
 }
 
-/** Sales' subscription form, as sent. */
+/** PD-45: where a family lives, as sent (the codes of the Admin Web's location lists). */
+export interface LocationInput {
+  countryCode: string
+  subdivisionCode: string | null
+}
+
+/** PD-45: a location as the server names it (both languages, and the field's label for the country). */
+export interface NamedLocation {
+  country: { code: string; en: string; ar: string }
+  subdivision: { code: string; en: string; ar: string } | null
+  label: { en: string; ar: string }
+}
+
+/**
+ * Sales' subscription form, as sent. `parent.location` is REQUIRED on a new
+ * form (owner Q1); an edit may leave it out (the stored one is kept) or send
+ * null (clears it).
+ */
 export interface SubscriptionFormInput {
-  parent: { name: string; email: string; phone: string }
+  parent: { name: string; email: string; phone: string; location?: LocationInput | null }
   children: Array<{
     name: string
     age: number
@@ -80,7 +97,13 @@ export interface NewStudentDto {
   recordedAt: string
   recordedBy: { id: string; name: string }
   updatedAt: string | null
-  parent: { name: string; email: string | null; phone: string }
+  parent: {
+    name: string
+    email: string | null
+    phone: string
+    /** PD-45: null when the form has none (a form from before the location was asked). */
+    location?: (LocationInput & { names: NamedLocation }) | null
+  }
   children: Array<{
     name: string
     age: number
@@ -154,8 +177,11 @@ export const trialsApi = {
   slots: (teacherId: string, durationMinutes: number) =>
     api.get<{ teacherId: string; durationMinutes: number; slots: string[] }>('/trials/slots', { teacherId, durationMinutes: String(durationMinutes) }),
   list: (query: { from?: string; to?: string; teacherId?: string } = {}) => api.get<{ trials: TrialDto[] }>('/trials', query),
-  book: (body: { students: Array<{ name: string; level?: string; note?: string }>; teacherId: string; startsAt: string; durationMinutes: number }) =>
+  /** PD-45: `location` is optional at booking; it only pre-fills Sales' subscription form. */
+  book: (body: { students: Array<{ name: string; level?: string; note?: string }>; teacherId: string; startsAt: string; durationMinutes: number; location?: LocationInput }) =>
     api.post<TrialDto>('/trials', body),
+  /** PD-45: what Sales' form starts with -- the location given at booking (Sales only). */
+  subscriptionPrefill: (trialId: string) => api.get<{ location: NamedLocation | null }>(`/trials/${id(trialId)}/subscription-prefill`),
   absence: (trialId: string, note?: string) => api.post<TrialDto>(`/trials/${id(trialId)}/attendance`, note ? { attended: false, note } : { attended: false }),
   /** Move a booked trial that has not started: another time, length or teacher. */
   reschedule: (trialId: string, body: { teacherId: string; startsAt: string; durationMinutes: number }) =>
@@ -197,5 +223,6 @@ export const trialKeys = {
   teachers: ['trials', 'teachers'] as const,
   slots: (teacherId: string, duration: number) => ['trials', 'slots', teacherId, duration] as const,
   newStudents: ['trials', 'new-students'] as const,
+  prefill: (trialId: string) => ['trials', 'subscription-prefill', trialId] as const,
   group: (conversationId: string) => ['trials', 'group', conversationId] as const,
 }

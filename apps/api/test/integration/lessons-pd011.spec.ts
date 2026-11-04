@@ -18,6 +18,7 @@ import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { LessonService, REPORT_LOOKBACK_DAYS } from '../../src/lessons/lesson.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, new PrismaAuditService());
@@ -41,13 +42,18 @@ async function code(p: Promise<unknown>): Promise<string> {
 
 /** A lesson for learner_l (taught by teacher_c), starting `startMs` from now, lasting 30 minutes. */
 async function lesson(startMs: number, durationMs = HOUR / 2): Promise<string> {
-  const dto = await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(startMs), endsAt: at(startMs + durationMs) });
+  const dto = await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(startMs), endsAt: at(startMs + durationMs) });
   return dto.id;
 }
 
+/**
+ * The group's ticket cards. Not the `lesson_scheduled` card each fixture lesson
+ * posts when it is added (PD-46 / CHATSCHED-001): that announces the fixture,
+ * not the ticket under test, and pd046-lesson-writer.spec asserts it.
+ */
 async function cardsInGroup() {
   return g.prisma.message.findMany({
-    where: { conversationId: groupId, type: 'card' },
+    where: { conversationId: groupId, type: 'card', NOT: { card: { kind: 'lesson_scheduled' } } },
     include: { card: true },
     orderBy: { seq: 'asc' },
   });
@@ -83,7 +89,7 @@ beforeEach(async () => {
 
 describe('1. scheduling', () => {
   it('the Teachers department schedules a lesson with the learner\'s assigned teacher', async () => {
-    const dto = await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(HOUR), endsAt: at(1.5 * HOUR) });
+    const dto = await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(HOUR), endsAt: at(1.5 * HOUR) });
     expect(dto.teacher.id).toBe(s.teacherId);
     expect(dto.phase).toBe('upcoming');
     expect(dto.outcome).toBeNull();
@@ -91,14 +97,14 @@ describe('1. scheduling', () => {
 
   it('an Operations supervisor, a teacher and a parent cannot schedule', async () => {
     const body = { learnerId: s.learnerId, startsAt: at(HOUR), endsAt: at(1.5 * HOUR) };
-    expect(await code(lessons.schedule(s.ownerId, body))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(lessons.schedule(s.teacherId, body))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(lessons.schedule(s.parentId, body))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(addLesson(g, lessons, s.ownerId, body))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(addLesson(g, lessons, s.teacherId, body))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(addLesson(g, lessons, s.parentId, body))).toBe(CommErrorCode.LESSON_DENIED);
   });
 
   it('a teacher is never booked twice at once; an excused lesson frees its slot', async () => {
     const first = await lesson(2 * HOUR);
-    expect(await code(lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(2.25 * HOUR), endsAt: at(2.75 * HOUR) })))
+    expect(await code(addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(2.25 * HOUR), endsAt: at(2.75 * HOUR) })))
       .toBe(CommErrorCode.LESSON_TEACHER_BUSY);
     await lessons.apology(s.parentId, first, { reason: 'travel' });
     await expect(lesson(2 * HOUR)).resolves.toBeDefined();

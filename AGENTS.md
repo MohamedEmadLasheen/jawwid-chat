@@ -43,7 +43,8 @@ If anything elsewhere contradicts this file, this file wins and the contradictio
 Before any heavy run, check `uptime` and wait while the 1-minute load is over 60. Then:
 - API: `npx jest --maxWorkers=2` (unit), `npm run test:int -- --runInBand` (integration; use your own
   Postgres and Redis, never the shared ones).
-- Admin Web / lessons: `npx vitest run --pool=forks --poolOptions.forks.maxForks=2`.
+- Admin Web / lessons: `npx vitest run --pool=forks --poolOptions.forks.maxForks=2 --poolOptions.forks.minForks=1`.
+- A fresh worktree must first run `python3 -I scripts/lessons/build-quran-snapshot.py` (writes the gitignored data to `apps/lessons/public/data/`), or 4 lessons test files fail at import.
 - Flutter: `flutter test --concurrency=2` (Flutter lives in `~/development/flutter/bin`, not on PATH).
 - Typecheck: `npm run typecheck` in the app's folder. Release guards: `bash scripts/qa/guards.sh <name>`.
 

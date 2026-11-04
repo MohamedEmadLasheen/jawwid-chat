@@ -66,6 +66,8 @@ export const ActionScope = {
   WHITEBOARD_WRITE: 'whiteboard_write_actor',
   /** PD-55: rewards given or withdrawn (POST /learners/:id/rewards…). */
   REWARD_GIVE: 'reward_give_actor',
+  /** PD-45 PR-4: a parent's own location (PUT /me/location, POST /me/location/later). */
+  LOCATION_WRITE: 'location_write_actor',
 } as const;
 
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];

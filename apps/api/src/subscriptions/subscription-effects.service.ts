@@ -296,11 +296,13 @@ export class SubscriptionEffects {
       const rows = await tx.$queryRaw<Array<{ state: string; held: boolean }>>`
         SELECT state, held FROM chat.learner_access WHERE learner_id = ${learnerId}::uuid FOR UPDATE`;
       if (!rows[0] || rows[0].held || !this.locks.enforced || (await lockOf(tx, learnerId)) === null) return false;
+      // lesson-writer: announced -- its ids are announced just below (PD-46).
       const lessons = await tx.$queryRaw<Array<{ id: string }>>`
         UPDATE chat.lesson
            SET outcome = 'suspended', outcome_note = 'subscription', outcome_by_kind = 'system', outcome_by = NULL
          WHERE learner_id = ${learnerId}::uuid AND kind = 'regular' AND outcome IS NULL AND starts_at > now()
         RETURNING id::text`;
+      await this.lessons.writer.announce(tx, 'paused', lessons.map((l) => l.id));
       for (const l of lessons) await cancelReminders(tx, l.id);
       await tx.learnerAccess.update({ where: { learnerId }, data: { held: true } });
       await this.audit.audit(tx, {

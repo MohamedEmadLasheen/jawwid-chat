@@ -26,6 +26,7 @@ import { TrialService } from '../../src/lessons/trial.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -69,7 +70,7 @@ async function sqlError(p: Promise<unknown>): Promise<string> {
 /** A 30-minute lesson for learner_l (teacher_c), starting `ms` from now; each call a distinct slot. */
 async function lesson(ms: number): Promise<string> {
   const start = ms + (slot++ % 20) * 40 * 60_000 * (ms < 0 ? -1 : 1);
-  return (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
+  return (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
 }
 
 /** A violation the database records: the teacher apologises for a lesson tomorrow-ish. */
