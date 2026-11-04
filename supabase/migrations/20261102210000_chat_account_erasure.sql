@@ -10,6 +10,7 @@
 --     7 years), attributed to the anonymised person. Messages the person sent
 --     stay in their conversations, shown as "Deleted user": the other members
 --     keep the history.
+--   * Kept (PD-58, 20261104110000): terms acceptances, the consent record, with the anonymised account.
 --   * A parent's children are the academy's records and are never deleted. The
 --     parent is unlinked from the family; if the family is left with nobody who
 --     can sign in, the Operations manager gets a task (family_without_account).
