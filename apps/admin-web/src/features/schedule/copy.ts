@@ -63,7 +63,10 @@ export const S = {
 
   // Stats
   statsLabel: { en: 'Figures for this view', ar: 'أرقام هذا العرض' },
-  teachingHours: { en: 'Teaching hours', ar: 'ساعات التدريس' },
+  // CHATSCHED-014, decision A (department head, 2026-11-02): this is PD-38's *booked*
+  // time -- any lesson reserved for a student, whatever its outcome -- so it is named so.
+  // What was actually held is the hint below.
+  teachingHours: { en: 'Booked hours', ar: 'الساعات المحجوزة' },
   heldSoFar: { en: '{h} held', ar: '{h} منعقدة' },
   students: { en: 'Students', ar: 'الطلاب' },
   studentsHint: { en: '+{trial} trial · {paused} paused', ar: '+{trial} تجريبي · {paused} متوقف' },
@@ -75,8 +78,8 @@ export const S = {
   pausedHours: { en: 'Paused', ar: 'متوقف' },
   freeHours: { en: 'Free (hourly)', ar: 'متاح (بالساعة)' },
   capacityNote: {
-    en: 'Shift, empty and leave count every lesson of the teachers shown; teaching hours and students count only the matching lessons.',
-    ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ ساعات التدريس والطلاب تحتسب الحصص المطابقة فقط.',
+    en: 'Shift, empty and leave count every lesson of the teachers shown; booked hours and students count only the matching lessons.',
+    ar: 'الشيفت والفارغ والإجازة تحتسب كل حصص المعلمين المعروضين؛ الساعات المحجوزة والطلاب تحتسب الحصص المطابقة فقط.',
   },
   byTeacher: { en: 'By teacher', ar: 'حسب المعلم' },
   colShift: { en: 'Shift', ar: 'الشيفت' },
@@ -193,6 +196,23 @@ export const STATUS_LABEL: Record<CalendarStatus, Pair> = {
   moved: { en: 'Moved away', ar: 'نُقلت' },
 }
 
+/**
+ * CHATSCHED-014: a lesson nobody teaches -- cancelled, excused, the teacher
+ * absent -- is 'active' to calendar_status, so its block read "Active" like a
+ * booked one. For these the block says its outcome (OUTCOME_LABEL, as the
+ * details panel does). Their time still counts as booked (PD-38 §2: booked is
+ * any lesson reserved for a student, whatever its outcome).
+ */
+const NOT_TAUGHT: ReadonlySet<string> = new Set(['admin_cancelled', 'student_apology', 'teacher_apology', 'teacher_no_show'])
+
+/** Whether a block is a lesson nobody teaches (drawn muted and struck through). */
+export const notTaught = (l: { anonymous?: true; outcome?: string | null }) => !l.anonymous && !!l.outcome && NOT_TAUGHT.has(l.outcome)
+
+/** What a block says it is: the outcome for a lesson nobody teaches, else its calendar status. */
+export function statusOf(l: { status: CalendarStatus; anonymous?: true; outcome?: string | null }): Pair {
+  return notTaught(l) ? OUTCOME_LABEL[l.outcome as string]! : STATUS_LABEL[l.status]
+}
+
 export const KIND_LABEL: Record<LessonKind, Pair> = {
   regular: { en: 'Regular', ar: 'أساسية' },
   makeup: { en: 'Make-up', ar: 'تعويضية' },
@@ -236,17 +256,17 @@ export function useScheduleText() {
 
 /** A calendar day ("2026-10-26") as words. A day, not an instant: no zone can move it. */
 export function dayLabel(day: string, locale: 'ar' | 'en', opts: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { ...opts, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { ...opts, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))
 }
 
 /** Minutes as hours with one decimal: 90 -> "1.5". */
 export function hoursOf(minutes: number, locale: 'ar' | 'en'): string {
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { maximumFractionDigits: 1 }).format(minutes / 60)
+  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { maximumFractionDigits: 1 }).format(minutes / 60)
 }
 
 export function percentOf(ratio: number | null, locale: 'ar' | 'en'): string {
   if (ratio === null) return '—'
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { style: 'percent', maximumFractionDigits: 0 }).format(ratio)
+  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { style: 'percent', maximumFractionDigits: 0 }).format(ratio)
 }
 
 /** A server refusal as a sentence; codes we know get our own words. */

@@ -8,6 +8,7 @@ import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/design/tokens.dart';
 import 'package:jawwid_chat/features/lessons/presentation/child_progress_card.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
@@ -305,6 +306,30 @@ void main() {
   });
 
   group('my leave', () {
+    // RQA-F7 (release-qa walk): every status was the same green.
+    testWidgets('each leave state wears its own status colour', (tester) async {
+      LeaveRequest r(String id, LeaveState state) =>
+          LeaveRequest(id: id, firstDay: DateTime.utc(2027, 3, 10), lastDay: DateTime.utc(2027, 3, 10), days: 1, reason: id, state: state);
+      final repo = _RecordingSupervision(summary: LeaveSummary(year: 2027, used: 0, requests: [
+        r('w', LeaveState.requested),
+        r('a', LeaveState.approved),
+        r('d', LeaveState.declined),
+        r('x', LeaveState.withdrawn),
+      ]));
+      await tester.pumpWidget(app(const MyLeaveScreen(), repo: repo));
+      await tester.pumpAndSettle();
+      final tokens = JawwidTokens.of(tester.element(find.byType(MyLeaveScreen)));
+      Color fg(String id) => tester
+          .widget<Text>(find.descendant(of: find.byKey(ValueKey('leave-state-$id')), matching: find.byType(Text)))
+          .style!
+          .color!;
+      expect(fg('w'), tokens.colorStatusWarningFg);
+      expect(fg('a'), tokens.colorStatusSuccessFg);
+      expect(fg('d'), tokens.colorStatusDangerFg);
+      expect(fg('x'), tokens.colorStatusNeutralFg);
+      expect({fg('w'), fg('a'), fg('d'), fg('x')}, hasLength(4));
+    });
+
     testWidgets('shows the server\'s numbers, and withdraws an undecided request after asking', (tester) async {
       final repo = _RecordingSupervision(summary: LeaveSummary(
         year: 2027,

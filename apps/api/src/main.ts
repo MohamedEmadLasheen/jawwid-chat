@@ -18,6 +18,7 @@ import {
   RequestErrorCaptureInterceptor,
   requestLogMiddleware,
 } from './infra/observability/request-log';
+import { assertProductionStripeConfig } from './billing/stripe-config';
 
 /**
  * API entrypoint.
@@ -51,6 +52,8 @@ async function bootstrap(): Promise<void> {
   // §4, RT-005). Nothing is generated or defaulted -- a signing key nobody
   // configured is a signing key an attacker can guess.
   loadAuthConfig();
+  // PD-56: no Stripe test key, and no card payments without the webhook that records them.
+  assertProductionStripeConfig();
 
   // RT-001 is CLOSED on both halves as of Phase 8, so there is no boot
   // restriction here any more. HTTP identity is a verified bearer token

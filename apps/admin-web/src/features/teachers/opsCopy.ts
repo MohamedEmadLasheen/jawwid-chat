@@ -305,7 +305,7 @@ export function describeOpsError(error: unknown, locale: 'ar' | 'en'): string {
 export function formatDay(day: string, locale: 'ar' | 'en'): string {
   const d = new Date(`${day}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return day
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(d)
 }
 
 /** "from → to" in the reading direction: in Arabic the arrow points left, to the new value. */
@@ -320,5 +320,5 @@ export function fill(template: string, params: Record<string, string | number>):
 
 /** A lesson length, "30 min" / "٣٠ دقيقة". */
 export function formatMinutes(n: number, locale: 'ar' | 'en'): string {
-  return locale === 'ar' ? `${new Intl.NumberFormat('ar-EG').format(n)} دقيقة` : `${n} min`
+  return locale === 'ar' ? `${new Intl.NumberFormat('ar-EG-u-nu-latn').format(n)} دقيقة` : `${n} min`
 }

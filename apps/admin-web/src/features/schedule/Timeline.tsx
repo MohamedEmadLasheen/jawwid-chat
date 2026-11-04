@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, clock12In, hour12Label, isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { CalendarDay, CalendarLesson, CalendarSummary, CalendarTeacher, CalendarWindow, Interval } from './api'
-import { CATEGORY_LABEL, S, STATUS_LABEL, WEEKDAYS, dayLabel, hoursOf, percentOf, useScheduleText } from './copy'
+import { CATEGORY_LABEL, S, WEEKDAYS, dayLabel, hoursOf, notTaught, percentOf, statusOf, useScheduleText } from './copy'
 import { swatchClass } from './palette'
 import { daysOf, isoWeekday, minuteOfDay } from './viewState'
 
@@ -83,7 +83,7 @@ export function lessonTime(l: { startsAt: string; endsAt: string }, locale: 'ar'
 }
 
 export function lessonLabel(l: CalendarLesson, tx: ReturnType<typeof useScheduleText>, locale: 'ar' | 'en', miss = false): string {
-  const parts = [lessonName(l, tx), lessonTime(l, locale), tx(STATUS_LABEL[l.status])]
+  const parts = [lessonName(l, tx), lessonTime(l, locale), tx(statusOf(l))]
   if (l.outsideShift) parts.push(tx(S.outsideMark))
   if (miss) parts.push(tx(S.otherBooking))
   return parts.join(' · ')
@@ -137,6 +137,7 @@ export function Track({
           'sc-lesson',
           miss ? 'sc-c-none sc-lesson--other' : swatchClass(l.colorKey),
           `sc-lesson--${l.status}`,
+          notTaught(l) ? 'sc-lesson--not-taught' : '',
           l.outsideShift ? 'sc-lesson--outside' : '',
         ].join(' ')
         const box: CSSProperties = { ...style, insetBlockStart: `${(lane.lane / lane.of) * 100}%`, blockSize: `${100 / lane.of}%` }

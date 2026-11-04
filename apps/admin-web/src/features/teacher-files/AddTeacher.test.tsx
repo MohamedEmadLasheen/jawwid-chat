@@ -217,6 +217,35 @@ describe('Add teacher', () => {
     expect(calls('POST', /\/teachers$/)).toHaveLength(0)
   })
 
+  // TEACHER-001 (QA T-ONB-03): a bad e-mail showed the server's raw "email: must be an e-mail address".
+  it('a malformed e-mail is caught here, in the reader\'s words, and nothing is sent', async () => {
+    listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files' })
+    await user.click(await screen.findByRole('button', { name: 'Add teacher' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add teacher' })
+    await user.type(within(dialog).getByLabelText('Full name'), 'New Teacher')
+    await user.type(within(dialog).getByLabelText('Sign-in e-mail'), 'not-an-email')
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    expect(within(dialog).getByText('Enter an e-mail address, like name@example.com.')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/email: must be/)).toBeNull()
+    expect(calls('POST', /\/teachers$/)).toHaveLength(0)
+  })
+
+  it('the server\'s own e-mail refusal is shown in the reader\'s words too', async () => {
+    listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })
+    on('POST', /\/teachers$/, () => json({ error: { code: 'COMMON.VALIDATION', message: 'email: must be an e-mail address' } }, 400))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files', locale: 'ar' })
+    await user.click(await screen.findByRole('button', { name: 'إضافة معلم' }))
+    const dialog = await screen.findByRole('dialog')
+    const [name, mail] = within(dialog).getAllByRole('textbox')
+    await user.type(name!, 'معلم جديد')
+    await user.type(mail!, 'odd@example.test')
+    await user.click(within(dialog).getByRole('button', { name: 'إضافة' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('أدخل بريدًا إلكترونيًا صحيحًا')
+  })
+
   // TEACHER-002 (QA T-ONB-06): a double click sent the add twice before the button could disable.
   it('a double click sends ONE add: both clicks land before React re-renders the button', async () => {
     listWith({ canAdd: true, supervisorChoice: 'any', supervisors: SUPERVISORS, selfId: 'm-1' })

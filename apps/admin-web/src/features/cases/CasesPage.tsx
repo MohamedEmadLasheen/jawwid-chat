@@ -206,7 +206,7 @@ function CasePanel({ id, onClose }: { id: string; onClose: () => void }) {
                   <strong>{tx(EVENT_LABEL[e.kind])}</strong>
                   {e.kind === 'status' && e.after?.status ? <> — {tx(STATUS_LABEL[e.after.status as CaseStatus])}</> : null}
                   {' · '}
-                  {e.actor.name} · <time dateTime={e.at}>{new Date(e.at).toLocaleString(locale === 'ar' ? 'ar' : 'en-GB')}</time>
+                  {e.actor.name} · <time dateTime={e.at}>{new Date(e.at).toLocaleString(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB')}</time>
                   {e.note && <p className="cases__text" dir="auto">{e.note}</p>}
                 </li>
               ))}

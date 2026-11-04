@@ -353,6 +353,9 @@ class L10nEn extends L10n {
   String get callOutcomeDeclined => 'Declined';
 
   @override
+  String get callOutcomeInProgress => 'In progress';
+
+  @override
   String callDuration(int minutes, int seconds) {
     return '${minutes}m ${seconds}s';
   }
@@ -4739,6 +4742,30 @@ class L10nEn extends L10n {
 
   @override
   String get boardNextPage => 'Next page';
+
+  @override
+  String get boardEmoji => 'Emoji';
+
+  @override
+  String get boardEmojiPick => 'Choose an emoji';
+
+  @override
+  String get boardEmojiSmileys => 'Smileys';
+
+  @override
+  String get boardEmojiAnimals => 'Animals';
+
+  @override
+  String get boardEmojiNature => 'Nature';
+
+  @override
+  String get boardEmojiFood => 'Food';
+
+  @override
+  String get boardEmojiSchool => 'School and play';
+
+  @override
+  String get boardEmojiSymbols => 'Symbols';
 
   @override
   String get boardWidePage => 'Wide page';

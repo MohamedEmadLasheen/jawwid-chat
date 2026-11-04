@@ -66,3 +66,37 @@ None of these is a secret.
 
 Before a store build is submitted, release-qa checks a signed build on a real
 iPhone.
+
+## App icon and launch screen (PD-56 PR-G)
+
+The owner (2026-11-03): use the official Jawwid logo, preserve its design and colours, and
+invent nothing. So the icons are composed from the original
+(`assets/brand/source/jawwid-logo-original.jpg`, sha256 `32907c53…0dd90cec`). The only
+operations are: trim the white margin, scale with Lanczos, centre on the logo's own white, and
+make near-white pixels transparent for the Android layers. No logo pixel changes colour.
+
+| Output | From |
+|---|---|
+| iOS AppIcon (every size, 1024 opaque) | `assets/brand/app-icon-1024.png` (the lockup at 78% width on white) |
+| Android launcher and adaptive icon (white background) | `assets/brand/adaptive-foreground-1024.png` (the lockup inside the 66% safe circle) |
+| Google Play listing icon (upload by hand) | `assets/brand/play-store-icon-512.png` |
+| Launch screen, iOS and Android, light and dark (white: the logo has no dark-background version) | `assets/brand/splash-logo.png`, `splash-android12-1152.png` |
+
+To regenerate after a new logo (Pillow in a virtualenv):
+
+```bash
+python3 scripts/brand/make-app-icons.py
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```
+
+Then restore `ios/Runner/Info.plist` and `ios/Runner.xcodeproj/project.pbxproj`. Both tools
+rewrite them needlessly: the splash tool re-indents the plist, and the icon tool sets
+`ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS` to `AppIcon`.
+
+`bash scripts/qa/guards.sh app-icons` fails if any icon or launch image is Flutter's template,
+or if the 1024 icon has an alpha channel.
+
+**The 1024 is soft.** The source logo is only 348×126 px of artwork, so the 1024 icon is a
+~2.3× upscale. A vector (SVG) or high-resolution original from the owner would make the store
+artwork crisp. Rerun the three commands above with it as the source.

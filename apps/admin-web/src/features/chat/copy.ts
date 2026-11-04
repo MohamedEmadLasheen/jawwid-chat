@@ -39,7 +39,7 @@ export const chatCopy = {
   ar: {
     // PD-33: the cover line under a chat's name, and the backup's chip.
     coverLine: (c: { coverName: string; supervisorName: string; until: string }) =>
-      `التغطية: ${c.coverName} بدلًا من ${c.supervisorName} حتى ${coverDay(c.until, 'ar-EG')}`,
+      `التغطية: ${c.coverName} بدلًا من ${c.supervisorName} حتى ${coverDay(c.until, 'ar-EG-u-nu-latn')}`,
     coveringFor: (name: string) => `تغطية عن ${name}`,
     // PD-36 @mentions. Arabic worded without a gendered verb: the names are anyone's.
     mentionSomeone: 'الإشارة إلى شخص',
@@ -302,11 +302,11 @@ export const chatCopy = {
       // A list preview carries the kind only: then the line is generic.
       'cover.started': (p: Record<string, unknown>) =>
         p.cover && p.supervisor
-          ? `التغطية: ${String(p.cover)} بدلًا من ${String(p.supervisor)} حتى ${coverDay(p.until, 'ar-EG')}`
+          ? `التغطية: ${String(p.cover)} بدلًا من ${String(p.supervisor)} حتى ${coverDay(p.until, 'ar-EG-u-nu-latn')}`
           : 'التغطية: مشرف بديل يتابع مؤقتًا',
       'cover.extended': (p: Record<string, unknown>) =>
         p.cover && p.supervisor
-          ? `مُدّدت التغطية: ${String(p.cover)} بدلًا من ${String(p.supervisor)} حتى ${coverDay(p.until, 'ar-EG')}`
+          ? `مُدّدت التغطية: ${String(p.cover)} بدلًا من ${String(p.supervisor)} حتى ${coverDay(p.until, 'ar-EG-u-nu-latn')}`
           : 'مُدّدت التغطية',
       'cover.ended': (p: Record<string, unknown>) =>
         p.supervisor ? `انتهت التغطية؛ عادت المتابعة إلى ${String(p.supervisor)}` : 'انتهت التغطية',

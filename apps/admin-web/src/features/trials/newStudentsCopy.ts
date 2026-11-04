@@ -87,7 +87,7 @@ function fold(text: string): string {
 /** Money without noise: whole amounts carry no ".00" (1,300 EGP; ١٬٣٠٠ ج.م.). */
 export function formatAmount(amount: number, currency: string, locale: 'ar' | 'en'): string {
   try {
-    return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', {
+    return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', {
       style: 'currency',
       currency,
       currencyDisplay: 'narrowSymbol',
@@ -113,6 +113,6 @@ export function currencyName(code: string, locale: 'ar' | 'en'): string {
 export function formatClock(hhmm: string, locale: 'ar' | 'en'): string {
   const [h, m] = hhmm.split(':').map(Number)
   if (h === undefined || m === undefined || Number.isNaN(h) || Number.isNaN(m)) return hhmm
-  const n = new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { minimumIntegerDigits: 2, useGrouping: false })
+  const n = new Intl.NumberFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { minimumIntegerDigits: 2, useGrouping: false })
   return `${n.format(h)}:${n.format(m)}`
 }

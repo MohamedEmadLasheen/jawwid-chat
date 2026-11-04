@@ -143,6 +143,17 @@ if [ "$ENVIRONMENT" = "production" ]; then
     echo "  FORBIDDEN   APNS_PRODUCTION must be 'true' -- sandbox APNs drops production tokens"
     errors=$((errors + 1))
   fi
+  # PD-56: the API refuses to boot with these too (apps/api/src/billing/stripe-config.ts);
+  # caught here, before the backup and the migrations, rather than after them.
+  case "$(lookup STRIPE_SECRET_KEY)" in
+    sk_test_* | rk_test_*)
+      echo "  FORBIDDEN   STRIPE_SECRET_KEY is a Stripe TEST key -- no money would move"
+      errors=$((errors + 1)) ;;
+  esac
+  if [ -n "$(lookup STRIPE_SECRET_KEY)" ] && [ -z "$(lookup STRIPE_WEBHOOK_SECRET)" ]; then
+    echo "  FORBIDDEN   STRIPE_WEBHOOK_SECRET is missing -- card payments could never be recorded"
+    errors=$((errors + 1))
+  fi
 fi
 
 printf '\n%d variables checked, %d error(s), %d note(s)\n' "$checked" "$errors" "$warnings"

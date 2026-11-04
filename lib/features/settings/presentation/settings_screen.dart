@@ -22,6 +22,7 @@ import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
 import '../../rewards/application/reward_feed.dart';
 import '../application/theme_mode_controller.dart';
+import '../data/parent_notice_repository.dart';
 import 'date_time_screen.dart';
 import 'lesson_audio_about_screen.dart';
 
@@ -195,8 +196,8 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
-          // PD-48: the lesson-audio notice and its terms -- the parents' only.
-          if (user?.role == UserRole.parent) ...[
+          // PD-48: the lesson-audio notice and its terms -- the parents' only, from Phase 2.
+          if (kLessonAudioNoticeLive && user?.role == UserRole.parent) ...[
             ListTile(
               key: const ValueKey('settings-lesson-audio'),
               leading: const Icon(Icons.record_voice_over_outlined),
