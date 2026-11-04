@@ -91,6 +91,9 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
         p.decision === RulingDecision.EXCUSED ? category : null,
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
+    case CardKind.LESSON_SCHEDULED:
+      // The time is the card's own startsAt, which clients draw in the reader's zone.
+      return ar ? `📅 أُضيفت حصة جديدة لـ ${learner}` : `📅 A new lesson was added for ${learner}`;
     case CardKind.LESSON_MOVED:
       // The times are the card's own timestamps, which clients draw in the reader's zone.
       return ar ? `📅 تغيّر موعد حصة ${learner}` : `📅 ${learner}'s lesson was moved`;

@@ -335,6 +335,8 @@ export const CardKind = {
   LESSON_LATE_APOLOGY: 'lesson_late_apology',
   LESSON_RULING: 'lesson_ruling',
   LESSON_MAKEUP_BOOKED: 'lesson_makeup_booked',
+  /** PD-46 (CHATSCHED-001): a lesson added outside the weekly times. */
+  LESSON_SCHEDULED: 'lesson_scheduled',
   /** PD-31: one lesson moved to another time. */
   LESSON_MOVED: 'lesson_moved',
   /** PD-31: a one-off lesson a change of teacher could not carry; a new time follows. */

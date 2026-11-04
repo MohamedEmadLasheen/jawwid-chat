@@ -35,6 +35,7 @@ import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 import { lessonPosition } from '../billing/subscription-reads';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
 import { TeacherScopeService, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
+import { LessonWriter, changeOfOutcome } from './lesson-writer';
 import { ReportMaterials, hasMaterials, parseReportMaterials, type CardPractice, type ReportMaterialsInput } from '../materials/report-materials';
 
 /** PD-35: no teacher -- the scope of someone outside the Teachers department. */
@@ -81,6 +82,16 @@ export interface CardSubject {
   learnerId: string;
   organizationId: string;
   teacherId: string;
+}
+
+/** The key of the one card that announces this lesson change (PD-46 §3.4). */
+export function cardKey(lesson: { id: string; revision: bigint | number }, change: string): string {
+  return `lesson:${lesson.id}:${String(lesson.revision)}:${change}`;
+}
+
+/** How a card is posted: `idempotencyKey` makes the post once-only (PD-46 §3.4). */
+export interface CardOptions {
+  idempotencyKey?: string;
 }
 
 export const LESSON_INCLUDE = {
@@ -133,6 +144,8 @@ export const DEFAULT_ZONE = 'Africa/Cairo';
 @Injectable()
 export class LessonService {
   readonly teacherScope: TeacherScopeService;
+  /** PD-46: every write of chat.lesson, announced in its own transaction. */
+  readonly writer: LessonWriter;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -153,6 +166,7 @@ export class LessonService {
     @Optional() teacherScope?: TeacherScopeService,
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
+    this.writer = new LessonWriter(prisma);
   }
 
   /**
@@ -188,7 +202,7 @@ export class LessonService {
 
     const learner = await this.prisma.learner.findFirst({
       where: { id: learnerId, organizationId: actor.organizationId },
-      select: { id: true, teacherId: true },
+      select: { id: true, teacherId: true, familyId: true },
     });
     // PD-35: a learner of a teacher outside the caller's scope reads as unknown.
     if (!learner || (learner.teacherId && !(await this.teacherScope.covers(actor, learner.teacherId)))) {
@@ -196,22 +210,25 @@ export class LessonService {
     }
     if (!learner.teacherId) throw stateError('the learner has no assigned teacher');
     await this.assertMayBook(learner.id);
+    const lang = await this.languageOf({ learner: { familyId: learner.familyId } });
 
     const lesson = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const created = await tx.lesson.create({
-          data: {
-            organizationId: actor.organizationId as string,
-            learnerId,
-            teacherId: learner.teacherId as string,
-            kind: makeupFor ? LessonKind.MAKEUP : LessonKind.REGULAR,
-            makeupFor,
-            startsAt,
-            endsAt,
-            createdBy: actor.actorId,
-          },
-          include: LESSON_INCLUDE,
-        }).then(learnerLesson);
+        const created = await this.writer.create(tx, 'created', {
+          organizationId: actor.organizationId as string,
+          learnerId,
+          teacherId: learner.teacherId as string,
+          kind: makeupFor ? LessonKind.MAKEUP : LessonKind.REGULAR,
+          makeupFor,
+          startsAt,
+          endsAt,
+          createdBy: actor.actorId,
+        }, LESSON_INCLUDE).then(learnerLesson);
+        // CHATSCHED-001: the family hears of a lesson added outside the weekly
+        // times, like any other lesson change.
+        await this.postCard(tx, created, actor, CardKind.LESSON_SCHEDULED, this.cardBase(created), lang, {
+          idempotencyKey: cardKey(created, 'created'),
+        });
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'lesson.scheduled',
@@ -792,12 +809,9 @@ export class LessonService {
           where: { id: ruling.id },
           data: { decision: RulingDecision.EXCUSED, decidedBy: actor.actorId, decidedAt: now, decisionNote: reason },
         });
-        const updated = await tx.lesson.update({
-          where: { id: lesson.id },
-          data: {
-            outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now,
-            excuseCategory: category,
-          },
+        const updated = await this.writer.update(tx, 'outcome', lesson.id, {
+          outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now,
+          excuseCategory: category,
         });
         await this.emitClosed(tx, updated, lesson.outcome !== null);
         await this.postCard(
@@ -931,13 +945,10 @@ export class LessonService {
         });
         const outcome = decision === RulingDecision.EXCUSED ? LessonOutcome.STUDENT_APOLOGY : LessonOutcome.STUDENT_NO_SHOW;
         if (lesson.outcome !== outcome) {
-          const updated = await tx.lesson.update({
-            where: { id: lesson.id },
-            data: {
-              outcome, outcomeNote: note ?? ruling.reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date(),
-              // PD-50: an excused late apology keeps the family's category.
-              excuseCategory: outcome === LessonOutcome.STUDENT_APOLOGY ? ruling.excuseCategory : null,
-            },
+          const updated = await this.writer.update(tx, changeOfOutcome(outcome), lesson.id, {
+            outcome, outcomeNote: note ?? ruling.reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date(),
+            // PD-50: an excused late apology keeps the family's category.
+            excuseCategory: outcome === LessonOutcome.STUDENT_APOLOGY ? ruling.excuseCategory : null,
           });
           await this.emitClosed(tx, updated, lesson.outcome !== null);
           await this.recordAttendance(tx, updated, actor, lesson.learner.familyId);
@@ -1003,17 +1014,14 @@ export class LessonService {
     const lang = await this.languageOf(lesson);
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const updated = await tx.lesson.update({
-          where: { id: lesson.id },
-          data: {
-            outcome,
-            outcomeNote,
-            outcomeByKind: actor.kind,
-            outcomeBy: actor.actorId,
-            outcomeAt: now,
-            ...(excuseCategory ? { excuseCategory } : {}),
-            ...(cancelCause ? { cancelCause } : {}),
-          },
+        const updated = await this.writer.update(tx, changeOfOutcome(outcome), lesson.id, {
+          outcome,
+          outcomeNote,
+          outcomeByKind: actor.kind,
+          outcomeBy: actor.actorId,
+          outcomeAt: now,
+          ...(excuseCategory ? { excuseCategory } : {}),
+          ...(cancelCause ? { cancelCause } : {}),
         });
         await then(tx, lesson, actor, lang);
         // A lesson that will not happen reminds nobody -- in the same
@@ -1083,10 +1091,11 @@ export class LessonService {
     kind: string,
     payload: Record<string, unknown>,
     lang: CardLanguage,
+    opts: CardOptions = {},
   ): Promise<string | null> {
     const conv = await this.groupFor(tx, lesson);
     if (!conv) return null;
-    return this.postCardInto(tx, conv, lesson.id, recorder, kind, payload, lang);
+    return this.postCardInto(tx, conv, lesson.id, recorder, kind, payload, lang, opts);
   }
 
   /**
@@ -1103,7 +1112,20 @@ export class LessonService {
     kind: string,
     payload: Record<string, unknown>,
     lang: CardLanguage,
+    opts: CardOptions = {},
   ): Promise<string> {
+    // PD-46 §3.4: one card per lesson change -- the key is (lesson, revision,
+    // change), so the same change posted twice answers the card already there.
+    // (A retried REQUEST is a new transaction: it re-reads the lesson, whose
+    // revision has moved on, and refuses or posts on its own merits.) The key is
+    // locked first, so two transactions posting the same change queue here
+    // instead of racing to the unique index -- a P2002 inside a transaction
+    // would abort it, so it cannot be caught and turned into "the card exists".
+    if (opts.idempotencyKey) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'card:' + opts.idempotencyKey}, 0))`;
+      const existing = await tx.messageCard.findUnique({ where: { idempotencyKey: opts.idempotencyKey }, select: { messageId: true } });
+      if (existing) return existing.messageId;
+    }
     const locked = await tx.$queryRaw<Array<{ last_seq: bigint }>>`
       SELECT last_seq FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE`;
     const seq = locked[0].last_seq + BigInt(1);
@@ -1133,7 +1155,10 @@ export class LessonService {
       },
     });
     await tx.messageCard.create({
-      data: { messageId: message.id, organizationId: conv.organizationId, kind, lessonId, payload: payload as Prisma.InputJsonValue },
+      data: {
+        messageId: message.id, organizationId: conv.organizationId, kind, lessonId,
+        payload: payload as Prisma.InputJsonValue, idempotencyKey: opts.idempotencyKey ?? null,
+      },
     });
     const recipients = members.filter((m) => m.actorId !== author?.actorId);
     if (recipients.length > 0) {
@@ -1174,9 +1199,20 @@ export class LessonService {
 
   /**
    * Where a lesson's card is posted: the learner's live student group, or else a
-   * live PD-8 family group that is about the learner and that the lesson's
-   * teacher is in. Both belong to ONE family (chat.conversation_learner holds a
-   * single family's children), so a card never reaches another family.
+   * live PD-8 family group that is about the learner AND that this lesson's
+   * teacher is in -- or WAS in. Both belong to ONE family
+   * (chat.conversation_learner holds a single family's children), so a card
+   * never reaches another family.
+   *
+   * CHATSCHED-012: after a change of teacher the old one has LEFT the group but
+   * still closes their remaining lessons, and the family must still read those
+   * records (and may contest them), so a group the teacher was ever a member of
+   * qualifies, the current one first.
+   *
+   * Never a group this teacher was never in (#420 review): a family group can
+   * hold several children with different teachers, and child A's attendance,
+   * apology or ruling (with its notes and excuse category) does not belong in a
+   * group that only sibling B's teacher was let into.
    */
   async groupFor(tx: Tx, lesson: CardSubject) {
     const own = await tx.conversation.findFirst({
@@ -1193,8 +1229,10 @@ export class LessonService {
          AND c.archived_at IS NULL
          AND c.organization_id = ${lesson.organizationId}::uuid
          AND EXISTS (SELECT 1 FROM chat.conversation_member m
-                      WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid AND m.left_at IS NULL)
-       ORDER BY c.created_at DESC
+                      WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid)
+       ORDER BY EXISTS (SELECT 1 FROM chat.conversation_member m
+                         WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid AND m.left_at IS NULL) DESC,
+                c.created_at DESC
        LIMIT 1`;
     return rows.length ? tx.conversation.findUnique({ where: { id: rows[0].id } }) : null;
   }

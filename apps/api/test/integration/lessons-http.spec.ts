@@ -166,7 +166,9 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     const page = await http(fam.parent, 'GET', `/conversations/${fam.groupId}/messages`);
     expect(page.status).toBe(200);
     const cards = (page.json.messages as Array<{ type: string; moderation: string; card: { kind: string; lessonId: string; payload: Record<string, unknown> } | null }>)
-      .filter((x) => x.type === 'card' && x.card?.lessonId === id);
+      // The report's card -- not the lesson's own `lesson_scheduled` card from when
+      // it was added (PD-46 / CHATSCHED-001), which this family reads too.
+      .filter((x) => x.type === 'card' && x.card?.lessonId === id && x.card.kind !== 'lesson_scheduled');
     expect(cards).toHaveLength(1);
     expect(cards[0].moderation).toBe('published');
     expect(cards[0].card?.payload.covered).toBe('Al-Mulk 1-15');
