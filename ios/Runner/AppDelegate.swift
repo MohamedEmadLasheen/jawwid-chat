@@ -1,5 +1,6 @@
 import Flutter
 import PushKit
+import UserNotifications
 import UIKit
 
 /**
@@ -116,7 +117,16 @@ import UIKit
   }
 
   /// Ask iOS for both tokens. Safe to call repeatedly.
+  ///
+  /// A standard APNs token alone shows the person nothing: without notification
+  /// authorization iOS presents no banner, sound or badge. So this asks for it
+  /// here, when a session begins (after sign-in, the moment a notification first
+  /// matters, never at launch). iOS shows the prompt once; later calls answer from
+  /// the person's choice without asking. A refusal changes nothing else: the token
+  /// is still registered, and calls still ring through PushKit and CallKit, which
+  /// need no such authorization.
   private func startRegistering() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     DispatchQueue.main.async {
       UIApplication.shared.registerForRemoteNotifications()
     }

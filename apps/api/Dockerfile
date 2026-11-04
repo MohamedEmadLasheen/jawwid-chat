@@ -37,6 +37,14 @@ RUN npm run build
 
 # ---------------------------------------------------------------- runtime deps
 FROM node:24.18.0-bookworm-slim AS prod-deps
+# `prisma generate` picks the query engine by the OpenSSL it finds, and the
+# slim base has none: without this it falls back to the openssl-1.1.x engine,
+# while the runtime below has OpenSSL 3 (ca-certificates depends on it), and
+# the API dies at boot with "could not locate the Query Engine". This stage's
+# node_modules is what the runtime ships, so it must see the runtime's OpenSSL.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
@@ -68,6 +76,12 @@ COPY --chown=node:node assets ./assets
 # `node` is an unprivileged user that ships with the base image. The runtime
 # needs no write access to its own code, so nothing here is owned by root.
 USER node
+
+# Fail the BUILD, not the first boot, if Prisma cannot load its engine here: it
+# connects through Prisma's own engine lookup to a port nothing listens on.
+# P1001 ("can't reach database server") means the engine loaded; anything else
+# (the engine missing or built for another OpenSSL) stops the build.
+RUN node -e "const {PrismaClient}=require('@prisma/client');new PrismaClient({datasourceUrl:'postgresql://check@127.0.0.1:1/check'}).\$connect().then(()=>process.exit(1),e=>{if(e.errorCode==='P1001')process.exit(0);console.error('Prisma engine check failed:',e.message);process.exit(1)})"
 
 EXPOSE 3000
 

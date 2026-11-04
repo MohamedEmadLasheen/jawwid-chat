@@ -81,6 +81,19 @@ export function selectPushProvider(
   const fcmConfig = readGroup('FCM', FCM_VARS, env);
   const voipEnabled = isTrue(env[VOIP_GATE]);
 
+  // Store blocker S-05: production delivers to BOTH stores. A production API
+  // without either transport would schedule every notification and deliver it
+  // to no one, while its dashboards stayed green -- refused at startup instead.
+  // Staging and laptops may run without (the manifest marks them opt there).
+  const appEnv = (env.APP_ENV ?? 'local').trim().toLowerCase();
+  if (appEnv === 'production' && (!apnsConfig || !fcmConfig)) {
+    const missing = [apnsConfig ? null : 'APNs', fcmConfig ? null : 'FCM'].filter(Boolean).join(' and ');
+    throw new Error(
+      `push: APP_ENV=production with no ${missing} configuration -- iPhones and Android phones would get no ` +
+        `message notifications and no call rings. Set ${APNS_VARS.join(', ')} and ${FCM_VARS.join(', ')}.`,
+    );
+  }
+
   if (!apnsConfig && !fcmConfig) {
     logger.warn(
       'push delivery is the logging provider: notifications are scheduled and ' +

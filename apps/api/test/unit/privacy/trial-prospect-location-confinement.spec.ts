@@ -22,9 +22,10 @@ const ROOTS: ReadonlyArray<{ dir: string; ext: RegExp }> = [
 ];
 const SKIP = new Set(['node_modules', 'dist', 'build', 'coverage']);
 
-/** Each file allowed to name it, and why. PR-3 adds the booking write and the pre-fill read. */
+/** Each file allowed to name it, and why. */
 const ALLOWED: Readonly<Record<string, string>> = {
   'supabase/migrations/20261030030000_chat_pd045_parent_location.sql': 'defines the table, its guard and its retention purge',
+  'apps/api/src/new-students/booking-location.ts': 'its one writer (the booking) and its one reader (the pre-fill of Sales\' form)',
 };
 
 const NAMES = /\btrial_prospect_location\b|\btrialProspectLocation\b|\bTrialProspectLocation\b/;

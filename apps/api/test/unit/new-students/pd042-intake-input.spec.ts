@@ -108,6 +108,16 @@ describe('PD-42 -- the intake\'s payload hash and PD-16\'s keys', () => {
     expect(parentContactKeys('a@b.test', '+99 000 333 444').map((k) => k.kind)).toEqual(['email']);
     expect(parentContactKeys('A@B.test', null)[0]!.hash).toBe(contactKeyHash('email', 'a@b.test'));
   });
+
+  it('PD-45: Assign reads a local number in the country Sales recorded, as a re-keyed reading a corrected country replaces', () => {
+    expect(parentContactKeys(null, '050 765 8888', 'AE')).toEqual([
+      { kind: 'phone', hash: contactKeyHash('phone', '+971507658888'), source: 'rekey' },
+    ]);
+    expect(parentContactKeys(null, '+20 100 765 8888', 'AE')).toEqual([
+      { kind: 'phone', hash: contactKeyHash('phone', '+201007658888'), source: 'record' },
+    ]);
+    expect(parentContactKeys('a@b.test', null, 'AE')[0]).toMatchObject({ kind: 'email', source: 'record' });
+  });
 });
 
 describe('PD-42 -- the contact-key backfill plan', () => {

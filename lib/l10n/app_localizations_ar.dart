@@ -2907,10 +2907,11 @@ class L10nAr extends L10n {
   String get signupFailed => 'حدث خطأ. حاول مرة أخرى.';
 
   @override
-  String get resetOpen => 'نسيت كلمة المرور؟ لديّ رمز إعادة تعيين';
+  String get resetOpen =>
+      'نسيت كلمة المرور؟ لديّ رمز الدخول الأول أو رمز إعادة التعيين';
 
   @override
-  String get resetTitle => 'تعيين كلمة مرور جديدة';
+  String get resetTitle => 'تعيين كلمة المرور';
 
   @override
   String get resetIntro =>
@@ -2937,7 +2938,7 @@ class L10nAr extends L10n {
 
   @override
   String get signInStaffResetHint =>
-      'المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.';
+      'المعلمون والموظفون: اطلب رمز الدخول الأول أو رمز إعادة التعيين من مشرفك.';
 
   @override
   String get changePasswordTitle => 'تغيير كلمة المرور';
@@ -2988,10 +2989,11 @@ class L10nAr extends L10n {
       'سنرسل رمزًا عبر واتساب إلى رقم الهاتف المسجّل لك لدى الأكاديمية.';
 
   @override
-  String get recoveryHaveCode => 'لديّ رمز من الأكاديمية';
+  String get recoveryHaveCode => 'لديّ رمز الدخول الأول أو رمز إعادة التعيين';
 
   @override
-  String get recoveryHaveCodeHint => 'أعطاك مشرفك رمز إعادة تعيين لمرة واحدة.';
+  String get recoveryHaveCodeHint =>
+      'أعطاك مشرفك رمز الدخول الأول أو رمز إعادة التعيين، وهو يعمل مرة واحدة.';
 
   @override
   String get recoveryStillStuck =>
