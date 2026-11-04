@@ -422,6 +422,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                         children: [
                           _Floating(
                             children: [
+                              // Back leaves the board itself (the system Back leaves full screen first).
+                              if (Navigator.of(context).canPop())
+                                BackButton(key: const ValueKey('board-full-screen-back'), onPressed: () => Navigator.of(context).pop()),
                               IconButton(
                                 key: const ValueKey('board-exit-full-screen'),
                                 tooltip: l10n.boardExitFullScreen,
@@ -542,8 +545,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
+        useSafeArea: true,
         showDragHandle: true,
-        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId),
+        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId, closeOnPlace: true),
       ),
     );
   }
