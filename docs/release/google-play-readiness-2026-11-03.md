@@ -22,6 +22,36 @@ Policy sources (read 2026-11-03):
 - [User-generated content](https://support.google.com/googleplay/android-developer/answer/9876937)
 - [Testing requirements for new personal accounts](https://support.google.com/googleplay/android-developer/answer/14151465)
 
+## 0. Status update (2026-11-04)
+
+**Gate references.**
+- `S-01` to `S-08` are the store gates in `docs/qa/release-gate.md` on `main`.
+- `S-09` to `S-14` are defined only in PR #447's update of that file, which is not merged yet:
+  - **S-09**: users can report what other users post;
+  - **S-10**: payments follow the store payments policies;
+  - **S-11**: iOS asks for notification permission at a sensible time;
+  - **S-12**: tapping a notification opens what it is about;
+  - **S-13**: Android shows notifications;
+  - **S-14**: no iOS privacy prompt is missing.
+- They become valid references here once #447 merges.
+
+**Who each item waits on.** Approvals and pending items are as recorded in
+`docs/release/google-play-blocker-roadmap-2026-11-03.md` §1.
+
+| # | Kind | State |
+|---|---|---|
+| P-1 Report | **Engineering.** The owner approved the requirements (A-1); only the wording of the reason labels is pending (N-4). | Roadmap WP-1 |
+| P-2 Block | **Engineering.** The owner approved the requirements (A-2). | Roadmap WP-2 |
+| P-3 Terms | **Engineering, plus an owner input.** The structure is approved (A-3). The legal wording and document versions are a **pending owner decision** (N-3). | Roadmap WP-3 |
+| P-4 Payments | **Owner decision, then engineering.** The owner chose an in-app external gateway (A-6), which **supersedes** this report's option (a) below. The product-by-product assessment is done. Five owner questions are open (N-5). No change starts before them. | Roadmap WP-4 |
+| P-5 Reviewer sign-in | **Owner.** It needs the production backend, the demo accounts and the credentials (N-6). The Console entry follows. | Owner |
+| P-6 Silent call when locked | **Engineering, already built in PR #411** (stacked on #408). It is not a new item. What remains: the `microphone` type only, a rebase after #408, and device rows SB-30, SB-31 and SB-35. Then the **owner** files the Play Console foreground-service declaration. | Roadmap WP-5 |
+| P-7 Notifications and calls while closed | **Engineering**: #408, with #449's notification layer merged in (roadmap G0, uncommitted, waiting for the owner). Then the **owner** provides the Firebase project and files the full-screen-intent declaration. | Roadmap §3 |
+| D-1 Package name | **Pending owner decision** (N-2) | — |
+| D-2 Account type | **Decided: Organization** (A-7). The checklist is in the roadmap, §11. | Owner |
+| D-3 Target audience | **Pending owner decision** (N-1) | — |
+| D-4 Listing assets | **Owner**, after D-3 | — |
+
 ## 1. Would cause a rejection or a policy strike
 
 | # | Issue | Why Play rejects it | Fix | Owner |
@@ -36,8 +66,8 @@ Policy sources (read 2026-11-03):
 
 | # | Issue | Evidence | Fix |
 |---|---|---|---|
-| P-6 | **A call goes silent when the screen locks or the user leaves the app.** | CODE. No foreground service exists. Neither the app's manifest nor `livekit_client` 2.13 / `flutter_webrtc` 1.6.2 declares `FOREGROUND_SERVICE` or a service. Android 11+ gives a background app silence from the microphone unless it runs a foreground service of type `microphone`, started while the app is visible. A teacher who locks the phone mid-lesson is heard as silence. Not yet run on a device. | A foreground service started when a call connects and stopped when it ends: type `microphone` (and `phoneCall` if the full-screen ringer is built), with an ongoing "Call in progress" notification. This adds `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE`, and the **Foreground service declaration in Play Console, which needs a short video** of the feature. Sequence it after the PD-32 amendment merges, because both change `MainActivity.kt` and the manifest. DEVICE test: lock the screen during a call, both directions. |
-| P-7 | **Notifications and calls while closed** (S-05, S-06, S-13) | The PD-32 amendment (in progress) adds FCM, drawing data pushes, the permission request and notification taps. It needs the owner's Firebase project (`google-services.json`). Without it the build compiles and shows nothing. An incoming call while the app is closed still has no ringer on Android. | Finish PD-32; the owner creates the Firebase project. For the ringer: a call-style notification. If it uses a **full-screen intent**, Android 14+ grants `USE_FULL_SCREEN_INTENT` only to apps whose core function is calling or alarms, and Play Console asks for a declaration. A high-priority call-style notification **without** a full-screen intent avoids that declaration, at the cost of no ringing over the lock screen. |
+| P-6 | **A call goes silent when the screen locks or the user leaves the app.** Fixed by **PR #411** (see §0). | CODE, on `main`. No foreground service exists on `main`; #411 adds one. Neither the app's manifest nor `livekit_client` 2.13 / `flutter_webrtc` 1.6.2 declares `FOREGROUND_SERVICE` or a service. Android 11+ gives a background app silence from the microphone unless it runs a foreground service of type `microphone`, started while the app is visible. A teacher who locks the phone mid-lesson is heard as silence. Not yet run on a device. | A foreground service started when a call connects and stopped when it ends: type `microphone` (and `phoneCall` if the full-screen ringer is built), with an ongoing "Call in progress" notification. This adds `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE`, and the **Foreground service declaration in Play Console, which needs a short video** of the feature. Sequence it after the PD-32 amendment merges, because both change `MainActivity.kt` and the manifest. DEVICE test: lock the screen during a call, both directions. |
+| P-7 | **Notifications and calls while closed** (S-05, S-06; and S-13, "Android shows notifications", defined in #447) | The PD-32 amendment (in progress) adds FCM, drawing data pushes, the permission request and notification taps. It needs the owner's Firebase project (`google-services.json`). Without it the build compiles and shows nothing. An incoming call while the app is closed still has no ringer on Android. | Finish PD-32; the owner creates the Firebase project. For the ringer: a call-style notification. If it uses a **full-screen intent**, Android 14+ grants `USE_FULL_SCREEN_INTENT` only to apps whose core function is calling or alarms, and Play Console asks for a declaration. A high-priority call-style notification **without** a full-screen intent avoids that declaration, at the cost of no ringing over the lock screen. |
 
 ## 3. Owner decisions that only the owner can make
 
