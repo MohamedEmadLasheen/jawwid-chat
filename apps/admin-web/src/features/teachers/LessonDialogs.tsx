@@ -6,6 +6,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { QueryBoundary } from '@/shared/components/States'
 import { SlotPicker, type LockReason } from '@/shared/components/SlotPicker'
 import type { Pair } from './copy'
+import { newSubmitKey } from '@/core/submit-key'
 import { opsApi, type BlockedOccurrence, type LessonDto, type MoveRefusal } from './opsApi'
 import { O, describeOpsError, fill, formatMinutes } from './opsCopy'
 import { useBlockedSlots, useFreeSlots, useMoveSlots, useOp, useUpcomingLessons } from './opsHooks'
@@ -128,12 +129,18 @@ export function AddLessonDialog({
   const minutes = Number(minutesText)
   const minutesOk = Number.isInteger(minutes) && minutes >= 15 && minutes <= 240
   const q = useFreeSlots(learner.id, minutesOk ? minutes : 0)
+  // CHATSCHED-007: one key per time chosen in this dialog -- a double click or a
+  // retry after a timeout is the same lesson; another time is another request.
+  const [seed] = useState(newSubmitKey)
   const op = useOp((startsAt: string) =>
-    opsApi.schedule({
-      learnerId: learner.id,
-      startsAt,
-      endsAt: new Date(new Date(startsAt).getTime() + minutes * 60_000).toISOString(),
-    }),
+    opsApi.schedule(
+      {
+        learnerId: learner.id,
+        startsAt,
+        endsAt: new Date(new Date(startsAt).getTime() + minutes * 60_000).toISOString(),
+      },
+      `add-lesson:${seed}:${startsAt}:${minutes}`,
+    ),
   )
   return (
     <Dialog title={fill(tx(O.addLessonTitle), { name: learner.name })} onClose={onClose}>
