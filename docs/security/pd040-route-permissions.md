@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-571 routes.
+574 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -325,6 +325,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/leave` | not for staff | `leave/leave.controller.ts#LeaveController.own` |
 | POST | `/api/v1/me/leave-requests` | not for staff | `leave/leave.controller.ts#LeaveController.request` |
 | POST | `/api/v1/me/leave-requests/:id/withdraw` | not for staff | `leave/leave.controller.ts#LeaveController.withdraw` |
+| GET | `/api/v1/me/location` | not for staff | `parent-profile/my-location.controller.ts#MyLocationController.read` |
+| PUT | `/api/v1/me/location` | not for staff | `parent-profile/my-location.controller.ts#MyLocationController.save` |
+| POST | `/api/v1/me/location/later` | not for staff | `parent-profile/my-location.controller.ts#MyLocationController.later` |
 | GET | `/api/v1/me/mentions` | chat.use | `communication/api/mention.controller.ts#MentionController.mine` |
 | GET | `/api/v1/me/notification-settings` | self-service | `communication/api/notification-inbox.controller.ts#NotificationInboxController.settings` |
 | PUT | `/api/v1/me/notification-settings` | self-service | `communication/api/notification-inbox.controller.ts#NotificationInboxController.setSettings` |
