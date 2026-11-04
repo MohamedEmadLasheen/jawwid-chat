@@ -50,7 +50,8 @@ const profile: ParentProfile = {
   isActive: true,
   avatarUrl: null,
   family: { id: 'f-1', name: 'Family Alpha' },
-  contact: { phone: null, email: null, countryCode: null, region: null },
+  contact: { phone: null, email: null, countryCode: null, subdivisionCode: null, location: null, locationSource: null, locationUpdatedAt: null, region: null },
+  suggestedCountryCode: null, suggestedCallingCode: null, timeZone: { app: null, estimate: null, mismatch: false },
   adminNote: null,
   childrenCount: 2,
   children: [

@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
-import { chooseOption } from '@/test/select'
+import { chooseOption, listOf } from '@/test/select'
+import { GEO_COUNTRIES } from '@/test/geo'
 
 /**
  * The Stories studio's contract with the server and with the operator:
@@ -156,6 +157,18 @@ describe('composing', () => {
     expect(screen.getByRole('link', { name: 'Fill it in' })).toHaveAttribute('href', '/admin/stories?tab=audience')
   })
 
+  it('PD-45: "Add a country" offers the dataset\'s countries that are not already chips, pinned markets first', async () => {
+    const geo = { version: 'cldr-49+overlay-test', defaultLabel: { en: 'Region', ar: 'المنطقة' }, countries: GEO_COUNTRIES }
+    vi.stubGlobal('fetch', server({ 'GET /stories/audience/facts': FACTS, 'GET /geo/countries': geo }))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories/new' })
+    await userEvent.click(await screen.findByRole('radio', { name: /Parents & students/ }))
+    const add = screen.getByRole('combobox', { name: 'Add a country' })
+    await userEvent.click(add)
+    await waitFor(() => expect(within(listOf(add)).getAllByRole('option').length).toBeGreaterThan(1))
+    const labels = within(listOf(add)).getAllByRole('option').filter((o) => o.dataset.value !== '').map((o) => o.querySelector('.ss__label')?.textContent)
+    expect(labels).toEqual(['🇪🇬 Egypt', '🇦🇹 Austria', '🇫🇷 France', '🇺🇸 United States'])
+  })
+
   it('a "Message me" button tells the publisher who is left out, and why', async () => {
     const estimates: Array<{ ctaKind: string | null }> = []
     vi.stubGlobal(
@@ -274,6 +287,7 @@ describe('insights', () => {
 })
 
 describe('audience data', () => {
+  const GEO_LIST = { version: 'cldr-49+overlay-test', defaultLabel: { en: 'Region', ar: 'المنطقة' }, countries: GEO_COUNTRIES }
   const FAMILIES = {
     truncated: false,
     families: [
@@ -289,6 +303,7 @@ describe('audience data', () => {
         'GET /stories': { stories: [] },
         'GET /stories/audience/facts': FACTS,
         'GET /stories/audience/families': FAMILIES,
+        'GET /geo/countries': GEO_LIST,
         'POST /stories/audience/families/f1': (body) => {
           posts.push(body)
           return { ...FAMILIES.families[0], countryCode: 'SA', segmentSource: 'admin' }
@@ -300,6 +315,28 @@ describe('audience data', () => {
     await chooseOption(userEvent, select, 'SA')
     await waitFor(() => expect(posts).toEqual([{ countryCode: 'SA' }]))
     expect(await screen.findByText('Saved')).toBeInTheDocument()
+  })
+
+  it('PD-45: the country picker is the shared one, country only -- the dataset\'s order and names, searchable in Arabic, no subdivision', async () => {
+    vi.stubGlobal(
+      'fetch',
+      server({
+        'GET /stories': { stories: [] },
+        'GET /stories/audience/facts': FACTS,
+        'GET /stories/audience/families': { ...FAMILIES, families: [{ ...FAMILIES.families[0], countryCode: 'EG' }] },
+        'GET /geo/countries': GEO_LIST,
+      }),
+    )
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories?tab=audience' })
+    const select = await screen.findByRole('combobox', { name: 'Country: family_w' })
+    await waitFor(() => expect(select).toHaveValue('🇪🇬 Egypt'))
+    await userEvent.click(select)
+    const labels = () => within(listOf(select)).queryAllByRole('option').filter((o) => o.dataset.value !== '').map((o) => o.querySelector('.ss__label')?.textContent)
+    expect(labels()).toEqual(['🇪🇬 Egypt', '🇸🇦 Saudi Arabia', '🇦🇪 United Arab Emirates', '🇦🇹 Austria', '🇫🇷 France', '🇺🇸 United States'])
+    await userEvent.keyboard('الامارات')
+    expect(labels()).toEqual(['🇦🇪 United Arab Emirates'])
+    // Country only: no governorate / region list beside it, whatever the country.
+    expect(screen.queryByRole('combobox', { name: /Governorate|Region/ })).not.toBeInTheDocument()
   })
 
   it('a supervisor publishes but is not offered the audience data', async () => {

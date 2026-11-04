@@ -264,16 +264,6 @@ export const SUGGESTED_COUNTRIES = [
   'TR', 'GB', 'US', 'CA', 'DE', 'FR', 'NL', 'SE', 'AU', 'MY', 'ID', 'PK', 'IN',
 ] as const
 
-/** Every ISO 3166-1 alpha-2 code the browser can name, for "add a country". */
-export function allCountryCodes(): string[] {
-  const A = 65
-  const out: string[] = []
-  for (let i = 0; i < 26; i += 1) {
-    for (let j = 0; j < 26; j += 1) out.push(String.fromCharCode(A + i, A + j))
-  }
-  return out
-}
-
 export function useCountryName() {
   const { locale } = useI18n()
   const names = useMemo(() => {

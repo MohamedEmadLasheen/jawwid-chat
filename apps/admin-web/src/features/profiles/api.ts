@@ -17,6 +17,16 @@ export interface ParentListItem {
   avatarUrl: string | null
   family: { id: string; name: string }
   childrenCount: number
+  /** PD-45: only when asked for (`with=location`); the codes, named by the geo lists. */
+  location?: { countryCode: string | null; subdivisionCode: string | null }
+}
+
+/** PD-45: a family's location as the API names it (apps/api/src/geo/location.ts `locationOf`). */
+export interface LocationNames {
+  country: { code: string; en: string; ar: string }
+  subdivision: { code: string; en: string; ar: string } | null
+  /** The subdivision field's name for this country: Governorate, Emirate, State ... */
+  label: { en: string; ar: string }
 }
 
 export interface ParentProfile {
@@ -26,7 +36,24 @@ export interface ParentProfile {
   isActive: boolean
   avatarUrl: string | null
   family: { id: string; name: string }
-  contact: { phone: string | null; email: string | null; countryCode: string | null; region: string | null }
+  contact: {
+    phone: string | null
+    email: string | null
+    countryCode: string | null
+    subdivisionCode: string | null
+    location: LocationNames | null
+    /** Who last set the location; a parent's own answer is shown to staff before they change it (owner Q6). */
+    locationSource: 'staff' | 'parent' | 'backfill' | null
+    locationUpdatedAt: string | null
+    /** The free text from before PD-45: read-only, shown as the "Old note". Never written. */
+    region: string | null
+  }
+  /** PD-45 §6.2, staff only: the country of an international phone number, never saved by itself. */
+  suggestedCountryCode: string | null
+  /** ... and the number's calling code ("971"), for the chip. Never the number. */
+  suggestedCallingCode: string | null
+  /** PD-45 §7, read-only: the app's clock, the clock the country implies, and whether they differ. */
+  timeZone: { app: string | null; estimate: string | null; mismatch: boolean }
   /** The administration's note about this parent. The parent never sees it. */
   adminNote: string | null
   childrenCount: number
@@ -40,7 +67,7 @@ export type ParentUpdate = Partial<{
   phone: string | null
   email: string | null
   countryCode: string | null
-  region: string | null
+  subdivisionCode: string | null
   adminNote: string | null
 }>
 
@@ -167,6 +194,8 @@ export interface StudentProfile {
   family?: { id: string; name: string; parents: Array<{ id: string; name: string }> }
   /** PD-22: the family's own zone (from a parent's phone), or null before any parent opened the app. */
   familyTimeZone?: string | null
+  /** PD-45 §7: the zone the family's country implies, only while `familyTimeZone` is null. Read-only. */
+  familyTimeZoneEstimate?: string | null
   viewer: 'teacher' | 'staff'
 }
 
@@ -182,9 +211,10 @@ const parent = (id: string) => `/parent-profiles/${encodeURIComponent(id)}`
 const family = (id: string) => `/families/${encodeURIComponent(id)}`
 
 export const profilesApi = {
-  parents: (q: string, access: ParentAccessFilter = 'all') => {
-    const params = { ...(q ? { q } : {}), ...(access !== 'all' ? { access } : {}) }
-    return api.get<{ items: ParentListItem[]; truncated: boolean }>('/parent-profiles', Object.keys(params).length ? params : undefined)
+  parents: (q: string, access: ParentAccessFilter = 'all', location: ParentLocationFilter = 'all') => {
+    // PD-45: the Parents list always shows each family's location (`with=location`); "Missing" is the API's own filter.
+    const params = { ...(q ? { q } : {}), ...(access !== 'all' ? { access } : {}), with: 'location', ...(location === 'missing' ? { location } : {}) }
+    return api.get<{ items: ParentListItem[]; truncated: boolean }>('/parent-profiles', params)
   },
   parent: (id: string) => api.get<ParentProfile>(parent(id)),
   updateParent: (id: string, body: ParentUpdate) => api.post<ParentProfile>(parent(id), body),
@@ -213,7 +243,7 @@ export const profilesApi = {
 
 export const profileKeys = {
   all: ['pd17-profiles'] as const,
-  parents: (q: string, access: ParentAccessFilter = 'all') => ['pd17-profiles', 'parents', q, access] as const,
+  parents: (q: string, access: ParentAccessFilter = 'all', location: ParentLocationFilter = 'all') => ['pd17-profiles', 'parents', q, access, location] as const,
   parent: (id: string) => ['pd17-profiles', 'parent', id] as const,
   billing: (familyId: string) => ['pd17-profiles', 'billing', familyId] as const,
   student: (id: string) => ['pd17-profiles', 'student', id] as const,
@@ -222,6 +252,8 @@ export const profileKeys = {
 /** Where each profile lives: one URL per person, whoever opens it. */
 /** PD-44: the Parents list's subscription filter -- families with a child locked, or in the grace period. */
 export type ParentAccessFilter = 'all' | 'locked' | 'grace'
+/** PD-45: the Parents list's location filter -- families with no country, or none of the subdivision their country has. */
+export type ParentLocationFilter = 'all' | 'missing'
 
 export const parentPath = (id: string) => `/parents/${encodeURIComponent(id)}`
 export const studentPath = (id: string) => `/students/${encodeURIComponent(id)}`
