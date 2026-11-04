@@ -2,8 +2,9 @@
 --
 -- Spec of record: docs/release/google-play-blocker-roadmap-2026-11-03.md
 -- §5.3 and §6.2 (the database), §5.5 (security and privacy), §6.1 (the block
--- rules A-2), §6.3 (the responsible manager). The owner approved A-1 (Report)
--- and A-2 (Block) on 2026-11-03. One migration for WP-1 and WP-2 (§5.3).
+-- rules A-2), §6.3 (the responsible managers). The owner approved A-1 (Report)
+-- and A-2 (Block) on 2026-11-03, and A-2a (every responsible manager is told of
+-- a family's block) on 2026-11-04. One migration for WP-1 and WP-2 (§5.3).
 --
 -- WHAT IS NEW
 --
@@ -21,8 +22,17 @@
 --   chat.actor_block      a personal block (A-2). A parent or a teacher blocks;
 --                         staff never block (§6.1 rule 5). Unique per pair;
 --                         deleting the row unblocks. It points at its case
---                         (case_report_id) and at the manager told of it
---                         (notified_manager_staff_id), each set once.
+--                         (case_report_id), set once.
+--   chat.actor_block_manager_notice
+--                         A-2a (owner, 2026-11-04): one row per manager told of
+--                         a block -- every manager responsible for a supervisor
+--                         of the family's children, across departments. Unique
+--                         per block and manager (no duplicate notice).
+--                         Insert-only history: an unblock sets block_id to null
+--                         (ON DELETE SET NULL) and the notice stays, tied to the
+--                         block's case report, which is never deleted. Being
+--                         told grants the manager nothing: no request role
+--                         reads it, and it is not a permission.
 --   chat.config           report.limit.per_reporter_hour = 10 (§5.3 REPORT_SUBMIT).
 --   chat.erase_account    PD-56's erasure, with two additions (§5.5 rule 6, §6.2):
 --                         the erased person's reports are KEPT and their
@@ -34,11 +44,12 @@
 --
 -- RETENTION (one line, §5.5 rule 6): a report outlives its reporter's erasure,
 -- anonymous; its evidence outlives its subject's; a block does not outlive
--- either person's erasure.
+-- either person's erasure; the managers' notices of it do, as the audit log
+-- does.
 --
 -- FAIL CLOSED (§5.5 rule 8). RLS on, no policy, no grant to any request role:
--- chat_app, authenticated, anon and public can neither read nor write either
--- table. Only the API's server-side connection does, through
+-- chat_app, authenticated, anon and public can neither read nor write any of
+-- the three tables. Only the API's server-side connection does, through
 -- apps/api/src/moderation (ENG-02). One guard trigger function per table.
 --
 -- Idempotent: every statement can run again on a database that has it.
@@ -300,9 +311,9 @@ create table if not exists chat.actor_block (
   blocked_id                 uuid not null,
   created_at                 timestamptz not null default now(),
   -- §6.1 rule 4: the moderation case the block opened (a person report by the
-  -- blocker about the blocked person), and the manager told (§6.3). Each set once.
+  -- blocker about the blocked person). Set once. The managers told of the block
+  -- are chat.actor_block_manager_notice rows (A-2a).
   case_report_id             uuid references chat.content_report (id),
-  notified_manager_staff_id  uuid references chat.staff (id),
 
   constraint actor_block_not_self
     check (blocker_kind <> blocked_kind or blocker_id <> blocked_id),
@@ -348,10 +359,8 @@ begin
   elsif (new.id, new.organization_id, new.blocker_kind, new.blocker_id, new.blocked_kind, new.blocked_id, new.created_at)
         is distinct from
         (old.id, old.organization_id, old.blocker_kind, old.blocker_id, old.blocked_kind, old.blocked_id, old.created_at)
-     or (old.case_report_id is not null and new.case_report_id is distinct from old.case_report_id)
-     or (old.notified_manager_staff_id is not null
-         and new.notified_manager_staff_id is distinct from old.notified_manager_staff_id) then
-    raise exception 'a block never changes; its case and its notified manager are each set once'
+     or (old.case_report_id is not null and new.case_report_id is distinct from old.case_report_id) then
+    raise exception 'a block never changes; its case is set once'
       using errcode = 'check_violation';
   end if;
 
@@ -364,10 +373,6 @@ begin
                         and r.subject_kind = new.blocked_kind and r.subject_id = new.blocked_id) then
     raise exception 'a block''s case is the blocker''s own report about the blocked person' using errcode = 'check_violation';
   end if;
-  if new.notified_manager_staff_id is not null
-     and not chat.staff_of(new.notified_manager_staff_id, new.organization_id) then
-    raise exception 'the manager told of a block is staff of its organization' using errcode = 'check_violation';
-  end if;
   return new;
 end;
 $$;
@@ -376,6 +381,85 @@ drop trigger if exists actor_block_is_coherent on chat.actor_block;
 create trigger actor_block_is_coherent
   before insert or update or delete on chat.actor_block
   for each row execute function chat.guard_actor_block();
+
+-- ===========================================================================
+-- 2a. chat.actor_block_manager_notice (A-2a, owner decision 2026-11-04)
+-- ===========================================================================
+-- When a family blocks someone, every manager responsible for a supervisor of
+-- the family's children is told, across departments, once each. The API
+-- (ENG-02) works out who they are (roadmap §6.3) and writes one row per manager
+-- here; the unique constraint is "no duplicate notice to the same manager" in
+-- the database. A teacher's block is told the same way (§6.3).
+--
+-- block_id is ON DELETE SET NULL, not CASCADE and not RESTRICT:
+--   * CASCADE would erase the record that a manager was told as soon as the
+--     family unblocks -- the notice is administrative history, like the audit
+--     log, and must outlive the block;
+--   * RESTRICT would make unblocking (deleting the actor_block row, §6.2)
+--     impossible once anyone was told, or force blocks to become soft-deleted;
+--   * SET NULL lets the block go and keeps the notice. Who blocked whom stays
+--     readable through case_report_id: the block's case report, which is never
+--     deleted (its own guard), so that foreign key can stay a plain RESTRICT.
+-- The guard allows exactly that one change (the foreign key nulling block_id
+-- after its block is gone); nothing else is ever updated or deleted.
+
+create table if not exists chat.actor_block_manager_notice (
+  id                uuid primary key default gen_random_uuid(),
+  organization_id   uuid not null default chat.default_organization_id() references chat.organization (id),
+  block_id          uuid references chat.actor_block (id) on delete set null,
+  case_report_id    uuid not null references chat.content_report (id),
+  manager_staff_id  uuid not null references chat.staff (id),
+  notified_at       timestamptz not null default now(),
+
+  constraint actor_block_manager_notice_once unique (block_id, manager_staff_id)
+);
+
+comment on table chat.actor_block_manager_notice is
+  'PD-57 A-2a (owner, 2026-11-04): one manager told of one block -- every manager responsible for a supervisor of the '
+  'family''s children, across departments, once each. Insert-only history; an unblock nulls block_id and the row stays, '
+  'tied to the block''s case report. Grants the manager nothing. No request role may read it.';
+comment on column chat.actor_block_manager_notice.block_id is
+  'The block; null once it is lifted or erased (ON DELETE SET NULL). case_report_id still says who blocked whom.';
+
+create index if not exists actor_block_manager_notice_case_idx
+  on chat.actor_block_manager_notice (case_report_id);
+create index if not exists actor_block_manager_notice_manager_idx
+  on chat.actor_block_manager_notice (manager_staff_id, notified_at desc);
+
+create or replace function chat.guard_actor_block_manager_notice()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.notified_at := now();
+    -- About a live block that has its case, in the notice's organization.
+    if not exists (select 1 from chat.actor_block b
+                    where b.id = new.block_id and b.organization_id = new.organization_id
+                      and b.case_report_id is not null and b.case_report_id = new.case_report_id) then
+      raise exception 'a block notice is about a block and that block''s case' using errcode = 'check_violation';
+    end if;
+    if not chat.staff_of(new.manager_staff_id, new.organization_id) then
+      raise exception 'the manager told of a block is staff of the organization' using errcode = 'check_violation';
+    end if;
+    return new;
+  end if;
+  -- The one update: the foreign key nulling block_id once its block is gone.
+  if tg_op = 'UPDATE'
+     and old.block_id is not null and new.block_id is null
+     and (to_jsonb(new) - 'block_id') = (to_jsonb(old) - 'block_id')
+     and not exists (select 1 from chat.actor_block b where b.id = old.block_id) then
+    return new;
+  end if;
+  raise exception 'a block notice is written once and kept' using errcode = 'check_violation';
+end;
+$$;
+
+drop trigger if exists actor_block_manager_notice_is_coherent on chat.actor_block_manager_notice;
+create trigger actor_block_manager_notice_is_coherent
+  before insert or update or delete on chat.actor_block_manager_notice
+  for each row execute function chat.guard_actor_block_manager_notice();
 
 -- ===========================================================================
 -- 3. The report limit, as operations-tunable configuration (§5.3)
@@ -396,11 +480,14 @@ on conflict (key) do nothing;
 
 alter table chat.content_report enable row level security;
 alter table chat.actor_block enable row level security;
+alter table chat.actor_block_manager_notice enable row level security;
 revoke all on chat.content_report from public, anon, authenticated, chat_app;
 revoke all on chat.actor_block from public, anon, authenticated, chat_app;
+revoke all on chat.actor_block_manager_notice from public, anon, authenticated, chat_app;
 
 revoke all on function chat.guard_content_report() from public;
 revoke all on function chat.guard_actor_block() from public;
+revoke all on function chat.guard_actor_block_manager_notice() from public;
 
 -- ===========================================================================
 -- 4b. The moderation queue's permission keys (ENG-02, roadmap §5.4)
