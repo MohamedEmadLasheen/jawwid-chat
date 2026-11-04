@@ -5020,13 +5020,13 @@ abstract class L10n {
   /// No description provided for @resetOpen.
   ///
   /// In en, this message translates to:
-  /// **'Forgot your password? I have a reset code'**
+  /// **'Forgot your password? I have a set-up or reset code'**
   String get resetOpen;
 
   /// No description provided for @resetTitle.
   ///
   /// In en, this message translates to:
-  /// **'Set a new password'**
+  /// **'Set your password'**
   String get resetTitle;
 
   /// No description provided for @resetIntro.
@@ -5074,7 +5074,7 @@ abstract class L10n {
   /// TEACHER-023: under the parents' recovery link on the sign-in screen; self-service recovery is for parents only.
   ///
   /// In en, this message translates to:
-  /// **'Teachers and staff: ask your supervisor for a reset code.'**
+  /// **'Teachers and staff: ask your supervisor for a set-up or reset code.'**
   String get signInStaffResetHint;
 
   /// TEACHER-023: Settings row and screen title.
@@ -5164,13 +5164,13 @@ abstract class L10n {
   /// No description provided for @recoveryHaveCode.
   ///
   /// In en, this message translates to:
-  /// **'I have a code from the academy'**
+  /// **'I have a set-up or reset code'**
   String get recoveryHaveCode;
 
   /// No description provided for @recoveryHaveCodeHint.
   ///
   /// In en, this message translates to:
-  /// **'Your supervisor gave you a one-time reset code.'**
+  /// **'Your supervisor gave you a one-time set-up or reset code.'**
   String get recoveryHaveCodeHint;
 
   /// No description provided for @recoveryStillStuck.

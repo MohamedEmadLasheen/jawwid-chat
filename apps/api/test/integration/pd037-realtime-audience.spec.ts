@@ -316,6 +316,31 @@ describe('PD-37: message.status reaches its author only, and only while they may
     for (const c of [parent2, teacher, staff, manager]) expect(c.got(CommEvent.MESSAGE_STATUS)).toBe(false);
   });
 
+  // CHATSCHED-015 (QA RT1-pd46): the teacher and the supervisor sit in the family's room AND are
+  // sent the event by user room, so they got every lesson.changed twice.
+  it('exceptActors: those already told are skipped, everyone else in the room still receives it', async () => {
+    const [parent, parent2, teacher, staff] = await Promise.all([as('parent'), as('parent2'), as('teacher'), as('staff')]);
+    const marker = randomUUID();
+    await gateway.toThreadAudience(groupId, CommEvent.MESSAGE_STATUS, status(marker), { exceptActors: [ids.teacher, ids.staff] });
+    await parent.waitFor(CommEvent.MESSAGE_STATUS, carries(marker));
+    await parent2.waitFor(CommEvent.MESSAGE_STATUS, carries(marker));
+    await sleep(GRACE_MS);
+    expect(teacher.got(CommEvent.MESSAGE_STATUS)).toBe(false);
+    expect(staff.got(CommEvent.MESSAGE_STATUS)).toBe(false);
+  });
+
+  it('exceptActors never widens: someone outside the room (or removed from it) still gets nothing', async () => {
+    const [parent, parent2] = await Promise.all([as('parent'), as('parent2')]);
+    await conversations.setMembership(
+      groupId, ids.staff, { actorId: ids.parent, actorKind: 'contact', memberRole: 'parent' }, 'remove', 'chatsched-015 test',
+    );
+    const marker = randomUUID();
+    await gateway.toThreadAudience(groupId, CommEvent.MESSAGE_STATUS, status(marker), { exceptActors: [ids.teacher] });
+    await parent2.waitFor(CommEvent.MESSAGE_STATUS, carries(marker));
+    await sleep(GRACE_MS);
+    expect(parent.got(CommEvent.MESSAGE_STATUS)).toBe(false);
+  });
+
   it('one delivery for many authors: each receives only their OWN payload', async () => {
     const [parent, teacher, parent2] = await Promise.all([as('parent'), as('teacher'), as('parent2')]);
     const forParent = randomUUID();
@@ -359,6 +384,9 @@ describe('PD-37: the worker relay never widens an audience', () => {
       onlyActors: [ids.parent],
     });
     expect(decodeEnvelope(JSON.stringify({ ...base, audience: { countableOnly: true } }))).not.toBeNull();
+    // CHATSCHED-015: "everyone but these" is a usable audience across nodes -- if it is a list.
+    expect(decodeEnvelope(JSON.stringify({ ...base, audience: { exceptActors: [ids.teacher] } }))?.audience).toEqual({ exceptActors: [ids.teacher] });
+    expect(decodeEnvelope(JSON.stringify({ ...base, audience: { exceptActors: 'x' } }))).toBeNull();
   });
 });
 

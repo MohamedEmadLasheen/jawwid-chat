@@ -190,6 +190,13 @@ export class TrialController {
     return this.trials.correct(actorId, id, body ?? {});
   }
 
+  /** PD-45: what Sales' form starts with -- the location given at booking. Sales only. */
+  @Requires('trials.manage')
+  @Get(':id/subscription-prefill')
+  subscriptionPrefill(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.trials.subscriptionPrefill(actorId, id);
+  }
+
   /** Sales changes a subscribed trial's form. */
   @Requires('trials.manage')
   @Post(':id/subscription')
