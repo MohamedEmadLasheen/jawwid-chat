@@ -22,6 +22,7 @@ import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
 import '../../rewards/application/reward_feed.dart';
 import '../application/theme_mode_controller.dart';
+import '../data/parent_notice_repository.dart';
 import 'date_time_screen.dart';
 import 'lesson_audio_about_screen.dart';
 
@@ -195,8 +196,8 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
-          // PD-48: the lesson-audio notice and its terms -- the parents' only.
-          if (user?.role == UserRole.parent) ...[
+          // PD-48: the lesson-audio notice and its terms -- the parents' only, from Phase 2.
+          if (kLessonAudioNoticeLive && user?.role == UserRole.parent) ...[
             ListTile(
               key: const ValueKey('settings-lesson-audio'),
               leading: const Icon(Icons.record_voice_over_outlined),
@@ -247,6 +248,16 @@ class SettingsScreen extends ConsumerWidget {
           const LegalLinksTiles(),
           const Divider(),
 
+          // PD-56 (store compliance): parents and teachers delete their own account here.
+          // Staff accounts are closed by the administration.
+          if (user != null && (user.role == UserRole.parent || user.isTeacher))
+            ListTile(
+              key: const ValueKey('settings-delete-account'),
+              leading: Icon(Icons.person_remove_outlined, color: tokens.colorStatusDangerFg),
+              title: Text(l10n.deleteAccountTitle, style: TextStyle(color: tokens.colorStatusDangerFg)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.deleteAccount),
+            ),
           ListTile(
             leading: Icon(Icons.logout, color: tokens.colorStatusDangerFg),
             title: Text(

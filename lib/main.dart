@@ -9,11 +9,15 @@ import 'app/app.dart';
 import 'app/bootstrap.dart';
 import 'app/providers.dart';
 import 'app/retry_policy.dart';
+import 'core/crash/crash_reporting.dart';
 import 'core/push/push_registration.dart';
 import 'core/time/time_zone_controller.dart';
+import 'shared/utils/western_digits.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // DD-09 / RQA-F3: Western digits everywhere, dates and times included.
+  useWesternDigits();
 
   // IBM Plex Sans Arabic ships under the SIL OFL 1.1, which asks that the licence
   // travel with the fonts wherever they are redistributed -- an app binary included.
@@ -63,10 +67,16 @@ Future<void> main() async {
   // long as the app runs; started here for the same reasons as push registration.
   startTimeZoneSync(container);
 
-  runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const JawwidApp(),
+  // PD-56 (S-07): crash reports name the person only by a hash of their actor id, and only
+  // in a release build with SENTRY_DSN set (lib/core/crash/crash_reporting.dart).
+  container.listen(principalIdProvider, (_, id) => setCrashReportingActor(id), fireImmediately: true);
+
+  await runWithCrashReporting(
+    () => runApp(
+      UncontrolledProviderScope(
+        container: container,
+        child: const JawwidApp(),
+      ),
     ),
   );
 }

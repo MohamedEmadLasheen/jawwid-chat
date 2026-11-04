@@ -375,6 +375,84 @@ void main() {
     });
   });
 
+  group('the tray as a sheet over the board', () {
+    Future<(_Rewards, List<StampKind>)> open(WidgetTester tester, List<RewardLesson> lessons) async {
+      final placed = <StampKind>[];
+      final repo = _Rewards(lessons);
+      await tester.binding.setSurfaceSize(const Size(430, 932));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [rewardsRepositoryProvider.overrideWithValue(repo)],
+          child: MaterialApp(
+            theme: JawwidTheme.light(isArabic: false),
+            localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+            supportedLocales: const [Locale('en'), Locale('ar')],
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    builder: (_) => RewardTray(
+                      closeOnPlace: true,
+                      place: ({required StampKind stamp, String? text, required Color color}) {
+                        placed.add(stamp);
+                        return 'el';
+                      },
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      return (repo, placed);
+    }
+
+    testWidgets('a tile is the size of what it shows, not a full-width row', (tester) async {
+      await open(tester, const []);
+      expect(tester.getSize(find.byKey(const ValueKey('reward-sticker-heart'))).width, lessThan(100));
+      expect(tester.getSize(find.byKey(const ValueKey('reward-praise-champion_ar'))).width, lessThan(200));
+    });
+
+    testWidgets('a stamp closes the tray so the teacher sees it land, and the reward is still recorded and confirmed', (tester) async {
+      const adam = RewardLesson(lessonId: 'lesson-a', learnerId: 'adam', learnerName: 'Adam', stars: 2);
+      final (repo, placed) = await open(tester, [adam]);
+      await tester.tap(find.byKey(const ValueKey('reward-praise-champion_ar')));
+      await tester.pumpAndSettle();
+      expect(placed, [StampKind.praise]);
+      expect(find.byType(RewardTray), findsNothing);
+      expect(repo.given.single.gift.toJson(), {'kind': 'praise', 'praiseKey': 'champion_ar'});
+      expect(find.text('Reward given'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('reward-undo')));
+      await tester.pumpAndSettle();
+      expect(repo.undone, ['event-1']);
+    });
+
+    testWidgets('no lesson on: a sticker lands and the tray closes', (tester) async {
+      final (repo, placed) = await open(tester, const []);
+      await tester.tap(find.byKey(const ValueKey('reward-sticker-heart')));
+      await tester.pumpAndSettle();
+      expect(placed, [StampKind.heart]);
+      expect(find.byType(RewardTray), findsNothing);
+      expect(repo.given, isEmpty);
+    });
+
+    testWidgets('the close button leaves the tray without placing anything', (tester) async {
+      final (_, placed) = await open(tester, const []);
+      await tester.tap(find.byKey(const ValueKey('reward-close')));
+      await tester.pumpAndSettle();
+      expect(find.byType(RewardTray), findsNothing);
+      expect(placed, isEmpty);
+    });
+  });
+
   group('the tally and its badges (PR-5)', () {
     test('progress: how many more for the next badge, or the badge once the last is earned', () {
       final en = lookupL10n(const Locale('en')), ar = lookupL10n(const Locale('ar'));

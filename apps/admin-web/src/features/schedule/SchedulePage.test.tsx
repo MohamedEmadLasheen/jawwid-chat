@@ -145,7 +145,8 @@ describe('the academy schedule', () => {
   it('the stats bar reads the same filters, and the legend names each supervisor\'s color', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26' })
     const stats = await screen.findByRole('region', { name: 'Figures for this view' })
-    expect(within(stats).getByText('Teaching hours').parentElement).toHaveTextContent('1.5 h')
+    // CHATSCHED-014, decision A: PD-38's booked time, named as such; the held hours are the hint.
+    expect(within(stats).getByText('Booked hours').parentElement).toHaveTextContent('1.5 h')
     expect(within(stats).getByText('Shift used').parentElement).toHaveTextContent('21%')
     expect(within(stats).getByText('Empty in shift').parentElement).toHaveTextContent('5.5 h')
     expect(lastQuery(/\/calendar\/stats\?/).toString()).toBe(lastQuery(/\/calendar\?/).toString())
@@ -350,9 +351,9 @@ describe('on a phone', () => {
 
   it('in Arabic the agenda reads right to left on the 12-hour clock', async () => {
     renderWithProviders(<AppRoutes />, { staff: manager, route: '/schedule?view=day&date=2026-10-26', locale: 'ar' })
-    const lesson = await screen.findByRole('button', { name: /Child Alpha · ١:٠٠ م – ٢:٠٠ م/ })
+    const lesson = await screen.findByRole('button', { name: /Child Alpha · 1:00 م – 2:00 م/ })
     expect(document.documentElement.dir).toBe('rtl')
-    expect(lesson).toHaveTextContent('١:٠٠ م – ٢:٠٠ م')
+    expect(lesson).toHaveTextContent('1:00 م – 2:00 م')
   })
 })
 

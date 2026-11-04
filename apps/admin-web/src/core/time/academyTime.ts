@@ -40,7 +40,7 @@ const CITY_AR: Record<string, string> = {
   'Australia/Sydney': 'سيدني',
 }
 
-const tag = (locale: TimeLocale) => (locale === 'ar' ? 'ar-EG' : 'en-GB')
+const tag = (locale: TimeLocale) => (locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB')
 
 /** "Cairo" / "القاهرة". */
 export function zoneCity(zone: string, locale: TimeLocale): string {
@@ -145,10 +145,10 @@ export function academyDayRange(days: number, now: Date = new Date(), zone = ACA
  * The 12-hour clock (owner, 2026-10-28: every Schedule time with AM/PM). One
  * formatter for instants, hours and wall-clock strings, so no screen writes a
  * time its own way. English uses en-US for "PM" (en-GB writes "pm"); Arabic
- * ar-EG, which writes "م" / "ص" with Arabic-Indic digits like every other number
- * on the page.
+ * ar-EG, which writes "م" / "ص" -- with Western digits (-u-nu-latn, DD-09) like
+ * every other number on the page.
  */
-const tag12 = (locale: TimeLocale) => (locale === 'ar' ? 'ar-EG' : 'en-US')
+const tag12 = (locale: TimeLocale) => (locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-US')
 
 /** "6:00 PM" / "٦:٠٠ م" -- the 12-hour clock of an instant in a zone. */
 export function clock12In(iso: string, zone: string, locale: TimeLocale): string {

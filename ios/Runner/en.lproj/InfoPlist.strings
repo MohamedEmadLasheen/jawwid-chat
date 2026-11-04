@@ -2,3 +2,4 @@
 "NSCameraUsageDescription" = "Jawwid uses the camera to take a photo or record a video to send in a conversation.";
 "NSMicrophoneUsageDescription" = "Jawwid uses the microphone to record voice messages and the sound of videos you record, and to make voice calls.";
 "NSPhotoLibraryUsageDescription" = "Jawwid lets you choose a photo or a video to send in a conversation, or a photo to use as a profile photo.";
+"NSFaceIDUsageDescription" = "Jawwid uses Face ID to unlock the app, if you turn on app lock.";

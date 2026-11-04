@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../lessons/presentation/lesson_card_view.dart' show cardPreviewTitle;
 
 /// One row of the chat list.
 ///
@@ -346,6 +347,8 @@ String previewText(Conversation conversation, L10n l10n) {
       _ => l10n.systemUpdate,
     };
   }
+  // RQA-F4: a card (a lesson report, a make-up booked, ...) is named, never a blank row.
+  if (kind.startsWith('card:')) return cardPreviewTitle(kind.substring('card:'.length), l10n) ?? l10n.systemUpdate;
   return switch (kind) {
     'image' => l10n.attachmentPhotoLabel,
     'voice' => l10n.attachmentVoiceLabel,

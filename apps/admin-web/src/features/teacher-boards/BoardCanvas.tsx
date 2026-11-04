@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PAGE_HEIGHT, PAGE_WIDTH, type BoardPage } from './board'
+import { pageSize, type BoardPage } from './board'
 import { BOARD_FONT, QURAN_FONT, drawPage, type DrawOptions } from './render'
 
 type QuranFont = 'loading' | 'ready' | 'failed'
@@ -59,6 +59,7 @@ export function BoardCanvas({ page, verse, image, label, ariaLabel }: { page: Bo
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
     const scale = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+    const { width: PAGE_WIDTH, height: PAGE_HEIGHT } = pageSize(page.shape)
     const cssWidth = width || canvas.clientWidth || PAGE_WIDTH / 2
     canvas.width = Math.round(cssWidth * scale)
     canvas.height = Math.round((cssWidth * scale * PAGE_HEIGHT) / PAGE_WIDTH)
@@ -66,5 +67,5 @@ export function BoardCanvas({ page, verse, image, label, ariaLabel }: { page: Bo
     drawPage(ctx, page, { verse: verseInFont, image, label })
   }, [page, verseInFont, image, label, fonts, width])
 
-  return <canvas ref={ref} className="tb-canvas" role="img" aria-label={ariaLabel} />
+  return <canvas ref={ref} className={page.shape === 'tall' ? 'tb-canvas tb-canvas--tall' : 'tb-canvas'} role="img" aria-label={ariaLabel} />
 }

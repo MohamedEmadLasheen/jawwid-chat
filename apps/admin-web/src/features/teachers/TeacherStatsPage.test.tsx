@@ -183,7 +183,7 @@ describe('the statistics', () => {
     expect(within(metric('Awaiting an outcome')).getByText('1')).toBeInTheDocument()
     expect(within(metric('Conversion')).getByText('75%')).toBeInTheDocument()
     expect(within(trials).getByText('2 upcoming and 1 cancelled are not counted.')).toBeInTheDocument()
-    expect(screen.getByText('60 h held in 2026-09')).toBeInTheDocument()
+    expect(screen.getByText('60 h held in September 2026')).toBeInTheDocument()
     // PD-31: moving a lesson is information, never a violation.
     const moves = screen.getByRole('article', { name: 'Lessons moved by teacher' })
     expect(within(moves).getByText('4')).toBeInTheDocument()
@@ -224,3 +224,47 @@ describe('the Teachers area', () => {
 function calls(pattern: RegExp): number {
   return fetchMock.mock.calls.filter(([u]) => pattern.test(String(u))).length
 }
+
+// RQA-F2 / RQA-F8 (release-qa walk, 2026-10-31): Arabic counts agree with their number; a
+// long delay reads in days and hours; the month is a month; make-ups are counted once.
+describe('readable statistics', () => {
+  const summary = {
+    totalScheduled: 4, conducted: 0, studentAttended: 0, studentNoShow: 0,
+    studentExcuses: { total: 0, beforeStart: 0, afterStart: 0 }, teacherExcuses: 0, teacherNoShow: 0, cancelled: 0,
+    pending: { total: 4, upcoming: 4, awaitingReport: 0 }, completed: { regular: 0, makeup: 0, total: 0 },
+    makeups: { completed: 0, scheduled: 2, total: 2 },
+  }
+
+  it('a long median delay reads in days and hours, and the month is named', async () => {
+    on(/\/stats\/teachers\/t-1\?/, () => json({ ...DETAIL, reports: { ...DETAIL.reports, medianDelayMinutes: 5506 } }))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    const reports = await screen.findByRole('article', { name: 'Lesson reports' })
+    expect(within(reports).getByText('3 days 19 h')).toBeInTheDocument()
+    expect(screen.getByText('Teaching statistics — October 2026')).toBeInTheDocument()
+  })
+
+  it('in Arabic, a count agrees with its number', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10', locale: 'ar' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    expect(await screen.findByText('63 حصة')).toBeInTheDocument() // 11 and more: the singular
+    expect(screen.getByText('5 حصص')).toBeInTheDocument() // 3 to 10: the plural
+    expect(screen.queryByText('5 حصة')).toBeNull()
+  })
+
+  it('make-ups are counted once: with the month summary shown, no second, closed-only card beside it', async () => {
+    on(/\/stats\/teachers\/t-1\?/, () => json({ ...DETAIL, summary: { ...summary } }))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    await screen.findByRole('article', { name: 'Lesson reports' })
+    expect(screen.queryByText('Closed make-ups')).toBeNull()
+  })
+
+  it('without a month summary the closed make-ups are shown, labelled as closed', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Teacher One' }))
+    expect(await screen.findByText('Closed make-ups')).toBeInTheDocument()
+    expect(screen.getByText('2 of 3 held')).toBeInTheDocument()
+  })
+})
+

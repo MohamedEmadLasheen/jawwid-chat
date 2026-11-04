@@ -176,6 +176,8 @@ class HttpCallRepository implements CallRepository {
       isGroup: row['type'] == Wire.callTypeGroup,
       duration: seconds is int ? Duration(seconds: seconds) : null,
       connectionLost: row['endReason'] == 'connection_lost',
+      // CHATSCHED-016: no outcome yet because the call has not ended (ringing or active).
+      inProgress: row['status'] == 'ringing' || row['status'] == 'active',
     );
   }
 

@@ -361,6 +361,9 @@ class L10nAr extends L10n {
   String get callOutcomeDeclined => 'مرفوضة';
 
   @override
+  String get callOutcomeInProgress => 'جارية';
+
+  @override
   String callDuration(int minutes, int seconds) {
     return '$minutes د $seconds ث';
   }
@@ -1278,6 +1281,10 @@ class L10nAr extends L10n {
   @override
   String get ticketNoLongerAllowed =>
       'لم يعد بالإمكان تحديث هذه الحصة بهذه الطريقة.';
+
+  @override
+  String get certificateAlreadySuggested =>
+      'هذه الشهادة مقترحة لهذا الطالب من قبل.';
 
   @override
   String get cardReportTitle => 'تقرير الحصة';
@@ -4831,6 +4838,36 @@ class L10nAr extends L10n {
   String get boardNextPage => 'الصفحة التالية';
 
   @override
+  String get boardEmoji => 'رموز تعبيرية';
+
+  @override
+  String get boardEmojiPick => 'اختر رمزًا تعبيريًا';
+
+  @override
+  String get boardEmojiSmileys => 'وجوه مبتسمة';
+
+  @override
+  String get boardEmojiAnimals => 'حيوانات';
+
+  @override
+  String get boardEmojiNature => 'طبيعة';
+
+  @override
+  String get boardEmojiFood => 'طعام';
+
+  @override
+  String get boardEmojiSchool => 'المدرسة واللعب';
+
+  @override
+  String get boardEmojiSymbols => 'رموز';
+
+  @override
+  String get boardWidePage => 'صفحة عريضة';
+
+  @override
+  String get boardTallPage => 'صفحة طولية';
+
+  @override
   String get boardZoomFit => 'ملاءمة الصفحة';
 
   @override
@@ -5140,4 +5177,48 @@ class L10nAr extends L10n {
 
   @override
   String get legalTerms => 'شروط الاستخدام';
+
+  @override
+  String get deleteAccountTitle => 'حذف الحساب';
+
+  @override
+  String get deleteAccountIntro => 'حذف حسابك نهائي ولا يمكن التراجع عنه.';
+
+  @override
+  String get deleteAccountGoes =>
+      'يُحذف فورًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك.';
+
+  @override
+  String get deleteAccountKeptParent =>
+      'يُحتفظ به: المدفوعات والفواتير لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»)، وسجلات أبنائك لدى الأكاديمية. ويُبلَّغ فريق العمل لمتابعتها.';
+
+  @override
+  String get deleteAccountKeptTeacher =>
+      'يُحتفظ به: سجلات الرواتب لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.';
+
+  @override
+  String get deleteAccountPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get deleteAccountAction => 'حذف حسابي';
+
+  @override
+  String get deleteAccountConfirm =>
+      'هل تريد حذف حسابك نهائيًا؟ لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get deleteAccountWrongPassword => 'كلمة المرور غير صحيحة.';
+
+  @override
+  String get deleteAccountStaff => 'حسابات فريق العمل تُغلق عن طريق الإدارة.';
+
+  @override
+  String get deleteAccountFailed => 'تعذّر حذف الحساب. حاول مرة أخرى.';
+
+  @override
+  String get deleteAccountDone => 'تم حذف حسابك.';
+
+  @override
+  String get deleteAccountTeacherBlocked =>
+      'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
 }

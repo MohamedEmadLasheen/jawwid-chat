@@ -24,7 +24,7 @@ abstract interface class WhiteboardsRepository {
 
   Future<BoardDetail> open(String boardId);
 
-  Future<BoardDetail> create(String title, {String? lessonId});
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide});
 
   Future<BoardDetail> rename(String boardId, int revision, String title);
 
@@ -35,7 +35,7 @@ abstract interface class WhiteboardsRepository {
 
   Future<BoardDetail> restore(String boardId);
 
-  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background});
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape});
 
   /// The autosave: one page's drawing (`{v, elements}`), layout and background.
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page);
@@ -107,7 +107,7 @@ class NoWhiteboardsRepository implements WhiteboardsRepository {
   @override
   Future<BoardDetail> open(String boardId) async => _none();
   @override
-  Future<BoardDetail> create(String title, {String? lessonId}) async => _none();
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async => _none();
   @override
   Future<BoardDetail> rename(String boardId, int revision, String title) async => _none();
   @override
@@ -117,7 +117,7 @@ class NoWhiteboardsRepository implements WhiteboardsRepository {
   @override
   Future<BoardDetail> restore(String boardId) async => _none();
   @override
-  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background}) async =>
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async =>
       _none();
   @override
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async => _none();
@@ -176,8 +176,9 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
       BoardDetail.fromJson((await _client.get<Map<String, Object?>>('/whiteboards/$boardId')).data ?? const {});
 
   @override
-  Future<BoardDetail> create(String title, {String? lessonId}) async =>
-      BoardDetail.fromJson(await _post('/whiteboards', {'title': title, 'lessonId': ?lessonId}));
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async =>
+      // PD-55: sent only when tall, so a wide board's request is the one it always was.
+      BoardDetail.fromJson(await _post('/whiteboards', {'title': title, 'lessonId': ?lessonId, if (shape == PageShape.tall) 'shape': shape.wire}));
 
   @override
   Future<BoardDetail> rename(String boardId, int revision, String title) async =>
@@ -194,13 +195,14 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
   Future<BoardDetail> restore(String boardId) async => BoardDetail.fromJson(await _post('/whiteboards/$boardId/restore'));
 
   @override
-  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background}) async =>
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async =>
       BoardDetail.fromJson(
         await _post('/whiteboards/$boardId/pages', {
           'revision': revision,
           'position': ?position,
           if (layout != null) 'layout': layout.wire,
           if (background != null) 'background': background.wire,
+          if (shape != null) 'shape': shape.wire,
         }),
       );
 
@@ -211,6 +213,9 @@ class HttpWhiteboardsRepository implements WhiteboardsRepository {
       'document': page.documentJson(),
       'layout': page.layout.wire,
       'background': page.background.wire,
+      // PD-55: the frame this page was drawn in. The server refuses a tall page's
+      // save without it, which is what keeps an older app from changing one.
+      'shape': page.shape.wire,
     });
     return PageSaved(
       revision: (d['revision'] as num?)?.toInt() ?? revision + 1,
@@ -424,11 +429,12 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
     if (_boards[id]!.summary.revision != revision) throw StateError('revision');
   }
 
-  BoardPage _page(int position, {PageLayout? layout, PageBackground? background}) => BoardPage(
+  BoardPage _page(int position, {PageLayout? layout, PageBackground? background, PageShape shape = PageShape.wide}) => BoardPage(
     id: _id(),
     position: position,
     layout: layout ?? PageLayout.plain,
     background: background ?? PageBackground.white,
+    shape: shape,
     elements: const [],
   );
 
@@ -454,10 +460,10 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
   Future<BoardDetail> open(String boardId) async => _detail(boardId);
 
   @override
-  Future<BoardDetail> create(String title, {String? lessonId}) async {
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async {
     final id = _id();
     final summary = BoardSummary(id: id, title: title, state: BoardState.active, revision: 1, pageCount: 1, updatedAt: DateTime.now());
-    return _put(id, summary, [_page(0)]);
+    return _put(id, summary, [_page(0, shape: shape)]);
   }
 
   @override
@@ -483,7 +489,7 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
       ),
       [
         for (final p in b.pages)
-          BoardPage(id: _id(), position: p.position, layout: p.layout, background: p.background, elements: p.elements),
+          BoardPage(id: _id(), position: p.position, layout: p.layout, background: p.background, shape: p.shape, elements: p.elements),
       ],
     );
   }
@@ -502,11 +508,11 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
   }
 
   @override
-  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background}) async {
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async {
     _check(boardId, revision);
     final b = _boards[boardId]!;
     final pages = [...b.pages]
-      ..insert((position ?? b.pages.length).clamp(0, b.pages.length), _page(0, layout: layout, background: background));
+      ..insert((position ?? b.pages.length).clamp(0, b.pages.length), _page(0, layout: layout, background: background, shape: shape ?? PageShape.wide));
     return _put(boardId, _with(b.summary), pages);
   }
 
@@ -514,6 +520,8 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async {
     _check(boardId, revision);
     final b = _boards[boardId]!;
+    // As the server: a page keeps the shape it was created with.
+    if (b.pages.firstWhere((p) => p.id == pageId).shape != page.shape) throw StateError('shape');
     final summary = _with(b.summary);
     _put(boardId, summary, [for (final p in b.pages) p.id == pageId ? page : p]);
     return PageSaved(revision: summary.revision, updatedAt: DateTime.now());
@@ -526,7 +534,10 @@ class FakeWhiteboardsRepository implements WhiteboardsRepository {
     final i = b.pages.indexWhere((p) => p.id == pageId);
     final source = b.pages[i];
     final pages = [...b.pages]
-      ..insert(i + 1, BoardPage(id: _id(), position: 0, layout: source.layout, background: source.background, elements: source.elements));
+      ..insert(
+        i + 1,
+        BoardPage(id: _id(), position: 0, layout: source.layout, background: source.background, shape: source.shape, elements: source.elements),
+      );
     return _put(boardId, _with(b.summary), pages);
   }
 

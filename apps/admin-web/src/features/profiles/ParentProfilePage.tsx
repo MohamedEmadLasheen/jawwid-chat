@@ -19,7 +19,7 @@ import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
 import { FamilyFeedbackSection } from './FamilyFeedbackSection'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
 import { I } from '@/features/intake/copy'
-import { useIntakeOptions } from '@/features/intake/hooks'
+import { useFamilyOwnership, useIntakeOptions } from '@/features/intake/hooks'
 import { OwnershipSection } from '@/features/intake/OwnershipSection'
 import { FamilyHistorySection } from '@/features/intake/FamilyHistorySection'
 import {
@@ -329,10 +329,13 @@ function NoteSection({ profile, onEdit }: { profile: ParentProfile; onEdit: () =
 
 function ChildrenSection({ profile }: { profile: ParentProfile }) {
   const tx = useCopy()
-  // PD-42: "Add child", when the server says this viewer enters families (it decides the family).
+  // PD-42: "Add child", when the server says this viewer enters families AND may add
+  // to THIS one (ADMIN-009: a Sales member was offered it on a family they did not
+  // enter; the family's own answer, can.addChild, is refused for those).
   const intake = useIntakeOptions()
+  const ownership = useFamilyOwnership(profile.family.id)
   const [adding, setAdding] = useState(false)
-  const action = intake.data?.ready ? (
+  const action = intake.data?.ready && ownership.data?.can.addChild === true ? (
     <button type="button" className="btn btn--sm" onClick={() => setAdding(true)}>
       {tx(I.addChild)}
     </button>
