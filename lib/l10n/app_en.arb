@@ -3426,5 +3426,35 @@
   "deleteAccountDone": "Your account has been deleted.",
   "@deleteAccountDone": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountTeacherBlocked": "Please contact the academy to close your lessons and payroll before deleting your account.",
-  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."}
+  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."},
+  "cardScheduledTitle": "Lesson added",
+  "@cardScheduledTitle": {
+    "description": "Title of the card posted when a lesson is added outside the weekly times (CHATSCHED-001)."
+  },
+  "cardNowAt": "Now: {when}",
+  "@cardNowAt": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson has since moved; when = its current day and time.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "cardNowHeldAt": "Held: {when}",
+  "@cardNowHeldAt": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson was held at another time.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "cardNowCancelled": "This lesson was cancelled",
+  "@cardNowCancelled": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson was later cancelled (no reason given)."
+  },
+  "cardNowMissed": "This lesson did not take place",
+  "@cardNowMissed": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson was missed (no one is named)."
+  }
 }

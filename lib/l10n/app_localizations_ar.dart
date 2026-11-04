@@ -5238,4 +5238,23 @@ class L10nAr extends L10n {
   @override
   String get deleteAccountTeacherBlocked =>
       'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
+
+  @override
+  String get cardScheduledTitle => 'أُضيفت حصة';
+
+  @override
+  String cardNowAt(String when) {
+    return 'الآن: $when';
+  }
+
+  @override
+  String cardNowHeldAt(String when) {
+    return 'عُقدت: $when';
+  }
+
+  @override
+  String get cardNowCancelled => 'أُلغيت هذه الحصة';
+
+  @override
+  String get cardNowMissed => 'لم تُعقد هذه الحصة';
 }

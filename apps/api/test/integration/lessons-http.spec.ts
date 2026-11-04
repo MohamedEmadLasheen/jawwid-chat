@@ -219,6 +219,30 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect(Array.isArray(member.json.tickets)).toBe(true);
   });
 
+  it('lesson-now (CHATSCHED-002) is refused (403) to someone who may not read the conversation, with no lesson data; a member gets 200 and exactly the five fields', async () => {
+    const id = await schedule(40 * 60 * MIN);
+    const outsider = m.families.find((f) => f.parent.subject !== fam.parent)!.parent.subject;
+    const path = `/conversations/${fam.groupId}/lesson-now`;
+    expect((await http(null, 'GET', path)).status).toBe(401);
+    const refused = await http(outsider, 'GET', path);
+    expect(refused.status).toBe(403);
+    expect(refused.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+    expect(Object.keys(refused.json)).toEqual(['error']);
+    expect(refused.json).not.toHaveProperty('lessons');
+    const said = JSON.stringify(refused.json).toLowerCase();
+    for (const leak of [id, 'upcoming', 'held', 'missed', 'cancelled', 'startsat', 'endsat', 'teacher', 'lesson']) expect(said).not.toContain(leak.toLowerCase());
+    // Control: the same outsider is refused the conversation's messages too -- one rule.
+    expect((await http(outsider, 'GET', `/conversations/${fam.groupId}/messages`)).status).toBe(403);
+
+    const member = await http(fam.parent, 'GET', path);
+    expect(member.status).toBe(200);
+    const entry = (member.json.lessons as Array<Record<string, unknown>>).find((l) => l.lessonId === id)!;
+    expect(entry).toBeDefined();
+    expect(Object.keys(entry).sort()).toEqual(['currentLessonId', 'endsAt', 'lessonId', 'startsAt', 'status']);
+    expect(entry.currentLessonId).toBe(id);
+    expect(entry.status).toBe('upcoming');
+  });
+
   it('the teacher of a sibling in the same family group neither sees nor closes the lesson', async () => {
     const id = await schedule(-50 * MIN);
     const offered = await http(fam.siblingTeacher, 'GET', `/conversations/${fam.groupId}/lesson-tickets`);

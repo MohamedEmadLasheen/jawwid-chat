@@ -1942,5 +1942,10 @@
   "deleteAccountStaff": "حسابات فريق العمل تُغلق عن طريق الإدارة.",
   "deleteAccountFailed": "تعذّر حذف الحساب. حاول مرة أخرى.",
   "deleteAccountDone": "تم حذف حسابك.",
-  "deleteAccountTeacherBlocked": "يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك."
+  "deleteAccountTeacherBlocked": "يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.",
+  "cardScheduledTitle": "أُضيفت حصة",
+  "cardNowAt": "الآن: {when}",
+  "cardNowHeldAt": "عُقدت: {when}",
+  "cardNowCancelled": "أُلغيت هذه الحصة",
+  "cardNowMissed": "لم تُعقد هذه الحصة"
 }
