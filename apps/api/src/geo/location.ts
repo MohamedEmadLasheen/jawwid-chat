@@ -96,6 +96,28 @@ export function parseLocationPatch(body: Record<string, unknown>, current: Locat
   return { countryCode, subdivisionCode };
 }
 
+/**
+ * A whole location from a form (`{ countryCode, subdivisionCode? }`): null
+ * when absent or null; otherwise a listed country and, when given, one of its
+ * subdivisions. `field` names it in the error.
+ */
+export function parseLocation(raw: unknown, field: string): LocationValue | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw invalid(`${field}: { countryCode, subdivisionCode? }, or null`);
+  const body = raw as Record<string, unknown>;
+  if (body.countryCode === undefined || body.countryCode === null) throw invalid(`${field}.countryCode: required with a location`);
+  try {
+    const value = parseLocationPatch(
+      { countryCode: body.countryCode, subdivisionCode: body.subdivisionCode ?? null },
+      { countryCode: null, subdivisionCode: null },
+    );
+    return value ?? null;
+  } catch (e) {
+    if (e instanceof CommError) throw invalid(`${field}.${e.message}`);
+    throw e;
+  }
+}
+
 function subdivisionOf(countryCode: string | null, value: unknown): string {
   if (typeof value !== 'string') throw invalid('subdivisionCode: an ISO 3166-2 code, e.g. EG-GZ, or null');
   if (!countryCode) throw invalid('subdivisionCode: a subdivision needs a country');

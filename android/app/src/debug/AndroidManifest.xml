@@ -4,4 +4,11 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <application>
+        <!-- Store blocker S-05, DEBUG ONLY: `adb shell am broadcast` draws a push without
+             Firebase (DebugPushReceiver.kt). Exported so adb can reach it; never in release. -->
+        <receiver
+            android:name=".DebugPushReceiver"
+            android:exported="true"/>
+    </application>
 </manifest>

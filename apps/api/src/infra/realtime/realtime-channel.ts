@@ -61,7 +61,10 @@ export function decodeEnvelope(raw: string): RealtimeEnvelope | null {
       (parsed.audience.onlyActors === undefined || Array.isArray(parsed.audience.onlyActors)) &&
       (parsed.audience.perActor === undefined ||
         (typeof parsed.audience.perActor === 'object' && parsed.audience.perActor !== null && !Array.isArray(parsed.audience.perActor))) &&
-      (parsed.audience.onlyActors !== undefined || parsed.audience.countableOnly === true)
+      // CHATSCHED-015: `exceptActors` only ever narrows (it names who was already sent the
+      // event), so it is a usable audience on its own -- but it must be a list.
+      (parsed.audience.exceptActors === undefined || Array.isArray(parsed.audience.exceptActors)) &&
+      (parsed.audience.onlyActors !== undefined || parsed.audience.countableOnly === true || Array.isArray(parsed.audience.exceptActors))
     ) {
       return parsed;
     }
