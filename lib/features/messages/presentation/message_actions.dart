@@ -11,7 +11,7 @@ import '../../../shared/utils/text_direction.dart';
 /// A choice, not a command: the sheet decides *what was asked for* and the chat
 /// screen decides what to do about it. Keeping the two apart is what lets the
 /// sheet be tested without a controller, a repository or a network.
-enum MessageAction { reply, forward, select, star, pin, copy, open, info, deleteForMe, deleteForEveryone }
+enum MessageAction { reply, forward, select, star, pin, copy, open, info, report, deleteForMe, deleteForEveryone }
 
 /// The reactions a parent can leave.
 ///
@@ -65,6 +65,7 @@ Future<MessageActionResult?> showMessageActions(
   required Message message,
   bool withMarks = false,
   bool withInfo = false,
+  bool withReport = false,
 }) {
   if (!canActOn(message)) return Future.value(null);
 
@@ -74,7 +75,7 @@ Future<MessageActionResult?> showMessageActions(
     // from and its last row disappears behind the tab bar.
     useRootNavigator: true,
     showDragHandle: true,
-    builder: (sheetContext) => _MessageActionsSheet(message: message, withMarks: withMarks, withInfo: withInfo),
+    builder: (sheetContext) => _MessageActionsSheet(message: message, withMarks: withMarks, withInfo: withInfo, withReport: withReport),
   );
 }
 
@@ -93,7 +94,16 @@ bool canActOn(Message message) {
 /// [withMarks] offers Star and Pin -- only when this build can reach those
 /// routes. Pin is offered for a message that reached everyone; the server
 /// decides whether this viewer may write (and so pin) here.
-List<MessageAction> actionsFor(Message message, {bool withMarks = false, bool withInfo = false}) {
+///
+/// [withReport] offers Report (PD-57), and only on someone else's published text, voice,
+/// photo, video or file message: never on one's own, a card or a system message (the server
+/// refuses those with `COMM.REPORT_SELF` / `COMM.REPORT_NOT_REPORTABLE`).
+List<MessageAction> actionsFor(
+  Message message, {
+  bool withMarks = false,
+  bool withInfo = false,
+  bool withReport = false,
+}) {
   final hasText = message.body.trim().isNotEmpty;
   final openable = message.attachments.any(
     (a) => a.kind == MessageKind.image || a.kind == MessageKind.file,
@@ -113,6 +123,7 @@ List<MessageAction> actionsFor(Message message, {bool withMarks = false, bool wi
     // answers the author and refuses anyone else.
     if (withInfo && message.isMine && message.approvalState == ApprovalState.notRequired)
       MessageAction.info,
+    if (withReport && mayReportMessage(message)) MessageAction.report,
     MessageAction.deleteForMe,
     // Only the author's own message, and only one that actually reached
     // everyone: a message still awaiting approval has been seen by nobody, so
@@ -122,17 +133,34 @@ List<MessageAction> actionsFor(Message message, {bool withMarks = false, bool wi
   ];
 }
 
+/// Whether Report may be offered on [message] (PD-57 §5): someone else's, delivered, and not
+/// a server-written `system` or `card` message.
+bool mayReportMessage(Message message) =>
+    !message.isMine &&
+    message.id != null &&
+    !message.isDeleted &&
+    message.kind != MessageKind.system &&
+    message.kind != MessageKind.card &&
+    message.card == null &&
+    message.approvalState == ApprovalState.notRequired;
+
 class _MessageActionsSheet extends StatelessWidget {
-  const _MessageActionsSheet({required this.message, required this.withMarks, this.withInfo = false});
+  const _MessageActionsSheet({
+    required this.message,
+    required this.withMarks,
+    this.withInfo = false,
+    this.withReport = false,
+  });
 
   final Message message;
   final bool withMarks;
   final bool withInfo;
+  final bool withReport;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final actions = actionsFor(message, withMarks: withMarks, withInfo: withInfo);
+    final actions = actionsFor(message, withMarks: withMarks, withInfo: withInfo, withReport: withReport);
     final mine = message.reactions.firstWhereOrNull((r) => r.mine)?.emoji;
 
     return SafeArea(
@@ -210,6 +238,7 @@ class _MessageActionsSheet extends StatelessWidget {
         MessageAction.copy => Icons.copy_outlined,
         MessageAction.open => Icons.open_in_new,
         MessageAction.info => Icons.info_outline,
+        MessageAction.report => Icons.flag_outlined,
         MessageAction.deleteForMe => Icons.delete_outline,
         MessageAction.deleteForEveryone => Icons.delete_forever_outlined,
       };
@@ -223,6 +252,7 @@ class _MessageActionsSheet extends StatelessWidget {
         MessageAction.copy => l10n.copyAction,
         MessageAction.open => l10n.openAction,
         MessageAction.info => l10n.messageInfoAction,
+        MessageAction.report => l10n.reportAction,
         MessageAction.deleteForMe => l10n.deleteForMeAction,
         MessageAction.deleteForEveryone => l10n.deleteForEveryoneAction,
       };

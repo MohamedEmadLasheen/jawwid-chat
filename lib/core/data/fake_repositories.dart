@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../features/moderation/data/moderation_repository.dart';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
@@ -457,4 +458,73 @@ class FakeFeedbackRepository implements FeedbackRepository {
     submitted.add(item);
     return item;
   }
+}
+
+/// PD-57, in memory: the fixture user's own reports.
+///
+/// Behaves like the contract where a screen depends on it: `other` needs a note, a note is
+/// at most 500 characters, a second report on the same target answers `alreadyOpen`, and
+/// the newest report comes first. [refuseWith] makes every submission fail with that code.
+class FakeModerationRepository implements ModerationRepository {
+  FakeModerationRepository({List<MyReport> reports = const [], this.refuseWith}) : _reports = [...reports];
+
+  final List<MyReport> _reports;
+
+  /// Every submission is refused with this code (and the matching kind), when set.
+  String? refuseWith;
+
+  /// What was submitted, oldest first.
+  final submitted = <ReportDraft>[];
+
+  /// The exact bodies that would have been sent, oldest first.
+  final bodies = <Map<String, Object?>>[];
+
+  int _next = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<ReportReceipt> submit(ReportDraft draft) async {
+    final code = refuseWith;
+    if (code != null) {
+      throw AppError(
+        switch (code) {
+          ModerationErrors.targetNotVisible => AppErrorKind.notFound,
+          ModerationErrors.rateLimited => AppErrorKind.rateLimited,
+          ModerationErrors.termsNotAccepted => AppErrorKind.forbidden,
+          _ => AppErrorKind.validation,
+        },
+        code: code,
+      );
+    }
+    final note = draft.note?.trim() ?? '';
+    if (draft.reason == ReportReason.other && note.isEmpty) {
+      throw const AppError(AppErrorKind.validation, code: ModerationErrors.noteRequired);
+    }
+    if (note.length > ModerationErrors.noteMaxLength) {
+      throw const AppError(AppErrorKind.validation, code: 'COMMON.VALIDATION');
+    }
+    final body = draft.toJson();
+    final duplicate = bodies.any((b) => b['messageId'] == body['messageId'] && '${b['subject']}' == '${body['subject']}');
+    submitted.add(draft);
+    bodies.add(body);
+    final id = 'report_${_next++}';
+    if (!duplicate) {
+      _reports.insert(
+        0,
+        MyReport(
+          id: id,
+          targetKind: body['targetKind']! as String,
+          reason: draft.reason,
+          status: ReportStatus.open,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+    return ReportReceipt(id: id, status: 'open', dueAt: DateTime.now().add(const Duration(hours: 48)), alreadyOpen: duplicate);
+  }
+
+  @override
+  Future<List<MyReport>> mine() async => List.unmodifiable(_reports);
 }

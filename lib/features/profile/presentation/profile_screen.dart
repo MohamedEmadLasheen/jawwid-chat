@@ -23,6 +23,8 @@ import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
 import '../../lessons/presentation/group_children_section.dart';
 import '../../materials/presentation/child_materials_entry.dart';
+import '../../moderation/data/moderation_repository.dart';
+import '../../moderation/presentation/report_sheet.dart';
 import '../../teacher_profile/presentation/teacher_profile_screen.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
@@ -83,6 +85,8 @@ class ConversationProfileScreen extends ConsumerWidget {
             // a person: muting yourself is not a thing.
             actions: [
               ConversationActions(conversationId: conversationId),
+              // PD-57: report the person on a 1:1 profile (a group reports its members).
+              if (!value.isGroup) ReportPersonTile(person: value.subject),
               // PD-15: each child of the group -- age, course, times, package. A family
               // group names no single learner, so each child's progress and Materials
               // come with that child's card here (a learner group shows them below).
@@ -218,6 +222,12 @@ class ProfileBody extends ConsumerWidget {
               isOpening: ref
                   .watch(openDirectControllerProvider)
                   .isOpening(member.id),
+              onReport: _mayReport(ref, member)
+                  ? () => showReportSheet(
+                        context,
+                        target: PersonReportTarget(kind: reportActorKind(member.role)!, id: member.id),
+                      )
+                  : null,
             ),
           if (view.requiresApproval)
             ProfileNote(text: l10n.groupApprovalNotice),
@@ -225,6 +235,12 @@ class ProfileBody extends ConsumerWidget {
       ],
     );
   }
+
+  /// PD-57: Report is offered for another person this client knows the kind of, in a build
+  /// that reaches the report route. Whether the report is accepted is the server's answer.
+  bool _mayReport(WidgetRef ref, ProfilePerson member) =>
+      ref.watch(moderationRepositoryProvider).isAvailable &&
+      mayReportPerson(id: member.id, role: member.role, viewerId: ref.watch(principalIdProvider));
 
   /// Whether this client may *offer* a direct channel to [member].
   ///
@@ -439,10 +455,14 @@ class MemberTile extends StatelessWidget {
     super.key,
     required this.member,
     this.onMessage,
+    this.onReport,
     this.isOpening = false,
   });
 
   final ProfilePerson member;
+
+  /// PD-57: null when this person cannot be reported from here (yourself, an unknown kind).
+  final VoidCallback? onReport;
 
   /// Null when this client cannot establish that the pairing is offerable.
   final VoidCallback? onMessage;
@@ -512,6 +532,13 @@ class MemberTile extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: identity),
+          if (onReport != null)
+            IconButton(
+              key: ValueKey('member-report-${member.id}'),
+              onPressed: onReport,
+              icon: const Icon(Icons.flag_outlined),
+              tooltip: '${l10n.reportMemberAction}: $name',
+            ),
           // No call action here: calling arrives with the call UI, and an
           // affordance with no screen behind it is worse than none.
           if (isOpening)
@@ -634,5 +661,30 @@ class ConversationActions extends ConsumerWidget {
       final message = ErrorPresenter.present(error, l10n);
       messenger.showSnackBar(SnackBar(content: Text(message.title)));
     }
+  }
+}
+
+/// PD-57: "Report this person" on a one-to-one profile. Absent for yourself, for a person
+/// whose kind is unknown, and in a build without the report route.
+class ReportPersonTile extends ConsumerWidget {
+  const ReportPersonTile({super.key, required this.person});
+
+  final ProfilePerson person;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(moderationRepositoryProvider).isAvailable) return const SizedBox.shrink();
+    if (!mayReportPerson(id: person.id, role: person.role, viewerId: ref.watch(principalIdProvider))) {
+      return const SizedBox.shrink();
+    }
+    return ListTile(
+      key: const ValueKey('profile-report-person'),
+      leading: const Icon(Icons.flag_outlined),
+      title: Text(L10n.of(context).reportPersonAction),
+      onTap: () => showReportSheet(
+        context,
+        target: PersonReportTarget(kind: reportActorKind(person.role)!, id: person.id),
+      ),
+    );
   }
 }
