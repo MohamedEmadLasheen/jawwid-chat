@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaAuditService } from '@platform/audit.service';
-import { CommError } from '@platform/errors';
+import { CommError, CommErrorCode } from '@platform/errors';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -123,5 +123,13 @@ describe('CHATSCHED-002: where a carded lesson stands now', () => {
     // The other family's parent may not read this family's group.
     const refused = await lessons.lessonNow(contactId, groupId).then(() => null, (e: unknown) => e);
     expect(refused).toBeInstanceOf(CommError);
+    // The refusal is the conversation-read one (same as every conversation route), and says nothing of the lesson.
+    const err = refused as CommError;
+    expect(err.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+    expect(err.status).toBe(403);
+    const said = JSON.stringify({ message: err.message, detail: err.detail ?? null }).toLowerCase();
+    for (const leak of [mine.id, mine.startsAt, mine.endsAt, 'upcoming', 'held', 'missed', 'cancelled', 'teacher', 'reason', 'lesson']) {
+      expect(said).not.toContain(String(leak).toLowerCase());
+    }
   });
 });
