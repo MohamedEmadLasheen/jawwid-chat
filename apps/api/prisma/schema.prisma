@@ -3065,3 +3065,80 @@ model LessonChangeUnannounced {
   @@map("lesson_change_unannounced")
   @@schema("chat")
 }
+
+/// PD-57 (A-1, A-2): a report of someone else's message or of a person, or the
+/// case a block opens (reason `blocked`). SQL owns the DDL and the rules:
+/// 20261104100000_chat_pd057_moderation.sql (the server's 48-hour clock; the
+/// reporter, target, note and evidence never change; the status only moves
+/// forward; closed only with an answer; never deleted; one unresolved report per
+/// reporter and target). No request role may read it. Evidence is shown only
+/// with moderation.view and never logged.
+model ContentReport {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// contact | teacher | staff
+  reporterKind       String    @map("reporter_kind")
+  /// Null (with reporterAccountId) once the reporter erased their account.
+  reporterId         String?   @map("reporter_id") @db.Uuid
+  reporterAccountId  String?   @map("reporter_account_id") @db.Uuid
+  /// message | person
+  targetKind         String    @map("target_kind")
+  messageId          String?   @map("message_id") @db.Uuid
+  conversationId     String?   @map("conversation_id") @db.Uuid
+  /// contact | teacher | staff. For a message report, its author.
+  subjectKind        String    @map("subject_kind")
+  subjectId          String    @map("subject_id") @db.Uuid
+  /// harassment | inappropriate | spam | child_safety | other | blocked (server only)
+  reason             String
+  note               String?
+  evidence           Json      @default("{}")
+  /// urgent (child_safety) | normal. Set by the database from the reason.
+  priority           String    @default("normal")
+  /// open | in_review | actioned | dismissed
+  status             String    @default("open")
+  /// created_at + 48 hours, set by the database.
+  dueAt              DateTime  @map("due_at") @db.Timestamptz
+  overdueAt          DateTime? @map("overdue_at") @db.Timestamptz
+  takenBy            String?   @map("taken_by") @db.Uuid
+  takenAt            DateTime? @map("taken_at") @db.Timestamptz
+  /// no_action (dismissed) | message_removed | warned | account_suspended | reassigned
+  resolution         String?
+  resolutionNote     String?   @map("resolution_note")
+  resolvedBy         String?   @map("resolved_by") @db.Uuid
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz
+  answerText         String?   @map("answer_text")
+  reporterAnsweredAt DateTime? @map("reporter_answered_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([organizationId, priority, dueAt])
+  @@index([reporterKind, reporterId, createdAt])
+  @@index([subjectKind, subjectId, createdAt])
+  @@map("content_report")
+  @@schema("chat")
+}
+
+/// PD-57 (A-2): a personal block by a parent (contact) or a teacher; staff never
+/// block. Deleting the row unblocks. SQL owns the DDL and the rules:
+/// 20261104100000_chat_pd057_moderation.sql (unique per pair, never oneself;
+/// the case and the notified manager are each set once). No request role may
+/// read it. Lessons and the administrative channel are never affected (the API).
+model ActorBlock {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// contact | teacher
+  blockerKind            String   @map("blocker_kind")
+  blockerId              String   @map("blocker_id") @db.Uuid
+  /// contact | teacher | staff
+  blockedKind            String   @map("blocked_kind")
+  blockedId              String   @map("blocked_id") @db.Uuid
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// The content_report (target person, the blocker's own) this block opened.
+  caseReportId           String?  @map("case_report_id") @db.Uuid
+  /// The responsible manager told of the block (roadmap §6.3).
+  notifiedManagerStaffId String?  @map("notified_manager_staff_id") @db.Uuid
+
+  @@unique([blockerKind, blockerId, blockedKind, blockedId])
+  @@index([blockedKind, blockedId])
+  @@map("actor_block")
+  @@schema("chat")
+}
