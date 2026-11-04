@@ -642,13 +642,15 @@ export class MessageService {
    * One indexed lookup per conversation (conversation_id, seq), run together;
    * the list is capped at 200 rows.
    */
-  async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message>> {
-    const out = new Map<string, Message>();
+  async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message & { card: { kind: string } | null }>> {
+    const out = new Map<string, Message & { card: { kind: string } | null }>();
     const found = await Promise.all(
       conversationIds.map((id) =>
         this.prisma.message.findFirst({
           where: this.visibilityFilter(actor, id, {} as ListMessagesInput),
           orderBy: { seq: 'desc' },
+          // RQA-F4: a card's kind, so a list row can name it ("Lesson report").
+          include: { card: { select: { kind: true } } },
         }),
       ),
     );

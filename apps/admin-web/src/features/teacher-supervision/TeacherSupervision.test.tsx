@@ -160,6 +160,30 @@ describe('1. leave', () => {
     expect(screen.getByRole('heading', { name: 'Leave requests' })).toBeInTheDocument()
   })
 
+  // RQA-F6 (release-qa walk 2026-10-31): after a decision the teacher's row kept "1 waiting" until a reload.
+  it('a decision refreshes the teacher\'s row in the overview', async () => {
+    let waiting = 1
+    const request = {
+      id: 'r-1', teacher: { id: 't-1', name: 'Teacher One' }, firstDay: '2027-03-10', lastDay: '2027-03-12', days: 3,
+      reason: 'Family wedding', state: 'requested', requestedAt: '2026-10-18T09:00:00Z', decidedAt: null, decidedBy: null,
+      decisionNote: null, endedAt: null, balance: 21, collidingLessons: [],
+    }
+    on('GET', /\/teacher-leave-overview$/, () =>
+      json({ year: 2027, teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, allowance: 21, used: 0, balance: 21, pendingRequests: waiting, away: null }] }),
+    )
+    on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: waiting ? [request] : [] }))
+    on('POST', /\/teacher-leave-requests\/r-1\/approve$/, () => {
+      waiting = 0
+      return json({ request: { ...request, state: 'approved' }, cancelledLessons: 0, notCancelled: [] })
+    })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision' })
+    expect(await screen.findByText('1 waiting')).toBeInTheDocument()
+    const row = (await screen.findByText('Family wedding')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Approve' }))
+    await waitFor(() => expect(screen.queryByText('1 waiting')).toBeNull())
+  })
+
   it('the old Leave requests link lands on this section', async () => {
     on('GET', /\/teacher-leave-overview$/, () => json({ year: 2026, teachers: [] }))
     on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [] }))
