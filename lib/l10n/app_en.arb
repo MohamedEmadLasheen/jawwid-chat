@@ -3421,5 +3421,18 @@
   "deleteAccountDone": "Your account has been deleted.",
   "@deleteAccountDone": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountTeacherBlocked": "Please contact the academy to close your lessons and payroll before deleting your account.",
-  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."}
+  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."},
+  "locationRowTitle": "Location",
+  "@locationRowTitle": {"description": "PD-45 PR-4: the Location row of the parent's own profile."},
+  "locationRowEmpty": "Not set",
+  "locationSheetTitle": "Where does the family live?",
+  "locationCountryLabel": "Country",
+  "locationSubdivisionError": "Choose a {label} from the list",
+  "@locationSubdivisionError": {"description": "PD-45 plan 5.3: the country's own field label (Governorate / Emirate / ...) in the sentence.", "placeholders": {"label": {"type": "String"}}},
+  "locationCountryError": "Choose a country from the list",
+  "locationSuggestion": "Suggested: {country}",
+  "@locationSuggestion": {"description": "PD-45: the country the server suggests from the number; tapping it only fills the picker, nothing is saved.", "placeholders": {"country": {"type": "String"}}},
+  "locationPromptBody": "Tell us where you live. You can change it any time from your profile.",
+  "locationLater": "Later",
+  "locationLoadFailed": "The list could not be loaded. Please try again."
 }

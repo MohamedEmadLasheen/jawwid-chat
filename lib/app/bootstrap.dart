@@ -64,6 +64,7 @@ import '../features/tasks/application/task_signal_channel.dart';
 import '../features/whiteboards/data/board_draft_files.dart';
 import '../features/whiteboards/data/quran_text_repository.dart';
 import '../features/whiteboards/data/whiteboards_repository.dart';
+import '../shared/location/location_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -238,6 +239,8 @@ List<Override> _httpOverrides() {
     materialsRepositoryProvider.overrideWithValue(
       HttpMaterialsRepository(client: client),
     ),
+    // PD-45: the parent's own location and the country / subdivision lists.
+    locationRepositoryProvider.overrideWithValue(HttpLocationRepository(client: client)),
     // PD-48: the parent's lesson-audio notice (acknowledged once).
     parentNoticeRepositoryProvider.overrideWithValue(
       HttpParentNoticeRepository(client: client),

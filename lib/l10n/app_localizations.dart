@@ -8820,6 +8820,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
   String get deleteAccountTeacherBlocked;
+
+  /// PD-45 PR-4: the Location row of the parent's own profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get locationRowTitle;
+
+  /// No description provided for @locationRowEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get locationRowEmpty;
+
+  /// No description provided for @locationSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Where does the family live?'**
+  String get locationSheetTitle;
+
+  /// No description provided for @locationCountryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get locationCountryLabel;
+
+  /// PD-45 plan 5.3: the country's own field label (Governorate / Emirate / ...) in the sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} from the list'**
+  String locationSubdivisionError(String label);
+
+  /// No description provided for @locationCountryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a country from the list'**
+  String get locationCountryError;
+
+  /// PD-45: the country the server suggests from the number; tapping it only fills the picker, nothing is saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested: {country}'**
+  String locationSuggestion(String country);
+
+  /// No description provided for @locationPromptBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us where you live. You can change it any time from your profile.'**
+  String get locationPromptBody;
+
+  /// No description provided for @locationLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get locationLater;
+
+  /// No description provided for @locationLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The list could not be loaded. Please try again.'**
+  String get locationLoadFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -5120,4 +5120,40 @@ class L10nEn extends L10n {
   @override
   String get deleteAccountTeacherBlocked =>
       'Please contact the academy to close your lessons and payroll before deleting your account.';
+
+  @override
+  String get locationRowTitle => 'Location';
+
+  @override
+  String get locationRowEmpty => 'Not set';
+
+  @override
+  String get locationSheetTitle => 'Where does the family live?';
+
+  @override
+  String get locationCountryLabel => 'Country';
+
+  @override
+  String locationSubdivisionError(String label) {
+    return 'Choose a $label from the list';
+  }
+
+  @override
+  String get locationCountryError => 'Choose a country from the list';
+
+  @override
+  String locationSuggestion(String country) {
+    return 'Suggested: $country';
+  }
+
+  @override
+  String get locationPromptBody =>
+      'Tell us where you live. You can change it any time from your profile.';
+
+  @override
+  String get locationLater => 'Later';
+
+  @override
+  String get locationLoadFailed =>
+      'The list could not be loaded. Please try again.';
 }

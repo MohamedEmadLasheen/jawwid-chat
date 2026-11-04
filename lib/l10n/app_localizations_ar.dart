@@ -5221,4 +5221,39 @@ class L10nAr extends L10n {
   @override
   String get deleteAccountTeacherBlocked =>
       'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
+
+  @override
+  String get locationRowTitle => 'الموقع';
+
+  @override
+  String get locationRowEmpty => 'غير محدد';
+
+  @override
+  String get locationSheetTitle => 'أين تقيم الأسرة؟';
+
+  @override
+  String get locationCountryLabel => 'الدولة';
+
+  @override
+  String locationSubdivisionError(String label) {
+    return 'اختر $label من القائمة';
+  }
+
+  @override
+  String get locationCountryError => 'اختر الدولة من القائمة';
+
+  @override
+  String locationSuggestion(String country) {
+    return 'مقترح: $country';
+  }
+
+  @override
+  String get locationPromptBody =>
+      'أخبرنا أين تقيمون. يمكنك تغييره في أي وقت من ملفك الشخصي.';
+
+  @override
+  String get locationLater => 'لاحقًا';
+
+  @override
+  String get locationLoadFailed => 'تعذّر تحميل القائمة. حاول مرة أخرى.';
 }

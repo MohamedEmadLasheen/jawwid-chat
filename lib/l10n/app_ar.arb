@@ -1937,5 +1937,15 @@
   "deleteAccountStaff": "حسابات فريق العمل تُغلق عن طريق الإدارة.",
   "deleteAccountFailed": "تعذّر حذف الحساب. حاول مرة أخرى.",
   "deleteAccountDone": "تم حذف حسابك.",
-  "deleteAccountTeacherBlocked": "يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك."
+  "deleteAccountTeacherBlocked": "يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.",
+  "locationRowTitle": "الموقع",
+  "locationRowEmpty": "غير محدد",
+  "locationSheetTitle": "أين تقيم الأسرة؟",
+  "locationCountryLabel": "الدولة",
+  "locationSubdivisionError": "اختر {label} من القائمة",
+  "locationCountryError": "اختر الدولة من القائمة",
+  "locationSuggestion": "مقترح: {country}",
+  "locationPromptBody": "أخبرنا أين تقيمون. يمكنك تغييره في أي وقت من ملفك الشخصي.",
+  "locationLater": "لاحقًا",
+  "locationLoadFailed": "تعذّر تحميل القائمة. حاول مرة أخرى."
 }
