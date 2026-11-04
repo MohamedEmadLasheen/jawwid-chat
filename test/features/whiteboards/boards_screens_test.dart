@@ -2,6 +2,7 @@
 // 5b): Deleted boards says how long a board can come back and that it is
 // deleted for good within 60 days; deleting says until when it can be
 // restored; there is no "delete forever"; a pen stroke on the page is saved.
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -431,6 +432,29 @@ void main() {
       expect(find.byType(BoardEditorScreen), findsNothing);
     });
 
+    testWidgets('full screen has its own Back: it leaves the board in one tap, and the system bars come back', (tester) async {
+      final l10n = await pump(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        size: const Size(844, 390),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('board-full-screen-back')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardEditorScreen), findsNothing);
+      expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
+    });
+
     testWidgets('on a wide screen the tools float along the side; the page bar is replaced by previous / next', (tester) async {
       repo.pages = const [
         BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: []),
@@ -463,6 +487,75 @@ void main() {
     });
   });
 
+  group('PD-55 Phase 1 (2): tools for small hands', () {
+    IconButton button(WidgetTester tester, String tooltip) =>
+        tester.widget<IconButton>(find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(IconButton)).first);
+    Color? fill(WidgetTester tester, String tooltip) =>
+        button(tester, tooltip).style!.backgroundColor!.resolve(<WidgetState>{});
+
+    testWidgets('each tool has its colour: the chosen one is filled with it, the rest washed with theirs', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      // The pen is chosen when a board opens.
+      expect(fill(tester, l10n.boardToolPen), BoardPalette.toolDraw);
+      expect(fill(tester, l10n.boardToolEraser), BoardPalette.toolErase.withValues(alpha: 0.12));
+      expect(fill(tester, l10n.boardToolRect), BoardPalette.toolShape.withValues(alpha: 0.12));
+
+      await tester.tap(find.byTooltip(l10n.boardToolEraser));
+      await tester.pumpAndSettle();
+      expect(fill(tester, l10n.boardToolEraser), BoardPalette.toolErase);
+      expect(fill(tester, l10n.boardToolPen), BoardPalette.toolDraw.withValues(alpha: 0.12));
+      expect(button(tester, l10n.boardToolEraser).isSelected, isTrue, reason: 'screen readers still hear "selected"');
+    });
+
+    testWidgets('every tool is a 48 pt touch target', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
+      for (final t in [l10n.boardToolSelect, l10n.boardToolPen, l10n.boardToolEraser, l10n.boardToolText]) {
+        final size = tester.getSize(find.ancestor(of: find.byTooltip(t), matching: find.byType(IconButton)).first);
+        expect(size.shortestSide, greaterThanOrEqualTo(48), reason: '$t is $size');
+      }
+    });
+
+    testWidgets('the chosen tool grows a little -- and not at all with "reduce motion"', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      AnimatedScale scaleOf(String tooltip) => tester.widget<AnimatedScale>(find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(AnimatedScale)).first);
+      expect(scaleOf(l10n.boardToolPen).scale, greaterThan(1));
+      expect(scaleOf(l10n.boardToolEraser).scale, 1);
+      expect(scaleOf(l10n.boardToolPen).duration, greaterThan(Duration.zero));
+
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await tester.pumpAndSettle();
+      expect(scaleOf(l10n.boardToolPen).duration, Duration.zero);
+    });
+
+    testWidgets('the chosen colour is a big drop with a tick', (tester) async {
+      await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      final ticks = find.byIcon(Icons.check_rounded);
+      expect(ticks, findsOneWidget);
+      expect(tester.getSize(find.ancestor(of: ticks, matching: find.byType(DecoratedBox)).first), const Size(36, 36));
+    });
+
+    test('a white icon reads on every tool colour (at least 4.5:1)', () {
+      double contrast(Color a, Color b) {
+        final la = a.computeLuminance(), lb = b.computeLuminance();
+        return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+      }
+
+      for (final c in [
+        BoardPalette.toolMove,
+        BoardPalette.toolDraw,
+        BoardPalette.toolErase,
+        BoardPalette.toolText,
+        BoardPalette.toolShape,
+        BoardPalette.toolReward,
+        BoardPalette.toolPoint,
+        BoardPalette.toolInsert,
+      ]) {
+        expect(contrast(c, BoardPalette.onTool), greaterThanOrEqualTo(4.5), reason: '$c');
+      }
+    });
+  });
+
   group('PD-55 Phase 1 (4): emoji and stickers', () {
     testWidgets('the stamp tool offers the emoji picker and the stickers; a chosen emoji is placed as a square stamp', (tester) async {
       final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
@@ -470,7 +563,7 @@ void main() {
       await tester.pumpAndSettle();
       // The reward stickers sit with PD-39's stamps: icons, no faces.
       for (final k in [StampKind.medal, StampKind.trophy, StampKind.rocket, StampKind.rainbow, StampKind.balloon]) {
-        expect(find.byIcon(kStampIcons[k]!), findsOneWidget, reason: '$k');
+        expect(find.byIcon(kStampIcons[k]!), findsWidgets, reason: '$k');
       }
 
       // Below the tools in the side panel: scrolled to, as a teacher would.

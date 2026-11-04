@@ -53,7 +53,7 @@ export function dayPartOf(clock24: string): DayPart {
 /** "6 times" / "٦ أوقات". */
 function timesCount(n: number, locale: 'ar' | 'en'): string {
   if (locale === 'en') return n === 1 ? '1 time' : `${n} times`
-  const num = new Intl.NumberFormat('ar-EG').format(n)
+  const num = new Intl.NumberFormat('ar-EG-u-nu-latn').format(n)
   if (n === 1) return 'وقت واحد'
   if (n === 2) return 'وقتان'
   return n <= 10 ? `${num} أوقات` : `${num} وقتًا`
@@ -210,7 +210,7 @@ function ChipPicker({
 
 /** "Mon 27" in the zone. */
 function shortDay(iso: string, zone: string, locale: 'ar' | 'en'): string {
-  const n = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { timeZone: zone, day: 'numeric' }).format(new Date(iso))
+  const n = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { timeZone: zone, day: 'numeric' }).format(new Date(iso))
   return `${weekdayIn(iso, zone, locale)} ${n}`
 }
 
