@@ -58,6 +58,12 @@ None of these is a secret.
 - Background modes: `voip`, `remote-notification` and `audio` (calls).
 - Notification permission: asked when push registration starts, which is when a
   session begins (after sign-in), never at launch (`AppDelegate.startRegistering`).
+  The push PRs (#449 with #408) replace this: the app explains first and asks only
+  after "Turn on".
+- `NSPhotoLibraryAddUsageDescription`: the share sheet's "Save Image" for a board
+  exported as PNG needs it, or iOS terminates the app.
+- Every usage string in Arabic and English (`ar.lproj` and `en.lproj`
+  `InfoPlist.strings`).
 
 ## What the Android build carries
 
@@ -69,10 +75,14 @@ None of these is a secret.
   foreground-service or exact-alarm permission, so no Play permission declaration
   form is needed.
 - Every native library is 16 KB page aligned (Play's requirement for target SDK 35+).
-- `NSPhotoLibraryAddUsageDescription`: the share sheet's "Save Image" for a board
-  exported as PNG needs it, or iOS terminates the app.
-- Every usage string in Arabic and English (`ar.lproj` and `en.lproj`
-  `InfoPlist.strings`).
+- Push notifications are not in this build line: Android FCM, the call ring, and
+  notification display and taps are PRs #408, #411 and #449. When #408 lands:
+  - a release build needs `android/app/google-services.json` (its Gradle guard
+    refuses to build without it);
+  - the manifest gains `USE_FULL_SCREEN_INTENT`, which needs the Play Console
+    full-screen-intent declaration.
+  - With #411, a call foreground service (`microphone|phoneCall`), which needs the
+    foreground-service declaration and a video.
 
 ## Store listings
 
