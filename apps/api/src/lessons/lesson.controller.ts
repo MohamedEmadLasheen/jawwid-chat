@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { LessonService } from './lesson.service';
@@ -48,8 +48,14 @@ export class LessonController {
 
   @Requires('lessons.manage')
   @Post('lessons')
-  schedule(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
-    return this.lessons.schedule(actorId, body ?? {});
+  schedule(
+    @ActorId() actorId: string,
+    @Body() body: Record<string, unknown>,
+    @Headers('idempotency-key') key?: string,
+    @Headers('x-idempotency-key') xKey?: string,
+  ) {
+    // CHATSCHED-007: the Flutter app sends X-Idempotency-Key, Admin Web Idempotency-Key.
+    return this.lessons.schedule(actorId, body ?? {}, key ?? xKey);
   }
 
   /** What the caller may open under "+" in this conversation now. Advisory. */
