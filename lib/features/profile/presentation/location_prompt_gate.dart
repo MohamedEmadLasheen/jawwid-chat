@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../app_lock/application/app_lock_controller.dart';
 import '../../../shared/location/location.dart';
 import '../../../shared/location/location_form.dart';
 import '../../../shared/location/location_repository.dart';
@@ -59,6 +60,10 @@ class _LocationPromptGateState extends ConsumerState<LocationPromptGate> {
       return; // nothing is asked on a failed read
     }
     if ( !mine.prompt || !mounted || ref.read(authControllerProvider).user?.id != accountId) return;
+    // One dialog at a time on a first sign-in: wait for the app-lock first-run offer to be
+    // answered (or never shown).
+    await _offerResolved();
+    if (!mounted || ref.read(authControllerProvider).user?.id != accountId) return;
     if (ref.read(locationPromptAskedProvider).contains(accountId)) return;
     ref.read(locationPromptAskedProvider.notifier).mark(accountId);
     final saved = await showDialog<bool>(
@@ -67,6 +72,21 @@ class _LocationPromptGateState extends ConsumerState<LocationPromptGate> {
       builder: (ctx) => _LocationPromptDialog(repository: repo, current: mine),
     );
     if (saved == true) ref.invalidate(myLocationProvider);
+  }
+
+  /// Completes when the app-lock offer is not on screen (or never was), or this gate is gone.
+  Future<void> _offerResolved() async {
+    bool busy(AppLockState l) => l.offerVisible || l.phase == AppLockPhase.pending;
+    if (!busy(ref.read(appLockControllerProvider))) return;
+    final done = Completer<void>();
+    final sub = ref.listenManual(appLockControllerProvider, (_, next) {
+      if (!busy(next) && !done.isCompleted) done.complete();
+    });
+    try {
+      await done.future;
+    } finally {
+      sub.close();
+    }
   }
 
   @override

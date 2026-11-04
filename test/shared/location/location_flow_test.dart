@@ -7,6 +7,8 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/shells/app_shell.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
+import 'package:jawwid_chat/features/app_lock/presentation/app_lock_gate.dart';
 import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
 import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
 import 'package:jawwid_chat/features/settings/application/theme_mode_controller.dart';
@@ -261,6 +263,54 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.saves, isEmpty);
       expect(repo.laterCalls, 1);
+    });
+
+    group('with the app-lock first-run offer', () {
+      Future<void> signedInThenShell(WidgetTester tester, FakeLocationRepository repo) async {
+        world = LockWorld(role: UserRole.parent);
+        container = ProviderContainer(overrides: [
+          ...world.overrides(),
+          themeModeStoreProvider.overrideWithValue(FakeThemeModeStore()),
+          locationRepositoryProvider.overrideWithValue(repo),
+        ]);
+        addTearDown(() {
+          container.dispose();
+          world.dispose();
+        });
+        container.listen(appLockControllerProvider, (_, _) {});
+        await container.read(authControllerProvider.notifier).signIn(username: 'u', password: 'p');
+        await tester.pump();
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: JawwidApp.supportedLocales,
+            localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate],
+            builder: (context, child) => AppLockGate(child: child!),
+            home: shell(UserRole.parent),
+          ),
+        ));
+        await tester.pumpAndSettle();
+      }
+
+      final offer = find.byKey(const ValueKey('app-lock-offer'));
+
+      testWidgets('while the offer is pending the prompt waits; after it is dismissed the prompt shows', (tester) async {
+        await signedInThenShell(tester, FakeLocationRepository());
+        expect(offer, findsOneWidget);
+        expect(prompt, findsNothing);
+
+        await tester.tap(find.byKey(const ValueKey('app-lock-offer-decline')));
+        await tester.pumpAndSettle();
+        expect(offer, findsNothing);
+        expect(prompt, findsOneWidget);
+      });
+
+      testWidgets('with no offer (a restored session) the prompt shows as before', (tester) async {
+        await pump(tester, shell(UserRole.parent), FakeLocationRepository());
+        expect(offer, findsNothing);
+        expect(prompt, findsOneWidget);
+      });
     });
 
     for (final role in [UserRole.teacher, UserRole.sales]) {
