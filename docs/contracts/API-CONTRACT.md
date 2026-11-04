@@ -838,6 +838,23 @@ A parent edits their own name and About, and each child's. Save is the publish. 
 
 **Audit:** `profile.name.changed` and `profile.child.name.changed` (old and new name); `profile.about.saved` and `profile.child.about.saved` (the About's LENGTH, never its text). The actor is always the parent.
 
+### Parent's own location (PD-45 PR-4)
+
+The family's country and first-level subdivision, from the app: the profile's "Location" row and the one-time prompt. Plan: `docs/product/pd045-parent-location-plan.md` §5.4, §6.1 (b), §6.2. `parent-profile/my-location.controller.ts`, `my-location.service.ts`.
+
+- **Whose:** the caller's own family, from the token. No route takes an owner id; an id in the body or the query is ignored. `@NotForStaff()`: staff get 403. A teacher, a contact without an account, or an inactive one get `403 COMM.PROFILE_NOT_AVAILABLE`.
+- **Codes and names** come from `GET /geo/countries` and `GET /geo/countries/:country/subdivisions`.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/location` | none | `{ countryCode, subdivisionCode, location: { ar, en } \| null, prompt, suggestedCountryCode? }`. `location` reads "مصر · الجيزة" / "Egypt · Giza". `prompt` is true while the location is incomplete (no country, an unlisted one, or a country with subdivisions and none chosen) and this contact has not answered. `suggestedCountryCode` is present only while the family has no country and the parent's own number on file is international; it is a suggestion to pre-select, never saved. |
+| PUT | `/me/location` | `{ countryCode, subdivisionCode? }` | The same view. Replaces the location: `countryCode` is required (a listed ISO 3166-1 code, any case); `subdivisionCode` absent or `null` means none, otherwise one of that country's. Written with `location_source = 'parent'`. Answers the prompt `saved`. |
+| POST | `/me/location/later` | none | The same view (201). Answers the prompt `later`; the location is untouched. An earlier answer is kept. |
+
+**Errors:** `COMMON.VALIDATION` (400; the message starts with the field: `countryCode: …` or `subdivisionCode: …`), `COMM.PROFILE_NOT_AVAILABLE` (403), `COMM.PERMISSION_DENIED` (403, staff), `COMM.PARENT_EXISTS` (409: under the new country the family's local number would be another family's; nothing is saved, and no family or number is named), `COMMON.RATE_LIMITED` (429; `abuse.throttle.location_write_actor`, PUT and Later only).
+
+**Audit:** `profile.location.changed` on the family, with the changed field NAMES only (`{ fields: ['countryCode', 'subdivisionCode'] }`), never the codes. The actor is the parent. Later writes no audit. No outbox event, push or realtime event carries the location.
+
 ### Teacher professional profile (Teacher Profile V2; on main 2026-10-20)
 
 The teacher owns it: **Save is the publish.** There is no draft, no submit and no profile approval. What a reviewer still decides is each **certificate**, because an upload does not make a credential verified. Migrations `20261021000000` + `20261021000100`; `teacher-profile.controller.ts`, `teacher-profile/teacher-profile.service.ts`.

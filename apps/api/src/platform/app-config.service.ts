@@ -171,6 +171,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.whiteboard_write_actor': 240,
   /** PD-55: rewards per teacher per window -- a celebration for a class of six is six. */
   'abuse.throttle.reward_give_actor': 30,
+  /** PD-45 PR-4: a parent's own location saves and Later answers (PUT /me/location, POST /me/location/later). A person does this once. */
+  'abuse.throttle.location_write_actor': 10,
   /**
    * PD-39 PR-4: board images and PDF export. OFF until the environment's
    * bucket exists with object versioning on (design §11.3, a hard
