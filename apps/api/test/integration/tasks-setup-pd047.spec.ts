@@ -91,7 +91,7 @@ async function subscribedTrial(parentEmail?: string): Promise<string> {
 /** A subscription form; the same parent e-mail makes a sibling of that parent's family (PD-42 PR-3). */
 function form(parentEmail = `parent.${randomUUID().slice(0, 8)}@example.test`) {
   return {
-    parent: { name: 'parent_t', email: parentEmail, phone: '+99 000 555 666' },
+    parent: { name: 'parent_t', email: parentEmail, phone: '+99 000 555 666', location: { countryCode: 'EG', subdivisionCode: 'EG-C' } },
     children: [
       { name: 'child_t1', age: 9, course: 'course_t', teacherId: s.teacherId, packagePrice: 1000, lessonPrice: 125,
         schedule: [{ weekday: 2, time: '17:00' }] },

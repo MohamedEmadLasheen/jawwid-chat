@@ -9,6 +9,7 @@ import { destinationsFor, entriesOf } from '@/app/navigation'
 import type { NewStudentDto, TrialDto, TrialGroupContextDto } from './api'
 import { TrialCardDialog, TrialGroupBar } from './TrialCardDialog'
 import { chooseOption, optionsOf } from '@/test/select'
+import { mockGeo } from '@/test/geo'
 
 /**
  * PD-11 T4 and the trial journey's Admin Web through the real routes and API
@@ -92,6 +93,7 @@ beforeEach(() => {
   )
   on('GET', /\/trials\/teachers$/, () => json({ teachers: [{ id: 't-1', name: 'Teacher One' }, { id: 't-2', name: 'Teacher Two' }] }))
   on('GET', /\/trials\/slots\?/, () => json({ teacherId: 't-2', durationMinutes: 30, slots: SLOTS }))
+  mockGeo(on, json)
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -157,6 +159,9 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.type(within(dialog).getByLabelText("Parent's name"), 'Parent Alpha')
     await userEvent.type(within(dialog).getByLabelText('Phone number'), '+99 000 111')
     await userEvent.type(within(dialog).getByLabelText('E-mail (optional)'), 'parent@example.test')
+    // PD-45 (owner Q1): the location is required on a new form -- the country, then its governorate.
+    await chooseOption(userEvent, await within(dialog).findByRole('combobox', { name: 'Country' }), 'EG')
+    await chooseOption(userEvent, await within(dialog).findByRole('combobox', { name: 'Governorate' }), 'EG-GZ')
     const child = within(dialog).getByRole('group', { name: 'Child 1' })
     // The trial's student is the first child already; the supervisor may rename.
     expect(within(child).getByLabelText('Name')).toHaveValue('Prospect Alpha')
@@ -177,7 +182,7 @@ describe('Trial lessons, as Sales', () => {
       expect(sent('POST', /\/trials\/tr-pending\/outcome$/)).toEqual([{
         result: 'subscribed',
         subscription: {
-          parent: { name: 'Parent Alpha', email: 'parent@example.test', phone: '+99 000 111' },
+          parent: { name: 'Parent Alpha', email: 'parent@example.test', phone: '+99 000 111', location: { countryCode: 'EG', subdivisionCode: 'EG-GZ' } },
           children: [{ name: 'Child Alpha', age: 9, course: 'Course A', teacherId: 't-1', packagePrice: 1200, lessonPrice: 150, schedule: [{ weekday: 1, time: '17:30' }] }],
           payment: { currency: 'SAR', method: 'invoice' },
         },
@@ -780,3 +785,145 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
 
 })
 
+
+
+describe('PD-45 PR-3b: the family\'s location on the forms', () => {
+  const FIELDS = {
+    en: { country: 'Country', governorate: 'Governorate', location: 'Location', phone: 'Phone number', fromBooking: 'From the booking. Confirm it or change it.', book: 'Book a trial', required: 'Fill in every required field.', needed: 'Choose the family\'s country, and its governorate, emirate or state.' },
+    ar: { country: 'الدولة', governorate: 'المحافظة', location: 'الموقع', phone: 'رقم الهاتف', fromBooking: 'من الحجز. أكِّده أو غيِّره.', book: 'حجز حصة تجريبية', required: 'املأ كل الحقول المطلوبة.', needed: 'اختر دولة العائلة، ومحافظتها أو إمارتها أو ولايتها.' },
+  } as const
+
+  /** The subscribed step of the "+ -> Trial" card, for a trial that awaits its outcome. */
+  async function openNewForm(locale: 'en' | 'ar') {
+    access({ sales: true })
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials', locale })
+    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: locale === 'en' ? 'Record outcome' : 'تسجيل النتيجة' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'The student subscribed' : 'الطالب اشترك' }))
+    return dialog
+  }
+
+  for (const locale of ['en', 'ar'] as const) {
+    const f = FIELDS[locale]
+
+    it(`[${locale}] the location is REQUIRED on a new Sales form: nothing is sent without it, and the field says so`, async () => {
+      on('POST', /\/trials\/tr-pending\/outcome$/, () => json(trial('tr-pending', { outcome: 'subscribed' }), 201))
+      on('GET', /\/trials\/tr-pending\/subscription-prefill$/, () => json({ location: null }))
+      const dialog = await openNewForm(locale)
+      const group = await within(dialog).findByRole('group', { name: f.location })
+      expect(within(group).getByRole('combobox', { name: f.country })).toBeInTheDocument()
+      // Everything else is filled in; only the location is left out.
+      await userEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'Submit' : 'إرسال' }))
+      expect(await within(dialog).findByText(f.needed)).toBeInTheDocument()
+      expect(sent('POST', /\/outcome$/)).toEqual([])
+      // Choosing Egypt asks for its governorate too (the dataset says Egypt has them).
+      await chooseOption(userEvent, within(group).getByRole('combobox', { name: f.country }), 'EG')
+      expect(await within(group).findByRole('combobox', { name: f.governorate })).toBeInTheDocument()
+      await userEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'Submit' : 'إرسال' }))
+      expect(within(dialog).getByText(f.needed)).toBeInTheDocument()
+      expect(sent('POST', /\/outcome$/)).toEqual([])
+    })
+
+    it(`[${locale}] the booking's location pre-fills the new form, marked "from the booking"; changing it clears the mark`, async () => {
+      on('GET', /\/trials\/tr-pending\/subscription-prefill$/, () =>
+        json({ location: { country: { code: 'AE', en: 'United Arab Emirates', ar: 'الإمارات العربية المتحدة' }, subdivision: { code: 'AE-DU', en: 'Dubai', ar: 'دبي' }, label: { en: 'Emirate', ar: 'الإمارة' } } }),
+      )
+      const dialog = await openNewForm(locale)
+      const group = await within(dialog).findByRole('group', { name: f.location })
+      await waitFor(() => expect(within(group).getByRole('combobox', { name: f.country })).toHaveAttribute('data-value', 'AE'))
+      expect(await within(group).findByText(f.fromBooking)).toBeInTheDocument()
+      await waitFor(() => expect(within(group).getByRole('combobox', { name: locale === 'en' ? 'Emirate' : 'الإمارة' })).toHaveAttribute('data-value', 'AE-DU'))
+      await chooseOption(userEvent, within(group).getByRole('combobox', { name: f.country }), 'SA')
+      expect(within(group).queryByText(f.fromBooking)).not.toBeInTheDocument()
+      expect(within(group).getByRole('combobox', { name: f.country })).toHaveAttribute('data-value', 'SA')
+    })
+
+    it(`[${locale}] the booking dialog offers an OPTIONAL location and sends it only when chosen`, async () => {
+      access({ sales: true })
+      on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', outcome: 'upcoming' }), 201))
+      renderWithProviders(<AppRoutes />, { staff, route: '/trials', locale })
+      await userEvent.click(await screen.findByRole('button', { name: f.book }))
+      const dialog = await screen.findByRole('dialog')
+      const group = within(dialog).getByRole('group', { name: locale === 'en' ? 'Location (optional)' : 'الموقع (اختياري)' })
+      await chooseOption(userEvent, within(group).getByRole('combobox', { name: f.country }), 'EG')
+      await chooseOption(userEvent, await within(group).findByRole('combobox', { name: f.governorate }), 'EG-C')
+      await userEvent.type(within(dialog).getAllByRole('textbox')[0]!, 'Karim')
+      await waitFor(async () => expect(await optionsOf(userEvent, within(dialog).getByRole('combobox', { name: locale === 'en' ? 'Teacher' : 'المعلم' }))).toHaveLength(3))
+      await chooseOption(userEvent, within(dialog).getByRole('combobox', { name: locale === 'en' ? 'Teacher' : 'المعلم' }), 't-2')
+      const picker = await within(dialog).findByRole('group', { name: locale === 'en' ? 'Free time' : 'الوقت المتاح' })
+      await userEvent.click(await waitFor(() => picker.querySelector<HTMLElement>(`[data-slot="${SLOTS[1]}"]`)!))
+      await userEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'Book' : 'احجز' }))
+      await waitFor(() => expect(sent('POST', /\/trials$/)).toEqual([expect.objectContaining({ location: { countryCode: 'EG', subdivisionCode: 'EG-C' } })]))
+    })
+  }
+
+  it('the booking dialog without a location sends none (it stays optional)', async () => {
+    access({ sales: true })
+    on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', outcome: 'upcoming' }), 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
+    await waitFor(async () => expect(await optionsOf(userEvent, within(dialog).getByLabelText('Teacher'))).toHaveLength(3))
+    await chooseOption(userEvent, within(dialog).getByLabelText('Teacher'), 't-2')
+    await pickTime(dialog, SLOTS[1]!)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
+    await waitFor(() => expect(sent('POST', /\/trials$/)).toHaveLength(1))
+    expect(sent('POST', /\/trials$/)[0]).not.toHaveProperty('location')
+  })
+
+  describe('New students', () => {
+    const base = (location: NewStudentDto['parent']['location']): NewStudentDto => ({
+      trialId: 'tr-sub', prospectName: 'Prospect Gamma', trialTeacher: { id: 't-1', name: 'Teacher One' }, trialAt: '2026-10-10T15:00:00Z',
+      recordedAt: '2026-10-11T10:00:00Z', recordedBy: { id: 's-1', name: 'Sales One' }, updatedAt: null,
+      parent: { name: 'Parent Gamma', email: null, phone: '+99 000 222', location },
+      children: [{ name: 'Child G1', age: 8, course: 'Course A', teacher: { id: 't-1', name: 'Teacher One' }, packagePrice: 1200, lessonPrice: 150, schedule: [{ weekday: 1, time: '17:00' }] }],
+      payment: { currency: 'USD', method: 'bank_transfer' },
+    })
+    const GIZA = { countryCode: 'EG', subdivisionCode: 'EG-GZ', names: { country: { code: 'EG', en: 'Egypt', ar: 'مصر' }, subdivision: { code: 'EG-GZ', en: 'Giza', ar: 'الجيزة' }, label: { en: 'Governorate', ar: 'المحافظة' } } }
+
+    it('[en] shows the form\'s location as "Egypt · Giza", and a dash for an older form without one', async () => {
+      access({ operations: true })
+      on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA), { ...base(null), trialId: 'tr-old', parent: { ...base(null).parent, name: 'Parent Old' } }] }))
+      renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+      const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+      const term = within(card).getByText('Location')
+      expect(term.nextElementSibling).toHaveTextContent('Egypt · Giza')
+      const old = screen.getByRole('heading', { name: 'Parent Old' }).closest('article')!
+      expect(within(old).getByText('Location').nextElementSibling).toHaveTextContent('—')
+    })
+
+    it('[ar] shows the form\'s location in Arabic', async () => {
+      access({ operations: true })
+      on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA)] }))
+      renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students', locale: 'ar' })
+      const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+      expect(within(card).getByText('الموقع').nextElementSibling).toHaveTextContent('مصر · الجيزة')
+    })
+
+    it('editing keeps working: a form with a location shows it in the picker and sends it back; an older form without one saves without it', async () => {
+      access({ sales: true })
+      on('GET', /\/trials\/new-students$/, () => json({ students: [base(GIZA)] }))
+      on('POST', /\/trials\/tr-sub\/subscription$/, () => json(base(GIZA), 201))
+      renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription' }))
+      const dialog = await screen.findByRole('dialog')
+      await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Country' })).toHaveAttribute('data-value', 'EG'))
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(sent('POST', /\/subscription$/)[0]).toMatchObject({ subscription: { parent: { location: { countryCode: 'EG', subdivisionCode: 'EG-GZ' } } } }))
+    })
+
+    it('an older form without a location can be saved without one (the rule is for NEW forms)', async () => {
+      access({ sales: true })
+      on('GET', /\/trials\/new-students$/, () => json({ students: [base(null)] }))
+      on('POST', /\/trials\/tr-sub\/subscription$/, () => json(base(null), 201))
+      renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription' }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(sent('POST', /\/subscription$/)).toHaveLength(1))
+      expect((sent('POST', /\/subscription$/)[0]!.subscription as { parent: object }).parent).not.toHaveProperty('location')
+    })
+  })
+})

@@ -18,6 +18,7 @@ import './trials.css'
 import { TrialBadge } from '@/shared/components/TrialBadge'
 import { ACADEMY_ZONE } from '@/core/time/academyTime'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { LocationPicker, type LocationValue } from '@/shared/location/LocationPicker'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
 type Filter = 'all' | 'decision' | 'upcoming'
@@ -202,6 +203,8 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
   const lengthOk = lengthText.trim() !== '' && Number.isInteger(typed) && typed >= MIN_LENGTH && typed <= MAX_LENGTH
   const duration = lengthOk ? typed : 0
   const [slot, setSlot] = useState('')
+  // PD-45: optional at booking; it only pre-fills Sales' subscription form later.
+  const [location, setLocation] = useState<LocationValue>({ countryCode: null, subdivisionCode: null })
   const [error, setError] = useState<unknown>(null)
   const slots = useTrialSlots(teacherId, duration)
   const book = useTrialOp((f: () => Promise<unknown>) => f())
@@ -238,6 +241,7 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
               teacherId,
               startsAt: chosenSlot,
               durationMinutes: duration,
+              ...(location.countryCode ? { location: { countryCode: location.countryCode, subdivisionCode: location.subdivisionCode } } : {}),
             }),
       )
       onClose()
@@ -310,6 +314,13 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
               {tx(TR.addStudent)}
             </button>
           )}
+        </fieldset>
+      )}
+      {!editing && (
+        <fieldset className="tj-fieldset">
+          <legend className="tj-legend">{tx(TR.bookingLocation)}</legend>
+          <p className="ts-muted">{tx(TR.bookingLocationHint)}</p>
+          <LocationPicker value={location} onChange={setLocation} />
         </fieldset>
       )}
       <div className="field">

@@ -47,3 +47,14 @@ export function useTrialOp<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
     },
   })
 }
+
+/** PD-45: the booking's location, to pre-fill a NEW subscription form. Missing or refused is simply "no pre-fill". */
+export function useSubscriptionPrefill(trialId: string | undefined) {
+  return useQuery({
+    queryKey: trialKeys.prefill(trialId ?? ''),
+    queryFn: () => trialsApi.subscriptionPrefill(trialId!),
+    enabled: !!trialId,
+    staleTime: 30_000,
+    retry: false,
+  })
+}

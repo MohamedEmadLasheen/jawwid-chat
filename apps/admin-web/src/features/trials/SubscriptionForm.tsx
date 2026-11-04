@@ -1,11 +1,13 @@
-import { useId } from 'react'
+import { useCallback, useEffect, useId } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import type { Pair } from '../teachers/copy'
 import type { NewStudentDto, PaymentMethod, ScheduleSlot, SubscriptionFormInput } from './api'
 import { CURRENCIES, TR, WEEKDAY } from './copy'
-import { useTrialTeachers } from './hooks'
+import { useSubscriptionPrefill, useTrialTeachers } from './hooks'
 import { readinessNote } from '@/features/teacher-files/readiness'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { LocationPicker, type LocationValue } from '@/shared/location/LocationPicker'
+import { useCountries } from '@/shared/location/api'
 import './trials.css'
 
 /**
@@ -34,14 +36,22 @@ export interface SubscriptionDraft {
   children: ChildDraft[]
   currency: string
   method: PaymentMethod | ''
+  /** PD-45: where the family lives. Required on a NEW form (owner Q1). */
+  location: LocationValue
+  /** The form already had a location when it was opened (an edit that clears it must say so). */
+  hadLocation: boolean
+  /** The location came from the trial's booking and nobody has changed it since. */
+  locationFromBooking: boolean
 }
+
+const NO_LOCATION: LocationValue = { countryCode: null, subdivisionCode: null }
 
 export function emptyChild(teacherId = ''): ChildDraft {
   return { name: '', age: '', course: '', teacherId, packagePrice: '', lessonPrice: '', schedule: [{ weekday: '', time: '' }] }
 }
 
 export function emptyDraft(teacherId = ''): SubscriptionDraft {
-  return { parentName: '', email: '', phone: '', children: [emptyChild(teacherId)], currency: 'EGP', method: '' }
+  return { parentName: '', email: '', phone: '', children: [emptyChild(teacherId)], currency: 'EGP', method: '', location: NO_LOCATION, hadLocation: false, locationFromBooking: false }
 }
 
 /** A recorded form back into a draft, for editing. */
@@ -61,15 +71,41 @@ export function draftFrom(s: NewStudentDto): SubscriptionDraft {
     })),
     currency: s.payment.currency,
     method: s.payment.method,
+    location: s.parent.location ? { countryCode: s.parent.location.countryCode, subdivisionCode: s.parent.location.subdivisionCode } : NO_LOCATION,
+    hadLocation: !!s.parent.location,
+    locationFromBooking: false,
   }
+}
+
+/** What a location needs to be complete, as the ids `formErrors` lists. */
+export type LocationCheck = (location: LocationValue) => string[]
+
+/**
+ * PD-45, owner Q1: a NEW form needs the country, and the governorate, emirate
+ * or state when the country has them in the list. An edit of a recorded form
+ * does not (`required` false). The server has the last word.
+ */
+export function useLocationCheck(required: boolean): LocationCheck {
+  const countries = useCountries()
+  return useCallback(
+    (location) => {
+      if (!required) return []
+      if (!location.countryCode) return ['location.country']
+      const country = countries.data?.countries.find((c) => c.code === location.countryCode)
+      if (country?.hasSubdivisions && !location.subdivisionCode) return ['location.subdivision']
+      return []
+    },
+    [required, countries.data],
+  )
 }
 
 const filled = (v: string) => v.trim() !== ''
 const amount = (v: string) => filled(v) && Number.isFinite(Number(v)) && Number(v) >= 0
 
 /** Field ids that are missing or malformed; empty when the draft can be sent. */
-export function formErrors(d: SubscriptionDraft): string[] {
+export function formErrors(d: SubscriptionDraft, locationCheck?: LocationCheck): string[] {
   const bad: string[] = []
+  if (locationCheck) bad.push(...locationCheck(d.location))
   if (!filled(d.parentName)) bad.push('parentName')
   if (!filled(d.phone)) bad.push('phone')
   d.children.forEach((c, i) => {
@@ -91,7 +127,15 @@ export function formErrors(d: SubscriptionDraft): string[] {
 
 export function toInput(d: SubscriptionDraft): SubscriptionFormInput {
   return {
-    parent: { name: d.parentName.trim(), email: d.email.trim(), phone: d.phone.trim() },
+    parent: {
+      name: d.parentName.trim(),
+      email: d.email.trim(),
+      phone: d.phone.trim(),
+      // A chosen location is sent; clearing one the form had says so (null); never having one leaves it out.
+      ...(d.location.countryCode
+        ? { location: { countryCode: d.location.countryCode, subdivisionCode: d.location.subdivisionCode } }
+        : d.hadLocation ? { location: null } : {}),
+    },
     children: d.children.map((c) => ({
       name: c.name.trim(),
       age: Number(c.age),
@@ -109,17 +153,31 @@ export function SubscriptionForm({
   value,
   onChange,
   showErrors,
+  requireLocation = false,
+  prefillTrialId,
 }: {
   value: SubscriptionDraft
   onChange: (next: SubscriptionDraft) => void
   /** Mark missing fields once the reader has tried to submit. */
   showErrors: boolean
+  /** A NEW form needs the location (owner Q1); an edit of a recorded one does not. */
+  requireLocation?: boolean
+  /** A new form for this trial starts with the location given at booking, if any. */
+  prefillTrialId?: string
 }) {
   const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const uid = useId()
   const teachers = useTrialTeachers(true)
-  const errors = new Set(showErrors ? formErrors(value) : [])
+  const locationCheck = useLocationCheck(requireLocation)
+  const errors = new Set(showErrors ? formErrors(value, locationCheck) : [])
+  const prefill = useSubscriptionPrefill(prefillTrialId)
+  const booked = prefill.data?.location
+  // The booking's location fills the block once, and only while it is still empty.
+  useEffect(() => {
+    if (!booked || value.location.countryCode || value.locationFromBooking) return
+    onChange({ ...value, location: { countryCode: booked.country.code, subdivisionCode: booked.subdivision?.code ?? null }, locationFromBooking: true })
+  }, [booked, value, onChange])
   const set = (patch: Partial<SubscriptionDraft>) => onChange({ ...value, ...patch })
   const setChild = (i: number, patch: Partial<ChildDraft>) =>
     set({ children: value.children.map((c, k) => (k === i ? { ...c, ...patch } : c)) })
@@ -148,6 +206,22 @@ export function SubscriptionForm({
         <div className="tj-row">
           {text('phone', TR.parentPhone, value.phone, (v) => set({ phone: v }), { type: 'tel', inputMode: 'tel', dir: 'ltr' })}
           {text('email', TR.parentEmail, value.email, (v) => set({ email: v }), { type: 'email', inputMode: 'email', dir: 'ltr' })}
+        </div>
+        <div className="tj-location" role="group" aria-label={tx(TR.location)}>
+          <span className="field__label">{tx(TR.location)}</span>
+          <LocationPicker
+            value={value.location}
+            clearable={!requireLocation}
+            onChange={(location) => set({ location, locationFromBooking: false })}
+          />
+          {value.locationFromBooking ? (
+            <span className="field__hint">{tx(TR.locationFromBooking)}</span>
+          ) : requireLocation ? (
+            <span className="field__hint">{tx(TR.locationHint)}</span>
+          ) : null}
+          {(errors.has('location.country') || errors.has('location.subdivision')) && (
+            <span className="field__error" role="alert">{tx(TR.locationNeeded)}</span>
+          )}
         </div>
       </fieldset>
 

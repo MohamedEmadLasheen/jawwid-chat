@@ -7,7 +7,7 @@ import { describeOpsError, formatMinutes } from '../teachers/opsCopy'
 import { trialsApi, type NotSubscribedReason, type OutcomeInput, type RecordedResult, type TrialDto } from './api'
 import { NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen } from './copy'
 import { useTrialGroup, useTrialOp } from './hooks'
-import { SubscriptionForm, emptyChild, emptyDraft, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
+import { SubscriptionForm, emptyChild, emptyDraft, formErrors, toInput, useLocationCheck, type SubscriptionDraft } from './SubscriptionForm'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import './trials.css'
 
@@ -71,6 +71,7 @@ export function TrialCardDialog(
   const [tried, setTried] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const op = useTrialOp((f: () => Promise<unknown>) => f())
+  const locationCheck = useLocationCheck(true) // a new Sales form needs the location (owner Q1)
 
   const correcting = step.at !== 'pick' && step.trial.outcome !== 'awaiting'
 
@@ -88,7 +89,7 @@ export function TrialCardDialog(
   const missing = (): boolean => {
     if (step.at === 'pick' || step.at === 'options') return true
     if (correcting && why.trim() === '') return true
-    if (step.at === 'subscribed') return formErrors(draft).length > 0
+    if (step.at === 'subscribed') return formErrors(draft, locationCheck).length > 0
     if (step.at === 'not_subscribed') return reason === '' || (reason === 'other' && note.trim() === '')
     return false
   }
@@ -194,7 +195,7 @@ export function TrialCardDialog(
               <strong dir="auto">{step.trial.prospect.displayName}</strong>
               <span className="ts-muted">{formatWhen(step.trial.startsAt, locale)}</span>
             </p>
-            {step.at === 'subscribed' && <SubscriptionForm value={draft} onChange={setDraft} showErrors={tried} />}
+            {step.at === 'subscribed' && <SubscriptionForm value={draft} onChange={setDraft} showErrors={tried} requireLocation prefillTrialId={step.trial.id} />}
             {step.at === 'not_subscribed' && (
               <>
                 <div className="field">

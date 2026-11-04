@@ -92,7 +92,7 @@ async function pastTrial(startsAt: Date, minutes = 30, teacherId = s.teacherId):
 /** A synthetic subscription form (G-16). */
 function form(teacherId = s.teacherId) {
   return {
-    parent: { name: 'parent_q', email: 'parent_q@example.test', phone: '+99 000 000 000' },
+    parent: { name: 'parent_q', email: 'parent_q@example.test', phone: '+99 000 000 000', location: { countryCode: 'EG', subdivisionCode: 'EG-C' } },
     children: [{ name: 'child_q', age: 9, course: 'course_q', teacherId, packagePrice: 1200, lessonPrice: 150, schedule: [{ weekday: 1, time: '17:00' }] }],
     payment: { currency: 'EGP', method: 'bank_transfer' },
   };
