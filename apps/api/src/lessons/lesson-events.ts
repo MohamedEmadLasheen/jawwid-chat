@@ -44,8 +44,15 @@ export class LessonEvents {
     const ids = [...new Set(lessonIds)];
     if (ids.length === 0) return 0;
     const payloads = await this.payloads(tx, ids, change);
-    let enqueued = 0;
-    for (const p of payloads) enqueued += await this.enqueueKeyed(tx, `lesson:${p.lessonId}:${p.revision}:${p.change}`, CommEvent.LESSON_CHANGED, p);
+    // One statement for every lesson (#420 review), not one per lesson: a
+    // weekly-times change or a pause announces many inside a locked transaction.
+    const at = new Date();
+    const enqueued = payloads.length === 0 ? 0 : await tx.$executeRaw`
+      INSERT INTO chat.outbox_event (id, type, payload, status, attempts, available_at, created_at, idempotency_key)
+      SELECT gen_random_uuid(), ${CommEvent.LESSON_CHANGED}, p.payload, 'pending', 0, ${at}, ${at}, p.key
+        FROM unnest(${payloads.map((p) => JSON.stringify(p))}::jsonb[],
+                    ${payloads.map((p) => `lesson:${p.lessonId}:${p.revision}:${p.change}`)}::text[]) AS p(payload, key)
+      ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`;
     // Announced up to this revision: one signal covers every earlier change of
     // the lesson too (clients refetch the current row).
     await tx.$executeRaw`

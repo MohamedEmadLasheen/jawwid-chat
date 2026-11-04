@@ -29,6 +29,7 @@ import { TeacherFileService } from '../../src/teacher-file/teacher-file.service'
 import { TeacherScopeService, type PageScope } from '@platform/teacher-scope';
 import { LESSON_REPORTS_PAGE, TeacherLessonReportsService } from '../../src/teacher-file/teacher-lesson-reports.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 jest.setTimeout(180_000);
 
@@ -66,7 +67,7 @@ async function monthOf(at: Date): Promise<string> {
 
 /** A lesson for learner_l at a fixed instant, `minutes` long. */
 async function lessonAt(startsAt: Date, minutes = 30): Promise<string> {
-  return (await lessons.schedule(tsupId, {
+  return (await addLesson(g, lessons, tsupId, {
     learnerId: s.learnerId,
     startsAt: startsAt.toISOString(),
     endsAt: new Date(startsAt.getTime() + minutes * MIN).toISOString(),

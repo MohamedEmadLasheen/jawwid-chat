@@ -30,20 +30,31 @@ enum ChatSignalKind {
   /// conversation room because the actor may no longer read it.
   accessRevoked,
 
+  /// `lesson.changed` (PD-46) -- a lesson changed, in [ChatSignal.conversationIds]:
+  /// the conversations whose cards and tickets may now say something else.
+  lessonChanged,
+
   /// Not a server event: the transport (re)connected, so anything may have
   /// been missed while it was down.
   reconnected,
 }
 
 class ChatSignal {
-  const ChatSignal(this.kind, {this.conversationId, this.seq});
+  const ChatSignal(this.kind, {this.conversationId, this.seq, this.conversationIds = const [], this.lessonId});
 
   const ChatSignal.reconnected() : this(ChatSignalKind.reconnected);
 
   final ChatSignalKind kind;
 
-  /// Null only for [ChatSignalKind.reconnected].
+  /// Null for [ChatSignalKind.reconnected] and [ChatSignalKind.lessonChanged] (which
+  /// names [conversationIds] instead).
   final String? conversationId;
+
+  /// [ChatSignalKind.lessonChanged] only: every conversation the lesson's change reaches.
+  final List<String> conversationIds;
+
+  /// [ChatSignalKind.lessonChanged] only.
+  final String? lessonId;
 
   /// Server sequence of the new message, for [ChatSignalKind.messageCreated]; and,
   /// for `message.updated` (PD-50), of the changed message when it may sit above the
@@ -78,11 +89,25 @@ abstract final class ChatEventNames {
   /// PD-34: this account read the conversation on another device. Sent to the account's
   /// own room only; refetching the conversation clears its unread badge here too.
   static const conversationRead = 'conversation.read';
+
+  /// PD-46: a lesson changed. A signal like every other: the client re-reads.
+  static const lessonChanged = 'lesson.changed';
 }
 
 /// Decode a frame. Null when it is not a chat event, or when it names no
 /// conversation -- a signal that cannot be routed is dropped, never guessed at.
 ChatSignal? decodeChatSignal(String event, Object? payload) {
+  // PD-46: names its conversations as a list, not one conversationId.
+  if (event == ChatEventNames.lessonChanged) {
+    if (payload is! Map) return null;
+    final ids = [
+      for (final id in (payload['conversationIds'] as List?) ?? const [])
+        if (id is String && id.isNotEmpty) id,
+    ];
+    if (ids.isEmpty) return null;
+    final lessonId = payload['lessonId'];
+    return ChatSignal(ChatSignalKind.lessonChanged, conversationIds: ids, lessonId: lessonId is String ? lessonId : null);
+  }
   final kind = switch (event) {
     ChatEventNames.messageCreated => ChatSignalKind.messageCreated,
     ChatEventNames.messageDeleted ||

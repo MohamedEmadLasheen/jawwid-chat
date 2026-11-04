@@ -34,6 +34,8 @@ import { TeacherPayrollService } from '../../src/teacher-file/teacher-payroll.se
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
+import { addLesson } from './lesson-fixture';
+import { LessonService } from '../../src/lessons/lesson.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -369,10 +371,10 @@ describe('5. an hourly salary', () => {
     const teacher = hourlyTeacher();
     const learnerId = m.families.flatMap((f) => f.children).find((c) => c.teacherId === teacher.id)!.id;
     const start = Date.now() - 40 * 60_000;
-    const lesson = await http(m.teacherSupervisors[0].subject, 'POST', '/lessons', {
+    // Started 40 minutes ago, so added before (PD-46 PR-2c refuses a past start over HTTP).
+    const lesson = { json: await addLesson(g, app.get(LessonService), m.teacherSupervisors[0].id, {
       learnerId, startsAt: new Date(start).toISOString(), endsAt: new Date(start + 30 * 60_000).toISOString(),
-    });
-    expect(lesson.status).toBe(201);
+    }) };
     expect((await http(teacher.subject, 'POST', `/lessons/${lesson.json.id}/report`, { covered: 'Al-Fatiha', rating: 5 })).status).toBe(201);
     const [r] = await g.prisma.$queryRawUnsafe<Array<{ m: string }>>(
       `select to_char(chat.academy_month(starts_at), 'YYYY-MM') as m from chat.lesson where id = '${lesson.json.id}'::uuid`,

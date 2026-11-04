@@ -78,6 +78,22 @@ class HttpLessonRepository implements LessonRepository {
   }
 
   @override
+  Future<Map<String, LessonNow>> lessonNow(String conversationId) async {
+    final d = (await _client.get<Map<String, Object?>>('/conversations/$conversationId/lesson-now')).data ?? const {};
+    final out = <String, LessonNow>{};
+    for (final row in (d['lessons'] as List?) ?? const []) {
+      if (row is! Map) continue;
+      final lessonId = row['lessonId'];
+      final current = row['currentLessonId'];
+      final startsAt = AppClock.parse(row['startsAt']);
+      final status = LessonNowStatus.parse(row['status']);
+      if (lessonId is! String || current is! String || startsAt == null || status == null) continue;
+      out[lessonId] = LessonNow(lessonId: lessonId, currentLessonId: current, startsAt: startsAt, status: status);
+    }
+    return out;
+  }
+
+  @override
   Future<LessonStaffDetails> staffDetails(String lessonId) async {
     final d = (await _client.get<Map<String, Object?>>('/lessons/$lessonId')).data ?? const {};
     String? text(Object? v) => v is String && v.trim().isNotEmpty ? v : null;

@@ -35,6 +35,7 @@ import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 import { lessonPosition } from '../billing/subscription-reads';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
 import { TeacherScopeService, scopeCovers, type TeacherScope } from '../platform/teacher-scope';
+import { LessonWriter, changeOfOutcome } from './lesson-writer';
 import { ReportMaterials, hasMaterials, parseReportMaterials, type CardPractice, type ReportMaterialsInput } from '../materials/report-materials';
 
 /** PD-35: no teacher -- the scope of someone outside the Teachers department. */
@@ -81,6 +82,16 @@ export interface CardSubject {
   learnerId: string;
   organizationId: string;
   teacherId: string;
+}
+
+/** The key of the one card that announces this lesson change (PD-46 §3.4). */
+export function cardKey(lesson: { id: string; revision: bigint | number }, change: string): string {
+  return `lesson:${lesson.id}:${String(lesson.revision)}:${change}`;
+}
+
+/** How a card is posted: `idempotencyKey` makes the post once-only (PD-46 §3.4). */
+export interface CardOptions {
+  idempotencyKey?: string;
 }
 
 export const LESSON_INCLUDE = {
@@ -133,6 +144,8 @@ export const DEFAULT_ZONE = 'Africa/Cairo';
 @Injectable()
 export class LessonService {
   readonly teacherScope: TeacherScopeService;
+  /** PD-46: every write of chat.lesson, announced in its own transaction. */
+  readonly writer: LessonWriter;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -153,6 +166,7 @@ export class LessonService {
     @Optional() teacherScope?: TeacherScopeService,
   ) {
     this.teacherScope = teacherScope ?? new TeacherScopeService(prisma);
+    this.writer = new LessonWriter(prisma);
   }
 
   /**
@@ -177,7 +191,14 @@ export class LessonService {
   // ------------------------------------------------------------------
 
   /** One lesson for a learner, with the learner's assigned teacher. Teachers department only. */
-  async schedule(actorId: string, body: Record<string, unknown>) {
+  /**
+   * Add one lesson (Admin Web "Add lesson"). With an Idempotency-Key
+   * (CHATSCHED-007) a retry of the same request answers the lesson the first
+   * one created -- the same body under the same key, by the same person --
+   * instead of 409 "the teacher already has a lesson"; the same key with
+   * another body is a 409 of its own.
+   */
+  async schedule(actorId: string, body: Record<string, unknown>, idempotencyKey?: string) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireManager(actor);
     const learnerId = uuidField(body, 'learnerId');
@@ -185,10 +206,12 @@ export class LessonService {
     const endsAt = dateField(body, 'endsAt');
     const makeupFor = optionalUuidField(body, 'makeupFor');
     if (endsAt <= startsAt) throw invalid('endsAt: must be after startsAt');
+    const key = idempotencyKey === undefined || idempotencyKey === '' ? null : idempotencyKey;
+    if (key !== null && (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))) throw invalid('Idempotency-Key: 1-200 visible characters');
 
     const learner = await this.prisma.learner.findFirst({
       where: { id: learnerId, organizationId: actor.organizationId },
-      select: { id: true, teacherId: true },
+      select: { id: true, teacherId: true, familyId: true },
     });
     // PD-35: a learner of a teacher outside the caller's scope reads as unknown.
     if (!learner || (learner.teacherId && !(await this.teacherScope.covers(actor, learner.teacherId)))) {
@@ -196,22 +219,40 @@ export class LessonService {
     }
     if (!learner.teacherId) throw stateError('the learner has no assigned teacher');
     await this.assertMayBook(learner.id);
+    const lang = await this.languageOf({ learner: { familyId: learner.familyId } });
 
     const lesson = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const created = await tx.lesson.create({
-          data: {
-            organizationId: actor.organizationId as string,
-            learnerId,
-            teacherId: learner.teacherId as string,
-            kind: makeupFor ? LessonKind.MAKEUP : LessonKind.REGULAR,
-            makeupFor,
-            startsAt,
-            endsAt,
-            createdBy: actor.actorId,
-          },
-          include: LESSON_INCLUDE,
-        }).then(learnerLesson);
+        if (key !== null) {
+          // Requests of one key are taken one after the other, so the second
+          // finds what the first created (a P2002 would abort the transaction).
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'lesson-create:' + actor.actorId + ':' + key}, 0))`;
+          const earlier = await tx.lesson.findFirst({ where: { createdBy: actor.actorId, createKey: key }, include: LESSON_INCLUDE });
+          if (earlier) {
+            const same = earlier.learnerId === learnerId && earlier.startsAt.getTime() === startsAt.getTime()
+              && earlier.endsAt.getTime() === endsAt.getTime() && earlier.makeupFor === (makeupFor ?? null);
+            if (!same) throw stateError('this Idempotency-Key was used for another lesson; use a new key');
+            return learnerLesson(earlier);
+          }
+        }
+        // TEACHER-API-002 / CHATSCHED-005: never in the past, never on a leave day.
+        await this.assertOpenTime(learner.teacherId as string, startsAt, 'a lesson', tx);
+        const created = await this.writer.create(tx, 'created', {
+          organizationId: actor.organizationId as string,
+          learnerId,
+          teacherId: learner.teacherId as string,
+          kind: makeupFor ? LessonKind.MAKEUP : LessonKind.REGULAR,
+          makeupFor,
+          startsAt,
+          endsAt,
+          createdBy: actor.actorId,
+          createKey: key,
+        }, LESSON_INCLUDE).then(learnerLesson);
+        // CHATSCHED-001: the family hears of a lesson added outside the weekly
+        // times, like any other lesson change.
+        await this.postCard(tx, created, actor, CardKind.LESSON_SCHEDULED, this.cardBase(created), lang, {
+          idempotencyKey: cardKey(created, 'created'),
+        });
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'lesson.scheduled',
@@ -457,6 +498,58 @@ export class LessonService {
    * what the client puts under "+". Advisory, exactly like canCall: each ticket
    * is re-decided when it is submitted.
    */
+  /**
+   * CHATSCHED-002 (PD-46 §3.4, owner Q2): a lesson card is history and is
+   * never rewritten, but nobody should act on an old time. For every lesson a
+   * time-announcing card in this conversation is about, where that lesson is
+   * NOW: the end of its move chain (moved_from), its time and a plain status.
+   * The family's view: no reason, no recorder. The same read check as every
+   * conversation route; the times are those its own later cards announce.
+   */
+  async lessonNow(actorId: string, conversationId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    const conv = await this.conversations.requireConversation(conversationId);
+    const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
+    if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const read = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!read.allowed) throw new CommError(read.code, read.reason);
+    const rows = await this.prisma.$queryRaw<Array<{ lesson_id: string; current_id: string; starts_at: Date; ends_at: Date; outcome: string | null }>>`
+      WITH RECURSIVE carded AS (
+        SELECT c.lesson_id, max(m.seq) AS last_seq
+          FROM chat.message_card c
+          JOIN chat.message m ON m.id = c.message_id
+         WHERE m.conversation_id = ${conv.id}::uuid
+           AND m.deleted_at IS NULL
+           AND c.lesson_id IS NOT NULL
+           AND c.kind = ANY(${TIMED_CARD_KINDS}::text[])
+         GROUP BY c.lesson_id
+         ORDER BY last_seq DESC
+         LIMIT ${LESSON_NOW_LIMIT}
+      ), chain AS (
+        SELECT l.id AS origin, l.id AS cur, 0 AS depth
+          FROM carded JOIN chat.lesson l ON l.id = carded.lesson_id
+         WHERE l.organization_id = ${conv.organizationId}::uuid
+        UNION ALL
+        SELECT chain.origin, n.id, chain.depth + 1
+          FROM chain JOIN chat.lesson n ON n.moved_from = chain.cur
+         WHERE chain.depth < 50
+      )
+      SELECT DISTINCT ON (chain.origin)
+             chain.origin::text AS lesson_id, l.id::text AS current_id, l.starts_at, l.ends_at, l.outcome
+        FROM chain JOIN chat.lesson l ON l.id = chain.cur
+       ORDER BY chain.origin, chain.depth DESC`;
+    return {
+      lessons: rows.map((r) => ({
+        lessonId: r.lesson_id,
+        currentLessonId: r.current_id,
+        startsAt: r.starts_at.toISOString(),
+        endsAt: r.ends_at.toISOString(),
+        status: nowStatus(r.outcome),
+      })),
+    };
+  }
+
   async ticketsFor(actorId: string, conversationId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
@@ -792,12 +885,9 @@ export class LessonService {
           where: { id: ruling.id },
           data: { decision: RulingDecision.EXCUSED, decidedBy: actor.actorId, decidedAt: now, decisionNote: reason },
         });
-        const updated = await tx.lesson.update({
-          where: { id: lesson.id },
-          data: {
-            outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now,
-            excuseCategory: category,
-          },
+        const updated = await this.writer.update(tx, 'outcome', lesson.id, {
+          outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now,
+          excuseCategory: category,
         });
         await this.emitClosed(tx, updated, lesson.outcome !== null);
         await this.postCard(
@@ -931,13 +1021,10 @@ export class LessonService {
         });
         const outcome = decision === RulingDecision.EXCUSED ? LessonOutcome.STUDENT_APOLOGY : LessonOutcome.STUDENT_NO_SHOW;
         if (lesson.outcome !== outcome) {
-          const updated = await tx.lesson.update({
-            where: { id: lesson.id },
-            data: {
-              outcome, outcomeNote: note ?? ruling.reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date(),
-              // PD-50: an excused late apology keeps the family's category.
-              excuseCategory: outcome === LessonOutcome.STUDENT_APOLOGY ? ruling.excuseCategory : null,
-            },
+          const updated = await this.writer.update(tx, changeOfOutcome(outcome), lesson.id, {
+            outcome, outcomeNote: note ?? ruling.reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date(),
+            // PD-50: an excused late apology keeps the family's category.
+            excuseCategory: outcome === LessonOutcome.STUDENT_APOLOGY ? ruling.excuseCategory : null,
           });
           await this.emitClosed(tx, updated, lesson.outcome !== null);
           await this.recordAttendance(tx, updated, actor, lesson.learner.familyId);
@@ -1003,17 +1090,14 @@ export class LessonService {
     const lang = await this.languageOf(lesson);
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const updated = await tx.lesson.update({
-          where: { id: lesson.id },
-          data: {
-            outcome,
-            outcomeNote,
-            outcomeByKind: actor.kind,
-            outcomeBy: actor.actorId,
-            outcomeAt: now,
-            ...(excuseCategory ? { excuseCategory } : {}),
-            ...(cancelCause ? { cancelCause } : {}),
-          },
+        const updated = await this.writer.update(tx, changeOfOutcome(outcome), lesson.id, {
+          outcome,
+          outcomeNote,
+          outcomeByKind: actor.kind,
+          outcomeBy: actor.actorId,
+          outcomeAt: now,
+          ...(excuseCategory ? { excuseCategory } : {}),
+          ...(cancelCause ? { cancelCause } : {}),
         });
         await then(tx, lesson, actor, lang);
         // A lesson that will not happen reminds nobody -- in the same
@@ -1083,10 +1167,11 @@ export class LessonService {
     kind: string,
     payload: Record<string, unknown>,
     lang: CardLanguage,
+    opts: CardOptions = {},
   ): Promise<string | null> {
     const conv = await this.groupFor(tx, lesson);
     if (!conv) return null;
-    return this.postCardInto(tx, conv, lesson.id, recorder, kind, payload, lang);
+    return this.postCardInto(tx, conv, lesson.id, recorder, kind, payload, lang, opts);
   }
 
   /**
@@ -1103,7 +1188,20 @@ export class LessonService {
     kind: string,
     payload: Record<string, unknown>,
     lang: CardLanguage,
+    opts: CardOptions = {},
   ): Promise<string> {
+    // PD-46 §3.4: one card per lesson change -- the key is (lesson, revision,
+    // change), so the same change posted twice answers the card already there.
+    // (A retried REQUEST is a new transaction: it re-reads the lesson, whose
+    // revision has moved on, and refuses or posts on its own merits.) The key is
+    // locked first, so two transactions posting the same change queue here
+    // instead of racing to the unique index -- a P2002 inside a transaction
+    // would abort it, so it cannot be caught and turned into "the card exists".
+    if (opts.idempotencyKey) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'card:' + opts.idempotencyKey}, 0))`;
+      const existing = await tx.messageCard.findUnique({ where: { idempotencyKey: opts.idempotencyKey }, select: { messageId: true } });
+      if (existing) return existing.messageId;
+    }
     const locked = await tx.$queryRaw<Array<{ last_seq: bigint }>>`
       SELECT last_seq FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE`;
     const seq = locked[0].last_seq + BigInt(1);
@@ -1133,7 +1231,10 @@ export class LessonService {
       },
     });
     await tx.messageCard.create({
-      data: { messageId: message.id, organizationId: conv.organizationId, kind, lessonId, payload: payload as Prisma.InputJsonValue },
+      data: {
+        messageId: message.id, organizationId: conv.organizationId, kind, lessonId,
+        payload: payload as Prisma.InputJsonValue, idempotencyKey: opts.idempotencyKey ?? null,
+      },
     });
     const recipients = members.filter((m) => m.actorId !== author?.actorId);
     if (recipients.length > 0) {
@@ -1174,9 +1275,20 @@ export class LessonService {
 
   /**
    * Where a lesson's card is posted: the learner's live student group, or else a
-   * live PD-8 family group that is about the learner and that the lesson's
-   * teacher is in. Both belong to ONE family (chat.conversation_learner holds a
-   * single family's children), so a card never reaches another family.
+   * live PD-8 family group that is about the learner AND that this lesson's
+   * teacher is in -- or WAS in. Both belong to ONE family
+   * (chat.conversation_learner holds a single family's children), so a card
+   * never reaches another family.
+   *
+   * CHATSCHED-012: after a change of teacher the old one has LEFT the group but
+   * still closes their remaining lessons, and the family must still read those
+   * records (and may contest them), so a group the teacher was ever a member of
+   * qualifies, the current one first.
+   *
+   * Never a group this teacher was never in (#420 review): a family group can
+   * hold several children with different teachers, and child A's attendance,
+   * apology or ruling (with its notes and excuse category) does not belong in a
+   * group that only sibling B's teacher was let into.
    */
   async groupFor(tx: Tx, lesson: CardSubject) {
     const own = await tx.conversation.findFirst({
@@ -1193,8 +1305,10 @@ export class LessonService {
          AND c.archived_at IS NULL
          AND c.organization_id = ${lesson.organizationId}::uuid
          AND EXISTS (SELECT 1 FROM chat.conversation_member m
-                      WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid AND m.left_at IS NULL)
-       ORDER BY c.created_at DESC
+                      WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid)
+       ORDER BY EXISTS (SELECT 1 FROM chat.conversation_member m
+                         WHERE m.conversation_id = c.id AND m.actor_id = ${lesson.teacherId}::uuid AND m.left_at IS NULL) DESC,
+                c.created_at DESC
        LIMIT 1`;
     return rows.length ? tx.conversation.findUnique({ where: { id: rows[0].id } }) : null;
   }
@@ -1319,6 +1433,28 @@ export class LessonService {
          AND ls.supervisor_id IN (SELECT chat.staff_principals(${actor.actorId}::uuid, ${at}::timestamptz))
          AND (${only ?? null}::uuid IS NULL OR ls.learner_id = ${only ?? null}::uuid)`;
     return rows.map((r) => r.learner_id);
+  }
+
+  /**
+   * TEACHER-API-002 / CHATSCHED-005: a lesson at a time a person chose (a
+   * one-off, a make-up, an agreed move) starts in the future and not on one of
+   * the teacher's days off -- an approved leave IS its days off (PD-12) -- in
+   * the teacher's own zone. The weekly schedule and the free-slot lists keep to
+   * both already.
+   */
+  async assertOpenTime(teacherId: string, startsAt: Date, what: string, db: Pick<Prisma.TransactionClient, '$queryRaw'> = this.prisma) {
+    const [r] = await db.$queryRaw<Array<{ future: boolean; day_off: boolean }>>`
+      SELECT ${startsAt}::timestamptz > now() AS future,
+             EXISTS (
+               SELECT 1 FROM chat.teacher_day_off o
+                WHERE o.teacher_id = ${teacherId}::uuid
+                  AND o.day = (${startsAt}::timestamptz AT TIME ZONE coalesce(
+                        (SELECT a.timezone FROM chat.teacher_availability a WHERE a.teacher_id = ${teacherId}::uuid LIMIT 1),
+                        (SELECT c.value #>> '{}' FROM chat.config c WHERE c.key = 'schedule.timezone'),
+                        'Africa/Cairo'))::date
+             ) AS day_off`;
+    if (!r.future) throw stateError(`${what} is scheduled in the future`);
+    if (r.day_off) throw stateError('that is one of the teacher\'s days off; agree on another day');
   }
 
   async languageOf(lesson: { learner: { familyId: string } }): Promise<CardLanguage> {
@@ -1552,6 +1688,21 @@ export async function cancelReminders(tx: Tx, lessonId: string): Promise<void> {
     where: { subjectId: lessonId, cancelledAt: null, visibleAt: { gt: new Date() } },
     data: { cancelledAt: new Date(), cancelReason: 'subject_gone' },
   });
+}
+
+/** The cards that announce a time to come: the ones an old time could mislead (CHATSCHED-002). */
+const TIMED_CARD_KINDS: string[] = [CardKind.LESSON_SCHEDULED, CardKind.LESSON_MOVED, CardKind.LESSON_MAKEUP_BOOKED];
+/** The newest lessons carded in one conversation that lessonNow answers for. */
+const LESSON_NOW_LIMIT = 300;
+
+/** What a family may read of where a lesson stands: never why, never who. */
+export type LessonNowStatus = 'upcoming' | 'held' | 'missed' | 'cancelled';
+function nowStatus(outcome: string | null): LessonNowStatus {
+  if (outcome === null) return 'upcoming';
+  if (outcome === LessonOutcome.HELD) return 'held';
+  if (outcome === LessonOutcome.STUDENT_NO_SHOW || outcome === LessonOutcome.TEACHER_NO_SHOW) return 'missed';
+  // An apology, a cancellation, a pause, a replaced weekly time, a voided report.
+  return 'cancelled';
 }
 
 export function invalid(reason: string) {

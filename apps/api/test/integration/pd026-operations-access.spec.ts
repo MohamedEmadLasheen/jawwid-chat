@@ -43,6 +43,7 @@ import { TeacherPayrollService } from '../../src/teacher-file/teacher-payroll.se
 import { SupervisionService } from '../../src/lessons/supervision.service';
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 import { offsetInOneYear } from './calendar-safe';
 
 const g = buildGraph();
@@ -90,7 +91,7 @@ function plusDays(day: string, n: number): string {
 
 async function lesson(ms: number): Promise<string> {
   const start = ms + (slot++ % 20) * 40 * 60_000 * (ms < 0 ? -1 : 1);
-  return (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
+  return (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
 }
 
 async function complaint(source: 'management' | 'parent' = 'parent') {
@@ -348,7 +349,7 @@ async function otherFamily() {
 
 /** A lesson of learner_n with teacher_c, held three hours ago. */
 async function theirHeldLesson(learnerId: string): Promise<string> {
-  const id = (await lessons.schedule(tsupId, { learnerId, startsAt: at(-3 * HOUR), endsAt: at(-2.5 * HOUR) })).id;
+  const id = (await addLesson(g, lessons, tsupId, { learnerId, startsAt: at(-3 * HOUR), endsAt: at(-2.5 * HOUR) })).id;
   await lessons.report(s.teacherId, id, { covered: 'Al-Mulk' });
   return id;
 }
@@ -396,7 +397,7 @@ describe('8. the scope\'s time bound (P2-3): a lesson ties its teacher for chat.
 
   it('a coming lesson ties its teacher; once the academy cancels it, it ties nobody', async () => {
     await assignLearnerL(s.unrelatedTeacherId);
-    const coming = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(2 * DAY), endsAt: at(2 * DAY + HOUR / 2) })).id;
+    const coming = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(2 * DAY), endsAt: at(2 * DAY + HOUR / 2) })).id;
     await assignLearnerL(s.teacherId);
     expect(await directoryOf(ops())).toEqual([s.teacherId, s.newTeacherId, s.unrelatedTeacherId].sort());
     await lessons.cancel(tsupId, coming, { reason: 'teacher_e is away' });
@@ -574,8 +575,8 @@ describe('13. leave responses, as Operations reads them (re-review)', () => {
     // The lessons on day n + 1, the leave n .. n + 3 around them, inside one calendar year.
     const n = offsetInOneYear(today, 29, 0, 3);
     const day = (n + 1) * DAY;
-    await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(day), endsAt: at(day + HOUR / 2) });
-    await lessons.schedule(tsupId, { learnerId: y.learnerId, startsAt: at(day + 2 * HOUR), endsAt: at(day + 2.5 * HOUR) });
+    await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(day), endsAt: at(day + HOUR / 2) });
+    await addLesson(g, lessons, tsupId, { learnerId: y.learnerId, startsAt: at(day + 2 * HOUR), endsAt: at(day + 2.5 * HOUR) });
     await leave.request(s.teacherId, { firstDay: plusDays(today, n), lastDay: plusDays(today, n + 3), reason: 'family' });
     const [mine] = (await leave.list(ops(), { state: 'requested' })).requests;
     expect(mine.collidingLessons?.map((l) => l.learnerName)).toEqual(['learner_l', null]);

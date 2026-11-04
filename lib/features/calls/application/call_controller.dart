@@ -246,6 +246,10 @@ class CallController extends Notifier<CallUiState> {
   /// second terminal event does not ask again. Bounded by one call at a time.
   final _dismissed = <String>{};
 
+  /// S-06: calls this device's microphone joined, whose ongoing-call service
+  /// (Android) is up -- so it is started once and stopped once.
+  final _ongoing = <String>{};
+
   /// True while WE are taking the media down, so the `disconnected` snapshot that
   /// follows is not mistaken for a drop.
   bool _leavingMedia = false;
@@ -847,6 +851,9 @@ class CallController extends Notifier<CallUiState> {
     // route to terminal -- our decline, our hang-up, `call.declined`,
     // `call.ended`, the ring timeout -- takes it down exactly once.
     final callId = state.callId;
+    if (callId != null && _ongoing.remove(callId)) {
+      unawaited(_native?.callFinished(callId: callId));
+    }
     if (callId != null) {
       _dismissNative(
         callId,
@@ -876,6 +883,12 @@ class CallController extends Notifier<CallUiState> {
     _media = media;
     _leavingMedia = false;
     _mediaSub = media.snapshots.listen(_onMediaSnapshot);
+    // S-06: from here the microphone is in a call; Android keeps it alive in the
+    // background. Started while the app is in front (the user just answered or
+    // called), which is when Android allows a microphone foreground service.
+    if (_ongoing.add(callId)) {
+      unawaited(_native?.callConnected(callId: callId, title: state.peerLabel ?? ''));
+    }
     await media.connect(callId: callId);
   }
 

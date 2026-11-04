@@ -3,4 +3,15 @@
     <!-- The Arabic launcher label, as lib/l10n/app_ar.arb's appName: جَوِّد, never جوّيد
          (test/l10n/brand_name_test.dart). -->
     <string name="app_name">جَوِّد</string>
+    <!-- Store blocker S-05: the push notifications a closed app shows (JawwidPush.kt). -->
+    <string name="channel_calls">المكالمات</string>
+    <string name="channel_calls_description">المكالمات الصوتية الواردة</string>
+    <string name="channel_messages">الرسائل</string>
+    <string name="channel_messages_description">الرسائل الجديدة في محادثاتك</string>
+    <string name="call_incoming">مكالمة واردة</string>
+    <string name="call_answer">رد</string>
+    <string name="call_decline">رفض</string>
+    <string name="message_new">رسالة جديدة</string>
+    <string name="call_ongoing">مكالمة جارية</string>
+    <string name="channel_ongoing_call">المكالمة الجارية</string>
 </resources>

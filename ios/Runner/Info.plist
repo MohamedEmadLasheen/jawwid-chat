@@ -56,6 +56,10 @@
 	<string>Jawwid uses the camera to take a photo or record a video to send in a conversation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Jawwid lets you choose a photo or a video to send in a conversation, or a photo to use as a profile photo.</string>
+	<!-- PD-39: a board exported as a picture goes to the share sheet, whose "Save Image"
+	     adds it to Photos. Without this key iOS terminates the app at that tap. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Jawwid saves a board you export as a picture to your photo library.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jawwid uses the microphone to record voice messages and the sound of videos you record, and to make voice calls.</string>
 	<!-- PD-23 app lock. Without it iOS refuses Face ID outright (and a passcode-only

@@ -54,6 +54,8 @@
 .jr-moved__line { font-variant-numeric: tabular-nums; }
 .jr-moved__old { color: var(--text-muted); }
 .jr-moved__sub { font-size: var(--fs-sm); color: var(--text-muted); }
+/* CHATSCHED-002: under an old time card, where its lesson stands now. */
+.jr-now { margin-top: var(--space-1); font-size: var(--fs-sm); font-style: italic; color: var(--text-muted); }
 /* Owner report 2026-10-29: an excused lesson's reason and its make-up's time. */
 .jr-excuse { display: grid; gap: 4px; min-inline-size: 14rem; }
 .jr-excuse__rows { display: grid; gap: 2px; margin: 0; }

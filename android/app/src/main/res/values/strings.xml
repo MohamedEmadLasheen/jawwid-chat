@@ -4,4 +4,15 @@
          Arabic one is in values-ar, and the phone's language picks between them.
          test/l10n/android_launcher_label_test.dart keeps both equal to the ARBs. -->
     <string name="app_name">Jawwid</string>
+    <!-- Store blocker S-05: the push notifications a closed app shows (JawwidPush.kt). -->
+    <string name="channel_calls">Calls</string>
+    <string name="channel_calls_description">Incoming voice calls</string>
+    <string name="channel_messages">Messages</string>
+    <string name="channel_messages_description">New messages in your conversations</string>
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_answer">Answer</string>
+    <string name="call_decline">Decline</string>
+    <string name="message_new">New message</string>
+    <string name="call_ongoing">Ongoing call</string>
+    <string name="channel_ongoing_call">Ongoing call</string>
 </resources>

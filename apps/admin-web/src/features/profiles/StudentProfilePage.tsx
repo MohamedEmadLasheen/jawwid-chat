@@ -145,8 +145,10 @@ function StudentCard({ s }: { s: StudentProfile }) {
                       {tx(P.minutes, { n: x.durationMinutes })}
                       {/* PD-22: the family's own clock beside the teacher's, when they differ. */}
                       {(() => {
-                        const theirs = x.nextStartsAt ? familyTime(x.nextStartsAt, s.familyTimeZone, locale) : null
-                        return theirs ? <span className="tf-muted"> · {tx(P.familyLocal, { time: theirs })}</span> : null
+                        // PD-45 §7: no app clock yet -> the clock the family's country implies, marked approximate.
+                        const estimated = !s.familyTimeZone && !!s.familyTimeZoneEstimate
+                        const theirs = x.nextStartsAt ? familyTime(x.nextStartsAt, s.familyTimeZone ?? s.familyTimeZoneEstimate, locale) : null
+                        return theirs ? <span className="tf-muted"> · {tx(estimated ? P.familyLocalEstimate : P.familyLocal, { time: theirs })}</span> : null
                       })()}
                     </li>
                   ))}

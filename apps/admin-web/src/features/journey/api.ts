@@ -86,9 +86,21 @@ export interface EnrollmentInput {
   packageLessons?: number | null
 }
 
+/** CHATSCHED-002: where a lesson a time card announced stands now (never who or why). */
+export interface LessonNow {
+  lessonId: string
+  currentLessonId: string
+  startsAt: string
+  endsAt: string
+  status: 'upcoming' | 'held' | 'missed' | 'cancelled'
+}
+
 export const journeyApi = {
   tickets: (conversationId: string) =>
     api.get<{ tickets: LessonTicket[] }>(`/conversations/${conversationId}/lesson-tickets`),
+  /** CHATSCHED-002: every lesson this conversation's time cards are about, where it is now. */
+  lessonNow: (conversationId: string) =>
+    api.get<{ lessons: LessonNow[] }>(`/conversations/${conversationId}/lesson-now`),
   /** A student excused before the start (the supervisor gives no reason). */
   excuseBefore: (lessonId: string, reason: string | null = null, reasonCategory: string | null = null) =>
     api.post<LessonRecord>(`/lessons/${lessonId}/apology`, { ...(reason ? { reason } : {}), ...(reasonCategory ? { reasonCategory } : {}) }),
@@ -144,6 +156,7 @@ export interface CorrectionRequest {
 
 export const journeyKeys = {
   tickets: (conversationId: string) => ['journey', 'tickets', conversationId] as const,
+  lessonNow: (conversationId: string) => ['journey', 'lessonNow', conversationId] as const,
   lesson: (lessonId: string) => ['journey', 'lesson', lessonId] as const,
   history: (lessonId: string) => ['journey', 'history', lessonId] as const,
   learners: (conversationId: string) => ['journey', 'learners', conversationId] as const,

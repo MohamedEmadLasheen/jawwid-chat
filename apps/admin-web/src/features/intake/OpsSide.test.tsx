@@ -239,7 +239,8 @@ function parentProfile(): ParentProfile {
   return {
     id: 'p-1', name: 'Parent Alpha', relationship: 'parent', isActive: true, avatarUrl: null,
     family: { id: 'f-1', name: 'Family Alpha' },
-    contact: { phone: '+20 100 000 0000', email: null, countryCode: 'EG', region: null },
+    contact: { phone: '+20 100 000 0000', email: null, countryCode: 'EG', subdivisionCode: null, location: null, locationSource: null, locationUpdatedAt: null, region: null },
+    suggestedCountryCode: null, suggestedCallingCode: null, timeZone: { app: null, estimate: null, mismatch: false },
     adminNote: null, childrenCount: 1, children: [{ id: 'k-1', name: 'Child One', avatarUrl: null }],
     updatedAt: null, access: { canEdit: true },
   }

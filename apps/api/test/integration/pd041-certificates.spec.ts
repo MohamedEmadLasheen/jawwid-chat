@@ -86,8 +86,9 @@ async function sqlError(p: Promise<unknown>): Promise<string> {
   throw new Error('expected the database to refuse');
 }
 
+// Not the `lesson_scheduled` card a fixture lesson posts when added (PD-46 / CHATSCHED-001).
 async function cardsIn(conversationId: string) {
-  return g.prisma.message.findMany({ where: { conversationId, type: 'card' }, include: { card: true, attachments: true }, orderBy: { seq: 'asc' } });
+  return g.prisma.message.findMany({ where: { conversationId, type: 'card', NOT: { card: { kind: 'lesson_scheduled' } } }, include: { card: true, attachments: true }, orderBy: { seq: 'asc' } });
 }
 
 async function studentRequest(over: Record<string, unknown> = {}) {

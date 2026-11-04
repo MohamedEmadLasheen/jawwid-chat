@@ -7,6 +7,8 @@
 #   PRIVACY_POLICY_URL   https://...  ({lang} -> ar | en)   (the owner's text)
 #   TERMS_URL            https://...  ({lang} -> ar | en)   (the owner's text)
 #   LESSONS_ORIGIN       optional, https://...               (PD-29 lesson audio)
+#   SENTRY_DSN           optional, https://...               (crash reporting; unset = off)
+#   SENTRY_ENVIRONMENT   optional, default production
 #
 #   scripts/mobile/build-store.sh ios       # flutter build ipa (signed by Xcode: team KX683HAR3Y)
 #   scripts/mobile/build-store.sh android   # flutter build appbundle (android/key.properties)
@@ -43,6 +45,8 @@ case "$API_BASE_URL" in */api/v1) : ;; *) fail "API_BASE_URL must end in /api/v1
 https_url PRIVACY_POLICY_URL "${PRIVACY_POLICY_URL:-}"
 https_url TERMS_URL "${TERMS_URL:-}"
 [ -z "${LESSONS_ORIGIN:-}" ] || https_url LESSONS_ORIGIN "$LESSONS_ORIGIN"
+[ -z "${SENTRY_DSN:-}" ] || https_url SENTRY_DSN "$SENTRY_DSN"
+[ -n "${SENTRY_DSN:-}" ] || echo "build-store: SENTRY_DSN is not set: this build will report no crashes" >&2
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [ "$TARGET" = android ] && [ ! -f "$ROOT/android/key.properties" ]; then
@@ -61,6 +65,8 @@ DEFINES=(
   --dart-define=PRIVACY_POLICY_URL="$PRIVACY_POLICY_URL"
   --dart-define=TERMS_URL="$TERMS_URL"
   --dart-define=JAWWID_LESSONS_ORIGIN="${LESSONS_ORIGIN:-}"
+  --dart-define=SENTRY_DSN="${SENTRY_DSN:-}"
+  --dart-define=SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-production}"
 )
 
 cd "$ROOT"

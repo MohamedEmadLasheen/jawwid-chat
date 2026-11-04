@@ -304,6 +304,38 @@ class LessonReportDraft {
       };
 }
 
+/// CHATSCHED-002 (PD-46): where a lesson a card announced stands NOW -- the end of
+/// its move chain, its time and a plain status. A card is history and is never
+/// rewritten; this is what lets it say it is out of date.
+enum LessonNowStatus {
+  upcoming,
+  held,
+  missed,
+  cancelled;
+
+  static LessonNowStatus? parse(Object? raw) => switch (raw) {
+        'upcoming' => upcoming,
+        'held' => held,
+        'missed' => missed,
+        'cancelled' => cancelled,
+        _ => null,
+      };
+}
+
+class LessonNow {
+  const LessonNow({required this.lessonId, required this.currentLessonId, required this.startsAt, required this.status});
+
+  /// The lesson the card is about.
+  final String lessonId;
+
+  /// The lesson it continues as now (itself, unless it was moved).
+  final String currentLessonId;
+
+  /// In the reader's zone, like [MessageCard.time].
+  final DateTime startsAt;
+  final LessonNowStatus status;
+}
+
 /// PD-15 / PD-50: what `GET /lessons/:id` tells a teacher or staff reader about an
 /// excuse that the group card deliberately leaves out. The server decides who reads
 /// each field; a blank one arrives here as null. NEVER fetched for a parent.

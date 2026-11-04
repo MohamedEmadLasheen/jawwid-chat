@@ -232,6 +232,16 @@ describe('PD-17 over HTTP', () => {
     // Sales never edits the contact record, from any client.
     expect((await http(sales, 'POST', `/parent-profiles/${f.parent.id}`, { region: 'x' })).status).toBe(403);
   });
+
+  it('PD-45 PR-2b: the old free-text region is refused over HTTP with the field-validation contract (400 VALIDATION), after authorisation', async () => {
+    const f = m.families[0]!;
+    const refused = await http(m.operationsManager.subject, 'POST', `/parent-profiles/${f.parent.id}`, { region: 'Giza' });
+    expect({ status: refused.status, code: refused.code }).toEqual({ status: 400, code: CommErrorCode.VALIDATION });
+    expect(JSON.stringify(refused.json)).toMatch(/region/);
+    // A location written the new way is accepted by the same route.
+    const ok = await http(m.operationsManager.subject, 'POST', `/parent-profiles/${f.parent.id}`, { countryCode: 'EG', subdivisionCode: 'EG-GZ' });
+    expect(ok.status).toBe(201);
+  });
 });
 
 describe('PD-45: the country and subdivision lists over HTTP', () => {

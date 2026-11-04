@@ -118,7 +118,7 @@ class MessageBubble extends StatelessWidget {
     final card = message.isDeleted ? null : message.card;
     final cardView = card == null
         ? null
-        : lessonCardView(context, card, foreground) ??
+        : lessonCardView(context, card, foreground, conversationId: message.conversationId) ??
             supervisionCardView(context, card, foreground) ??
             trialCardView(context, card, foreground) ??
             scheduledCallCardView(context, card, foreground,

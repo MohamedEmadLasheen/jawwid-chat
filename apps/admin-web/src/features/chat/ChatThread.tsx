@@ -42,6 +42,7 @@ import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
 import { LESSON_CARD_KINDS } from '@/features/journey/api'
 import { LessonMovedCard, readLessonMovedCard } from '@/features/journey/LessonMovedCard'
 import { LessonExcuseCard, readLessonExcuseCard } from '@/features/journey/LessonExcuseCard'
+import { LessonNowNote, TIMED_CARD_KINDS } from '@/features/journey/LessonNowNote'
 import { journeyCopyFor } from '@/features/journey/journeyCopyFor'
 import {
   SCHEDULED_CALL_CARD_KINDS,
@@ -975,6 +976,10 @@ function MessageItem({
   const movedCard = live && m.type === 'card' && m.card?.kind === 'lesson_moved' ? readLessonMovedCard(m.card.payload) : null
   // An excused lesson's reason and its make-up's time; a make-up's day, date and time.
   const excuseCard = live && m.type === 'card' && m.card ? readLessonExcuseCard(m.card.kind, m.card.payload) : null
+  // CHATSCHED-002: a card that announced a time says where its lesson stands now.
+  const nowCard = live && m.type === 'card' && m.card && TIMED_CARD_KINDS.has(m.card.kind) && typeof m.card.payload.lessonId === 'string'
+    ? { lessonId: m.card.payload.lessonId, startsAt: typeof m.card.payload.startsAt === 'string' ? m.card.payload.startsAt : null }
+    : null
   // PD-35 B6: a case escalated to this department, linked to Escalations.
   const caseCard = live && m.type === 'card' && m.card?.kind === 'case_escalated' ? readCaseEscalatedCard(m.card.payload) : null
   const reactions = summarize(m.reactions ?? [], selfId)
@@ -1093,6 +1098,9 @@ function MessageItem({
                 </span>
               )}
             </>
+          )}
+          {nowCard && m.conversationId && (
+            <LessonNowNote conversationId={m.conversationId} lessonId={nowCard.lessonId} shownStartsAt={nowCard.startsAt} />
           )}
           <span className="bubble__meta">
             {m.pinned && (

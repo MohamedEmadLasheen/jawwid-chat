@@ -39,7 +39,7 @@ export class ParentRecordController {
     return this.parents.detail(actorId, contactId);
   }
 
-  /** { name?, phone?, email?, countryCode?, subdivisionCode?, region?, adminNote? } -- partial; null clears. */
+  /** { name?, phone?, email?, countryCode?, subdivisionCode?, adminNote? } -- `region` is refused (PD-45) -- partial; null clears. */
   @Requires('parents.edit')
   @Post(':contactId')
   update(@ActorId() actorId: string, @Param('contactId') contactId: string, @Body() body: Record<string, unknown>) {

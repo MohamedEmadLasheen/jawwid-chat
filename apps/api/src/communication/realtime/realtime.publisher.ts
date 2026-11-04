@@ -20,6 +20,12 @@ export interface DeliveryAudience {
    * still receives only their own ticks.
    */
   perActor?: Record<string, unknown>;
+  /**
+   * CHATSCHED-015: people already sent this event another way (their own user
+   * room), skipped here so a member of the room gets it once. Only ever narrows:
+   * everyone else in the room is still decided, and authorized, as before.
+   */
+  exceptActors?: string[];
 }
 
 /**

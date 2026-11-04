@@ -13,6 +13,7 @@ import { LessonService, cancelReminders, dateField, invalid, stateError, textFie
 import { SchedulingService } from './scheduling.service';
 import { TrialGroupService } from './trial-group.service';
 import { NewStudentsService } from '../new-students/new-students.service';
+import { bookingLocationOf, parseBookingLocation, recordBookingLocation } from '../new-students/booking-location';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 const NOT_SUBSCRIBED_REASONS: ReadonlySet<string> = new Set(['price', 'schedule', 'not_ready', 'chose_other', 'no_response', 'other']);
@@ -167,6 +168,8 @@ export class TrialService {
     const startsAt = dateField(body, 'startsAt');
     const duration = body.durationMinutes === undefined ? 30 : Number(body.durationMinutes);
     if (!Number.isInteger(duration) || duration < 15 || duration > 120) throw invalid('durationMinutes: 15 to 120');
+    // PD-45 "At booking too": optional; kept beside the prospect, never on the trial (BR-2).
+    const location = parseBookingLocation(body.location);
     const existing = prospectId
       ? await this.prisma.trialProspect.findFirst({ where: { id: prospectId, organizationId: actor.organizationId } })
       : null;
@@ -178,19 +181,17 @@ export class TrialService {
     const trial = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
         const prospect = existing ?? (await this.recordParty(tx, actor, students as BookingStudent[]));
-        const created = await tx.lesson.create({
-          data: {
-            organizationId: actor.organizationId as string,
-            kind: LessonKind.TRIAL,
-            prospectId: prospect.id,
-            teacherId: teacher.id,
-            startsAt,
-            endsAt: new Date(startsAt.getTime() + duration * 60_000),
-            createdByKind: 'staff',
-            createdBy: actor.actorId,
-          },
-          include: TRIAL_INCLUDE,
-        });
+        await recordBookingLocation(tx, { prospectId: prospect.id, organizationId: prospect.organizationId, location, by: actor.actorId });
+        const created = await this.lessons.writer.create(tx, 'trial', {
+          organizationId: actor.organizationId as string,
+          kind: LessonKind.TRIAL,
+          prospectId: prospect.id,
+          teacherId: teacher.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + duration * 60_000),
+          createdByKind: 'staff',
+          createdBy: actor.actorId,
+        }, TRIAL_INCLUDE);
         await this.audit.audit(tx, {
           actorId: actor.actorId, action: 'trial.booked', entity: 'lesson', entityId: created.id,
           after: { prospectId: prospect.id, teacherId: teacher.id, startsAt: startsAt.toISOString() }, reason: 'trial booked',
@@ -313,15 +314,12 @@ export class TrialService {
 
     await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const updated = await tx.lesson.update({
-          where: { id: trial.id },
-          data: {
-            outcome: attended ? LessonOutcome.HELD : LessonOutcome.STUDENT_NO_SHOW,
-            outcomeNote: attended ? null : note,
-            outcomeByKind: actor.kind,
-            outcomeBy: actor.actorId,
-            outcomeAt: new Date(),
-          },
+        const updated = await this.lessons.writer.update(tx, 'trial', trial.id, {
+          outcome: attended ? LessonOutcome.HELD : LessonOutcome.STUDENT_NO_SHOW,
+          outcomeNote: attended ? null : note,
+          outcomeByKind: actor.kind,
+          outcomeBy: actor.actorId,
+          outcomeAt: new Date(),
         });
         if (attended) {
           await tx.lessonReport.create({
@@ -369,28 +367,22 @@ export class TrialService {
 
     const moved = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.lesson.update({
-          where: { id: trial.id },
-          data: { outcome: LessonOutcome.RESCHEDULED, outcomeNote: 'trial moved', outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
-        });
+        await this.lessons.writer.update(tx, 'trial', trial.id, { outcome: LessonOutcome.RESCHEDULED, outcomeNote: 'trial moved', outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
         await cancelReminders(tx, trial.id);
         const free = await this.scheduling.freeSlots(teacher.id, duration, tx);
         if (!free.some((d) => d.getTime() === startsAt.getTime())) {
           throw stateError('that time is not free for this teacher; choose one of the offered times');
         }
-        const created = await tx.lesson.create({
-          data: {
-            organizationId: trial.organizationId,
-            kind: LessonKind.TRIAL,
-            prospectId: trial.prospectId,
-            teacherId: teacher.id,
-            startsAt,
-            endsAt: new Date(startsAt.getTime() + duration * 60_000),
-            createdByKind: 'staff',
-            createdBy: actor.actorId,
-          },
-          include: TRIAL_INCLUDE,
-        });
+        const created = await this.lessons.writer.create(tx, 'trial', {
+          organizationId: trial.organizationId,
+          kind: LessonKind.TRIAL,
+          prospectId: trial.prospectId,
+          teacherId: teacher.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + duration * 60_000),
+          createdByKind: 'staff',
+          createdBy: actor.actorId,
+        }, TRIAL_INCLUDE);
         const students = created.prospect?.students.map((x) => x.displayName) ?? [];
         if (teacher.id === trial.teacherId) {
           await this.groups.postCard(tx, created, actor, CardKind.TRIAL_RESCHEDULED, { previousWhen, students });
@@ -420,10 +412,7 @@ export class TrialService {
     if (trial.outcome !== null) throw stateError('this trial is already closed');
     await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
-        const updated = await tx.lesson.update({
-          where: { id: trial.id },
-          data: { outcome: LessonOutcome.ADMIN_CANCELLED, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
-        });
+        const updated = await this.lessons.writer.update(tx, 'trial', trial.id, { outcome: LessonOutcome.ADMIN_CANCELLED, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
         await cancelReminders(tx, trial.id);
         await this.lessons.emitClosed(tx, updated, false);
         await this.groups.postCard(tx, trial, actor, CardKind.TRIAL_CANCELLED, { reason });
@@ -530,10 +519,7 @@ export class TrialService {
         await tx.$executeRaw`SELECT set_config('chat.correcting_trial', 'on', true), set_config('chat.trial_correction_reason', ${why}, true)`;
         const attendance = result === 'no_show' ? LessonOutcome.STUDENT_NO_SHOW : LessonOutcome.HELD;
         if (trial.outcome !== attendance) {
-          await tx.lesson.update({
-            where: { id: trial.id },
-            data: { outcome: attendance, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
-          });
+          await this.lessons.writer.update(tx, 'trial', trial.id, { outcome: attendance, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
         }
         if (trial.trialOutcome) {
           await tx.trialOutcome.update({
@@ -560,6 +546,19 @@ export class TrialService {
       }),
     );
     return this.get(actorId, lessonId);
+  }
+
+  /**
+   * PD-45: what Sales' subscription form starts with for this trial -- the
+   * location given at booking, which Sales confirm or change (plan §5.5). Sales'
+   * own: the Teachers department may book but never reads it back, and the
+   * trial's teacher never sees it.
+   */
+  async subscriptionPrefill(actorId: string, lessonId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    const { trial, standing } = await this.load(actor, lessonId);
+    if (standing !== 'sales') throw new CommError(CommErrorCode.LESSON_DENIED, 'the subscription form is Sales\'');
+    return { location: await bookingLocationOf(this.prisma, actor.organizationId as string, trial.prospectId) };
   }
 
   /** Change a subscribed trial's form (a typo, a new schedule). Sales. Nothing is posted. */
@@ -596,10 +595,7 @@ export class TrialService {
   /** Mark the trial attended / not attended by a supervisor, unless it already is (same transaction). */
   private async attend(tx: Prisma.TransactionClient, trial: TrialRow, actor: Actor, outcome: string) {
     if (trial.outcome === outcome) return;
-    const updated = await tx.lesson.update({
-      where: { id: trial.id },
-      data: { outcome, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
-    });
+    const updated = await this.lessons.writer.update(tx, 'trial', trial.id, { outcome, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() });
     await this.lessons.emitClosed(tx, updated, false);
   }
 
