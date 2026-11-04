@@ -143,9 +143,16 @@ final class CallKitBridge: NSObject {
       return
     }
 
-    // A duplicate push for a call already on screen reports nothing further.
-    if uuidByCall[callId] != nil {
-      completion()
+    // A duplicate push for a call already on screen is still a VoIP delivery, and
+    // iOS terminates an app that returns from one without reporting a call. So it
+    // reports the SAME uuid again: CallKit answers `callUUIDAlreadyExists`, the
+    // screen already showing is untouched, and the delivery counts as reported.
+    // The error is expected and changes no mapping.
+    if let existing = uuidByCall[callId] {
+      let update = CXCallUpdate()
+      update.hasVideo = false
+      update.remoteHandle = CXHandle(type: .generic, value: callId)
+      provider.reportNewIncomingCall(with: existing, update: update) { _ in completion() }
       return
     }
 
