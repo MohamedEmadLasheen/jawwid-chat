@@ -13,7 +13,7 @@ import 'location.dart';
 /// | GET | `/geo/countries` |
 /// | GET | `/geo/countries/:country/subdivisions` |
 ///
-/// The app never calls `/parent-profiles` for this (Contact File rule, plan section 4).
+/// The staff Contact File endpoints are never called for this (plan section 4).
 abstract interface class LocationRepository {
   Future<MyLocation> mine();
 
