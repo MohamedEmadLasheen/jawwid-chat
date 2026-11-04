@@ -51,6 +51,14 @@ class FakePresentation implements CallPresentation {
   }) async =>
       dismissals.add((callId, reason));
 
+  final ongoing = <String>[];
+
+  @override
+  Future<void> callConnected({required String callId, required String title}) async => ongoing.add('start:$callId');
+
+  @override
+  Future<void> callFinished({required String callId}) async => ongoing.add('stop:$callId');
+
   /// The platform reporting an action.
   void emit(NativeCallActionKind kind, {String callId = 'call_1', String? conversationId}) =>
       _actions.add(
@@ -282,6 +290,43 @@ void main() {
       await settle();
 
       expect(stateOf(container).callId, 'call_1');
+    });
+  });
+
+  // =======================================================================
+  group('N6. S-06: an answered call keeps its ongoing-call service until it ends', () {
+    test('N6a. answering starts it once; the call ending stops it once', () async {
+      await ringing();
+      expect(native.ongoing, isEmpty, reason: 'a ringing call holds no microphone');
+
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+      expect(native.ongoing, ['start:call_1']);
+
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'answered'));
+      await settle();
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'answered'));
+      await settle();
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+    });
+
+    test('N6b. a declined call never starts it, so there is nothing to stop', () async {
+      await ringing();
+      native.emit(NativeCallActionKind.decline);
+      await settle();
+      expect(native.ongoing, isEmpty);
+    });
+
+    test('N6c. hanging up from the ongoing-call notification ends the call and stops it', () async {
+      await ringing();
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+      native.emit(NativeCallActionKind.end);
+      await settle();
+      expect(calls.endCalls, ['call_1']);
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
     });
   });
 
