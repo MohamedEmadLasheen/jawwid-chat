@@ -11,7 +11,6 @@ import {
   type SegmentWho,
 } from './api'
 import {
-  allCountryCodes,
   CHILDREN_LABEL,
   flagOf,
   PLAN_LABEL,
@@ -20,6 +19,8 @@ import {
   useCountryName,
 } from './copy'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useCountries } from '@/shared/location/api'
+import { countryOptions } from '@/shared/location/LocationPicker'
 
 export interface AudienceDraft {
   who: SegmentWho | null
@@ -76,7 +77,7 @@ export function AudienceBuilder({
   dataPath: string | null
 }) {
   const tx = useText()
-  const { number } = useI18n()
+  const { number, locale } = useI18n()
   const countryName = useCountryName()
 
   const planCount = (m: number) => facts?.plans.find((p) => p.months === m)?.families
@@ -89,16 +90,12 @@ export function AudienceBuilder({
     return [...set]
   }, [facts, value.countries])
 
+  // PD-45: "add a country" offers the dataset's list (pinned markets first, then A-Z), minus the chips already shown.
+  const geo = useCountries()
   const addable = useMemo(() => {
     const known = new Set(offeredCountries)
-    const suggested = SUGGESTED_COUNTRIES.filter((c) => !known.has(c))
-    const rest = allCountryCodes()
-      .filter((c) => !known.has(c) && !(SUGGESTED_COUNTRIES as readonly string[]).includes(c))
-      .map((c) => [c, countryName(c)] as const)
-      .filter(([c, name]) => name !== c)
-      .sort((a, b) => a[1].localeCompare(b[1]))
-    return { suggested, rest }
-  }, [offeredCountries, countryName])
+    return countryOptions((geo.data?.countries ?? []).filter((c) => !known.has(c.code)), locale)
+  }, [geo.data, offeredCountries, locale])
 
   const toggle = (list: number[] | string[], v: number | string) =>
     (list as Array<number | string>).includes(v)
@@ -182,20 +179,12 @@ export function AudienceBuilder({
                 className="add-country__select"
                 value=""
                 aria-label={tx(S.addCountry)}
+                options={[{ value: '', label: tx(S.addCountry) }, ...addable]}
                 onValueChange={(v) => {
                   const c = v
                   if (c) onChange({ ...value, countries: [...value.countries, c] })
                 }}
-              >
-                <option value="">{tx(S.addCountry)}</option>
-                {addable.suggested.map((c) => (
-                  <option key={c} value={c}>{`${flagOf(c)} ${countryName(c)}`}</option>
-                ))}
-                {addable.suggested.length > 0 && <option disabled>──────────</option>}
-                {addable.rest.map(([c, name]) => (
-                  <option key={c} value={c}>{`${flagOf(c)} ${name}`}</option>
-                ))}
-              </SearchableSelect>
+              />
             </label>
           </ChipGroup>
 

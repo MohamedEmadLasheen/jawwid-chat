@@ -14,6 +14,7 @@ import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { StatsService } from '../../src/lessons/stats.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -49,7 +50,7 @@ async function monthOf(at: Date): Promise<string> {
 
 /** A lesson for learner_l at a fixed instant, `minutes` long. */
 async function lessonAt(startsAt: Date, minutes: number): Promise<string> {
-  return (await lessons.schedule(tsupId, {
+  return (await addLesson(g, lessons, tsupId, {
     learnerId: s.learnerId,
     startsAt: startsAt.toISOString(),
     endsAt: new Date(startsAt.getTime() + minutes * MIN).toISOString(),

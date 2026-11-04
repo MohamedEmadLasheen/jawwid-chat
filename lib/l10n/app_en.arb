@@ -1057,10 +1057,10 @@
   "supervisionChatTitle": "Supervision",
   "supervisionChatSubtitle": "Teachers department · private",
   "supervisionTicketsHeader": "Requests",
-  "ticketCertificate": "Request a certificate",
+  "ticketCertificate": "Suggest a certificate",
   "ticketLeave": "Request leave",
-  "certificateFormTitle": "Request a certificate",
-  "certificateFormHint": "Sent privately to the Teachers department. When the certificate is issued, it is posted to the student's group, where you and the parents receive it.",
+  "certificateFormTitle": "Suggest a certificate",
+  "certificateFormHint": "Sent privately to the student's Operations supervisor, who decides. If it is accepted, the certificate is designed and posted to the student's group, where you and the parents receive it.",
   "certificateStudent": "Student",
   "certificateTitleField": "Certificate",
   "certificateTitleHint": "e.g. Juz Amma",
@@ -1115,9 +1115,14 @@
   "leaveStateDeclined": "Not approved",
   "leaveStateWithdrawn": "Withdrawn",
   "leaveStateCancelled": "Cancelled",
-  "cardCertificateRequestedTitle": "Certificate request",
+  "cardCertificateRequestedTitle": "Certificate suggestion",
   "cardCertificateIssuedTitle": "Certificate",
-  "cardCertificateDeclinedTitle": "Certificate request not approved",
+  "cardCertificateDeclinedTitle": "Certificate suggestion not approved",
+  "cardCertificateAcceptedTitle": "Certificate suggestion accepted",
+  "cardCertificateAwardedTitle": "Certificate of appreciation",
+  "cardAwardType": "Award",
+  "cardAwardPeriod": "Period",
+  "cardAwardThanks": "Thank you for your work! The certificate is attached.",
   "cardLeaveRequestedTitle": "Leave request",
   "cardLeaveApprovedTitle": "Leave approved",
   "cardLeaveDeclinedTitle": "Leave not approved",
@@ -3421,5 +3426,35 @@
   "deleteAccountDone": "Your account has been deleted.",
   "@deleteAccountDone": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountTeacherBlocked": "Please contact the academy to close your lessons and payroll before deleting your account.",
-  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."}
+  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."},
+  "cardScheduledTitle": "Lesson added",
+  "@cardScheduledTitle": {
+    "description": "Title of the card posted when a lesson is added outside the weekly times (CHATSCHED-001)."
+  },
+  "cardNowAt": "Now: {when}",
+  "@cardNowAt": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson has since moved; when = its current day and time.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "cardNowHeldAt": "Held: {when}",
+  "@cardNowHeldAt": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson was held at another time.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "cardNowCancelled": "This lesson was cancelled",
+  "@cardNowCancelled": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson was later cancelled (no reason given)."
+  },
+  "cardNowMissed": "This lesson did not take place",
+  "@cardNowMissed": {
+    "description": "CHATSCHED-002: footer of an old lesson card whose lesson was missed (no one is named)."
+  }
 }

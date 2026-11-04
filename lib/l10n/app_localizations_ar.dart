@@ -1749,17 +1749,17 @@ class L10nAr extends L10n {
   String get supervisionTicketsHeader => 'الطلبات';
 
   @override
-  String get ticketCertificate => 'طلب شهادة';
+  String get ticketCertificate => 'اقتراح شهادة';
 
   @override
   String get ticketLeave => 'طلب إجازة';
 
   @override
-  String get certificateFormTitle => 'طلب شهادة';
+  String get certificateFormTitle => 'اقتراح شهادة';
 
   @override
   String get certificateFormHint =>
-      'يُرسل بشكل خاص إلى قسم المعلمين. عند إصدار الشهادة تُنشر في مجموعة الطالب، حيث تستلمها أنت وأولياء الأمر.';
+      'يُرسل بشكل خاص إلى مشرف الطالب في العمليات ليقرر. عند قبوله تُصمَّم الشهادة وتُنشر في مجموعة الطالب، حيث تستلمها أنت وأولياء الأمر.';
 
   @override
   String get certificateStudent => 'الطالب';
@@ -1877,13 +1877,28 @@ class L10nAr extends L10n {
   String get leaveStateCancelled => 'ملغاة';
 
   @override
-  String get cardCertificateRequestedTitle => 'طلب شهادة';
+  String get cardCertificateRequestedTitle => 'اقتراح شهادة';
 
   @override
   String get cardCertificateIssuedTitle => 'شهادة';
 
   @override
-  String get cardCertificateDeclinedTitle => 'لم يُعتمد طلب الشهادة';
+  String get cardCertificateDeclinedTitle => 'لم يُعتمد اقتراح الشهادة';
+
+  @override
+  String get cardCertificateAcceptedTitle => 'قُبل اقتراح الشهادة';
+
+  @override
+  String get cardCertificateAwardedTitle => 'شهادة تقدير';
+
+  @override
+  String get cardAwardType => 'التقدير';
+
+  @override
+  String get cardAwardPeriod => 'الفترة';
+
+  @override
+  String get cardAwardThanks => 'شكرًا لعطائك! الشهادة مرفقة.';
 
   @override
   String get cardLeaveRequestedTitle => 'طلب إجازة';
@@ -5223,4 +5238,23 @@ class L10nAr extends L10n {
   @override
   String get deleteAccountTeacherBlocked =>
       'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
+
+  @override
+  String get cardScheduledTitle => 'أُضيفت حصة';
+
+  @override
+  String cardNowAt(String when) {
+    return 'الآن: $when';
+  }
+
+  @override
+  String cardNowHeldAt(String when) {
+    return 'عُقدت: $when';
+  }
+
+  @override
+  String get cardNowCancelled => 'أُلغيت هذه الحصة';
+
+  @override
+  String get cardNowMissed => 'لم تُعقد هذه الحصة';
 }

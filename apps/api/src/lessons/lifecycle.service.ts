@@ -325,6 +325,8 @@ export class LifecycleService {
         for (const plan of plans) {
           const { learner } = plan;
           const lang = await this.lessons.languageOf({ learner: { familyId: learner.familyId } });
+          // The SQL writer: the teacher_id of the learner, its groups' membership
+          // and its future lessons. Announced below, in this transaction (PD-46).
           const rows = await tx.$queryRaw<Array<{ conversation_id: string; removed_teacher_id: string }>>`
             SELECT conversation_id::text, removed_teacher_id::text
               FROM chat.transfer_learner(${learner.id}::uuid, ${toTeacher.id}::uuid, ${opts.reasonCode},
@@ -337,6 +339,19 @@ export class LifecycleService {
             await this.scheduling.applyScheduleTx(
               tx, actor, learner, toTeacher.id, timezone ?? DEFAULT_ZONE, plan.slots, from, plan.oldSlotIds,
             );
+          }
+          // PD-46: the lessons that changed teacher, announced now (not swept a
+          // minute later as `external`); those the new weekly times closed were
+          // announced by applyScheduleTx itself.
+          await this.lessons.writer.announce(tx, 'transferred', plan.before);
+          // CHATSCHED-008: every group the old teacher left and the new one joined
+          // says so, as every other membership change does -- the members' lists
+          // refresh, and the new teacher's chat list shows the group at once
+          // (conversation.added, outbox.worker).
+          for (const e of rows) {
+            await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+              conversationId: e.conversation_id, added: [toTeacher.id], removed: [e.removed_teacher_id],
+            });
           }
           const subject = { id: null, learnerId: learner.id, organizationId: learner.organizationId, teacherId: toTeacher.id };
           // The family hears who teaches their child now -- never why (the reason is internal).
@@ -690,15 +705,12 @@ export class LifecycleService {
          AND (l.starts_at AT TIME ZONE ${zone})::date >= ${from}::date
          AND (${until}::date IS NULL OR (l.starts_at AT TIME ZONE ${zone})::date < ${until}::date)`;
     if (ids.length === 0) return;
-    await tx.lesson.updateMany({
-      where: { id: { in: ids.map((r) => r.id) } },
-      data: {
-        outcome: LessonOutcome.SUSPENDED,
-        outcomeNote: 'study paused',
-        outcomeByKind: ActorKind.STAFF,
-        outcomeBy: actor.actorId,
-        outcomeAt: new Date(),
-      },
+    await this.lessons.writer.updateMany(tx, 'paused', { id: { in: ids.map((r) => r.id) } }, {
+      outcome: LessonOutcome.SUSPENDED,
+      outcomeNote: 'study paused',
+      outcomeByKind: ActorKind.STAFF,
+      outcomeBy: actor.actorId,
+      outcomeAt: new Date(),
     });
     for (const r of ids) await cancelReminders(tx, r.id);
     // A make-up paused with the rest: the card that owed it re-reads it.

@@ -32,6 +32,7 @@ import { TeacherFileService } from '../../src/teacher-file/teacher-file.service'
 import { TeacherPayrollService } from '../../src/teacher-file/teacher-payroll.service';
 import { SupervisionService } from '../../src/lessons/supervision.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 import { leaveFromToday } from './calendar-safe';
 
 const g = buildGraph();
@@ -78,7 +79,7 @@ function plusDays(day: string, n: number): string {
 
 async function lesson(ms: number): Promise<string> {
   const start = ms + (slot++ % 20) * 40 * 60_000 * (ms < 0 ? -1 : 1);
-  return (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
+  return (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: at(start), endsAt: at(start + HOUR / 2) })).id;
 }
 
 async function complaint(source: 'management' | 'parent' = 'parent') {

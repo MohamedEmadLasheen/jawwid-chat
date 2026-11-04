@@ -44,7 +44,23 @@ function parent(over: Partial<ParentProfile> = {}): ParentProfile {
     isActive: true,
     avatarUrl: null,
     family: { id: 'f-1', name: 'Family Alpha' },
-    contact: { phone: '+971 50 123 4567', email: 'alpha@example.test', countryCode: 'AE', region: 'Dubai' },
+    contact: {
+      phone: '+971 50 123 4567',
+      email: 'alpha@example.test',
+      countryCode: 'AE',
+      subdivisionCode: 'AE-DU',
+      location: {
+        country: { code: 'AE', en: 'United Arab Emirates', ar: 'الإمارات العربية المتحدة' },
+        subdivision: { code: 'AE-DU', en: 'Dubai', ar: 'دبي' },
+        label: { en: 'Emirate', ar: 'الإمارة' },
+      },
+      locationSource: 'staff',
+      locationUpdatedAt: '2026-10-20T10:00:00.000Z',
+      region: null,
+    },
+    suggestedCountryCode: null,
+    suggestedCallingCode: null,
+    timeZone: { app: null, estimate: null, mismatch: false },
     adminNote: 'Prefers calls after 6 pm.',
     childrenCount: 2,
     children: [
@@ -438,18 +454,18 @@ describe('the Parents list, filtered by subscription (PD-44)', () => {
   const item = { id: 'p-1', name: 'Parent One', avatarUrl: null, family: { id: 'f-1', name: 'Family One' }, childrenCount: 2 }
 
   it('opens on the filter the URL names and asks the server for it', async () => {
-    on('GET', /\/parent-profiles\?access=locked$/, () => json({ items: [item], truncated: false }))
+    on('GET', /\/parent-profiles\?access=locked&with=location$/, () => json({ items: [item], truncated: false }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents?access=locked' })
     expect(await screen.findByText('Parent One')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Locked subscription' })).toHaveAttribute('aria-pressed', 'true')
-    expect(calls('GET', /\/parent-profiles\?access=locked$/).length).toBeGreaterThan(0)
+    expect(calls('GET', /\/parent-profiles\?access=locked&with=location$/).length).toBeGreaterThan(0)
   })
 
   it('asks for the grace period when that chip is chosen, and for everyone again with All', async () => {
-    on('GET', /\/parent-profiles(\?access=grace)?$/, () => json({ items: [item], truncated: false }))
+    on('GET', /\/parent-profiles\?(access=grace&)?with=location$/, () => json({ items: [item], truncated: false }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents' })
     expect(await screen.findByText('Parent One')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Grace period' }))
-    await waitFor(() => expect(calls('GET', /\/parent-profiles\?access=grace$/).length).toBeGreaterThan(0))
+    await waitFor(() => expect(calls('GET', /\/parent-profiles\?access=grace&with=location$/).length).toBeGreaterThan(0))
   })
 })

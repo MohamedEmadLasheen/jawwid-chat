@@ -107,6 +107,16 @@ abstract interface class CallPresentation {
     required String callId,
     required CallDismissReason reason,
   });
+
+  /// Store blocker S-06: this device's microphone is in a call. Android keeps
+  /// the call alive in the background with a foreground service (types
+  /// microphone and phoneCall) and an ongoing-call notification whose hang-up
+  /// comes back as [NativeCallActionKind.end]. iOS: CallKit already does; a
+  /// no-op there. Idempotent by [callId].
+  Future<void> callConnected({required String callId, required String title});
+
+  /// The call this device was in is over, however it ended. Idempotent.
+  Future<void> callFinished({required String callId});
 }
 
 /// The platform implementation, over one method channel.
@@ -189,6 +199,24 @@ class PlatformCallPresentation implements CallPresentation {
 
   @override
   Stream<NativeCallAction> actions() => _actions.stream;
+
+  @override
+  Future<void> callConnected({required String callId, required String title}) =>
+      _quietly('ongoingStart', {'callId': callId, 'title': title});
+
+  @override
+  Future<void> callFinished({required String callId}) => _quietly('ongoingStop', {'callId': callId});
+
+  /// A platform without the ongoing-call half (iOS, which has CallKit) answers
+  /// notImplemented; that is not a failure of the call.
+  Future<void> _quietly(String method, Map<String, Object?> args) async {
+    if (!_available) return;
+    try {
+      await _channel.invokeMethod<void>(method, args);
+    } catch (_) {
+      // See above.
+    }
+  }
 
   @override
   Future<void> dismiss({

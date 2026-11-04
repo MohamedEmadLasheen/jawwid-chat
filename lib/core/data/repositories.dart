@@ -812,6 +812,10 @@ abstract interface class LessonRepository {
   /// `GET /conversations/:id/lesson-tickets` -- what "+" may offer here, now. Advisory.
   Future<List<LessonTicket>> tickets(String conversationId);
 
+  /// CHATSCHED-002: `GET /conversations/:id/lesson-now` -- where each lesson this
+  /// conversation's time cards announced stands now, by the card's lesson id.
+  Future<Map<String, LessonNow>> lessonNow(String conversationId);
+
   /// `POST /lessons/:id/report`
   Future<void> report(String lessonId, LessonReportDraft draft);
 
@@ -948,6 +952,9 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<List<LessonTicket>> tickets(String conversationId) async => const [];
+
+  @override
+  Future<Map<String, LessonNow>> lessonNow(String conversationId) async => const {};
 
   @override
   Future<void> report(String lessonId, LessonReportDraft draft) =>

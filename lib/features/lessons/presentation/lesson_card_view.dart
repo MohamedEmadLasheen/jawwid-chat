@@ -46,8 +46,9 @@ String? cardPreviewTitle(String kind, L10n l10n) => switch (kind) {
 ///
 /// Returns null for a card kind this build does not know, so the bubble falls back
 /// to the plain-text body the server always sends alongside -- a new kind is never
-/// an empty bubble.
-Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground) {
+/// an empty bubble. [conversationId] lets a card that announced a time say where
+/// its lesson stands now (CHATSCHED-002).
+Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground, {String? conversationId}) {
   final l10n = L10n.of(context);
   final title = switch (card.kind) {
     'lesson_report' => (Icons.menu_book_outlined, l10n.cardReportTitle),
@@ -66,6 +67,7 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
         : (Icons.info_outline, l10n.cardRulingCreditedTitle),
     'lesson_makeup_booked' => (Icons.event_available_outlined, l10n.cardMakeupBookedTitle),
     'lesson_moved' => (Icons.event_repeat_outlined, l10n.cardMovedTitle),
+    'lesson_scheduled' => (Icons.event_outlined, l10n.cardScheduledTitle),
     'lesson_makeup_resolved' => (Icons.task_alt_outlined, l10n.cardMakeupResolvedTitle),
     'schedule_change_requested' => (Icons.edit_calendar_outlined, l10n.cardScheduleRequestedTitle),
     'schedule_change_decided' => card.text('decision') == 'approved'
@@ -93,7 +95,41 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
     title: title.$2,
     card: card,
     foreground: foreground,
+    conversationId: conversationId,
   );
+}
+
+/// CHATSCHED-002: where each lesson this conversation's time cards announced stands now,
+/// by the card's lesson id. Refetched when a `lesson.changed` reaches the conversation
+/// (chat_realtime.dart). Empty on any failure: a missing footer is never an error on a card.
+/// Bound to the principal so one account's answer is never served to the next.
+final lessonNowProvider = FutureProvider.autoDispose.family<Map<String, LessonNow>, String>((ref, conversationId) async {
+  ref.watch(principalIdProvider);
+  try {
+    return await ref.watch(lessonRepositoryProvider).lessonNow(conversationId);
+  } catch (_) {
+    return const {};
+  }
+});
+
+/// The cards that announce a time to come -- the only ones an old time could mislead.
+const _timedCards = {'lesson_scheduled', 'lesson_moved', 'lesson_makeup_booked'};
+
+/// What an old time card says about its lesson now, or null while it is still right:
+/// moved since (the time it shows is not the lesson's any more), cancelled, or missed.
+String? _nowFootnote(BuildContext context, L10n l10n, DateTime? shown, LessonNow? now) {
+  if (now == null) return null;
+  switch (now.status) {
+    case LessonNowStatus.cancelled:
+      return l10n.cardNowCancelled;
+    case LessonNowStatus.missed:
+      return l10n.cardNowMissed;
+    case LessonNowStatus.upcoming:
+    case LessonNowStatus.held:
+      if (shown != null && shown.isAtSameMomentAs(now.startsAt)) return null;
+      final when = _dayWhen(context, now.startsAt);
+      return now.status == LessonNowStatus.held ? l10n.cardNowHeldAt(when) : l10n.cardNowAt(when);
+  }
 }
 
 /// PD-15 / PD-50: what a staff or teacher reader sees of an excuse beyond its card --
@@ -136,12 +172,14 @@ class _LessonCard extends ConsumerWidget {
     required this.title,
     required this.card,
     required this.foreground,
+    this.conversationId,
   });
 
   final IconData icon;
   final String title;
   final MessageCard card;
   final Color foreground;
+  final String? conversationId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -196,6 +234,14 @@ class _LessonCard extends ConsumerWidget {
     final familyWords = lateApology ? staff?.familyWords : null;
     final staffCategory = teacherApology ? excuseCategoryLabel(l10n, staff?.category) : null;
     final rating = card.integer('rating');
+    // CHATSCHED-002: a card is history; under it, where the lesson stands now when that
+    // is no longer what the card says. The time it showed: the make-up's, else the lesson's.
+    final conversation = conversationId;
+    final timed = conversation != null && lessonId != null && _timedCards.contains(card.kind);
+    final now = timed
+        ? _nowFootnote(context, l10n, makeupCard ? card.time('startsAt') : starts,
+            ref.watch(lessonNowProvider(conversation)).value?[lessonId])
+        : null;
     // PD-31: a moved lesson reads "previous -> new", both in the reader's own clock.
     final previous = card.kind == 'lesson_moved' ? card.time('previousStartsAt') : null;
     final movedBy = card.kind == 'lesson_moved'
@@ -351,6 +397,7 @@ class _LessonCard extends ConsumerWidget {
           if (card.kind == 'lesson_late_apology' || card.kind == 'schedule_change_requested')
             _Footnote(text: l10n.cardUnderReview, color: muted),
           if (movedBy != null) _Footnote(text: movedBy, color: muted),
+          ?now == null ? null : _Footnote(key: const ValueKey('lesson-now'), text: now, color: muted),
           // Owed until booked: every read of the card carries its live make-up (makeupStartsAt).
           if (card.flag('makeupOwed') && makeupStarts == null)
             _Footnote(text: l10n.cardMakeupOwed, color: muted),
@@ -379,7 +426,7 @@ class _LessonCard extends ConsumerWidget {
 }
 
 class _Footnote extends StatelessWidget {
-  const _Footnote({required this.text, required this.color});
+  const _Footnote({super.key, required this.text, required this.color});
 
   final String text;
   final Color color;

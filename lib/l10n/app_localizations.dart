@@ -2950,7 +2950,7 @@ abstract class L10n {
   /// No description provided for @ticketCertificate.
   ///
   /// In en, this message translates to:
-  /// **'Request a certificate'**
+  /// **'Suggest a certificate'**
   String get ticketCertificate;
 
   /// No description provided for @ticketLeave.
@@ -2962,13 +2962,13 @@ abstract class L10n {
   /// No description provided for @certificateFormTitle.
   ///
   /// In en, this message translates to:
-  /// **'Request a certificate'**
+  /// **'Suggest a certificate'**
   String get certificateFormTitle;
 
   /// No description provided for @certificateFormHint.
   ///
   /// In en, this message translates to:
-  /// **'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.'**
+  /// **'Sent privately to the student\'s Operations supervisor, who decides. If it is accepted, the certificate is designed and posted to the student\'s group, where you and the parents receive it.'**
   String get certificateFormHint;
 
   /// No description provided for @certificateStudent.
@@ -3172,7 +3172,7 @@ abstract class L10n {
   /// No description provided for @cardCertificateRequestedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Certificate request'**
+  /// **'Certificate suggestion'**
   String get cardCertificateRequestedTitle;
 
   /// No description provided for @cardCertificateIssuedTitle.
@@ -3184,8 +3184,38 @@ abstract class L10n {
   /// No description provided for @cardCertificateDeclinedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Certificate request not approved'**
+  /// **'Certificate suggestion not approved'**
   String get cardCertificateDeclinedTitle;
+
+  /// No description provided for @cardCertificateAcceptedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate suggestion accepted'**
+  String get cardCertificateAcceptedTitle;
+
+  /// No description provided for @cardCertificateAwardedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate of appreciation'**
+  String get cardCertificateAwardedTitle;
+
+  /// No description provided for @cardAwardType.
+  ///
+  /// In en, this message translates to:
+  /// **'Award'**
+  String get cardAwardType;
+
+  /// No description provided for @cardAwardPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get cardAwardPeriod;
+
+  /// No description provided for @cardAwardThanks.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for your work! The certificate is attached.'**
+  String get cardAwardThanks;
 
   /// No description provided for @cardLeaveRequestedTitle.
   ///
@@ -8820,6 +8850,36 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
   String get deleteAccountTeacherBlocked;
+
+  /// Title of the card posted when a lesson is added outside the weekly times (CHATSCHED-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson added'**
+  String get cardScheduledTitle;
+
+  /// CHATSCHED-002: footer of an old lesson card whose lesson has since moved; when = its current day and time.
+  ///
+  /// In en, this message translates to:
+  /// **'Now: {when}'**
+  String cardNowAt(String when);
+
+  /// CHATSCHED-002: footer of an old lesson card whose lesson was held at another time.
+  ///
+  /// In en, this message translates to:
+  /// **'Held: {when}'**
+  String cardNowHeldAt(String when);
+
+  /// CHATSCHED-002: footer of an old lesson card whose lesson was later cancelled (no reason given).
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson was cancelled'**
+  String get cardNowCancelled;
+
+  /// CHATSCHED-002: footer of an old lesson card whose lesson was missed (no one is named).
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson did not take place'**
+  String get cardNowMissed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -112,6 +112,67 @@ void main() {
       expect(find.text('plain-text fallback'), findsNothing);
     });
 
+    // PD-41 PR-4: the teacher's own appreciation certificate, posted by the API as `certificate_awarded`.
+    final awardedFile = [
+      {'id': 'a1', 'kind': 'file', 'mimeType': 'application/pdf', 'byteSize': 2048, 'originalName': 'appreciation.pdf', 'url': 'https://api.test/media/a1'},
+    ];
+    testWidgets('an awarded certificate shows the file, the type and the period (en)', (tester) async {
+      final m = WireMappers.message(
+        wireCard(
+          'certificate_awarded',
+          {
+            'certificateId': 'x1',
+            'teacherId': 't1',
+            'title': 'Teacher of the month',
+            'type': 'Monthly excellence',
+            'printedName': 'teacher_t',
+            'periodStart': '2026-10-01',
+            'periodEnd': '2026-10-31',
+          },
+          attachments: awardedFile,
+        ),
+        viewerActorId: 't1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+      expect(find.text('Certificate of appreciation'), findsOneWidget);
+      expect(find.text('teacher_t'), findsOneWidget);
+      expect(find.text('Monthly excellence'), findsOneWidget);
+      expect(find.text('Period'), findsOneWidget);
+      expect(find.text('appreciation.pdf'), findsOneWidget);
+      expect(find.text('Thank you for your work! The certificate is attached.'), findsOneWidget);
+      expect(find.text('plain-text fallback'), findsNothing);
+    });
+
+    testWidgets('an awarded certificate reads in Arabic too', (tester) async {
+      final m = WireMappers.message(
+        wireCard(
+          'certificate_awarded',
+          {'type': 'التميز الشهري', 'printedName': 'teacher_t', 'periodStart': '2026-10-01', 'periodEnd': '2026-10-31'},
+          attachments: awardedFile,
+        ),
+        viewerActorId: 't1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), locale: const Locale('ar')));
+      expect(find.text('شهادة تقدير'), findsOneWidget);
+      expect(find.text('التميز الشهري'), findsOneWidget);
+      expect(find.text('الفترة'), findsOneWidget);
+      expect(find.text('شكرًا لعطائك! الشهادة مرفقة.'), findsOneWidget);
+      expect(find.text('plain-text fallback'), findsNothing);
+    });
+
+    testWidgets('an awarded certificate with missing or malformed fields still draws, and never throws', (tester) async {
+      for (final payload in <Map<String, Object?>>[
+        {},
+        {'type': 5, 'printedName': null, 'periodStart': 'not-a-date', 'periodEnd': 42, 'surprise': {'a': 1}},
+        {'periodEnd': '2026-10-31'},
+      ]) {
+        final m = WireMappers.message(wireCard('certificate_awarded', payload), viewerActorId: 't1');
+        await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+        expect(tester.takeException(), isNull);
+        expect(find.text('Certificate of appreciation'), findsOneWidget);
+        }
+    });
+
     testWidgets('an approved leave shows its calendar days and the balance, in Arabic too', (tester) async {
       final m = WireMappers.message(
         wireCard('leave_approved', {'firstDay': '2027-03-10', 'lastDay': '2027-03-12', 'days': 3, 'balance': 18}),
@@ -251,6 +312,36 @@ void main() {
       expect(find.text('This certificate is already suggested for this child.'), findsOneWidget);
       expect(find.text("Couldn't send. Please try again."), findsNothing);
       expect(find.text('Juz Amma'), findsOneWidget);
+    });
+  });
+
+  group('the certificate form wording (PD-41: a teacher suggests, the supervisor decides)', () {
+    testWidgets('says suggest, in English and Arabic', (tester) async {
+      for (final (locale, title, hint) in [
+        (const Locale('en'), 'Suggest a certificate', 'Sent privately'),
+        (const Locale('ar'), 'اقتراح شهادة', 'يُرسل بشكل خاص'),
+      ]) {
+        await tester.pumpWidget(app(
+          const CertificateRequestForm(learners: [SupervisionLearner(id: 'l1', name: 'learner_l')]),
+          repo: _RecordingSupervision(),
+          locale: locale,
+        ));
+        expect(find.text(title), findsOneWidget);
+        expect(find.textContaining(hint), findsOneWidget);
+        expect(find.textContaining(locale.languageCode == 'en' ? 'Request a certificate' : 'طلب شهادة'), findsNothing);
+      }
+    });
+
+    testWidgets('the suggestion and its decision cards say suggestion', (tester) async {
+      for (final (kind, text) in [
+        ('certificate_requested', 'Certificate suggestion'),
+        ('certificate_declined', 'Certificate suggestion not approved'),
+        ('certificate_accepted', 'Certificate suggestion accepted'),
+      ]) {
+        final m = WireMappers.message(wireCard(kind, {'learnerName': 'learner_l', 'title': 'Juz Amma'}), viewerActorId: 't1');
+        await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+        expect(find.text(text), findsOneWidget, reason: kind);
+      }
     });
   });
 

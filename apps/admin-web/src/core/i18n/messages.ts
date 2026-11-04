@@ -121,6 +121,11 @@ export const messages = {
     'common.select.clear': 'Clear',
     'common.select.noMatches': 'No matches',
     'common.select.required': 'Choose one.',
+    // PD-45: the shared location picker (shared/location).
+    'common.location.country': 'Country',
+    'common.location.notSet': 'Not set',
+    'common.location.notInList': '{code} (not in the list: please choose again)',
+    'common.location.loading': 'Loading the list…',
     'shell.openMenu': 'Open navigation',
     'shell.closeMenu': 'Close navigation',
     'shell.switchLanguage': 'العربية',
@@ -255,6 +260,11 @@ export const messages = {
     'common.select.clear': 'مسح',
     'common.select.noMatches': 'لا توجد نتائج مطابقة',
     'common.select.required': 'اختر واحدًا.',
+    // PD-45: منتقي الموقع المشترك (shared/location).
+    'common.location.country': 'الدولة',
+    'common.location.notSet': 'غير محدد',
+    'common.location.notInList': '{code} (غير مدرج في القائمة: اختر من جديد)',
+    'common.location.loading': 'جارٍ تحميل القائمة…',
     'shell.openMenu': 'فتح القائمة',
     'shell.closeMenu': 'إغلاق القائمة',
     'shell.switchLanguage': 'English',

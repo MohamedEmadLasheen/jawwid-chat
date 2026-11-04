@@ -10,11 +10,17 @@ import android.content.Intent
  * Flutter (`onDecline` on jawwid/call_native), as on iOS. If the app is not
  * running it is queued for the next start; by then an unanswered call has
  * usually ended on its own and the server's own timeout records it.
+ *
+ * Also "Hang up" on the ongoing-call notification (S-06): `onEnd`, the same
+ * path as the in-app button; the service comes down when the call is over.
  */
 class CallActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != JawwidPush.ACTION_DECLINE) return
         val callId = intent.getStringExtra(JawwidPush.EXTRA_CALL_ID) ?: return
-        JawwidPush.onDecline(context, callId, intent.getStringExtra(JawwidPush.EXTRA_CONVERSATION_ID))
+        when (intent.action) {
+            JawwidPush.ACTION_DECLINE -> JawwidPush.onDecline(context, callId, intent.getStringExtra(JawwidPush.EXTRA_CONVERSATION_ID))
+            // S-06: Hang up on the ongoing-call notification (CallForegroundService).
+            JawwidPush.ACTION_HANG_UP -> JawwidPush.onHangUp(callId)
+        }
     }
 }

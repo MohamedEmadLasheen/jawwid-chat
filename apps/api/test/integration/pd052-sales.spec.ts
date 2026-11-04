@@ -38,6 +38,7 @@ import { SupervisionService } from '../../src/lessons/supervision.service';
 import { ParentFeedbackService } from '../../src/teacher-file/parent-feedback.service';
 import { TeacherRecordsService } from '../../src/teacher-file/teacher-records.service';
 import { buildGraph, seed, supervise, truncate, withAssignmentGate, Scenario } from './harness';
+import { addLesson } from './lesson-fixture';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -132,7 +133,7 @@ async function heldTrial(): Promise<{ lessonId: string; prospectId: string }> {
 /** A held regular lesson of teacher_c with learner_l. */
 async function heldRegular(): Promise<string> {
   const start = Date.now() - 3 * HOUR - (slot++ % 10) * 45 * 60_000;
-  const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: new Date(start).toISOString(), endsAt: new Date(start + HOUR / 2).toISOString() })).id;
+  const id = (await addLesson(g, lessons, tsupId, { learnerId: s.learnerId, startsAt: new Date(start).toISOString(), endsAt: new Date(start + HOUR / 2).toISOString() })).id;
   await lessons.report(s.teacherId, id, { covered: 'Al-Mulk' });
   return id;
 }

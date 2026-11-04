@@ -25,6 +25,8 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
+import { addLesson } from './lesson-fixture';
+import { LessonService } from '../../src/lessons/lesson.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -140,6 +142,12 @@ afterAll(async () => {
 });
 
 async function schedule(startMs: number): Promise<string> {
+  // A lesson that has started was added before it began (PD-46 PR-2c refuses a
+  // past start over HTTP): written as the route wrote it then.
+  if (startMs <= 0) {
+    return (await addLesson(g, app.get(LessonService), m.teacherSupervisors[0].id,
+      { learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) })).id;
+  }
   const r = await http(tsup, 'POST', '/lessons', { learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) });
   expect(r.status).toBe(201);
   return r.json.id as string;
@@ -149,6 +157,31 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
   it('every route is behind the bearer guard', async () => {
     expect((await http(null, 'GET', '/lessons')).status).toBe(401);
     expect((await http(null, 'POST', `/lessons/${randomUUID()}/report`, { covered: 'x' })).status).toBe(401);
+  });
+
+  it('CHATSCHED-007: a retried "Add lesson" with the same Idempotency-Key (or the app\'s X-Idempotency-Key) gets the same lesson', async () => {
+    // A retry sends the same bytes: the body is built once, not re-timed per call.
+    const post = async (header: string, key: string, body: string) => {
+      const r = await fetch(`${base}/lessons`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${await tokenFor(tsup)}`, [header]: key },
+        body,
+      });
+      return { status: r.status, json: (await r.json()) as { id?: string; error?: { code?: string } } };
+    };
+    for (const [header, startMs] of [['idempotency-key', 50 * 60 * MIN], ['x-idempotency-key', 52 * 60 * MIN]] as const) {
+      const key = `retry-${randomUUID()}`;
+      const body = JSON.stringify({ learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) });
+      const first = await post(header, key, body);
+      const again = await post(header, key, body);
+      expect(first.status).toBe(201);
+      expect(again.status).toBe(201);
+      expect(again.json.id).toBe(first.json.id);
+    }
+    // Without the key, the same request is the overlap it always was.
+    const plain = await http(tsup, 'POST', '/lessons', { learnerId: fam.child.id, startsAt: at(50 * 60 * MIN), endsAt: at(50 * 60 * MIN + 30 * MIN) });
+    expect(plain.status).toBe(409);
+    expect(plain.code).toBe(CommErrorCode.LESSON_TEACHER_BUSY);
   });
 
   it('a Teachers supervisor schedules; the teacher reports; the family reads the card in their family group', async () => {
@@ -166,7 +199,9 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     const page = await http(fam.parent, 'GET', `/conversations/${fam.groupId}/messages`);
     expect(page.status).toBe(200);
     const cards = (page.json.messages as Array<{ type: string; moderation: string; card: { kind: string; lessonId: string; payload: Record<string, unknown> } | null }>)
-      .filter((x) => x.type === 'card' && x.card?.lessonId === id);
+      // The report's card -- not the lesson's own `lesson_scheduled` card from when
+      // it was added (PD-46 / CHATSCHED-001), which this family reads too.
+      .filter((x) => x.type === 'card' && x.card?.lessonId === id && x.card.kind !== 'lesson_scheduled');
     expect(cards).toHaveLength(1);
     expect(cards[0].moderation).toBe('published');
     expect(cards[0].card?.payload.covered).toBe('Al-Mulk 1-15');
@@ -182,6 +217,30 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     const member = await http(fam.parent, 'GET', path);
     expect(member.status).toBe(200);
     expect(Array.isArray(member.json.tickets)).toBe(true);
+  });
+
+  it('lesson-now (CHATSCHED-002) is refused (403) to someone who may not read the conversation, with no lesson data; a member gets 200 and exactly the five fields', async () => {
+    const id = await schedule(40 * 60 * MIN);
+    const outsider = m.families.find((f) => f.parent.subject !== fam.parent)!.parent.subject;
+    const path = `/conversations/${fam.groupId}/lesson-now`;
+    expect((await http(null, 'GET', path)).status).toBe(401);
+    const refused = await http(outsider, 'GET', path);
+    expect(refused.status).toBe(403);
+    expect(refused.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+    expect(Object.keys(refused.json)).toEqual(['error']);
+    expect(refused.json).not.toHaveProperty('lessons');
+    const said = JSON.stringify(refused.json).toLowerCase();
+    for (const leak of [id, 'upcoming', 'held', 'missed', 'cancelled', 'startsat', 'endsat', 'teacher', 'lesson']) expect(said).not.toContain(leak.toLowerCase());
+    // Control: the same outsider is refused the conversation's messages too -- one rule.
+    expect((await http(outsider, 'GET', `/conversations/${fam.groupId}/messages`)).status).toBe(403);
+
+    const member = await http(fam.parent, 'GET', path);
+    expect(member.status).toBe(200);
+    const entry = (member.json.lessons as Array<Record<string, unknown>>).find((l) => l.lessonId === id)!;
+    expect(entry).toBeDefined();
+    expect(Object.keys(entry).sort()).toEqual(['currentLessonId', 'endsAt', 'lessonId', 'startsAt', 'status']);
+    expect(entry.currentLessonId).toBe(id);
+    expect(entry.status).toBe('upcoming');
   });
 
   it('the teacher of a sibling in the same family group neither sees nor closes the lesson', async () => {

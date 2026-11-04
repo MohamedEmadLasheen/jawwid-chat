@@ -49,11 +49,15 @@ const DAY = 24 * HOUR;
 const at = (ms: number) => new Date(Date.now() + ms).toISOString();
 
 /**
- * Ceilings: 22 and 21 measured 2026-11-02 (30 and 29 before TEACHER-027 dropped the in-transaction include), plus 2: a change that adds statements
- * INSIDE the transaction (which holds the learner and the group's row locks)
- * must raise these on purpose.
+ * Ceilings: 29 and 28 measured 2026-11-02, plus 2. History: 30/29 before
+ * TEACHER-027 dropped the in-transaction include, 22/21 after it, 29/28 once
+ * PD-46 PR-2a announces the move in the same transaction (two keyed
+ * lesson.changed -- the closed row and the new one -- each a payload read, an
+ * outbox insert and a safety-net delete; and the card's idempotency lookup).
+ * A change that adds statements INSIDE the transaction (which holds the
+ * learner and the group's row locks) must raise these on purpose.
  */
-const MAX_TX_STATEMENTS = { family: 24, staff: 23 };
+const MAX_TX_STATEMENTS = { family: 31, staff: 30 };
 
 let s: Scenario;
 let tsupId: string;

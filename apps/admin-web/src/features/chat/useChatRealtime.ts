@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { Socket } from 'socket.io-client'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { chatKeys } from './chatApi'
+import { journeyKeys } from '@/features/journey/api'
 
 /** Events that change a message the thread may be showing. */
 const MESSAGE_EVENTS = [
@@ -128,14 +129,28 @@ export function useChatRealtime(conversationIds: readonly string[]): void {
       onMessage(payload)
     }
 
+    // PD-46 / CHATSCHED-002: a lesson changed -- the time cards of each conversation
+    // it reaches re-read where their lessons stand, and "+" its tickets. It names its
+    // conversations as a list; a query nobody shows is only marked stale.
+    const onLesson = (payload: { conversationIds?: unknown } | undefined) => {
+      const ids = Array.isArray(payload?.conversationIds) ? payload.conversationIds : []
+      for (const id of ids) {
+        if (typeof id !== 'string' || !id) continue
+        void queryClient.invalidateQueries({ queryKey: journeyKeys.lessonNow(id) })
+        void queryClient.invalidateQueries({ queryKey: journeyKeys.tickets(id) })
+      }
+    }
+
     for (const event of MESSAGE_EVENTS) socket.on(event, onMessage)
     for (const event of LIST_EVENTS) socket.on(event, onList)
     socket.on('message.created', onCreated)
+    socket.on('lesson.changed', onLesson)
     return () => {
       clearTimeout(listTimer)
       for (const event of MESSAGE_EVENTS) socket.off(event, onMessage)
       for (const event of LIST_EVENTS) socket.off(event, onList)
       socket.off('message.created', onCreated)
+      socket.off('lesson.changed', onLesson)
     }
   }, [socket, queryClient])
 

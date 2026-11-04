@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite pd-registry quran-dataset geo-dataset pd040-routes lessons-supply-chain app-icons ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons ci-wiring"
 
 title() {
   case "$1" in
@@ -204,6 +204,7 @@ title() {
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
     geo-dataset)   echo "PD-45 · the country and subdivision dataset is exactly what its pinned CLDR files and reviewed overlay build" ;;
     pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
+    lesson-writer) echo "PD-46 · chat.lesson is written only through LessonWriter" ;;
     lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the family bundle carries no withheld lesson text; the API's voice-over text is current" ;;
     app-icons)     echo "PD-56 · the app icon and launch image are Jawwid's, never Flutter's template; the 1024 icon is opaque" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
@@ -395,6 +396,16 @@ gate_pd040_routes() {
   fi
   "$PYTHON" -I scripts/qa/check-route-permissions.py selftest || return 1
   "$PYTHON" -I scripts/qa/check-route-permissions.py check
+}
+
+gate_lesson_writer() {
+  # PD-46 §3.1: a lesson write outside LessonWriter is a lesson change nobody hears of.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the lesson-writer gate cannot run, so it FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/qa/check-lesson-writer.py selftest || return 1
+  "$PYTHON" -I scripts/qa/check-lesson-writer.py check
 }
 
 gate_lessons_supply_chain() {

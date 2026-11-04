@@ -17,6 +17,9 @@ Widget? supervisionCardView(BuildContext context, MessageCard card, Color foregr
   final head = switch (card.kind) {
     'certificate_requested' => (Icons.workspace_premium_outlined, l10n.cardCertificateRequestedTitle),
     'certificate_issued' => (Icons.workspace_premium, l10n.cardCertificateIssuedTitle),
+    'certificate_accepted' => (Icons.check_circle_outline, l10n.cardCertificateAcceptedTitle),
+    // PD-41: the teacher's own appreciation certificate; the file is the message's attachment.
+    'certificate_awarded' => (Icons.workspace_premium, l10n.cardCertificateAwardedTitle),
     'certificate_declined' => (Icons.info_outline, l10n.cardCertificateDeclinedTitle),
     'leave_requested' => (Icons.beach_access_outlined, l10n.cardLeaveRequestedTitle),
     'leave_approved' => (Icons.check_circle_outline, l10n.cardLeaveApprovedTitle),
@@ -58,9 +61,12 @@ class _SupervisionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final muted = foreground.withValues(alpha: 0.75);
     final isCertificate = card.kind.startsWith('certificate_');
+    final isAwarded = card.kind == 'certificate_awarded';
     final isDiscipline = card.kind.startsWith('discipline_');
 
-    final subtitle = isCertificate
+    final subtitle = isAwarded
+        ? card.text('printedName')
+        : isCertificate
         ? card.text('learnerName')
         : isDiscipline
             ? _dates(context, from: 'startsOn', to: 'endsOn')
@@ -68,6 +74,9 @@ class _SupervisionCard extends StatelessWidget {
     final rows = <(String, String)>[
       if (isDiscipline) ...[
         (l10n.cardViolation, _violation(context)),
+      ] else if (isAwarded) ...[
+        if (card.text('type') ?? card.text('title') case final v?) (l10n.cardAwardType, v),
+        if (_period(context) case final v?) (l10n.cardAwardPeriod, v),
       ] else if (isCertificate) ...[
         if (card.text('title') case final v?) (l10n.certificateTitleField, v),
         if (card.text('achievement') case final v?) (l10n.cardAchievement, v),
@@ -119,6 +128,7 @@ class _SupervisionCard extends StatelessWidget {
           if (card.kind == 'discipline_warning' && card.integer('step') != null)
             _Foot(text: l10n.cardViolationStep('${card.integer('step')}'), color: muted),
           if (card.kind == 'discipline_deduction') _Foot(text: l10n.cardPayrollNote, color: muted),
+          if (isAwarded) _Foot(text: l10n.cardAwardThanks, color: muted),
           if (card.kind == 'certificate_issued')
             Padding(
               padding: const EdgeInsets.only(top: Spacing.spacing2),
@@ -148,6 +158,17 @@ class _SupervisionCard extends StatelessWidget {
       ?card.text('learnerName'),
       if (day != null) MaterialLocalizations.of(context).formatMediumDate(DateTime(day.year, day.month, day.day)),
     ].join(' — ');
+  }
+
+  /// An award's period: calendar days, shown as one day or a range; null when the server gave none.
+  String? _period(BuildContext context) {
+    final first = parseCalendarDay(card.payload['periodStart']);
+    final last = parseCalendarDay(card.payload['periodEnd']);
+    if (first == null && last == null) return null;
+    final m = MaterialLocalizations.of(context);
+    String day(DateTime d) => m.formatMediumDate(DateTime(d.year, d.month, d.day));
+    if (first == null || last == null || first == last) return day((first ?? last)!);
+    return '${day(first)} – ${day(last)}';
   }
 
   /// A leave's (or a suspension's) dates are calendar days: the same day in every time zone.
