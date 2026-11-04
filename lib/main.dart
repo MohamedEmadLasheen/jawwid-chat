@@ -12,9 +12,12 @@ import 'app/retry_policy.dart';
 import 'core/crash/crash_reporting.dart';
 import 'core/push/push_registration.dart';
 import 'core/time/time_zone_controller.dart';
+import 'shared/utils/western_digits.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // DD-09 / RQA-F3: Western digits everywhere, dates and times included.
+  useWesternDigits();
 
   // IBM Plex Sans Arabic ships under the SIL OFL 1.1, which asks that the licence
   // travel with the fonts wherever they are redistributed -- an app binary included.

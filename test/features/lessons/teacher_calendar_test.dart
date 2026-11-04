@@ -129,12 +129,12 @@ void main() {
     expect(find.text('12:00'), findsNothing);
   });
 
-  testWidgets('in Arabic the axis reads ص/م with Arabic-Indic digits', (tester) async {
+  testWidgets('in Arabic the axis reads ص/م with 0-9 digits (DD-09)', (tester) async {
     await pump(tester, locale: const Locale('ar'));
     await tester.tap(find.text('يوم'));
     await tester.pumpAndSettle();
-    expect(find.text('١ م'), findsOneWidget);
-    expect(find.text('١٣:٠٠'), findsNothing);
+    expect(find.text('1 م'), findsOneWidget);
+    expect(find.text('13:00'), findsNothing);
   });
 
   testWidgets('a malformed answer is the error state, not a crash', (tester) async {

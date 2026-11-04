@@ -350,6 +350,8 @@ export interface LastMessageDto {
   text: string | null;
   /** For a system message, its event kind (e.g. `group.created`); the client words it. */
   systemKind: string | null;
+  /** RQA-F4: for a card (PD-11), its kind (e.g. `lesson_report`); the client words it. */
+  cardKind: string | null;
   authorKind: string;
   authorId: string | null;
   deleted: boolean;
@@ -357,7 +359,7 @@ export interface LastMessageDto {
 }
 
 /** A list-row preview of a message. Text is capped: a row shows a line, not a page. */
-export function toLastMessageDto(m: Message): LastMessageDto {
+export function toLastMessageDto(m: Message & { card?: { kind: string } | null }): LastMessageDto {
   const deleted = m.deletedForAll;
   const system = m.type === 'system';
   return {
@@ -365,6 +367,7 @@ export function toLastMessageDto(m: Message): LastMessageDto {
     type: m.type,
     text: !deleted && !system && m.type === 'text' && m.body ? m.body.slice(0, 160) : null,
     systemKind: system && !deleted ? (parseSystemEvent(m.body)?.kind as string | undefined) ?? null : null,
+    cardKind: m.type === 'card' && !deleted ? m.card?.kind ?? null : null,
     authorKind: m.authorType,
     authorId: m.authorId,
     deleted,

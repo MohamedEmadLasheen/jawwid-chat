@@ -21,7 +21,43 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null)
 
 const STORAGE_KEY = 'jawwid.locale'
-export const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG', en: 'en-GB' }
+/**
+ * ADMIN-008: a signed-in person's own choice, kept per account, so one person's
+ * pick on a shared browser never becomes the next person's language. Without a
+ * choice of their own, an account opens in its /me.locale.
+ */
+const accountKey = (accountId: string) => `${STORAGE_KEY}.account.${accountId}`
+
+function readAccountLocale(accountId: string): Locale | null {
+  try {
+    const stored = localStorage.getItem(accountKey(accountId))
+    if (stored === 'ar' || stored === 'en') return stored
+  } catch {
+    // Blocked storage: the account's own language stands.
+  }
+  return null
+}
+
+/** The language an account opens in: its own pick on this browser, else what /me says; null if neither is known. */
+export function accountLocale(accountId: string, serverLocale: string | null | undefined): Locale | null {
+  return readAccountLocale(accountId) ?? (serverLocale === 'en' || serverLocale === 'ar' ? serverLocale : null)
+}
+
+/** Remember `locale` as this account's own pick on this browser. */
+export function rememberAccountLocale(accountId: string, locale: Locale): void {
+  try {
+    localStorage.setItem(accountKey(accountId), locale)
+  } catch {
+    // A convenience; losing it must not break the app.
+  }
+}
+/**
+ * The locale each language formats with. Arabic is `ar-EG` with the Latin numbering
+ * system (`-u-nu-latn`): Western digits 0-9 in both locales, dates and times included
+ * (DD-09, docs/design/decisions.md; RQA-F3). Without the extension `ar-EG` prints
+ * Arabic-Indic digits (٠١٢٣) in Intl, beside the counts a screen shows in 0-9.
+ */
+export const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG-u-nu-latn', en: 'en-GB' }
 
 function readStoredLocale(): Locale {
   try {
@@ -97,6 +133,11 @@ export function I18nProvider({
   }, [locale, dir, setLocale])
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+}
+
+/** The i18n context when one is mounted, else null (the session works without one, as in some tests). */
+export function useI18nIfAny(): I18nValue | null {
+  return useContext(I18nContext)
 }
 
 export function useI18n(): I18nValue {

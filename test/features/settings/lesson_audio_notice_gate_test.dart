@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/app/shells/app_shell.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/design/theme.dart';
@@ -174,13 +175,27 @@ void main() {
     expect(find.byType(LessonAudioNoticeDialog), findsNothing);
   });
 
-  testWidgets('a parent finds About lesson audio in Settings, with its terms', (tester) async {
+  // Phase 2 (owner 2026-11-03): the learning materials are postponed until after launch, so
+  // the parent sees neither the Settings row nor the sign-in notice. The gate and the About
+  // screen stay (above, and from sign-up) for when [kLessonAudioNoticeLive] turns on.
+  testWidgets('Phase 2: a parent has no About lesson audio row in Settings', (tester) async {
+    expect(kLessonAudioNoticeLive, isFalse);
     await pump(tester, const SettingsScreen(), needed: false);
-    await tester.scrollUntilVisible(find.byKey(const ValueKey('settings-lesson-audio')), 200);
-    await tester.tap(find.byKey(const ValueKey('settings-lesson-audio')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('lesson-audio-about-body')), findsOneWidget);
-    expect(find.text('Terms and privacy'), findsOneWidget);
+    final list = find.byType(Scrollable).first;
+    for (var i = 0; i < 30; i++) {
+      expect(find.byKey(const ValueKey('settings-lesson-audio'), skipOffstage: false), findsNothing);
+      await tester.drag(list, const Offset(0, -300));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Sign out', skipOffstage: false), findsWidgets);
+  });
+
+  testWidgets('Phase 2: the parent shell asks nothing at sign-in, even when the server says needed', (tester) async {
+    await pump(tester, AppShell(role: UserRole.parent, currentRoute: '/chats', onDestinationSelected: (_) {}, child: const Text('home')));
+    expect(find.text('home'), findsOneWidget);
+    expect(find.byType(LessonAudioNoticeGate), findsNothing);
+    expect(find.byType(LessonAudioNoticeDialog), findsNothing);
+    expect(notices.asked, 0);
   });
 
   testWidgets('a teacher has no About lesson audio row', (tester) async {

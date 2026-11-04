@@ -208,7 +208,7 @@ export const WEEKDAYS: Record<number, Pair> = {
 
 /** PD-22: "Mon 21 Oct, 17:00 (Cairo time)" -- the academy's clock, named. */
 export function formatLessonWhen(iso: string, locale: 'ar' | 'en'): string {
-  const when = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', {
+  const when = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', {
     weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE,
   }).format(new Date(iso))
   return `${when} (${zoneLabel(ACADEMY_ZONE, locale)})`

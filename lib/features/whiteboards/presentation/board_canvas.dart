@@ -835,7 +835,8 @@ class BoardCanvasState extends State<BoardCanvas> with SingleTickerProviderState
   void _placeStamp(Offset at) {
     final style = widget.style;
     final text = style.stampText;
-    final size = text == null ? const Size(140, 140) : Size(math.max(220, text.length * 46.0), 110);
+    // An emoji is a square, like an icon stamp; words are a pill as wide as they are.
+    final size = text == null || style.stamp == StampKind.emoji ? const Size(140, 140) : Size(math.max(220, text.length * 46.0), 110);
     final rect = Rect.fromCenter(center: at, width: size.width, height: size.height);
     widget.onCommit([...widget.page.elements, StampElement(id: _newId(), stamp: style.stamp, rect: rect, color: style.color, text: text)]);
   }

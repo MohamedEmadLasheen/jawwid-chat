@@ -40,5 +40,7 @@ export interface Staff {
    * Absent from an API that predates PD-40.
    */
   permissions?: string[]
+  /** ADMIN-008: the account's own language (`/me.locale`), the interface's until this person picks another. */
+  locale?: string
 }
 

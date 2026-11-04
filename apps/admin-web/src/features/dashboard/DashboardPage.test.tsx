@@ -325,7 +325,7 @@ describe('the manager Dashboard', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'لوحة المتابعة' })).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
     const waiting = await screen.findByRole('link', { name: /محادثات تنتظر ردّنا/ })
-    expect(within(waiting).getByText('٤')).toBeInTheDocument()
+    expect(within(waiting).getByText('4')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /حالات تجاوزت موعدها/ })).toBeInTheDocument()
   })
 

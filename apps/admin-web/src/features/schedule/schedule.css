@@ -131,6 +131,8 @@
 .sc-lesson:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 1; }
 .sc-lesson__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-lesson--trial { border-style: dashed; }
+/* CHATSCHED-014: cancelled, excused or the teacher absent: still in its place, plainly not happening. */
+.sc-lesson--not-taught { opacity: 0.55; text-decoration: line-through; background-image: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, currentColor 12%, transparent) 6px 8px); }
 .sc-lesson--paused { border-style: dotted; }
 .sc-lesson--moved { opacity: 0.55; text-decoration: line-through; border-style: dashed; }
 .sc-lesson--other { opacity: 0.75; }

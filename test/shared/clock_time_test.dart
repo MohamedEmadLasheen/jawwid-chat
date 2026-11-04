@@ -10,7 +10,8 @@ import 'package:jawwid_chat/shared/utils/clock_time.dart';
 /// One set of digits per screen. In Arabic, a lesson card read "4:00 م" (Latin, from
 /// `MaterialLocalizations.formatTimeOfDay`) while the chat beside it read "١٤:٢٦"
 /// (Arabic-Indic, from intl's DateFormat). Times now come from [formatClockTime], which
-/// writes them the way [DateFormat] writes the dates next to them.
+/// writes them the way [DateFormat] writes the dates next to them -- and since RQA-F3
+/// (DD-09, useWesternDigits) DateFormat writes 0-9 in Arabic too, so both read 0-9.
 void main() {
   setUpAll(() async => initializeDateFormatting());
 
@@ -46,9 +47,9 @@ void main() {
     return out;
   }
 
-  testWidgets('Arabic writes a time in Arabic-Indic digits, like its dates', (tester) async {
-    expect(await clock(tester, 'ar', four), '٤:٠٠ م');
-    expect(await clock(tester, 'ar', const TimeOfDay(hour: 14, minute: 26), h24: true), '١٤:٢٦');
+  testWidgets('Arabic writes a time in the digits of its dates: 0-9 (DD-09)', (tester) async {
+    expect(await clock(tester, 'ar', four), '4:00 م');
+    expect(await clock(tester, 'ar', const TimeOfDay(hour: 14, minute: 26), h24: true), '14:26');
     // The same digits as the chat timestamp and the date on the same card.
     expect(await clock(tester, 'ar', const TimeOfDay(hour: 14, minute: 26), h24: true),
         DateFormat.Hm('ar').format(DateTime(2026, 10, 27, 14, 26)));
@@ -80,12 +81,12 @@ void main() {
     expect(await inLocale(tester, 'en', (c) => formatClockHour(c, 13)), '1 PM');
     expect(await inLocale(tester, 'en', (c) => formatClockHour(c, 0)), '12 AM');
     expect(await inLocale(tester, 'en', (c) => formatClockHour(c, 24)), '12 AM');
-    expect(await inLocale(tester, 'ar', (c) => formatClockHour(c, 13)), '١ م');
+    expect(await inLocale(tester, 'ar', (c) => formatClockHour(c, 13)), '1 م');
   });
 
   testWidgets('a wall-clock "HH:MM" from the server reads the same way; anything else as sent', (tester) async {
     expect(await inLocale(tester, 'en', (c) => formatWallClock(c, '17:00')), '5:00 PM');
-    expect(await inLocale(tester, 'ar', (c) => formatWallClock(c, '09:30')), '٩:٣٠ ص');
+    expect(await inLocale(tester, 'ar', (c) => formatWallClock(c, '09:30')), '9:30 ص');
     expect(await inLocale(tester, 'en', (c) => formatWallClock(c, 'soon')), 'soon');
   });
 

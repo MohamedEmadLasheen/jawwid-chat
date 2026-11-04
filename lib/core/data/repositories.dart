@@ -184,10 +184,16 @@ class CallHistoryEntry {
     this.duration,
     this.direction,
     this.connectionLost = false,
+    this.inProgress = false,
   });
 
   final String id;
   final String conversationId;
+
+  /// CHATSCHED-016: the call has not ended -- ringing, or active (the server's `status`),
+  /// which includes a call in its reconnect grace. Its [outcome] is only the placeholder
+  /// every unfinished row needs; a row says "In progress", never "Missed", until it ends.
+  final bool inProgress;
 
   /// CHATSCHED-013: the call ended because the connection was lost (the server's
   /// `endReason`), not because anybody hung up.

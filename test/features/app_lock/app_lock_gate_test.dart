@@ -10,6 +10,7 @@ import 'package:jawwid_chat/features/app_lock/data/app_lock_store.dart';
 import 'package:jawwid_chat/features/app_lock/domain/app_lock_settings.dart';
 import 'package:jawwid_chat/features/app_lock/presentation/app_lock_gate.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
+import 'package:jawwid_chat/features/settings/data/parent_notice_repository.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
@@ -176,6 +177,21 @@ void main() {
     expect(world.store.stored['u_parent']?.offerAnswered, isTrue);
     expect(container.read(appLockControllerProvider).settings.enabled, isFalse);
     expect(reachable(tester), isTrue);
+  });
+
+  // PARENT-001 (QA P-001b): "Lock the app?" opened on top of "About lesson audio".
+  testWidgets('parent: the offer waits while the lesson-audio notice is decided or shown, then comes',
+      (tester) async {
+    await pumpGate(tester, storedSession: false);
+    container.read(lessonAudioNoticeBusyProvider.notifier).set(true);
+    await container.read(authControllerProvider.notifier).signIn(username: 'u', password: 'p');
+    await tester.pumpAndSettle();
+    expect(container.read(appLockControllerProvider).offerVisible, isTrue);
+    expect(find.byKey(const ValueKey('app-lock-offer')), findsNothing);
+
+    container.read(lessonAudioNoticeBusyProvider.notifier).set(false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app-lock-offer')), findsOneWidget);
   });
 
   testWidgets('staff: no offer -- the lock is simply on', (tester) async {
