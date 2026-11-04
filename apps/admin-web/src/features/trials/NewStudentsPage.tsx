@@ -201,6 +201,10 @@ function StudentCard({
               <dt>{tx(TR.email)}</dt>
               <dd>{s.parent.email ? <bdi dir="ltr" className="ns-ltr">{s.parent.email}</bdi> : <span className="ts-muted">—</span>}</dd>
             </div>
+            <div>
+              <dt>{tx(TR.location)}</dt>
+              <dd>{formLocationText(s.parent.location, locale)}</dd>
+            </div>
           </dl>
         </section>
         <section className="ns-block" aria-label={tx(NS.payment)}>
@@ -264,6 +268,14 @@ function StudentCard({
       </section>
     </article>
   )
+}
+
+/** PD-45: "Egypt · Giza" / "مصر · الجيزة" from the names the server sent, or a dash for a form that has none. */
+function formLocationText(location: NewStudentDto['parent']['location'], locale: 'ar' | 'en') {
+  if (!location) return <span className="ts-muted">—</span>
+  const { country, subdivision } = location.names
+  const name = (n: { ar: string; en: string }) => (locale === 'ar' ? n.ar : n.en)
+  return <bdi>{subdivision ? `${name(country)} · ${name(subdivision)}` : name(country)}</bdi>
 }
 
 function EditSubscriptionDialog({ student, onClose }: { student: NewStudentDto; onClose: () => void }) {

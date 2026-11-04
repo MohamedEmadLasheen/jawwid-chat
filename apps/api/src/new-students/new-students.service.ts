@@ -4,7 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { awayRefusal } from '../leave/away';
 import { isUuid } from '../communication/conversations/conversation.service';
-import { locationOf, parseLocation, type LocationValue } from '../geo/location';
+import { hasSubdivisions, locationOf, parseLocation, type LocationValue } from '../geo/location';
 
 type Tx = Prisma.TransactionClient;
 
@@ -76,7 +76,7 @@ export class NewStudentsService {
       name: text(parentRaw.name, 'parent.name', 120, true) as string,
       email: email(parentRaw.email),
       phone: phone(parentRaw.phone),
-      // PD-45: optional until the new form (PR-3b) makes it required (owner Q1).
+      // PD-45: optional here, so a change that leaves it out keeps it; a NEW form must carry it (recordInTx, owner Q1).
       ...('location' in parentRaw ? { location: parseLocation(parentRaw.location, 'parent.location') } : {}),
     };
 
@@ -106,6 +106,7 @@ export class NewStudentsService {
 
   /** Store the form of a trial that has just become "subscribed" (in the caller's transaction). */
   async recordInTx(tx: Tx, input: { lessonId: string; organizationId: string; form: SubscriptionForm; by: string }) {
+    requireLocation(input.form);
     const existing = await tx.trialSubscription.findUnique({ where: { lessonId: input.lessonId } });
     if (existing) {
       // A trial corrected back to "subscribed": its form comes back with the new details.
@@ -226,6 +227,20 @@ export class NewStudentsService {
         payment: { currency: f.currency, method: f.paymentMethod },
       };
     });
+  }
+}
+
+/**
+ * PD-45, owner Q1: a NEW Sales form (a trial that becomes "subscribed", or is
+ * corrected back to it) names where the family lives -- the country, and its
+ * governorate / emirate / state when the country has any in the list. Editing a
+ * recorded form is not new: `validate` alone lets it leave the location out.
+ */
+function requireLocation(form: SubscriptionForm) {
+  const location = form.parent.location;
+  if (!location?.countryCode) throw invalid('parent.location: the family\'s country is required on a new subscription form');
+  if (!location.subdivisionCode && hasSubdivisions(location.countryCode)) {
+    throw invalid('parent.location.subdivisionCode: required for this country');
   }
 }
 
