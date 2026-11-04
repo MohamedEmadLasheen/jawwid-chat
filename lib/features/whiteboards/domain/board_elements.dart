@@ -5,7 +5,9 @@ import '../../../design/tokens.dart';
 import 'stroke_points.dart';
 
 /// The page every board is drawn on: one fixed 16:9 page, so zoom, export and
-/// (Phase 2) a shared view look the same on every screen (design §4.2).
+/// (Phase 2) a shared view look the same on every screen (design §4.2). PD-55:
+/// this is a wide page; a tall page is the same turned upright
+/// ([PageShape.tall], 1080 x 1920). Ask a page for its own [BoardPage.size].
 const Size kBoardPageSize = Size(1920, 1080);
 
 /// PD-39: one thing drawn on a page. Immutable: an edit makes a new element
@@ -13,9 +15,8 @@ const Size kBoardPageSize = Size(1920, 1080);
 ///
 /// The JSON shape is the client's own (the server checks ids, kinds, sizes,
 /// verses and images only: apps/api/src/whiteboards/whiteboard-document.ts).
-/// A kind this build does not draw -- a verse before PR-3, an image before
-/// PR-4, anything newer -- is kept as an [OpaqueElement] and saved back
-/// exactly as it came.
+/// A kind this build does not draw -- anything newer than it, or malformed --
+/// is kept as an [OpaqueElement] and saved back exactly as it came.
 sealed class BoardElement {
   const BoardElement(this.id);
 
@@ -75,6 +76,36 @@ sealed class BoardElement {
             size: Size(_num(json['w'], 300), _num(json['h'], 60)),
             fontSize: _num(json['size'], 48),
             color: _color(json['color']),
+            bold: json['bold'] == true,
+            rotation: _num(json['rotation'], 0),
+          );
+        case 'verse':
+          final t = json['transform'];
+          final st = json['style'];
+          final transform = t is Map ? t : const {};
+          final style = st is Map ? st : const {};
+          final surah = json['surah'], from = json['fromAyah'], to = json['toAyah'];
+          final dataset = json['datasetId'], range = json['rangeSha256'];
+          if (surah is! int || from is! int || to is! int || dataset is! String || range is! String) break;
+          return VerseElement(
+            id: id,
+            surah: surah,
+            fromAyah: from,
+            toAyah: to,
+            datasetId: dataset,
+            rangeSha256: range,
+            rect: Rect.fromLTWH(_num(transform['x'], 0), _num(transform['y'], 0), _num(transform['w'], 1400), _num(transform['h'], 200)),
+            fontSize: _num(style['size'], 64),
+            color: _color(style['color']),
+          );
+        case 'image':
+          final asset = json['assetId'];
+          if (asset is! String || asset.isEmpty) break;
+          return ImageElement(
+            id: id,
+            assetId: asset.toLowerCase(),
+            rect: Rect.fromLTWH(_num(json['x'], 0), _num(json['y'], 0), _num(json['w'], 400), _num(json['h'], 300)),
+            extra: ImageElement.extraOf(json),
           );
         case 'stamp':
           return StampElement(
@@ -237,27 +268,46 @@ class TextElement extends BoardElement {
     required this.size,
     required this.fontSize,
     required this.color,
+    this.bold = false,
+    this.rotation = 0,
   }) : super(id);
 
   final String text;
+
+  /// The box as laid out, before [rotation]: where it wraps and what turns.
   final Offset topLeft;
   final Size size;
   final double fontSize;
   final Color color;
 
+  /// PD-55: bold, and a turn about the box's centre (radians, clockwise on
+  /// screen). Both are additive fields: a PD-39 text has neither and keeps the
+  /// bytes it had (see [toJson]).
+  final bool bold;
+  final double rotation;
+
   @override
   String get kind => 'text';
 
-  @override
-  Rect get bounds => topLeft & size;
+  /// The unrotated box.
+  Rect get box => topLeft & size;
 
-  TextElement copyWith({String? text, Offset? topLeft, Size? size, double? fontSize, Color? color}) => TextElement(
+  /// What it covers on the page: the box, turned.
+  @override
+  Rect get bounds => rotation == 0 ? box : _rotatedBounds(box, rotation);
+
+  /// [point] in the box's own (unrotated) frame -- for a hit test where it is drawn.
+  Offset toBox(Offset point) => rotation == 0 ? point : _rotateAbout(point, box.center, -rotation);
+
+  TextElement copyWith({String? text, Offset? topLeft, Size? size, double? fontSize, Color? color, bool? bold, double? rotation}) => TextElement(
     id: id,
     text: text ?? this.text,
     topLeft: topLeft ?? this.topLeft,
     size: size ?? this.size,
     fontSize: fontSize ?? this.fontSize,
     color: color ?? this.color,
+    bold: bold ?? this.bold,
+    rotation: rotation ?? this.rotation,
   );
 
   @override
@@ -265,8 +315,15 @@ class TextElement extends BoardElement {
 
   @override
   BoardElement scaled(Offset anchor, double sx, double sy) {
-    final r = _scaleRect(bounds, anchor, sx, sy);
-    return copyWith(topLeft: r.topLeft, size: r.size, fontSize: (fontSize * math.sqrt(sx.abs() * sy.abs())).clamp(8, 400).toDouble());
+    // The box scales about [anchor] as its centre moves; the turn is kept.
+    final centre = _scaleRect(Rect.fromCenter(center: box.center, width: 0, height: 0), anchor, sx, sy).center;
+    final k = math.sqrt(sx.abs() * sy.abs());
+    final next = Size(size.width * sx.abs(), size.height * sy.abs());
+    return copyWith(
+      topLeft: centre - Offset(next.width / 2, next.height / 2),
+      size: next,
+      fontSize: (fontSize * k).clamp(8, 400).toDouble(),
+    );
   }
 
   @override
@@ -280,12 +337,40 @@ class TextElement extends BoardElement {
     'h': _round(size.height),
     'size': _round(fontSize),
     'color': _hex(color),
+    if (bold) 'bold': true,
+    if (rotation != 0) 'rotation': rotation,
   };
 }
 
 /// The reward stamps (design §4.1): drawn from bundled icons and our font,
 /// never emoji (they render as boxes in the browser build).
-enum StampKind { star, check, heart, thumbsUp, excellentAr, wellDoneAr, excellentEn, wellDoneEn }
+enum StampKind {
+  star,
+  check,
+  heart,
+  thumbsUp,
+  excellentAr,
+  wellDoneAr,
+  excellentEn,
+  wellDoneEn,
+
+  /// PD-55: the reward tray's stickers (the closed catalogue in features/rewards).
+  medal,
+  trophy,
+  rocket,
+  sun,
+  rainbow,
+  crown,
+  balloon,
+
+  /// PD-55: a praise stamp with any words in [StampElement.text] -- the tray's
+  /// رائع, بطل, Great, Champion, or the teacher's own.
+  praise,
+
+  /// PD-55 Phase 1 (4): an emoji, the character itself in [StampElement.text]
+  /// (one of kBoardEmoji). An app or viewer from before draws it as a star.
+  emoji,
+}
 
 class StampElement extends BoardElement {
   const StampElement({required String id, required this.stamp, required this.rect, required this.color, this.text}) : super(id);
@@ -322,8 +407,138 @@ class StampElement extends BoardElement {
   };
 }
 
-/// A kind this build does not draw (a verse before PR-3, an image before PR-4,
-/// or anything newer). Kept and saved back exactly as it came; it moves only
+/// A Quran verse on the page (design §4.3): a REFERENCE to the shared, verified
+/// dataset -- surah, ayat, the dataset and the range's SHA-256 -- and never its
+/// text, which the server refuses in a document. Where it sits and how it is
+/// drawn go in `transform` and `style`, the only other fields a verse may
+/// carry. The text is fetched (GET /quran/ayahs) and drawn in Amiri Quran; a
+/// range whose served SHA-256 is not [rangeSha256] is shown as "re-insert",
+/// never silently redrawn.
+class VerseElement extends BoardElement {
+  const VerseElement({
+    required String id,
+    required this.surah,
+    required this.fromAyah,
+    required this.toAyah,
+    required this.datasetId,
+    required this.rangeSha256,
+    required this.rect,
+    required this.fontSize,
+    required this.color,
+  }) : super(id);
+
+  final int surah;
+  final int fromAyah;
+  final int toAyah;
+  final String datasetId;
+  final String rangeSha256;
+
+  /// Where it sits; its height is what the text took when it was placed.
+  final Rect rect;
+  final double fontSize;
+  final Color color;
+
+  /// The key of its text in the verse cache.
+  String get rangeKey => '$datasetId/$surah/$fromAyah-$toAyah';
+
+  @override
+  String get kind => 'verse';
+
+  @override
+  Rect get bounds => rect;
+
+  VerseElement copyWith({Rect? rect, double? fontSize, Color? color}) => VerseElement(
+    id: id,
+    surah: surah,
+    fromAyah: fromAyah,
+    toAyah: toAyah,
+    datasetId: datasetId,
+    rangeSha256: rangeSha256,
+    rect: rect ?? this.rect,
+    fontSize: fontSize ?? this.fontSize,
+    color: color ?? this.color,
+  );
+
+  @override
+  BoardElement translated(Offset delta) => copyWith(rect: rect.shift(delta));
+
+  /// A verse scales as one: both sides and the type by the same factor (the
+  /// width's), so the text always fits the box it was laid out in.
+  @override
+  BoardElement scaled(Offset anchor, double sx, double sy) {
+    final k = (fontSize * sx.abs()).clamp(16, 240) / fontSize;
+    final r = Rect.fromLTWH(
+      anchor.dx + (rect.left - anchor.dx) * k,
+      anchor.dy + (rect.top - anchor.dy) * k,
+      rect.width * k,
+      rect.height * k,
+    );
+    return copyWith(rect: r, fontSize: fontSize * k);
+  }
+
+  @override
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'kind': kind,
+    'surah': surah,
+    'fromAyah': fromAyah,
+    'toAyah': toAyah,
+    'datasetId': datasetId,
+    'rangeSha256': rangeSha256,
+    'transform': _rectJson(rect),
+    'style': {'size': _round(fontSize), 'color': _hex(color)},
+  };
+}
+
+/// An image on the page (PR-4, design §4.4): it NAMES an asset of this board
+/// -- never a key or a URL, which the server refuses in a document -- and the
+/// board signs that asset's URL for whoever may read the board. It scales as
+/// one, keeping its proportions.
+///
+/// Fields this build does not know (a newer client's `z`, `crop`, `style` ...)
+/// are kept in [extra] and written back unchanged (review of #328): before
+/// images were drawn they were kept whole, and drawing them must not start
+/// stripping what a newer client wrote.
+class ImageElement extends BoardElement {
+  const ImageElement({required String id, required this.assetId, required this.rect, this.extra = const {}}) : super(id);
+
+  final String assetId;
+  final Rect rect;
+
+  /// Every field of the element's JSON this build does not read, as it came.
+  final Map<String, Object?> extra;
+
+  static const _known = {'id', 'kind', 'assetId', 'x', 'y', 'w', 'h'};
+
+  static Map<String, Object?> extraOf(Map<String, Object?> json) => Map.unmodifiable({
+    for (final e in json.entries)
+      if (!_known.contains(e.key)) e.key: e.value,
+  });
+
+  @override
+  String get kind => 'image';
+
+  @override
+  Rect get bounds => rect;
+
+  ImageElement withRect(Rect next) => ImageElement(id: id, assetId: assetId, rect: next, extra: extra);
+
+  @override
+  BoardElement translated(Offset delta) => withRect(rect.shift(delta));
+
+  @override
+  BoardElement scaled(Offset anchor, double sx, double sy) {
+    final k = sx.abs().clamp(0.05, 20).toDouble();
+    return withRect(
+      Rect.fromLTWH(anchor.dx + (rect.left - anchor.dx) * k, anchor.dy + (rect.top - anchor.dy) * k, rect.width * k, rect.height * k),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() => {...extra, 'id': id, 'kind': kind, 'assetId': assetId, ..._rectJson(rect)};
+}
+
+/// A kind this build does not draw (anything newer, or malformed). Kept and saved back exactly as it came; it moves only
 /// when it carries x/y/w/h, and it is shown as a labelled box.
 class OpaqueElement extends BoardElement {
   const OpaqueElement(super.id, this.json);
@@ -355,6 +570,22 @@ class OpaqueElement extends BoardElement {
 double _num(Object? v, double fallback) => v is num && v.isFinite ? v.toDouble() : fallback;
 
 double _round(double v) => (v * 10).roundToDouble() / 10;
+
+Offset _rotateAbout(Offset p, Offset c, double angle) {
+  final d = p - c;
+  final cos = math.cos(angle), sin = math.sin(angle);
+  return c + Offset(d.dx * cos - d.dy * sin, d.dx * sin + d.dy * cos);
+}
+
+/// The axis-aligned box around [r] turned by [angle] about its centre.
+Rect _rotatedBounds(Rect r, double angle) {
+  final corners = [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft].map((p) => _rotateAbout(p, r.center, angle));
+  var out = Rect.fromPoints(corners.first, corners.first);
+  for (final p in corners) {
+    out = out.expandToInclude(Rect.fromPoints(p, p));
+  }
+  return out;
+}
 
 Color _color(Object? v) {
   if (v is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v)) return Color(int.parse(v.substring(1), radix: 16) | 0xFF000000);

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/data/http/attachment_uploader.dart' show UploadCancel;
 import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/error_mapper.dart';
@@ -24,9 +25,14 @@ class MessagesState {
     this.initialError,
     this.olderError,
     this.isOffline = false,
+    this.uploadProgress = const {},
   });
 
   final MessageLog log;
+
+  /// PARENT-017: how far each uploading attachment has gone, 0..1, by client
+  /// message id. Absent while it waits or once it is sent.
+  final Map<String, double> uploadProgress;
   final bool isLoadingInitial;
   final bool isLoadingOlder;
 
@@ -50,8 +56,10 @@ class MessagesState {
     bool clearInitialError = false,
     bool clearOlderError = false,
     bool? isOffline,
+    Map<String, double>? uploadProgress,
   }) {
     return MessagesState(
+      uploadProgress: uploadProgress ?? this.uploadProgress,
       log: log ?? this.log,
       isLoadingInitial: isLoadingInitial ?? this.isLoadingInitial,
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
@@ -100,6 +108,9 @@ class MessagesController extends Notifier<MessagesState> {
   /// staging copy. Deleting it on send is how an app removes a photo the user
   /// still has. So this map exists only so a retry can find the bytes again.
   final _pendingAttachmentFiles = <String, String>{};
+
+  /// PARENT-017: the cancel handle of each upload in flight, by client message id.
+  final _uploadCancels = <String, UploadCancel>{};
 
   Timer? _drainTimer;
 
@@ -332,6 +343,7 @@ class MessagesController extends Notifier<MessagesState> {
           fileName: attachment.fileName,
           mimeType: attachment.mimeType,
           byteSize: attachment.byteSize,
+          durationMs: attachment.duration?.inMilliseconds,
         ),
       ],
     );
@@ -364,6 +376,7 @@ class MessagesController extends Notifier<MessagesState> {
         clientMessageId: outgoing.clientMessageId,
         conversationId: conversationId,
         enqueuedAt: now,
+        carriesUpload: outgoing.needsUpload,
       ),
     );
     _pendingBodies[outgoing.clientMessageId] = outgoing;
@@ -396,6 +409,9 @@ class MessagesController extends Notifier<MessagesState> {
       ),
     );
 
+    // A failure while the bytes go to storage says nothing about the API: storage is
+    // another host. Only the API's own answer may say "offline" (PARENT-005).
+    var uploading = false;
     try {
       var outbound = outgoing;
 
@@ -406,16 +422,27 @@ class MessagesController extends Notifier<MessagesState> {
         final note = outbound.voiceNote;
         final attachment = outbound.pendingAttachment;
 
-        final uploaded = note != null
-            ? await _messages.uploadVoiceNote(
-                conversationId: conversationId,
-                note: note,
-              )
-            : await _messages.uploadAttachment(
-                conversationId: conversationId,
-                attachment: attachment!,
-              );
+        uploading = true;
+        final cancel = _uploadCancels[entry.clientMessageId] = UploadCancel();
+        final UploadedAttachment uploaded;
+        try {
+          uploaded = note != null
+              ? await _messages.uploadVoiceNote(
+                  conversationId: conversationId,
+                  note: note,
+                )
+              : await _messages.uploadAttachment(
+                  conversationId: conversationId,
+                  attachment: attachment!,
+                  onProgress: (sent, total) => _progress(entry.clientMessageId, sent, total),
+                  cancel: cancel,
+                );
+        } finally {
+          _uploadCancels.remove(entry.clientMessageId);
+          if (_alive) _clearProgress(entry.clientMessageId);
+        }
         if (!_alive) return;
+        uploading = false;
         outbound = outbound.withUploaded(uploaded);
         _pendingBodies[entry.clientMessageId] = outbound;
       }
@@ -434,13 +461,16 @@ class MessagesController extends Notifier<MessagesState> {
     } catch (error) {
       final failure = ErrorMapper.map(error);
       if (!_alive) return;
+      // PARENT-017: a cancelled upload was discarded by cancelUpload; nothing failed.
+      if (failure.code == AppError.uploadCancelled) return;
 
       _outbox.markFailed(
         entry.clientMessageId,
         DateTime.now(),
         // A policy refusal or a validation failure will fail identically forever, so it is
-        // parked for an explicit retry instead of being re-attempted (§3).
-        retryable: failure.isTransient,
+        // parked for an explicit retry instead of being re-attempted (§3). So is an upload
+        // that ran out of time: an automatic retry would re-send the whole file at once.
+        retryable: failure.isTransient && failure.code != AppError.uploadTimeout,
         failureCode: failure.code,
       );
 
@@ -452,10 +482,11 @@ class MessagesController extends Notifier<MessagesState> {
             failureCode: failure.code,
           ),
         ),
-        isOffline: failure.kind == AppErrorKind.network,
+        isOffline: !uploading && failure.kind == AppErrorKind.network,
       );
 
-      _scheduleNextDrain();
+      // What waited behind a failure that steps aside goes now (PARENT-005).
+      unawaited(drain());
     }
   }
 
@@ -464,10 +495,9 @@ class MessagesController extends Notifier<MessagesState> {
     _drainTimer?.cancel();
     if (!_alive || _outbox.isEmpty) return;
 
-    final entries = _outbox.entriesFor(conversationId);
-    if (entries.isEmpty) return;
-
-    final notBefore = entries.first.nextAttemptAt;
+    // The earliest backoff anywhere in the queue: a failed upload waits beside the
+    // messages that stepped past it, not only at the head.
+    final notBefore = _outbox.nextRetryAt(conversationId);
     if (notBefore == null) return;
 
     final delay = notBefore.difference(DateTime.now());
@@ -489,16 +519,36 @@ class MessagesController extends Notifier<MessagesState> {
     await drain();
   }
 
+  /// The user abandoned a message that was never sent: it leaves the queue AND the chat
+  /// (no "deleted" ghost: nobody else ever saw it), and what waited behind it goes
+  /// (PARENT-005).
+  /// PARENT-017: stop a sending attachment's upload and take the message back.
+  /// Before its upload starts it is simply discarded.
+  void cancelUpload(String clientMessageId) {
+    _uploadCancels.remove(clientMessageId)?.cancel();
+    discard(clientMessageId);
+  }
+
+  /// Progress at whole percents only: a 100 MB video must not rebuild the chat
+  /// for every 64 KB chunk.
+  void _progress(String clientMessageId, int sent, int total) {
+    if (!_alive || total <= 0) return;
+    final value = (sent * 100 ~/ total) / 100;
+    if (state.uploadProgress[clientMessageId] == value) return;
+    state = state.copyWith(uploadProgress: {...state.uploadProgress, clientMessageId: value});
+  }
+
+  void _clearProgress(String clientMessageId) {
+    if (!state.uploadProgress.containsKey(clientMessageId)) return;
+    state = state.copyWith(uploadProgress: {...state.uploadProgress}..remove(clientMessageId));
+  }
+
   void discard(String clientMessageId) {
     _outbox.discard(clientMessageId);
     _pendingBodies.remove(clientMessageId);
     _discardRecording(clientMessageId);
-    state = state.copyWith(
-      log: state.log.updateOne(
-        clientMessageId,
-        (m) => m.copyWith(isDeleted: true),
-      ),
-    );
+    state = state.copyWith(log: state.log.removeLocal(clientMessageId));
+    unawaited(drain());
   }
 
   /// Called on reconnect. Resyncs from the highest sequence we hold rather than refetching

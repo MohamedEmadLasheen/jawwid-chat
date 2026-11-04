@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/storage/browser_token_store.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
@@ -199,11 +200,22 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onPressed: isBusy ? null : _openSignup,
                         child: Text(l10n.signupOpen),
                       ),
+                    // TEACHER-023: self-service recovery is for parents (PD-25); it
+                    // answers alike for every name, so it cannot say who is staff. A
+                    // teacher or staff member is told plainly where their way back is.
                     TextButton(
                       key: const ValueKey('account-recovery-open'),
                       onPressed: isBusy ? null : _openRecovery,
                       child: Text(l10n.recoveryOpen),
                     ),
+                    Text(
+                      l10n.signInStaffResetHint,
+                      key: const ValueKey('staff-reset-hint'),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    // PD-56: the privacy policy and the terms, before anyone signs in.
+                    const LegalLinksRow(),
                   ],
                 ),
               ),

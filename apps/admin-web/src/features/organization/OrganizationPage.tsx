@@ -37,8 +37,17 @@ export function OrganizationPage() {
   const teachersDept = departments.find((d) => d.kind === 'teachers') ?? null
   const assignsTeachers = !!teachersDept && !!staff && (staff.role === 'super_admin' || teachersDept.manager?.id === staff.id)
   // ?tab=teachers: Teacher Files' "Assign supervisor" shortcut (PD-43 §3.7) lands on that tab.
-  const [params] = useSearchParams()
-  const [tab, setTab] = useState<Tab>(() => (TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'children'))
+  // PD-44: the tab lives in the URL, read on every render, so a Dashboard tile
+  // (?tab=children&filter=unassigned, ?tab=teachers, ?tab=structure) moves it too.
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'children'
+  const setTab = (next: Tab) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      p.set('tab', next)
+      p.delete('filter')
+      return p
+    }, { replace: true })
   const shown: Tab =
     tab === 'children' ? (operations ? 'children' : assignsTeachers ? 'teachers' : 'structure')
     : tab === 'teachers' ? (assignsTeachers ? 'teachers' : 'structure')
@@ -168,7 +177,16 @@ function ChildrenTab({ operations }: { operations: Department }) {
   const { t, number } = useI18n()
   const learners = useLearners(true)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<string>('all')
+  // PD-44: ?filter=unassigned (or a supervisor's id) -- the Dashboard's children tile opens the list it counted.
+  const [params, setParams] = useSearchParams()
+  const filter = params.get('filter') || 'all'
+  const setFilter = (next: string) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('filter')
+      else p.set('filter', next)
+      return p
+    }, { replace: true })
   const [editing, setEditing] = useState<LearnerAssignment | null>(null)
   const supervisors = operations.members.filter((m) => m.position === 'supervisor')
 

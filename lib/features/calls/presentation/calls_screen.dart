@@ -710,13 +710,17 @@ class _CallRow extends ConsumerWidget {
     final now = DateTime.now();
     final canCall = ref.watch(canCallProvider(entry.conversationId));
     final direction = entry.direction;
-    final missed = entry.outcome == CallOutcome.missed;
+    // CHATSCHED-016: a call that has not ended is not a missed one, whatever placeholder
+    // outcome it carries.
+    final missed = entry.outcome == CallOutcome.missed && !entry.inProgress;
 
-    final outcome = switch (entry.outcome) {
-      CallOutcome.answered => l10n.callOutcomeAnswered,
-      CallOutcome.missed => l10n.callOutcomeMissed,
-      CallOutcome.declined => l10n.callOutcomeDeclined,
-    };
+    final outcome = entry.inProgress
+        ? l10n.callOutcomeInProgress
+        : switch (entry.outcome) {
+            CallOutcome.answered => l10n.callOutcomeAnswered,
+            CallOutcome.missed => l10n.callOutcomeMissed,
+            CallOutcome.declined => l10n.callOutcomeDeclined,
+          };
 
     // Missed calls are marked by their icon and by their words, never by red alone (§53).
     final icon = switch (direction) {
@@ -734,6 +738,7 @@ class _CallRow extends ConsumerWidget {
     final duration = entry.duration;
     final detail = [
       outcome,
+      if (entry.connectionLost) l10n.callHistoryConnectionLost,
       if (duration != null)
         l10n.callDuration(duration.inMinutes, duration.inSeconds.remainder(60)),
     ].join(' · ');

@@ -5,6 +5,7 @@ import { TeacherFileController } from './teacher-file.controller';
 import { TeacherSupervisionController } from './teacher-supervision.controller';
 import { TeacherFileService } from './teacher-file.service';
 import { TeacherPayrollService } from './teacher-payroll.service';
+import { TeacherLessonReportsService } from './teacher-lesson-reports.service';
 import { ParentFeedbackController } from './parent-feedback.controller';
 import { ParentFeedbackService } from './parent-feedback.service';
 import { SupervisionModule } from '../supervision/supervision.module';
@@ -14,6 +15,8 @@ import { AuthModule } from '../platform/auth/auth.module';
 import { FIRST_LOGIN_MAILER, selectMailSender } from '../account-recovery/recovery-delivery';
 import { TeacherOnboardingController } from './teacher-onboarding.controller';
 import { TeacherOnboardingService } from './teacher-onboarding.service';
+import { TeacherRecordsController } from './teacher-records.controller';
+import { TeacherRecordsService } from './teacher-records.service';
 
 /**
  * PD-10: the administration-only Teacher File. The only module that may read
@@ -33,13 +36,16 @@ import { TeacherOnboardingService } from './teacher-onboarding.service';
   // (PD-26). Nothing under LessonModule or SupervisionModule imports this
   // module, so no cycle.
   imports: [CommunicationModule, SupervisionModule, LessonModule, AuthModule],
-  controllers: [TeacherFileController, TeacherSupervisionController, ParentFeedbackController, TeacherEvaluationController, TeacherOnboardingController],
+  controllers: [TeacherFileController, TeacherSupervisionController, ParentFeedbackController, TeacherEvaluationController, TeacherOnboardingController, TeacherRecordsController],
   providers: [
     TeacherFileService,
     TeacherPayrollService,
+    TeacherLessonReportsService,
     ParentFeedbackService,
     TeacherEvaluationService,
     TeacherOnboardingService,
+    // PD-52: the teacher-records pages' access answer.
+    TeacherRecordsService,
     { provide: FIRST_LOGIN_MAILER, useFactory: () => selectMailSender() },
   ],
   // PD-35 B5: escalation cases ask who a piece of feedback is about (ids only).

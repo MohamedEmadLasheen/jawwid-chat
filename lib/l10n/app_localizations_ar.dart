@@ -318,6 +318,16 @@ class L10nAr extends L10n {
   String get callReconnecting => 'جارٍ إعادة الاتصال…';
 
   @override
+  String get callWaitingForReconnect =>
+      'انقطع الاتصال. بانتظار عودة الطرف الآخر…';
+
+  @override
+  String get callEndedConnectionLost => 'انتهت المكالمة: انقطع الاتصال';
+
+  @override
+  String get callHistoryConnectionLost => 'انقطع الاتصال';
+
+  @override
   String get callAccept => 'قبول';
 
   @override
@@ -349,6 +359,9 @@ class L10nAr extends L10n {
 
   @override
   String get callOutcomeDeclined => 'مرفوضة';
+
+  @override
+  String get callOutcomeInProgress => 'جارية';
 
   @override
   String callDuration(int minutes, int seconds) {
@@ -840,6 +853,24 @@ class L10nAr extends L10n {
   String get attachFile => 'ملف';
 
   @override
+  String get attachVideo => 'فيديو';
+
+  @override
+  String get attachRecordVideo => 'تسجيل فيديو';
+
+  @override
+  String get videoRecordPermissionDenied =>
+      'يحتاج جَوِّد إلى إذن لاستخدام الكاميرا والميكروفون لتسجيل فيديو. يمكنك السماح بذلك من الإعدادات.';
+
+  @override
+  String get cancelUpload => 'إلغاء الإرسال';
+
+  @override
+  String uploadingPercent(String percent) {
+    return 'جارٍ الإرسال… $percent٪';
+  }
+
+  @override
   String get attachmentPhotoLabel => 'صورة';
 
   @override
@@ -1250,6 +1281,10 @@ class L10nAr extends L10n {
   @override
   String get ticketNoLongerAllowed =>
       'لم يعد بالإمكان تحديث هذه الحصة بهذه الطريقة.';
+
+  @override
+  String get certificateAlreadySuggested =>
+      'هذه الشهادة مقترحة لهذا الطالب من قبل.';
 
   @override
   String get cardReportTitle => 'تقرير الحصة';
@@ -2898,7 +2933,34 @@ class L10nAr extends L10n {
   String get resetFinish => 'تعيين كلمة المرور';
 
   @override
-  String get recoveryOpen => 'لا تستطيع تسجيل الدخول؟';
+  String get recoveryOpen => 'أولياء الأمور: لا تستطيع تسجيل الدخول؟';
+
+  @override
+  String get signInStaffResetHint =>
+      'المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.';
+
+  @override
+  String get changePasswordTitle => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordCurrentLabel => 'كلمة المرور الحالية';
+
+  @override
+  String get changePasswordWrongCurrent => 'هذه ليست كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordCurrentRequired => 'أدخل كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'اختر كلمة مرور مختلفة عن كلمة مرورك الحالية.';
+
+  @override
+  String get changePasswordAction => 'تغيير كلمة المرور';
+
+  @override
+  String get changePasswordDone =>
+      'تم تغيير كلمة المرور. سُجِّل خروجك من أجهزتك الأخرى.';
 
   @override
   String get recoveryTitle => 'استعادة حسابك';
@@ -3388,6 +3450,14 @@ class L10nAr extends L10n {
   @override
   String salesVoidedBy(String name, String reason) {
     return 'ألغاه $name: $reason';
+  }
+
+  @override
+  String get salesOtherPaymentsTitle => 'دفعات أخرى';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'استُرد $amount';
   }
 
   @override
@@ -4058,6 +4128,12 @@ class L10nAr extends L10n {
   String get feedbackEntrySubtitle => 'إشادة أو اقتراح أو شكوى';
 
   @override
+  String get feedbackShortcutPraise => 'الثناء على المعلّم';
+
+  @override
+  String get feedbackShortcutProblem => 'الإبلاغ عن مشكلة';
+
+  @override
   String feedbackTeacherLine(String name) {
     return 'المعلّم: $name';
   }
@@ -4657,6 +4733,9 @@ class L10nAr extends L10n {
   String get boardLayoutArabicLines => 'أسطر الخط العربي';
 
   @override
+  String get boardLayoutDotted => 'منقّط';
+
+  @override
   String get boardBackgroundWhite => 'أبيض';
 
   @override
@@ -4693,6 +4772,24 @@ class L10nAr extends L10n {
   String get boardToolText => 'نص';
 
   @override
+  String get boardToolLaser => 'مؤشر الليزر';
+
+  @override
+  String get boardTextSmaller => 'تصغير النص';
+
+  @override
+  String get boardTextBigger => 'تكبير النص';
+
+  @override
+  String get boardTextBold => 'عريض';
+
+  @override
+  String get boardTextColour => 'لون النص';
+
+  @override
+  String get boardTextDone => 'تم';
+
+  @override
   String get boardToolRect => 'مستطيل';
 
   @override
@@ -4723,10 +4820,67 @@ class L10nAr extends L10n {
   String get boardZoomOut => 'تصغير';
 
   @override
+  String get boardFullScreen => 'ملء الشاشة';
+
+  @override
+  String get boardExitFullScreen => 'الخروج من ملء الشاشة';
+
+  @override
+  String get boardShowTools => 'إظهار الأدوات';
+
+  @override
+  String get boardHideTools => 'إخفاء الأدوات';
+
+  @override
+  String get boardPreviousPage => 'الصفحة السابقة';
+
+  @override
+  String get boardNextPage => 'الصفحة التالية';
+
+  @override
+  String get boardEmoji => 'رموز تعبيرية';
+
+  @override
+  String get boardEmojiPick => 'اختر رمزًا تعبيريًا';
+
+  @override
+  String get boardEmojiSmileys => 'وجوه مبتسمة';
+
+  @override
+  String get boardEmojiAnimals => 'حيوانات';
+
+  @override
+  String get boardEmojiNature => 'طبيعة';
+
+  @override
+  String get boardEmojiFood => 'طعام';
+
+  @override
+  String get boardEmojiSchool => 'المدرسة واللعب';
+
+  @override
+  String get boardEmojiSymbols => 'رموز';
+
+  @override
+  String get boardWidePage => 'صفحة عريضة';
+
+  @override
+  String get boardTallPage => 'صفحة طولية';
+
+  @override
   String get boardZoomFit => 'ملاءمة الصفحة';
 
   @override
   String get boardDeleteSelection => 'حذف المحدد';
+
+  @override
+  String get boardCopy => 'نسخ';
+
+  @override
+  String get boardPaste => 'لصق';
+
+  @override
+  String get boardDuplicate => 'تكرار';
 
   @override
   String get boardColour => 'اللون';
@@ -4750,15 +4904,6 @@ class L10nAr extends L10n {
   String get boardTajweedIzhar => 'الإظهار';
 
   @override
-  String get boardTextTitle => 'نص';
-
-  @override
-  String get boardTextHint => 'اكتب هنا';
-
-  @override
-  String get boardVersePlaceholder => 'آية قرآنية';
-
-  @override
   String get boardElementUnknown => 'لا يظهر في هذا الإصدار';
 
   @override
@@ -4769,6 +4914,103 @@ class L10nAr extends L10n {
 
   @override
   String get boardMore => 'المزيد';
+
+  @override
+  String get boardToolVerse => 'آية قرآنية';
+
+  @override
+  String get boardVerseSurah => 'السورة';
+
+  @override
+  String get boardVerseFrom => 'من الآية';
+
+  @override
+  String get boardVerseTo => 'إلى الآية';
+
+  @override
+  String boardVerseMax(String count) {
+    return '$count آية على الأكثر في المرة الواحدة.';
+  }
+
+  @override
+  String boardVerseSource(String source) {
+    return 'نص القرآن الكريم: $source';
+  }
+
+  @override
+  String get boardVerseInsert => 'إدراج';
+
+  @override
+  String get boardVerseLoading => 'جارٍ تحميل الآية…';
+
+  @override
+  String get boardVerseUnavailable => 'نص القرآن غير متاح';
+
+  @override
+  String get boardVerseChanged => 'تغيّر نص الآية، أعد إدراجها';
+
+  @override
+  String get boardToolImage => 'صورة';
+
+  @override
+  String get boardImageAdding => 'جارٍ إضافة الصورة…';
+
+  @override
+  String get boardImageLoading => 'جارٍ تحميل الصورة…';
+
+  @override
+  String get boardImageUnavailable => 'الصورة غير متاحة';
+
+  @override
+  String get boardImageOff => 'لم تُفعَّل الصور في السبورات بعد.';
+
+  @override
+  String get boardImageTooLarge =>
+      'هذه الصورة كبيرة جدًا. استخدم صورة أصغر من 10 ميغابايت، أو صورًا أقل في هذه السبورة.';
+
+  @override
+  String get boardImageNotImage =>
+      'هذا الملف ليس صورة يمكن للسبورة عرضها. استخدم PNG أو JPEG أو WebP.';
+
+  @override
+  String get boardImageFailed => 'تعذّرت إضافة الصورة. حاول مرة أخرى.';
+
+  @override
+  String get boardExportPng => 'تصدير هذه الصفحة كصورة (PNG)';
+
+  @override
+  String get boardExportPdf => 'تصدير السبورة كملف PDF';
+
+  @override
+  String get boardExporting => 'جارٍ تجهيز التصدير…';
+
+  @override
+  String get boardExportSaved => 'تم التصدير.';
+
+  @override
+  String get boardExportOff => 'لم يُفعَّل التصدير بعد.';
+
+  @override
+  String get boardExportBusy => 'يجري الآن تصدير كثير. حاول بعد دقيقة.';
+
+  @override
+  String get boardExportInProgress =>
+      'لديك عمليات تصدير قيد التجهيز. انتظر بضع دقائق ثم حاول مرة أخرى.';
+
+  @override
+  String get boardExportExpired =>
+      'استغرق التصدير وقتًا طويلًا وانتهت مهلته. صدِّر مرة أخرى.';
+
+  @override
+  String get boardExportTooLarge =>
+      'هذه السبورة أكبر من أن تُصدَّر دفعة واحدة.';
+
+  @override
+  String get boardExportNotHere =>
+      'التصدير متاح في المتصفح. افتح السبورة هناك لتصديرها.';
+
+  @override
+  String get boardExportFailed => 'تعذّر التصدير. حاول مرة أخرى.';
 
   @override
   String get boardDraftStale =>
@@ -4791,4 +5033,192 @@ class L10nAr extends L10n {
   @override
   String get boardSaveFirst =>
       'يجب حفظ تغييراتك أولًا. حاول مرة أخرى عندما تظهر عبارة «محفوظ».';
+
+  @override
+  String get pickerSearchHint => 'اكتب للبحث';
+
+  @override
+  String get pickerNoMatches => 'لا توجد نتائج مطابقة';
+
+  @override
+  String get materialsAgeLabel => 'العمر';
+
+  @override
+  String get photoLabel => 'صورة';
+
+  @override
+  String photoPositionLabel(String position, String count) {
+    return 'الصورة $position من $count';
+  }
+
+  @override
+  String get chatDraftLabel => 'مسودة:';
+
+  @override
+  String get rewardPraiseExcellent => 'ممتاز';
+
+  @override
+  String get rewardPraiseWellDone => 'أحسنت';
+
+  @override
+  String get rewardPraiseGreat => 'رائع';
+
+  @override
+  String get rewardPraiseChampion => 'بطل';
+
+  @override
+  String get rewardTrayTitle => 'المكافآت';
+
+  @override
+  String get rewardTrayFor => 'إلى';
+
+  @override
+  String get rewardTrayEveryone => 'الجميع';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'تُحتسب المكافآت أثناء الحصة. الآن تُزيّن السبورة فقط.';
+
+  @override
+  String get rewardTrayStar => 'نجمة';
+
+  @override
+  String get rewardTrayStickers => 'ملصقات';
+
+  @override
+  String get rewardTrayPraise => 'ثناء';
+
+  @override
+  String get rewardTrayOwnWords => 'كلماتي…';
+
+  @override
+  String get rewardTrayCelebrate => 'احتفال';
+
+  @override
+  String get rewardTrayUndo => 'تراجع';
+
+  @override
+  String get rewardTraySent => 'أُعطيت المكافأة';
+
+  @override
+  String get rewardTrayFailed => 'لم تُسجَّل المكافأة. ما زالت على السبورة.';
+
+  @override
+  String get rewardCelebrationLine => 'معلّمك يحتفل بك!';
+
+  @override
+  String get rewardSoundTitle => 'صوت المكافآت';
+
+  @override
+  String get rewardSoundSubtitle =>
+      'صوت قصير عندما يكافئ المعلّم طفلك: نغمة أو تصفيق أو احتفال.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'نجمة! $count نجمة في هذه الحصة',
+      many: 'نجمة! $count نجمة في هذه الحصة',
+      few: 'نجمة! $count نجوم في هذه الحصة',
+      two: 'نجمة! نجمتان في هذه الحصة',
+      one: 'نجمة! نجمة واحدة في هذه الحصة',
+      zero: 'نجمة!',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rewardBadgeBronze => 'جهد رائع';
+
+  @override
+  String get rewardBadgeSilver => 'جهد مذهل';
+
+  @override
+  String get rewardBadgeGold => 'نجم متألّق';
+
+  @override
+  String rewardToNextBadge(int count, String badge) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نجمة أخرى لـ$badge',
+      many: '$count نجمة أخرى لـ$badge',
+      few: '$count نجوم أخرى لـ$badge',
+      two: 'نجمتان أخريان لـ$badge',
+      one: 'نجمة واحدة أخرى لـ$badge',
+      zero: '$badge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rewardBadgeEarned(String badge) {
+    return 'الشارة: $badge';
+  }
+
+  @override
+  String rewardReportStars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نجمة',
+      many: '$count نجمة',
+      few: '$count نجوم',
+      two: 'نجمتان',
+      one: 'نجمة واحدة',
+      zero: 'لا نجوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get legalPrivacyPolicy => 'سياسة الخصوصية';
+
+  @override
+  String get legalTerms => 'شروط الاستخدام';
+
+  @override
+  String get deleteAccountTitle => 'حذف الحساب';
+
+  @override
+  String get deleteAccountIntro => 'حذف حسابك نهائي ولا يمكن التراجع عنه.';
+
+  @override
+  String get deleteAccountGoes =>
+      'يُحذف فورًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك.';
+
+  @override
+  String get deleteAccountKeptParent =>
+      'يُحتفظ به: المدفوعات والفواتير لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»)، وسجلات أبنائك لدى الأكاديمية. ويُبلَّغ فريق العمل لمتابعتها.';
+
+  @override
+  String get deleteAccountKeptTeacher =>
+      'يُحتفظ به: سجلات الرواتب لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.';
+
+  @override
+  String get deleteAccountPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get deleteAccountAction => 'حذف حسابي';
+
+  @override
+  String get deleteAccountConfirm =>
+      'هل تريد حذف حسابك نهائيًا؟ لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get deleteAccountWrongPassword => 'كلمة المرور غير صحيحة.';
+
+  @override
+  String get deleteAccountStaff => 'حسابات فريق العمل تُغلق عن طريق الإدارة.';
+
+  @override
+  String get deleteAccountFailed => 'تعذّر حذف الحساب. حاول مرة أخرى.';
+
+  @override
+  String get deleteAccountDone => 'تم حذف حسابك.';
+
+  @override
+  String get deleteAccountTeacherBlocked =>
+      'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
 }

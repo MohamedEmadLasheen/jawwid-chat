@@ -1,5 +1,5 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { invalidCountryMessage, isGeoForeignKeyViolation } from '../geo/countries';
@@ -14,10 +14,14 @@ import type { BillingAccess } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { AvatarService } from '../communication/profile/avatar.service';
 import { signAvatar } from '../communication/profile/avatar-urls';
-import { billingAccessOf, ownsFamily, reachesFamily, salesEditsFamily } from '../billing/billing-access';
+import { billingAccessOf, familyInScopeSql, ownsFamily, reachesFamily, salesEditsFamily } from '../billing/billing-access';
+import { ActorKind } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 
 const NAME_MAX = 120;
 const SEARCH_LIMIT = 200;
+/** PD-44: the Parents list's subscription filters (chat.learner_access.state). */
+const ACCESS_FILTERS: readonly string[] = ['locked', 'grace'];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type Scope = NonNullable<BillingAccess['scope']>;
@@ -77,16 +81,22 @@ export class ParentRecordService implements OnModuleInit {
    * the list staff complete (plan §6.1 a). Each row carries its location only
    * when asked (`with=location`, or that filter): the Sales app's Payments tab
    * reads this list and does not need it (data minimisation).
+   *
+   * PD-44 `access=locked|grace`: only the parents of a family with a child in
+   * that PD-30 state, computed now (chat.compute_learner_access, as
+   * enforcement computes it), never read from the chat.learner_access row a
+   * sweep may not have refreshed yet: an instalment overdue at midnight
+   * shows at once. One statement; EXISTS stops at the family's first match.
    */
-  async list(actorId: string, q?: string, location?: string, withFields?: string) {
+  async list(actorId: string, q?: string, location?: string, withFields?: string, accessFilter?: string) {
     const { actor, scope } = await this.requireAdmin(actorId);
     if (location !== undefined && location !== '' && location !== 'missing') throw invalid('location: missing, or leave it out');
     if (withFields !== undefined && withFields !== '' && withFields !== 'location') throw invalid('with: location, or leave it out');
     const missing = location === 'missing';
     const withLocation = missing || withFields === 'location';
     const search = typeof q === 'string' ? q.trim().slice(0, 80) : '';
-    const reach = scope === 'reach';
-    const owned = scope === 'owned';
+    const state = accessFilter === undefined || accessFilter === '' ? null : accessFilter;
+    if (state !== null && !ACCESS_FILTERS.includes(state)) throw invalid('access: locked or grace, or leave it out');
     const rows = await this.prisma.$queryRaw<
       Array<{
         id: string; name: string; avatar_object_key: string | null; family_id: string; family_name: string; children: number;
@@ -98,11 +108,10 @@ export class ParentRecordService implements OnModuleInit {
              f.country_code, f.subdivision_code
         FROM chat.contact c
         JOIN chat.family f ON f.id = c.family_id
-       WHERE c.organization_id = ${actor.organizationId as string}::uuid
-         AND c.is_active
-         AND (${search} = '' OR c.name ILIKE '%' || ${search} || '%' OR f.display_name ILIKE '%' || ${search} || '%')
-         AND (${!reach} OR chat.staff_reaches_family(${actor.actorId}::uuid, f.id) IS NOT NULL)
-         AND (${!owned} OR chat.staff_owns_family(${actor.actorId}::uuid, f.id))
+       WHERE ${this.listWhere(actor, scope, search)}
+         AND (${state}::text IS NULL OR EXISTS (
+               SELECT 1 FROM chat.learner l CROSS JOIN LATERAL chat.compute_learner_access(l.id) a
+                WHERE l.family_id = f.id AND a.state = ${state}::text))
          AND (${!missing} OR f.country_code IS NULL
               -- an old code that is not a country of the list (the "other" box, before PD-45)
               OR NOT EXISTS (SELECT 1 FROM chat.geo_country gc WHERE gc.code = f.country_code AND gc.retired_at IS NULL)
@@ -122,6 +131,53 @@ export class ParentRecordService implements OnModuleInit {
       })),
       truncated: rows.length === SEARCH_LIMIT,
     };
+  }
+
+  /** The rows the Parents list may show this viewer: one rule for the list and its Dashboard count. */
+  private listWhere(actor: Actor, scope: Scope, search: string): Prisma.Sql {
+    return Prisma.sql`c.organization_id = ${actor.organizationId as string}::uuid
+         AND c.is_active
+         AND (${search} = '' OR c.name ILIKE '%' || ${search} || '%' OR f.display_name ILIKE '%' || ${search} || '%')
+         AND ${familyInScopeSql(actor.actorId, scope, Prisma.sql`f.id`)}`;
+  }
+
+  /**
+   * PD-44: the Dashboard's tiles for the Parents list's subscription filters
+   * -- what `list(?access=locked|grace)` shows, counted in one statement over
+   * the same rows (listWhere), each child's state computed once, now (as
+   * `list` and enforcement compute it), and capped at the list's SEARCH_LIMIT:
+   *
+   *   parents.locked   parents of a family with a child whose subscription is locked
+   *   parents.grace    ... a child in the grace period
+   *
+   * Staff who open no Parent Profile get no tile; non-staff are refused.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) {
+      throw new CommError(CommErrorCode.PARENT_PROFILE_DENIED, 'parent profiles are the administration\'s');
+    }
+    const scope = (await billingAccessOf(this.prisma, actor)).scope;
+    if (!scope) return [];
+    const [r] = await this.prisma.$queryRaw<Array<{ locked: number; grace: number }>>`
+      WITH shown AS (
+        SELECT f.id AS family_id
+          FROM chat.contact c
+          JOIN chat.family f ON f.id = c.family_id
+         WHERE ${this.listWhere(actor, scope, '')}
+      ), states AS (
+        SELECT l.family_id, bool_or(a.state = 'locked') AS locked, bool_or(a.state = 'grace') AS grace
+          FROM chat.learner l
+         CROSS JOIN LATERAL chat.compute_learner_access(l.id) a
+         WHERE l.family_id IN (SELECT family_id FROM shown)
+         GROUP BY l.family_id
+      )
+      SELECT count(*) FILTER (WHERE s.locked)::int AS locked,
+             count(*) FILTER (WHERE s.grace)::int AS grace
+        FROM shown
+        JOIN states s ON s.family_id = shown.family_id`;
+    const tile = (key: string, n: number) => dashboardTile(key, Math.min(n, SEARCH_LIMIT), null, n > SEARCH_LIMIT);
+    return [tile('parents.locked', r?.locked ?? 0), tile('parents.grace', r?.grace ?? 0)];
   }
 
   async detail(actorId: string, contactId: string) {

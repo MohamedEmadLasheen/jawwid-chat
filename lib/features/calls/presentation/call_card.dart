@@ -85,12 +85,17 @@ class CallCard extends StatelessWidget {
   }
 
   String _headline(L10n l10n) {
-    final outcome = switch (call.outcome) {
-      CallOutcome.answered => l10n.callOutcomeAnswered,
-      CallOutcome.missed => l10n.callOutcomeMissed,
-      CallOutcome.declined => l10n.callOutcomeDeclined,
-    };
-    return call.isGroup ? '${l10n.callGroup} · $outcome' : '${l10n.callVoice} · $outcome';
+    // CHATSCHED-016: a call that has not ended is "In progress", never "Missed".
+    final outcome = call.inProgress
+        ? l10n.callOutcomeInProgress
+        : switch (call.outcome) {
+            CallOutcome.answered => l10n.callOutcomeAnswered,
+            CallOutcome.missed => l10n.callOutcomeMissed,
+            CallOutcome.declined => l10n.callOutcomeDeclined,
+          };
+    // CHATSCHED-013: said in words, beside the outcome, when the line dropped.
+    final how = call.connectionLost ? '$outcome · ${l10n.callHistoryConnectionLost}' : outcome;
+    return call.isGroup ? '${l10n.callGroup} · $how' : '${l10n.callVoice} · $how';
   }
 
   /// When, and for how long. The duration is the SERVER's — derived from
@@ -105,9 +110,11 @@ class CallCard extends StatelessWidget {
     return '$when · ${l10n.callDuration(minutes, seconds)}';
   }
 
-  (IconData, Color) _appearance(JawwidTokens tokens) => switch (call.outcome) {
-        CallOutcome.answered => (Icons.call, tokens.colorTextSecondary),
-        CallOutcome.missed => (Icons.call_missed, tokens.colorStatusDangerFg),
-        CallOutcome.declined => (Icons.call_end, tokens.colorTextSecondary),
-      };
+  (IconData, Color) _appearance(JawwidTokens tokens) => call.inProgress
+      ? (Icons.call, tokens.colorTextSecondary)
+      : switch (call.outcome) {
+          CallOutcome.answered => (Icons.call, tokens.colorTextSecondary),
+          CallOutcome.missed => (Icons.call_missed, tokens.colorStatusDangerFg),
+          CallOutcome.declined => (Icons.call_end, tokens.colorTextSecondary),
+        };
 }

@@ -270,6 +270,34 @@ export class AttachmentService {
   }
 
   /**
+   * PARENT-023: every attachment's object is in storage, at the size and type
+   * the sender declares -- the ones its upload was authorized for (the signed
+   * PUT binds both, so a mismatch is a different object, or none). Called on
+   * the send path after the key is known to belong to the conversation, so a
+   * message can never point at an object that was never uploaded.
+   *
+   * One small ranged read per attachment (1 byte); a thumbnail must exist too.
+   */
+  async assertUploaded(
+    attachments: ReadonlyArray<{ objectKey: string; mimeType: string; byteSize: number; thumbnailObjectKey?: string | null }>,
+  ): Promise<void> {
+    for (const a of attachments) {
+      const stored = await this.storage.readHead(a.objectKey, 1);
+      if (!stored) throw notUploaded('the attachment was not uploaded; upload it, then send');
+      if (stored.byteSize !== a.byteSize) {
+        throw notUploaded(`the uploaded attachment is ${stored.byteSize} bytes, not the ${a.byteSize} declared`);
+      }
+      const storedType = stored.contentType?.split(';')[0].trim().toLowerCase() ?? null;
+      if (storedType && storedType !== a.mimeType.toLowerCase()) {
+        throw notUploaded(`the uploaded attachment is ${storedType}, not the ${a.mimeType} declared`);
+      }
+      if (a.thumbnailObjectKey && !(await this.storage.readHead(a.thumbnailObjectKey, 1))) {
+        throw notUploaded('the attachment\'s thumbnail was not uploaded');
+      }
+    }
+  }
+
+  /**
    * Forwarding media: COPY each stored object into the destination
    * conversation's namespace (`conversations/<target>/<uuid>`), so the copy is
    * governed by the destination's own access rules and the source keeps its
@@ -333,4 +361,8 @@ export class AttachmentService {
       }
     }
   }
+}
+
+function notUploaded(message: string): CommError {
+  return new CommError(CommErrorCode.ATTACHMENT_NOT_UPLOADED, message, 409);
 }

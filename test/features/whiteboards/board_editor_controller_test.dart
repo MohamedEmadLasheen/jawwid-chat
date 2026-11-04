@@ -34,8 +34,10 @@ class FakeBoards implements WhiteboardsRepository {
   Completer<void>? hold;
   Object? createError;
   final List<String> trashed = [];
+  bool imagesSupported = false;
 
   BoardDetail detail() => BoardDetail(
+    imagesSupported: imagesSupported,
     summary: BoardSummary(id: 'b1', title: 'Board', state: BoardState.active, revision: revision, pageCount: 2, updatedAt: DateTime(2026)),
     canEdit: true,
     pages: [pages['p1']!, pages['p2']!],
@@ -65,8 +67,9 @@ class FakeBoards implements WhiteboardsRepository {
   }
 
   @override
-  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background}) async {
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async {
     requests++;
+    shapes.add(('add', shape));
     if (boardId == 'copy') {
       return BoardDetail(
         summary: BoardSummary(id: 'copy', title: 'copy', state: BoardState.active, revision: 2, pageCount: 2, updatedAt: DateTime(2026)),
@@ -81,14 +84,18 @@ class FakeBoards implements WhiteboardsRepository {
   }
 
   @override
-  Future<BoardDetail> create(String title, {String? lessonId}) async {
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async {
     if (createError != null) throw createError!;
+    shapes.add(('create', shape));
     return BoardDetail(
       summary: BoardSummary(id: 'copy', title: title, state: BoardState.active, revision: 1, pageCount: 1, updatedAt: DateTime(2026)),
       canEdit: true,
       pages: const [BoardPage(id: 'c1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: [])],
     );
   }
+
+  /// PD-55: the shape each new page was asked for, by create and addPage.
+  final shapes = <(String, PageShape?)>[];
 
   @override
   Future<BoardSummary> moveToTrash(String boardId, int revision) async {
@@ -259,10 +266,105 @@ void main() {
     await c.flush();
   });
 
+  test('a picture lands on the page its upload started on, whichever is showing (review of #328)', () async {
+    final c = await open();
+    c.goTo(1);
+    const image = ImageElement(id: 'i1', assetId: 'a1', rect: Rect.fromLTWH(0, 0, 40, 30));
+    expect(c.addTo('p1', image), isTrue);
+    expect(state().current, 1);
+    expect(state().pages[0].elements.single, image);
+    expect(state().pages[1].elements, isEmpty);
+    c.goTo(0);
+    expect(state().canUndo, isTrue);
+    c.undo();
+    expect(state().page.elements, isEmpty);
+    expect(c.addTo('gone', image), isFalse);
+    await c.flush();
+  });
+
+  test('images are offered only where the server knows them, until it says they are off (review of #328)', () async {
+    final page = {'id': 'p1', 'position': 0, 'document': {'elements': <Object>[]}};
+    final board = {'id': 'b1', 'title': 'B', 'state': 'active', 'revision': 1, 'pageCount': 1, 'updatedAt': '2026-10-31T00:00:00Z', 'pages': [page]};
+    expect(BoardDetail.fromJson(board).imagesSupported, isFalse);
+    expect(BoardDetail.fromJson({...board, 'assets': <Object>[]}).imagesSupported, isTrue);
+
+    repo.imagesSupported = true;
+    final c = await open();
+    expect(state().imagesSupported, isTrue);
+    c.imagesOff();
+    expect(state().imagesSupported, isFalse);
+  });
+
   test('sign-out clears every board draft on the device', () async {
     drafts.stored['actor-1/b1'] = const BoardDraft(pages: {'p1': {}});
     drafts.stored['actor-2/b9'] = const BoardDraft(pages: {'p1': {}});
     await drafts.clearAll();
     expect(drafts.stored, isEmpty);
+  });
+
+  group('PD-55: a page keeps its shape', () {
+    const tallP2 = BoardPage(
+      id: 'p2',
+      position: 1,
+      layout: PageLayout.plain,
+      background: PageBackground.white,
+      shape: PageShape.tall,
+      elements: [],
+      savedAt: 'p2@1',
+    );
+
+    test('a tall page\'s draft comes back tall -- on the next open, and when stale edits are kept', () async {
+      repo.pages['p2'] = tallP2;
+      final c = await open();
+      repo.offline.add('p2');
+      c.goTo(1);
+      c.commit([stroke('b')]);
+      await c.flush();
+      container.dispose();
+      repo.offline.clear();
+      container = make();
+      await open();
+      expect(state().pages[1].shape, PageShape.tall);
+      expect(state().pages[1].elements.single.id, 'b');
+
+      // A stale draft kept over the page as it now is: still tall.
+      final c2 = container.read(boardEditorProvider('b1').notifier);
+      repo.hold = Completer<void>();
+      c2.goTo(1);
+      c2.commit([stroke('b'), stroke('c')]);
+      final saving = c2.flush();
+      await Future<void>.delayed(Duration.zero);
+      c2.commit([stroke('b'), stroke('c'), stroke('later')]);
+      await settleDraft();
+      container.dispose();
+      unawaited(saving.catchError((_) {}));
+      repo.hold = null;
+      container = make();
+      await open();
+      expect(state().draftStale, isTrue);
+      container.read(boardEditorProvider('b1').notifier).keepStaleDraft();
+      expect(state().pages[1].shape, PageShape.tall);
+      expect(state().pages[1].elements.map((e) => e.id), ['b', 'c', 'later']);
+    });
+
+    test('Add page takes the current page\'s shape, or the one asked for', () async {
+      repo.pages['p2'] = tallP2;
+      final c = await open();
+      await c.addPage();
+      expect(repo.shapes.last, ('add', PageShape.wide));
+      c.goTo(1);
+      await c.addPage();
+      expect(repo.shapes.last, ('add', PageShape.tall));
+      await c.addPage(shape: PageShape.wide);
+      expect(repo.shapes.last, ('add', PageShape.wide));
+    });
+
+    test('Save as copy makes each page in its own shape', () async {
+      repo.pages['p2'] = tallP2;
+      final c = await open();
+      // This fake's copy then fails to save (a revision it does not know); the pages were made first.
+      await c.saveAsCopy('copy');
+      expect(repo.shapes, [('create', PageShape.wide), ('add', PageShape.tall)]);
+    });
   });
 }

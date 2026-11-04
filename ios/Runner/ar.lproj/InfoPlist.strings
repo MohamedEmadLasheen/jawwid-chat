@@ -1,0 +1,5 @@
+/* The permission prompts iOS shows, in Arabic (PARENT-017). */
+"NSCameraUsageDescription" = "يستخدم جَوِّد الكاميرا لالتقاط صورة أو تسجيل فيديو لإرساله في محادثة.";
+"NSMicrophoneUsageDescription" = "يستخدم جَوِّد الميكروفون لتسجيل الرسائل الصوتية وصوت الفيديو الذي تسجّله، ولإجراء المكالمات الصوتية.";
+"NSPhotoLibraryUsageDescription" = "يتيح لك جَوِّد اختيار صورة أو فيديو لإرساله في محادثة، أو صورة لاستخدامها صورةً للملف الشخصي.";
+"NSFaceIDUsageDescription" = "يستخدم جَوِّد بصمة الوجه لفتح التطبيق، إذا فعّلت قفل التطبيق.";

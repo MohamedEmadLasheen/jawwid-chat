@@ -45,6 +45,11 @@ class _SwipeToReplyState extends State<SwipeToReply> with SingleTickerProviderSt
   double _springFrom = 0;
   bool _armed = false;
 
+  /// The touch was cancelled (the system took it: a call, an alert). A drag
+  /// already under way reports that through onEnd, not onCancel, so the
+  /// pointer itself is watched.
+  bool _pointerCancelled = false;
+
   bool get _rtl => Directionality.of(context) == TextDirection.rtl;
 
   @override
@@ -55,10 +60,18 @@ class _SwipeToReplyState extends State<SwipeToReply> with SingleTickerProviderSt
 
   void _onSpringBack() => setState(() => _travel = _springFrom * (1 - Motion.easingStandard.transform(_back.value)));
 
-  /// Not in the leading [SwipeToReply.backGestureEdge] of the screen.
+  /// Not in the leading [SwipeToReply.backGestureEdge] of the area the chat's
+  /// pages are laid out in -- the back gesture's own edge. That is the
+  /// navigator's box, not the screen: on an iPad in split view, or the web
+  /// beside a list, the chat does not start at the screen's edge.
   bool _clearOfBackGesture(Offset global) {
-    final width = MediaQuery.sizeOf(context).width;
-    return _rtl ? global.dx < width - SwipeToReply.backGestureEdge : global.dx > SwipeToReply.backGestureEdge;
+    final box = Navigator.maybeOf(context)?.context.findRenderObject() as RenderBox?;
+    final area = box != null && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : Offset.zero & MediaQuery.sizeOf(context);
+    return _rtl
+        ? global.dx < area.right - SwipeToReply.backGestureEdge
+        : global.dx > area.left + SwipeToReply.backGestureEdge;
   }
 
   void _onUpdate(DragUpdateDetails details) {
@@ -70,8 +83,17 @@ class _SwipeToReplyState extends State<SwipeToReply> with SingleTickerProviderSt
     _armed = armed;
   }
 
-  void _onEnd([DragEndDetails? _]) {
-    if (_armed) widget.onReply();
+  /// Let go: a reply if it was armed -- and if a finger really let go.
+  void _onEnd(DragEndDetails _) {
+    if (_armed && !_pointerCancelled) widget.onReply();
+    _springBack();
+  }
+
+  /// Taken away -- the system cancelled the touch, or another gesture won it.
+  /// Never a reply, armed or not: nobody let go.
+  void _onCancel() => _springBack();
+
+  void _springBack() {
     _armed = false;
     _springFrom = _travel;
     if (_travel == 0) return;
@@ -86,33 +108,38 @@ class _SwipeToReplyState extends State<SwipeToReply> with SingleTickerProviderSt
     final theme = Theme.of(context);
     return Semantics(
       customSemanticsActions: {CustomSemanticsAction(label: L10n.of(context).replyAction): widget.onReply},
-      child: RawGestureDetector(
+      child: Listener(
         behavior: HitTestBehavior.translucent,
-        gestures: {
-          _ReplyDragRecognizer: GestureRecognizerFactoryWithHandlers<_ReplyDragRecognizer>(
-            () => _ReplyDragRecognizer(allowedAt: _clearOfBackGesture, debugOwner: this),
-            (r) => r
-              ..onUpdate = _onUpdate
-              ..onEnd = _onEnd
-              ..onCancel = _onEnd,
-          ),
-        },
-        child: Stack(
-          alignment: AlignmentDirectional.centerStart,
-          children: [
-            if (_travel > 0)
-              PositionedDirectional(
-                start: Spacing.spacing2,
-                child: Opacity(
-                  opacity: progress,
-                  child: Transform.scale(
-                    scale: 0.6 + 0.4 * progress,
-                    child: Icon(Icons.reply, color: theme.colorScheme.primary),
+        onPointerDown: (_) => _pointerCancelled = false,
+        onPointerCancel: (_) => _pointerCancelled = true,
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.translucent,
+          gestures: {
+            _ReplyDragRecognizer: GestureRecognizerFactoryWithHandlers<_ReplyDragRecognizer>(
+              () => _ReplyDragRecognizer(allowedAt: _clearOfBackGesture, debugOwner: this),
+              (r) => r
+                ..onUpdate = _onUpdate
+                ..onEnd = _onEnd
+                ..onCancel = _onCancel,
+            ),
+          },
+          child: Stack(
+            alignment: AlignmentDirectional.centerStart,
+            children: [
+              if (_travel > 0)
+                PositionedDirectional(
+                  start: Spacing.spacing2,
+                  child: Opacity(
+                    opacity: progress,
+                    child: Transform.scale(
+                      scale: 0.6 + 0.4 * progress,
+                      child: Icon(Icons.reply, color: theme.colorScheme.primary),
+                    ),
                   ),
                 ),
-              ),
-            Transform.translate(offset: Offset(_rtl ? -_travel : _travel, 0), child: widget.child),
-          ],
+              Transform.translate(offset: Offset(_rtl ? -_travel : _travel, 0), child: widget.child),
+            ],
+          ),
         ),
       ),
     );

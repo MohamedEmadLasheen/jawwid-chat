@@ -6,6 +6,11 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Jawwid Chat</string>
 	<key>CFBundleExecutable</key>
@@ -26,6 +31,11 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- PD-56: only the system's standard encryption (HTTPS/TLS, WebRTC's
+	     DTLS-SRTP), which is exempt; App Store Connect then asks no export
+	     compliance question per build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- W8-W1. `voip` lets a PushKit push wake the app so an incoming call can
 	     be reported; `remote-notification` does the same for a data push.
 	     Receiving a VoIP push obliges an immediate CallKit report, which is
@@ -35,16 +45,19 @@
 	<array>
 		<string>voip</string>
 		<string>remote-notification</string>
+		<!-- PD-56: a voice call keeps its audio when the screen locks or the
+		     person switches app. -->
+		<string>audio</string>
 	</array>
 	<!-- Required before the system will even present the camera. Without it iOS
 	     terminates the app on capture rather than refusing it, so this is not a
 	     nicety: attaching a photo from the camera is unreachable without it. -->
 	<key>NSCameraUsageDescription</key>
-	<string>Jawwid uses the camera to take a photo to send in a conversation.</string>
+	<string>Jawwid uses the camera to take a photo or record a video to send in a conversation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Jawwid lets you choose a photo to send in a conversation or to use as a profile photo.</string>
+	<string>Jawwid lets you choose a photo or a video to send in a conversation, or a photo to use as a profile photo.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Jawwid uses the microphone to record voice messages and to make voice calls.</string>
+	<string>Jawwid uses the microphone to record voice messages and the sound of videos you record, and to make voice calls.</string>
 	<!-- PD-23 app lock. Without it iOS refuses Face ID outright (and a passcode-only
 	     fallback is all that remains). The app never sees biometric data: the system
 	     answers yes or no. -->

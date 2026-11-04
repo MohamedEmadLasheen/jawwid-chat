@@ -39,6 +39,18 @@ abstract final class SearchText {
     return fold(haystack).contains(folded);
   }
 
+  /// Whether every word of [query] appears somewhere in [texts], in any order.
+  ///
+  /// For pickers: "ali fam" finds "Ali family", "fam ali" too, and a secondary
+  /// text (an e-mail, a role) counts as well as the name. An empty query
+  /// matches everything.
+  static bool matchesAllWords(String query, Iterable<String?> texts) {
+    final words = fold(query).split(' ').where((w) => w.isNotEmpty);
+    if (words.isEmpty) return true;
+    final haystack = fold(texts.whereType<String>().join(' '));
+    return words.every(haystack.contains);
+  }
+
   static int _foldRune(int rune) {
     // Latin case folding. Arabic has no case, so this is safe to apply to every rune.
     if (rune >= 0x41 && rune <= 0x5A) return rune + 0x20;

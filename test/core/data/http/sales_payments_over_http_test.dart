@@ -130,6 +130,54 @@ void main() {
     expect(billing.totals.single.overdueMinor, 125050);
   });
 
+  test('ADMIN-012: the payments towards no instalment are parsed -- refunds and voids kept; instalment payments stay with their instalment', () async {
+    server.on('GET', '/families/f1/billing', [
+      Reply.ok({
+        ...billingBody(),
+        'totals': [
+          {'currency': 'AED', 'paidMinor': 128050, 'outstandingMinor': 125050, 'overdueMinor': 125050},
+        ],
+        'payments': [
+          {
+            'id': 'pay1', 'method': 'cash', 'amountMinor': 5000, 'refundedMinor': 2000, 'currency': 'AED', 'paidOn': '2026-10-20',
+            'recordedAt': '2026-10-20T09:00:00.000Z', 'requestId': null, 'instalmentId': null, 'child': null, 'reference': 'R-1',
+            'invoice': {'id': 'v1', 'number': 'INV-1'}, 'recordedBy': {'id': 's1', 'name': 'خديجة'}, 'voided': null,
+          },
+          {
+            'id': 'pay2', 'method': 'invoice', 'amountMinor': 125050, 'refundedMinor': 0, 'currency': 'AED', 'paidOn': '2026-10-19',
+            'instalmentId': 'i1', 'child': {'id': 'k1', 'name': 'سارة'}, 'recordedBy': {'id': 's1', 'name': 'خديجة'},
+          },
+          {
+            'id': 'pay3', 'method': 'bank_transfer', 'amountMinor': 1000, 'refundedMinor': 0, 'currency': 'AED', 'paidOn': '2026-10-18',
+            'instalmentId': null, 'child': {'id': 'k1', 'name': 'سارة'}, 'reference': null, 'recordedBy': {'id': 's1', 'name': 'خديجة'},
+            'voided': {'at': '2026-10-19T08:00:00.000Z', 'by': {'id': 's2', 'name': 'حسن'}, 'reason': 'wrong family'},
+          },
+          {'id': 'broken', 'amountMinor': 'x', 'instalmentId': null},
+        ],
+      }),
+    ]);
+
+    final billing = await repository().familyBilling('f1');
+
+    expect(billing.otherPayments.map((p) => p.id), ['pay1', 'pay3']);
+    final cash = billing.otherPayments.first;
+    expect(cash.amountMinor, 5000);
+    expect(cash.refundedMinor, 2000);
+    expect(cash.currency, 'AED');
+    expect(cash.paidOn, DateTime(2026, 10, 20));
+    expect(cash.method, BillingMethod.cash);
+    expect(cash.reference, 'R-1');
+    expect(cash.childName, isNull);
+    expect(cash.recordedByName, 'خديجة');
+    expect(cash.voided, isNull);
+    final voided = billing.otherPayments.last;
+    expect(voided.childName, 'سارة');
+    expect(voided.voided?.reason, 'wrong family');
+    expect(voided.voided?.byName, 'حسن');
+    // "Paid" is the server's: every standing payment less refunds (here 125050 + 5000 - 2000).
+    expect(billing.totals.single.paidMinor, 128050);
+  });
+
   test('POST /instalments/:id/payment sends the day, the method and the reference; answers the body', () async {
     server.on('POST', '/instalments/i1/payment', [
       Reply.ok(billingBody(
@@ -148,10 +196,13 @@ void main() {
       'i1',
       paidOn: DateTime(2026, 10, 20, 23, 30),
       method: BillingMethod.invoice,
+      paymentId: '6f1c2b7e-3a4d-4e5f-8a9b-0c1d2e3f4a5b',
       reference: ' INV-7 ',
     );
 
     expect(server.lastRequestTo('POST', '/instalments/i1/payment')!.json, {
+      // ADMIN-001: the submit's idempotency key, as given.
+      'paymentId': '6f1c2b7e-3a4d-4e5f-8a9b-0c1d2e3f4a5b',
       'paidOn': '2026-10-20',
       'method': 'invoice',
       'reference': 'INV-7',
@@ -166,9 +217,9 @@ void main() {
   test('an empty reference is not sent; bank transfer is spelled the server\'s way', () async {
     server.on('POST', '/instalments/i1/payment', [Reply.ok(billingBody(status: 'paid'))]);
 
-    await repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.bankTransfer, reference: '  ');
+    await repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.bankTransfer, paymentId: 'k-2', reference: '  ');
 
-    expect(server.lastRequestTo('POST', '/instalments/i1/payment')!.json, {'paidOn': '2026-10-22', 'method': 'bank_transfer'});
+    expect(server.lastRequestTo('POST', '/instalments/i1/payment')!.json, {'paymentId': 'k-2', 'paidOn': '2026-10-22', 'method': 'bank_transfer'});
   });
 
   test('POST /instalments/:id/void sends the reason', () async {
@@ -185,7 +236,7 @@ void main() {
     server.on('POST', '/instalments/i1/void', [Reply.commError(400, 'VALIDATION')]);
 
     await expectLater(
-      repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.invoice),
+      repository().recordPayment('i1', paidOn: DateTime(2026, 10, 22), method: BillingMethod.invoice, paymentId: 'k-3'),
       throwsA(isA<AppError>().having((e) => e.code, 'code', 'COMM.BILLING_STATE')),
     );
     await expectLater(

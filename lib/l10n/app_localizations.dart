@@ -619,6 +619,24 @@ abstract class L10n {
   /// **'Reconnecting…'**
   String get callReconnecting;
 
+  /// CHATSCHED-013: in a call, the other side dropped; the call ends after 60 s unless they come back.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost. Waiting for them to reconnect…'**
+  String get callWaitingForReconnect;
+
+  /// CHATSCHED-013: the call ended because a participant dropped and did not reconnect within 60 s.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended: the connection was lost'**
+  String get callEndedConnectionLost;
+
+  /// CHATSCHED-013: in call history and the chat's call card, beside the outcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get callHistoryConnectionLost;
+
   /// No description provided for @callAccept.
   ///
   /// In en, this message translates to:
@@ -684,6 +702,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Declined'**
   String get callOutcomeDeclined;
+
+  /// No description provided for @callOutcomeInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get callOutcomeInProgress;
 
   /// No description provided for @callDuration.
   ///
@@ -1495,6 +1519,36 @@ abstract class L10n {
   /// **'File'**
   String get attachFile;
 
+  /// PARENT-017: attachment menu entry for a video from the library.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachVideo;
+
+  /// PARENT-017: attachment menu entry that records a video with the camera (up to 3 minutes).
+  ///
+  /// In en, this message translates to:
+  /// **'Record video'**
+  String get attachRecordVideo;
+
+  /// PARENT-017: shown when recording a video was refused the camera or the microphone.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.'**
+  String get videoRecordPermissionDenied;
+
+  /// PARENT-017: the button on a sending video that stops its upload and takes the message back.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sending'**
+  String get cancelUpload;
+
+  /// PARENT-017: how far a video's upload has gone. A percentage, not a count: a String, so no plural form applies.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending… {percent}%'**
+  String uploadingPercent(String percent);
+
   /// Stands in for a photo where a message has no text.
   ///
   /// In en, this message translates to:
@@ -2148,6 +2202,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'This lesson can no longer be updated this way.'**
   String get ticketNoLongerAllowed;
+
+  /// No description provided for @certificateAlreadySuggested.
+  ///
+  /// In en, this message translates to:
+  /// **'This certificate is already suggested for this child.'**
+  String get certificateAlreadySuggested;
 
   /// No description provided for @cardReportTitle.
   ///
@@ -5008,8 +5068,56 @@ abstract class L10n {
   /// No description provided for @recoveryOpen.
   ///
   /// In en, this message translates to:
-  /// **'Trouble signing in?'**
+  /// **'Parents: trouble signing in?'**
   String get recoveryOpen;
+
+  /// TEACHER-023: under the parents' recovery link on the sign-in screen; self-service recovery is for parents only.
+  ///
+  /// In en, this message translates to:
+  /// **'Teachers and staff: ask your supervisor for a reset code.'**
+  String get signInStaffResetHint;
+
+  /// TEACHER-023: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordTitle;
+
+  /// No description provided for @changePasswordCurrentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get changePasswordCurrentLabel;
+
+  /// No description provided for @changePasswordWrongCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not your current password.'**
+  String get changePasswordWrongCurrent;
+
+  /// No description provided for @changePasswordCurrentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your current password.'**
+  String get changePasswordCurrentRequired;
+
+  /// No description provided for @changePasswordUnchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a password different from your current one.'**
+  String get changePasswordUnchanged;
+
+  /// No description provided for @changePasswordAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get changePasswordAction;
+
+  /// No description provided for @changePasswordDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed. You were signed out on your other devices.'**
+  String get changePasswordDone;
 
   /// No description provided for @recoveryTitle.
   ///
@@ -5676,6 +5784,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Voided by {name}: {reason}'**
   String salesVoidedBy(String name, String reason);
+
+  /// ADMIN-012: heading above a family's payments that are not towards an instalment (recorded by hand, or a paid request).
+  ///
+  /// In en, this message translates to:
+  /// **'Other payments'**
+  String get salesOtherPaymentsTitle;
+
+  /// ADMIN-012: how much of a payment was refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String salesRefundedAmount(String amount);
 
   /// A voided instalment whose voiding staff member is not known.
   ///
@@ -6787,6 +6907,18 @@ abstract class L10n {
   /// **'Praise, a suggestion or a complaint'**
   String get feedbackEntrySubtitle;
 
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Praise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise the teacher'**
+  String get feedbackShortcutPraise;
+
+  /// PD-52: a shortcut on a child's card that opens the feedback form on Complaint.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a problem'**
+  String get feedbackShortcutProblem;
+
   /// PD-32: who the feedback is about.
   ///
   /// In en, this message translates to:
@@ -7831,6 +7963,12 @@ abstract class L10n {
   /// **'Arabic handwriting lines'**
   String get boardLayoutArabicLines;
 
+  /// PD-55 whiteboard: a page with a dot every 32 units.
+  ///
+  /// In en, this message translates to:
+  /// **'Dotted'**
+  String get boardLayoutDotted;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -7903,6 +8041,42 @@ abstract class L10n {
   /// **'Text'**
   String get boardToolText;
 
+  /// PD-55 whiteboard: points without marking; the trail fades and is never saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Laser pointer'**
+  String get boardToolLaser;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get boardTextSmaller;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bigger text'**
+  String get boardTextBigger;
+
+  /// PD-55 whiteboard: the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get boardTextBold;
+
+  /// PD-55 whiteboard: a quick colour on the text style bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Text colour'**
+  String get boardTextColour;
+
+  /// PD-55 whiteboard: ends typing a text on the board.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get boardTextDone;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -7963,6 +8137,102 @@ abstract class L10n {
   /// **'Zoom out'**
   String get boardZoomOut;
 
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Full screen'**
+  String get boardFullScreen;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get boardExitFullScreen;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Show tools'**
+  String get boardShowTools;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide tools'**
+  String get boardHideTools;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get boardPreviousPage;
+
+  /// PD-55 whiteboard full-screen mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get boardNextPage;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji'**
+  String get boardEmoji;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an emoji'**
+  String get boardEmojiPick;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Smileys'**
+  String get boardEmojiSmileys;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Animals'**
+  String get boardEmojiAnimals;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Nature'**
+  String get boardEmojiNature;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get boardEmojiFood;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'School and play'**
+  String get boardEmojiSchool;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Symbols'**
+  String get boardEmojiSymbols;
+
+  /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
+  ///
+  /// In en, this message translates to:
+  /// **'Wide page'**
+  String get boardWidePage;
+
+  /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
+  ///
+  /// In en, this message translates to:
+  /// **'Tall page'**
+  String get boardTallPage;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -7974,6 +8244,24 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Delete selection'**
   String get boardDeleteSelection;
+
+  /// PD-55 whiteboard: copy the selection (Ctrl/Cmd+C).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get boardCopy;
+
+  /// PD-55 whiteboard: paste what was copied (Ctrl/Cmd+V).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get boardPaste;
+
+  /// PD-55 whiteboard: copy and paste the selection in one step (Ctrl/Cmd+D).
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get boardDuplicate;
 
   /// PD-39 whiteboard.
   ///
@@ -8020,24 +8308,6 @@ abstract class L10n {
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
-  /// **'Text'**
-  String get boardTextTitle;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Write here'**
-  String get boardTextHint;
-
-  /// PD-39 whiteboard. A verse element before the verses update.
-  ///
-  /// In en, this message translates to:
-  /// **'Quran verse'**
-  String get boardVersePlaceholder;
-
-  /// PD-39 whiteboard.
-  ///
-  /// In en, this message translates to:
   /// **'Not shown in this version'**
   String get boardElementUnknown;
 
@@ -8058,6 +8328,180 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'More'**
   String get boardMore;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Quran verse'**
+  String get boardToolVerse;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Surah'**
+  String get boardVerseSurah;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'From ayah'**
+  String get boardVerseFrom;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'To ayah'**
+  String get boardVerseTo;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {count} ayat at a time.'**
+  String boardVerseMax(String count);
+
+  /// PD-39 whiteboard, Quran verses. The dataset attribution (CC BY 3.0 requires it).
+  ///
+  /// In en, this message translates to:
+  /// **'Quran text: {source}'**
+  String boardVerseSource(String source);
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert'**
+  String get boardVerseInsert;
+
+  /// PD-39 whiteboard, Quran verses.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the verse…'**
+  String get boardVerseLoading;
+
+  /// PD-39 whiteboard, Quran verses. Never a fallback text (503 COMM.QURAN_UNAVAILABLE).
+  ///
+  /// In en, this message translates to:
+  /// **'Quran text unavailable'**
+  String get boardVerseUnavailable;
+
+  /// PD-39 whiteboard, Quran verses. The served range no longer matches the stored rangeSha256.
+  ///
+  /// In en, this message translates to:
+  /// **'Verse text updated, re-insert'**
+  String get boardVerseChanged;
+
+  /// PD-39 whiteboard: the tool that puts a picture on the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get boardToolImage;
+
+  /// PD-39 whiteboard images: while a picture uploads.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding the image…'**
+  String get boardImageAdding;
+
+  /// PD-39 whiteboard images: an image not yet shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the image…'**
+  String get boardImageLoading;
+
+  /// PD-39 whiteboard images: an image that could not be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Image unavailable'**
+  String get boardImageUnavailable;
+
+  /// PD-39 whiteboard images: 503 COMM.WHITEBOARD_ASSETS_OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Pictures on boards aren\'t switched on yet.'**
+  String get boardImageOff;
+
+  /// PD-39 whiteboard images: over a size, board or storage limit.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture is too large. Use one under 10 MB, or fewer pictures on this board.'**
+  String get boardImageTooLarge;
+
+  /// PD-39 whiteboard images: not a picture the server accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'That file isn\'t a picture the board can show. Use a PNG, JPEG or WebP.'**
+  String get boardImageNotImage;
+
+  /// PD-39 whiteboard images: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The picture couldn\'t be added. Try again.'**
+  String get boardImageFailed;
+
+  /// PD-39 whiteboard export: board menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Export this page as a picture (PNG)'**
+  String get boardExportPng;
+
+  /// PD-39 whiteboard export: board menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Export the board as a PDF'**
+  String get boardExportPdf;
+
+  /// PD-39 whiteboard export: while pages are drawn and the PDF is made.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the export…'**
+  String get boardExporting;
+
+  /// PD-39 whiteboard export: done.
+  ///
+  /// In en, this message translates to:
+  /// **'Exported.'**
+  String get boardExportSaved;
+
+  /// PD-39 whiteboard export: 503 COMM.WHITEBOARD_ASSETS_OFF.
+  ///
+  /// In en, this message translates to:
+  /// **'Export isn\'t switched on yet.'**
+  String get boardExportOff;
+
+  /// PD-39 whiteboard export: 429, the export workers are busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Many exports are being made right now. Try again in a minute.'**
+  String get boardExportBusy;
+
+  /// PD-39 whiteboard export: 409 the teacher's own exports in flight (five at most), or this one already being made.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have exports being made. Wait a few minutes, then try again.'**
+  String get boardExportInProgress;
+
+  /// PD-39 whiteboard export: 409 COMM.WHITEBOARD_STATE, the export's pages expired before compose.
+  ///
+  /// In en, this message translates to:
+  /// **'The export took too long and ran out. Export again.'**
+  String get boardExportExpired;
+
+  /// PD-39 whiteboard export: over the export limits.
+  ///
+  /// In en, this message translates to:
+  /// **'This board is too large to export in one go.'**
+  String get boardExportTooLarge;
+
+  /// PD-39 whiteboard export: a phone or tablet build has nowhere to save a file.
+  ///
+  /// In en, this message translates to:
+  /// **'Export works in the browser. Open the board there to export it.'**
+  String get boardExportNotHere;
+
+  /// PD-39 whiteboard export: any other failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The export couldn\'t be made. Try again.'**
+  String get boardExportFailed;
 
   /// PD-39 whiteboard. Review of #293: never dropped, never silently written over.
   ///
@@ -8094,6 +8538,288 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your changes have to be saved first. Try again once the board says Saved.'**
   String get boardSaveFirst;
+
+  /// The search field at the top of every list picker (owner 2026-10-29: every list can be typed into).
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search'**
+  String get pickerSearchHint;
+
+  /// A list picker whose search matched nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get pickerNoMatches;
+
+  /// The age filter on the child materials library; names the picker and its sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get materialsAgeLabel;
+
+  /// PD-37: a photo in the full-screen viewer, read by a screen reader when it is the only one.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get photoLabel;
+
+  /// PD-37: which photo of the message is on screen, read by a screen reader. Positions, not counts: no noun follows either number, so there is no plural agreement to make.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo {position} of {count}'**
+  String photoPositionLabel(String position, String count);
+
+  /// PD-37: before the unsent text of a chat, in the Chats list (WhatsApp's "Draft:").
+  ///
+  /// In en, this message translates to:
+  /// **'Draft:'**
+  String get chatDraftLabel;
+
+  /// PD-55: a praise stamp (general praise only).
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get rewardPraiseExcellent;
+
+  /// No description provided for @rewardPraiseWellDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Well done'**
+  String get rewardPraiseWellDone;
+
+  /// No description provided for @rewardPraiseGreat.
+  ///
+  /// In en, this message translates to:
+  /// **'Great'**
+  String get rewardPraiseGreat;
+
+  /// No description provided for @rewardPraiseChampion.
+  ///
+  /// In en, this message translates to:
+  /// **'Champion'**
+  String get rewardPraiseChampion;
+
+  /// PD-55: the teacher's reward tray on the whiteboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards'**
+  String get rewardTrayTitle;
+
+  /// No description provided for @rewardTrayFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For'**
+  String get rewardTrayFor;
+
+  /// No description provided for @rewardTrayEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get rewardTrayEveryone;
+
+  /// No description provided for @rewardTrayNoLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards count during a lesson. Now they decorate the board only.'**
+  String get rewardTrayNoLesson;
+
+  /// No description provided for @rewardTrayStar.
+  ///
+  /// In en, this message translates to:
+  /// **'Star'**
+  String get rewardTrayStar;
+
+  /// No description provided for @rewardTrayStickers.
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers'**
+  String get rewardTrayStickers;
+
+  /// No description provided for @rewardTrayPraise.
+  ///
+  /// In en, this message translates to:
+  /// **'Praise'**
+  String get rewardTrayPraise;
+
+  /// No description provided for @rewardTrayOwnWords.
+  ///
+  /// In en, this message translates to:
+  /// **'My own words…'**
+  String get rewardTrayOwnWords;
+
+  /// No description provided for @rewardTrayCelebrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Celebrate'**
+  String get rewardTrayCelebrate;
+
+  /// No description provided for @rewardTrayUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get rewardTrayUndo;
+
+  /// No description provided for @rewardTraySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Reward given'**
+  String get rewardTraySent;
+
+  /// No description provided for @rewardTrayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The reward was not recorded. It is still on the board.'**
+  String get rewardTrayFailed;
+
+  /// PD-55: the family's celebration line.
+  ///
+  /// In en, this message translates to:
+  /// **'Your teacher is celebrating you!'**
+  String get rewardCelebrationLine;
+
+  /// PD-55: Settings switch for the reward sounds (chime, applause, fanfare).
+  ///
+  /// In en, this message translates to:
+  /// **'Reward sounds'**
+  String get rewardSoundTitle;
+
+  /// No description provided for @rewardSoundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A short sound when a teacher rewards your child: a chime, applause or a fanfare.'**
+  String get rewardSoundSubtitle;
+
+  /// PD-55: the family's line for a star, sticker or praise.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{A star! 1 star this lesson} other{A star! {count} stars this lesson}}'**
+  String rewardStarLine(int count);
+
+  /// PD-55: the first badge in a lesson -- named for effort, never a rank.
+  ///
+  /// In en, this message translates to:
+  /// **'Great effort'**
+  String get rewardBadgeBronze;
+
+  /// No description provided for @rewardBadgeSilver.
+  ///
+  /// In en, this message translates to:
+  /// **'Amazing effort'**
+  String get rewardBadgeSilver;
+
+  /// No description provided for @rewardBadgeGold.
+  ///
+  /// In en, this message translates to:
+  /// **'Superstar'**
+  String get rewardBadgeGold;
+
+  /// PD-55: progress toward the next badge.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more star for {badge}} other{{count} more stars for {badge}}}'**
+  String rewardToNextBadge(int count, String badge);
+
+  /// No description provided for @rewardBadgeEarned.
+  ///
+  /// In en, this message translates to:
+  /// **'Badge: {badge}'**
+  String rewardBadgeEarned(String badge);
+
+  /// PD-55: the lesson report card's rewards row.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 star} other{{count} stars}}'**
+  String rewardReportStars(int count);
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get legalPrivacyPolicy;
+
+  /// PD-56 (store compliance): the link to the owner's legal text, on sign-in, sign-up and Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of use'**
+  String get legalTerms;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccountTitle;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting your account is final and cannot be undone.'**
+  String get deleteAccountIntro;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.'**
+  String get deleteAccountGoes;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.'**
+  String get deleteAccountKeptParent;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
+  String get deleteAccountKeptTeacher;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Your password'**
+  String get deleteAccountPasswordLabel;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get deleteAccountAction;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account for good? This cannot be undone.'**
+  String get deleteAccountConfirm;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'That password is not right.'**
+  String get deleteAccountWrongPassword;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff accounts are closed by the administration.'**
+  String get deleteAccountStaff;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'The account could not be deleted. Try again.'**
+  String get deleteAccountFailed;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account has been deleted.'**
+  String get deleteAccountDone;
+
+  /// PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
+  String get deleteAccountTeacherBlocked;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

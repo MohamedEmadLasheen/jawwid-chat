@@ -226,5 +226,5 @@ the clean merge.
 | Broad cross-agent merging / reconciliation | 🔴 **FROZEN** |
 | Continued isolated work behind declared seams | 🟢 permitted |
 | Narrow fixes to already-written work (e.g. AI4-D1) | 🟢 permitted |
-| Any code resolving AMB-9 | 🔴 **FORBIDDEN** |
+| Any code resolving AMB-9 | ✅ Resolved by #415 per the department head's G-43 decision, 2026-11-02 |
 | Any new client-side contract invention | 🔴 **FORBIDDEN** — unify first |

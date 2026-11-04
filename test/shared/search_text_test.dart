@@ -78,4 +78,30 @@ void main() {
       expect(SearchText.matches(' Ahmed  Hassan ', 'ahmed hassan'), isTrue);
     });
   });
+
+  group('matchesAllWords (pickers)', () {
+    test('every word, anywhere, in any order', () {
+      expect(SearchText.matchesAllWords('ali fam', ['Ali family']), isTrue);
+      expect(SearchText.matchesAllWords('fam ali', ['Ali family']), isTrue);
+      expect(SearchText.matchesAllWords('ali bakr', ['Ali family']), isFalse);
+    });
+
+    test('a secondary text counts, and a missing one is ignored', () {
+      expect(SearchText.matchesAllWords('owner@', ['Organization Owner', 'owner@example.test']), isTrue);
+      expect(SearchText.matchesAllWords('owner', ['Organization Owner', null]), isTrue);
+    });
+
+    test('folds Arabic both ways: hamza, ى/ي, ة/ه, harakat, dagger alef', () {
+      expect(SearchText.matchesAllWords('احمد', ['عائلة أحمد']), isTrue);
+      expect(SearchText.matchesAllWords('مصطفي', ['عائلة مصطفى']), isTrue);
+      expect(SearchText.matchesAllWords('فاطمه', ['فاطمة']), isTrue);
+      expect(SearchText.matchesAllWords('محمد', ['مُحَمَّد']), isTrue);
+      // U+0670, the superscript alef, as in الرحمٰن.
+      expect(SearchText.matchesAllWords('الرحمن', ['عبد ${String.fromCharCodes([0x627, 0x644, 0x631, 0x62d, 0x645, 0x670, 0x646])}']), isTrue);
+    });
+
+    test('an empty query matches everything', () {
+      expect(SearchText.matchesAllWords('   ', ['anything']), isTrue);
+    });
+  });
 }

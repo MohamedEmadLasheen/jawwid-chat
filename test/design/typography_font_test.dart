@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,8 +43,7 @@ void main() {
         };
 
         styles.forEach((name, style) {
-          expect(style.fontFamily, family,
-              reason: '$name (isArabic=$isArabic) would render in the fallback font');
+          expect(style.fontFamily, family, reason: '$name (isArabic=$isArabic) would render in the fallback font');
         });
       }
     });
@@ -51,8 +51,7 @@ void main() {
     test('the fallback chain survives — it is what carries uncovered glyphs', () {
       final style = JawwidTypography.body(true);
       expect(style.fontFamilyFallback, isNotEmpty);
-      expect(style.fontFamilyFallback, contains('Noto Sans Arabic'),
-          reason: 'Arabic must still render if the bundled asset fails to load');
+      expect(style.fontFamilyFallback, contains('Noto Sans Arabic'), reason: 'Arabic must still render if the bundled asset fails to load');
     });
 
     test('the ThemeData both roles are built from resolves to the family', () {
@@ -83,8 +82,7 @@ void main() {
           JawwidTypography.caption(isArabic),
           JawwidTypography.button(isArabic),
         ]) {
-          expect(usedWeights, contains(style.fontWeight!.value),
-              reason: 'weight ${style.fontWeight!.value} has no bundled file');
+          expect(usedWeights, contains(style.fontWeight!.value), reason: 'weight ${style.fontWeight!.value} has no bundled file');
         }
       }
     });
@@ -109,13 +107,15 @@ void main() {
     }
 
     test('the declared family name matches the one the styles ask for', () {
-      expect(pubspec, contains('- family: $family'),
-          reason: 'a family name typo renders as a silent fallback, not an error');
+      expect(pubspec, contains('- family: $family'), reason: 'a family name typo renders as a silent fallback, not an error');
     });
 
     test('exactly the used weights are bundled — no gaps, no dead weight', () {
-      expect(declaredFonts().map((f) => f.$1).toSet(), usedWeights,
-          reason: 'a missing weight is synthesised silently; an extra one is bundle bloat');
+      expect(
+        declaredFonts().map((f) => f.$1).toSet(),
+        usedWeights,
+        reason: 'a missing weight is synthesised silently; an extra one is bundle bloat',
+      );
     });
 
     test('every declared font file actually exists on disk', () {
@@ -127,14 +127,12 @@ void main() {
         expect(file.existsSync(), isTrue, reason: '$path (w$weight) is declared but absent');
         expect(file.lengthSync(), greaterThan(1000), reason: '$path is not a real font');
         // TrueType magic. Guards against a stub or an HTML error page saved as .ttf.
-        expect(file.readAsBytesSync().sublist(0, 4), [0x00, 0x01, 0x00, 0x00],
-            reason: '$path is not a TrueType file');
+        expect(file.readAsBytesSync().sublist(0, 4), [0x00, 0x01, 0x00, 0x00], reason: '$path is not a TrueType file');
       }
     });
 
     test('the OFL licence ships with the fonts it covers', () {
-      expect(pubspec, contains('- assets/fonts/OFL.txt'),
-          reason: 'OFL 1.1 asks the licence to travel with the binary');
+      expect(pubspec, contains('- assets/fonts/OFL.txt'), reason: 'OFL 1.1 asks the licence to travel with the binary');
       final text = File('assets/fonts/OFL.txt').readAsStringSync();
       expect(text, contains('SIL OPEN FONT LICENSE'));
       expect(text, contains('IBM Corp.'));
@@ -171,8 +169,11 @@ void main() {
       // The widget-test default font gives every glyph one fixed advance, so a real
       // font measuring the same as the fallback means the file never loaded.
       const arabic = 'الدرس يبدأ';
-      expect(widthIn(arabic, family), isNot(widthIn(arabic, 'NoSuchFamily')),
-          reason: 'identical metrics mean the engine fell back — the font did not load');
+      expect(
+        widthIn(arabic, family),
+        isNot(widthIn(arabic, 'NoSuchFamily')),
+        reason: 'identical metrics mean the engine fell back — the font did not load',
+      );
     });
 
     test('Arabic actually renders glyphs rather than collapsing', () {
@@ -187,16 +188,18 @@ void main() {
     test('mixed Arabic and Latin lay out together on one run', () {
       // §3.1: one family covering both scripts is the whole reason for this font.
       const mixed = 'الدرس يبدأ 3:00 PM';
-      expect(widthIn(mixed, family), greaterThan(widthIn('الدرس يبدأ', family)),
-          reason: 'the Latin half must contribute width, not be dropped');
+      expect(
+        widthIn(mixed, family),
+        greaterThan(widthIn('الدرس يبدأ', family)),
+        reason: 'the Latin half must contribute width, not be dropped',
+      );
     });
 
     test('the bundled weights are distinct faces, not one synthesised from another', () {
       const sample = 'الحصة Jawwid';
       final regular = widthIn(sample, family, weight: FontWeight.w400);
       final bold = widthIn(sample, family, weight: FontWeight.w700);
-      expect(bold, isNot(regular),
-          reason: 'identical metrics suggest only one weight is reaching the engine');
+      expect(bold, isNot(regular), reason: 'identical metrics suggest only one weight is reaching the engine');
     });
 
     testWidgets('the declarations survive Flutter\'s own asset pipeline', (tester) async {
@@ -204,17 +207,14 @@ void main() {
       // asset the way the running app does, so it fails if `pubspec.yaml` declares a path
       // the bundler does not actually ship.
       final manifest = await rootBundle.loadString('FontManifest.json');
-      expect(manifest, contains(family),
-          reason: 'the family never reached the generated FontManifest');
+      expect(manifest, contains(family), reason: 'the family never reached the generated FontManifest');
 
       for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
-        final data =
-            await rootBundle.load('assets/fonts/IBMPlexSansArabic-$weight.ttf');
+        final data = await rootBundle.load('assets/fonts/IBMPlexSansArabic-$weight.ttf');
         expect(data.lengthInBytes, greaterThan(100000), reason: '$weight is not bundled');
       }
 
-      expect(await rootBundle.loadString('assets/fonts/OFL.txt'),
-          contains('SIL OPEN FONT LICENSE'));
+      expect(await rootBundle.loadString('assets/fonts/OFL.txt'), contains('SIL OPEN FONT LICENSE'));
     });
 
     test('English is unaffected in the ways that matter — it still lays out LTR and sized', () {
@@ -232,8 +232,7 @@ void main() {
     /// §3.2: "Text scaling up to 200% must not clip." A larger face with different
     /// metrics is exactly the kind of change that can start clipping text that used to
     /// fit, so the scale is exercised at the ceiling in both scripts.
-    testWidgets('the whole scale survives 200% text scaling in both scripts',
-        (tester) async {
+    testWidgets('the whole scale survives 200% text scaling in both scripts', (tester) async {
       for (final (locale, isArabic, sample) in [
         (const Locale('en'), false, 'Parent account — lesson at 3:00 PM'),
         (const Locale('ar'), true, 'ولي الأمر — تبدأ الحصة ٣:٠٠ مساءً'),
@@ -275,10 +274,26 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(tester.takeException(), isNull,
-            reason: 'the type scale clipped or overflowed at 200% in $locale');
+        expect(tester.takeException(), isNull, reason: 'the type scale clipped or overflowed at 200% in $locale');
         expect(find.text(sample), findsWidgets);
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  /// PD-39: the verses' font is the exact file the shared Quran dataset's
+  /// contract names, pinned by its SHA-256 (pubspec.yaml records where it came
+  /// from). A changed file would change how every mark of every verse is drawn,
+  /// so it is a reviewed change, never a silent one.
+  group('Amiri Quran (the verses on a board)', () {
+    test('the bundled file is the pinned one, with its licence', () {
+      final bytes = File('assets/fonts/AmiriQuran.ttf').readAsBytesSync();
+      expect(sha256.convert(bytes).toString(), 'e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c');
+      expect(File('assets/fonts/OFL-Amiri.txt').readAsStringSync(), contains('SIL Open Font License, Version 1.1'));
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(pubspec, contains('family: Amiri Quran'));
+      expect(pubspec, contains('assets/fonts/AmiriQuran.ttf'));
+      expect(pubspec, contains('e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c'));
     });
   });
 }

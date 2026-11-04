@@ -11,6 +11,9 @@ import { MediaUrlSigner } from '../../platform/media-url';
 import { isUuid } from '../conversations/conversation.service';
 import { signAvatar } from '../profile/avatar-urls';
 import { sniffCertificateFile } from '../../certificates/certificate-file';
+import { ActorKind } from '../contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../../dashboard/dashboard-tile';
+import { TeacherScopeService, scopeCovers, type TeacherScope } from '../../platform/teacher-scope';
 
 /**
  * The teacher's professional profile. The teacher owns it.
@@ -82,6 +85,8 @@ export class TeacherProfileService {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
+    // TEACHER-001: credential review honours the PD-35 teacher scope.
+    @Optional() private readonly teacherScope: TeacherScopeService = new TeacherScopeService(prisma),
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -359,6 +364,7 @@ export class TeacherProfileService {
     const profiles = await this.prisma.teacherProfessionalProfile.findMany({
       where: {
         ...this.orgScope(actor),
+        ...inScope(await this.teacherScope.scopeOf(actor)),
         certificates: { some: { state: 'pending' } },
       },
       include: {
@@ -376,12 +382,34 @@ export class TeacherProfileService {
     }));
   }
 
+  /**
+   * PD-44: the Dashboard's credentials tile -- `certificateReviewQueue`'s
+   * length (one row per profile with a credential waiting), counted over the
+   * same query in one statement. Staff who may not review get no tile; anyone
+   * else is refused as the queue refuses them.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.requireActor(actorId);
+    const decision = await this.reviewDecision(actor);
+    if (!decision.allowed) {
+      if (actor.kind === ActorKind.STAFF && actor.isActive) return [];
+      throw new CommError(decision.code, decision.reason);
+    }
+    const r = await this.prisma.teacherProfessionalProfile.aggregate({
+      where: { ...this.orgScope(actor), ...inScope(await this.teacherScope.scopeOf(actor)), certificates: { some: { state: 'pending' } } },
+      _count: { _all: true },
+      _min: { updatedAt: true },
+    });
+    return [dashboardTile('teacher_profiles.pending', r._count._all, r._min.updatedAt)];
+  }
+
   async decideCertificate(
     actorId: string,
     certificateId: string,
     decision: { approved: boolean; note?: string | null },
   ): Promise<CertificateReviewItem> {
     const actor = await this.requireReviewer(actorId);
+    const scope = await this.teacherScope.scopeOf(actor);
 
     if (!decision.approved && !(decision.note ?? '').trim()) {
       throw new CommError(
@@ -400,7 +428,12 @@ export class TeacherProfileService {
         where: { id: certificateId },
         include: { profile: { include: { teacher: true } } },
       });
-      if (!certificate || !this.inOrg(actor, certificate.profile.organizationId)) {
+      // TEACHER-001: outside the reviewer's teacher scope reads as not found.
+      if (
+        !certificate ||
+        !this.inOrg(actor, certificate.profile.organizationId) ||
+        !scopeCovers(scope, certificate.profile.teacherId)
+      ) {
         throw new CommError(
           CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
           'no such certificate',
@@ -458,6 +491,13 @@ export class TeacherProfileService {
    * this reader.
    */
   async certificateDownloadUrl(actorId: string, certificateId: string): Promise<string> {
+    // ADMIN-006: staff who are not reviewers are refused before any lookup, as
+    // the queue refuses them; the teacher's own link goes on to the owner check.
+    const actor = await this.requireActor(actorId);
+    if (actor.kind === ActorKind.STAFF) {
+      const decision = await this.reviewDecision(actor);
+      if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    }
     await this.authorizeCertificateRead(certificateId, actorId);
     return this.mediaUrls.url(
       'teacher-certificates',
@@ -491,7 +531,12 @@ export class TeacherProfileService {
     if (!certificate || !this.inOrg(actor, certificate.profile.organizationId)) throw notFound();
 
     const isOwner = actor.kind === 'teacher' && actor.actorId === certificate.profile.teacherId;
-    if (!isOwner && !this.authz.canReviewTeacherProfile(actor).allowed) throw notFound();
+    if (!isOwner) {
+      // A reviewer (ADMIN-006: the Teachers department or the super admin), and
+      // (TEACHER-001) of a teacher in their PD-35 scope.
+      if (!(await this.reviewDecision(actor)).allowed) throw notFound();
+      if (!scopeCovers(await this.teacherScope.scopeOf(actor), certificate.profile.teacherId)) throw notFound();
+    }
     return { objectKey: certificate.objectKey };
   }
 
@@ -556,9 +601,29 @@ export class TeacherProfileService {
 
   private async requireReviewer(actorId: string): Promise<Actor> {
     const actor = await this.requireActor(actorId);
-    const decision = this.authz.canReviewTeacherProfile(actor);
+    const decision = await this.reviewDecision(actor);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
     return actor;
+  }
+
+  /**
+   * ADMIN-006: who reviews a teacher's credentials -- the super admin and the
+   * Teachers department (its manager; its supervisors, narrowed by PD-35),
+   * nobody else. A credential approved here is shown to families, so Sales and
+   * Operations, though family-facing, are refused (TEACHER_PROFILE_CANNOT_REVIEW).
+   * The role check comes first; the department is the PD-26 page basis.
+   */
+  private async reviewDecision(actor: Actor): Promise<{ allowed: true } | { allowed: false; code: CommErrorCode; reason: string }> {
+    const role = this.authz.canReviewTeacherProfile(actor);
+    if (!role.allowed) return { allowed: false, code: role.code, reason: role.reason };
+    if (!(await this.teacherScope.pageBases(actor)).teachers) {
+      return {
+        allowed: false,
+        code: CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW,
+        reason: 'only the Teachers department and the super admin review teacher credentials',
+      };
+    }
+    return { allowed: true };
   }
 
   /**
@@ -964,4 +1029,9 @@ export interface PublicProfileView {
   experience: string | null;
   languages: string[];
   certificates: { title: string; issuingOrganization: string | null; issuedOn: Date | null }[];
+}
+
+/** TEACHER-001: the profiles of the teachers in a reviewer's PD-35 scope (every teacher when it is not narrowed). */
+function inScope(scope: TeacherScope): { teacherId?: { in: string[] } } {
+  return scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } };
 }

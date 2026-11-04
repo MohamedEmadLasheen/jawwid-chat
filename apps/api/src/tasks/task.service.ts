@@ -80,6 +80,11 @@ export const SOURCE_TYPES = [
   // PD-47 PR-6c: the Teachers department's decisions (chat.work_task_sweep_decisions).
   // `feedback` is a parent's (PD-32): read only through chat.work_task_feedback_*.
   'complaint', 'feedback', 'schedule_change', 'makeup_owed',
+  // PD-56: after an erasure -- a family nobody can sign in to (settled by chat.work_task_sweep_erasure),
+  // and a teacher's departure (a notice, withdrawn when raised: the Teachers manager acknowledges it).
+  'family_without_account', 'teacher_account_deleted',
+  // AMB-9: a group left without a live admin (chat.work_task_sweep_group_admin).
+  'group_admin_absent',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -450,11 +455,11 @@ export class TaskService {
       failed: 0, declined: 0, issues: 0, batches: 0,
     };
     // PR-2's sources, PR-2b's financial ones, PR-6a's set-up ones, then PR-6b's
-    // hand-overs: each sweep its own lock and batches.
+    // hand-overs, PR-6c's decisions and AMB-9's groups: each sweep its own lock and batches.
     const sweeps = [
       Prisma.sql`chat.work_task_sweep(50)`, Prisma.sql`chat.work_task_sweep_financial(50)`,
       Prisma.sql`chat.work_task_sweep_setup(50)`, Prisma.sql`chat.work_task_sweep_handover(50)`,
-      Prisma.sql`chat.work_task_sweep_decisions(50)`,
+      Prisma.sql`chat.work_task_sweep_decisions(50)`, Prisma.sql`chat.work_task_sweep_group_admin(50)`, Prisma.sql`chat.work_task_sweep_erasure(50)`,
     ];
     let skipped = 0;
     for (const sweep of sweeps) {
@@ -1042,6 +1047,7 @@ export class TaskService {
                WHEN 'violation_decision' THEN (SELECT q.teacher_id::text FROM chat.teacher_violation q WHERE q.id = t.source_id)
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
                WHEN 'teacher_setup' THEN t.source_id::text
+               WHEN 'teacher_account_deleted' THEN t.source_id::text
                WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
                WHEN 'trial_attendance' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = t.source_id)
                WHEN 'complaint' THEN (SELECT e.teacher_id::text FROM chat.teacher_supervision_entry e WHERE e.id = t.source_id)
@@ -1088,6 +1094,13 @@ export class TaskService {
                                                   FROM chat.family f WHERE f.id = t.source_id)
                WHEN 'teacher_setup' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id, 'count', chat.work_task_setup_missing(te.id))
                                             FROM chat.teacher te WHERE te.id = t.source_id)
+               -- PD-56. The family by its name and a child to open; the teacher (now "Deleted user") by what is left on them.
+               WHEN 'family_without_account' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id,
+                                                                             'learnerId', (SELECT l.id FROM chat.learner l WHERE l.family_id = f.id ORDER BY l.created_at, l.id LIMIT 1),
+                                                                             'count', (SELECT count(*)::int FROM chat.learner l WHERE l.family_id = f.id))
+                                                     FROM chat.family f WHERE f.id = t.source_id)
+               WHEN 'teacher_account_deleted' THEN jsonb_build_object('teacherId', t.source_id,
+                                                                      'count', (SELECT count(*)::int FROM chat.learner l WHERE l.teacher_id = t.source_id))
                WHEN 'new_student_assign' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
                                                  FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
                WHEN 'new_student_group' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id)
@@ -1119,6 +1132,10 @@ export class TaskService {
                WHEN 'makeup_owed' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'startsAt', l.starts_at, 'lessonId', l.id)
                                           FROM chat.lesson l JOIN chat.learner ln ON ln.id = l.learner_id
                                          WHERE l.id = chat.work_task_makeup_original(t.source_id))
+               -- AMB-9. Named by the group's title, opened by its id.
+               WHEN 'group_admin_absent' THEN (SELECT jsonb_build_object('groupTitle', c.title, 'conversationId', c.id, 'groupType', c.type)
+                                                 FROM chat.work_task_group_admin_spell sp JOIN chat.conversation c ON c.id = sp.conversation_id
+                                                WHERE sp.id = t.source_id)
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

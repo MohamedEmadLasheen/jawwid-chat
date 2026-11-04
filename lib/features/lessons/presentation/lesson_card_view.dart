@@ -11,10 +11,36 @@ import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/clock_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../materials/data/materials_repository.dart';
+import '../../rewards/presentation/lesson_rewards_row.dart';
 import '../domain/excuse_category.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
 import 'lesson_ticket_sheet.dart' show lessonWhen, weeklyLabel;
+
+/// RQA-F4: a card's name for a chat-list row, from its kind alone -- the bubble's own
+/// title where the kind settles it, null where the title depends on the card's payload
+/// (the row then says it is an update).
+String? cardPreviewTitle(String kind, L10n l10n) => switch (kind) {
+      'lesson_report' => l10n.cardReportTitle,
+      'lesson_absence' => l10n.cardAbsenceTitle,
+      'lesson_apology' => l10n.cardApologyTitle,
+      'lesson_corrected' => l10n.cardCorrectedTitle,
+      'lesson_teacher_apology' => l10n.cardTeacherApologyTitle,
+      'lesson_late_apology' => l10n.cardLateApologyTitle,
+      'lesson_makeup_booked' => l10n.cardMakeupBookedTitle,
+      'lesson_moved' => l10n.cardMovedTitle,
+      'lesson_makeup_resolved' => l10n.cardMakeupResolvedTitle,
+      'schedule_change_requested' => l10n.cardScheduleRequestedTitle,
+      'learner_transferred' => l10n.cardTransferredTitle,
+      'learner_handover' => l10n.cardHandoverTitle,
+      'learner_return_soon' => l10n.cardReturnSoonTitle,
+      'learner_resumed' => l10n.cardResumedTitle,
+      'teacher_bonus' => l10n.cardBonusTitle,
+      'lessons_paused' => l10n.cardLessonsPausedTitle,
+      'subscription_locked' => l10n.cardSubscriptionLockedTitle,
+      'subscription_unlocked' => l10n.cardSubscriptionUnlockedTitle,
+      _ => null,
+    };
 
 /// PD-11: a ticket's card, drawn inside its message bubble.
 ///
@@ -320,6 +346,8 @@ class _LessonCard extends ConsumerWidget {
                 ),
               ),
             ),
+          // PD-55 PR-5: the child's rewards in this lesson -- shown only when there are any.
+          if (card.kind == 'lesson_report' && lessonId != null) LessonRewardsRow(lessonId: lessonId, color: foreground),
           if (card.kind == 'lesson_late_apology' || card.kind == 'schedule_change_requested')
             _Footnote(text: l10n.cardUnderReview, color: muted),
           if (movedBy != null) _Footnote(text: movedBy, color: muted),

@@ -11,7 +11,10 @@ enum PageLayout {
   ruled('ruled'),
   narrowRuled('narrow_ruled'),
   grid('grid'),
-  arabicLines('arabic_lines');
+  arabicLines('arabic_lines'),
+
+  /// PD-55: a dot every 32 units.
+  dotted('dotted');
 
   const PageLayout(this.wire);
   final String wire;
@@ -37,6 +40,23 @@ enum PageBackground {
   static PageBackground parse(String? v) => values.firstWhere((b) => b.wire == v, orElse: () => white);
 }
 
+/// PD-55: a page's frame, chosen when the page is created and never changed
+/// (the server refuses a change): wide, the board's page until now, or tall --
+/// the same page turned upright, for a phone held upright.
+enum PageShape {
+  wide('wide', kBoardPageSize),
+  tall('tall', Size(1080, 1920));
+
+  const PageShape(this.wire, this.size);
+  final String wire;
+
+  /// The page in page units.
+  final Size size;
+
+  /// A page from before PD-55 has no shape: it is wide.
+  static PageShape parse(String? v) => values.firstWhere((s) => s.wire == v, orElse: () => wide);
+}
+
 /// One page as the editor holds it: its look and its elements, bottom first.
 class BoardPage {
   const BoardPage({
@@ -45,6 +65,7 @@ class BoardPage {
     required this.layout,
     required this.background,
     required this.elements,
+    this.shape = PageShape.wide,
     this.savedAt,
   });
 
@@ -53,6 +74,12 @@ class BoardPage {
   final PageLayout layout;
   final PageBackground background;
   final List<BoardElement> elements;
+
+  /// PD-55: wide or tall, for good.
+  final PageShape shape;
+
+  /// The page in page units: 1920 x 1080, or 1080 x 1920 when tall.
+  Size get size => shape.size;
 
   /// The server's `updatedAt` for this page as last seen here, exactly as sent:
   /// a draft made against it applies only while the server still says the same
@@ -67,6 +94,7 @@ class BoardPage {
       position: (json['position'] as num?)?.toInt() ?? 0,
       layout: PageLayout.parse(json['layout'] as String?),
       background: PageBackground.parse(json['background'] as String?),
+      shape: PageShape.parse(json['shape'] as String?),
       savedAt: json['updatedAt'] as String?,
       elements: [
         for (final e in raw)
@@ -82,6 +110,7 @@ class BoardPage {
         layout: layout ?? this.layout,
         background: background ?? this.background,
         elements: elements ?? this.elements,
+        shape: shape,
         savedAt: savedAt ?? this.savedAt,
       );
 
@@ -147,6 +176,8 @@ class BoardGeometry {
     return switch (e) {
       InkElement(:final points, :final width) => _nearPolyline(points.map((p) => p.offset).toList(), point, width / 2 + slop),
       LineElement(:final from, :final to, :final width) => _distanceToSegment(point, from, to) <= width / 2 + slop,
+      // PD-55: a turned text is hit where it is drawn.
+      TextElement() => e.box.inflate(slop).contains(e.toBox(point)),
       _ => true,
     };
   }
@@ -170,9 +201,12 @@ class BoardGeometry {
         continue;
       }
       final keep = radius + e.width / 2;
+      // PD-55: a simplified stroke's points can be far apart; the eraser
+      // cuts between them too, on the stroke resampled finely where it passes.
+      final points = _densify(e.points, point, keep);
       final runs = <List<StrokePoint>>[];
       var run = <StrokePoint>[];
-      for (final p in e.points) {
+      for (final p in points) {
         if ((p.offset - point).distance <= keep) {
           if (run.isNotEmpty) runs.add(run);
           run = [];
@@ -181,7 +215,7 @@ class BoardGeometry {
         }
       }
       if (run.isNotEmpty) runs.add(run);
-      if (runs.length == 1 && runs.first.length == e.points.length) {
+      if (runs.length == 1 && runs.first.length == points.length) {
         out.add(e);
         continue;
       }
@@ -192,11 +226,74 @@ class BoardGeometry {
     return out;
   }
 
+  /// [points] with extra points, every [keep] / 2, on the segments that pass
+  /// within [keep] of [at]; elsewhere unchanged.
+  static List<StrokePoint> _densify(List<StrokePoint> points, Offset at, double keep) {
+    if (points.length < 2) return points;
+    final step = math.max(1.0, keep / 2);
+    final out = <StrokePoint>[points.first];
+    for (var i = 1; i < points.length; i++) {
+      final a = points[i - 1], b = points[i];
+      final length = (b.offset - a.offset).distance;
+      if (length > step && _distanceToSegment(at, a.offset, b.offset) <= keep) {
+        final n = (length / step).ceil();
+        for (var k = 1; k < n; k++) {
+          final t = k / n;
+          out.add(StrokePoint(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.pressure + (b.pressure - a.pressure) * t));
+        }
+      }
+      out.add(b);
+    }
+    return out;
+  }
+
   /// Every element whose bounds meet [area] (the marquee selection).
   static Set<String> within(List<BoardElement> elements, Rect area) => {
     for (final e in elements)
       if (e.bounds.overlaps(area)) e.id,
   };
+
+  /// PD-55: what a freehand lasso takes -- a stroke when at least half of its
+  /// points are inside the loop, anything else when its centre is.
+  static Set<String> inLasso(List<BoardElement> elements, List<Offset> loop) {
+    if (loop.length < 3) return {};
+    return {
+      for (final e in elements)
+        if (switch (e) {
+          InkElement(:final points) when points.isNotEmpty =>
+            points.where((p) => insidePolygon(loop, p.offset)).length * 2 >= points.length,
+          _ => insidePolygon(loop, e.bounds.center),
+        })
+          e.id,
+    };
+  }
+
+  /// Whether [p] is inside the closed [polygon] (even-odd rule).
+  static bool insidePolygon(List<Offset> polygon, Offset p) {
+    var inside = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      final a = polygon[i], b = polygon[j];
+      if ((a.dy > p.dy) != (b.dy > p.dy) && p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) inside = !inside;
+    }
+    return inside;
+  }
+
+  /// PD-55: a finger's or a mouse's stroke, steadied -- each point the mean of
+  /// itself and the two before it, so the jitter of a hand is smoothed and the
+  /// ends stay where they were. A pen is never passed through this.
+  static List<StrokePoint> steady(List<StrokePoint> raw) {
+    if (raw.length < 3) return raw;
+    return [
+      raw.first,
+      for (var i = 1; i < raw.length - 1; i++)
+        StrokePoint(
+          (raw[i - 1].x + raw[i].x + raw[i + 1].x) / 3,
+          (raw[i - 1].y + raw[i].y + raw[i + 1].y) / 3,
+          raw[i].pressure,
+        ),
+      raw.last,
+    ];
+  }
 
   static bool _nearPolyline(List<Offset> pts, Offset p, double tolerance) {
     if (pts.length == 1) return (pts.first - p).distance <= tolerance;
@@ -246,9 +343,9 @@ class BoardGeometry {
     ];
   }
 
-  /// Keeps a point on the page.
-  static Offset clampToPage(Offset p) =>
-      Offset(p.dx.clamp(0, kBoardPageSize.width).toDouble(), p.dy.clamp(0, kBoardPageSize.height).toDouble());
+  /// Keeps a point on a page of [page] size (a wide page unless said).
+  static Offset clampToPage(Offset p, [Size page = kBoardPageSize]) =>
+      Offset(p.dx.clamp(0, page.width).toDouble(), p.dy.clamp(0, page.height).toDouble());
 
   /// The angle of the segment [a]→[b], for arrow heads.
   static double angle(Offset a, Offset b) => math.atan2(b.dy - a.dy, b.dx - a.dx);

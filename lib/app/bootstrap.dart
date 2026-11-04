@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_account_deletion_repository.dart';
 import '../core/data/http/http_account_recovery_repository.dart';
 import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_billing_repository.dart';
@@ -14,6 +15,7 @@ import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_parent_signup_repository.dart';
+import '../core/data/http/http_password_change_repository.dart';
 import '../core/data/http/http_password_reset_repository.dart';
 import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_sales_payments_repository.dart';
@@ -43,7 +45,9 @@ import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
 import '../features/materials/data/materials_repository.dart';
 import '../features/messages/application/chat_typing_channel.dart';
+import '../features/messages/application/drafts_controller.dart';
 import '../features/messages/data/chat_theme_repository.dart';
+import '../features/messages/data/draft_store.dart';
 import '../features/messages/data/mention_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
@@ -51,12 +55,14 @@ import '../features/messages/data/receipt_repository.dart';
 import '../features/messages/data/typing_repository.dart';
 import '../features/notifications/data/notifications_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
+import '../features/rewards/data/rewards_repository.dart';
 import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/sessions/data/account_sessions_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../features/settings/data/parent_notice_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
 import '../features/whiteboards/data/board_draft_files.dart';
+import '../features/whiteboards/data/quran_text_repository.dart';
 import '../features/whiteboards/data/whiteboards_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -164,6 +170,7 @@ List<Override> _httpOverrides() {
   );
 
   client = buildApiClient(config: config, tokens: tokens);
+  final drafts = platformDraftStore();
 
   return [
     // The language choice survives a restart (see PersistedLocaleController).
@@ -208,6 +215,8 @@ List<Override> _httpOverrides() {
     receiptRepositoryProvider.overrideWithValue(HttpReceiptRepository(client: client)),
     typingRepositoryProvider.overrideWithValue(HttpTypingRepository(client: client)),
     viewerActorIdProvider.overrideWithValue(session.actorId),
+    // PD-37: unsent drafts stay on this device, in its secure storage; sign-out deletes them.
+    draftStoreProvider.overrideWithValue(drafts),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
     ),
@@ -240,6 +249,12 @@ List<Override> _httpOverrides() {
     // PD-39: the teacher's boards (the whiteboard).
     whiteboardsRepositoryProvider.overrideWithValue(
       HttpWhiteboardsRepository(client: client),
+    ),
+    // PD-55: rewards during a lesson (every route 404 until rewards.enabled is on).
+    rewardsRepositoryProvider.overrideWithValue(HttpRewardsRepository(client: client)),
+    // PD-39 PR-3: the verified Quran text (the shared dataset), for verses on a board.
+    quranTextRepositoryProvider.overrideWithValue(
+      HttpQuranTextRepository(client: client),
     ),
     // PD-20: Sales' Payments (search, a family's instalments, record / void).
     salesPaymentsRepositoryProvider.overrideWithValue(
@@ -280,6 +295,12 @@ List<Override> _httpOverrides() {
     callRepositoryProvider.overrideWithValue(
       HttpCallRepository(client: client),
     ),
+    // TEACHER-023: change your own password, on the same authenticated client.
+    passwordChangeRepositoryProvider.overrideWithValue(
+      HttpPasswordChangeRepository(client: client, tokens: tokenStore),
+    ),
+    // PD-56: delete your own account, on the same authenticated client.
+    accountDeletionRepositoryProvider.overrideWithValue(HttpAccountDeletionRepository(client: client)),
     accountCallHistoryProvider.overrideWithValue(
       // Named after the OTHER participant, so the viewer's own id is read per call.
       HttpAccountCallHistory(client: client, viewerActorId: session.actorId),
@@ -329,9 +350,10 @@ List<Override> _httpOverrides() {
       () => AuthController(
         repository: auth,
         tokens: tokenStore,
-        // PD-39: board drafts are a device's copy of a teacher's unsaved pages; a
-        // shared device keeps nobody's after sign-out.
-        clearLocalData: () => platformBoardDraftStore().clearAll(),
+        // Nothing a person left unsent survives their sign-out on a shared
+        // device: PD-37 chat drafts, and PD-39 board drafts (a teacher's
+        // unsaved pages). Both run even if one fails.
+        clearLocalData: () => Future.wait([drafts.clearAll(), platformBoardDraftStore().clearAll()]),
         // The transport layer needs the principal too: ownership is decided by actor id and
         // approval policy by role. Before this existed, `actorId()` returned '' and `role()`
         // silently defaulted to parent, so a signed-in teacher saw their own messages as
@@ -351,6 +373,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final tokens = InMemoryTokenStore();
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
   final calls = FakeCallRepository(backend);
+  // PD-37: drafts in memory, deleted at sign-out exactly as the real stack does.
+  final drafts = InMemoryDraftStore();
 
   return [
     localeOverrideProvider.overrideWith(PersistedLocaleController.new),
@@ -393,11 +417,12 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     whiteboardsRepositoryProvider.overrideWithValue(FakeWhiteboardsRepository()),
     // A Sales seat can join a fixture trial group (PD-20).
     trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
+    draftStoreProvider.overrideWithValue(drafts),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
         tokens: tokens,
-        clearLocalData: () async {},
+        clearLocalData: drafts.clearAll,
       ),
     ),
   ];

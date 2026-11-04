@@ -76,8 +76,17 @@ export enum CommErrorCode {
   MESSAGE_NOT_FOUND = 'COMM.MESSAGE_NOT_FOUND',
   REPLY_TARGET_CROSS_CONVERSATION = 'COMM.REPLY_TARGET_CROSS_CONVERSATION',
   EMPTY_MESSAGE = 'COMM.EMPTY_MESSAGE',
+  /** PARENT-003: the body is longer than MESSAGE_MAX_CHARACTERS (4000) characters. 400. */
+  MESSAGE_TOO_LONG = 'COMM.MESSAGE_TOO_LONG',
   ATTACHMENT_TOO_LARGE = 'COMM.ATTACHMENT_TOO_LARGE',
   ATTACHMENT_TYPE_NOT_ALLOWED = 'COMM.ATTACHMENT_TYPE_NOT_ALLOWED',
+  /**
+   * PARENT-023: the attachment's object is not in storage, or is not what the
+   * upload was authorized for (another size or type). 409: upload it (again),
+   * then send. Without this a message pointed at nothing and its bubble could
+   * never play.
+   */
+  ATTACHMENT_NOT_UPLOADED = 'COMM.ATTACHMENT_NOT_UPLOADED',
   /**
    * An attachment names an object outside the conversation it was sent to.
    * A policy refusal, not a validation error: the key may be perfectly
@@ -524,6 +533,12 @@ export enum CommErrorCode {
   WHITEBOARD_STATE = 'COMM.WHITEBOARD_STATE',
   /** A limit: boards, pages, or the teacher's document storage; `detail` names which. 409. */
   WHITEBOARD_LIMIT = 'COMM.WHITEBOARD_LIMIT',
+  /**
+   * Images and export are switched off on this deployment (config
+   * `whiteboards.assets_enabled`): on only once the bucket and its versioning
+   * exist (design §11.3). 503.
+   */
+  WHITEBOARD_ASSETS_OFF = 'COMM.WHITEBOARD_ASSETS_OFF',
 
   // --- PD-35: the visible seat (joining a conversation by choice) ---
   /** No such seat reason, or no feature on this deployment takes seats for it. 400. */
@@ -590,6 +605,12 @@ export enum CommErrorCode {
   PARENT_EXISTS = 'COMM.PARENT_EXISTS',
   /** A child with this name (and date of birth) is already in the family; resend with confirmDuplicate for twins. 409. */
   CHILD_EXISTS = 'COMM.CHILD_EXISTS',
+  /**
+   * TEACHER-027: the database could not serve the request in time (unreachable,
+   * no pool connection, a transaction or statement timeout). Nothing was
+   * committed. 503 with Retry-After; retry the same request.
+   */
+  DATABASE_UNAVAILABLE = 'COMM.DATABASE_UNAVAILABLE',
 }
 
 export class CommError extends Error {

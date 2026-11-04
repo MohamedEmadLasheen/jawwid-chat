@@ -14,5 +14,7 @@ import { DisciplineService } from './discipline.service';
   imports: [CommunicationModule, SupervisionModule, LessonModule],
   controllers: [DisciplineController],
   providers: [DisciplineService],
+  // PD-44: the Dashboard's Teachers section counts this page's list.
+  exports: [DisciplineService],
 })
 export class DisciplineModule {}

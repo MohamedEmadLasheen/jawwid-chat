@@ -151,7 +151,16 @@ export interface PersonalPatch {
 }
 
 export type NewEntry =
-  | { kind: 'complaint'; body: string; source: 'management' | 'parent'; handledBy?: string; sourceConversationId?: string }
+  | {
+      kind: 'complaint'
+      body: string
+      source: 'management' | 'parent'
+      handledBy?: string
+      sourceConversationId?: string
+      /** PD-52: the student, or trial family, it is about. */
+      learnerId?: string
+      prospectId?: string
+    }
   | { kind: 'complaint_resolution'; body: string; refersTo: string }
   | { kind: 'complaint_followup'; body: string; refersTo: string }
   | { kind: 'monthly_comment'; body: string; month: string }
@@ -184,6 +193,8 @@ export interface FirstLogin {
   code?: string
   expiresAt: string
   emailed: boolean
+  /** TEACHER-002: the same add again; the code was given the first time and is not issued again. */
+  alreadyIssued?: boolean
 }
 
 /** PD-43: a Teacher File's sign-in -- `none` until the teacher has a login. */
@@ -340,8 +351,9 @@ export const supervisionTimelineApi = {
   addNote: (teacherId: string, body: string) =>
     api.post<{ id: string; kind: string }>(`/teachers/${encodeURIComponent(teacherId)}/supervision`, { kind: 'note', body }),
   /** The bonus ticket: a `bonus` entry and a card in the teacher's supervision chat. No amount -- payroll's. */
-  bonus: (teacherId: string, reason: string) =>
-    api.post<{ id: string; kind: string; conversationId: string }>(`/teachers/${encodeURIComponent(teacherId)}/bonus`, { reason }),
+  /** PD-52 PR-5: Sales names the student (`learnerId`) or trial (`prospectId`) a grant is about. */
+  bonus: (teacherId: string, reason: string, about: { learnerId?: string; prospectId?: string } = {}) =>
+    api.post<{ id: string; kind: string; conversationId: string }>(`/teachers/${encodeURIComponent(teacherId)}/bonus`, { reason, ...about }),
 }
 
 export const timelineKeys = {
@@ -389,6 +401,8 @@ export interface MonthPay {
   currency: string | null
   salaryType: SalaryType | null
   paidMinutes: number
+  /** TEACHER-005: the month's unpaid leave days (shown, never priced). Absent from an older API. */
+  unpaidLeaveDays?: number
   base: string | null
   bonuses: string
   deductions: string

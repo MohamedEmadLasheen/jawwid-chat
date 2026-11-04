@@ -176,6 +176,38 @@ describe('PD-40 S4: roles', () => {
     expect(byKey.get('certificates.view')).toMatchObject({ inRoles: true, delegable: true });
     expect(byKey.get('parents.edit')).toMatchObject({ inRoles: true, delegable: false });
   });
+
+  it('TEACHER-004: the catalogue is for whoever manages staff accounts or roles -- a teacher, a parent or a supervisor gets 403', async () => {
+    // A department manager (staff_accounts.view) builds roles from it; so does the super admin.
+    expect((await as(m.operationsManager.subject, 'GET', '/admin/permissions')).status).toBe(200);
+    expect((await as(m.teachersManager.subject, 'GET', '/admin/permissions')).status).toBe(200);
+    for (const [who, subject] of [
+      ['teacher', m.teachers[0]!.subject],
+      ['parent', m.families[0]!.parent.subject],
+      ['operations supervisor', m.supervisors[0]!.subject],
+    ] as const) {
+      const r = await as(subject, 'GET', '/admin/permissions');
+      expect({ who, status: r.status, permissions: r.json.permissions }).toEqual({ who, status: 403, permissions: undefined });
+    }
+    // Without a session at all, as before.
+    expect((await call(null, 'GET', '/admin/permissions')).status).toBe(401);
+  });
+
+  it('ADMIN-005: the access-role list follows the same rule -- a teacher, a parent and Operations and Teachers supervisors get 403', async () => {
+    expect((await as(m.operationsManager.subject, 'GET', '/admin/access-roles')).status).toBe(200);
+    expect((await as(m.teachersManager.subject, 'GET', '/admin/access-roles')).status).toBe(200);
+    expect((await as(m.superAdmin.subject, 'GET', '/admin/access-roles')).status).toBe(200);
+    for (const [who, subject] of [
+      ['teacher', m.teachers[0]!.subject],
+      ['parent', m.families[0]!.parent.subject],
+      ['operations supervisor', m.supervisors[0]!.subject],
+      ['teacher supervisor', m.teacherSupervisors[0]!.subject],
+    ] as const) {
+      const r = await as(subject, 'GET', '/admin/access-roles');
+      expect({ who, status: r.status, roles: r.json.roles }).toEqual({ who, status: 403, roles: undefined });
+    }
+    expect((await call(null, 'GET', '/admin/access-roles')).status).toBe(401);
+  });
 });
 
 describe('PD-40: the Designer, end to end (S1, S3, S5)', () => {

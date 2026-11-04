@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption pd-registry quran-dataset geo-dataset pd040-routes lessons-supply-chain ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite pd-registry quran-dataset geo-dataset pd040-routes lessons-supply-chain app-icons ci-wiring"
 
 title() {
   case "$1" in
@@ -199,11 +199,13 @@ title() {
     app-spec)      echo "App Platform specs match the manifest and DigitalOcean's schema" ;;
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
+    backup-offsite) echo "The weekly off-site backup stores only encrypted archives and keeps 8 weeks" ;;
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
     geo-dataset)   echo "PD-45 · the country and subdivision dataset is exactly what its pinned CLDR files and reviewed overlay build" ;;
     pd040-routes)  echo "PD-40 · every API route declares the permission it asks of staff" ;;
-    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the API's voice-over text is current" ;;
+    lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the family bundle carries no withheld lesson text; the API's voice-over text is current" ;;
+    app-icons)     echo "PD-56 · the app icon and launch image are Jawwid's, never Flutter's template; the 1024 icon is opaque" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -326,6 +328,13 @@ gate_backup_encryption() {
   bash scripts/qa/check-backup-encryption.sh
 }
 
+gate_backup_offsite() {
+  # The weekly copy in Spaces (backup-weekly.yml): only .dump.enc with its .hmac
+  # leaves the runner, every object is read back, and prune keeps exactly the
+  # last 8 weeks. AWS CLI stubbed; no network, no credential.
+  bash scripts/qa/check-backup-offsite.sh
+}
+
 gate_pd_registry() {
   # One file per claim (docs/product/pd-registry/, docs/product/migration-slots/),
   # so parallel PRs only ever ADD files. Refuses a PD number claimed twice, a
@@ -427,6 +436,11 @@ gate_lessons_supply_chain() {
   # older export (a replay of something since withdrawn), never signs with a
   # retired key (against the PR's base branch; GITHUB_BASE_REF in CI).
   node scripts/lessons/verify-approvals.mjs diff || return 1
+  # PD-29: the family bundle ships no unreviewed lesson text. The check can fail on each
+  # kind of leak, and the committed golden (each content file's status, and what ships
+  # of a lesson) is current; the ci.yml lessons job runs the check on the real build.
+  "$PYTHON" -I scripts/lessons/check-family-bundle.py selftest || return 1
+  "$PYTHON" -I scripts/lessons/check-family-bundle.py golden --check || return 1
   # ...and the job that builds the production lessons bundle verifies them
   # before it builds; no other workflow builds that bundle (a hand-built or
   # elsewhere-built bundle cannot skip the check).
@@ -440,11 +454,15 @@ body = job.group(1)
 v, b = body.find('verify-approvals.mjs'), body.find('npm run build')
 if v < 0 or b < 0 or v > b:
     sys.exit('guards: the ci.yml lessons job must run scripts/lessons/verify-approvals.mjs before npm run build')
+step = re.search(r'^ +run: python3 -I scripts/lessons/check-family-bundle\.py check *$', body, re.M)
+c, u = (step.start() if step else -1), body.find('name: lessons-dist-')
+if c < 0 or u < 0 or not b < c < u:
+    sys.exit('guards: the ci.yml lessons job must run scripts/lessons/check-family-bundle.py check after npm run build and before it uploads lessons-dist')
 others = [f for f in glob.glob('.github/workflows/*.yml') if f != '.github/workflows/ci.yml'
           and re.search(r'apps/lessons[^\n]*\n?[^\n]*npm run build|working-directory: apps/lessons', open(f, encoding='utf-8').read())]
 if others:
     sys.exit(f'guards: only ci.yml builds the lessons bundle; also built in: {others}')
-print('lessons bundle: built only by the ci.yml lessons job, after its approvals verify')
+print('lessons bundle: built only by the ci.yml lessons job, after its approvals verify, and checked for withheld text before upload')
 PY
   # PD-49: the API reviews exactly what apps/lessons holds -- its generated map of
   # items and mechanics (with their hashes and required steps) is never stale.
@@ -463,6 +481,8 @@ PY
   # PD-48: the operator's generation script plans and refuses as it must (no network, no key).
   "$PYTHON" -I scripts/lessons/tts/tts.py selftest
 }
+
+gate_app_icons() { python3 scripts/qa/check-app-icons.py; }
 
 gate_ci_wiring() {
   # The anti-drift check: a gate added here but never called from CI would pass

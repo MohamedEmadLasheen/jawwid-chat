@@ -38,13 +38,16 @@ import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
+import '../application/drafts_controller.dart';
 import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
+import '../data/draft_store.dart';
 import '../data/message_search_repository.dart';
 import '../domain/typing_sender.dart';
 import 'attachment_preview.dart';
 import 'chat_theme_sheet.dart';
+import 'chat_video_screen.dart';
 import 'forward_sheet.dart';
 import 'media_viewer.dart';
 import 'message_actions.dart';
@@ -428,6 +431,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       picked = switch (source) {
         AttachmentSource.camera => await picker.captureImage(),
         AttachmentSource.photo => await picker.pickImage(),
+        AttachmentSource.video => await picker.pickVideo(),
+        AttachmentSource.recordVideo => await picker.recordVideo(),
         AttachmentSource.file => await picker.pickFile(),
       };
     } on MediaPickException catch (failure) {
@@ -495,12 +500,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   void _sayPickFailed(MediaPickFailure reason, AttachmentSource source) {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final isCamera = source == AttachmentSource.camera;
+    final isCamera = source == AttachmentSource.camera || source == AttachmentSource.recordVideo;
 
     final text = switch (reason) {
-      MediaPickFailure.permissionDenied => isCamera
-          ? l10n.cameraPermissionDenied
-          : l10n.attachmentPermissionDenied,
+      // Recording a video needs the camera AND the microphone: name both.
+      MediaPickFailure.permissionDenied => source == AttachmentSource.recordVideo
+          ? l10n.videoRecordPermissionDenied
+          : isCamera
+              ? l10n.cameraPermissionDenied
+              : l10n.attachmentPermissionDenied,
       MediaPickFailure.tooLarge => l10n.attachmentTooLarge,
       MediaPickFailure.typeNotAllowed => l10n.attachmentTypeNotAllowed,
       MediaPickFailure.unsupported =>
@@ -1020,6 +1028,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       return;
     }
 
+    // CHATSCHED-010: a video plays here, in the app; Safari could not play it and
+    // showed its signed URL.
+    if (attachment.kind == MessageKind.video && attachment.url != null) {
+      await showChatVideo(context, url: attachment.url!, title: attachment.fileName);
+      return;
+    }
+
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final url = attachment.url;
@@ -1043,7 +1058,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
 
   void _openFirstAttachment(Message message) {
     final first = message.attachments.firstWhereOrNull(
-      (a) => a.kind == MessageKind.image || a.kind == MessageKind.file,
+      (a) => a.kind == MessageKind.image || a.kind == MessageKind.file || a.kind == MessageKind.video,
     );
     if (first != null) _openAttachment(message, first);
   }
@@ -1063,6 +1078,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       duration: Motion.respecting(context, Motion.motionBase),
       curve: Motion.easingStandard,
     );
+  }
+
+  /// PD-37: this chat's saved draft, for the composer to put back. Watches
+  /// only whether the drafts have loaded, so the screen rebuilds once, not on
+  /// every keystroke.
+  Draft? _savedDraft() {
+    if (!ref.watch(draftsProvider.select((d) => d.hasValue))) return null;
+    return ref.read(draftsProvider).value?[widget.conversationId];
   }
 
   @override
@@ -1256,8 +1279,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
-            // PD-37: "typing…" -- a read-only chat says nothing.
+            // PD-37: "typing…" (a read-only chat says nothing), and the unsent
+            // text kept as this chat's draft.
+            // Keyed by the account: a switch with this chat open starts an
+            // empty field with the NEW account's draft, never the last one's text.
+            key: ValueKey(('composer', ref.watch(principalIdProvider))),
+            initialDraft: _savedDraft(),
             onDraftChanged: _typingSender?.typed,
+            onDraft: (draft) => ref.read(draftsProvider.notifier).set(widget.conversationId, draft),
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,
@@ -1404,38 +1433,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
                   enabled: canActOn(message) && !_selecting && !widget.isReadOnly,
                   onReply: () => setState(() => _replyingTo = _previewOf(message)),
                   child: MessageBubble(
-                  key: _messageKeys.putIfAbsent(key, GlobalKey.new),
-                  message: message,
-                  showAuthor: showAuthor,
-                  reserveSenderColumn: fromSomeoneElse,
-                  replyTo: reply,
-                  highlight: _highlightTerm,
-                  isHighlighted: _highlightedKey == key ||
-                      (message.id != null && _selected.contains(message.id)),
-                  onRetry: message.canRetry
-                      ? () => controller.retry(message.clientMessageId)
-                      : null,
-                  onDiscard: message.canRetry
-                      ? () => controller.discard(message.clientMessageId)
-                      : null,
-                  // Absent rather than inert on a message nothing can be done
-                  // to, so a long press there is a no-op the user feels once
-                  // instead of an empty sheet they have to dismiss.
-                  onLongPress: !canActOn(message)
-                      ? null
-                      : _selecting
-                          ? () => _toggleSelected(message)
-                          : () => _onLongPress(message),
-                  onTap: _selecting ? () => _toggleSelected(message) : null,
-                  onTapReply: reply == null
-                      ? null
-                      : () => _jumpToMessage(reply.messageId, state),
-                  onToggleReaction: message.id == null
-                      ? null
-                      : (emoji) =>
-                          _guard(() => controller.toggleReaction(message, emoji)),
-                  onOpenAttachment: (attachment) =>
-                      _openAttachment(message, attachment),
+                    key: _messageKeys.putIfAbsent(key, GlobalKey.new),
+                    message: message,
+                    showAuthor: showAuthor,
+                    reserveSenderColumn: fromSomeoneElse,
+                    replyTo: reply,
+                    highlight: _highlightTerm,
+                    isHighlighted: _highlightedKey == key ||
+                        (message.id != null && _selected.contains(message.id)),
+                    onRetry: message.canRetry
+                        ? () => controller.retry(message.clientMessageId)
+                        : null,
+                    onDiscard: message.canRetry
+                        ? () => controller.discard(message.clientMessageId)
+                        : null,
+                    // Absent rather than inert on a message nothing can be done
+                    // to, so a long press there is a no-op the user feels once
+                    // instead of an empty sheet they have to dismiss.
+                    onLongPress: !canActOn(message)
+                        ? null
+                        : _selecting
+                            ? () => _toggleSelected(message)
+                            : () => _onLongPress(message),
+                    onTap: _selecting ? () => _toggleSelected(message) : null,
+                    onTapReply: reply == null
+                        ? null
+                        : () => _jumpToMessage(reply.messageId, state),
+                    onToggleReaction: message.id == null
+                        ? null
+                        : (emoji) =>
+                            _guard(() => controller.toggleReaction(message, emoji)),
+                    onOpenAttachment: (attachment) =>
+                        _openAttachment(message, attachment),
+                    // PARENT-017: a sending video shows how far it is, and can be taken back.
+                    uploadProgress: state.uploadProgress[message.clientMessageId],
+                    onCancelUpload: message.isPending && message.id == null
+                        ? () => controller.cancelUpload(message.clientMessageId)
+                        : null,
                   ),
                 ),
               ],

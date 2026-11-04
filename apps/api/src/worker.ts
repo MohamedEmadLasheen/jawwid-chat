@@ -13,6 +13,7 @@ import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
 import { SupervisorCoverService } from './org/supervisor-cover.service';
+import { FamilyAccessService } from './account-admin/family-access.service';
 import { MentionService } from './communication/mentions/mention.service';
 import { SubscriptionEffects } from './subscriptions/subscription-effects.service';
 import { subscriptionLockEnforced } from './platform/subscription-lock';
@@ -27,6 +28,9 @@ import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
+import { LessonEvents } from './lessons/lesson-events';
+import { setDatabasePoolRole } from './platform/database-pool';
+import { assertProductionStripeConfig } from './billing/stripe-config';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -99,6 +103,13 @@ const NOTIFICATION_PURGE_MS = 24 * 60 * 60_000;
 const COVER_SWEEP_MS = Number(process.env.COVER_SWEEP_MS ?? 60_000);
 
 /**
+ * ADMIN-002: how often grants of family access that ran out are logged
+ * ('family_access.expired'). Access already ended at ends_at -- this is the
+ * record of it, so a minute is plenty.
+ */
+const FAMILY_ACCESS_SWEEP_MS = Number(process.env.FAMILY_ACCESS_SWEEP_MS ?? 60_000);
+
+/**
  * PD-36: how often summonses a seat answered are closed and unanswered ones
  * expire. Nothing waits on it for access -- a summons grants none -- so a
  * minute is plenty.
@@ -143,6 +154,13 @@ const CASE_DUE_SWEEP_MS = 10 * 60_000;
  * guarantee, and what raises lesson reports when a lesson ends.
  */
 const TASK_SWEEP_MS = 60_000;
+
+/**
+ * PD-46 §3.2: how often lesson changes made outside the lesson writer
+ * (chat.lesson_change_unannounced -- weekly materialization, a raw SQL update)
+ * are announced. A missed writer shows up this late, never silently.
+ */
+const LESSON_ANNOUNCE_SWEEP_MS = Number(process.env.LESSON_ANNOUNCE_SWEEP_MS ?? 60_000);
 
 /**
  * PD-35 B6: how often the department rooms are healed against the structure
@@ -195,6 +213,10 @@ function report(log: Logger, what: string, route: string, e: unknown): void {
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
 
+  // PD-56: the same production Stripe guard as the API (the worker records payments too).
+  assertProductionStripeConfig();
+  // Its own, smaller pool (DATABASE_WORKER_POOL_MAX): set before Nest builds PrismaService.
+  setDatabasePoolRole('worker');
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger,
@@ -208,11 +230,13 @@ async function bootstrap(): Promise<void> {
   const paymentReminders = app.get(PaymentReminders);
   const pipeline = app.get(NotificationPipeline);
   const covers = app.get(SupervisorCoverService);
+  const familyAccess = app.get(FamilyAccessService);
   const mentions = app.get(MentionService);
   const subscriptions = app.get(SubscriptionEffects);
   const seats = app.get(ConversationSeatService);
   const cases = app.get(SupervisionCaseService);
   const tasks = app.get(TaskService);
+  const lessonEvents = app.get(LessonEvents);
   const departmentRooms = app.get(DepartmentRoomService);
   const whiteboards = app.get(WhiteboardService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
@@ -264,6 +288,7 @@ async function bootstrap(): Promise<void> {
   let nextLessonSweep = 0;
   let nextPaymentReminderSweep = 0;
   let nextCoverSweep = 0;
+  let nextFamilyAccessSweep = 0;
   let nextMentionSweep = 0;
   let nextSignupFailurePurge = 0;
   let nextNotificationAdopt = 0;
@@ -272,6 +297,7 @@ async function bootstrap(): Promise<void> {
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
   let nextTaskSweep = 0;
+  let nextLessonAnnounceSweep = 0;
   let lastTaskIssues = 0;
   let nextRoomSweep = 0;
   let nextWhiteboardSweep = 0;
@@ -356,6 +382,14 @@ async function bootstrap(): Promise<void> {
         // The calls it did not expire are still ringing and still match.
         report(log, 'call sweep', 'calls.expireRinging', e);
       }
+      // CHATSCHED-013: a call that dropped and was not rejoined within the
+      // grace ends as connection_lost. Same single-statement claim, so it is
+      // safe on every replica and against a rejoin racing it.
+      try {
+        await calls.endInterruptedCalls();
+      } catch (e) {
+        report(log, 'call sweep', 'calls.endInterrupted', e);
+      }
     }
 
     // Lessons from regular times, their reminders and (hourly, inside the
@@ -387,6 +421,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCoverSweep = Date.now() + COVER_SWEEP_MS;
+      }
+    }
+
+    // ADMIN-002: grants of family access that ran out -- the 'expired' log row, once each.
+    if (Date.now() >= nextFamilyAccessSweep) {
+      draining = true;
+      try {
+        await familyAccess.sweepExpired();
+      } catch (e) {
+        report(log, 'family access sweep', 'accounts.family_access', e);
+      } finally {
+        draining = false;
+        nextFamilyAccessSweep = Date.now() + FAMILY_ACCESS_SWEEP_MS;
       }
     }
 
@@ -481,6 +528,20 @@ async function bootstrap(): Promise<void> {
       }
     }
 
+    // PD-46: announce the lesson changes nobody announced (the safety net).
+    if (Date.now() >= nextLessonAnnounceSweep) {
+      draining = true;
+      try {
+        const announced = await lessonEvents.announceUnannounced();
+        if (announced.lessons > 0) log.log(`lesson changes announced late (outside the writer): ${announced.lessons}`);
+      } catch (e) {
+        report(log, 'lesson announce sweep', 'lessons.announce', e);
+      } finally {
+        draining = false;
+        nextLessonAnnounceSweep = Date.now() + LESSON_ANNOUNCE_SWEEP_MS;
+      }
+    }
+
     // PD-47: raise and reconcile the tasks of their sources.
     if (Date.now() >= nextTaskSweep) {
       draining = true;
@@ -508,7 +569,7 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    // PD-39: boards past their trash or retention time, and the retention notice.
+    // PD-39: boards past their trash or retention time, uploads never confirmed, and the retention notice.
     if (Date.now() >= nextWhiteboardSweep) {
       draining = true;
       try {
@@ -516,6 +577,11 @@ async function bootstrap(): Promise<void> {
         if (swept.failed > 0) log.warn(`whiteboard purge: ${swept.purged} purged, ${swept.failed} left for the next sweep`);
       } catch (e) {
         report(log, 'whiteboard purge', 'whiteboards.purge', e);
+      }
+      try {
+        await whiteboards.sweepAbandonedAssets();
+      } catch (e) {
+        report(log, 'whiteboard upload sweep', 'whiteboards.uploads', e);
       }
       try {
         await whiteboards.retentionNotices();

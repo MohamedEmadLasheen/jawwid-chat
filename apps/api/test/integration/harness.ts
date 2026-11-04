@@ -498,6 +498,31 @@ export async function truncate(prisma: PrismaService): Promise<void> {
   // A truncate that cannot get its locks is a session another suite left open
   // in a transaction. Waiting for it hangs every later suite at its hook (seen
   // in CI, 2026-10-26); failing after a bounded wait names the blocker instead.
+  //
+  // A DEADLOCK (40P01) is different: a suite that boots the app starts its
+  // background passes at once -- the realtime gateway's revocation confirmer
+  // reads chat.principal_revocation, chat.call and chat.call_participant the
+  // moment it starts -- and the first beforeEach's truncate takes those tables
+  // in another order (super-admin-message-route.spec, G-19 2026-10-29).
+  // Postgres rolls the victim back whole, so trying again is safe: a few
+  // times, briefly. Nothing else is retried.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await truncateOnce(prisma, sql);
+      return;
+    } catch (e) {
+      if (attempt < TRUNCATE_DEADLOCK_TRIES && /\b40P01\b|deadlock detected/i.test(String((e as Error).message))) {
+        await new Promise((r) => setTimeout(r, 100 * attempt));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+const TRUNCATE_DEADLOCK_TRIES = 5;
+
+async function truncateOnce(prisma: PrismaService, sql: string): Promise<void> {
   try {
     await prisma.$transaction([
       prisma.$executeRawUnsafe(`set local lock_timeout = '60s'`),

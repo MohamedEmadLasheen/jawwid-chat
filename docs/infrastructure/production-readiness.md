@@ -1,93 +1,59 @@
-# Production Readiness
+# Production Readiness: the Phase 1 checklist
 
-Owner: AI #7 · Last verified: 2026-10-22 (GitHub configuration re-read; the deploy path is code-complete)
+Owner: release-qa, refreshed 2026-11-02 against `main` @ `12189c9e`. It was last verified by AI #7 on 2026-10-22/28; the "Owner steps" below are their re-verification of 2026-10-28, and they still hold.
 
-Status: 🔴 **NOT READY.**
+**Phase 1** means the system app is submitted to the App Store and Google Play, against a production backend on DigitalOcean App Platform (ADR-010, ADR-012). Materials are frozen and are not part of it.
 
-Not because infrastructure is unfinished — the deploy path is now code-complete
-for DigitalOcean App Platform (ADR-010, ADR-012) — but because Jawwid Chat still
-has no place to run. What remains is a short list of owner actions, in order,
-under **Owner steps that remain** below; none of it is a repository defect.
+Status: 🔴 **NOT READY.** Two different kinds of work remain, and they close separately:
 
-## Checklist
+- **The owner's accounts and keys.** The deploy path is code-complete, but there is nothing to deploy to. This is most of the backend list below.
+- **Code that is not built yet.** It is mostly on the mobile side: Android push, the call ring with the app closed, account deletion, the privacy manifest, app crash reporting and release signing. Its gates are S-01..S-08 in `docs/qa/release-gate.md` §2a. The phone-side test plan is `docs/qa/submission-device-test-plan.md`.
 
-Legend: ✅ done and verified · 🟡 partial · ❌ not done · ⛔ blocked
+Legend for the **Code** column: ✅ built and tested · 🟡 partly built · ❌ not built.
+Legend for the **Owner provides** column: the account, key or decision only the owner can supply. "—" means nothing is needed.
 
-| | Item | State | Note |
+## 1. Backend
+
+| Item | Code | What exists | Owner provides |
 |---|---|---|---|
-| ⛔ | Production environment exists | ❌ | No hosting account, no domain. BLOCKER-1 |
-| ✅ | Repository hosted, CI executable | ✅ | Remote live; CI runs on every push and PR, green on a GitHub-hosted runner. BLOCKER-2 closed |
-| ✅ | Application entrypoint | ✅ | `apps/api/src/main.ts` and `apps/api/src/worker.ts` both exist. BLOCKER-4 closed |
-| ⛔ | Secrets configured | ❌ | No secret store exists |
-| ⛔ | TLS enabled | ❌ | No domain |
-| 🟡 | Database configured | 🟡 | Local ✅. No managed instance. Authority locked to the SQL migrations; reconciliation in progress |
-| ❌ | Database backup configured | ❌ | Provider backups need a provider. `pg_dump` path ✅ |
-| ✅ | **Restore tested** | ✅ | Drill executed 2026-09-05: 0 errors, 31 tables, 57 config rows |
-| 🟡 | Redis configured | 🟡 | Local ✅, `appendonly` + `noeviction`. No managed instance |
-| 🟡 | Workers configured | 🟡 | Code ✅ — `src/worker.ts` drains the outbox, same image as the API (ADR-004). No worker process runs anywhere |
-| 🟡 | Object storage configured | 🟡 | MinIO ✅, private bucket ✅. No production bucket (none on the DigitalOcean account, checked 2026-10-28). Versioning + 30-day lifecycle scripted (`storage-versioning.sh`) and enforced by the production deploy |
-| ❌ | Push configured | ❌ | No Firebase or Apple credentials |
-| ❌ | LiveKit configured | ❌ | No project |
-| 🟡 | Core integration configured | 🟡 | Boundary being reworked to API/webhook per the locked decision |
-| 🟡 | Realtime configured | 🟡 | Gateway exists; multi-instance Redis adapter unproven |
-| ✅ | Health checks | ✅ | Liveness/readiness implemented; 200 and 503 paths both tested |
-| ❌ | Monitoring | ❌ | Structured JSON logs implemented (`monitoring.md` §3); metrics, dashboards, alerts not provisioned. BLOCKER-3 |
-| 🟡 | Error tracking | 🟡 | Sentry wired in API and worker behind a privacy allowlist (`monitoring.md` §3a, 2026-10-21); no Sentry project or DSN provisioned |
-| ✅ | CI configured | ✅ | Executes on GitHub-hosted runners; green on `main` |
-| 🟡 | CD configured | 🟡 | Release step implemented: `doctl` deploys `.do/app.<env>.yaml` and verifies the active deployment (ADR-012). Never executed: no DigitalOcean account yet |
-| ✅ | Infrastructure as code | ✅ | App Platform specs generated from the manifest; guard `app-spec` (stale spec, ADR invariants, workflow supply, `doctl` schema) runs in CI |
-| ✅ | Rollback documented | ✅ | Including which migrations are *not* reversible |
-| ✅ | Incident response documented | ✅ | No on-call rotation exists |
-| ⛔ | Staging validated | ❌ | No staging environment. CODE-CLOSED / INFRA-BLOCKED |
-| ✅ | Smoke tests available | ✅ | Executed against a live app; caught two real defects |
-| ✅ | Secret hygiene | ✅ | Scanner clean over worktree and full history |
-| ✅ | Config validation | ✅ | Rejects placeholders, wildcard CORS, sandbox APNs, TLS-disabled DSNs |
-| ✅ | Images build unprivileged | ✅ | Verified `uid=1000(node)` |
+| **App Platform app (production)** | ✅ | `.do/app.production.yaml`, generated from `infra/env/manifest.tsv` by `scripts/infra/app-spec.py` and checked in CI (`app-spec` guard). Region `fra`. Components: `api` (`node dist/main.js`, 1 vCPU/2 GB, health `/health/ready` + `/health/live`), `worker` (same image, `node dist/worker.js`), `admin-web` (nginx). Release: `.github/workflows/deploy-production.yml` → `scripts/infra/do-release.sh`. Its order: preflight → Admin Web build → credentials → `check-env.sh` → bucket versioning check → database role preflight → encrypted `pg_dump` → migrations → `doctl` release → smoke test. | A DigitalOcean account and project. GitHub Environment `production`, with required reviewers and deploys limited to `main`. `DIGITALOCEAN_ACCESS_TOKEN`, `GHCR_PULL_CREDENTIALS`, then `DIGITALOCEAN_APP_ID` after `first_deploy`. Optionally `DIGITALOCEAN_PROJECT_ID`. Steps 1, 4, 5 and 9 below. |
+| **Managed Postgres 17, backups, PITR** | 🟡 | The spec has deliberately no `databases:` block: the database arrives as the secret `DATABASE_URL`, and `check-env.sh` refuses `sslmode=disable`. The migration grants BYPASSRLS, so `scripts/db/preflight-role-capability.sh` must pass on the provider before the provider is chosen; the deploy re-runs it. Portable encrypted backup: `scripts/infra/backup-db.sh` / `restore-db.sh` (AES-256 + HMAC). It runs **before every deploy** and is kept 30 days as a workflow artifact, and it is drilled in CI (G-41). **A weekly scheduled backup now exists**: `backup-weekly.yml` (Sundays) dumps, encrypts and stores the copy in Spaces for 8 weeks (`backup-recovery.md` §3b), and the CI guard `backup-offsite` holds its upload and retention contract. DigitalOcean's daily backups and 7-day PITR are the first line. | The managed cluster (the "Jawwid Chat" project already holds one: verify it is PG 17 and run the preflight). Turn on and confirm the provider's daily backups and point-in-time recovery. DigitalOcean documents PITR for the last 7 days on managed Postgres; record the actual window. `BACKUP_ENCRYPTION_PASSPHRASE`, with a copy kept outside GitHub. Set up the `backup` GitHub Environment, the read-only `jawwid_backup` role and a key limited to a dedicated backup bucket (`backup-recovery.md` §3b), run `backup-weekly.yml` once by hand, then the §5a drill from that copy. |
+| **Redis** | ✅ | `REDIS_URL` + `QUEUE_PREFIX`. Used by realtime (`communication/realtime/redis.provider.ts`, the Socket.IO adapter), rate limiters and the outbox. It requires `appendonly yes`, `noeviction` and Redis ≥ 6.2 (`production-runbook.md` §1a). Multi-instance realtime is unproven (RISK-4), so production runs **one** API instance until it is proven. | A managed Redis/Valkey with those settings. |
+| **Object storage (Spaces)** | ✅ | The S3 adapter `communication/attachments/s3-object-storage.ts`; a partial configuration refuses to boot. `scripts/infra/storage-versioning.sh` turns on versioning, 30-day expiry of old versions and 1-day abandoned uploads. The production deploy verifies them and refuses to release without them. Spaces only (R2 has no versioning). | A private bucket in `fra1`, created **before** anything is uploaded, plus a Spaces key with `GetBucketVersioning` / `GetLifecycleConfiguration`. `STORAGE_*` values and `STORAGE_SIGNING_SECRET`. Run `storage-versioning.sh apply`, then `--verify-expiry` (step 7). |
+| **Domains and TLS** | ✅ | The spec names `${API_DOMAIN}` (primary) and `${ADMIN_WEB_DOMAIN}` (alias), minimum TLS 1.2. App Platform issues the certificates once DNS resolves. The store apps must use this HTTPS origin, never a local one (the local test stack's CA does not apply). | The domain and DNS CNAMEs. The variables `PRODUCTION_API_BASE_URL`, `PRODUCTION_REALTIME_URL`, `PRODUCTION_ADMIN_WEB_URL`, `PRODUCTION_CORS_ALLOWED_ORIGINS`, `TRUSTED_PROXY_HOPS` (step 3). |
+| **Secrets** | ✅ | Every value is in `infra/env/manifest.tsv` (marked secret or variable, and required, optional or forbidden per environment), templated in `infra/env/production.env.example`, inventoried in `secrets.md` §2 and judged by `scripts/infra/check-env.sh`. That script rejects placeholders, wildcard CORS, sandbox APNs, `NODE_ENV≠production` and TLS-off database URLs. CI scans the full git history for secrets. | Production requires: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RESET_CODE_HASH_SECRET`, the storage keys and `STORAGE_SIGNING_SECRET`, `APNS_PRIVATE_KEY`, `FCM_SERVICE_ACCOUNT_JSON`, `LIVEKIT_API_KEY`/`SECRET`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`, `SENTRY_DSN`, `SMTP_URL`. Optional: `STRIPE_*`, `TEACHER_PAYOUT_KEYS`, `LESSON_APPROVALS_SIGNING_KEY`, `WHATSAPP_ACCESS_TOKEN`. |
+| **APNs (iOS push)** | 🟡 | Server: `notifications/apns.provider.ts`, selected by `push.provider.selector.ts`. The deploy hard-codes `APNS_PRODUCTION=true`, and `check-env.sh` forbids anything else. Without a key it falls back to logging, which is what the local test stack runs: no push is delivered there, recorded as the LAUNCH BLOCKER on rows D-14/D-17b. **VoIP (call ring with the app closed) is gated by `APNS_VOIP_ENABLED`, which defaults to off and is in no manifest, app spec or deploy workflow. Production cannot turn it on today.** Code: add it to the manifest/spec as a variable. App side: S-03 and S-06 in the gate. | An Apple **APNs auth key (.p8)** from the paid developer team: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`. The bundle id must match the store app. |
+| **FCM (Android push)** | 🟡 | Server: `notifications/fcm.provider.ts` (data-only, high priority) and call routing in `call-push-routing.ts` (Android receives every kind). **App: not built.** No `firebase_messaging`, no `google-services.json`, and `MainActivity.kt` `startRegistering()` is empty (S-05). | A Firebase project with the Android app registered (`com.jawwid.jawwid_chat`, or the final id). `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_JSON`, and the `google-services.json` for the build. |
+| **LiveKit (calls)** | ✅ | `communication/calls/media-token.ts` (microphone only, 120 s TTL from `chat.config`) and `media-room-control.ts`. `.github/workflows/livekit-probe.yml` verifies an environment's credentials. Only the staging LiveKit exists. After provisioning, run `rt037-media-revocation.spec.ts` §G against it (`LIVEKIT_REAL_URL`) to close gate G-06. | A LiveKit Cloud project, or a self-hosted server with TURN. `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` in the `production` Environment. |
+| **Stripe (live)** | ✅ | `billing/stripe.gateway.ts`, `stripe-webhook.controller.ts`, `checkout.service.ts`. Unset means card payments are off and the webhook answers 503. The endpoint and its events are in `docs/admin/pd027-payments.md`. Card refunds reach Stripe once per refund id (#358). **There is no check that refuses a `sk_test_` key in production**; worth a `check-env.sh` rule. | Chat's Stripe account, a **restricted live key** (Checkout Sessions write, Refunds write), `STRIPE_SECRET_KEY`, the live webhook's `STRIPE_WEBHOOK_SECRET`, and `PAYMENT_LINK_BASE_URL`. |
+| **E-mail (SMTP)** | ✅ | `account-recovery/recovery-delivery.ts` (nodemailer). It carries first-login and reset codes for staff and teachers (PD-40/43) and parents' recovery (PD-25). `SMTP_URL` + `RECOVERY_MAIL_FROM` are **required**; the deploy refuses without them. | An SMTP provider and a sending domain with SPF and DKIM. |
+| **Error tracking (Sentry)** | 🟡 | API and worker: `infra/observability/sentry-error-tracker.ts` behind a privacy allowlist (`monitoring.md` §3a). `SENTRY_DSN` is required in production. **Flutter app: not built** (S-07). | A Sentry organisation, a project per component, and the DSNs. |
+| **Monitoring and alerts** | ❌ | Code: structured JSON logs with redaction, and `/health/live` + `/health/ready`. The spec provisions only App Platform's `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` alerts. `monitoring.md` §5's alert table is "a target, not a running system". No uptime check, metrics, dashboards or OpenTelemetry. | At minimum, for Phase 1: an external uptime check on `/health/ready`; App Platform CPU, memory and restart alerts; Sentry alert rules; database storage and connection alerts. Someone to receive them (on-call, runbook §9 "not yet defined"). |
+| **Rollback runbook** | ✅ | `production-runbook.md` §3: **forward-only by design.** Roll back the application by redeploying the previous sha; roll back data by restoring the pre-deploy encrypted backup; roll back config by reverting the variable. §3a restores an object from a bucket version. There are 23 hand-written `db/rollback/*.down.sql` scripts, for 159 migrations, none run in CI. Most migrations are not reversible by script. Treat every production migration as one-way, and keep the pre-deploy backup as the way back (gate G-19). | Decide the RPO/RTO (proposed: ≤ 5 min / ≤ 2 h, `backup-recovery.md` §6) and do one restore drill into staging before the first production deploy. |
+| **Core integration** | 🟡 | Signed webhook ingest only (`apps/api/src/core-boundary`). Phase 1 does not need Core to feed Chat. | `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET` (all required by the manifest in production; set real values or agree the inert ones). |
 
-## Readiness is three separate questions
+## 2. Mobile store builds
 
-They are tracked separately because they close separately, and conflating them
-is how a project talks itself into believing it can deploy.
+These are the code-side half of Phase 1. Gate ids refer to `docs/qa/release-gate.md` §2a.
 
-**1 · Repository / code readiness — ✅ READY.** The application builds, the
-entrypoint exists, the test suites and security guards pass.
+| Item | Code | State on `main` | Owner provides |
+|---|---|---|---|
+| iOS release signing and push entitlement (S-03) | ❌ | `Runner.entitlements` says `aps-environment = development`. The project names team `L4GWGYV6SN`; the local test builds use the paid team `KX683HAR3Y` by override. The bundle id is `com.jawwid.jawwidChat`. | The paid team's distribution certificate and App Store profile, and the App Store Connect app record. |
+| iOS Background Modes / CallKit / PushKit (S-06) | 🟡 | `UIBackgroundModes` = `voip`, `remote-notification` (no `audio`). `CallKitBridge.swift` and the PushKit registry in `AppDelegate.swift` exist, but they never ran on a device and the server gate is off. | — |
+| iOS privacy manifest (S-02) | ❌ | No `PrivacyInfo.xcprivacy`. | The App Privacy answers in App Store Connect. |
+| Android release signing and AAB (S-04) | ❌ | The release build is signed with the debug key (`android/app/build.gradle.kts:36`). No `key.properties`. The `applicationId` is `com.jawwid.jawwid_chat`, which differs from the iOS id; decide before the first upload, because it cannot change afterwards. | An upload keystore, kept outside the repo, enrolled in Play App Signing. The Play Console app record. |
+| Android push and call UI (S-05, S-06) | ❌ | No FCM client and no full-screen call notification. | `google-services.json` (see FCM). |
+| Account deletion (S-01) | ❌ | Not built, on either side. Both stores require it, and Google also needs a web link. | **Product decision:** what is erased and what is kept (payments, lesson records, audit) and for how long. |
+| App crash reporting (S-07) | ❌ | — | A Sentry DSN for the app. |
+| Release API address | ✅ | `--dart-define=JAWWID_API_BASE_URL=https://<api>/api/v1`, with no default. A release build without it stops at startup instead of showing fixtures (`lib/app/bootstrap.dart`). The LiveKit URL comes from the server's token response. | The production API domain. |
+| Store listings | — | Not code. | Names, screenshots, privacy policy URL, support URL, age rating, review account(s) for Apple and Google. |
 
-**2 · CI readiness — ✅ READY.** The pipeline runs on GitHub-hosted runners and
-is green on `main`. This is observed behaviour, not a reading of the YAML.
+## 3. What is ready today (no owner action needed)
 
-**3 · Staging infrastructure readiness — ⛔ NOT READY.**
-
-### Staging: CODE-CLOSED / INFRA-BLOCKED
-
-The repository side of staging is correct and complete. What is missing is
-external provisioning, verified against the live GitHub configuration on
-2026-09-24:
-
-* no staging hosting target exists
-* no `staging` environment exists in GitHub (the repository has zero
-  environments; `deploy-staging.yml` references one that has never been created)
-* no staging database exists
-* no staging Redis exists
-* no staging object storage exists
-* no staging domain or TLS certificate exists
-* no deployment credentials exist (the repository has zero Actions secrets and
-  zero Actions variables)
-* no DigitalOcean account, token or app exists, so the `Release` step — now
-  implemented (ADR-012) — refuses loudly, and the run stops at **The deploy
-  credentials are present**, before the backup and the migrations
-
-**A red `Deploy staging` run is therefore the expected and correct outcome**, and
-will stay that way until infrastructure exists. It is not a regression, and it
-must not be "fixed" by relaxing a guard, making the release step succeed, or
-marking the job `continue-on-error`. ADR-003 considered and rejected exactly
-that: a pipeline reporting success without deploying is a false negative on
-every future incident. It turns green by doing **Owner steps that remain**.
-
-The closure sequence is external and ordered: choose the platform, provision the
-infrastructure, create the GitHub `staging` environment, configure its variables
-and secrets, implement the real release command, deploy, then run
-`scripts/infra/smoke.sh` against the live host. Owner: product owner for the
-first two; AI #7 thereafter.
+- **Repository and CI.** 8 CI jobs on every push and PR, including Flutter (`mobile`). The last completed run on main, https://github.com/MohamedEmadLasheen/jawwid-chat/actions/runs/41471455277 on `0d1a1f50`, passed all 8.
+- **Containers.** The images build and run unprivileged (`uid=1000`). The `images` job checks the security headers.
+- **Database.** The migrations apply from empty and re-apply as a no-op (CI `migrations`). The encrypted backup/restore drill runs in CI (G-41).
+- **Behaviour.** Final acceptance, 512 rows: 415 PASS, 0 open P1. The local system-test stack (`main`, a release build on a physical iPhone) has run every chat, call, lesson, payment and whiteboard flow except push.
 
 ## Owner steps that remain
 
@@ -207,78 +173,31 @@ nothing. It never reports a deployment that did not happen (ADR-003).
 
 ## Blockers
 
-**BLOCKER-1 · No hosting.** *Provider chosen 2026-10-22: DigitalOcean App
-Platform (ADR-010); the app spec and release step are in the repository
-(ADR-012). Nothing is provisioned yet — see **Owner steps that remain**.* No cloud account, domain, TLS certificate, managed
-Postgres, Redis, object storage bucket, push credentials or LiveKit project
-exists for Jawwid Chat. Owner: product owner. Until then, nothing can be
-deployed anywhere, and the release step of both deployment workflows fails on
-purpose rather than pretending (ADR-003).
+**BLOCKER-1 · No hosting.** The provider was chosen on 2026-10-22: DigitalOcean App Platform (ADR-010). The app spec and release step are in the repository (ADR-012). The project holds a Postgres cluster, and nothing else is provisioned. Owner: product owner, via **Owner steps that remain** above. Until then, every deploy run stops at its first step with the missing item named, and changes nothing (ADR-003). A red `Deploy staging` run is the expected outcome, not a regression. It must not be "fixed" by relaxing a guard.
 
-**BLOCKER-2 · No git remote. — ✅ CLOSED 2026-09-24.** The repository is hosted
-at `MohamedEmadLasheen/jawwid-chat`, and CI executes on GitHub-hosted runners on
-every push and pull request, green on `main`. Claims about CI are now claims
-about observed behaviour. CD still cannot be judged this way: `Deploy staging`
-has failed on all 21 recorded runs, and the deploy job was skipped on every run
-because the build job failed first — so the release stub has never executed, and
-would refuse on purpose (ADR-003) if it ever did. What remains unexecuted is the
-*deployment*, not the pipeline. That is BLOCKER-1, not this one.
+**BLOCKER-2 · No git remote. ✅ CLOSED 2026-09-24.**
 
-**BLOCKER-3 · No observability backend.** No error tracking, metrics, dashboards
-or alerting. Detection today means a person noticing. Owner: AI #7, once
-BLOCKER-1 clears.
+**BLOCKER-3 · No observability backend.** There is no error tracking, metrics, dashboards or alerting. Detection today means a person noticing. See the Monitoring row above.
 
-**BLOCKER-4 · The API has no entrypoint. — ✅ CLOSED.** `apps/api/src/main.ts`
-exists: it constructs the Nest application from `AppModule` and listens on the
-configured port. `apps/api/src/worker.ts` is the second entrypoint, draining the
-outbox from the same image under a different command (ADR-004). Both are
-exercised by the test suites. Nothing about this closes BLOCKER-1 — the API can
-start, but there is still nowhere to start it.
+**BLOCKER-4 · The API has no entrypoint. ✅ CLOSED.**
 
-## High risks
+**BLOCKER-5 · The store builds are not submittable** (new, 2026-11-02). Account deletion, the privacy manifest, Android push and signing, the iOS release entitlement, and the call ring with the app closed (gates S-01..S-07). This is code work plus one product decision (what account deletion erases).
 
-**RISK-1 · The Prisma client and the API source have drifted.** `npm run
-typecheck` fails on the test project: the generated client no longer exports
-members the specs import. `src/` still compiles, so the image builds — but CI's
-typecheck gate will fail. Note the container build regenerates the Prisma client
-from scratch and is therefore a **stricter** check than any local build, which
-reuses a stale client. Owner: AI #2 / AI #5.
+## Risks
 
-**RISK-2 · Database reconciliation is mid-flight.** The authority is locked to
-the SQL migrations, and Prisma is being moved onto the `chat` schema. Until it
-lands, the two descriptions of the domain disagree. Owner: AI #1.
-Cross-referenced: `docs/product-operations/database-divergence.md`.
+- **RISK-1 · Prisma client drift. ✅ CLOSED.** The CI `api` job typechecks and is green on main.
+- **RISK-2 · Two schema authorities. 🟡 Open, smaller.** The SQL migrations are the only authority CI applies. Prisma can still `db push`, and the `db:drift` check that `schema.prisma` mentions does not exist (gate G-21).
+- **RISK-3 · Mobile unbuildable. ✅ CLOSED.** The Flutter app builds and its suite runs in CI. Release builds have been installed on a physical iPhone. What remains is the store work in BLOCKER-5.
+- **RISK-4 · Multi-instance realtime is unproven.** Production must run one API instance until two instances are shown, on staging, to deliver every event through the Redis adapter.
+- **RISK-5 · Shared working trees.** Several agents work in one repository. Verify the committed tree, never the working copy.
+- **RISK-6 · Backups between deploys rest entirely on the provider.** 🟡 Mitigated in code: `backup-weekly.yml` takes an encrypted dump every Sunday and keeps 8 weeks in Spaces (`backup-recovery.md` §3b), whether or not anyone deploys. Open until (a) the provider's daily backups and 7-day PITR are confirmed on the production cluster, (b) the `backup` Environment, read-only role and dedicated bucket key exist (`backup-recovery.md` §3b) and the weekly job has run once, and (c) the §5a restore drill from a weekly copy has passed.
 
-**RISK-3 · Mobile is unbuildable and untestable.** No `pubspec.yaml`; no Flutter
-SDK on any known host. Every mobile build instruction in `handoff-ai3.md` is a
-specification that has never been executed. Owner: AI #3.
+## What would make this green (Phase 1 order)
 
-**RISK-4 · Multi-instance realtime is unproven.** The Socket.IO Redis adapter is
-a declared dependency, not a demonstrated behaviour. Running two API instances
-without it silently delivers events to only one of them. Must be tested on
-staging before any horizontal scaling.
-
-**RISK-5 · One shared working tree.** Five-plus agents commit to one checkout;
-files written by one were committed by another, and this branch's `ci.yml` was
-overwritten and had to be merged back. Nothing here is safe to assume unread.
-Cross-referenced: `docs/product-operations/shared-working-tree-risk.md`.
-
-## What would make this green
-
-1. ~~Provision a git remote~~ — done; CI runs and is green (BLOCKER-2 closed).
-2. ~~Write `main.ts` and `worker.ts`~~ — done (BLOCKER-4 closed).
-3. ~~Choose a provider~~ — DigitalOcean App Platform (ADR-010). Provision
-   hosting, then create the GitHub `staging` environment and configure its
-   variables and secrets (BLOCKER-1; ordered sequence under **Staging:
-   CODE-CLOSED / INFRA-BLOCKED**). Verify the BYPASSRLS capability first —
-   `scripts/db/preflight-role-capability.sh` answers it against a trial instance
-   without migrating anything.
-4. Land the database reconciliation (RISK-2).
-5. ~~Fill in the release step in both deployment workflows, together with the IaC
-   for the chosen provider (ADR-009)~~ — done: `.do/app.<env>.yaml` and the
-   `doctl` release step landed together (ADR-012).
-6. Deploy to staging; run the smoke test; run a restore drill against staging.
-7. Provision observability and wire Sentry and OTLP (BLOCKER-3).
-8. Prove multi-instance realtime on staging (RISK-4).
-9. Define an on-call rotation and escalation path.
-10. Re-run this checklist against the real environment rather than against files.
+1. Owner steps 1–8 above (accounts, database preflight, domain, Environments, credentials, bucket, services).
+2. Deploy staging, run the smoke test, run a restore drill into staging (G-41), and run the real-LiveKit test §G (G-06).
+3. Build the store items (BLOCKER-5), add `APNS_VOIP_ENABLED` to the manifest, and turn it on in staging first.
+4. Run `docs/qa/submission-device-test-plan.md` on staging with the release builds.
+5. Provision Sentry (API, worker, app), an uptime check and alerts. Name who is on call.
+6. Deploy production from a commit staging has run. Submit the store builds pointed at it.
+7. Re-run this checklist against the real environment rather than against files.

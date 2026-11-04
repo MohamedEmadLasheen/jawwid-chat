@@ -2,16 +2,26 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
+import '../data/board_images.dart';
+import '../data/quran_text_repository.dart';
 import '../domain/board_elements.dart';
+import '../domain/board_emoji.dart';
 import '../domain/board_page.dart';
 import '../domain/stroke_points.dart';
 
 /// The board's one font for text and text stamps (bundled; IBM Plex Sans
-/// Arabic covers Arabic and Latin). Amiri arrives with the verses (PR-3).
+/// Arabic covers Arabic and Latin).
 const String kBoardFont = 'IBM Plex Sans Arabic';
+
+/// The verses' font (bundled; the shared Quran dataset's contract names it).
+const String kQuranFont = 'Amiri Quran';
+
+/// How the painter learns a verse's text: the open board's [VerseCache].
+typedef VerseSource = VerseLookup Function(VerseElement verse);
 
 /// Paints a page in page units (1920 × 1080); the caller scales the canvas.
 ///
@@ -21,26 +31,46 @@ const String kBoardFont = 'IBM Plex Sans Arabic';
 /// a [ui.Picture] and replayed, so drawing a new stroke repaints only that
 /// stroke (the canvas's overlay), not the whole page.
 class BoardPagePainter extends CustomPainter {
-  BoardPagePainter({required this.page, this.placeholderLabel}) : _cache = _PictureCache.of(page, null);
+  BoardPagePainter({required this.page, this.placeholderLabel, this.verses, this.versesVersion, this.images, this.imagesVersion})
+    : emojiReady = boardEmojiFontReady.value,
+      _cache = _PictureCache.of(page, versesVersion, imagesVersion, boardEmojiFontReady.value);
 
   final BoardPage page;
 
-  /// How a kind this build does not draw is labelled (a verse before PR-3).
+  /// How a kind this build does not draw is labelled -- and a verse whose text
+  /// is loading, unavailable or changed.
   final String Function(BoardElement element)? placeholderLabel;
+
+  /// The verses' texts, and what changes whenever one of them does.
+  final VerseSource? verses;
+  final Object? versesVersion;
+
+  /// The board's images (PR-4), and what changes whenever one of them arrives.
+  final BoardImageSource? images;
+  final Object? imagesVersion;
+
+  /// PD-55 (4): whether the emoji font could draw when this was made; a page
+  /// recorded before it loaded is recorded again once it has.
+  final bool emojiReady;
 
   final _PictureCache _cache;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
-    canvas.scale(size.width / kBoardPageSize.width, size.height / kBoardPageSize.height);
-    canvas.drawPicture(_cache.picture(() => _record(page, placeholderLabel)));
+    canvas.scale(size.width / page.size.width, size.height / page.size.height);
+    canvas.drawPicture(_cache.picture(() => _record(page, placeholderLabel, verses, images)));
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(BoardPagePainter old) =>
-      !identical(old.page.elements, page.elements) || old.page.layout != page.layout || old.page.background != page.background;
+      !identical(old.page.elements, page.elements) ||
+      old.page.layout != page.layout ||
+      old.page.background != page.background ||
+      !identical(old.versesVersion, versesVersion) ||
+      !identical(old.imagesVersion, imagesVersion) ||
+      old.emojiReady != emojiReady;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,8 +89,14 @@ class _PictureCache {
   static const int _capacity = 16;
   static final LinkedHashMap<List<BoardElement>, _PictureCache> _recent = LinkedHashMap(equals: identical, hashCode: identityHashCode);
 
-  static _PictureCache of(BoardPage page, Object? versesVersion) {
-    final key = (page.layout, page.background, versesVersion == null ? 0 : identityHashCode(versesVersion));
+  static _PictureCache of(BoardPage page, Object? versesVersion, [Object? imagesVersion, bool emojiReady = true]) {
+    final key = (
+      page.layout,
+      page.background,
+      versesVersion == null ? 0 : identityHashCode(versesVersion),
+      imagesVersion == null ? 0 : identityHashCode(imagesVersion),
+      emojiReady,
+    );
     final existing = _recent.remove(page.elements);
     if (existing != null && existing.key == key) {
       _recent[page.elements] = existing; // most recent last
@@ -78,28 +114,28 @@ class _PictureCache {
   ui.Picture picture(ui.Picture Function() record) => _picture ??= record();
 }
 
-ui.Picture _record(BoardPage page, String Function(BoardElement)? label) {
+ui.Picture _record(BoardPage page, String Function(BoardElement)? label, VerseSource? verses, BoardImageSource? images) {
   final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder, Offset.zero & kBoardPageSize);
-  paintBackground(canvas, page.layout, page.background);
+  final canvas = Canvas(recorder, Offset.zero & page.size);
+  paintBackground(canvas, page.layout, page.background, page.size);
   for (final e in page.elements) {
     if (e is InkElement && e.highlight) paintInk(canvas, e);
   }
   for (final e in page.elements) {
     if (e is InkElement && e.highlight) continue;
-    paintElement(canvas, e, dark: page.background.isDark, label: label);
+    paintElement(canvas, e, dark: page.background.isDark, label: label, verses: verses, images: images);
   }
   return recorder.endRecording();
 }
 
-/// The page colour and its rulings.
-void paintBackground(Canvas canvas, PageLayout layout, PageBackground background) {
-  final page = Offset.zero & kBoardPageSize;
+/// The page colour and its rulings, on a page of [size] (wide unless said; PD-55).
+void paintBackground(Canvas canvas, PageLayout layout, PageBackground background, [Size size = kBoardPageSize]) {
+  final page = Offset.zero & size;
   canvas.drawRect(page, Paint()..color = background.color);
   final line = Paint()
     ..color = background.isDark ? BoardPalette.ruleOnDark : BoardPalette.ruleOnLight
     ..strokeWidth = 1.5;
-  final w = kBoardPageSize.width, h = kBoardPageSize.height;
+  final w = size.width, h = size.height;
   switch (layout) {
     case PageLayout.plain:
       break;
@@ -116,6 +152,15 @@ void paintBackground(Canvas canvas, PageLayout layout, PageBackground background
       }
       for (var y = gap; y < h; y += gap) {
         canvas.drawLine(Offset(0, y), Offset(w, y), line);
+      }
+    case PageLayout.dotted:
+      // PD-55: a dot every 32 units, the rule colour made a little firmer.
+      const gap = 32.0;
+      final dot = Paint()..color = line.color.withValues(alpha: math.min(1, line.color.a * 1.8));
+      for (var x = gap; x < w; x += gap) {
+        for (var y = gap; y < h; y += gap) {
+          canvas.drawCircle(Offset(x, y), 2.2, dot);
+        }
       }
     case PageLayout.arabicLines:
       // A baseline and a lighter upper guide per band: the height of a
@@ -143,7 +188,14 @@ void _dashed(Canvas canvas, Offset a, Offset b, Paint paint) {
   }
 }
 
-void paintElement(Canvas canvas, BoardElement e, {bool dark = false, String Function(BoardElement)? label}) {
+void paintElement(
+  Canvas canvas,
+  BoardElement e, {
+  bool dark = false,
+  String Function(BoardElement)? label,
+  VerseSource? verses,
+  BoardImageSource? images,
+}) {
   switch (e) {
     case InkElement():
       paintInk(canvas, e);
@@ -155,9 +207,82 @@ void paintElement(Canvas canvas, BoardElement e, {bool dark = false, String Func
       _paintText(canvas, e);
     case StampElement():
       _paintStamp(canvas, e);
+    case VerseElement():
+      final found = verses?.call(e);
+      if (found != null && found.status == VerseStatus.ready) {
+        paintVerse(canvas, e, found.text!);
+      } else {
+        _paintPlaceholderBox(canvas, e.bounds, dark, label?.call(e) ?? e.kind);
+      }
+    case ImageElement():
+      final found = images?.call(e.assetId);
+      final image = found?.image;
+      if (found != null && found.status == BoardImageStatus.ready && image != null) {
+        paintBoardImage(canvas, e.rect, image);
+      } else {
+        _paintPlaceholderBox(canvas, e.bounds, dark, label?.call(e) ?? e.kind);
+      }
     case OpaqueElement():
-      _paintPlaceholder(canvas, e, dark, label?.call(e) ?? e.kind);
+      _paintPlaceholderBox(canvas, e.bounds, dark, label?.call(e) ?? e.kind);
   }
+}
+
+/// An image filling its box (its box keeps the image's proportions), smoothed.
+void paintBoardImage(Canvas canvas, Rect rect, ui.Image image) {
+  final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+  canvas.drawImageRect(image, src, rect, Paint()..filterQuality = FilterQuality.medium);
+}
+
+const _arabicIndic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+/// "١٢" for 12: the ayah number inside its end-of-ayah sign.
+String arabicIndicNumber(int n) => '$n'.split('').map((d) => _arabicIndic[int.parse(d)]).join();
+
+/// The ayat as one run of text, each closed by the end-of-ayah sign (U+06DD)
+/// with its number: the verse only, never the Basmala.
+String verseBody(VerseText text) => [for (final a in text.ayahs) '${a.text} \u06DD${arabicIndicNumber(a.ayah)}'].join(' ');
+
+/// A verse laid out in its box: the Basmala on its own centred line (ayah 1 of
+/// the surahs that carry it), then the ayat, each closed by U+06DD with its
+/// number, right to left, never splitting a word.
+({TextPainter? basmala, TextPainter text}) layoutVerse(VerseText text, double fontSize, Color color, double width) {
+  TextStyle style(double size) => TextStyle(fontFamily: kQuranFont, fontSize: size, color: color, height: 1.9);
+  final first = text.ayahs.first;
+  final basmala = first.basmala == null
+      ? null
+      : (TextPainter(
+          text: TextSpan(text: first.basmala, style: style(fontSize)),
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.center,
+        )..layout(minWidth: width, maxWidth: width));
+  final verse = verseBody(text);
+  final body = TextPainter(
+    text: TextSpan(text: verse, style: style(fontSize)),
+    textDirection: TextDirection.rtl,
+    textAlign: TextAlign.justify,
+  )..layout(minWidth: width, maxWidth: width);
+  return (basmala: basmala, text: body);
+}
+
+/// The height a verse takes at [width]: what its box is given when placed.
+double verseHeight(VerseText text, double fontSize, double width) {
+  final laid = layoutVerse(text, fontSize, BoardPalette.ink, width);
+  return (laid.basmala?.height ?? 0) + laid.text.height;
+}
+
+/// Drawn within its box, never past it: a verse never spills over what is
+/// around it on the page.
+void paintVerse(Canvas canvas, VerseElement v, VerseText text) {
+  final laid = layoutVerse(text, v.fontSize, v.color, v.rect.width);
+  canvas.save();
+  canvas.clipRect(v.rect.inflate(v.fontSize * 0.25));
+  var y = v.rect.top;
+  if (laid.basmala != null) {
+    laid.basmala!.paint(canvas, Offset(v.rect.left, y));
+    y += laid.basmala!.height;
+  }
+  laid.text.paint(canvas, Offset(v.rect.left, y));
+  canvas.restore();
 }
 
 /// A pen stroke widens with pressure; a stroke from a mouse (no pressure) and
@@ -251,22 +376,36 @@ TextDirection textDirectionOf(String text) {
   return TextDirection.ltr;
 }
 
-TextPainter layoutBoardText(String text, double fontSize, Color color, double maxWidth) {
+/// The board's text style: one place, so the painter, the export and the
+/// in-place editor (PD-55) lay text out identically.
+TextStyle boardTextStyle(double fontSize, Color color, {bool bold = false}) =>
+    TextStyle(fontFamily: kBoardFont, fontSize: fontSize, color: color, height: 1.4, fontWeight: bold ? FontWeight.w700 : FontWeight.w400);
+
+TextPainter layoutBoardText(String text, double fontSize, Color color, double maxWidth, {bool bold = false}) {
   final dir = textDirectionOf(text);
   return TextPainter(
-    text: TextSpan(
-      text: text,
-      style: TextStyle(fontFamily: kBoardFont, fontSize: fontSize, color: color, height: 1.4),
-    ),
+    text: TextSpan(text: text, style: boardTextStyle(fontSize, color, bold: bold)),
     textDirection: dir,
     textAlign: dir == TextDirection.rtl ? TextAlign.right : TextAlign.left,
   )..layout(maxWidth: maxWidth);
 }
 
 void _paintText(Canvas canvas, TextElement t) {
-  final tp = layoutBoardText(t.text, t.fontSize, t.color, t.size.width);
+  final tp = layoutBoardText(t.text, t.fontSize, t.color, t.size.width, bold: t.bold);
   final dx = tp.textDirection == TextDirection.rtl ? t.size.width - tp.width : 0.0;
+  if (t.rotation == 0) {
+    tp.paint(canvas, t.topLeft + Offset(dx, 0));
+    return;
+  }
+  // PD-55: turned about the box's centre.
+  final c = t.box.center;
+  canvas
+    ..save()
+    ..translate(c.dx, c.dy)
+    ..rotate(t.rotation)
+    ..translate(-c.dx, -c.dy);
   tp.paint(canvas, t.topLeft + Offset(dx, 0));
+  canvas.restore();
 }
 
 /// Icon stamps are Material icons drawn as glyphs; text stamps are our font.
@@ -275,9 +414,29 @@ const Map<StampKind, IconData> kStampIcons = {
   StampKind.check: Icons.check_circle_rounded,
   StampKind.heart: Icons.favorite_rounded,
   StampKind.thumbsUp: Icons.thumb_up_rounded,
+  // PD-55: the reward stickers (the same icons as features/rewards' Sticker).
+  StampKind.medal: Icons.military_tech_rounded,
+  StampKind.trophy: Icons.emoji_events_rounded,
+  StampKind.rocket: Icons.rocket_launch_rounded,
+  StampKind.sun: Icons.wb_sunny_rounded,
+  StampKind.rainbow: Icons.looks_rounded,
+  StampKind.crown: Icons.workspace_premium_rounded,
+  StampKind.balloon: Icons.celebration_rounded,
 };
 
 void _paintStamp(Canvas canvas, StampElement s) {
+  if (s.stamp == StampKind.emoji) {
+    // PD-55 (4): the emoji itself, filling its square, in colour (not in s.color).
+    final tp = TextPainter(
+      text: TextSpan(
+        text: s.text ?? '',
+        style: TextStyle(fontFamily: kIsWeb ? kBoardEmojiFont : null, fontSize: s.rect.shortestSide * 0.82, height: 1),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, s.rect.center - Offset(tp.width / 2, tp.height / 2));
+    return;
+  }
   final icon = kStampIcons[s.stamp];
   if (icon != null) {
     final tp = TextPainter(
@@ -304,8 +463,7 @@ void _paintStamp(Canvas canvas, StampElement s) {
   tp.paint(canvas, s.rect.center - Offset(tp.width / 2, tp.height / 2));
 }
 
-void _paintPlaceholder(Canvas canvas, OpaqueElement e, bool dark, String label) {
-  final r = e.bounds;
+void _paintPlaceholderBox(Canvas canvas, Rect r, bool dark, String label) {
   final ink = dark ? BoardPalette.placeholderOnDark : BoardPalette.placeholderOnLight;
   canvas.drawRect(r, Paint()..color = ink.withValues(alpha: 0.08));
   final edge = Paint()

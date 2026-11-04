@@ -5,10 +5,11 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
-import { pageRowVisible, scopeCovers, type PageScope } from '../platform/teacher-scope';
+import { pageRowVisible, scopeCovers, type PageScope, type TeacherScope } from '../platform/teacher-scope';
 import { isLiveTeacher } from '../platform/pd012-policy';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { CardKind, LeaveState } from '../communication/contracts/vocab';
+import { ActorKind, CardKind, LeaveState } from '../communication/contracts/vocab';
+import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
@@ -122,13 +123,16 @@ export class LeaveService {
         });
         const conv = await this.supervision.ensureInTx(tx, actor.actorId, actor.organizationId as string, null);
         const balance = await this.balanceOf(tx, actor.actorId, Number(firstDay.slice(0, 4)));
+        const days = daysBetween(firstDay, lastDay).length;
         const payload = {
           leaveRequestId: row.id,
           firstDay,
           lastDay,
-          days: daysBetween(firstDay, lastDay).length,
+          days,
           reason,
           balance: balance.balance,
+          // TEACHER-005: the warning, to the teacher and the approver alike (both read this card).
+          unpaidDays: unpaidFor(balance.balance, days),
         };
         const messageId = await this.cards.post(tx, conv, actor, {
           kind: CardKind.LEAVE_REQUESTED,
@@ -186,17 +190,31 @@ export class LeaveService {
     }
     // PD-35: the requests of the teachers in the caller's scope.
     const page = await this.supervision.teacherScope.pageRowsOf(actor);
-    const scope = page.teachers;
     const rows = await this.prisma.teacherLeaveRequest.findMany({
-      where: {
-        organizationId: actor.organizationId,
-        ...(query.state ? { state: query.state } : {}),
-        ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
-      },
+      where: requestsWhere(actor, page.teachers, query.state),
       orderBy: query.state === LeaveState.REQUESTED ? { requestedAt: 'asc' } : { firstDay: 'desc' },
-      take: 500,
+      take: LIST_LIMIT,
     });
     return { requests: await this.dtos(rows, true, page) };
+  }
+
+  /**
+   * PD-44: the Dashboard's leave tile -- `list({ state: 'requested' })`'s
+   * length, counted over the same rows (requestsWhere, the page's scope) in
+   * one statement and capped at the list's LIST_LIMIT. Staff off the
+   * Teacher Supervision page get no tile; non-staff are refused as there.
+   */
+  async dashboardCounts(actorId: string): Promise<DashboardTile[]> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) return [];
+    const page = await this.supervision.teacherScope.pageRowsOf(actor);
+    const r = await this.prisma.teacherLeaveRequest.aggregate({
+      where: requestsWhere(actor, page.teachers, LeaveState.REQUESTED),
+      _count: { _all: true },
+      _min: { requestedAt: true },
+    });
+    const n = r._count._all;
+    return [dashboardTile('leave.pending', Math.min(n, LIST_LIMIT), r._min.requestedAt, n > LIST_LIMIT)];
   }
 
   /**
@@ -216,6 +234,7 @@ export class LeaveService {
                ORDER BY a.set_at DESC, a.id DESC LIMIT 1) AS allowance,
              (SELECT count(*)::int FROM chat.teacher_day_off o
                WHERE o.teacher_id = t.id AND o.suspension_id IS NULL
+                 AND NOT o.unpaid -- TEACHER-005: as balanceOf, paid days only
                  AND extract(year FROM o.day) = ${year}) AS used,
              (SELECT count(*)::int FROM chat.teacher_leave_request r
                WHERE r.teacher_id = t.id AND r.state = 'requested') AS pending,
@@ -235,7 +254,7 @@ export class LeaveService {
         name: r.name,
         isActive: r.active,
         ...(scopeCovers(page.whole, r.id)
-          ? { allowance: r.allowance, used: r.used, balance: r.allowance === null ? null : r.allowance - r.used }
+          ? { allowance: r.allowance, used: r.used, balance: r.allowance === null ? null : Math.max(0, r.allowance - r.used) }
           : {}),
         pendingRequests: r.pending,
         away: r.away_kind && r.away_until ? { kind: r.away_kind, until: isoDate(r.away_until) } : null,
@@ -322,6 +341,8 @@ export class LeaveService {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
     await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    // TEACHER-007: approving an approved request again (a double click) answers as the first did.
+    if (row.state === LeaveState.APPROVED) return this.alreadyApproved(row.id, actor);
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const firstDay = isoDate(row.firstDay);
     const lastDay = isoDate(row.lastDay);
@@ -346,15 +367,23 @@ export class LeaveService {
     const teacher = await this.conversations.requireActor(row.teacherId);
     const year = Number(firstDay.slice(0, 4));
 
-    await this.write(() =>
+    const claimed = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.teacherLeaveRequest.update({
-          where: { id: row.id },
-          data: { state: LeaveState.APPROVED, decidedBy: actor.actorId, decisionNote: note },
-        });
+        // Lock, claim, then the balance: two approvals for one teacher at once must
+        // not both see the whole balance -- the teacher's row orders them (#398
+        // review) -- and of two approvals of ONE request, one writes (TEACHER-007).
+        // NO KEY UPDATE, not UPDATE: it orders approvals for this teacher without
+        // blocking the KEY SHARE locks every foreign-key check takes on the teacher
+        // (a concurrent decline's card insert), which deadlocked with FOR UPDATE.
+        await tx.$queryRaw`SELECT 1 FROM chat.teacher WHERE id = ${row.teacherId}::uuid FOR NO KEY UPDATE`;
+        if (!(await this.claim(tx, row.id, { state: LeaveState.APPROVED, decidedBy: actor.actorId, decisionNote: note }))) return false;
         const alreadyOff = new Set(await this.daysAlreadyOff(tx, row.teacherId, chosen));
-        const toWrite = chosen.filter((d) => !alreadyOff.has(d));
-        for (const day of toWrite) {
+        const toWrite = chosen.filter((d) => !alreadyOff.has(d)).sort();
+        // TEACHER-005: the days fill what the balance has left, in date order;
+        // the rest are unpaid leave. No allowance: nothing to exceed.
+        const before = (await this.balanceOf(tx, row.teacherId, year)).balance;
+        const covered = before === null ? toWrite.length : Math.max(0, before);
+        for (const [i, day] of toWrite.entries()) {
           await tx.teacherDayOff.create({
             data: {
               organizationId: row.organizationId,
@@ -363,21 +392,28 @@ export class LeaveService {
               reason: `Leave: ${row.reason}`.slice(0, 500),
               createdBy: actor.actorId,
               leaveRequestId: row.id,
+              unpaid: i >= covered,
             },
           });
         }
+        const unpaidDays = Math.max(0, toWrite.length - covered);
         const balance = await this.balanceOf(tx, row.teacherId, year);
-        await this.postToTeacher(tx, row, actor, CardKind.LEAVE_APPROVED, { days: toWrite.length, balance: balance.balance, note }, teacher);
+        await this.postToTeacher(
+          tx, row, actor, CardKind.LEAVE_APPROVED,
+          { days: toWrite.length - unpaidDays, unpaidDays, balance: balance.balance, note }, teacher,
+        );
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'teacher_leave.approved',
           entity: 'teacher_leave_request',
           entityId: row.id,
-          after: { days: toWrite, collidingLessons: colliding.map((l) => l.id) },
+          after: { days: toWrite, unpaidDays: toWrite.slice(covered), collidingLessons: colliding.map((l) => l.id) },
           reason: note ?? 'leave approved',
         });
+        return true;
       }),
     );
+    if (!claimed) return this.alreadyDecided(row.id, actor, LeaveState.APPROVED).then((request) => ({ request, cancelledLessons: 0, notCancelled: [] }));
 
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
     for (const lesson of colliding) {
@@ -385,7 +421,7 @@ export class LeaveService {
         const reason = teacher.locale === 'en' ? 'The teacher is on approved leave' : 'المعلم في إجازة معتمدة';
         // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
         if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
-        else await this.lessons.cancel(actorId, lesson.id, { reason });
+        else await this.lessons.cancel(actorId, lesson.id, { reason }, 'teacher_leave');
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
         this.logger.warn(`lesson ${lesson.id} inside approved leave ${row.id} was not cancelled: ${reason}`);
@@ -399,15 +435,14 @@ export class LeaveService {
     const actor = await this.requireSupervisor(actorId);
     const row = await this.loadRequest(actor.organizationId as string, requestId);
     await this.supervision.requireTeacherInPageScope(actor, row.teacherId, CommErrorCode.LEAVE_NOT_FOUND);
+    // TEACHER-007: declining a declined request again (a double click) answers as the first did.
+    if (row.state === LeaveState.DECLINED) return { request: await this.dtoById(row.id, actor) };
     if (row.state !== LeaveState.REQUESTED) throw state('this request has already been decided');
     const note = textField(body, 'note', MAX_TEXT, true) as string;
     const teacher = await this.conversations.requireActor(row.teacherId);
-    await this.write(() =>
+    const claimed = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.teacherLeaveRequest.update({
-          where: { id: row.id },
-          data: { state: LeaveState.DECLINED, decidedBy: actor.actorId, decisionNote: note },
-        });
+        if (!(await this.claim(tx, row.id, { state: LeaveState.DECLINED, decidedBy: actor.actorId, decisionNote: note }))) return false;
         await this.postToTeacher(tx, row, actor, CardKind.LEAVE_DECLINED, { note }, teacher);
         await this.audit.audit(tx, {
           actorId: actor.actorId,
@@ -416,8 +451,10 @@ export class LeaveService {
           entityId: row.id,
           reason: note,
         });
+        return true;
       }),
     );
+    if (!claimed) return { request: await this.alreadyDecided(row.id, actor, LeaveState.DECLINED) };
     return { request: await this.dtoById(row.id, actor) };
   }
 
@@ -436,28 +473,32 @@ export class LeaveService {
     const teacher = await this.conversations.requireActor(row.teacherId);
     const today = todayIn(await this.timeZone());
     let returned = 0;
+    let unpaidCancelled = 0;
     await this.write(() =>
       this.prisma.$transaction(async (tx) => {
         await tx.teacherLeaveRequest.update({
           where: { id: row.id },
           data: { state: LeaveState.CANCELLED, endedBy: actor.actorId, endedAt: new Date() },
         });
+        // TEACHER-005: of the days given back, the paid ones return to the balance;
+        // the unpaid ones are simply no longer leave. Reported apart (#398 review).
+        unpaidCancelled = await tx.teacherDayOff.count({ where: { leaveRequestId: row.id, day: { gte: asDate(today) }, unpaid: true } });
         const removed = await tx.teacherDayOff.deleteMany({
           where: { leaveRequestId: row.id, day: { gte: asDate(today) } },
         });
-        returned = removed.count;
-        await this.postToTeacher(tx, row, actor, CardKind.LEAVE_CANCELLED, { daysReturned: returned, note }, teacher);
+        returned = removed.count - unpaidCancelled;
+        await this.postToTeacher(tx, row, actor, CardKind.LEAVE_CANCELLED, { daysReturned: returned, unpaidDaysCancelled: unpaidCancelled, note }, teacher);
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'teacher_leave.cancelled',
           entity: 'teacher_leave_request',
           entityId: row.id,
-          after: { daysReturned: returned },
+          after: { daysReturned: returned, unpaidDaysCancelled: unpaidCancelled },
           reason: note,
         });
       }),
     );
-    return { request: await this.dtoById(row.id, actor), daysReturned: returned };
+    return { request: await this.dtoById(row.id, actor), daysReturned: returned, unpaidDaysCancelled: unpaidCancelled };
   }
 
   // ------------------------------------------------------------------
@@ -473,10 +514,12 @@ export class LeaveService {
         (SELECT count(*)::int FROM chat.teacher_day_off o
           WHERE o.teacher_id = ${teacherId}::uuid
             AND o.suspension_id IS NULL -- a suspension is not leave (PD-12 S2)
+            AND NOT o.unpaid            -- TEACHER-005: unpaid leave is not drawn from the allowance
             AND extract(year FROM o.day) = ${year}) AS used`;
     const allowance = rows[0]?.allowance ?? null;
     const used = rows[0]?.used ?? 0;
-    return { year, allowance, used, balance: allowance === null ? null : allowance - used };
+    // Never below 0 (owner, TEACHER-005): an allowance lowered after the fact reads as used up, not owed.
+    return { year, allowance, used, balance: allowance === null ? null : Math.max(0, allowance - used) };
   }
 
   // ------------------------------------------------------------------
@@ -570,6 +613,9 @@ export class LeaveService {
         endedAt: r.endedAt?.toISOString() ?? null,
         // For the approver: what approving would do, computed now.
         balance: withCollisions && open && whole ? (await this.balanceOf(this.prisma, r.teacherId, year)).balance : undefined,
+        // TEACHER-005: the days beyond the allowance -- projected while open, recorded once approved.
+        // It speaks of the balance, so it is shown where the balance is (the teacher; the Teachers department).
+        unpaidDays: whole ? await this.unpaidDaysOf(r, open, year) : undefined,
         collidingLessons:
           withCollisions && open
             ? (await this.collidingLessons(r.teacherId, firstDay, lastDay, tz)).map((l) => ({
@@ -581,6 +627,31 @@ export class LeaveService {
       });
     }
     return out;
+  }
+
+  private async unpaidDaysOf(r: TeacherLeaveRequest, open: boolean, year: number): Promise<number | null> {
+    if (open) return unpaidFor((await this.balanceOf(this.prisma, r.teacherId, year)).balance, daysBetween(isoDate(r.firstDay), isoDate(r.lastDay)).length);
+    return this.prisma.teacherDayOff.count({ where: { leaveRequestId: r.id, unpaid: true } });
+  }
+
+  /**
+   * TEACHER-007: moves a request out of 'requested' only if it is still there;
+   * false when another decision got there first (the row lock orders them).
+   */
+  private async claim(tx: Tx, requestId: string, data: { state: string; decidedBy: string; decisionNote: string | null }): Promise<boolean> {
+    const done = await tx.teacherLeaveRequest.updateMany({ where: { id: requestId, state: LeaveState.REQUESTED }, data });
+    return done.count === 1;
+  }
+
+  /** The decision another call made a moment ago: the same one answers as it did; a different one is a 409. */
+  private async alreadyDecided(requestId: string, actor: Actor, wanted: string) {
+    const now = await this.prisma.teacherLeaveRequest.findUniqueOrThrow({ where: { id: requestId }, select: { state: true } });
+    if (now.state !== wanted) throw state('this request has already been decided');
+    return this.dtoById(requestId, actor);
+  }
+
+  private async alreadyApproved(requestId: string, actor: Actor) {
+    return { request: await this.dtoById(requestId, actor), cancelledLessons: 0, notCancelled: [] as Array<{ lessonId: string; reason: string }> };
   }
 
   private async staffNames(ids: string[]): Promise<Map<string, string>> {
@@ -603,13 +674,18 @@ export class LeaveService {
   }
 
   private async requireSupervisor(actorId: string): Promise<Actor> {
+    const actor = await this.supervisorOrNone(actorId);
+    if (!actor) throw leaveDenied();
+    return actor;
+  }
+
+  /** The supervisor, or null for staff off the page (PD-44: no tile); anyone not staff is refused. */
+  private async supervisorOrNone(actorId: string): Promise<Actor | null> {
     const actor = await this.conversations.requireActor(actorId);
+    if (actor.kind !== ActorKind.STAFF) throw leaveDenied();
     // PD-26 amendment: the Teachers department, or an Operations supervisor for
     // the teachers of their families (narrowed below by the page scope).
-    if (!(await this.supervision.pageAccess(actor)).canSupervise) {
-      throw new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
-    }
-    return actor;
+    return (await this.supervision.pageAccess(actor)).canSupervise ? actor : null;
   }
 
   private async requireTeacherOf(actor: Actor, teacherId: string) {
@@ -712,4 +788,25 @@ export function todayIn(tz: string, now = new Date()): string {
 
 function langOf(actor: Actor): CardLanguage {
   return actor.locale === 'en' ? 'en' : 'ar';
+}
+
+/** The Leave requests list's page size; the Dashboard tile caps at it too (PD-44). */
+const LIST_LIMIT = 500;
+
+/** The leave requests the page lists: the organization's, of the teachers in the caller's scope. */
+function requestsWhere(actor: Actor, scope: TeacherScope, state?: string): Prisma.TeacherLeaveRequestWhereInput {
+  return {
+    organizationId: actor.organizationId,
+    ...(state ? { state } : {}),
+    ...(scope.all ? {} : { teacherId: { in: [...scope.teacherIds] } }),
+  };
+}
+
+function leaveDenied(): CommError {
+  return new CommError(CommErrorCode.LEAVE_DENIED, 'only the Teachers department and, for the teachers of their families, Operations decide leave');
+}
+
+/** TEACHER-005: how many of `days` leave days the balance does not cover; null while no allowance is set. */
+export function unpaidFor(balance: number | null, days: number): number | null {
+  return balance === null ? null : Math.max(0, days - Math.max(0, balance));
 }

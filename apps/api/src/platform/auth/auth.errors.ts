@@ -48,6 +48,14 @@ export enum AuthErrorCode {
   /** 400. PD-16 parent sign-up / PD-21 reset: the chosen password is outside 4..128 characters. */
   PASSWORD_TOO_WEAK = 'AUTH.PASSWORD_TOO_WEAK',
   /**
+   * 409. PD-56: a teacher asked to delete their own account while a lesson,
+   * a student or payroll is still open on them. Said only once the password
+   * was right; the academy closes those first.
+   */
+  TEACHER_DELETION_BLOCKED = 'AUTH.TEACHER_DELETION_BLOCKED',
+  /** TEACHER-023: a password change to the same password. */
+  PASSWORD_UNCHANGED = 'AUTH.PASSWORD_UNCHANGED',
+  /**
    * 401. PD-21 password reset: the code is wrong, expired, used up or was never
    * issued -- one code for all of them, and the same whether the login is known
    * or not, so the reset cannot enumerate accounts.
@@ -79,7 +87,9 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 'the code is not valid; ask for a new one',
   [AuthErrorCode.SIGNUP_LOCKED]: 'too many wrong codes; please contact your supervisor',
   [AuthErrorCode.PASSWORD_TOO_WEAK]: 'choose a password of at least 4 characters',
+  [AuthErrorCode.PASSWORD_UNCHANGED]: 'choose a password different from the current one',
   [AuthErrorCode.RESET_CODE_INVALID]: 'the code is not valid; ask your administrator for a new one',
+  [AuthErrorCode.TEACHER_DELETION_BLOCKED]: 'Please contact the academy to close your lessons and payroll before deleting your account.',
 };
 
 const STATUS: Record<AuthErrorCode, number> = {
@@ -92,7 +102,9 @@ const STATUS: Record<AuthErrorCode, number> = {
   [AuthErrorCode.RATE_LIMITED]: 429,
   [AuthErrorCode.SIGNUP_CODE_INVALID]: 401,
   [AuthErrorCode.SIGNUP_LOCKED]: 403,
+  [AuthErrorCode.TEACHER_DELETION_BLOCKED]: 409,
   [AuthErrorCode.PASSWORD_TOO_WEAK]: 400,
+  [AuthErrorCode.PASSWORD_UNCHANGED]: 400,
   [AuthErrorCode.RESET_CODE_INVALID]: 401,
 };
 

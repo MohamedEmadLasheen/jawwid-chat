@@ -171,6 +171,18 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect(cards[0].card?.payload.covered).toBe('Al-Mulk 1-15');
   });
 
+  it('lesson-tickets is refused (403) to someone who may not read the conversation, like every conversation route; a member gets 200', async () => {
+    const outsider = m.families.find((f) => f.parent.subject !== fam.parent)!.parent.subject;
+    const path = `/conversations/${fam.groupId}/lesson-tickets`;
+    const refused = await http(outsider, 'GET', path);
+    expect({ status: refused.status, tickets: refused.json.tickets }).toEqual({ status: 403, tickets: undefined });
+    // Control: the same outsider is refused the same conversation's messages -- one rule.
+    expect((await http(outsider, 'GET', `/conversations/${fam.groupId}/messages`)).status).toBe(403);
+    const member = await http(fam.parent, 'GET', path);
+    expect(member.status).toBe(200);
+    expect(Array.isArray(member.json.tickets)).toBe(true);
+  });
+
   it('the teacher of a sibling in the same family group neither sees nor closes the lesson', async () => {
     const id = await schedule(-50 * MIN);
     const offered = await http(fam.siblingTeacher, 'GET', `/conversations/${fam.groupId}/lesson-tickets`);

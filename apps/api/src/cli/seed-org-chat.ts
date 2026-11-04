@@ -1,5 +1,5 @@
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
-import { PrismaClient } from '@prisma/client';
+import { cliPrismaClient } from './cli-prisma';
 import { describeTarget } from './bootstrap-super-admin';
 import { bootstrapSuperAdmin } from './super-admin-bootstrap';
 import { SeedRefusal, seedOrgChat, type SeedManifest } from './org-chat-seed';
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
   }
   const password = readPassword(args.passwordFile);
 
-  const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  const prisma = cliPrismaClient(databaseUrl);
   try {
     const organizationId =
       args.organization ??

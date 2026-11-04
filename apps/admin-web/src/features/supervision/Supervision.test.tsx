@@ -65,6 +65,10 @@ beforeEach(() => {
     return json({ error: { code: 'unrouted', message: `no mock for ${method} ${url}` } }, 404)
   })
   vi.stubGlobal('fetch', fetchMock)
+  // PD-52: leave and discipline are on the Attendance & Complaints page, which asks what to offer.
+  on('GET', /\/teacher-records\/access$/, () =>
+    json({ basis: 'teachers', attendance: { view: true, record: true, decide: true }, grants: { view: true, record: true }, leaveBalance: true, amounts: false, opensFile: true }),
+  )
   tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
   on('GET', /\/teacher-files$/, () => json({ access: { canEditPersonal: false, canWriteSupervision: true }, teachers: [] }))
 })
@@ -84,7 +88,7 @@ describe('the Teachers area has three pages', () => {
   })
 
   it('the super admin has the same pages under Admin > Teachers, without Statistics (that is Admin > Reports)', async () => {
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/supervision' })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/boards' })
     const tabs = await screen.findByRole('navigation', { name: 'Teachers department' })
     expect(within(tabs).getByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/admin/teachers')
     expect(within(tabs).getByRole('link', { name: 'Supervision' })).toHaveAttribute('href', '/admin/teachers/supervision')
@@ -109,6 +113,17 @@ describe('leave requests', () => {
     expect(bodyOf(calls('POST', /\/approve$/)[0])).toEqual({ days: ['2027-03-10', '2027-03-12'] })
   })
 
+  it('TEACHER-005: beyond the balance, the row and the dialog warn how many days will be unpaid; the balance stops at 0', async () => {
+    on('GET', /\/teacher-leave-requests\?state=requested$/, () => json({ requests: [leave({ balance: 2, unpaidDays: 1 })] }))
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/leave' })
+    const row = (await screen.findByText('Family wedding')).closest('tr')!
+    expect(within(row).getByText(/1 days will be unpaid/)).toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/2 day\(s\) will be deducted; balance after: 0/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/1 days will be unpaid/)).toBeInTheDocument()
+  })
+
   it('lessons inside the leave must be confirmed before anything is sent', async () => {
     on('GET', /\/teacher-leave-requests\?state=requested$/, () =>
       json({ requests: [leave({ collidingLessons: [{ id: 'les-1', startsAt: '2027-03-11T08:00:00Z', learnerName: 'Child Alpha' }] })] }),
@@ -116,7 +131,7 @@ describe('leave requests', () => {
     on('POST', /\/teacher-leave-requests\/r-1\/approve$/, () => json({ request: leave({ state: 'approved' }), cancelledLessons: 1, notCancelled: [] }))
     renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/leave' })
     const row = (await screen.findByText('Family wedding')).closest('tr')!
-    expect(within(row).getByText('1 lesson(s) inside')).toBeInTheDocument()
+    expect(within(row).getByText('1 lesson inside')).toBeInTheDocument()
     await userEvent.click(within(row).getByRole('button', { name: 'Approve' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Child Alpha')).toBeInTheDocument()

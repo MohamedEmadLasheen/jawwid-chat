@@ -45,6 +45,28 @@ def rasm(text):
     return " ".join("".join(out).split())
 
 
+def words(text):
+    """rasm() as words, with the vocative joined: Tanzil writes يَٰٓأَيُّهَا / يَٰبُنَىَّ / يَٰقَوْمِ as ONE word
+    where standard spelling splits يَا off, and rasm() leaves that يَا as a lone ي. Joining a lone ي to the
+    next word gives both spellings one skeleton (يبني, ييه, يقوم). For run-matching only."""
+    out = []
+    for t in rasm(text).split():
+        if out and out[-1] == chr(0x64A):
+            out[-1] += t
+        else:
+            out.append(t)
+    return out
+
+
+PREFIXES = set(chr(c) for c in (0x648, 0x641, 0x628, 0x644))  # و ف ب ل
+
+
+def edge_forms(word):
+    """A run's edge word with and without one prefix letter (و ف ب ل), so «وَرَبِّ زِدْنِي عِلْمًا» meets
+    «وَقُل رَّبِّ زِدْنِى عِلْمًا». Only on words of 3+ letters, so a short word never loses its root."""
+    return {word, word[1:]} if len(word) >= 3 and word[0] in PREFIXES else {word}
+
+
 def _u(*cps):
     return ''.join(chr(c) for c in cps)
 

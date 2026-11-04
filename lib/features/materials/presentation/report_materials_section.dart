@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design/tokens.dart';
+import '../../../design/widgets/searchable_picker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/materials.dart';
 import '../data/materials_repository.dart';
@@ -162,13 +163,14 @@ class _AyahDialogState extends State<_AyahDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          DropdownButtonFormField<int>(
+          SearchablePickerField<int>(
             key: const ValueKey('ayah-surah'),
-            initialValue: _surah.number,
-            isExpanded: true,
-            decoration: InputDecoration(labelText: l10n.reportSurahLabel),
-            items: [
-              for (final s in widget.surahs) DropdownMenuItem(value: s.number, child: Text('${s.number}. ${s.name(arabic)}')),
+            value: _surah.number,
+            label: l10n.reportSurahLabel,
+            options: [
+              // Both names are searched, whichever language the app is in.
+              for (final s in widget.surahs)
+                PickerOption(value: s.number, label: '${s.number}. ${s.name(arabic)}', hint: s.name(!arabic)),
             ],
             onChanged: (n) => setState(() {
               _surah = widget.surahs.firstWhere((s) => s.number == n);

@@ -46,9 +46,13 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 INSTALL_SCRIPT_ALLOWLIST = {'esbuild', 'fsevents'}
-# Binary files that may exist under apps/lessons, by path -> SHA-256. Empty until
-# the Amiri Quran font is vendored (with the owner's OK).
-BINARY_ALLOWLIST: dict = {}
+# Binary files that may exist under apps/lessons, by path -> SHA-256. The Amiri Quran
+# font, vendored on the owner's instruction (2026-10-29: the verses rendered in a system
+# fallback): the same file Admin Web bundles, Amiri 1.003, OFL 1.1.
+BINARY_ALLOWLIST: dict = {
+    'src/fonts/AmiriQuran.ttf': 'e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c',
+}
+FONT_FACE = re.compile(r'@font-face\s*\{[^}]*\}')
 EXACT = re.compile(r'^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$')
 MARKERS = [
     (re.compile(r"global(?:This)?\[\s*['\"]!['\"]\s*\]"), "global['!'] (the loader's marker)"),
@@ -71,7 +75,7 @@ CSS_MARKERS = [
 FORBIDDEN_NAMES = re.compile(r'^(postcss\.config\.[cm]?[jt]s|\.postcssrc(\..*)?|tailwind\.config\.[cm]?[jt]s)$')
 FORBIDDEN_DIRS = {'node_modules', 'dist', '.vite', '.vscode'}
 CODE_EXT = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
-CONFIG_FILES = {'vite.config.ts', 'vitest.config.ts'}
+CONFIG_FILES = {'vite.config.ts', 'vitest.config.ts', 'playwright.config.ts'}
 CONFIG_BUILTINS = {'node:fs', 'node:path', 'node:url'}
 IMPORT = re.compile(r"""(?:\bimport\s+(?:[^'"]*?\sfrom\s+)?|\bexport\s+[^'"]*?\sfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]""")
 HOOK = re.compile(r'^(pre|post).+|^(install|prepare|prepublish|prepack|postpack)$')
@@ -185,6 +189,11 @@ def check(base, paths=None, api_integrity=API_INTEGRITY):
             for pattern, what in CSS_MARKERS:
                 if pattern.search(text):
                     errors.append(f'{rel(p)}: contains {what}')
+            # A verse is drawn in Amiri Quran and nothing else: named only through the token, never
+            # with a fallback (a system font mis-shapes the Uthmani marks). The @font-face says it.
+            for value in re.findall(r'font-family\s*:\s*([^;}]*)', FONT_FACE.sub('', text)):
+                if 'amiri' in value.lower() and value.strip() != 'var(--quran-font)':
+                    errors.append(f'{rel(p)}: font-family {value.strip()!r} names the Quran font directly; use var(--quran-font), with no fallback')
         if name.endswith(CODE_EXT):
             for spec in IMPORT.findall(text):
                 if spec.startswith('.'):
@@ -214,6 +223,15 @@ def check(base, paths=None, api_integrity=API_INTEGRITY):
             ext = json.loads(text).get('extends')
             if ext and (not str(ext).startswith('.') or not inside(os.path.join(tsdir, ext))):
                 errors.append(f'{rel(p)}: extends {ext!r}, outside apps/lessons')
+
+    styles = os.path.join(base, 'src', 'styles.css')
+    if os.path.exists(styles):
+        css = open(styles, encoding='utf-8').read()
+        faces = FONT_FACE.findall(css)
+        if not any(re.search(r"font-family:\s*'Amiri Quran'", f) and "url('./fonts/AmiriQuran.ttf')" in f and 'font-display: block' in f for f in faces):
+            errors.append("src/styles.css: must declare @font-face 'Amiri Quran' from url('./fonts/AmiriQuran.ttf') with font-display: block")
+        if not re.search(r"--quran-font:\s*'Amiri Quran';", css):
+            errors.append("src/styles.css: --quran-font must be 'Amiri Quran' (no fallback)")
 
     engine = os.path.join(base, 'src', 'quran', 'basmala.ts')
     if not os.path.exists(engine) or not os.path.exists(api_integrity):
@@ -328,6 +346,10 @@ def selftest():
         'extensionless': (write('bin/run', "#!/bin/sh\nnode -e \"require('child_process')\"\n"), 'child_process'),
         'binary': (write('public/x.bin', b'\x00\x01\x02payload', binary=True), 'binary file'),
         'fake-font': (write('public/fa.woff2', b'\x00node -e', binary=True), 'binary file'),
+        'verse-font-fallback': (write('src/c.css', ".v { font-family: 'Amiri Quran', serif; }\n"), 'names the Quran font directly'),
+        'no-font-face': (write('src/styles.css', ":root { --quran-font: 'Amiri Quran'; }\n"), 'must declare @font-face'),
+        # The vendored Quran font at its own path, but other bytes: the pin is by path AND hash.
+        'swapped-quran-font': (write('src/fonts/AmiriQuran.ttf', b'\x00\x01not the pinned font', binary=True), 'binary file'),
         'postcss': (write('postcss.config.js', 'module.exports = {};\n'), 'build-config file'),
         'vscode': (write('.vscode/tasks.json', '{}'), 'under .vscode/'),
         'nested-dist': (write('src/dist/x.ts', "export const x = 1;\n"), 'under dist/'),

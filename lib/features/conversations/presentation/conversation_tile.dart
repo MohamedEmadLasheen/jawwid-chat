@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../lessons/presentation/lesson_card_view.dart' show cardPreviewTitle;
 
 /// One row of the chat list.
 ///
@@ -25,10 +26,15 @@ class ConversationTile extends StatelessWidget {
     required this.now,
     this.onTap,
     this.onLongPress,
+    this.draft,
   });
 
   final Conversation conversation;
   final DateTime now;
+
+  /// PD-37: this person's unsent text here. Shown instead of the last message,
+  /// after "Draft:", as WhatsApp does.
+  final String? draft;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -122,6 +128,7 @@ class ConversationTile extends StatelessWidget {
                         _Preview(
                           conversation: conversation,
                           unread: unread,
+                          draft: draft,
                         ),
                       ],
                     ),
@@ -202,10 +209,11 @@ class ConversationTile extends StatelessWidget {
 /// message. One line, never two — two-line previews halve how many conversations fit on a
 /// phone screen, and this list exists to be scanned.
 class _Preview extends StatelessWidget {
-  const _Preview({required this.conversation, required this.unread});
+  const _Preview({required this.conversation, required this.unread, this.draft});
 
   final Conversation conversation;
   final bool unread;
+  final String? draft;
 
   @override
   Widget build(BuildContext context) {
@@ -226,38 +234,65 @@ class _Preview extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
           ),
-          _PreviewText(conversation: conversation, unread: unread),
+          _PreviewText(conversation: conversation, unread: unread, draft: draft),
         ],
       );
     }
 
-    return _PreviewText(conversation: conversation, unread: unread);
+    return _PreviewText(conversation: conversation, unread: unread, draft: draft);
   }
 }
 
 class _PreviewText extends StatelessWidget {
-  const _PreviewText({required this.conversation, required this.unread});
+  const _PreviewText({required this.conversation, required this.unread, this.draft});
 
   final Conversation conversation;
   final bool unread;
+  final String? draft;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: unread
+          ? theme.colorScheme.onSurface
+          : theme.colorScheme.onSurfaceVariant,
+      fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+    );
+
+    final draft = this.draft == null ? null : draftPreview(this.draft!);
+    if (draft != null) {
+      return Row(
+        children: [
+          Text(
+            '${L10n.of(context).chatDraftLabel} ',
+            style: style?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Flexible(
+            child: ContentText(draft, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+          ),
+        ],
+      );
+    }
 
     // Without this, an Arabic sentence in an English UI puts its full stop on the left.
     return ContentText(
       previewText(conversation, L10n.of(context)),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: unread
-            ? theme.colorScheme.onSurface
-            : theme.colorScheme.onSurfaceVariant,
-        fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
-      ),
+      style: style,
     );
   }
+}
+
+/// A draft on one line: its line breaks and runs of spaces become one space.
+/// Null when there is nothing to show.
+String? draftPreview(String draft) {
+  final line = draft.trim().replaceAll(RegExp(r'\s+'), ' ');
+  return line.isEmpty ? null : line;
 }
 
 class _UnreadBadge extends StatelessWidget {
@@ -312,6 +347,8 @@ String previewText(Conversation conversation, L10n l10n) {
       _ => l10n.systemUpdate,
     };
   }
+  // RQA-F4: a card (a lesson report, a make-up booked, ...) is named, never a blank row.
+  if (kind.startsWith('card:')) return cardPreviewTitle(kind.substring('card:'.length), l10n) ?? l10n.systemUpdate;
   return switch (kind) {
     'image' => l10n.attachmentPhotoLabel,
     'voice' => l10n.attachmentVoiceLabel,

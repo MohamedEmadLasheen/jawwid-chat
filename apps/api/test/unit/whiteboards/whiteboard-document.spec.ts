@@ -3,6 +3,8 @@
  * §4.3, §4.5). The rules that matter most: a verse is a reference and never its
  * text, an image names an asset and never a key, and a page stays within 512 KB.
  */
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { PAGE_MAX_BYTES, PAGE_MAX_ELEMENTS, VERSE_MAX_AYAT, checkDocument } from '../../../src/whiteboards/whiteboard-document';
 
 const SHA = 'a'.repeat(64);
@@ -32,6 +34,13 @@ describe('a board page document', () => {
     expect(r.value.assetIds).toEqual([asset]);
     expect(r.value.verses).toEqual([{ surah: 1, fromAyah: 1, toAyah: 7, datasetId: 'tanzil-uthmani-1.1', rangeSha256: SHA }]);
     expect(r.value.bytes).toBe(Buffer.byteLength(JSON.stringify(r.value.document)));
+  });
+
+  it('PD-55: keeps a text\'s bold and rotation as they came (the client\'s own fields)', () => {
+    const r = checkDocument(doc({ id: 't1', kind: 'text', text: 'أحسنت', bold: true, rotation: 1.5707963267948966 }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.document.elements[0]).toMatchObject({ bold: true, rotation: 1.5707963267948966 });
   });
 
   it('refuses a verse that carries its text, Basmala or anything but the reference', () => {
@@ -83,5 +92,14 @@ describe('a board page document', () => {
     expect(reason(doc(...elements))).toMatch(new RegExp(`at most ${PAGE_MAX_BYTES}`));
     const many = Array.from({ length: PAGE_MAX_ELEMENTS + 1 }, (_, i) => ({ id: `l${i}`, kind: 'line' }));
     expect(reason(doc(...many))).toMatch(new RegExp(`at most ${PAGE_MAX_ELEMENTS}`));
+  });
+
+  it('accepts the shared fixture: the page every kind of element, as the Flutter portal writes it and Admin Web draws it', () => {
+    const fixture = JSON.parse(readFileSync(resolve(__dirname, '../../../../../test/fixtures/whiteboards/page-every-kind.json'), 'utf8'));
+    const r = checkDocument(fixture.page.document);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.document).toEqual(fixture.page.document);
+    expect(r.value.verses.map((v) => v.rangeSha256)).toEqual([fixture.ayahs.rangeSha256]);
   });
 });

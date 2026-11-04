@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../platform/prisma.service';
 import type { Actor } from '../platform/types';
 import {
@@ -60,4 +61,18 @@ export async function reachesFamily(prisma: PrismaService, actor: Actor, familyI
   const rows = await prisma.$queryRaw<{ reach: string | null }[]>`
     SELECT chat.staff_reaches_family(${actor.actorId}::uuid, ${familyId}::uuid) AS reach`;
   return rows[0]?.reach != null;
+}
+
+/**
+ * The same family scope as SQL, for a statement over many families: every
+ * family (all), those the staff member reaches (PD-8), or those they own
+ * (PD-42 Sales). `familyId` is the column or expression naming the family.
+ * Every list and its Dashboard count (PD-44) filter through this one
+ * predicate, so they cannot disagree.
+ */
+export function familyInScopeSql(actorId: string, scope: BillingAccess['scope'], familyId: Prisma.Sql): Prisma.Sql {
+  const reach = scope === 'reach';
+  const owned = scope === 'owned';
+  return Prisma.sql`(${!reach} OR chat.staff_reaches_family(${actorId}::uuid, ${familyId}) IS NOT NULL)
+         AND (${!owned} OR chat.staff_owns_family(${actorId}::uuid, ${familyId}))`;
 }

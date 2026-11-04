@@ -310,6 +310,16 @@ class L10nEn extends L10n {
   String get callReconnecting => 'Reconnecting…';
 
   @override
+  String get callWaitingForReconnect =>
+      'Connection lost. Waiting for them to reconnect…';
+
+  @override
+  String get callEndedConnectionLost => 'Call ended: the connection was lost';
+
+  @override
+  String get callHistoryConnectionLost => 'Connection lost';
+
+  @override
   String get callAccept => 'Accept';
 
   @override
@@ -341,6 +351,9 @@ class L10nEn extends L10n {
 
   @override
   String get callOutcomeDeclined => 'Declined';
+
+  @override
+  String get callOutcomeInProgress => 'In progress';
 
   @override
   String callDuration(int minutes, int seconds) {
@@ -821,6 +834,24 @@ class L10nEn extends L10n {
   String get attachFile => 'File';
 
   @override
+  String get attachVideo => 'Video';
+
+  @override
+  String get attachRecordVideo => 'Record video';
+
+  @override
+  String get videoRecordPermissionDenied =>
+      'Jawwid needs the camera and the microphone to record a video. You can allow them in Settings.';
+
+  @override
+  String get cancelUpload => 'Cancel sending';
+
+  @override
+  String uploadingPercent(String percent) {
+    return 'Sending… $percent%';
+  }
+
+  @override
   String get attachmentPhotoLabel => 'Photo';
 
   @override
@@ -1208,6 +1239,10 @@ class L10nEn extends L10n {
   @override
   String get ticketNoLongerAllowed =>
       'This lesson can no longer be updated this way.';
+
+  @override
+  String get certificateAlreadySuggested =>
+      'This certificate is already suggested for this child.';
 
   @override
   String get cardReportTitle => 'Lesson report';
@@ -2850,7 +2885,34 @@ class L10nEn extends L10n {
   String get resetFinish => 'Set password';
 
   @override
-  String get recoveryOpen => 'Trouble signing in?';
+  String get recoveryOpen => 'Parents: trouble signing in?';
+
+  @override
+  String get signInStaffResetHint =>
+      'Teachers and staff: ask your supervisor for a reset code.';
+
+  @override
+  String get changePasswordTitle => 'Change password';
+
+  @override
+  String get changePasswordCurrentLabel => 'Current password';
+
+  @override
+  String get changePasswordWrongCurrent => 'That is not your current password.';
+
+  @override
+  String get changePasswordCurrentRequired => 'Enter your current password.';
+
+  @override
+  String get changePasswordUnchanged =>
+      'Choose a password different from your current one.';
+
+  @override
+  String get changePasswordAction => 'Change password';
+
+  @override
+  String get changePasswordDone =>
+      'Password changed. You were signed out on your other devices.';
 
   @override
   String get recoveryTitle => 'Get back into your account';
@@ -3315,6 +3377,14 @@ class L10nEn extends L10n {
   @override
   String salesVoidedBy(String name, String reason) {
     return 'Voided by $name: $reason';
+  }
+
+  @override
+  String get salesOtherPaymentsTitle => 'Other payments';
+
+  @override
+  String salesRefundedAmount(String amount) {
+    return 'Refunded $amount';
   }
 
   @override
@@ -3979,6 +4049,12 @@ class L10nEn extends L10n {
   String get feedbackEntrySubtitle => 'Praise, a suggestion or a complaint';
 
   @override
+  String get feedbackShortcutPraise => 'Praise the teacher';
+
+  @override
+  String get feedbackShortcutProblem => 'Report a problem';
+
+  @override
   String feedbackTeacherLine(String name) {
     return 'Teacher: $name';
   }
@@ -4563,6 +4639,9 @@ class L10nEn extends L10n {
   String get boardLayoutArabicLines => 'Arabic handwriting lines';
 
   @override
+  String get boardLayoutDotted => 'Dotted';
+
+  @override
   String get boardBackgroundWhite => 'White';
 
   @override
@@ -4599,6 +4678,24 @@ class L10nEn extends L10n {
   String get boardToolText => 'Text';
 
   @override
+  String get boardToolLaser => 'Laser pointer';
+
+  @override
+  String get boardTextSmaller => 'Smaller text';
+
+  @override
+  String get boardTextBigger => 'Bigger text';
+
+  @override
+  String get boardTextBold => 'Bold';
+
+  @override
+  String get boardTextColour => 'Text colour';
+
+  @override
+  String get boardTextDone => 'Done';
+
+  @override
   String get boardToolRect => 'Rectangle';
 
   @override
@@ -4629,10 +4726,67 @@ class L10nEn extends L10n {
   String get boardZoomOut => 'Zoom out';
 
   @override
+  String get boardFullScreen => 'Full screen';
+
+  @override
+  String get boardExitFullScreen => 'Exit full screen';
+
+  @override
+  String get boardShowTools => 'Show tools';
+
+  @override
+  String get boardHideTools => 'Hide tools';
+
+  @override
+  String get boardPreviousPage => 'Previous page';
+
+  @override
+  String get boardNextPage => 'Next page';
+
+  @override
+  String get boardEmoji => 'Emoji';
+
+  @override
+  String get boardEmojiPick => 'Choose an emoji';
+
+  @override
+  String get boardEmojiSmileys => 'Smileys';
+
+  @override
+  String get boardEmojiAnimals => 'Animals';
+
+  @override
+  String get boardEmojiNature => 'Nature';
+
+  @override
+  String get boardEmojiFood => 'Food';
+
+  @override
+  String get boardEmojiSchool => 'School and play';
+
+  @override
+  String get boardEmojiSymbols => 'Symbols';
+
+  @override
+  String get boardWidePage => 'Wide page';
+
+  @override
+  String get boardTallPage => 'Tall page';
+
+  @override
   String get boardZoomFit => 'Fit page';
 
   @override
   String get boardDeleteSelection => 'Delete selection';
+
+  @override
+  String get boardCopy => 'Copy';
+
+  @override
+  String get boardPaste => 'Paste';
+
+  @override
+  String get boardDuplicate => 'Duplicate';
 
   @override
   String get boardColour => 'Colour';
@@ -4656,15 +4810,6 @@ class L10nEn extends L10n {
   String get boardTajweedIzhar => 'Izhar';
 
   @override
-  String get boardTextTitle => 'Text';
-
-  @override
-  String get boardTextHint => 'Write here';
-
-  @override
-  String get boardVersePlaceholder => 'Quran verse';
-
-  @override
   String get boardElementUnknown => 'Not shown in this version';
 
   @override
@@ -4675,6 +4820,104 @@ class L10nEn extends L10n {
 
   @override
   String get boardMore => 'More';
+
+  @override
+  String get boardToolVerse => 'Quran verse';
+
+  @override
+  String get boardVerseSurah => 'Surah';
+
+  @override
+  String get boardVerseFrom => 'From ayah';
+
+  @override
+  String get boardVerseTo => 'To ayah';
+
+  @override
+  String boardVerseMax(String count) {
+    return 'At most $count ayat at a time.';
+  }
+
+  @override
+  String boardVerseSource(String source) {
+    return 'Quran text: $source';
+  }
+
+  @override
+  String get boardVerseInsert => 'Insert';
+
+  @override
+  String get boardVerseLoading => 'Loading the verse…';
+
+  @override
+  String get boardVerseUnavailable => 'Quran text unavailable';
+
+  @override
+  String get boardVerseChanged => 'Verse text updated, re-insert';
+
+  @override
+  String get boardToolImage => 'Image';
+
+  @override
+  String get boardImageAdding => 'Adding the image…';
+
+  @override
+  String get boardImageLoading => 'Loading the image…';
+
+  @override
+  String get boardImageUnavailable => 'Image unavailable';
+
+  @override
+  String get boardImageOff => 'Pictures on boards aren\'t switched on yet.';
+
+  @override
+  String get boardImageTooLarge =>
+      'This picture is too large. Use one under 10 MB, or fewer pictures on this board.';
+
+  @override
+  String get boardImageNotImage =>
+      'That file isn\'t a picture the board can show. Use a PNG, JPEG or WebP.';
+
+  @override
+  String get boardImageFailed => 'The picture couldn\'t be added. Try again.';
+
+  @override
+  String get boardExportPng => 'Export this page as a picture (PNG)';
+
+  @override
+  String get boardExportPdf => 'Export the board as a PDF';
+
+  @override
+  String get boardExporting => 'Preparing the export…';
+
+  @override
+  String get boardExportSaved => 'Exported.';
+
+  @override
+  String get boardExportOff => 'Export isn\'t switched on yet.';
+
+  @override
+  String get boardExportBusy =>
+      'Many exports are being made right now. Try again in a minute.';
+
+  @override
+  String get boardExportInProgress =>
+      'You already have exports being made. Wait a few minutes, then try again.';
+
+  @override
+  String get boardExportExpired =>
+      'The export took too long and ran out. Export again.';
+
+  @override
+  String get boardExportTooLarge =>
+      'This board is too large to export in one go.';
+
+  @override
+  String get boardExportNotHere =>
+      'Export works in the browser. Open the board there to export it.';
+
+  @override
+  String get boardExportFailed => 'The export couldn\'t be made. Try again.';
 
   @override
   String get boardDraftStale =>
@@ -4697,4 +4940,184 @@ class L10nEn extends L10n {
   @override
   String get boardSaveFirst =>
       'Your changes have to be saved first. Try again once the board says Saved.';
+
+  @override
+  String get pickerSearchHint => 'Type to search';
+
+  @override
+  String get pickerNoMatches => 'No matches';
+
+  @override
+  String get materialsAgeLabel => 'Age';
+
+  @override
+  String get photoLabel => 'Photo';
+
+  @override
+  String photoPositionLabel(String position, String count) {
+    return 'Photo $position of $count';
+  }
+
+  @override
+  String get chatDraftLabel => 'Draft:';
+
+  @override
+  String get rewardPraiseExcellent => 'Excellent';
+
+  @override
+  String get rewardPraiseWellDone => 'Well done';
+
+  @override
+  String get rewardPraiseGreat => 'Great';
+
+  @override
+  String get rewardPraiseChampion => 'Champion';
+
+  @override
+  String get rewardTrayTitle => 'Rewards';
+
+  @override
+  String get rewardTrayFor => 'For';
+
+  @override
+  String get rewardTrayEveryone => 'Everyone';
+
+  @override
+  String get rewardTrayNoLesson =>
+      'Rewards count during a lesson. Now they decorate the board only.';
+
+  @override
+  String get rewardTrayStar => 'Star';
+
+  @override
+  String get rewardTrayStickers => 'Stickers';
+
+  @override
+  String get rewardTrayPraise => 'Praise';
+
+  @override
+  String get rewardTrayOwnWords => 'My own words…';
+
+  @override
+  String get rewardTrayCelebrate => 'Celebrate';
+
+  @override
+  String get rewardTrayUndo => 'Undo';
+
+  @override
+  String get rewardTraySent => 'Reward given';
+
+  @override
+  String get rewardTrayFailed =>
+      'The reward was not recorded. It is still on the board.';
+
+  @override
+  String get rewardCelebrationLine => 'Your teacher is celebrating you!';
+
+  @override
+  String get rewardSoundTitle => 'Reward sounds';
+
+  @override
+  String get rewardSoundSubtitle =>
+      'A short sound when a teacher rewards your child: a chime, applause or a fanfare.';
+
+  @override
+  String rewardStarLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'A star! $count stars this lesson',
+      one: 'A star! 1 star this lesson',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rewardBadgeBronze => 'Great effort';
+
+  @override
+  String get rewardBadgeSilver => 'Amazing effort';
+
+  @override
+  String get rewardBadgeGold => 'Superstar';
+
+  @override
+  String rewardToNextBadge(int count, String badge) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more stars for $badge',
+      one: '1 more star for $badge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rewardBadgeEarned(String badge) {
+    return 'Badge: $badge';
+  }
+
+  @override
+  String rewardReportStars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stars',
+      one: '1 star',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get legalPrivacyPolicy => 'Privacy policy';
+
+  @override
+  String get legalTerms => 'Terms of use';
+
+  @override
+  String get deleteAccountTitle => 'Delete account';
+
+  @override
+  String get deleteAccountIntro =>
+      'Deleting your account is final and cannot be undone.';
+
+  @override
+  String get deleteAccountGoes =>
+      'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.';
+
+  @override
+  String get deleteAccountKeptParent =>
+      'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.';
+
+  @override
+  String get deleteAccountKeptTeacher =>
+      'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
+
+  @override
+  String get deleteAccountPasswordLabel => 'Your password';
+
+  @override
+  String get deleteAccountAction => 'Delete my account';
+
+  @override
+  String get deleteAccountConfirm =>
+      'Delete your account for good? This cannot be undone.';
+
+  @override
+  String get deleteAccountWrongPassword => 'That password is not right.';
+
+  @override
+  String get deleteAccountStaff =>
+      'Staff accounts are closed by the administration.';
+
+  @override
+  String get deleteAccountFailed =>
+      'The account could not be deleted. Try again.';
+
+  @override
+  String get deleteAccountDone => 'Your account has been deleted.';
+
+  @override
+  String get deleteAccountTeacherBlocked =>
+      'Please contact the academy to close your lessons and payroll before deleting your account.';
 }

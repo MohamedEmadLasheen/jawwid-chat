@@ -31,5 +31,11 @@ module.exports = {
       // 60 s for tests and hooks (truncating hooks outran the 5 s default under CI load).
       setupFilesAfterEnv: ['<rootDir>/test/setup-integration.ts'],
     },
+    // G-38. Black box against a running API + worker, which scripts/qa/e2e-smoke.sh
+    // starts and seeds (jest never does). Present only when that script points it
+    // at a stack, so a plain `npm test` does not fail for want of one.
+    ...(process.env.E2E_BASE_URL
+      ? [{ ...base, displayName: 'e2e', testMatch: ['<rootDir>/test/e2e/**/*.e2e.ts'], setupFiles: [] }]
+      : []),
   ],
 };

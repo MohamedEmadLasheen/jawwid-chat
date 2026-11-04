@@ -53,9 +53,18 @@ class EditorState {
     this.draftStale = false,
     this.draftNotKept = false,
     this.notice,
+    this.assets = const [],
+    this.imagesSupported = false,
   });
 
   final BoardSummary board;
+
+  /// The board's images as the server last signed them (PR-4); the image cache takes them.
+  final List<BoardAsset> assets;
+
+  /// Whether adding a picture is offered: the server knows images, and has
+  /// not said they are switched off here (review of #328).
+  final bool imagesSupported;
   final List<BoardPage> pages;
   final int current;
   final bool canEdit;
@@ -89,6 +98,8 @@ class EditorState {
     bool? draftNotKept,
     EditorNotice? notice,
     bool clearNotice = false,
+    List<BoardAsset>? assets,
+    bool? imagesSupported,
   }) => EditorState(
     board: board ?? this.board,
     pages: pages ?? this.pages,
@@ -101,6 +112,8 @@ class EditorState {
     draftStale: draftStale ?? this.draftStale,
     draftNotKept: draftNotKept ?? this.draftNotKept,
     notice: clearNotice ? null : (notice ?? this.notice),
+    assets: assets ?? this.assets,
+    imagesSupported: imagesSupported ?? this.imagesSupported,
   );
 }
 
@@ -179,7 +192,8 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
           final server = byId[id];
           if (server == null) continue; // the page was deleted since: nothing to put it on
           if (d['base'] == server.savedAt) {
-            applied[id] = BoardPage.fromJson({...d, 'id': id, 'position': server.position, 'updatedAt': server.savedAt});
+            // A draft holds the drawing, not the frame: the shape is the server's (PD-55).
+            applied[id] = BoardPage.fromJson({...d, 'id': id, 'position': server.position, 'updatedAt': server.savedAt, 'shape': server.shape.wire});
           } else {
             _stale[id] = d;
           }
@@ -200,6 +214,8 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
       canEdit: detail.canEdit,
       save: _dirty.isEmpty ? SaveStatus.saved : SaveStatus.dirty,
       draftStale: _stale.isNotEmpty,
+      assets: detail.assets,
+      imagesSupported: detail.imagesSupported,
     );
   }
 
@@ -232,6 +248,39 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     final page = s.page;
     _history[page.id]!.push(elements);
     _replacePage(page.copyWith(elements: _history[page.id]!.present));
+  }
+
+  /// PD-55: page [pageId]'s elements replaced, whichever page is showing now --
+  /// a text typed on a page the teacher has just left lands there, not on the
+  /// page now in view. One undo step on that page; false when it is gone.
+  bool commitTo(String pageId, List<BoardElement> elements) {
+    final s = _s;
+    final h = _history[pageId];
+    final page = s?.pages.where((p) => p.id == pageId).firstOrNull;
+    if (s == null || !s.canEdit || h == null || page == null) return false;
+    h.push(elements);
+    _replacePage(page.copyWith(elements: h.present));
+    return true;
+  }
+
+  /// [element] added to page [pageId], whichever page is showing now: a
+  /// picture lands on the page its upload started on (review of #328). One
+  /// undo step on that page. False when the page is gone or the board is not
+  /// editable.
+  bool addTo(String pageId, BoardElement element) {
+    final s = _s;
+    final h = _history[pageId];
+    final page = s?.pages.where((p) => p.id == pageId).firstOrNull;
+    if (s == null || !s.canEdit || h == null || page == null) return false;
+    h.push([...h.present, element]);
+    _replacePage(page.copyWith(elements: h.present));
+    return true;
+  }
+
+  /// The server said images are switched off here: stop offering them.
+  void imagesOff() {
+    final s = _s;
+    if (s != null && s.imagesSupported) _set(s.copyWith(imagesSupported: false));
   }
 
   void undo() => _step((h) => h.undo());
@@ -326,7 +375,7 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     for (final MapEntry(key: id, value: d) in stale.entries) {
       final i = pages.indexWhere((p) => p.id == id);
       if (i < 0) continue;
-      final restored = BoardPage.fromJson({...d, 'id': id, 'position': pages[i].position, 'updatedAt': pages[i].savedAt});
+      final restored = BoardPage.fromJson({...d, 'id': id, 'position': pages[i].position, 'updatedAt': pages[i].savedAt, 'shape': pages[i].shape.wire});
       _history[id]!.push(restored.elements);
       pages = [...pages]..[i] = restored;
       _dirty.add(id);
@@ -475,13 +524,15 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     final local = {for (final p in s.pages) p.id: p};
     final pages = [for (final p in detail.pages) local[p.id]?.copyWith(position: p.position, savedAt: p.savedAt) ?? p];
     final current = (select ?? s.current).clamp(0, pages.length - 1);
-    _set(_withHistory(s.copyWith(board: detail.summary, pages: pages, current: current, save: SaveStatus.saved, clearFailure: true)));
+    _set(_withHistory(s.copyWith(board: detail.summary, pages: pages, current: current, save: SaveStatus.saved, clearFailure: true, assets: detail.assets)));
   }
 
-  Future<bool> addPage() {
+  /// A page after the current one, like it -- its layout, background and, unless
+  /// [shape] says otherwise, its shape (PD-55).
+  Future<bool> addPage({PageShape? shape}) {
     final at = (_s?.current ?? 0) + 1;
     return _structural(
-      (r) => _repo.addPage(boardId, r, position: at, layout: _s?.page.layout, background: _s?.page.background),
+      (r) => _repo.addPage(boardId, r, position: at, layout: _s?.page.layout, background: _s?.page.background, shape: shape ?? _s?.page.shape),
       select: at,
     );
   }
@@ -534,9 +585,10 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     if (s == null) return null;
     BoardDetail? copy;
     try {
-      copy = await _repo.create(title);
+      // Each page in its own shape: a page's shape is set when it is made (PD-55).
+      copy = await _repo.create(title, shape: s.pages.first.shape);
       for (var i = 1; i < s.pages.length; i++) {
-        copy = await _repo.addPage(copy!.id, copy.revision);
+        copy = await _repo.addPage(copy!.id, copy.revision, shape: s.pages[i].shape);
       }
       var revision = copy!.revision;
       for (var i = 0; i < s.pages.length; i++) {

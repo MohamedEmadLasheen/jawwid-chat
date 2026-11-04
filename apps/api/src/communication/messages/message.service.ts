@@ -47,6 +47,7 @@ import { currentImpersonationId } from '../../platform/request-context';
 import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 import { withOwedMakeups } from './owed-makeup';
+import { MESSAGE_MAX_CHARACTERS, messageTooLong } from './message-length';
 
 export interface AttachmentInput {
   kind: string;
@@ -104,6 +105,10 @@ export interface ListMessagesInput {
   after?: string;
   limit?: number;
 }
+
+/** PARENT-003: one answer for every client, naming the limit. */
+const tooLong = () =>
+  new CommError(CommErrorCode.MESSAGE_TOO_LONG, `a message may be at most ${MESSAGE_MAX_CHARACTERS} characters`, 400);
 
 @Injectable()
 export class MessageService {
@@ -268,6 +273,11 @@ export class MessageService {
       await this.conversations.liveMembersOf(conv.id),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    // PARENT-023: and each object is really there, as authorized -- else the
+    // message would point at nothing and its bubble could never open. After
+    // canSend, so only a sender learns whether an object is in storage.
+    await this.attachments.assertUploaded(input.attachments ?? []);
 
     this.validateContent(type, input);
     await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
@@ -497,6 +507,8 @@ export class MessageService {
 
   private validateContent(type: string, input: SendMessageInput): void {
     const hasBody = typeof input.body === 'string' && input.body.trim().length > 0;
+    // PARENT-003: a text and a caption alike, as the clients count them.
+    if (typeof input.body === 'string' && messageTooLong(input.body)) throw tooLong();
     const hasAttachments = (input.attachments?.length ?? 0) > 0;
     if (type === MessageType.TEXT && !hasBody) {
       throw new CommError(CommErrorCode.EMPTY_MESSAGE, 'a text message requires a body', 400);
@@ -630,13 +642,15 @@ export class MessageService {
    * One indexed lookup per conversation (conversation_id, seq), run together;
    * the list is capped at 200 rows.
    */
-  async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message>> {
-    const out = new Map<string, Message>();
+  async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message & { card: { kind: string } | null }>> {
+    const out = new Map<string, Message & { card: { kind: string } | null }>();
     const found = await Promise.all(
       conversationIds.map((id) =>
         this.prisma.message.findFirst({
           where: this.visibilityFilter(actor, id, {} as ListMessagesInput),
           orderBy: { seq: 'desc' },
+          // RQA-F4: a card's kind, so a list row can name it ("Lesson report").
+          include: { card: { select: { kind: true } } },
         }),
       ),
     );
@@ -1710,6 +1724,7 @@ export class MessageService {
   ): Promise<MessageDto> {
     const body = typeof rawBody === 'string' ? rawBody.trim() : '';
     if (!body) throw new CommError(CommErrorCode.EMPTY_MESSAGE, 'an edited message requires a body', 400);
+    if (messageTooLong(body)) throw tooLong();
 
     const { actor, message, conv } = await this.loadForActor(messageId, actorId);
     // The route names a conversation; a message of another one reads as absent.

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { PrismaClient } from '@prisma/client';
+import { cliPrismaClient } from './cli-prisma';
 import { selectObjectStorage } from '../communication/attachments/storage.provider';
 import type { PrismaService } from '../platform/prisma.service';
 import { LESSON_KEY } from '../lesson-audio/lesson-audio-key';
@@ -86,7 +86,7 @@ function checkedTarget(target: string | undefined): string {
 }
 
 async function exportLesson(lesson: string, organization: string, target: string): Promise<void> {
-  const prisma = new PrismaClient();
+  const prisma = cliPrismaClient();
   try {
     const clips = await prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT c.string_id AS "stringId", c.text_sha256 AS "textSha256", c.render_sha256 AS "renderSha256",
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
   const target = checkedTarget(args.target);
   const appEnv = process.env.APP_ENV ?? '';
   if (!mayWriteHere(appEnv, args.allowNonLocal)) throw new UsageError(`APP_ENV=${appEnv || '(unset)'}; it must be local, test or ci, or pass --allow-non-local`);
-  const prisma = new PrismaClient();
+  const prisma = cliPrismaClient();
   try {
     const report = await runLessonIngest(
       manifest,

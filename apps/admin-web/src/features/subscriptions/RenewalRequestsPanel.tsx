@@ -33,7 +33,7 @@ export function RenewalRequestsPanel() {
                 {r.child.name}
               </Link>
               <span className="tf-muted" dir="auto">
-                {r.parentName} · {new Date(r.requestedAt).toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                {r.parentName} · {new Date(r.requestedAt).toLocaleString(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
               </span>
             </li>
           ))}

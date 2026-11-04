@@ -199,6 +199,12 @@ class _RecordingThemes implements ChatThemeRepository {
 }
 
 class _OnePhoto implements MediaPicker {
+  @override
+  Future<PendingAttachment?> pickVideo() async => null;
+
+  @override
+  Future<PendingAttachment?> recordVideo() async => null;
+
   _OnePhoto(this.photo);
   final PendingAttachment photo;
   @override

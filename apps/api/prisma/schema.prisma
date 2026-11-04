@@ -507,6 +507,8 @@ model OutboxEvent {
   availableAt DateTime  @default(now()) @map("available_at") @db.Timestamptz
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   publishedAt DateTime? @map("published_at") @db.Timestamptz
+  /// PD-46: lesson:<id>:<revision>:<change>; unique where not null (partial index in SQL).
+  idempotencyKey String? @map("idempotency_key")
 
   @@map("outbox_event")
   @@schema("chat")
@@ -698,22 +700,33 @@ model ActorTimeZone {
 
 model Call {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId  String       @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id              String       @id @default(uuid()) @db.Uuid
-  conversationId  String       @map("conversation_id") @db.Uuid
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  familyId        String?      @map("family_id") @db.Uuid
-  initiatorId     String       @map("initiator_id") @db.Uuid
-  type            String
+  organizationId   String       @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id               String       @id @default(uuid()) @db.Uuid
+  conversationId   String       @map("conversation_id") @db.Uuid
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  familyId         String?      @map("family_id") @db.Uuid
+  initiatorId      String       @map("initiator_id") @db.Uuid
+  type             String
   /// Server-minted. A client-supplied room name is never trusted.
-  roomName        String       @unique @map("room_name")
-  status          String       @default("ringing")
-  outcome         String?
-  startedAt       DateTime     @default(now()) @map("started_at") @db.Timestamptz
-  answeredAt      DateTime?    @map("answered_at") @db.Timestamptz
-  endedAt         DateTime?    @map("ended_at") @db.Timestamptz
-  durationSeconds Int?         @map("duration_seconds")
-  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  roomName         String       @unique @map("room_name")
+  status           String       @default("ringing")
+  outcome          String?
+  startedAt        DateTime     @default(now()) @map("started_at") @db.Timestamptz
+  answeredAt       DateTime?    @map("answered_at") @db.Timestamptz
+  endedAt          DateTime?    @map("ended_at") @db.Timestamptz
+  durationSeconds  Int?         @map("duration_seconds")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  /// CHATSCHED-013: hung_up | declined | ring_timeout | connection_lost. Read and
+  /// written with SQL in CallService / MediaPresenceService.
+  endReason        String?      @map("end_reason")
+  /// CHATSCHED-013: when an active call fell below two in the room by a drop.
+  interruptedAt    DateTime?    @map("interrupted_at") @db.Timestamptz
+  /// CHATSCHED-013: start of the open connected span.
+  connectedSince   DateTime?    @map("connected_since") @db.Timestamptz
+  /// CHATSCHED-013: connected time of the closed spans.
+  connectedSeconds Int          @default(0) @map("connected_seconds")
+  /// CHATSCHED-013: the call ever had two in the media room.
+  wasConnected     Boolean      @default(false) @map("was_connected")
 
   participants CallParticipant[]
 
@@ -722,21 +735,23 @@ model Call {
 }
 
 model CallParticipant {
-  id            String    @id @default(uuid()) @db.Uuid
-  callId        String    @map("call_id") @db.Uuid
-  call          Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
-  actorId       String    @map("actor_id") @db.Uuid
-  actorKind     String    @map("actor_kind")
-  invitedAt     DateTime  @default(now()) @map("invited_at") @db.Timestamptz
+  id                String    @id @default(uuid()) @db.Uuid
+  callId            String    @map("call_id") @db.Uuid
+  call              Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  actorId           String    @map("actor_id") @db.Uuid
+  actorKind         String    @map("actor_kind")
+  invitedAt         DateTime  @default(now()) @map("invited_at") @db.Timestamptz
   /// APPLICATION accept (`POST /calls/:id/accept`). Not media presence.
-  joinedAt      DateTime? @map("joined_at") @db.Timestamptz
+  joinedAt          DateTime? @map("joined_at") @db.Timestamptz
   /// APPLICATION departure: decline, or end() closing an open participant.
-  leftAt        DateTime? @map("left_at") @db.Timestamptz
+  leftAt            DateTime? @map("left_at") @db.Timestamptz
   /// MEDIA presence, from the LiveKit webhook's own event timestamp. Distinct
   /// from joinedAt on purpose -- accepting a call and reaching the room are two
   /// different facts, and only LiveKit knows the second.
-  mediaJoinedAt DateTime? @map("media_joined_at") @db.Timestamptz
-  mediaLeftAt   DateTime? @map("media_left_at") @db.Timestamptz
+  mediaJoinedAt     DateTime? @map("media_joined_at") @db.Timestamptz
+  mediaLeftAt       DateTime? @map("media_left_at") @db.Timestamptz
+  /// CHATSCHED-013: the latest media join; an older departure is ignored.
+  mediaLastJoinedAt DateTime? @map("media_last_joined_at") @db.Timestamptz
 
   @@unique([callId, actorId])
   @@map("call_participant")
@@ -1261,6 +1276,26 @@ model SupervisorBackup {
   @@schema("chat")
 }
 
+/// ADMIN-002: time-boxed, purpose-bound account administration over ONE family's parent accounts. SQL owns the DDL and the guard.
+model FamilyAccessGrant {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  familyId        String    @map("family_id") @db.Uuid
+  granteeId       String    @map("grantee_id") @db.Uuid
+  grantedBy       String    @map("granted_by") @db.Uuid
+  purpose         String
+  startsAt        DateTime  @default(now()) @map("starts_at") @db.Timestamptz
+  endsAt          DateTime  @map("ends_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy       String?   @map("revoked_by") @db.Uuid
+  revokeReason    String?   @map("revoke_reason")
+  expiryAuditedAt DateTime? @map("expiry_audited_at") @db.Timestamptz
+
+  @@map("family_access_grant")
+  @@schema("chat")
+}
+
 /// PD-33: a supervisor away, their backup covering for a window. Access is the
 /// backup link's activation; this row is the event, the routing input and the
 /// history (20261026130000).
@@ -1345,6 +1380,8 @@ model Lesson {
   outcomeNote          String?        @map("outcome_note")
   /// PD-50: the excuse's reason category (EXCUSE_CATEGORIES), shown to the family.
   excuseCategory       String?        @map("excuse_category")
+  /// TEACHER-008: why the academy cancelled it, when the teacher is the reason (owes a make-up). SQL owns the CHECK.
+  cancelCause          String?        @map("cancel_cause")
   outcomeByKind        String?        @map("outcome_by_kind")
   outcomeBy            String?        @map("outcome_by") @db.Uuid
   outcomeAt            DateTime?      @map("outcome_at") @db.Timestamptz
@@ -1357,6 +1394,8 @@ model Lesson {
   scheduleSlotId       String?        @map("schedule_slot_id") @db.Uuid
   /// PD-31: the lesson this one replaces after a move (that row is rescheduled). Insert only.
   movedFrom            String?        @unique @map("moved_from") @db.Uuid
+  /// PD-46: bumped by chat.lesson_bump_revision on any change a reader sees; never set by hand.
+  revision             BigInt         @default(0)
   movedFromLesson      Lesson?        @relation("LessonMove", fields: [movedFrom], references: [id])
   /// PD-31: the lesson that replaced this one, when it was moved.
   movedToLesson        Lesson?        @relation("LessonMove")
@@ -1544,6 +1583,8 @@ model TeacherDayOff {
   leaveRequestId String?  @map("leave_request_id") @db.Uuid
   /// PD-12 S2: the temporary suspension this day off belongs to (not counted against leave).
   suspensionId   String?  @map("suspension_id") @db.Uuid
+  /// TEACHER-005: a leave day beyond the allowance (unpaid leave). SQL owns the CHECK.
+  unpaid         Boolean  @default(false)
 
   @@unique([teacherId, day])
   @@map("teacher_day_off")
@@ -1656,26 +1697,32 @@ model LearnerSuspension {
 
 /// PD-10/PD-11: one entry on a teacher's supervision timeline. Append-only.
 model TeacherSupervisionEntry {
-  id               String    @id @default(uuid()) @db.Uuid
-  organizationId   String    @map("organization_id") @db.Uuid
-  teacherId        String    @map("teacher_id") @db.Uuid
-  kind             String
-  body             String
-  period           DateTime? @db.Date
-  conversationId   String?   @map("conversation_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  teacherId         String    @map("teacher_id") @db.Uuid
+  kind              String
+  body              String
+  period            DateTime? @db.Date
+  conversationId    String?   @map("conversation_id") @db.Uuid
   /// Null only on a complaint a parent filed in the app (PD-32, complaintSource parent_app).
-  createdBy        String?   @map("created_by") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy         String?   @map("created_by") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
   /// PD-10: a complaint_resolution's complaint.
-  refersTo         String?   @map("refers_to") @db.Uuid
+  refersTo          String?   @map("refers_to") @db.Uuid
   /// PD-10: a complaint's source message (in conversation_id).
-  sourceMessageId  String?   @map("source_message_id") @db.Uuid
+  sourceMessageId   String?   @map("source_message_id") @db.Uuid
   /// PD-26: a complaint's source, management | parent | parent_app (PD-32) (null before PD-26).
-  complaintSource  String?   @map("complaint_source")
+  complaintSource   String?   @map("complaint_source")
   /// PD-26: the Teachers department supervisor handling a complaint.
-  handledBy        String?   @map("handled_by") @db.Uuid
+  handledBy         String?   @map("handled_by") @db.Uuid
   /// PD-32: the parent feedback an app complaint was filed as.
-  parentFeedbackId String?   @unique @map("parent_feedback_id") @db.Uuid
+  parentFeedbackId  String?   @unique @map("parent_feedback_id") @db.Uuid
+  /// PD-52: how a staff-recorded testimonial reached the academy (testimonials only).
+  testimonialSource String?   @map("testimonial_source")
+  /// PD-52: the student, family or trial family a complaint, testimonial or grant is about.
+  learnerId         String?   @map("learner_id") @db.Uuid
+  familyId          String?   @map("family_id") @db.Uuid
+  trialProspectId   String?   @map("trial_prospect_id") @db.Uuid
 
   @@map("teacher_supervision_entry")
   @@schema("chat")
@@ -2997,5 +3044,20 @@ model TrialProspectLocation {
   recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz
 
   @@map("trial_prospect_location")
+  @@schema("chat")
+}
+
+/// PD-46: lesson changes made outside the API's lesson writer, until the worker announces them.
+model LessonChangeUnannounced {
+  lessonId       String   @map("lesson_id") @db.Uuid
+  revision       BigInt
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  op             String
+  fromSlot       Boolean  @map("from_slot")
+  recordedAt     DateTime @default(now()) @map("recorded_at") @db.Timestamptz
+
+  @@id([lessonId, revision])
+  @@map("lesson_change_unannounced")
   @@schema("chat")
 }

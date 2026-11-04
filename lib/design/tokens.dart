@@ -545,4 +545,33 @@ abstract final class BoardPalette {
 
   /// Selection outline and handles.
   static const selection = Color(0xFF0E7C86);
+
+  /// PD-55: the laser pointer -- a bright red that reads on every page colour.
+  static const laser = Color(0xFFFF1744);
+
+  /// PD-55 Phase 1 (2): the tools, coloured by what they do, for children. A
+  /// chosen tool is filled with its colour and shows [onTool]; every fill clears
+  /// 4.5:1 against white. An unchosen tool is the same colour on a light wash.
+  static const toolMove = Color(0xFF455A64); // select, hand
+  static const toolDraw = Color(0xFF1565C0); // pen, highlighter
+  static const toolErase = Color(0xFFAD1457); // eraser, area eraser
+  static const toolText = Color(0xFF6A1B9A); // text
+  static const toolShape = Color(0xFF2E7D32); // rectangle, ellipse, triangle, line, arrow
+  static const toolReward = Color(0xFF9A4A00); // stamp, rewards
+  static const toolPoint = Color(0xFFC62828); // laser
+  static const toolInsert = Color(0xFF00695C); // verse, image
+  static const onTool = Color(0xFFFFFFFF);
+}
+
+/// PD-55: the reward stickers' colours and the celebration's confetti. Bright and
+/// friendly, for children; each sticker sits on the tray's surface tint.
+abstract final class RewardPalette {
+  static const gold = Color(0xFFF9A825);
+  static const orange = Color(0xFFEF6C00);
+  static const blue = Color(0xFF1565C0);
+  static const purple = Color(0xFF6A1B9A);
+  static const red = Color(0xFFC62828);
+  static const green = Color(0xFF2E7D32);
+
+  static const confetti = [gold, red, blue, green, purple, orange];
 }

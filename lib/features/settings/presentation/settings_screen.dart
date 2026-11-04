@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app.dart';
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/time/time_zone_controller.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
@@ -19,7 +20,9 @@ import '../../app_lock/data/device_security_settings.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
 import '../../app_lock/presentation/unlock_platform.dart';
 import '../../profile/presentation/profile_photos_section.dart';
+import '../../rewards/application/reward_feed.dart';
 import '../application/theme_mode_controller.dart';
+import '../data/parent_notice_repository.dart';
 import 'date_time_screen.dart';
 import 'lesson_audio_about_screen.dart';
 
@@ -119,6 +122,16 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          // TEACHER-023: your own password, for every role (the web portal too). A
+          // teacher's only way used to be a reset code from their supervisor.
+          if (user != null)
+            ListTile(
+              key: const ValueKey('settings-change-password'),
+              leading: const Icon(Icons.lock_outline),
+              title: Text(l10n.changePasswordTitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.changePassword),
+            ),
           // ONE profile per account (owner 2026-10-24): the row above opens it. For a
           // teacher that is their professional profile; for a parent, their own profile
           // with each child's -- photo, name and About, one photo control each. There is
@@ -183,8 +196,8 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
-          // PD-48: the lesson-audio notice and its terms -- the parents' only.
-          if (user?.role == UserRole.parent) ...[
+          // PD-48: the lesson-audio notice and its terms -- the parents' only, from Phase 2.
+          if (kLessonAudioNoticeLive && user?.role == UserRole.parent) ...[
             ListTile(
               key: const ValueKey('settings-lesson-audio'),
               leading: const Icon(Icons.record_voice_over_outlined),
@@ -213,6 +226,16 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.notificationSettings),
           ),
+          // PD-55: the reward celebration's chime, per device. On for a family by
+          // default, off for a teacher; the phone's silent mode silences it anyway.
+          SwitchListTile(
+            key: const ValueKey('settings-reward-sound'),
+            secondary: const Icon(Icons.music_note_outlined),
+            title: Text(l10n.rewardSoundTitle),
+            subtitle: Text(l10n.rewardSoundSubtitle),
+            value: ref.watch(rewardSoundProvider).value ?? false,
+            onChanged: (on) => ref.read(rewardSoundProvider.notifier).set(on),
+          ),
           // PD-23: every device this account is signed in on.
           ListTile(
             key: const ValueKey('settings-devices'),
@@ -221,8 +244,20 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.devices),
           ),
+          // PD-56: the privacy policy and the terms of use (the owner's texts).
+          const LegalLinksTiles(),
           const Divider(),
 
+          // PD-56 (store compliance): parents and teachers delete their own account here.
+          // Staff accounts are closed by the administration.
+          if (user != null && (user.role == UserRole.parent || user.isTeacher))
+            ListTile(
+              key: const ValueKey('settings-delete-account'),
+              leading: Icon(Icons.person_remove_outlined, color: tokens.colorStatusDangerFg),
+              title: Text(l10n.deleteAccountTitle, style: TextStyle(color: tokens.colorStatusDangerFg)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.deleteAccount),
+            ),
           ListTile(
             leading: Icon(Icons.logout, color: tokens.colorStatusDangerFg),
             title: Text(

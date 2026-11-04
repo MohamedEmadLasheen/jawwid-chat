@@ -1,6 +1,8 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
+import { pageRowVisible } from '../platform/teacher-scope';
+import { aboutOf } from './teacher-records.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
@@ -85,6 +87,7 @@ export class TeacherPayrollService {
 
     const months = monthsEndingAt(until, SUMMARY_MONTHS);
     const paidMinutes = await this.paidMinutes(teacher.id, months[months.length - 1], until);
+    const unpaid = await this.unpaidLeaveDays(teacher.id, months[months.length - 1], until);
     const live = liveAdjustments(adjustments);
     const staff = await this.names([...terms.map((t) => t.createdBy), ...adjustments.map((a) => a.createdBy), ...(account ? [account.updatedBy] : [])]);
     const person = (id: string) => ({ id, name: staff.get(id) ?? '' });
@@ -117,7 +120,9 @@ export class TeacherPayrollService {
         bonusEntryIds: bonusEntries.map((e) => e.id).filter((id) => !pricedBonus.has(id)),
         violationIds: deductions.map((v) => v.id).filter((id) => !pricedViolation.has(id)),
       },
-      summary: months.map((m) => summarize(m, termsAt(terms, m), live, paidMinutes.get(m) ?? 0)),
+      // TEACHER-005: the month's unpaid leave days, shown beside the pay -- never priced (no formula):
+      // a deduction for them is an adjustment a person records.
+      summary: months.map((m) => ({ ...summarize(m, termsAt(terms, m), live, paidMinutes.get(m) ?? 0), unpaidLeaveDays: unpaid.get(m) ?? 0 })),
     };
   }
 
@@ -374,13 +379,14 @@ export class TeacherPayrollService {
   async rewards(actorId: string, month?: unknown) {
     // PD-26 amendment: the page's rewards list; an Operations supervisor reads
     // their families' teachers' rewards, never an amount (canViewFinance is false).
-    const { actor, access } = await this.files.pageGate(actorId, (a) => a.onPage);
+    // PD-52 PR-5: Sales too, for the grants about the children and trials in its reach.
+    const { actor, access, page } = await this.files.recordsGate(actorId, (a) => a.onPage);
     const org = actor.organizationId as string;
     const m = month === undefined || month === '' ? null : requireMonth('month', month);
     const [from, to] = m ? await this.monthBounds(m) : [null, null];
     // PD-35: the rewards of the teachers in the caller's scope.
-    const scope = await this.files.teacherScope.pageScopeOf(actor);
-    const entries = await this.prisma.teacherSupervisionEntry.findMany({
+    const scope = page.teachers;
+    const found = await this.prisma.teacherSupervisionEntry.findMany({
       where: {
         organizationId: org,
         kind: 'bonus',
@@ -390,6 +396,8 @@ export class TeacherPayrollService {
       orderBy: [{ createdAt: 'desc' }],
       take: 500,
     });
+    // PD-52: a grant about one child shows only to who may see that child's rows.
+    const entries = found.filter((e) => pageRowVisible(page, e.teacherId, aboutOf(e)));
     const teachers = await this.prisma.teacher.findMany({
       where: { id: { in: [...new Set(entries.map((e) => e.teacherId))] } },
       select: { id: true, name: true },
@@ -509,6 +517,17 @@ export class TeacherPayrollService {
   }
 
   /** Minutes of the lessons the teacher was paid for, by payroll month (the academy calendar). */
+  /** TEACHER-005: unpaid leave days per month (YYYY-MM), from `from` through `until`. */
+  private async unpaidLeaveDays(teacherId: string, from: string, until: string): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<Array<{ month: string; days: number }>>`
+      SELECT to_char(o.day, 'YYYY-MM') AS month, count(*)::int AS days
+        FROM chat.teacher_day_off o
+       WHERE o.teacher_id = ${teacherId}::uuid AND o.unpaid
+         AND to_char(o.day, 'YYYY-MM') BETWEEN ${from} AND ${until}
+       GROUP BY 1`;
+    return new Map(rows.map((r) => [r.month, r.days]));
+  }
+
   private async paidMinutes(teacherId: string, from: string, until: string): Promise<Map<string, number>> {
     const rows = await this.prisma.$queryRaw<Array<{ m: string; minutes: number }>>`
       SELECT to_char(chat.academy_month(l.starts_at), 'YYYY-MM') AS m,

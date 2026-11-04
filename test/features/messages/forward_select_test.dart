@@ -86,6 +86,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(picked, [for (var i = 0; i < 10; i++) 'c$i']);
   });
+
+  testWidgets('the forward sheet can be typed into: Arabic-folded, and a choice survives being filtered out', (tester) async {
+    final chats = [
+      Conversation(id: 'a', kind: ConversationKind.studentGroup, title: 'أحمد · Quran', updatedAt: DateTime.utc(2026)),
+      Conversation(id: 'b', kind: ConversationKind.studentGroup, title: 'Sara · Tajweed', updatedAt: DateTime.utc(2026)),
+    ];
+    List<String>? picked;
+    await tester.pumpWidget(app(
+      Builder(builder: (context) => TextButton(onPressed: () async => picked = await showForwardSheet(context), child: const Text('open'))),
+      overrides: [conversationRepositoryProvider.overrideWithValue(_Chats(chats))],
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Sara · Tajweed'));
+    // A bare alef finds the hamza spelling; Sara is filtered out but stays chosen.
+    await tester.enterText(find.byKey(const ValueKey('forward-search')), 'احمد');
+    await tester.pumpAndSettle();
+    expect(find.byType(CheckboxListTile), findsOneWidget);
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'أحمد · Quran'));
+    await tester.enterText(find.byKey(const ValueKey('forward-search')), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('No matches'), findsOneWidget);
+    await tester.tap(find.text('Send to 2'));
+    await tester.pumpAndSettle();
+    expect(picked, ['b', 'a']);
+  });
 }
 
 class _Chats extends Fake implements ConversationRepository {

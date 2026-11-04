@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
@@ -35,8 +35,13 @@ export function AddTeacherDialog({
   const [supervisor, setSupervisor] = useState<string>(offer.supervisorChoice === 'self_or_none' ? 'self' : '')
   const [touched, setTouched] = useState(false)
   const [added, setAdded] = useState<AddedTeacher | null>(null)
+  // TEACHER-002: `disabled` lands only after a re-render, so a double click sent two
+  // adds. The ref stops the second click at once; the server answers a replay too.
+  const inFlight = useRef(false)
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
   const missing = (v: string) => (touched && !v.trim() ? tx(T.required) : null)
+  // TEACHER-001: checked here, in the reader's language, before the server's raw field text could show.
+  const emailError = touched ? (!form.email.trim() ? tx(T.required) : looksLikeEmail(form.email) ? null : tx(T.invalidEmail)) : null
 
   // Stable across keystrokes: the Dialog re-focuses whenever onClose changes.
   const { isPending, reset } = add
@@ -51,7 +56,9 @@ export function AddTeacherDialog({
   // The same teacher id either way: "Add anyway" after a warning is still one teacher.
   const submit = (confirmSimilarName = false) => {
     setTouched(true)
-    if (!form.name.trim() || !form.email.trim()) return
+    if (!form.name.trim() || !looksLikeEmail(form.email)) return
+    if (inFlight.current) return
+    inFlight.current = true
     add.mutate(
       {
         id: teacherId,
@@ -62,7 +69,12 @@ export function AddTeacherDialog({
         supervisorId: supervisor === '' ? null : supervisor,
         ...(confirmSimilarName ? { confirmSimilarName: true } : {}),
       },
-      { onSuccess: setAdded },
+      {
+        onSuccess: setAdded,
+        onSettled: () => {
+          inFlight.current = false
+        },
+      },
     )
   }
 
@@ -80,7 +92,7 @@ export function AddTeacherDialog({
       }
     >
       <Field label={tx(T.fullName)} value={form.name} onChange={set('name')} error={missing(form.name)} />
-      <Field label={tx(T.signInEmail)} type="email" value={form.email} onChange={set('email')} error={missing(form.email)} />
+      <Field label={tx(T.signInEmail)} type="email" value={form.email} onChange={set('email')} error={emailError} />
       <p className="field__hint">{tx(T.signInHint)}</p>
       <Field label={tx(T.phoneOptional)} type="tel" value={form.phone} onChange={set('phone')} />
       <Field label={tx(T.joinedOnOptional)} type="date" value={form.joinedOn} onChange={set('joinedOn')} />
@@ -121,6 +133,9 @@ export function AddTeacherDialog({
     </Dialog>
   )
 }
+
+/** TEACHER-001: the shape the server accepts (one @, a dot in the domain, no spaces). */
+export const looksLikeEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
 
 const isSimilarName = (error: unknown): error is ApiError => error instanceof ApiError && error.code === 'COMM.TEACHER_SIMILAR_NAME'
 
@@ -207,6 +222,8 @@ export function FirstLoginCodeDialog({ signIn, firstLogin, onClose }: { signIn: 
           <p className="field__hint">{tx(T.validUntil, { when: dateTime(firstLogin.expiresAt) })}</p>
           <p className="field__hint">{tx(firstLogin.emailed ? T.emailedTo : T.notEmailed)}</p>
         </>
+      ) : firstLogin.alreadyIssued ? (
+        <p>{tx(T.codeAlreadyIssued, { when: dateTime(firstLogin.expiresAt) })}</p>
       ) : (
         <p>{tx(firstLogin.emailed ? T.codeEmailed : T.codeNotEmailedAskManager)}</p>
       )}
@@ -235,7 +252,7 @@ export function GiveSignInDialog({ teacherId, basePath, onClose }: { teacherId: 
 
   const submit = () => {
     setTouched(true)
-    if (!email.trim()) return
+    if (!looksLikeEmail(email)) return
     give.mutate(email.trim())
   }
   return (
@@ -252,7 +269,13 @@ export function GiveSignInDialog({ teacherId, basePath, onClose }: { teacherId: 
       }
     >
       <p className="field__hint">{tx(T.giveSignInHint)}</p>
-      <Field label={tx(T.signInEmail)} type="email" value={email} onChange={setEmail} error={touched && !email.trim() ? tx(T.required) : null} />
+      <Field
+        label={tx(T.signInEmail)}
+        type="email"
+        value={email}
+        onChange={setEmail}
+        error={touched ? (!email.trim() ? tx(T.required) : looksLikeEmail(email) ? null : tx(T.invalidEmail)) : null}
+      />
       <p className="field__hint">{tx(T.signInHint)}</p>
       <AddRefusal error={give.error} basePath={basePath} />
     </Dialog>

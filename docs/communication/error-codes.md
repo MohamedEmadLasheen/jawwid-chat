@@ -54,7 +54,9 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CONVERSATION_ARCHIVED` | 403 | Archived conversations are readable, never writable. |
 | `COMM.REPLY_TARGET_CROSS_CONVERSATION` | 403 | A reply must target the same conversation. |
 | `COMM.EMPTY_MESSAGE` | 400 | Text needs a body; media needs an attachment. |
+| `COMM.MESSAGE_TOO_LONG` | 400 | PARENT-003. A body (a text, a caption, an edit) is over 4000 characters, counted as a person sees them (grapheme clusters), or over 16000 UTF-16 code units. The clients count the same way and stop at the limit. |
 | `COMM.ATTACHMENT_TOO_LARGE` | 400 | Over the configured per-kind limit. |
+| `COMM.ATTACHMENT_NOT_UPLOADED` | 409 | PARENT-023. The attachment's object is not in storage, or is another size or type than declared (the ones its upload was authorized for). Upload it again, then send with the same `clientMessageId`. |
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Someone else decided first. Refresh the queue. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | A rejection must state a reason. |
@@ -162,6 +164,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.BILLING_NOT_FOUND` | 404 | No such family in the caller's organization, or one this caller does not reach. |
 | `COMM.BILLING_STATE` | 409 | PD-17: the instalment is already paid or voided. PD-27: also a payment request already paid, cancelled or expired, a receipt already decided, a card payment voided instead of refunded, a refund larger than what is left. Reload; never retry blindly. |
 | `COMM.PAYMENTS_UNAVAILABLE` | 503 | PD-27: card payments are not configured on this deployment (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`). Offer the bank transfer instead. |
+| `COMM.DATABASE_UNAVAILABLE` | 503 | TEACHER-027. The database could not serve the request in time: unreachable (P1001), no pool connection (P2024), a transaction past its timeout (P2028) or a statement past `DATABASE_STATEMENT_TIMEOUT_MS` (57014). Nothing was committed. Sent with `Retry-After` (seconds); retry the same request after it. Any route may answer it. |
 | `COMM.SUBSCRIPTION_LOCKED` | 403 | PD-30: the child's group is read-only for the parent and the teacher (lessons used up after the grace lessons, or an instalment overdue): a message, a reaction or a call there, or a lesson booked for the child. Staff are never refused; a direct chat never. Show the banner; retry after paying. |
 | `COMM.SUBSCRIPTION_DENIED` | 403 | PD-30: exceptions are granted and revoked only by the super admin, the Operations Manager and the Sales Manager. Never retry. |
 | `COMM.SUBSCRIPTION_STATE` | 409 | PD-30: the subscription is already voided, the exception already revoked, or a renewal was already requested today. Reload. |
@@ -201,6 +204,8 @@ recorded them.
   are free and return the original message.
 - `COMM.APPROVAL_ALREADY_DECIDED` means refresh, not retry.
 - Treat unknown `COMM.*` codes as a generic failure and show the `message`.
+- **Retry** `COMM.DATABASE_UNAVAILABLE` after its `Retry-After`: the server was
+  busy and nothing was saved. Back off further on a second one.
 - **Retry** `COMM.REVOCATION_UNCONFIRMED` with the same request: the change is
   already saved; only its realtime completion is unconfirmed. Do not undo it.
 - **Never retry** `COMM.STORY_EXPIRED` or `COMM.STORY_DELETED`: both are final

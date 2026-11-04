@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/data/http/attachment_uploader.dart' show UploadCancel;
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/features/messages/application/messages_controller.dart';
@@ -16,6 +17,8 @@ class _VoiceRepository implements MessageRepository {
   final history_ = <Message>[];
 
   int uploadFailures = 0;
+  /// What a failing upload throws (a plain network failure unless a test says otherwise).
+  AppError uploadError = const AppError(AppErrorKind.network);
   int sendFailures = 0;
   int _sequence = 0;
 
@@ -39,7 +42,7 @@ class _VoiceRepository implements MessageRepository {
     uploads.add(note);
     if (uploadFailures > 0) {
       uploadFailures--;
-      throw const AppError(AppErrorKind.network);
+      throw uploadError;
     }
     return UploadedAttachment(
       kind: MessageKind.voice,
@@ -91,6 +94,8 @@ class _VoiceRepository implements MessageRepository {
   Future<UploadedAttachment> uploadAttachment({
     required String conversationId,
     required PendingAttachment attachment,
+    void Function(int sent, int total)? onProgress,
+    UploadCancel? cancel,
   }) async {
     attachmentUploads.add(attachment);
     return UploadedAttachment(
@@ -277,6 +282,37 @@ void main() {
 
       expect(repository.uploads, hasLength(2));
       expect(repository.sent, hasLength(1));
+      expect(state().log.messages.single.deliveryState, DeliveryState.sent);
+    });
+
+    test('a timed-out request is retried on its own after the backoff (control)', () async {
+      repository.uploadFailures = 1;
+      repository.uploadError = const AppError(AppErrorKind.timeout);
+      controller().sendVoice(note());
+      await settle();
+      expect(repository.uploads, hasLength(1));
+
+      await Future<void>.delayed(const Duration(milliseconds: 2400)); // the first backoff is 2 s
+      expect(repository.uploads, hasLength(2));
+      expect(state().log.messages.single.deliveryState, DeliveryState.sent);
+    });
+
+    test('an upload that ran out of send time is parked, not re-sent on its own', () async {
+      repository.uploadFailures = 1;
+      repository.uploadError = const AppError(AppErrorKind.timeout, code: AppError.uploadTimeout);
+      final id = controller().sendVoice(note());
+      await settle();
+
+      await Future<void>.delayed(const Duration(milliseconds: 2400));
+      // An automatic retry would push the whole file again over the same slow link.
+      expect(repository.uploads, hasLength(1));
+      final failed = state().log.messages.single;
+      expect(failed.deliveryState, DeliveryState.failed);
+      expect(failed.failureCode, AppError.uploadTimeout);
+
+      await controller().retry(id); // the user's explicit retry still works
+      await settle();
+      expect(repository.uploads, hasLength(2));
       expect(state().log.messages.single.deliveryState, DeliveryState.sent);
     });
 
