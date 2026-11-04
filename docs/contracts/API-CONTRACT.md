@@ -1275,11 +1275,17 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 > PushKit push to an app that cannot report a call terminates it and, repeated,
 > costs the VoIP entitlement.
 >
-> **Android is not yet configured.** The channel, the Dart boundary and the
-> manifest permission exist; obtaining an FCM token needs a Firebase project
-> (`google-services.json` + the Gradle plugin), which is infrastructure
-> configuration rather than code. Until then the device reports no token and
-> `POST /notifications/devices` is simply never called from Android.
+> **Android (store blocker S-05).** The app asks Firebase Messaging for its
+> token after sign-in and registers it here as `platform: android`. Every FCM
+> message is data-only and carries the rendered `title` and `body` in its data;
+> a call (`call_started` / `group_call_started`, with `callId`) has a 45 s TTL.
+> While the app is closed, the app draws it: a call is a CallStyle notification
+> with Answer and Decline (and a full-screen intent where Android allows one),
+> reported to the call controller on `jawwid/call_native` exactly as iOS's
+> CallKit is; anything else is an ordinary notification. Firebase is configured
+> by `android/app/google-services.json` from the owner's project: a debug build
+> without it runs with push off, a release build without it refuses to build.
+> With `APP_ENV=production` the API refuses to start without both APNs and FCM.
 >
 > **Push is not the call.** A push wakes the app; the call itself still arrives
 > over the realtime connection and the server remains the only authority on its

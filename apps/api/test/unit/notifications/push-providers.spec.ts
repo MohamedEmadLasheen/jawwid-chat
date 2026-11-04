@@ -12,7 +12,7 @@
  * credential is needed.
  */
 import { ApnsPushProvider } from '@communication/notifications/apns.provider';
-import { FcmPushProvider } from '@communication/notifications/fcm.provider';
+import { FCM_CALL_TTL, FcmPushProvider } from '@communication/notifications/fcm.provider';
 import { selectPushProvider } from '@communication/notifications/push.provider.selector';
 import type { PushMessage } from '@communication/notifications/push.provider';
 import apn from '@parse/node-apn';
@@ -253,8 +253,11 @@ describe('FCM', () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const sent = JSON.parse((init as RequestInit).body as string);
-    expect(sent.message.data).toEqual(message().data);
+    // The rendered text rides in the data: a closed Android app draws it from there.
+    expect(sent.message.data).toEqual({ ...message().data, title: 'Incoming call', body: 'Call from teacher_c' });
     expect(sent.message.android.priority).toBe('high');
+    // A ring is kept only while it can still be answered.
+    expect(sent.message.android.ttl).toBe(FCM_CALL_TTL);
     // No `notification` block: the client decides what to show, which is what
     // lets a call push reach code rather than be drawn as a banner.
     expect(sent.message).not.toHaveProperty('notification');
@@ -271,6 +274,16 @@ describe('FCM', () => {
       expect(result.tokenInvalid).toBe(true);
     });
   }
+
+  it('a message push carries its text and no call TTL', async () => {
+    replyWith(200, {});
+    await new FcmPushProvider(config, auth as never).send(
+      message({ title: 'Lina', body: 'New message', data: { eventType: 'message_created', notificationId: 'n_2', conversationId: 'c_1' } }),
+    );
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(sent.message.data).toEqual({ eventType: 'message_created', notificationId: 'n_2', conversationId: 'c_1', title: 'Lina', body: 'New message' });
+    expect(sent.message.android).toEqual({ priority: 'high' });
+  });
 
   it('a 404 means the token no longer exists', async () => {
     replyWith(404, { error: { status: 'NOT_FOUND' } });
@@ -384,6 +397,19 @@ describe('provider selection', () => {
 
   it('both configured is the production shape', () => {
     expect(selectPushProvider({ ...apnsEnv, ...fcmEnv }, silent).kind).toBe('apns+fcm');
+  });
+
+  it('S-05: production refuses to start without BOTH stores, and names the missing one', () => {
+    expect(selectPushProvider({ APP_ENV: 'production', ...apnsEnv, ...fcmEnv }, silent).kind).toBe('apns+fcm');
+    expect(() => selectPushProvider({ APP_ENV: 'production' }, silent)).toThrow(/no APNs and FCM configuration/);
+    expect(() => selectPushProvider({ APP_ENV: 'production', ...apnsEnv }, silent)).toThrow(/no FCM configuration/);
+    expect(() => selectPushProvider({ APP_ENV: ' Production ', ...fcmEnv }, silent)).toThrow(/no APNs configuration/);
+  });
+
+  it('S-05: staging and a laptop may still run on the logging provider', () => {
+    expect(selectPushProvider({ APP_ENV: 'staging' }, silent).kind).toBe('logging');
+    expect(selectPushProvider({ APP_ENV: 'local' }, silent).kind).toBe('logging');
+    expect(selectPushProvider({}, silent).kind).toBe('logging');
   });
 
   describe('the deployment contract in infra/env/manifest.tsv', () => {
