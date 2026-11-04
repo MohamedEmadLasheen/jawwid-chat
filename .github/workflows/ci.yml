@@ -310,21 +310,17 @@ jobs:
           retention-days: 30
 
   # --------------------------------------------------------------- migrations
+  # Cheap database gates, kept under the original required check name. This job
+  # also reports the sharded integration suite below: its last step fails unless
+  # every shard passed, so "G-19 · migrations apply and are idempotent" still
+  # means what it meant before the suite was split (a skipped or cancelled shard
+  # is a failure, never a pass).
   migrations:
     name: G-19 · migrations apply and are idempotent
     runs-on: ubuntu-latest
-    needs: guards
-    # The DB gates take ~45s and the integration suite about ten minutes (110+
-    # files, ~2,000 tests; 10m09s on main on 2026-10-27, up from about a minute
-    # when this timeout was first set). 25 minutes is deliberate headroom, not
-    # a guess: its job is to bound a hung service, and a hang is exactly what
-    # happened here -- realtime-delivery.spec.ts opens ioredis with
-    # `maxRetriesPerRequest: null`, so an unreachable Redis retries forever
-    # rather than failing, and with no timeout the job sat until the 6-hour
-    # default. At 15 minutes the grown suite was cancelled mid-run with no test
-    # failing (#147, #151). `test:int` runs with --forceExit, so a handle left
-    # open after the last test cannot spend the rest of this budget either.
-    timeout-minutes: 25
+    needs: [guards, integration]
+    if: ${{ always() && !cancelled() }}
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17
@@ -413,21 +409,101 @@ jobs:
       - name: Teacher professional profile row-level security
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/teacher_profile_rls.sql
 
+      - name: G-19 · every integration shard must have passed
+        if: ${{ always() }}
+        env:
+          GUARDS: ${{ needs.guards.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+        run: |
+          echo "guards=$GUARDS integration=$INTEGRATION"
+          if [ "$GUARDS" != success ] || [ "$INTEGRATION" != success ]; then
+            echo "::error::G-19 FAIL — the integration suite did not pass on every shard"; exit 1
+          fi
+
+  # --------------------------------------------------------------- integration
+  # The integration suite (190 spec files, ~3,200 tests) used to run serially in
+  # the migrations job and took 15-23 minutes against a 25 minute timeout (ENG-43).
+  # It now runs as 4 shards of `jest --shard=N/4`. Jest assigns every spec file to
+  # exactly one shard, so together they run exactly the specs the single job ran
+  # (proof: scripts/ci/integration-shards.sh). Each shard has its OWN Postgres and
+  # Redis service containers and runs --runInBand inside, so no spec ever shares a
+  # database with a spec from another shard, as before. No test, timeout or
+  # assertion changed. fail-fast is off so one red shard still shows every failure.
+  integration:
+    name: G-19 · integration suite (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    needs: guards
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jawwid_chat_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      # redis:7-alpine matches docker-compose.yml, so CI and local development
+      # run the same server.
+      #
+      # Mapped to 6410 because that is the endpoint realtime-delivery.spec.ts
+      # asks for. That port is the test's own default and is deliberately
+      # neither Redis's 6379 nor compose's 6380: it keeps a developer's own
+      # Redis from quietly answering for the one the suite is supposed to
+      # exercise. Honouring it here keeps that isolation instead of pointing the
+      # suite at a shared port -- which is how this hang stayed invisible, since
+      # it passed locally against an unrelated container listening on 6410.
+      redis:
+        image: redis:7-alpine
+        ports: ['6410:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Migrate the empty database (same script as the G-19 gate)
+        run: bash scripts/db/apply.sh
+
+      # Ephemeral CI database, discarded with the job: durability buys nothing.
+      # These settings are reloadable, so no server restart is needed. The migrations
+      # job keeps the default settings for the gates and the drills.
+      - name: Tune the throwaway database for speed (fsync off)
+        run: |
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "alter system set fsync = off" \
+            -c "alter system set synchronous_commit = off" \
+            -c "alter system set full_page_writes = off"
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "select pg_reload_conf()"
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: apps/api/package-lock.json
 
-      - name: Integration suite
+      - name: Integration suite (shard ${{ matrix.shard }}/4)
         working-directory: apps/api
         run: |
           npm ci
           npx prisma generate
-          npm run test:int
+          npm run test:int -- --shard=${{ matrix.shard }}/4
+
+      # The backup and restore drills need a database that has been used. They
+      # follow the suite on shard 1, as they followed the single suite before.
 
       # ---- AI #7 -----------------------------------------------------------
       - name: Backup drill against the current schema
+        if: matrix.shard == 1
         # A `chat`-only dump is NOT self-restorable while chat.core_* are views
         # over Core-owned tables in public: restore fails partway and looks like
         # it worked. This asserts the documented recovery procedure still holds
@@ -448,6 +524,7 @@ jobs:
       # Synthetic data only. The key is generated here, lives in RUNNER_TEMP,
       # and is never printed.
       - name: G-41 · encrypted backup, refused tampering, restore and verify
+        if: matrix.shard == 1
         env:
           PG_IMAGE: postgres:17-alpine
         run: |
