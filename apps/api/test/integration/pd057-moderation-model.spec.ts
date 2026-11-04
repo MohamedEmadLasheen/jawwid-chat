@@ -18,7 +18,10 @@
  *      answer; a closed report never changes; never deleted
  *   6. a block (§6.1, §6.2): parents and teachers block, staff never; not
  *      oneself; once per pair; its case is the blocker's own person report;
- *      case and notified manager set once; deleting unblocks, the case stays
+ *      case set once; deleting unblocks, the case stays
+ *   6b. the managers told of a block (owner, 2026-11-04): one notice per
+ *      manager per block, however many departments; insert-only; kept as
+ *      history after an unblock; no request role reaches it
  *   7. erasure (§5.5 rule 6, §6.2): the erased reporter's reports are kept and
  *      anonymous, evidence about an erased subject is kept, blocks go both ways
  *   8. the report limit is configuration
@@ -131,6 +134,15 @@ const reportRefusal = (r: ReportInput = {}): Promise<string> => {
 const personReport = (r: ReportInput = {}) =>
   report({ targetKind: 'person', messageId: null, conversationId: null, ...r });
 
+/** `managerId` was told of `blockId` (the API writes one per responsible manager). */
+const notice = async (blockId: string, managerId: string, caseId?: string) =>
+  (await one<{ id: string }>(
+    `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id)
+     values ($1::uuid, coalesce($2::uuid, (select case_report_id from chat.actor_block where id = $1::uuid)), $3::uuid)
+     returning id::text as id`,
+    blockId, caseId ?? null, managerId,
+  )).id;
+
 const block = async (blockerKind: string, blockerId: string, blockedKind: string, blockedId: string, caseId: string | null = null) =>
   (await one<{ id: string }>(
     `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id, case_report_id)
@@ -204,23 +216,26 @@ describe('1. fail closed: no request role reaches either table (§5.5 rule 8)', 
       `select c.relname::text, c.relrowsecurity as rls,
               (select count(*)::int from pg_policy p where p.polrelid = c.oid) as policies
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = 'chat' and c.relname in ('content_report', 'actor_block')
+        where n.nspname = 'chat' and c.relname in ('content_report', 'actor_block', 'actor_block_manager_notice')
         order by c.relname`,
     );
     expect(tables).toEqual([
       { relname: 'actor_block', rls: true, policies: 0 },
+      { relname: 'actor_block_manager_notice', rls: true, policies: 0 },
       { relname: 'content_report', rls: true, policies: 0 },
     ]);
     const grants = await g.prisma.$queryRawUnsafe<Array<{ grantee: string }>>(
       `select distinct grantee::text from information_schema.role_table_grants
-        where table_schema = 'chat' and table_name in ('content_report', 'actor_block')`,
+        where table_schema = 'chat' and table_name in ('content_report', 'actor_block', 'actor_block_manager_notice')`,
     );
     expect(grants.map((r) => r.grantee).filter((x) => x !== 'postgres')).toEqual([]);
   });
 
   it.each(['chat_app', 'authenticated', 'anon'])('%s can neither read nor write a report or a block', async (role) => {
     const id = await report();
-    await block('contact', s.parentId, 'teacher', s.teacherId);
+    const theCase = await personReport({ reason: 'blocked' });
+    const b = await block('contact', s.parentId, 'teacher', s.teacherId, theCase);
+    await notice(b, s.managerId);
     const asRole = async (sql: string) => {
       try {
         await g.prisma.$transaction(async (tx) => {
@@ -237,6 +252,10 @@ describe('1. fail closed: no request role reaches either table (§5.5 rule 8)', 
       `select * from chat.actor_block`,
       `update chat.content_report set status = 'dismissed' where id = '${id}'`,
       `delete from chat.actor_block`,
+      `select * from chat.actor_block_manager_notice`,
+      `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id)
+       values ('${b}', '${theCase}', '${s.ownerId}')`,
+      `delete from chat.actor_block_manager_notice`,
       `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id)
        values ('contact', '${s.otherParentId}', 'teacher', '${s.teacherId}')`,
     ]) {
@@ -292,7 +311,14 @@ describe('2. a report takes the server\'s clock and its priority from its reason
     const blockRow = await g.prisma.actorBlock.findUniqueOrThrow({ where: { id: b } });
     expect(blockRow).toMatchObject({
       blockerKind: 'contact', blockerId: s.parentId, blockedKind: 'teacher', blockedId: s.teacherId,
-      caseReportId: null, notifiedManagerStaffId: null,
+      caseReportId: null,
+    });
+    expect(blockRow).not.toHaveProperty('notifiedManagerStaffId');
+    const theCase = await personReport({ reason: 'blocked', reporterId: s.otherParentId, reporterAccountId: otherParentAccount });
+    const b2 = await block('contact', s.otherParentId, 'teacher', s.teacherId, theCase);
+    const n = await notice(b2, s.managerId);
+    expect(await g.prisma.actorBlockManagerNotice.findUniqueOrThrow({ where: { id: n } })).toMatchObject({
+      blockId: b2, caseReportId: theCase, managerStaffId: s.managerId,
     });
   });
 });
@@ -497,7 +523,7 @@ describe('6. a block (§6.1, §6.2)', () => {
     )).toMatch(/between two people of its organization/);
   });
 
-  it('its case is the blocker\'s own person report about the blocked person, set once; the manager told, once', async () => {
+  it('its case is the blocker\'s own person report about the blocked person, set once', async () => {
     const id = await block('contact', s.parentId, 'teacher', s.teacherId);
     const messageCase = await report();
     const otherPersonCase = await personReport({ reporterId: s.otherParentId, reporterAccountId: otherParentAccount });
@@ -508,12 +534,6 @@ describe('6. a block (§6.1, §6.2)', () => {
     await expect(setCase(otherPersonCase)).rejects.toThrow(/blocker's own report about the blocked person/);
     await setCase(theCase);
     await expect(setCase(otherPersonCase)).rejects.toThrow(/set once/);
-    await g.prisma.$executeRawUnsafe(
-      `update chat.actor_block set notified_manager_staff_id = $2::uuid where id = $1::uuid`, id, s.managerId,
-    );
-    expect(await refusal(
-      `update chat.actor_block set notified_manager_staff_id = $2::uuid where id = $1::uuid`, id, s.ownerId,
-    )).toMatch(/set once/);
     expect(await refusal(`update chat.actor_block set blocked_id = $2::uuid where id = $1::uuid`, id, s.newTeacherId))
       .toMatch(/a block never changes/);
     // Opened together with its case, in one insert.
@@ -535,6 +555,87 @@ describe('6. a block (§6.1, §6.2)', () => {
   });
 });
 
+describe('6b. the managers told of a block (owner decision 2026-11-04)', () => {
+  /** A manager of another department: the family's children can be supervised across departments. */
+  async function otherDepartmentManager(): Promise<string> {
+    const id = randomUUID();
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'manager_s', 'manager', true)`, id,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department (kind, display_name, manager_id) values ('sales', 'sales', $1::uuid)`, id,
+    );
+    return id;
+  }
+  async function blockWithCase(): Promise<{ id: string; theCase: string }> {
+    const theCase = await personReport({ reason: 'blocked' });
+    return { id: await block('contact', s.parentId, 'teacher', s.teacherId, theCase), theCase };
+  }
+  const notices = () =>
+    g.prisma.$queryRawUnsafe<Array<{ block_id: string | null; case_report_id: string; manager_staff_id: string; fresh: boolean }>>(
+      `select block_id::text, case_report_id::text, manager_staff_id::text, notified_at > now() - interval '1 minute' as fresh
+         from chat.actor_block_manager_notice order by manager_staff_id`,
+    );
+
+  it('every responsible manager, across departments, is told once; a second notice to the same manager is refused', async () => {
+    const second = await otherDepartmentManager();
+    const { id, theCase } = await blockWithCase();
+    await notice(id, s.managerId);
+    await notice(id, second);
+    expect(await refusal(
+      `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id) values ($1::uuid, $2::uuid, $3::uuid)`,
+      id, theCase, s.managerId,
+    )).toMatch(/actor_block_manager_notice_once|23505/);
+    expect(await notices()).toEqual(
+      [s.managerId, second].sort().map((m) => ({ block_id: id, case_report_id: theCase, manager_staff_id: m, fresh: true })),
+    );
+  });
+
+  it('insert-only: a notice is never changed or deleted', async () => {
+    const { id } = await blockWithCase();
+    const n = await notice(id, s.managerId);
+    for (const sql of [
+      `update chat.actor_block_manager_notice set manager_staff_id = '${s.ownerId}' where id = $1::uuid`,
+      `update chat.actor_block_manager_notice set notified_at = notified_at - interval '1 day' where id = $1::uuid`,
+      `update chat.actor_block_manager_notice set block_id = null where id = $1::uuid`,
+      `delete from chat.actor_block_manager_notice where id = $1::uuid`,
+    ]) {
+      expect(await refusal(sql, n)).toMatch(/a block notice is written once/);
+    }
+  });
+
+  it('a notice is about a block with its case, to staff of the organization, at the server\'s time', async () => {
+    const bare = await block('contact', s.parentId, 'teacher', s.teacherId);
+    const unrelatedCase = await personReport({ reporterId: s.otherParentId, reporterAccountId: otherParentAccount });
+    expect(await refusal(
+      `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id) values ($1::uuid, $2::uuid, $3::uuid)`,
+      bare, unrelatedCase, s.managerId,
+    )).toMatch(/about a block and that block's case/);
+    await g.prisma.$executeRawUnsafe(`delete from chat.actor_block where id = $1::uuid`, bare);
+    const { id, theCase } = await blockWithCase();
+    expect(await refusal(
+      `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id) values ($1::uuid, $2::uuid, $3::uuid)`,
+      id, theCase, randomUUID(),
+    )).toMatch(/foreign key|23503|staff of the organization/);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id, notified_at)
+       values ($1::uuid, $2::uuid, $3::uuid, '2020-01-01T00:00:00Z')`,
+      id, theCase, s.managerId,
+    );
+    expect((await notices())[0]!.fresh).toBe(true);
+  });
+
+  it('unblocking keeps the notices as history, tied to the case; a new block is told afresh', async () => {
+    const { id, theCase } = await blockWithCase();
+    await notice(id, s.managerId);
+    await g.prisma.$executeRawUnsafe(`delete from chat.actor_block where id = $1::uuid`, id);
+    expect(await notices()).toEqual([{ block_id: null, case_report_id: theCase, manager_staff_id: s.managerId, fresh: true }]);
+    const again = await block('contact', s.parentId, 'teacher', s.teacherId, theCase);
+    await notice(again, s.managerId);
+    expect((await notices()).map((n) => n.block_id).sort()).toEqual([again, null].sort());
+  });
+});
+
 describe('7. erasure keeps reports, anonymous, and removes blocks (§5.5 rule 6, §6.2)', () => {
   it('the erased parent\'s reports stay without them; reports about them keep their evidence; their blocks go both ways', async () => {
     const theirs = await report({ reason: 'other', note: 'Kept with the report.' });
@@ -544,7 +645,8 @@ describe('7. erasure keeps reports, anonymous, and removes blocks (§5.5 rule 6,
       messageId: parentMsg, subjectKind: 'contact', subjectId: s.parentId,
       evidence: JSON.stringify({ body: 'synthetic body', authorId: s.parentId }) });
     const othersReport = await report({ reporterId: s.otherParentId, reporterAccountId: otherParentAccount });
-    await block('contact', s.parentId, 'teacher', s.teacherId);
+    const blockCase = await personReport({ reason: 'blocked' });
+    await notice(await block('contact', s.parentId, 'teacher', s.teacherId, blockCase), s.managerId);
     await block('teacher', s.unrelatedTeacherId, 'contact', s.parentId);
     const othersBlock = await block('contact', s.otherParentId, 'teacher', s.teacherId);
 
@@ -556,7 +658,7 @@ describe('7. erasure keeps reports, anonymous, and removes blocks (§5.5 rule 6,
     }>>(`select id::text, reporter_kind, reporter_id::text, reporter_account_id::text, subject_id::text, note, evidence, status
            from chat.content_report`);
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
     expect(byId[theirs]).toMatchObject({ reporter_kind: 'contact', reporter_id: null, reporter_account_id: null,
                                          note: 'Kept with the report.', status: 'open' });
     expect(byId[closed]).toMatchObject({ reporter_id: null, reporter_account_id: null, status: 'dismissed' });
@@ -566,10 +668,13 @@ describe('7. erasure keeps reports, anonymous, and removes blocks (§5.5 rule 6,
 
     const blocks = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(`select id::text from chat.actor_block`);
     expect(blocks.map((b) => b.id)).toEqual([othersBlock]);
+    // The managers' notices of the erased parent's block stay, as administrative history.
+    expect(await one(`select block_id, case_report_id::text from chat.actor_block_manager_notice`))
+      .toEqual({ block_id: null, case_report_id: blockCase });
 
     // Erasing again changes nothing.
     await g.prisma.$queryRawUnsafe(`select chat.erase_account($1::uuid, 'pd57 model spec')`, parentAccount);
-    expect((await one<{ n: number }>(`select count(*)::int as n from chat.content_report`)).n).toBe(4);
+    expect((await one<{ n: number }>(`select count(*)::int as n from chat.content_report`)).n).toBe(5);
   });
 
   it('an erased teacher\'s blocks go too', async () => {

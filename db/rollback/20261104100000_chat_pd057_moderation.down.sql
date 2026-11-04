@@ -1,8 +1,9 @@
 -- Roll back 20261104100000_chat_pd057_moderation (PD-57, ENG-01): Report and Block.
 --
 -- Roll back the API first: the PD-57 moderation module (ENG-02) reads and writes
--- these tables. DROPS chat.content_report and chat.actor_block WITH THEIR ROWS:
--- the reports, their evidence and answers, and every block are lost. Take a
+-- these tables. DROPS chat.content_report, chat.actor_block and
+-- chat.actor_block_manager_notice WITH THEIR ROWS: the reports, their evidence
+-- and answers, every block and the record of which managers were told are lost. Take a
 -- backup first if any exist (select count(*) from chat.content_report).
 -- chat.erase_account returns to its 20261102210000 text (reports and blocks
 -- no longer exist for it to touch).
@@ -162,8 +163,10 @@ comment on function chat.erase_account(uuid, text, text[]) is
   'the photo object keys the caller deletes from storage, and the tasks raised. Idempotent.';
 revoke all on function chat.erase_account(uuid, text, text[]) from public;
 
+drop table if exists chat.actor_block_manager_notice;
 drop table if exists chat.actor_block;
 drop table if exists chat.content_report;
+drop function if exists chat.guard_actor_block_manager_notice();
 drop function if exists chat.guard_actor_block();
 drop function if exists chat.guard_content_report();
 

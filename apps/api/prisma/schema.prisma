@@ -3120,8 +3120,9 @@ model ContentReport {
 /// PD-57 (A-2): a personal block by a parent (contact) or a teacher; staff never
 /// block. Deleting the row unblocks. SQL owns the DDL and the rules:
 /// 20261104100000_chat_pd057_moderation.sql (unique per pair, never oneself;
-/// the case and the notified manager are each set once). No request role may
-/// read it. Lessons and the administrative channel are never affected (the API).
+/// the case is set once). The managers told of it are ActorBlockManagerNotice
+/// rows. No request role may read it. Lessons and the administrative channel
+/// are never affected (the API).
 model ActorBlock {
   id                     String   @id @default(uuid()) @db.Uuid
   organizationId         String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
@@ -3134,11 +3135,33 @@ model ActorBlock {
   createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
   /// The content_report (target person, the blocker's own) this block opened.
   caseReportId           String?  @map("case_report_id") @db.Uuid
-  /// The responsible manager told of the block (roadmap §6.3).
-  notifiedManagerStaffId String?  @map("notified_manager_staff_id") @db.Uuid
 
   @@unique([blockerKind, blockerId, blockedKind, blockedId])
   @@index([blockedKind, blockedId])
   @@map("actor_block")
+  @@schema("chat")
+}
+
+/// PD-57, owner decision 2026-11-04: one row per responsible manager told of a
+/// block -- every manager of every supervisor of the family's children, across
+/// departments, once each (unique per block and manager). Insert-only history:
+/// an unblock sets blockId to null and the row stays, tied to the block's case
+/// report. Being told grants the manager nothing (no request role reads it; it
+/// is not a permission). SQL owns the DDL: 20261104100000_chat_pd057_moderation.sql.
+model ActorBlockManagerNotice {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// Null once the block is lifted (or erased); the notice stays.
+  blockId        String?  @map("block_id") @db.Uuid
+  /// The block's case: who blocked whom, kept after the block is gone.
+  caseReportId   String   @map("case_report_id") @db.Uuid
+  managerStaffId String   @map("manager_staff_id") @db.Uuid
+  /// Set by the database.
+  notifiedAt     DateTime @default(now()) @map("notified_at") @db.Timestamptz
+
+  @@unique([blockId, managerStaffId])
+  @@index([caseReportId])
+  @@index([managerStaffId, notifiedAt])
+  @@map("actor_block_manager_notice")
   @@schema("chat")
 }
