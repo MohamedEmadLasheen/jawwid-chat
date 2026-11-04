@@ -7,6 +7,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/features/auth/presentation/parent_signup_screen.dart';
+import 'package:jawwid_chat/features/settings/data/parent_notice_repository.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
 /// PD-16 on the client: a parent creates their account with the e-mail the academy has and
@@ -21,8 +22,10 @@ Future<void> submit(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('signup-submit')));
 }
 
-/// PD-48: the lesson-audio line, ticked before the account is finished.
+/// PD-48: the lesson-audio line, ticked before the account is finished -- from Phase 2
+/// ([kLessonAudioNoticeLive]); until then there is no line to tick.
 Future<void> tick(WidgetTester tester) async {
+  if (!kLessonAudioNoticeLive) return;
   await tester.pumpAndSettle();
   await tester.ensureVisible(find.byKey(const ValueKey('signup-lesson-audio')));
   await tester.tap(find.byKey(const ValueKey('signup-lesson-audio')));
@@ -158,37 +161,43 @@ void main() {
     });
   }
 
-  testWidgets('PD-48: finishing needs the approved lesson-audio line ticked; then its version is sent', (tester) async {
+  // Phase 2 (owner 2026-11-03): the lessons are postponed, so sign-up shows no lesson-audio
+  // line or link and sends no notice version -- the server then records no acknowledgement,
+  // and the account is created all the same (apps/api/test/integration/
+  // new-student-enrolment-pd016.spec.ts). The ticked flow returns with the switch; its tests
+  // are in this file's history (PR #446).
+  testWidgets('Phase 2: no lesson-audio line or link at any step; finishing sends no notice version', (tester) async {
+    expect(kLessonAudioNoticeLive, isFalse);
     final repo = _RecordingSignup();
     await tester.pumpWidget(app(const ParentSignupScreen(), repo));
+    void noLessonAudio() {
+      expect(find.byKey(const ValueKey('signup-lesson-audio'), skipOffstage: false), findsNothing);
+      expect(find.byKey(const ValueKey('signup-lesson-audio-about'), skipOffstage: false), findsNothing);
+      expect(find.byType(CheckboxListTile, skipOffstage: false), findsNothing);
+      expect(find.textContaining('lesson', skipOffstage: false), findsNothing);
+    }
+
+    noLessonAudio();
     await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
     await submit(tester);
     await tester.pumpAndSettle();
-    // The owner's words, exactly.
-    expect(find.text('I understand that lesson pronunciation audio is computer-generated and checked by the academy\'s teachers before use.'), findsOneWidget);
+    noLessonAudio();
     await tester.enterText(find.byKey(const ValueKey('signup-code')), '482913');
     await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
     await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
     await submit(tester);
     await tester.pumpAndSettle();
-    expect(repo.verified, isEmpty);
-    await tick(tester);
-    await submit(tester);
-    await tester.pumpAndSettle();
     expect(repo.verified, ['parent@example.test 482913 long-password-1']);
-    expect(repo.notices, [1]);
+    expect(repo.notices, [null]);
   });
 
-  testWidgets('PD-48: the sign-up links to About lesson audio, with the terms', (tester) async {
-    await tester.pumpWidget(app(const ParentSignupScreen(), _RecordingSignup()));
+  testWidgets('Phase 2: the Arabic sign-up has no lesson-audio text either', (tester) async {
+    await tester.pumpWidget(app(const ParentSignupScreen(), _RecordingSignup(), locale: const Locale('ar')));
     await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
     await submit(tester);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('signup-lesson-audio-about')));
-    await tester.tap(find.byKey(const ValueKey('signup-lesson-audio-about')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('lesson-audio-about-body')), findsOneWidget);
-    expect(find.text('Terms and privacy'), findsOneWidget);
+    expect(find.textContaining('صوت', skipOffstage: false), findsNothing);
+    expect(find.textContaining('الدروس', skipOffstage: false), findsNothing);
   });
 }
 
