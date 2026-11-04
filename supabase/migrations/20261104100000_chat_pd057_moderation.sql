@@ -403,6 +403,39 @@ revoke all on function chat.guard_content_report() from public;
 revoke all on function chat.guard_actor_block() from public;
 
 -- ===========================================================================
+-- 4b. The moderation queue's permission keys (ENG-02, roadmap §5.4)
+-- ===========================================================================
+-- moderation.view (the queue and the evidence, every view audited) and
+-- moderation.act (take and resolve), for the department managers; the super
+-- admin holds every key. Neither is delegable. The block is generated from
+-- apps/api/src/platform/permissions (catalogue.ts, legacy-bundles.ts) and
+-- checked by test/unit/authorization/pd040-catalogue-seed.spec.ts. Inside a
+-- DO block only so that the migration stays idempotent.
+
+do $pd057_keys$
+begin
+  if exists (select 1 from chat.permission where key = 'moderation.view') then
+    return;
+  end if;
+  perform set_config('chat.pd040_catalogue_change', 'on', true);
+-- BEGIN GENERATED pd057 catalogue rows -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit
+insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values
+  ('moderation.view', 'moderation', 'view', 'View reports and their evidence', 'عرض البلاغات وأدلتها', 'pii', false, 'PD-57'),
+  ('moderation.act', 'moderation', 'act', 'Take and resolve reports', 'استلام البلاغات والبت فيها', 'admin', false, 'PD-57');
+
+insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) values
+  ('manager', 'operations', 'moderation.act'),
+  ('manager', 'operations', 'moderation.view'),
+  ('manager', 'teachers', 'moderation.act'),
+  ('manager', 'teachers', 'moderation.view'),
+  ('manager', 'sales', 'moderation.act'),
+  ('manager', 'sales', 'moderation.view');
+-- END GENERATED pd057 catalogue rows
+  perform set_config('chat.pd040_catalogue_change', 'off', true);
+end;
+$pd057_keys$;
+
+-- ===========================================================================
 -- 5. The erasure keeps reports anonymous and removes blocks (§5.5 rule 6, §6.2)
 -- ===========================================================================
 -- chat.erase_account as 20261102210000 defined it, with the PD-57 lines added

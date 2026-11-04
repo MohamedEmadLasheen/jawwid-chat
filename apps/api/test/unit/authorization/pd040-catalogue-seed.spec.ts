@@ -244,6 +244,16 @@ const LATER: readonly Later[] = [
       ),
     ),
   },
+  {
+    // PD-57 (roadmap §5.4): the moderation queue -- the department managers
+    // (and the super admin, who holds every key). Neither key is delegable.
+    migration: '20261104100000_chat_pd057_moderation.sql',
+    tag: 'pd057',
+    permissions: ['moderation.view', 'moderation.act'],
+    bundles: (['operations', 'sales', 'teachers'] as const).flatMap((kind) =>
+      (['moderation.act', 'moderation.view'] as const).map((key) => ['manager', kind, key] as const),
+    ),
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));

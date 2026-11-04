@@ -65,6 +65,7 @@ because each is a rolling 24-hour count that must survive a Redis restart:
 |---|---|---|
 | `feedback.limit.per_child_day` | 3 | `POST /me/feedback` about one child, rolling 24 h → `429 COMM.FEEDBACK_LIMIT` |
 | `feedback.limit.per_family_day` | 10 | `POST /me/feedback` by one family, rolling 24 h → `429 COMM.FEEDBACK_LIMIT` |
+| `report.limit.per_reporter_hour` | 10 | PD-57: `POST /reports` by one person (parent, teacher or staff), rolling hour, counted from `chat.content_report` under a per-reporter advisory lock → `429 COMMON.RATE_LIMITED` with `Retry-After`. A duplicate of an open report is not counted. |
 | `signup.wrong_codes_per_day` | 10 | wrong parent sign-up codes per enrolled parent's account (per e-mail hash for any other e-mail), rolling 24 h, across codes, decided under an advisory lock → `403 AUTH.SIGNUP_LOCKED` until the window rolls or staff reset it. Rows purged after 7 days by the worker. |
 
 - These are set well above human use on purpose. A limit a busy admin can hit on a

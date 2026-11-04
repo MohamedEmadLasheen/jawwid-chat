@@ -191,6 +191,14 @@ const ENTRIES = {
   // delegable (owner 2026-10-28: exactly those four roles).
   'whiteboards.view': { label: { en: "View teachers' boards (read-only)", ar: 'عرض سبورات المعلمين (للقراءة فقط)' }, risk: 'pii', introducedBy: 'PD-39' },
   'whiteboards.retention': { label: { en: "Manage departed teachers' boards and read board access history", ar: 'إدارة سبورات المعلمين المغادرين والاطلاع على سجل الوصول' }, risk: 'pii', introducedBy: 'PD-39' },
+
+  // PD-57 (A-1, roadmap §5.4): the moderation queue. `view` shows the evidence
+  // (what was said, by whom; every view audited), `act` takes and resolves.
+  // The narrowest holders: the department managers and the super admin
+  // (legacy-bundles.ts); not delegable, so only the super admin may put them
+  // in a role. Filing a report needs no key (self-service).
+  'moderation.view': { label: { en: 'View reports and their evidence', ar: 'عرض البلاغات وأدلتها' }, risk: 'pii', introducedBy: 'PD-57' },
+  'moderation.act': { label: { en: 'Take and resolve reports', ar: 'استلام البلاغات والبت فيها' }, risk: 'admin', introducedBy: 'PD-57' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;

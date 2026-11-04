@@ -169,4 +169,11 @@ drop function if exists chat.guard_content_report();
 
 delete from chat.config where key = 'report.limit.per_reporter_hour';
 
+-- ENG-02: the moderation keys. An access role that carries one must be edited
+-- first (the super admin removes the key); this delete then succeeds.
+select set_config('chat.pd040_catalogue_change', 'on', true);
+delete from chat.legacy_permission_bundle where permission_key in ('moderation.view', 'moderation.act');
+delete from chat.permission where key in ('moderation.view', 'moderation.act');
+select set_config('chat.pd040_catalogue_change', 'off', true);
+
 delete from chat.schema_migrations where version = '20261104100000_chat_pd057_moderation';

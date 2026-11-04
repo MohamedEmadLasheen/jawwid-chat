@@ -119,6 +119,24 @@ describe('PD-40: every route declares what it asks of staff', () => {
     ]);
   });
 
+  it('PD-57: the moderation keys open exactly the queue; filing and reading one\'s own reports are self-service', () => {
+    const opened = (key: string) =>
+      routes
+        .filter((r) => r.access?.kind === 'requires' && r.access.anyOf.includes(key as never))
+        .map((r) => `${r.method} ${r.path}`)
+        .sort();
+    expect(opened('moderation.view')).toEqual(['GET /moderation/reports', 'GET /moderation/reports/:id']);
+    expect(opened('moderation.act')).toEqual(['POST /moderation/reports/:id/resolve', 'POST /moderation/reports/:id/take']);
+    // Exactly one key each: nothing else opens the queue.
+    expect(routes.filter((r) => r.path.startsWith('/moderation')).every((r) => r.access?.kind === 'requires' && r.access.anyOf.length === 1)).toBe(true);
+    expect(routes.filter((r) => r.path === '/reports' || r.path === '/me/reports').map((r) => [r.method, r.path, r.access?.kind])).toEqual(
+      expect.arrayContaining([
+        ['POST', '/reports', 'self'],
+        ['GET', '/me/reports', 'self'],
+      ]),
+    );
+  });
+
   it('docs/security/pd040-route-permissions.md is up to date', () => {
     const want = table(routes);
     if (process.env.PD040_WRITE_ROUTE_TABLE === '1') writeFileSync(TABLE, want);
