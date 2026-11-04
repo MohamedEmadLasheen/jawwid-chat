@@ -17,6 +17,7 @@ import { AuthModule } from '@platform/auth/auth.module';
 import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
 import { CommErrorCode } from '@platform/errors';
+import { PERMISSION_GUARD_MODE, shadowDenials } from '@platform/permissions/permission.guard';
 import { CommunicationModule } from '@communication/communication.module';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -381,6 +382,54 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     const tickets = await http(fam.teacher, 'GET', `/conversations/${gid}/trial-tickets`);
     expect(tickets.status).toBe(200);
     expect(tickets.json.tickets).toEqual([]);
+  });
+
+  it('PD-45: GET /trials/:id/subscription-prefill -- the permission guard, and the Sales standing behind it', async () => {
+    const sales = m.salesManager.subject;
+    const prospect = await http(sales, 'POST', '/trials/prospects', { displayName: 'QA prospect pd45' });
+    const slots = (await http(sales, 'GET', `/trials/slots?teacherId=${fam.child.teacherId}&durationMinutes=30`)).json.slots as string[];
+    const booked = await http(sales, 'POST', '/trials', {
+      prospectId: prospect.json.id, teacherId: fam.child.teacherId, startsAt: slots[slots.length - 1],
+      location: { countryCode: 'AE', subdivisionCode: 'AE-DU' },
+    });
+    expect(booked.status).toBe(201);
+    const route = `/trials/${booked.json.id as string}/subscription-prefill`;
+    const prefill = await http(sales, 'GET', route);
+    expect(prefill.status).toBe(200);
+    expect(prefill.json).toMatchObject({ location: { country: { code: 'AE' }, subdivision: { code: 'AE-DU' } } });
+
+    // A staff member who lacks trials.manage: a supervisor in no department
+    // (bundle supervisor:none). PD-40 runs in shadow mode on main, so the guard
+    // lets the request through and counts the would-be refusal; the service's
+    // trial standing then refuses it ("not found": no trial standing at all).
+    // Under enforce the guard answers 403 itself, before the service.
+    const loose = `loose.pd45@${DOMAIN}`;
+    await g.prisma.$transaction(async (tx) => {
+      const account = await tx.account.create({ data: { organizationId: orgId, subject: loose, kind: 'staff', status: 'active', isActive: true } });
+      await tx.accountCredential.create({ data: { accountId: account.id, passwordHash: await hashPassword(PASSWORD) } });
+      await tx.staff.create({ data: { organizationId: orgId, name: 'QA loose supervisor', role: 'admin', isActive: true, accountId: account.id } });
+    });
+    const denials = () =>
+      [...shadowDenials.entries()].filter(([k]) => k.includes('subscription-prefill')).reduce((n, [, v]) => n + v, 0);
+    const before = denials();
+    const refused = await http(loose, 'GET', route);
+    if (PERMISSION_GUARD_MODE === 'enforce') {
+      expect([refused.status, refused.code]).toEqual([403, CommErrorCode.PERMISSION_DENIED]);
+    } else {
+      expect([refused.status, refused.code]).toEqual([404, CommErrorCode.LESSON_NOT_FOUND]);
+      expect(denials()).toBe(before + 1);
+    }
+    expect(JSON.stringify(refused.json)).not.toMatch(/AE-DU|Dubai|دبي/);
+
+    // Callers the guard never checks (it gates staff only): the trial's own
+    // teacher and a parent. Only the service refuses them, in either mode.
+    const teacher = await http(fam.teacher, 'GET', route);
+    expect([teacher.status, teacher.code]).toEqual([403, CommErrorCode.LESSON_DENIED]);
+    expect(JSON.stringify(teacher.json)).not.toMatch(/AE-DU|Dubai|دبي/);
+    const parent = await http(fam.parent, 'GET', route);
+    expect(parent.status).toBe(404);
+    expect(JSON.stringify(parent.json)).not.toMatch(/AE-DU|Dubai|دبي/);
+    expect((await http(null, 'GET', route)).status).toBe(401);
   });
 
   it('the needs-action queue is the Teachers department\'s; a client cannot send a card', async () => {

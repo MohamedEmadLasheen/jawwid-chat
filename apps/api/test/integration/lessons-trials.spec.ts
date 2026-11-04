@@ -206,6 +206,66 @@ describe('2. booking', () => {
     expect(await trials.subscriptionPrefill(salesId, bare.id)).toEqual({ location: null });
   });
 
+  it('PD-45: the pre-fill is the trial desk\'s -- another organization\'s Sales, and staff off the trial desk, read nothing', async () => {
+    await openAllWeek();
+    const { slots } = await trials.slots(salesId, s.teacherId, '30');
+    const t = await trials.book(salesId, {
+      prospectId, teacherId: s.teacherId, startsAt: slots[3], location: { countryCode: 'EG', subdivisionCode: 'EG-GZ' },
+    });
+    const refusedWithNothing = async (actorId: string, expected: string) => {
+      let caught: unknown;
+      try {
+        await trials.subscriptionPrefill(actorId, t.id);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(CommError);
+      const e = caught as CommError;
+      expect(e.code).toBe(expected);
+      expect(e.status).toBe(expected.endsWith('_NOT_FOUND') ? 404 : 403);
+      expect(JSON.stringify({ message: e.message, detail: e.detail ?? null })).not.toMatch(/EG-GZ|Giza|الجيزة|"EG"/);
+    };
+
+    // (a) A Sales-department member of ANOTHER organization -- the trial desk at
+    // home -- gets "not found": the trial is looked up inside the caller's own
+    // organization first, so it is not even told that the trial exists.
+    const [org2, sales2] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.organization (id, slug, display_name) values ($1::uuid, $2, 'org_two')`, org2, `org-two-${org2.slice(0, 8)}`,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active, organization_id) values ($1::uuid, 'sales_two', 'admin', true, $2::uuid)`, sales2, org2,
+    );
+    const [{ id: sales2Dept }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.department (organization_id, kind, display_name) values ($1::uuid, 'sales', 'sales') returning id::text as id`, org2,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, $2::uuid, $3::uuid, 'supervisor')`,
+      sales2, org2, sales2Dept,
+    );
+    await trials.createProspect(sales2, { displayName: 'prospect_two' }); // the trial desk in its own organization
+    await refusedWithNothing(sales2, CommErrorCode.LESSON_NOT_FOUND);
+
+    // (c) Staff off the trial desk: a supervisor in no department and a finance
+    // account have no trial standing at all, so "not found". (The Teachers
+    // department and the trial's own teacher: the test above, LESSON_DENIED.)
+    const [loose, finance] = [randomUUID(), randomUUID()];
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'loose_a', 'admin', true), ($2::uuid, 'finance_a', 'finance', true)`,
+      loose, finance,
+    );
+    await refusedWithNothing(loose, CommErrorCode.LESSON_NOT_FOUND);
+    await refusedWithNothing(finance, CommErrorCode.LESSON_NOT_FOUND);
+
+    // The contract as built: Operations IS the trial desk (owner, 2026-10-21,
+    // "Sales and Operations work trials alike"), so its manager and supervisors
+    // hold the Sales standing and read the pre-fill -- admin_b too, an Operations
+    // supervisor with no charge over any family.
+    for (const ops of [s.managerId, s.ownerId, s.otherAdminId]) {
+      expect((await trials.subscriptionPrefill(ops, t.id)).location).toMatchObject({ country: { code: 'EG' }, subdivision: { code: 'EG-GZ' } });
+    }
+  });
+
   it('the lesson pages never see a trial', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     expect(await code(lessons.get(tsupId, id))).toBe(CommErrorCode.LESSON_NOT_FOUND);
