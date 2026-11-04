@@ -247,7 +247,7 @@ function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: 
   }
 
   const timeLabel = (iso: string) =>
-    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(new Date(iso))
+    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en', { hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(new Date(iso))
 
   return (
     <Dialog

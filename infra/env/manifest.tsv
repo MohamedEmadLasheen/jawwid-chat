@@ -156,6 +156,12 @@ APNS_TEAM_ID	push	no	opt	opt	req
 APNS_BUNDLE_ID	push	no	opt	opt	req
 APNS_PRIVATE_KEY	push	yes	opt	opt	req
 APNS_PRODUCTION	push	no	opt	opt	req
+# APNS_VOIP_ENABLED is CONSUMED by apps/api/src/communication/notifications/
+# push.provider.selector.ts (W8-W1, S-06): `true` delivers iOS VoIP (PushKit)
+# pushes for incoming calls. Default OFF: a VoIP push obliges the app to report
+# the call to CallKit at once, so it is turned on deliberately, per environment,
+# once the iOS build with CallKit reporting is the one users run. Not a secret.
+APNS_VOIP_ENABLED	push	no	opt	opt	opt
 # Calling is LiveKit Cloud; there is no local LiveKit server in docker-compose, so
 # a developer machine and a unit/integration test run leave it unconfigured. The
 # issuer refuses to mint a token when any of the three is absent (media-token.ts),

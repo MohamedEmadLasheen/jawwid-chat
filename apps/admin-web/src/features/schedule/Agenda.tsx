@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ACADEMY_ZONE, clock12In, isoToAcademyWallClock } from '@/core/time/academyTime'
 import type { CalendarDay, CalendarLesson, CalendarSummary, CalendarWindow } from './api'
-import { CATEGORY_LABEL, S, STATUS_LABEL, dayLabel, hoursOf, useScheduleText } from './copy'
+import { CATEGORY_LABEL, S, dayLabel, hoursOf, statusOf, useScheduleText } from './copy'
 import { swatchClass } from './palette'
 import { lessonLabel, lessonTime } from './Timeline'
 import { daysOf } from './viewState'
@@ -74,7 +74,7 @@ export function AgendaView({ data, onLesson }: { data: CalendarWindow; onLesson:
                             <bdi>{r.lesson.anonymous ? tx(S.booked) : r.lesson.learner?.name ?? r.lesson.prospect?.name ?? tx(S.booked)}</bdi>
                           </span>
                           <span className="sc-agenda__status">
-                            {tx(STATUS_LABEL[r.lesson.status])}
+                            {tx(statusOf(r.lesson))}
                             {r.lesson.outsideShift && ` · ${tx(S.outsideMark)}`}
                           </span>
                         </button>

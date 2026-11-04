@@ -130,7 +130,6 @@ export const T = {
   regular: { en: 'Regular', ar: 'أساسية' },
   makeup: { en: 'Make-up', ar: 'تعويضية' },
   minutesShort: { en: '{m} min', ar: '{m} دقيقة' },
-  hoursShort: { en: '{h} h', ar: '{h} ساعة' },
   kpis: { en: 'Key indicators', ar: 'المؤشرات الرئيسية' },
   kpiHeld: { en: 'Lessons held', ar: 'الحصص المنعقدة' },
   kpiAttendance: { en: 'Student attendance', ar: 'حضور الطلاب' },
@@ -141,7 +140,6 @@ export const T = {
   kpiWorkload: { en: 'Scheduled hours', ar: 'الساعات المجدولة' },
   kpiWorkloadHint: { en: 'of {h} available', ar: 'من {h} متاحة' },
   kpiTrials: { en: 'Trial conversion', ar: 'تحويل الحصص التجريبية' },
-  kpiTrialsHint: { en: '{n} trials', ar: '{n} حصة تجريبية' },
   fullStats: { en: 'Full statistics for this month', ar: 'الإحصائيات الكاملة لهذا الشهر' },
   comments: { en: 'Supervisor comments', ar: 'تعليقات المشرف' },
 
@@ -151,6 +149,7 @@ export const T = {
   resolution: { en: 'How it was resolved', ar: 'كيف عولجت' },
   reason: { en: 'Reason for the change', ar: 'سبب التغيير' },
   required: { en: 'Required.', ar: 'مطلوب.' },
+  invalidEmail: { en: 'Enter an e-mail address, like name@example.com.', ar: 'أدخل بريدًا إلكترونيًا صحيحًا، مثل name@example.com.' },
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
   by: { en: '{name}, {date}', ar: '{name}، {date}' },
@@ -283,7 +282,7 @@ export const T = {
     ar: 'أُعيد التفعيل. ليس لهذا المعلم حساب دخول بعد: استخدم «منح حساب دخول».',
   },
   setupTitle: { en: 'Set-up checklist', ar: 'قائمة التجهيز' },
-  stepsLeft: { en: '{n} steps left', ar: 'متبقٍ {n} خطوات' },
+  stepsLeft: { en: '{steps} left', ar: 'متبقٍ {steps}' },
   oneStepLeft: { en: 'One step left', ar: 'متبقٍ خطوة واحدة' },
   stepNotDone: { en: 'Not done', ar: 'لم يكتمل' },
   stepSignedIn: { en: 'Signed in', ar: 'سجّل الدخول' },
@@ -400,7 +399,10 @@ export function describeError(error: unknown, locale: 'ar' | 'en'): string {
   const pick = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   if (error instanceof ApiError) {
     const mapped = BY_CODE[error.code]
-    return mapped ? pick(mapped) : error.localized(locale)
+    if (mapped) return pick(mapped)
+    // TEACHER-001: the server names the field in English ("email: must be an e-mail address").
+    if (error.code === 'COMMON.VALIDATION' && /^email:/.test(error.messageEn)) return pick(T.invalidEmail)
+    return error.localized(locale)
   }
   return pick({ en: 'Something went wrong. Try again.', ar: 'حدث خطأ. حاول مرة أخرى.' })
 }

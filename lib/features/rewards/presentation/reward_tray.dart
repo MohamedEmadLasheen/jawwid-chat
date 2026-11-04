@@ -30,10 +30,14 @@ typedef PlaceStamp = String Function({required StampKind stamp, String? text, re
 /// the tray still decorates the board and says rewards count during a lesson.
 /// General praise only; no emoji; nothing ever compares children.
 class RewardTray extends ConsumerStatefulWidget {
-  const RewardTray({super.key, required this.place, this.boardId, this.random});
+  const RewardTray({super.key, required this.place, this.boardId, this.random, this.closeOnPlace = false});
 
   final PlaceStamp place;
   final String? boardId;
+
+  /// In a sheet over the board: a stamp closes the tray, so the teacher sees it
+  /// land (the sheet would otherwise hide both the stamp and the confirmation).
+  final bool closeOnPlace;
 
   /// The source of client event ids (a seam for tests).
   final math.Random? random;
@@ -63,15 +67,20 @@ class _RewardTrayState extends ConsumerState<RewardTray> {
     return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
   }
 
-  /// Places (unless a celebration) and records for every chosen learner.
+  /// Places (unless a celebration) and records for every chosen learner. Everything
+  /// it needs after the stamp is taken first: the tray may close as the stamp lands.
   Future<void> _give(RewardGift gift, {StampKind? stamp, String? text, Color? color}) async {
-    if (stamp != null) widget.place(stamp: stamp, text: text, color: color ?? BoardPalette.stampGold);
     final lessons = ref.read(rewardLessonsNowProvider).value ?? const [];
     final chosen = _chosen(lessons);
-    if (chosen.isEmpty) return;
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.maybeOf(context);
     final repo = ref.read(rewardsRepositoryProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    if (stamp != null) {
+      widget.place(stamp: stamp, text: text, color: color ?? BoardPalette.stampGold);
+      if (widget.closeOnPlace) unawaited(Navigator.of(context).maybePop());
+    }
+    if (chosen.isEmpty) return;
     final given = <({String learnerId, String eventId})>[];
     var failed = false;
     for (final lesson in chosen) {
@@ -82,8 +91,8 @@ class _RewardTrayState extends ConsumerState<RewardTray> {
         failed = true;
       }
     }
-    ref.invalidate(rewardLessonsNowProvider);
-    if (!mounted || messenger == null) return;
+    container.invalidate(rewardLessonsNowProvider);
+    if (messenger == null || !messenger.mounted) return;
     messenger.showSnackBar(
       SnackBar(
         content: Text(failed ? l10n.rewardTrayFailed : l10n.rewardTraySent),
@@ -96,7 +105,7 @@ class _RewardTrayState extends ConsumerState<RewardTray> {
                   for (final g in given) {
                     unawaited(repo.undo(learnerId: g.learnerId, eventId: g.eventId).then((_) {}, onError: (Object _) {}));
                   }
-                  ref.invalidate(rewardLessonsNowProvider);
+                  container.invalidate(rewardLessonsNowProvider);
                 },
               ),
       ),
@@ -136,7 +145,18 @@ class _RewardTrayState extends ConsumerState<RewardTray> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(l10n.rewardTrayTitle, style: theme.textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(child: Text(l10n.rewardTrayTitle, style: theme.textTheme.titleLarge)),
+                if (widget.closeOnPlace)
+                  IconButton(
+                    key: const ValueKey('reward-close'),
+                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.close),
+                  ),
+              ],
+            ),
             if (lessons.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: Spacing.spacing2),
@@ -306,7 +326,8 @@ class _RewardButton extends StatelessWidget {
           onTap: onTap,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
-            child: Padding(padding: const EdgeInsets.all(Spacing.spacing2), child: Center(child: child)),
+            // widthFactor/heightFactor 1: a tile as big as what it shows, not a full-width row.
+            child: Padding(padding: const EdgeInsets.all(Spacing.spacing2), child: Center(widthFactor: 1, heightFactor: 1, child: child)),
           ),
         ),
       ),
