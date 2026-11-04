@@ -319,6 +319,37 @@ describe('the Parent Profile', () => {
   })
 })
 
+// ADMIN-009 (QA AR-PAR-05): a Sales member was offered "Add child" on a family they did not
+// enter; the server refused it (404). The button now follows the family's own answer.
+describe('Add child on the Parent Profile', () => {
+  const options = { standing: 'sales_member', manager: false, ready: true, onBehalfOf: [], waitingForStaff: false }
+  const ownership = (addChild: boolean) => ({
+    familyId: 'f-1', contactId: 'p-1', signIn: true, supervisor: null, needsOperationsSupervisor: false, salesOwner: null, suggestion: null,
+    can: { setSignInEmail: false, addChild, suggestSupervisor: false, assignOperationsSupervisor: false, changeSalesOwner: false },
+    supervisorChoices: [], salesOwnerChoices: [],
+  })
+  const salesMember = makeStaff({ id: 'sm-2', name: 'Sales Member', role: 'admin' })
+
+  it('is offered on a family the viewer entered', async () => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
+    on('GET', /\/family-intake\/options$/, () => json(options))
+    on('GET', /\/family-intake\/families\/f-1$/, () => json(ownership(true)))
+    renderWithProviders(<AppRoutes />, { staff: salesMember, route: '/parents/p-1' })
+    const children = await screen.findByRole('region', { name: /Children/ })
+    expect(await within(children).findByRole('button', { name: 'Add child' })).toBeInTheDocument()
+  })
+
+  it('is NOT offered on a family the viewer did not enter (the server refuses that family)', async () => {
+    on('GET', /\/parent-profiles\/p-1$/, () => json(parent()))
+    on('GET', /\/family-intake\/options$/, () => json(options))
+    on('GET', /\/family-intake\/families\/f-1$/, () => json({ error: { code: 'COMM.INTAKE_NOT_FOUND', message: 'not found' } }, 404))
+    renderWithProviders(<AppRoutes />, { staff: salesMember, route: '/parents/p-1' })
+    const children = await screen.findByRole('region', { name: /Children/ })
+    await waitFor(() => expect(calls('GET', /\/family-intake\/families\/f-1$/).length).toBeGreaterThan(0))
+    expect(within(children).queryByRole('button', { name: 'Add child' })).toBeNull()
+  })
+})
+
 describe('the Student Profile', () => {
   it('shows photo, name, age, schedule, teacher and course, and the parents to staff', async () => {
     on('GET', /\/learners\/k-1\/profile$/, () => json(student()))

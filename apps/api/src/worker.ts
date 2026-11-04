@@ -30,6 +30,7 @@ import { flushErrorTracker, installProcessErrorHandlers } from './infra/observab
 import { safeErrorMessage } from './infra/observability/redact';
 import { LessonEvents } from './lessons/lesson-events';
 import { setDatabasePoolRole } from './platform/database-pool';
+import { assertProductionStripeConfig } from './billing/stripe-config';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -212,6 +213,8 @@ function report(log: Logger, what: string, route: string, e: unknown): void {
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
 
+  // PD-56: the same production Stripe guard as the API (the worker records payments too).
+  assertProductionStripeConfig();
   // Its own, smaller pool (DATABASE_WORKER_POOL_MAX): set before Nest builds PrismaService.
   setDatabasePoolRole('worker');
   // No HTTP server: this process serves no traffic and must not hold a port.

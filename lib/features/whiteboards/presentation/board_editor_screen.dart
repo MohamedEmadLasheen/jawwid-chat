@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -19,10 +20,12 @@ import '../application/board_editor_controller.dart';
 import '../application/board_export.dart';
 import '../application/board_image_import.dart';
 import '../application/boards_controller.dart';
+import '../data/board_emoji_font.dart';
 import '../data/board_images.dart';
 import '../data/quran_text_repository.dart';
 import '../data/whiteboards_repository.dart';
 import '../domain/board_elements.dart';
+import '../domain/board_emoji.dart';
 import '../domain/board_page.dart';
 import 'board_canvas.dart';
 import 'board_painter.dart';
@@ -76,6 +79,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   };
   double _width = 6;
   StampKind _stamp = StampKind.star;
+  /// PD-55 (4): the emoji an emoji stamp places, as last chosen.
+  String _emoji = kBoardEmoji.first.emoji[2];
   bool _gateLogged = false;
   /// PD-55: the board takes the whole screen; the tools float, and fold away.
   bool _fullScreen = false;
@@ -87,6 +92,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   void initState() {
     super.initState();
     _held = ref.read(boardEditorProvider(widget.boardId).notifier);
+    // PD-55 (4): the portal's emoji font, fetched once; the pages redraw when it lands.
+    boardEmojiFontReady.addListener(_emojiFontChanged);
+    unawaited(loadBoardEmojiFont());
     // Going to the background may be the app's last moment: the draft is
     // written and a save is tried (review of #293).
     _lifecycle = AppLifecycleListener(
@@ -121,8 +129,13 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  void _emojiFontChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    boardEmojiFontReady.removeListener(_emojiFontChanged);
     if (_fullScreen) _systemBars(hidden: false);
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
@@ -242,6 +255,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         _stamp = k;
         _stampColor = _isTextStamp(k) ? BoardPalette.stampGreen : BoardPalette.stampGold;
       }),
+      onEmoji: () => _pickEmoji(context),
+      emoji: _emoji,
       onDelete: _deleteSelection,
       onVerse: () => _insertVerse(context),
       onRewards: () => _openRewards(context),
@@ -407,6 +422,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
                         children: [
                           _Floating(
                             children: [
+                              // Back leaves the board itself (the system Back leaves full screen first).
+                              if (Navigator.of(context).canPop())
+                                BackButton(key: const ValueKey('board-full-screen-back'), onPressed: () => Navigator.of(context).pop()),
                               IconButton(
                                 key: const ValueKey('board-exit-full-screen'),
                                 tooltip: l10n.boardExitFullScreen,
@@ -497,8 +515,21 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   String? _stampText(L10n l10n) => switch (_stamp) {
     StampKind.excellentAr || StampKind.excellentEn => l10n.boardStampExcellent,
     StampKind.wellDoneAr || StampKind.wellDoneEn => l10n.boardStampWellDone,
+    StampKind.emoji => _emoji,
     _ => null,
   };
+
+  /// PD-55 (4): the emoji picker -- a short, chosen list (kBoardEmoji), in
+  /// groups. Choosing one makes the stamp tool place it.
+  Future<void> _pickEmoji(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(context: context, showDragHandle: true, builder: (_) => const _EmojiPicker());
+    if (picked == null || !mounted) return;
+    setState(() {
+      _emoji = picked;
+      _stamp = StampKind.emoji;
+      _tool = BoardTool.stamp;
+    });
+  }
 
   double _defaultWidth(BoardTool t) => switch (t) {
     BoardTool.highlighter => 30,
@@ -514,8 +545,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
+        useSafeArea: true,
         showDragHandle: true,
-        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId),
+        builder: (_) => RewardTray(place: canvas.placeStampInView, boardId: widget.boardId, closeOnPlace: true),
       ),
     );
   }
@@ -561,7 +593,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     final picked = await pickVerse(context);
     final s = ref.read(boardEditorProvider(widget.boardId)).value;
     if (picked == null || s == null || !mounted) return;
-    const width = 1400.0, size = 64.0;
+    final page = s.page.size;
+    // As wide as most of the page: 1400 on a wide page, the page less its margins on a tall one.
+    final width = math.min(1400.0, page.width - 120), size = 64.0;
     final height = verseHeight(picked.text, size, width);
     final verse = VerseElement(
       id: 'v${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}',
@@ -571,8 +605,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       datasetId: picked.text.datasetId,
       rangeSha256: picked.text.rangeSha256,
       rect: Rect.fromLTWH(
-        (kBoardPageSize.width - width) / 2,
-        ((kBoardPageSize.height - height) / 2).clamp(24, double.infinity),
+        (page.width - width) / 2,
+        ((page.height - height) / 2).clamp(24, double.infinity),
         width,
         height,
       ),
@@ -600,8 +634,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     try {
       final picked = await ref.read(mediaPickerProvider).pickImage();
       if (picked == null || !mounted) return;
-      final pageId = ref.read(boardEditorProvider(widget.boardId)).value?.page.id;
-      if (pageId == null) return;
+      final startedOn = ref.read(boardEditorProvider(widget.boardId)).value?.page;
+      if (startedOn == null) return;
+      final pageId = startedOn.id;
       say(l10n.boardImageAdding);
       final bytes = await ref.read(boardImageBytesProvider)(picked.filePath);
       if (!mounted) return;
@@ -612,7 +647,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       ref.read(boardImagesProvider(widget.boardId).notifier).remember(asset, prepared.image);
       final placed = prepared;
       prepared = null; // the board's images hold it now
-      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height));
+      _controller.addTo(pageId, placeBoardImage(asset.id, placed.width, placed.height, page: startedOn.size));
       messenger.hideCurrentSnackBar();
     } on MediaPickException catch (e) {
       say(switch (e.reason) {
@@ -846,6 +881,8 @@ class _ToolPanel extends StatelessWidget {
     required this.onColor,
     required this.onWidth,
     required this.onStamp,
+    required this.onEmoji,
+    required this.emoji,
     required this.onDelete,
     required this.onVerse,
     required this.onRewards,
@@ -864,6 +901,10 @@ class _ToolPanel extends StatelessWidget {
   final ValueChanged<Color> onColor;
   final ValueChanged<double> onWidth;
   final ValueChanged<StampKind> onStamp;
+
+  /// PD-55 (4): opens the emoji picker; [emoji] is the one last chosen.
+  final VoidCallback onEmoji;
+  final String emoji;
   final VoidCallback onDelete;
   final VoidCallback onVerse;
 
@@ -878,13 +919,8 @@ class _ToolPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final tokens = JawwidTokens.of(context);
-    Widget toolButton(BoardTool t, IconData icon, String label) => IconButton(
-      tooltip: label,
-      isSelected: tool == t,
-      style: IconButton.styleFrom(backgroundColor: tool == t ? tokens.colorBrandPrimary.withValues(alpha: 0.14) : null),
-      onPressed: () => onTool(t),
-      icon: Icon(icon, color: tool == t ? tokens.colorBrandPrimary : tokens.colorTextPrimary),
-    );
+    Widget toolButton(BoardTool t, IconData icon, String label) =>
+        _KidToolButton(tooltip: label, icon: icon, tint: _toolTint(t), selected: tool == t, onPressed: () => onTool(t));
     Widget swatch(Color c, String label) => Semantics(
       button: true,
       selected: c == color,
@@ -894,43 +930,47 @@ class _ToolPanel extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: () => onColor(c),
-          child: Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.all(Spacing.spacing1),
+          // PD-55 Phase 1 (2): a big round drop of the colour; the chosen one has a tick.
+          child: AnimatedContainer(
+            duration: Motion.respecting(context, Motion.motionFast),
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.all(Spacing.spacing2),
             decoration: BoxDecoration(
               color: c,
               shape: BoxShape.circle,
               border: Border.all(color: c == color ? tokens.colorBrandPrimary : tokens.colorBorderDefault, width: c == color ? 3 : 1),
             ),
+            child: c == color ? Icon(Icons.check_rounded, size: 20, color: c.computeLuminance() > 0.5 ? BoardPalette.ink : BoardPalette.onTool) : null,
           ),
         ),
       ),
     );
     final widths = tool == BoardTool.highlighter ? const [18.0, 30.0, 44.0] : const [3.0, 6.0, 10.0, 16.0];
     final children = <Widget>[
-      toolButton(BoardTool.select, Icons.near_me_outlined, l10n.boardToolSelect),
-      toolButton(BoardTool.hand, Icons.pan_tool_outlined, l10n.boardToolHand),
-      toolButton(BoardTool.pen, Icons.edit_outlined, l10n.boardToolPen),
-      toolButton(BoardTool.highlighter, Icons.border_color_outlined, l10n.boardToolHighlighter),
-      toolButton(BoardTool.eraser, Icons.cleaning_services_outlined, l10n.boardToolEraser),
-      toolButton(BoardTool.areaEraser, Icons.auto_fix_normal_outlined, l10n.boardToolAreaEraser),
-      toolButton(BoardTool.text, Icons.text_fields, l10n.boardToolText),
-      toolButton(BoardTool.rect, Icons.crop_square, l10n.boardToolRect),
+      toolButton(BoardTool.select, Icons.near_me_rounded, l10n.boardToolSelect),
+      toolButton(BoardTool.hand, Icons.pan_tool_rounded, l10n.boardToolHand),
+      toolButton(BoardTool.pen, Icons.edit_rounded, l10n.boardToolPen),
+      toolButton(BoardTool.highlighter, Icons.border_color_rounded, l10n.boardToolHighlighter),
+      toolButton(BoardTool.eraser, Icons.cleaning_services_rounded, l10n.boardToolEraser),
+      toolButton(BoardTool.areaEraser, Icons.auto_fix_normal_rounded, l10n.boardToolAreaEraser),
+      toolButton(BoardTool.text, Icons.text_fields_rounded, l10n.boardToolText),
+      toolButton(BoardTool.rect, Icons.crop_square_rounded, l10n.boardToolRect),
       toolButton(BoardTool.ellipse, Icons.circle_outlined, l10n.boardToolEllipse),
-      toolButton(BoardTool.triangle, Icons.change_history, l10n.boardToolTriangle),
-      toolButton(BoardTool.line, Icons.horizontal_rule, l10n.boardToolLine),
-      toolButton(BoardTool.arrow, Icons.arrow_right_alt, l10n.boardToolArrow),
-      toolButton(BoardTool.stamp, Icons.star_outline, l10n.boardToolStamp),
-      toolButton(BoardTool.laser, Icons.highlight, l10n.boardToolLaser),
-      IconButton(tooltip: l10n.boardToolVerse, onPressed: onVerse, icon: const Icon(Icons.menu_book_outlined)),
-      if (onImage != null) IconButton(tooltip: l10n.boardToolImage, onPressed: onImage, icon: const Icon(Icons.image_outlined)),
+      toolButton(BoardTool.triangle, Icons.change_history_rounded, l10n.boardToolTriangle),
+      toolButton(BoardTool.line, Icons.horizontal_rule_rounded, l10n.boardToolLine),
+      toolButton(BoardTool.arrow, Icons.arrow_right_alt_rounded, l10n.boardToolArrow),
+      toolButton(BoardTool.stamp, Icons.star_rounded, l10n.boardToolStamp),
+      toolButton(BoardTool.laser, Icons.highlight_rounded, l10n.boardToolLaser),
+      _KidToolButton(tooltip: l10n.boardToolVerse, icon: Icons.menu_book_rounded, tint: BoardPalette.toolInsert, onPressed: onVerse),
+      if (onImage != null) _KidToolButton(tooltip: l10n.boardToolImage, icon: Icons.image_rounded, tint: BoardPalette.toolInsert, onPressed: onImage),
       // PD-55: after the inserts, so nothing PD-39 placed moves; the floating dock (PR-6) regroups.
-      IconButton(
+      _KidToolButton(
         key: const ValueKey('board-rewards'),
         tooltip: l10n.rewardTrayTitle,
+        icon: Icons.emoji_events_rounded,
+        tint: BoardPalette.toolReward,
         onPressed: onRewards,
-        icon: const Icon(Icons.emoji_events_outlined),
       ),
       const Divider(height: Spacing.spacing4),
       if (tool == BoardTool.highlighter) ...[
@@ -941,7 +981,30 @@ class _ToolPanel extends StatelessWidget {
         swatch(BoardPalette.tajweedIzhar, l10n.boardTajweedIzhar),
       ] else if (tool == BoardTool.stamp) ...[
         // PD-39's own stamps; PD-55's stickers and praise live in the reward tray.
-        for (final k in const [StampKind.star, StampKind.check, StampKind.heart, StampKind.thumbsUp, StampKind.excellentAr, StampKind.wellDoneAr])
+        // PD-55 (4): the emoji picker first, then PD-39's stamps and the reward
+        // stickers -- icons only, generic encouragement, no faces.
+        IconButton(
+          key: const ValueKey('board-emoji'),
+          isSelected: stamp == StampKind.emoji,
+          tooltip: l10n.boardEmoji,
+          onPressed: onEmoji,
+          icon: Text(emoji, style: const TextStyle(fontFamily: kIsWeb ? kBoardEmojiFont : null, fontSize: 22, height: 1)),
+        ),
+        for (final k in const [
+          StampKind.star,
+          StampKind.check,
+          StampKind.heart,
+          StampKind.thumbsUp,
+          StampKind.medal,
+          StampKind.trophy,
+          StampKind.rocket,
+          StampKind.sun,
+          StampKind.rainbow,
+          StampKind.crown,
+          StampKind.balloon,
+          StampKind.excellentAr,
+          StampKind.wellDoneAr,
+        ])
           IconButton(
             isSelected: stamp == k,
             tooltip: switch (k) {
@@ -967,22 +1030,21 @@ class _ToolPanel extends StatelessWidget {
       if (tool != BoardTool.stamp && tool != BoardTool.select && tool != BoardTool.hand) ...[
         const Divider(height: Spacing.spacing4),
         for (final w in widths)
+          // PD-55 Phase 1 (2): a dot as fat as the line it draws.
           IconButton(
             tooltip: l10n.boardThickness,
             isSelected: width == w,
             onPressed: () => onWidth(w),
-            icon: Container(
-              width: 22,
-              height: (w / 2).clamp(2, 14),
-              decoration: BoxDecoration(
-                color: width == w ? tokens.colorBrandPrimary : tokens.colorTextSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
+            icon: AnimatedContainer(
+              duration: Motion.respecting(context, Motion.motionFast),
+              width: (w * 0.75).clamp(6, 26),
+              height: (w * 0.75).clamp(6, 26),
+              decoration: BoxDecoration(color: width == w ? _toolTint(tool) : tokens.colorTextSecondary, shape: BoxShape.circle),
             ),
           ),
       ],
       if (tool == BoardTool.select)
-        IconButton(tooltip: l10n.boardDeleteSelection, onPressed: onDelete, icon: const Icon(Icons.delete_outline)),
+        _KidToolButton(tooltip: l10n.boardDeleteSelection, icon: Icons.delete_rounded, tint: BoardPalette.toolErase, onPressed: onDelete),
       const Divider(height: Spacing.spacing4),
       PopupMenuButton<PageLayout>(
         tooltip: l10n.boardLayout,
@@ -1045,6 +1107,58 @@ class _ToolPanel extends StatelessWidget {
   }
 }
 
+/// PD-55 Phase 1 (2): each tool's colour, by what it does.
+Color _toolTint(BoardTool t) => switch (t) {
+  BoardTool.select || BoardTool.hand => BoardPalette.toolMove,
+  BoardTool.pen || BoardTool.highlighter => BoardPalette.toolDraw,
+  BoardTool.eraser || BoardTool.areaEraser => BoardPalette.toolErase,
+  BoardTool.text => BoardPalette.toolText,
+  BoardTool.stamp => BoardPalette.toolReward,
+  BoardTool.laser => BoardPalette.toolPoint,
+  _ => BoardPalette.toolShape,
+};
+
+/// PD-55 Phase 1 (2): a tool for small hands -- a big rounded square (48 pt to touch),
+/// a light wash of its colour; chosen, it fills with that colour, its icon turns
+/// white and it grows a little (not with "reduce motion"). Same tooltip, same
+/// semantics as before: tests and screen readers find it as they did.
+class _KidToolButton extends StatelessWidget {
+  const _KidToolButton({super.key, required this.tooltip, required this.icon, required this.tint, required this.onPressed, this.selected});
+
+  final String tooltip;
+  final IconData icon;
+  final Color tint;
+  final VoidCallback? onPressed;
+
+  /// Null for an action (insert a verse, open the rewards), which is never "chosen".
+  final bool? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = selected ?? false;
+    final tokens = JawwidTokens.of(context);
+    // A 44 pt tile in a 48 pt touch target: the panel keeps PD-39's 48 pt rhythm, so
+    // nothing below moves further down, and the tiles have air between them.
+    return AnimatedScale(
+      scale: on ? 1.08 : 1,
+      duration: Motion.respecting(context, Motion.motionFast),
+      curve: Motion.easingStandard,
+      child: IconButton(
+        tooltip: tooltip,
+        isSelected: selected,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          fixedSize: const Size.square(44),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          backgroundColor: on ? tint : tint.withValues(alpha: 0.12),
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radii.radiusLg)),
+        ),
+        icon: Icon(icon, size: 26, color: on ? BoardPalette.onTool : tokens.colorTextPrimary),
+      ),
+    );
+  }
+}
+
 const _layoutOrder = [
   PageLayout.plain,
   PageLayout.arabicLines,
@@ -1053,6 +1167,63 @@ const _layoutOrder = [
   PageLayout.ruled,
   PageLayout.narrowRuled,
 ];
+
+/// PD-55 (4): the emoji picker -- kBoardEmoji in its groups, a tap answers one.
+class _EmojiPicker extends StatelessWidget {
+  const _EmojiPicker();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    String name(String key) => switch (key) {
+      'smileys' => l10n.boardEmojiSmileys,
+      'animals' => l10n.boardEmojiAnimals,
+      'nature' => l10n.boardEmojiNature,
+      'food' => l10n.boardEmojiFood,
+      'school' => l10n.boardEmojiSchool,
+      _ => l10n.boardEmojiSymbols,
+    };
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing4, vertical: Spacing.spacing2),
+          children: [
+            Text(l10n.boardEmojiPick, style: Theme.of(context).textTheme.titleMedium),
+            for (final g in kBoardEmoji) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: Spacing.spacing4, bottom: Spacing.spacing2),
+                child: Text(name(g.key), style: Theme.of(context).textTheme.labelLarge),
+              ),
+              Wrap(
+                spacing: Spacing.spacing2,
+                runSpacing: Spacing.spacing2,
+                children: [
+                  for (final e in g.emoji)
+                    Semantics(
+                      button: true,
+                      label: e,
+                      child: InkWell(
+                        key: ValueKey('emoji-$e'),
+                        borderRadius: const BorderRadius.all(Radii.radiusMd),
+                        onTap: () => Navigator.of(context).pop(e),
+                        child: SizedBox.square(
+                          dimension: 52,
+                          child: Center(
+                            child: Text(e, style: const TextStyle(fontFamily: kIsWeb ? kBoardEmojiFont : null, fontSize: 32, height: 1)),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// PD-55: a page layout in miniature, drawn by the same painter as the page.
 class _LayoutThumbnail extends StatelessWidget {
@@ -1211,7 +1382,8 @@ class _PageBar extends ConsumerWidget {
                       child: Directionality(
                         textDirection: TextDirection.ltr,
                         child: CustomPaint(
-                          size: const Size(128, 72),
+                          // Each page in its own frame: 16:9, or 9:16 when tall (PD-55).
+                          size: Size(72 * state.pages[i].size.width / state.pages[i].size.height, 72),
                           painter: BoardPagePainter(
                             page: state.pages[i],
                             verses: verses,
@@ -1229,10 +1401,22 @@ class _PageBar extends ConsumerWidget {
             ),
             Text(l10n.boardPageOf('${state.current + 1}', '${state.pages.length}'), style: Theme.of(context).textTheme.labelMedium),
             if (editable) ...[
-              IconButton(
+              // PD-55: a new page is wide or tall; its shape is for good.
+              PopupMenuButton<PageShape>(
                 tooltip: l10n.boardAddPage,
-                onPressed: state.pages.length >= 50 ? null : c.addPage,
+                enabled: state.pages.length < 50,
                 icon: const Icon(Icons.note_add_outlined),
+                onSelected: (shape) => c.addPage(shape: shape),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: PageShape.wide,
+                    child: ListTile(leading: const Icon(Icons.crop_landscape), title: Text(l10n.boardWidePage)),
+                  ),
+                  PopupMenuItem(
+                    value: PageShape.tall,
+                    child: ListTile(leading: const Icon(Icons.crop_portrait), title: Text(l10n.boardTallPage)),
+                  ),
+                ],
               ),
               PopupMenuButton<String>(
                 tooltip: l10n.boardMore,

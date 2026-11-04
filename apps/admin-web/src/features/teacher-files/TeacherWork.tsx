@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { LOCALE_TAG, useI18n } from '@/core/i18n/I18nProvider'
+import { HOURS, TRIALS, countLabel } from '@/core/i18n/counts'
 import { Badge } from '@/shared/components/Badge'
 import { QueryBoundary } from '@/shared/components/States'
 import { useTeacherDetail } from '@/features/teachers/hooks'
@@ -154,7 +155,7 @@ export function MonthlyKpis({ teacherId, month, links }: { teacherId: string; mo
   const percent = (r: number | null) =>
     r === null ? tx(T.none) : new Intl.NumberFormat(LOCALE_TAG[locale], { style: 'percent', maximumFractionDigits: 0 }).format(r)
   const hours = (minutes: number | null) =>
-    minutes === null ? tx(T.none) : tx(T.hoursShort, { h: number(Math.round((minutes / 60) * 10) / 10) })
+    minutes === null ? tx(T.none) : countLabel(Math.round((minutes / 60) * 10) / 10, number(Math.round((minutes / 60) * 10) / 10), HOURS, locale)
 
   return (
     <QueryBoundary isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
@@ -171,7 +172,7 @@ export function MonthlyKpis({ teacherId, month, links }: { teacherId: string; mo
               value={hours(d.workload.scheduledMinutes)}
               hint={d.workload.availableMinutes === null ? undefined : tx(T.kpiWorkloadHint, { h: hours(d.workload.availableMinutes) })}
             />
-            <Kpi label={tx(T.kpiTrials)} value={percent(d.trials.conversionRate)} hint={tx(T.kpiTrialsHint, { n: number(d.trials.total) })} />
+            <Kpi label={tx(T.kpiTrials)} value={percent(d.trials.conversionRate)} hint={countLabel(d.trials.total, number(d.trials.total), TRIALS, locale)} />
           </dl>
           {links && (
             <p className="tf-byline">

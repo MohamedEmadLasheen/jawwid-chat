@@ -1,0 +1,16 @@
+# PD-56 PR-G: app icons from the owner's original logo (masters from
+# scripts/brand/make-app-icons.py). Regenerate with:
+#   ~/development/flutter/bin/dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/brand/app-icon-1024.png"
+  ios: true
+  # Apple refuses an app icon with an alpha channel.
+  remove_alpha_ios: true
+  android: "ic_launcher"
+  # Adaptive icon (API 26+, every device since minSdk is 26): the lockup inside the 66%
+  # safe circle, on the logo's own white.
+  adaptive_icon_foreground: "assets/brand/adaptive-foreground-1024.png"
+  adaptive_icon_background: "#FFFFFF"
+  # The master is already sized to the 66% safe zone: no extra inset on top.
+  adaptive_icon_foreground_inset: 0
+  min_sdk_android: 26

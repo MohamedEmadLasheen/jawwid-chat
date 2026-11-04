@@ -295,7 +295,7 @@ describe('PD-52: one teacher\'s strip', () => {
     on('GET', /\/teacher-records\/testimonials\?teacher=t-1$/, () => json({ canRecord: true, testimonials: [praise] }))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teacher-grants?section=testimonials&teacher=t-1', locale: 'ar' })
     expect(await screen.findByRole('heading', { name: 'المنح والشهادات الطيبة' })).toBeInTheDocument()
-    expect(await screen.findByText('المنح في 2026: ٣')).toBeInTheDocument()
+    expect(await screen.findByText('المنح في 2026: 3')).toBeInTheDocument()
     expect(screen.getByText('ولي الأمر (التطبيق)')).toBeInTheDocument()
   })
 })

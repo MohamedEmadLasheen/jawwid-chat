@@ -127,16 +127,19 @@ dependencies:
   # (itself and share_plus_platform_interface) -- everything it uses was
   # already here. The export is a temporary file, deleted after the sheet closes.
   share_plus: ^13.3.1
+  sentry_flutter: ^10.3.0
+  # dart.dev's own package, already in the lock (through the web plugins) at
+  # this exact version. PD-39's font test checks AmiriQuran.ttf's SHA-256 with
+  # it; PD-56 hashes the actor id a crash report carries.
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   mocktail: ^1.0.5
-  # PD-39: the font test checks AmiriQuran.ttf's SHA-256 against the pinned
-  # value. dart.dev's own package, already in the lock (through the web
-  # plugins) at this exact version: declaring it adds nothing to the build.
-  crypto: ^3.0.7
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
 
 flutter:
   uses-material-design: true

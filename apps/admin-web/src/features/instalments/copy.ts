@@ -94,7 +94,7 @@ export function describeError(error: unknown, locale: 'ar' | 'en'): string {
 
 /** Amounts are minor units; the currency decides how many decimals that is. */
 export function formatMoney(amountMinor: number, currency: string, locale: 'ar' | 'en'): string {
-  const tag = locale === 'ar' ? 'ar-EG' : 'en-GB'
+  const tag = locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB'
   try {
     const fmt = new Intl.NumberFormat(tag, { style: 'currency', currency })
     const digits = fmt.resolvedOptions().maximumFractionDigits ?? 2
@@ -106,7 +106,7 @@ export function formatMoney(amountMinor: number, currency: string, locale: 'ar' 
 
 /** A calendar day (YYYY-MM-DD) as written, never shifted by the viewer's time zone. */
 export function formatDay(day: string, locale: 'ar' | 'en'): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeZone: 'UTC' }).format(
     new Date(`${day}T00:00:00Z`),
   )
 }

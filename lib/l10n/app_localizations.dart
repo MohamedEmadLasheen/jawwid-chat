@@ -703,6 +703,12 @@ abstract class L10n {
   /// **'Declined'**
   String get callOutcomeDeclined;
 
+  /// No description provided for @callOutcomeInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get callOutcomeInProgress;
+
   /// No description provided for @callDuration.
   ///
   /// In en, this message translates to:
@@ -2196,6 +2202,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'This lesson can no longer be updated this way.'**
   String get ticketNoLongerAllowed;
+
+  /// No description provided for @certificateAlreadySuggested.
+  ///
+  /// In en, this message translates to:
+  /// **'This certificate is already suggested for this child.'**
+  String get certificateAlreadySuggested;
 
   /// No description provided for @cardReportTitle.
   ///
@@ -8161,6 +8173,66 @@ abstract class L10n {
   /// **'Next page'**
   String get boardNextPage;
 
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji'**
+  String get boardEmoji;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an emoji'**
+  String get boardEmojiPick;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Smileys'**
+  String get boardEmojiSmileys;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Animals'**
+  String get boardEmojiAnimals;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Nature'**
+  String get boardEmojiNature;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get boardEmojiFood;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'School and play'**
+  String get boardEmojiSchool;
+
+  /// PD-55 whiteboard emoji picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Symbols'**
+  String get boardEmojiSymbols;
+
+  /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
+  ///
+  /// In en, this message translates to:
+  /// **'Wide page'**
+  String get boardWidePage;
+
+  /// PD-55 whiteboard page shape: wide 16:9 or tall 9:16.
+  ///
+  /// In en, this message translates to:
+  /// **'Tall page'**
+  String get boardTallPage;
+
   /// PD-39 whiteboard.
   ///
   /// In en, this message translates to:
@@ -8670,6 +8742,84 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Terms of use'**
   String get legalTerms;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccountTitle;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting your account is final and cannot be undone.'**
+  String get deleteAccountIntro;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.'**
+  String get deleteAccountGoes;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.'**
+  String get deleteAccountKeptParent;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
+  String get deleteAccountKeptTeacher;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Your password'**
+  String get deleteAccountPasswordLabel;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get deleteAccountAction;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account for good? This cannot be undone.'**
+  String get deleteAccountConfirm;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'That password is not right.'**
+  String get deleteAccountWrongPassword;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff accounts are closed by the administration.'**
+  String get deleteAccountStaff;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'The account could not be deleted. Try again.'**
+  String get deleteAccountFailed;
+
+  /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account has been deleted.'**
+  String get deleteAccountDone;
+
+  /// PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
+  String get deleteAccountTeacherBlocked;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -5,7 +5,9 @@ import '../../../design/tokens.dart';
 import 'stroke_points.dart';
 
 /// The page every board is drawn on: one fixed 16:9 page, so zoom, export and
-/// (Phase 2) a shared view look the same on every screen (design §4.2).
+/// (Phase 2) a shared view look the same on every screen (design §4.2). PD-55:
+/// this is a wide page; a tall page is the same turned upright
+/// ([PageShape.tall], 1080 x 1920). Ask a page for its own [BoardPage.size].
 const Size kBoardPageSize = Size(1920, 1080);
 
 /// PD-39: one thing drawn on a page. Immutable: an edit makes a new element
@@ -364,6 +366,10 @@ enum StampKind {
   /// PD-55: a praise stamp with any words in [StampElement.text] -- the tray's
   /// رائع, بطل, Great, Champion, or the teacher's own.
   praise,
+
+  /// PD-55 Phase 1 (4): an emoji, the character itself in [StampElement.text]
+  /// (one of kBoardEmoji). An app or viewer from before draws it as a star.
+  emoji,
 }
 
 class StampElement extends BoardElement {

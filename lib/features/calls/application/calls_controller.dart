@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
+import '../../../core/realtime/call_event.dart';
 import '../data/account_call_history.dart';
+import 'call_session.dart';
 
 /// Call history, from the backend and nowhere else.
 ///
@@ -34,6 +38,13 @@ class CallsController extends AsyncNotifier<List<CallHistoryEntry>>
     // chat list: who this person rang, and who rang them. It must not survive into the next
     // session on the device.
     bindToSession();
+    // CHATSCHED-016: a call that ends -- by a hang-up, a decline or the server's reconnect
+    // grace running out -- changes its row from "In progress" to its outcome. Read again
+    // when the server says one ended, so the tab never waits for a pull-to-refresh.
+    ref.listen(callEventsProvider, (_, next) {
+      final event = next.value;
+      if (event is CallEnded) unawaited(refresh());
+    });
     return _load();
   }
 

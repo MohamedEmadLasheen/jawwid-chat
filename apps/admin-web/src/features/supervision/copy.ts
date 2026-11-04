@@ -78,7 +78,7 @@ export const S = {
   // TEACHER-005: the approver's warning, and the record once approved.
   willBeUnpaid: { en: '{n} days will be unpaid', ar: 'سيكون {n} يوم بدون أجر' },
   unpaidLeave: { en: 'Unpaid leave: {n} days', ar: 'إجازة بدون أجر: {n} يوم' },
-  lessonsInside: { en: '{n} lesson(s) inside', ar: 'حصص داخل الإجازة: {n}' },
+  lessonsInside: { en: '{lessons} inside', ar: '{lessons} داخل الإجازة' },
   noLeave: { en: 'No leave requests here.', ar: 'لا توجد طلبات إجازة هنا.' },
   approve: { en: 'Approve', ar: 'اعتماد' },
   approveTitle: { en: 'Approve leave for {name}', ar: 'اعتماد إجازة {name}' },

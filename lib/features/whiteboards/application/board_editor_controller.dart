@@ -192,7 +192,8 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
           final server = byId[id];
           if (server == null) continue; // the page was deleted since: nothing to put it on
           if (d['base'] == server.savedAt) {
-            applied[id] = BoardPage.fromJson({...d, 'id': id, 'position': server.position, 'updatedAt': server.savedAt});
+            // A draft holds the drawing, not the frame: the shape is the server's (PD-55).
+            applied[id] = BoardPage.fromJson({...d, 'id': id, 'position': server.position, 'updatedAt': server.savedAt, 'shape': server.shape.wire});
           } else {
             _stale[id] = d;
           }
@@ -374,7 +375,7 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     for (final MapEntry(key: id, value: d) in stale.entries) {
       final i = pages.indexWhere((p) => p.id == id);
       if (i < 0) continue;
-      final restored = BoardPage.fromJson({...d, 'id': id, 'position': pages[i].position, 'updatedAt': pages[i].savedAt});
+      final restored = BoardPage.fromJson({...d, 'id': id, 'position': pages[i].position, 'updatedAt': pages[i].savedAt, 'shape': pages[i].shape.wire});
       _history[id]!.push(restored.elements);
       pages = [...pages]..[i] = restored;
       _dirty.add(id);
@@ -526,10 +527,12 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     _set(_withHistory(s.copyWith(board: detail.summary, pages: pages, current: current, save: SaveStatus.saved, clearFailure: true, assets: detail.assets)));
   }
 
-  Future<bool> addPage() {
+  /// A page after the current one, like it -- its layout, background and, unless
+  /// [shape] says otherwise, its shape (PD-55).
+  Future<bool> addPage({PageShape? shape}) {
     final at = (_s?.current ?? 0) + 1;
     return _structural(
-      (r) => _repo.addPage(boardId, r, position: at, layout: _s?.page.layout, background: _s?.page.background),
+      (r) => _repo.addPage(boardId, r, position: at, layout: _s?.page.layout, background: _s?.page.background, shape: shape ?? _s?.page.shape),
       select: at,
     );
   }
@@ -582,9 +585,10 @@ class BoardEditorController extends AsyncNotifier<EditorState> {
     if (s == null) return null;
     BoardDetail? copy;
     try {
-      copy = await _repo.create(title);
+      // Each page in its own shape: a page's shape is set when it is made (PD-55).
+      copy = await _repo.create(title, shape: s.pages.first.shape);
       for (var i = 1; i < s.pages.length; i++) {
-        copy = await _repo.addPage(copy!.id, copy.revision);
+        copy = await _repo.addPage(copy!.id, copy.revision, shape: s.pages[i].shape);
       }
       var revision = copy!.revision;
       for (var i = 0; i < s.pages.length; i++) {

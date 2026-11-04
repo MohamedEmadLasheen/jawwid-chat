@@ -2,6 +2,7 @@
 // 5b): Deleted boards says how long a board can come back and that it is
 // deleted for good within 60 days; deleting says until when it can be
 // restored; there is no "delete forever"; a pen stroke on the page is saved.
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -20,6 +21,7 @@ import 'package:jawwid_chat/features/whiteboards/domain/board_elements.dart';
 import 'package:jawwid_chat/features/whiteboards/domain/board_page.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/board_canvas.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/board_editor_screen.dart';
+import 'package:jawwid_chat/features/whiteboards/presentation/board_painter.dart';
 import 'package:jawwid_chat/features/whiteboards/presentation/boards_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
@@ -57,6 +59,26 @@ class _Boards implements WhiteboardsRepository {
   Future<PageSaved> savePage(String boardId, String pageId, int revision, BoardPage page) async {
     saved.add(page);
     return PageSaved(revision: ++this.revision, updatedAt: DateTime(2026));
+  }
+
+  /// PD-55: the shape each new board and each added page was asked for.
+  final created = <PageShape>[];
+  final added = <PageShape?>[];
+
+  @override
+  Future<BoardDetail> create(String title, {String? lessonId, PageShape shape = PageShape.wide}) async {
+    created.add(shape);
+    return open('b9');
+  }
+
+  @override
+  Future<BoardDetail> addPage(String boardId, int revision, {int? position, PageLayout? layout, PageBackground? background, PageShape? shape}) async {
+    added.add(shape);
+    pages = [
+      ...pages,
+      BoardPage(id: 'p${pages.length + 1}', position: pages.length, layout: PageLayout.plain, background: PageBackground.white, shape: shape ?? PageShape.wide, elements: const []),
+    ];
+    return open(boardId);
   }
 
   @override
@@ -410,6 +432,29 @@ void main() {
       expect(find.byType(BoardEditorScreen), findsNothing);
     });
 
+    testWidgets('full screen has its own Back: it leaves the board in one tap, and the system bars come back', (tester) async {
+      final l10n = await pump(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        size: const Size(844, 390),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('board-full-screen-back')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardEditorScreen), findsNothing);
+      expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
+    });
+
     testWidgets('on a wide screen the tools float along the side; the page bar is replaced by previous / next', (tester) async {
       repo.pages = const [
         BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, elements: []),
@@ -439,6 +484,161 @@ void main() {
       await tester.tap(find.byTooltip(l10n.boardFullScreen));
       await tester.pumpAndSettle();
       expect(tester.getCenter(find.byTooltip(l10n.boardToolPen)).dx, greaterThan(1280 - 100));
+    });
+  });
+
+  group('PD-55 Phase 1 (2): tools for small hands', () {
+    IconButton button(WidgetTester tester, String tooltip) =>
+        tester.widget<IconButton>(find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(IconButton)).first);
+    Color? fill(WidgetTester tester, String tooltip) =>
+        button(tester, tooltip).style!.backgroundColor!.resolve(<WidgetState>{});
+
+    testWidgets('each tool has its colour: the chosen one is filled with it, the rest washed with theirs', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      // The pen is chosen when a board opens.
+      expect(fill(tester, l10n.boardToolPen), BoardPalette.toolDraw);
+      expect(fill(tester, l10n.boardToolEraser), BoardPalette.toolErase.withValues(alpha: 0.12));
+      expect(fill(tester, l10n.boardToolRect), BoardPalette.toolShape.withValues(alpha: 0.12));
+
+      await tester.tap(find.byTooltip(l10n.boardToolEraser));
+      await tester.pumpAndSettle();
+      expect(fill(tester, l10n.boardToolEraser), BoardPalette.toolErase);
+      expect(fill(tester, l10n.boardToolPen), BoardPalette.toolDraw.withValues(alpha: 0.12));
+      expect(button(tester, l10n.boardToolEraser).isSelected, isTrue, reason: 'screen readers still hear "selected"');
+    });
+
+    testWidgets('every tool is a 48 pt touch target', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
+      for (final t in [l10n.boardToolSelect, l10n.boardToolPen, l10n.boardToolEraser, l10n.boardToolText]) {
+        final size = tester.getSize(find.ancestor(of: find.byTooltip(t), matching: find.byType(IconButton)).first);
+        expect(size.shortestSide, greaterThanOrEqualTo(48), reason: '$t is $size');
+      }
+    });
+
+    testWidgets('the chosen tool grows a little -- and not at all with "reduce motion"', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      AnimatedScale scaleOf(String tooltip) => tester.widget<AnimatedScale>(find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(AnimatedScale)).first);
+      expect(scaleOf(l10n.boardToolPen).scale, greaterThan(1));
+      expect(scaleOf(l10n.boardToolEraser).scale, 1);
+      expect(scaleOf(l10n.boardToolPen).duration, greaterThan(Duration.zero));
+
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await tester.pumpAndSettle();
+      expect(scaleOf(l10n.boardToolPen).duration, Duration.zero);
+    });
+
+    testWidgets('the chosen colour is a big drop with a tick', (tester) async {
+      await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      final ticks = find.byIcon(Icons.check_rounded);
+      expect(ticks, findsOneWidget);
+      expect(tester.getSize(find.ancestor(of: ticks, matching: find.byType(DecoratedBox)).first), const Size(36, 36));
+    });
+
+    test('a white icon reads on every tool colour (at least 4.5:1)', () {
+      double contrast(Color a, Color b) {
+        final la = a.computeLuminance(), lb = b.computeLuminance();
+        return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+      }
+
+      for (final c in [
+        BoardPalette.toolMove,
+        BoardPalette.toolDraw,
+        BoardPalette.toolErase,
+        BoardPalette.toolText,
+        BoardPalette.toolShape,
+        BoardPalette.toolReward,
+        BoardPalette.toolPoint,
+        BoardPalette.toolInsert,
+      ]) {
+        expect(contrast(c, BoardPalette.onTool), greaterThanOrEqualTo(4.5), reason: '$c');
+      }
+    });
+  });
+
+  group('PD-55 Phase 1 (4): emoji and stickers', () {
+    testWidgets('the stamp tool offers the emoji picker and the stickers; a chosen emoji is placed as a square stamp', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      await tester.tap(find.byTooltip(l10n.boardToolStamp).first);
+      await tester.pumpAndSettle();
+      // The reward stickers sit with PD-39's stamps: icons, no faces.
+      for (final k in [StampKind.medal, StampKind.trophy, StampKind.rocket, StampKind.rainbow, StampKind.balloon]) {
+        expect(find.byIcon(kStampIcons[k]!), findsWidgets, reason: '$k');
+      }
+
+      // Below the tools in the side panel: scrolled to, as a teacher would.
+      await tester.ensureVisible(find.byKey(const ValueKey('board-emoji')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('board-emoji')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardEmojiPick), findsOneWidget);
+      expect(find.text(l10n.boardEmojiAnimals), findsOneWidget);
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('emoji-🦉')), 200, scrollable: find.byType(Scrollable).last);
+      await tester.tap(find.byKey(const ValueKey('emoji-🦉')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardEmojiPick), findsNothing);
+
+      await tester.tapAt(tester.getCenter(find.byType(BoardCanvas)));
+      await tester.pumpAndSettle();
+      final placed = container.read(boardEditorProvider('b1')).value!.page.elements.single as StampElement;
+      expect(placed.stamp, StampKind.emoji);
+      expect(placed.text, '🦉');
+      expect(placed.rect.width, closeTo(140, 0.001), reason: 'a square, like an icon stamp');
+      expect(placed.rect.height, closeTo(140, 0.001));
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      expect((repo.saved.last.elements.single as StampElement).text, '🦉');
+    });
+  });
+
+  group('PD-55 (1b): tall pages', () {
+    testWidgets('Add page offers a wide or a tall page, and the strip shows each in its own frame', (tester) async {
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'));
+      await tester.tap(find.byTooltip(l10n.boardAddPage));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.boardWidePage), findsOneWidget);
+      await tester.tap(find.text(l10n.boardTallPage));
+      await tester.pumpAndSettle();
+      expect(repo.added, [PageShape.tall]);
+      final thumbs = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is BoardPagePainter && w.size.height == 72));
+      expect(thumbs.map((t) => t.size), [const Size(128, 72), const Size(40.5, 72)]);
+    });
+
+    testWidgets('a tall page fills a phone held upright, and saves as tall', (tester) async {
+      repo.pages = const [
+        BoardPage(id: 'p1', position: 0, layout: PageLayout.plain, background: PageBackground.white, shape: PageShape.tall, elements: []),
+      ];
+      final l10n = await pump(tester, const BoardEditorScreen(boardId: 'b1'), size: const Size(390, 844));
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      // Drawn near the foot of the screen: on a tall page that is far below where a wide one ends.
+      final canvas = tester.getRect(find.byType(BoardCanvas));
+      final from = Offset(canvas.center.dx, canvas.bottom - 200);
+      final gesture = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
+      for (var i = 1; i <= 8; i++) {
+        await gesture.moveTo(from + Offset(i * 6.0, i * 2.0));
+      }
+      await gesture.up();
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      final saved = repo.saved.last;
+      expect(saved.shape, PageShape.tall);
+      expect((saved.elements.single as InkElement).points.first.y, greaterThan(1400));
+    });
+
+    testWidgets('a new board on a phone held upright starts tall; on a wider screen, wide', (tester) async {
+      Future<void> create(Size size) async {
+        final l10n = await pump(tester, const BoardsScreen(), size: size);
+        await tester.tap(find.text(l10n.boardsNew));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(l10n.boardsCreate));
+        await tester.pumpAndSettle();
+      }
+
+      await create(const Size(390, 844));
+      await create(const Size(1280, 800));
+      await create(const Size(844, 390));
+      expect(repo.created, [PageShape.tall, PageShape.wide, PageShape.wide]);
     });
   });
 }

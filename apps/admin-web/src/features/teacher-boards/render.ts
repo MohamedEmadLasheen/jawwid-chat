@@ -1,8 +1,7 @@
 import {
-  PAGE_HEIGHT,
-  PAGE_WIDTH,
   PALETTE,
   drawOrder,
+  pageSize,
   isDarkBackground,
   verseBody,
   type AyahsAnswer,
@@ -18,7 +17,8 @@ import {
  * PD-39: a board page drawn for staff, read-only, the way the teacher's portal
  * paints it (lib/features/whiteboards/presentation/board_painter.dart):
  * background and rulings, every highlighter stroke, then the rest in order.
- * Pure drawing on a 2D context in page units (1920 x 1080); the caller scales.
+ * Pure drawing on a 2D context in page units (1920 x 1080, or 1080 x 1920 for a
+ * tall page); the caller scales.
  */
 
 export const BOARD_FONT = "'IBM Plex Sans Arabic', sans-serif"
@@ -81,6 +81,7 @@ export function drawPage(ctx: Ctx, page: BoardPage, opts: DrawOptions): void {
 }
 
 function drawBackground(ctx: Ctx, page: BoardPage) {
+  const { width: PAGE_WIDTH, height: PAGE_HEIGHT } = pageSize(page.shape)
   ctx.fillStyle = PALETTE[page.background]
   ctx.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT)
   const rule = isDarkBackground(page.background) ? PALETTE.ruleOnDark : PALETTE.ruleOnLight
@@ -409,8 +410,21 @@ function roundRect(ctx: Ctx, { x, y, w, h }: Rect, r: number) {
 }
 
 /** The reward stamps (§4.1): the icons as simple shapes, the words in our font. */
+/** The browser's own colour emoji fonts: staff browsers have them, nothing is downloaded. */
+export const EMOJI_FONT = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"
+
 function drawStamp(ctx: Ctx, s: Extract<BoardElement, { kind: 'stamp' }>, background: string) {
   const { x, y, w, h } = s.rect
+  if (s.stamp === 'emoji') {
+    // PD-55 (4): the emoji itself, filling its square, in its own colours (as the portal draws it).
+    ctx.save()
+    ctx.font = `${Math.round(Math.min(w, h) * 0.82)}px ${EMOJI_FONT}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(s.text ?? '', x + w / 2, y + h / 2)
+    ctx.restore()
+    return
+  }
   ctx.save()
   ctx.fillStyle = s.color
   ctx.strokeStyle = s.color

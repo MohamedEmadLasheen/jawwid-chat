@@ -271,7 +271,7 @@ function DailyChart({ daily, showTaps }: { daily: StoryAnalytics['daily']; showT
   const days = daily.slice(-30)
   const max = Math.max(1, ...days.map((d) => Math.max(d.views, showTaps ? d.taps : 0)))
   const fmt = (iso: string) =>
-    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+    new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
       new Date(`${iso}T00:00:00Z`),
     )
   return (

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../settings/data/parent_notice_repository.dart';
 import '../application/app_lock_call_bypass.dart';
 import '../application/app_lock_controller.dart';
 import 'app_lock_screen.dart';
@@ -56,6 +57,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingOb
     final lock = ref.watch(appLockControllerProvider);
     final callOnScreen = lock.covered && ref.watch(appLockCallBypassProvider);
     final covered = lock.covered && !callOnScreen;
+    // PARENT-001: one first-run dialog at a time -- the lesson-audio notice first.
+    final noticeBusy = ref.watch(lessonAudioNoticeBusyProvider);
 
     return Stack(
       fit: StackFit.expand,
@@ -75,7 +78,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingOb
                   ),
                 )
               : const AppLockPrivacyCover(),
-        if (lock.offerVisible && !covered) const AppLockOffer(),
+        if (lock.offerVisible && !covered && !noticeBusy) const AppLockOffer(),
         if (lock.obscured) const AppLockPrivacyCover(),
       ],
     );

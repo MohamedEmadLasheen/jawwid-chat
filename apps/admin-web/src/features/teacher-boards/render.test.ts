@@ -223,6 +223,17 @@ describe('text', () => {
     expect(dots[0]!.args.slice(0, 3)).toEqual([32, 32, 2.2])
   })
 
+  it('PD-55: a tall page is read as tall and drawn 1080 x 1920; a page without a shape is wide', () => {
+    const tall = parsePage({ layout: 'dotted', background: 'white', shape: 'tall', document: { v: 1, elements: [] } })
+    expect(tall.shape).toBe('tall')
+    const { ctx, calls } = recorder()
+    drawPage(ctx, tall, { verse: () => ({ status: 'loading' }), label })
+    expect(calls.find((c) => c.op === 'fillRect')!.args).toEqual([0, 0, 1080, 1920])
+    expect(calls.filter((c) => c.op === 'arc').length).toBe(Math.floor((1080 - 1) / 32) * Math.floor((1920 - 1) / 32))
+    expect(parsePage({ layout: 'plain', background: 'white', document: { v: 1, elements: [] } }).shape).toBe('wide')
+    expect(parsePage({ layout: 'plain', background: 'white', shape: 'hexagon', document: { v: 1, elements: [] } }).shape).toBe('wide')
+  })
+
   it('PD-55: a reward sticker is read as itself and drawn as a sticker badge, never as some other stamp; free praise is drawn as its words', () => {
     const rewards = parsePage({
       layout: 'plain',
@@ -241,6 +252,21 @@ describe('text', () => {
     // The badge: a ring with a star in it -- not a bare star that would read as a "star" reward.
     expect(calls.filter((c) => c.op === 'arc').length).toBeGreaterThanOrEqual(1)
     expect(texts()).toContain('بطل')
+  })
+
+  it('PD-55 (4): an emoji stamp is read as an emoji and drawn as its own character, in an emoji font, centred in its square', () => {
+    const page = parsePage({
+      layout: 'plain',
+      background: 'white',
+      document: { v: 1, elements: [{ id: 'e1', kind: 'stamp', stamp: 'emoji', x: 100, y: 100, w: 140, h: 140, color: '#000000', text: '🦉' }] },
+    })
+    const stamp = page.elements[0]!
+    expect(stamp.kind === 'stamp' && stamp.stamp).toBe('emoji')
+    const { ctx, calls } = recorder()
+    drawPage(ctx, page, { verse: () => ({ status: 'loading' }), label })
+    const text = calls.find((c) => c.op === 'fillText')!
+    expect(text.args.slice(0, 3)).toEqual(['🦉', 170, 170])
+    expect(text.state.font).toMatch(/Color Emoji/)
   })
 
   it('PD-39: a text without the PD-55 fields is drawn as before: regular weight, never turned', () => {
