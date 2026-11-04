@@ -128,6 +128,16 @@ class MainActivity : FlutterFragmentActivity() {
                     call.argument<String>("callId")?.let { JawwidPush.cancelCall(applicationContext, it) }
                     result.success(null)
                 }
+                // S-06: the call keeps its microphone in the background (CallForegroundService).
+                "ongoingStart" -> {
+                    val callId = call.argument<String>("callId")
+                    if (callId != null) CallForegroundService.start(applicationContext, callId, call.argument<String>("title").orEmpty())
+                    result.success(null)
+                }
+                "ongoingStop" -> {
+                    CallForegroundService.stop(applicationContext)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

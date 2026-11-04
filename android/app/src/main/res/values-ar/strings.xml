@@ -12,4 +12,6 @@
     <string name="call_answer">رد</string>
     <string name="call_decline">رفض</string>
     <string name="message_new">رسالة جديدة</string>
+    <string name="call_ongoing">مكالمة جارية</string>
+    <string name="channel_ongoing_call">المكالمة الجارية</string>
 </resources>

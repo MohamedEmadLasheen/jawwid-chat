@@ -13,4 +13,6 @@
     <string name="call_answer">Answer</string>
     <string name="call_decline">Decline</string>
     <string name="message_new">New message</string>
+    <string name="call_ongoing">Ongoing call</string>
+    <string name="channel_ongoing_call">Ongoing call</string>
 </resources>
