@@ -17,74 +17,70 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Push-token plumbing for voice calls (W8-W1).
+ * Push tokens (W8-W1) and Android's half of the native call contract (store
+ * blocker S-05).
  *
- * THIS FILE REPORTS TOKENS, and today it reports none. It does not present a
- * call, answer one or decline one; a received push will be handled by the
- * native call layer W8-W3 builds, and the call itself still arrives over the
- * app's existing realtime connection.
+ * ## The FCM token
  *
- * ## FCM, when the build has a Firebase project (PD-32 amendment, 2026-11-03)
+ * `start` (from push_tokens.dart, after sign-in) asks Firebase Messaging for
+ * this device's token and reports it on `jawwid/push_tokens` as
+ * `android`/`standard`. Firebase is configured by `android/app/google-services.json`
+ * from the owner's Firebase project. A DEBUG build without that file runs with
+ * push off (`start` reports nothing, as before); a RELEASE build without it
+ * fails at build time (android/app/build.gradle.kts). A token rotated while no
+ * engine is running is kept (PushTokenStore) and reported on the next start.
  *
- * The Firebase SDK is linked; the Google Services plugin is applied only when
- * `android/app/google-services.json` exists (it is not committed -- it is the
- * Firebase project's), so a developer's build without it still builds. Without
- * it FirebaseApp never initializes, `start` reports no token, and the Dart side
- * treats that as "push is unavailable on this build", which it is. With it,
- * `start` reports this phone's token and [JawwidMessagingService] the rotations.
+ * `start` is also where Android 13+'s POST_NOTIFICATIONS is asked for: after
+ * sign-in, when a notification first matters, never at launch.
  *
- * ## Ordinary pushes: drawn, and opened where they point
+ * ## The call channel
  *
- * [JawwidMessagingService] draws an ordinary push ([PushPresenter]); a tap starts
- * this activity with the allowlisted ids and this install's nonce. A cold start
- * reads it in [onCreate], a running app in [onNewIntent] (`singleTop`); either
- * way it waits in [PushBridge] until Dart listens on `jawwid/push_opens`, then
- * Dart routes it. Calls are untouched: never drawn, never routed here.
+ * `jawwid/call_native` speaks the contract iOS's CallKitBridge speaks
+ * (lib/core/call_native/call_presentation.dart): Dart says `ready` and
+ * `dismiss`; native reports `onIncoming`, `onAnswer`, `onDecline`. Answer and a
+ * tap on the ring open this activity with a call intent (JawwidPush), on a cold
+ * start or a warm one, and are handed to Flutter once it is ready.
  *
  * ## Why a FlutterFragmentActivity
  *
  * PD-23's app lock uses `local_auth`, whose BiometricPrompt is a Fragment and needs a
  * FragmentActivity host. FlutterFragmentActivity offers the same `configureFlutterEngine`
- * hook FlutterActivity did, so the push-token channel below is unchanged.
+ * hook FlutterActivity did, so the channels below are unchanged.
  */
 class MainActivity : FlutterFragmentActivity() {
     private var channel: MethodChannel? = null
+    private var callChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // A closed app opened by a notification tap. Not on a restore after the process
-        // was killed: that intent was already handled when it first arrived.
-        if (savedInstanceState == null) handleTap(intent)
+        // A cold start from Answer or a tap on the ring: queued until Dart is ready.
+        // NOT on a recreate (rotation, process restore) or a launch from recents: the
+        // intent is the one already handled, and replaying it would answer again.
+        val fromHistory = (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (savedInstanceState == null && !fromHistory) {
+            handleCallIntent(intent)
+            handlePushTap(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // The app was in the background or open (`singleTop`).
-        handleTap(intent)
+        handleCallIntent(intent)
+        handlePushTap(intent)
     }
 
-    override fun onResume() {
-        super.onResume()
-        PushBridge.inForeground = true
-    }
-
-    override fun onPause() {
-        PushBridge.inForeground = false
-        super.onPause()
-    }
-
-    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        PushBridge.detach()
-        super.cleanUpFlutterEngine(flutterEngine)
-    }
-
-    /** A tap on one of OUR notifications only: its nonce must match this install's. */
-    private fun handleTap(intent: Intent?) {
+    /**
+     * PD-32: a tap on an ordinary notification (JawwidPush.showMessage).
+     *
+     * The launcher activity is exported, so any app can start it with any extras. A tap
+     * counts only when it carries this install's nonce, which no other app can know, and
+     * only the allow-listed, id-shaped keys pass ([PushPayload.fromTap]). Calls never come
+     * this way: they have their own intents (handleCallIntent). Held by [PushBridge] until
+     * Dart listens on `jawwid/push_opens`; Dart then routes it.
+     */
+    private fun handlePushTap(intent: Intent?) {
         if (intent?.action != PushBridge.ACTION_OPEN) return
-        // Reopened from Recents: the system replays the task's original intent -- the tap
-        // that launched it, long since opened. Not a new tap.
-        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
         val extras = intent.extras ?: return
         val raw = PushPayload.OPEN_KEYS.mapNotNull { k -> extras.getString(k)?.let { k to it } }.toMap()
         val open = PushPayload.fromTap(raw, extras.getString(PushBridge.EXTRA_NONCE), PushBridge.nonce(this)) ?: return
@@ -93,16 +89,61 @@ class MainActivity : FlutterFragmentActivity() {
         PushBridge.open(open)
     }
 
+    /**
+     * A call action: shown over the lock screen and waking it (#408 review --
+     * otherwise a full-screen ring or an Answer lands on the unlock prompt),
+     * handed to Flutter, then cleared so nothing replays it.
+     */
+    private fun handleCallIntent(intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action != JawwidPush.ACTION_ANSWER && action != JawwidPush.ACTION_OPEN_CALL) return
+        // Another app can start this exported activity with these actions and any call id;
+        // only the ring this app drew carries the install's nonce (as a notification tap does).
+        if (!PushPayload.isTrustedTap(intent.getStringExtra(PushBridge.EXTRA_NONCE), PushBridge.nonce(this))) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+            )
+        }
+        JawwidPush.onCallIntent(applicationContext, intent)
+        intent.action = null
+        intent.removeExtra(JawwidPush.EXTRA_CALL_ID)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        JawwidPush.inForeground = true
+    }
+
+    override fun onPause() {
+        JawwidPush.inForeground = false
+        super.onPause()
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        callChannel?.let { JawwidPush.detach(it) }
+        callChannel = null
+        PushBridge.detach()
+        if (attached === this) attached = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        attached = this
 
         val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
         )
         this.channel = channel
-        PushBridge.tokenChannelReady(channel)
 
+        // PD-32: taps on ordinary notifications, and sign-out clearing the tray.
         val opens = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, OPENS_CHANNEL)
         PushBridge.openChannel = opens
         opens.setMethodCallHandler { call, result ->
@@ -111,9 +152,34 @@ class MainActivity : FlutterFragmentActivity() {
                     PushBridge.listen()
                     result.success(null)
                 }
-                // Sign-out: the previous account's notifications leave the tray.
                 "clearDelivered" -> {
-                    androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
+                    JawwidPush.clearMessages(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        val callChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JawwidPush.CALL_CHANNEL_NAME)
+        this.callChannel = callChannel
+        callChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "ready" -> {
+                    JawwidPush.attach(applicationContext, callChannel)
+                    result.success(null)
+                }
+                "dismiss" -> {
+                    call.argument<String>("callId")?.let { JawwidPush.cancelCall(applicationContext, it) }
+                    result.success(null)
+                }
+                // S-06: the call keeps its microphone in the background (CallForegroundService).
+                "ongoingStart" -> {
+                    val callId = call.argument<String>("callId")
+                    if (callId != null) CallForegroundService.start(applicationContext, callId, call.argument<String>("title").orEmpty())
+                    result.success(null)
+                }
+                "ongoingStop" -> {
+                    CallForegroundService.stop(applicationContext)
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -123,9 +189,6 @@ class MainActivity : FlutterFragmentActivity() {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "start" -> {
-                    // Dart is listening for tokens now: one the service got first is handed over.
-                    PushBridge.tokenListening = true
-                    PushBridge.flushToken()
                     startRegistering()
                     result.success(null)
                 }
@@ -183,39 +246,63 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * Ask for permission to notify (Android 13+), then for this phone's push token.
+     * Ask Firebase for this device's push token, and for permission to show
+     * notifications (Android 13+).
      *
-     * Called by Dart when a session starts (`PushRegistrar.start`) -- the point where
-     * notifications start to matter, never at launch. No token without a Firebase
-     * project (see the class comment). It never throws: an Android build without push
-     * works, it simply will not notify while closed.
+     * It never throws: a debug build without google-services.json has no
+     * Firebase app, and then reports nothing -- push is simply off on that build.
      */
     private fun startRegistering() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        JawwidPush.ensureChannels(applicationContext)
+        if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY_REQUEST)
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST)
         }
-        if (FirebaseApp.getApps(this).isEmpty()) return
+        if (FirebaseApp.getApps(applicationContext).isEmpty()) return
+        PushTokenStore.load(applicationContext)?.let { reportToken(it) }
         try {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                if (!token.isNullOrEmpty()) PushBridge.reportToken(token)
+                if (!token.isNullOrEmpty()) {
+                    PushTokenStore.save(applicationContext, token)
+                    reportToken(token)
+                }
             }
         } catch (e: IllegalStateException) {
-            // Firebase present but not usable: push unavailable, as without it.
+            // Firebase present but not initialised for messaging: push stays off.
         }
+    }
+
+    /**
+     * Hand a token to Flutter. `kind` is always "standard": FCM has no VoIP
+     * channel, which is why the server routes Android calls to ordinary tokens.
+     */
+    fun reportToken(token: String) {
+        channel?.invokeMethod(
+            "onToken",
+            mapOf("token" to token, "platform" to "android", "kind" to "standard"),
+        )
     }
 
     companion object {
         /** Shared with `push_tokens.dart`. One string, three places. */
         private const val CHANNEL_NAME = "jawwid/push_tokens"
 
+        private const val NOTIFICATION_PERMISSION_REQUEST = 4601
+
+        /** The activity whose engine is live, for a token rotated by JawwidMessagingService. */
+        @Volatile
+        private var attached: MainActivity? = null
+
+        fun reportTokenIfAttached(token: String) {
+            val activity = attached ?: return
+            activity.runOnUiThread { activity.reportToken(token) }
+        }
+
         /** Shared with `device_security_settings.dart`. */
         private const val SECURITY_SETTINGS_CHANNEL = "jawwid/device_security_settings"
 
-        /** Shared with `push_opens.dart`. */
+        /** Shared with `lib/core/push/push_opens.dart`. */
         private const val OPENS_CHANNEL = "jawwid/push_opens"
-
-        private const val NOTIFY_REQUEST = 7301
     }
 }

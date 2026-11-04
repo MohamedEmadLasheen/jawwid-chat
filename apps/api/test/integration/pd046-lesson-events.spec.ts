@@ -36,11 +36,13 @@ const calendar = new CalendarService(g.prisma, g.conversations, lessons, g.confi
 const events = new LessonEvents(g.prisma);
 
 /** A realtime publisher that records what it was asked to deliver. */
-const sent: Array<{ via: 'users' | 'thread'; to: string[]; event: string; payload: any }> = [];
+const sent: Array<{ via: 'users' | 'thread'; to: string[]; event: string; payload: any; except?: string[] }> = [];
 const recording = {
   toUsers: async (ids: string[], event: string, payload: unknown) => void sent.push({ via: 'users', to: ids, event, payload }),
   toThread: async (id: string, event: string, payload: unknown) => void sent.push({ via: 'thread', to: [id], event, payload }),
-  toThreadAudience: async () => undefined,
+  // CHATSCHED-015: the family's room pass names who was already told by user room.
+  toThreadAudience: async (id: string, event: string, payload: unknown, audience: { exceptActors?: string[] }) =>
+    void sent.push({ via: 'thread', to: [id], event, payload, except: audience.exceptActors }),
 };
 const worker = new OutboxWorker(g.prisma, g.notifications, recording as never, g.identity);
 new LessonAudienceService(g.prisma, calendar, worker, g.identity).onModuleInit();
@@ -268,8 +270,36 @@ describe('the worker fans lesson.changed out to exactly who may see the lesson',
     expect(toUsers.to).not.toContain(s.otherAdminId);
     expect(toUsers.to).not.toContain(s.unrelatedTeacherId);
     expect(toUsers.payload).toMatchObject({ lessonId: id, change: 'created' });
-    expect(sent.filter((x) => x.via === 'thread' && x.event === CommEvent.LESSON_CHANGED).map((x) => x.to[0])).toEqual([groupId]);
+    const room = sent.filter((x) => x.via === 'thread' && x.event === CommEvent.LESSON_CHANGED);
+    expect(room.map((x) => x.to[0])).toEqual([groupId]);
+    // CHATSCHED-015 (QA RT1-pd46): the teacher and the supervisor are in the family's room too and
+    // were told by user room already -- the room pass skips exactly the people already told.
+    expect(new Set(room[0]!.except)).toEqual(new Set(toUsers.to));
     expect(await g.prisma.outboxEvent.count({ where: { idempotencyKey: `lesson:${id}:0:created`, status: 'published' } })).toBe(1);
+  });
+
+  // CHATSCHED-015: one person in two roles (the lesson's teacher who is also in-scope staff, and a
+  // supervisor who is also the Operations manager) is told ONCE by user room and left out of the
+  // family's room pass. The audience is stubbed to return the overlaps (twice, even) so the dedupe
+  // is what is under test, not the seed's role layout.
+  it('one person holding two roles gets lesson.changed exactly once, and the room pass excludes them', async () => {
+    const overlapping = new OutboxWorker(g.prisma, g.notifications, recording as never, g.identity);
+    overlapping.useLessonAudience({
+      staffFor: async () => [s.teacherId, s.ownerId, s.ownerId, s.managerId, s.managerId],
+    } as never);
+    const id = await lessonAt(5 * HOUR);
+    await g.prisma.$transaction((tx) => events.record(tx, [id], 'created'));
+    await overlapping.drain();
+    const users = sent.filter((x) => x.via === 'users' && x.event === CommEvent.LESSON_CHANGED);
+    expect(users).toHaveLength(1);
+    const told = users[0]!.to;
+    expect(told).toHaveLength(new Set(told).size);
+    for (const p of [s.teacherId, s.ownerId, s.managerId]) expect(told.filter((x) => x === p)).toHaveLength(1);
+    const room = sent.filter((x) => x.via === 'thread' && x.event === CommEvent.LESSON_CHANGED);
+    expect(room).toHaveLength(1);
+    expect(room[0]!.except).toBeDefined();
+    expect(new Set(room[0]!.except)).toEqual(new Set(told));
+    for (const p of [s.teacherId, s.ownerId, s.managerId]) expect(room[0]!.except).toContain(p);
   });
 
   it('schedule.refreshed reaches the teacher and the staff in scope of the teacher or the learner', async () => {

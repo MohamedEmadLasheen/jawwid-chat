@@ -14,7 +14,9 @@ import type { Payment, PaymentRequest } from '@/features/payments/api'
 import { METHOD, PAY } from '@/features/payments/copy'
 import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, ReceiptStatusBadge, RequestList } from '@/features/payments/PaymentParts'
 import { parentPath, studentPath, type FamilyBilling, type ParentProfile, type TimelineInstalment, type TimelineStatus } from './api'
-import { METHOD_LABEL, P, TIMELINE_STATUS, countryName, describeError, isProfileRefusal, planLabel, useCopy } from './copy'
+import { useCountries } from '@/shared/location/api'
+import { zoneCity } from '@/core/time/academyTime'
+import { METHOD_LABEL, P, TIMELINE_STATUS, describeError, isProfileRefusal, planLabel, useCopy } from './copy'
 import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
 import { FamilyFeedbackSection } from './FamilyFeedbackSection'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
@@ -152,9 +154,21 @@ function Section({ id, title, action, hint, children }: { id: string; title: str
 
 function ContactSection({ profile, onEdit }: { profile: ParentProfile; onEdit: () => void }) {
   const tx = useCopy()
-  const { locale, dateTime } = useI18n()
+  const { locale, dateTime, date } = useI18n()
   const c = profile.contact
   const missing = <span className="tf-muted">{tx(P.notRecorded)}</span>
+  const pick = (n: { en: string; ar: string }) => (locale === 'ar' ? n.ar : n.en)
+  // A country with no subdivisions has no such row; while the list loads, assume it has them.
+  const countries = useCountries()
+  const showSubdivision = !!c.location?.subdivision || countries.data?.countries.find((x) => x.code === c.countryCode)?.hasSubdivisions !== false
+  // PD-45 §7, read-only: the clock the country implies where the app gave none, or a hint when they differ.
+  const zone = profile.timeZone
+  const clock =
+    zone.app === null && zone.estimate
+      ? tx(P.zoneEstimate, { city: zoneCity(zone.estimate, locale) })
+      : zone.mismatch && zone.app && c.location
+        ? tx(P.zoneHint, { country: pick(c.location.country), city: zoneCity(zone.app, locale) })
+        : null
   return (
     <Section
       id="pf-contact"
@@ -182,11 +196,31 @@ function ContactSection({ profile, onEdit }: { profile: ParentProfile; onEdit: (
           <dt>{tx(P.childrenCount)}</dt>
           <dd>{profile.childrenCount}</dd>
           <dt>{tx(P.country)}</dt>
-          <dd>{c.countryCode ? countryName(c.countryCode, locale) : missing}</dd>
-          <dt>{tx(P.region)}</dt>
-          <dd>{c.region ? <bdi>{c.region}</bdi> : missing}</dd>
+          <dd>{c.location ? <bdi>{pick(c.location.country)}</bdi> : missing}</dd>
+          {c.location && showSubdivision && (
+            <>
+              <dt>{pick(c.location.label)}</dt>
+              <dd>{c.location.subdivision ? <bdi>{pick(c.location.subdivision)}</bdi> : missing}</dd>
+            </>
+          )}
+          {/* PD-45 §3.4: the old free text, until a subdivision is set. */}
+          {c.region && !c.subdivisionCode && (
+            <>
+              <dt>{tx(P.oldNote)}</dt>
+              <dd>
+                <bdi>{c.region}</bdi>
+              </dd>
+            </>
+          )}
+          {clock && (
+            <>
+              <dt>{tx(P.timeZone)}</dt>
+              <dd className="tf-muted">{clock}</dd>
+            </>
+          )}
         </dl>
       </div>
+      {c.locationSource === 'parent' && c.locationUpdatedAt && <p className="tf-byline">{tx(P.setByParent, { date: date(c.locationUpdatedAt) })}</p>}
       {profile.updatedAt && <p className="tf-byline">{tx(P.lastEdit, { date: dateTime(profile.updatedAt) })}</p>}
     </Section>
   )

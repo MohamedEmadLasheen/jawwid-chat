@@ -2950,7 +2950,7 @@ abstract class L10n {
   /// No description provided for @ticketCertificate.
   ///
   /// In en, this message translates to:
-  /// **'Request a certificate'**
+  /// **'Suggest a certificate'**
   String get ticketCertificate;
 
   /// No description provided for @ticketLeave.
@@ -2962,13 +2962,13 @@ abstract class L10n {
   /// No description provided for @certificateFormTitle.
   ///
   /// In en, this message translates to:
-  /// **'Request a certificate'**
+  /// **'Suggest a certificate'**
   String get certificateFormTitle;
 
   /// No description provided for @certificateFormHint.
   ///
   /// In en, this message translates to:
-  /// **'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.'**
+  /// **'Sent privately to the student\'s Operations supervisor, who decides. If it is accepted, the certificate is designed and posted to the student\'s group, where you and the parents receive it.'**
   String get certificateFormHint;
 
   /// No description provided for @certificateStudent.
@@ -3172,7 +3172,7 @@ abstract class L10n {
   /// No description provided for @cardCertificateRequestedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Certificate request'**
+  /// **'Certificate suggestion'**
   String get cardCertificateRequestedTitle;
 
   /// No description provided for @cardCertificateIssuedTitle.
@@ -3184,8 +3184,38 @@ abstract class L10n {
   /// No description provided for @cardCertificateDeclinedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Certificate request not approved'**
+  /// **'Certificate suggestion not approved'**
   String get cardCertificateDeclinedTitle;
+
+  /// No description provided for @cardCertificateAcceptedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate suggestion accepted'**
+  String get cardCertificateAcceptedTitle;
+
+  /// No description provided for @cardCertificateAwardedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate of appreciation'**
+  String get cardCertificateAwardedTitle;
+
+  /// No description provided for @cardAwardType.
+  ///
+  /// In en, this message translates to:
+  /// **'Award'**
+  String get cardAwardType;
+
+  /// No description provided for @cardAwardPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get cardAwardPeriod;
+
+  /// No description provided for @cardAwardThanks.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for your work! The certificate is attached.'**
+  String get cardAwardThanks;
 
   /// No description provided for @cardLeaveRequestedTitle.
   ///
@@ -5020,13 +5050,13 @@ abstract class L10n {
   /// No description provided for @resetOpen.
   ///
   /// In en, this message translates to:
-  /// **'Forgot your password? I have a reset code'**
+  /// **'Forgot your password? I have a set-up or reset code'**
   String get resetOpen;
 
   /// No description provided for @resetTitle.
   ///
   /// In en, this message translates to:
-  /// **'Set a new password'**
+  /// **'Set your password'**
   String get resetTitle;
 
   /// No description provided for @resetIntro.
@@ -5074,7 +5104,7 @@ abstract class L10n {
   /// TEACHER-023: under the parents' recovery link on the sign-in screen; self-service recovery is for parents only.
   ///
   /// In en, this message translates to:
-  /// **'Teachers and staff: ask your supervisor for a reset code.'**
+  /// **'Teachers and staff: ask your supervisor for a set-up or reset code.'**
   String get signInStaffResetHint;
 
   /// TEACHER-023: Settings row and screen title.
@@ -5164,13 +5194,13 @@ abstract class L10n {
   /// No description provided for @recoveryHaveCode.
   ///
   /// In en, this message translates to:
-  /// **'I have a code from the academy'**
+  /// **'I have a set-up or reset code'**
   String get recoveryHaveCode;
 
   /// No description provided for @recoveryHaveCodeHint.
   ///
   /// In en, this message translates to:
-  /// **'Your supervisor gave you a one-time reset code.'**
+  /// **'Your supervisor gave you a one-time set-up or reset code.'**
   String get recoveryHaveCodeHint;
 
   /// No description provided for @recoveryStillStuck.

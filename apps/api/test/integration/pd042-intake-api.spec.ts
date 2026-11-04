@@ -237,6 +237,18 @@ describe('1. entering a family', () => {
   });
 });
 
+describe('1b. PD-45: the family\'s location at intake (optional, owner Q2)', () => {
+  it('is saved with the new family when given, refused when it is not a place, and absent when left out', async () => {
+    const r = await intake.enter(salesA, form({ parent: { name: 'parent_i', phone: phone(), location: { countryCode: 'eg', subdivisionCode: 'eg-gz' } } }));
+    expect(await g.prisma.family.findUniqueOrThrow({ where: { id: r.familyId } })).toMatchObject({
+      countryCode: 'EG', subdivisionCode: 'EG-GZ', locationSource: 'staff', locationUpdatedBy: salesA,
+    });
+    expect(await code(intake.enter(salesA, form({ parent: { name: 'parent_i', phone: phone(), location: { countryCode: 'EG', subdivisionCode: 'SA-01' } } })))).toBe(CommErrorCode.VALIDATION);
+    const bare = await intake.enter(salesA, form());
+    expect(await g.prisma.family.findUniqueOrThrow({ where: { id: bare.familyId } })).toMatchObject({ countryCode: null, subdivisionCode: null });
+  });
+});
+
 describe('2. idempotency and duplicates (S1)', () => {
   it('the same intake id again writes nothing and answers the first result; another supervisor is refused', async () => {
     const f = form();

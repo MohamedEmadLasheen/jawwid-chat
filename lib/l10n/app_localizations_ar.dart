@@ -1749,17 +1749,17 @@ class L10nAr extends L10n {
   String get supervisionTicketsHeader => 'الطلبات';
 
   @override
-  String get ticketCertificate => 'طلب شهادة';
+  String get ticketCertificate => 'اقتراح شهادة';
 
   @override
   String get ticketLeave => 'طلب إجازة';
 
   @override
-  String get certificateFormTitle => 'طلب شهادة';
+  String get certificateFormTitle => 'اقتراح شهادة';
 
   @override
   String get certificateFormHint =>
-      'يُرسل بشكل خاص إلى قسم المعلمين. عند إصدار الشهادة تُنشر في مجموعة الطالب، حيث تستلمها أنت وأولياء الأمر.';
+      'يُرسل بشكل خاص إلى مشرف الطالب في العمليات ليقرر. عند قبوله تُصمَّم الشهادة وتُنشر في مجموعة الطالب، حيث تستلمها أنت وأولياء الأمر.';
 
   @override
   String get certificateStudent => 'الطالب';
@@ -1877,13 +1877,28 @@ class L10nAr extends L10n {
   String get leaveStateCancelled => 'ملغاة';
 
   @override
-  String get cardCertificateRequestedTitle => 'طلب شهادة';
+  String get cardCertificateRequestedTitle => 'اقتراح شهادة';
 
   @override
   String get cardCertificateIssuedTitle => 'شهادة';
 
   @override
-  String get cardCertificateDeclinedTitle => 'لم يُعتمد طلب الشهادة';
+  String get cardCertificateDeclinedTitle => 'لم يُعتمد اقتراح الشهادة';
+
+  @override
+  String get cardCertificateAcceptedTitle => 'قُبل اقتراح الشهادة';
+
+  @override
+  String get cardCertificateAwardedTitle => 'شهادة تقدير';
+
+  @override
+  String get cardAwardType => 'التقدير';
+
+  @override
+  String get cardAwardPeriod => 'الفترة';
+
+  @override
+  String get cardAwardThanks => 'شكرًا لعطائك! الشهادة مرفقة.';
 
   @override
   String get cardLeaveRequestedTitle => 'طلب إجازة';
@@ -2907,10 +2922,11 @@ class L10nAr extends L10n {
   String get signupFailed => 'حدث خطأ. حاول مرة أخرى.';
 
   @override
-  String get resetOpen => 'نسيت كلمة المرور؟ لديّ رمز إعادة تعيين';
+  String get resetOpen =>
+      'نسيت كلمة المرور؟ لديّ رمز الدخول الأول أو رمز إعادة التعيين';
 
   @override
-  String get resetTitle => 'تعيين كلمة مرور جديدة';
+  String get resetTitle => 'تعيين كلمة المرور';
 
   @override
   String get resetIntro =>
@@ -2937,7 +2953,7 @@ class L10nAr extends L10n {
 
   @override
   String get signInStaffResetHint =>
-      'المعلمون والموظفون: اطلب رمز إعادة التعيين من مشرفك.';
+      'المعلمون والموظفون: اطلب رمز الدخول الأول أو رمز إعادة التعيين من مشرفك.';
 
   @override
   String get changePasswordTitle => 'تغيير كلمة المرور';
@@ -2988,10 +3004,11 @@ class L10nAr extends L10n {
       'سنرسل رمزًا عبر واتساب إلى رقم الهاتف المسجّل لك لدى الأكاديمية.';
 
   @override
-  String get recoveryHaveCode => 'لديّ رمز من الأكاديمية';
+  String get recoveryHaveCode => 'لديّ رمز الدخول الأول أو رمز إعادة التعيين';
 
   @override
-  String get recoveryHaveCodeHint => 'أعطاك مشرفك رمز إعادة تعيين لمرة واحدة.';
+  String get recoveryHaveCodeHint =>
+      'أعطاك مشرفك رمز الدخول الأول أو رمز إعادة التعيين، وهو يعمل مرة واحدة.';
 
   @override
   String get recoveryStillStuck =>

@@ -4,21 +4,22 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 /**
- * FCM's entry point (PD-32 amendment, 2026-11-03). Runs only in a build with a Firebase
- * project (`google-services.json`); without one FCM never starts and this never runs.
- *
- * A data-only message arrives here in every app state -- closed, background, open.
- * Ordinary pushes are drawn ([PushPresenter]); a CALL is left exactly as before this file
- * existed: not drawn and not routed (calls arrive over the realtime connection).
+ * Store blocker S-05: FCM's entry point while the app is closed or in the
+ * background. Every message is data-only (fcm.provider.ts), so this is what
+ * draws it -- see JawwidPush.
  */
 class JawwidMessagingService : FirebaseMessagingService() {
-    override fun onNewToken(token: String) {
-        android.os.Handler(mainLooper).post { PushBridge.reportToken(token) }
+    override fun onMessageReceived(message: RemoteMessage) {
+        JawwidPush.show(applicationContext, message.data)
     }
 
-    override fun onMessageReceived(message: RemoteMessage) {
-        val data = message.data
-        if (PushPayload.isCall(data)) return
-        PushPresenter.show(applicationContext, data)
+    /**
+     * A rotated token. Kept until Flutter can register it: the process may be
+     * running without an engine, and a token the server never hears of is a
+     * phone that silently stops ringing.
+     */
+    override fun onNewToken(token: String) {
+        PushTokenStore.save(applicationContext, token)
+        MainActivity.reportTokenIfAttached(token)
     }
 }

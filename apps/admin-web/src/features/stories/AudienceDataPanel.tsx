@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { useText } from '@/features/admin/copy'
 import { PLAN_MONTHS, type FamilyAudienceRow } from './api'
-import { allCountryCodes, flagOf, PLAN_LABEL, S, SUGGESTED_COUNTRIES, useCountryName } from './copy'
+import { PLAN_LABEL, S } from './copy'
 import { useAudienceFacts, useFamilyAudienceData, useSetFamilyAudienceData } from './hooks'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { LocationPicker } from '@/shared/location/LocationPicker'
 
 /**
  * Each family's country and subscription plan -- the two facts targeting
@@ -24,7 +25,6 @@ export function AudienceDataPanel() {
   const query = useFamilyAudienceData({ search, missing })
   const facts = useAudienceFacts()
   const rows = query.data?.families ?? []
-  const countries = useCountryOptions()
 
   return (
     <div className="audience-data">
@@ -83,7 +83,7 @@ export function AudienceDataPanel() {
               </thead>
               <tbody>
                 {rows.map((f) => (
-                  <FamilyRow key={f.id} family={f} countries={countries} />
+                  <FamilyRow key={f.id} family={f} />
                 ))}
               </tbody>
             </table>
@@ -95,28 +95,7 @@ export function AudienceDataPanel() {
   )
 }
 
-interface CountryOptions {
-  suggested: ReadonlyArray<readonly [string, string]>
-  rest: ReadonlyArray<readonly [string, string]>
-}
-
-/** Built once per locale for the whole table, never per row. */
-function useCountryOptions(): CountryOptions {
-  const countryName = useCountryName()
-  return useMemo(() => {
-    const suggested = SUGGESTED_COUNTRIES as readonly string[]
-    return {
-      suggested: suggested.map((c) => [c, countryName(c)] as const),
-      rest: allCountryCodes()
-        .filter((c) => !suggested.includes(c))
-        .map((c) => [c, countryName(c)] as const)
-        .filter(([c, name]) => name !== c)
-        .sort((a, b) => a[1].localeCompare(b[1])),
-    }
-  }, [countryName])
-}
-
-function FamilyRow({ family: f, countries }: { family: FamilyAudienceRow; countries: CountryOptions }) {
+function FamilyRow({ family: f }: { family: FamilyAudienceRow }) {
   const tx = useText()
   const { number } = useI18n()
   const save = useSetFamilyAudienceData()
@@ -140,23 +119,17 @@ function FamilyRow({ family: f, countries }: { family: FamilyAudienceRow; countr
         {save.error && <span className="field__error" role="alert">{(save.error as Error).message}</span>}
       </td>
       <td>
-        <SearchableSelect
+        {/* PD-45: the shared picker, country only (Stories target by country; plan §13). */}
+        <LocationPicker
+          countryOnly
+          compact
+          hideLabels
           clearable={false}
-          className="select select--sm"
-          value={f.countryCode ?? ''}
           disabled={save.isPending}
-          aria-label={`${tx(S.country)}: ${f.displayName}`}
-          onValueChange={(v) => commit({ countryCode: v || null })}
-        >
-          <option value="">{tx(S.notSet)}</option>
-          {countries.suggested.map(([c, name]) => (
-            <option key={c} value={c}>{`${flagOf(c)} ${name}`}</option>
-          ))}
-          <option disabled>──────────</option>
-          {countries.rest.map(([c, name]) => (
-            <option key={c} value={c}>{`${flagOf(c)} ${name}`}</option>
-          ))}
-        </SearchableSelect>
+          ariaLabel={`${tx(S.country)}: ${f.displayName}`}
+          value={{ countryCode: f.countryCode, subdivisionCode: null }}
+          onChange={(next) => commit({ countryCode: next.countryCode })}
+        />
       </td>
       <td>
         <SearchableSelect

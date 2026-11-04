@@ -21,7 +21,8 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
-    // PD-32 amendment: applied by :app only when android/app/google-services.json exists.
+    // Store blocker S-05: reads android/app/google-services.json (Firebase). Applied by
+    // :app only when that file exists; see android/app/build.gradle.kts.
     id("com.google.gms.google-services") version "4.4.2" apply false
 }
 

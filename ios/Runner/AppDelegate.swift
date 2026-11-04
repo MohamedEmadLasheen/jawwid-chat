@@ -1,7 +1,7 @@
 import Flutter
 import PushKit
-import UIKit
 import UserNotifications
+import UIKit
 
 /**
  * Push tokens, the VoIP wake-up, and THE ONE FLUTTER ENGINE (W8-W1, W8-W3).
@@ -163,13 +163,17 @@ import UserNotifications
     return engine
   }
 
-  /// Ask iOS for both tokens, and for permission to show alerts. Safe to call repeatedly:
-  /// iOS asks the person once and answers from their choice afterwards.
+  /// Ask iOS for both tokens. Safe to call repeatedly.
+  ///
+  /// A standard APNs token alone shows the person nothing: without notification
+  /// authorization iOS presents no banner, sound or badge. So this asks for it
+  /// here, when a session begins (after sign-in, the moment a notification first
+  /// matters, never at launch). iOS shows the prompt once; later calls answer from
+  /// the person's choice without asking. A refusal changes nothing else: the token
+  /// is still registered, and calls still ring through PushKit and CallKit, which
+  /// need no such authorization.
   private func startRegistering() {
-    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
-      // Either answer is fine: without permission the token still registers, and iOS
-      // simply does not show the alert.
-    }
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     DispatchQueue.main.async {
       UIApplication.shared.registerForRemoteNotifications()
     }

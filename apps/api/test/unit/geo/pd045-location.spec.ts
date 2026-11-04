@@ -4,7 +4,7 @@
  * subdivision is always one of its country's, and changing the country drops a
  * subdivision that is not the new country's. Pure.
  */
-import { countryList, locationOf, parseLocationPatch, subdivisionsOf } from '../../../src/geo/location';
+import { countryList, locationOf, parseLocation, parseLocationPatch, subdivisionsOf } from '../../../src/geo/location';
 import { suggestedCountryFromPhone } from '../../../src/parent-profile/parent-phone-directory';
 
 const PINNED = ['EG', 'SA', 'AE', 'KW', 'QA', 'BH', 'OM', 'JO'];
@@ -101,6 +101,25 @@ describe('PD-45: a change to a family\'s location', () => {
 
   it('refuses a subdivision on a family with no country', () => {
     expect(() => parseLocationPatch({ subdivisionCode: 'EG-GZ' }, { countryCode: null, subdivisionCode: null })).toThrow(/needs a country/);
+  });
+});
+
+describe('PD-45: a whole location from a form (Sales\' form, the booking, the intake)', () => {
+  it('is null when absent, and a listed country with, optionally, one of its subdivisions', () => {
+    expect(parseLocation(undefined, 'parent.location')).toBeNull();
+    expect(parseLocation(null, 'parent.location')).toBeNull();
+    expect(parseLocation({ countryCode: 'eg' }, 'parent.location')).toEqual({ countryCode: 'EG', subdivisionCode: null });
+    expect(parseLocation({ countryCode: 'eg', subdivisionCode: 'eg-gz' }, 'location')).toEqual({ countryCode: 'EG', subdivisionCode: 'EG-GZ' });
+  });
+
+  it.each([
+    ['Egypt', /^parent\.location: /],
+    [['EG'], /^parent\.location: /],
+    [{ subdivisionCode: 'EG-GZ' }, /^parent\.location\.countryCode: required/],
+    [{ countryCode: 'UK' }, /^parent\.location\.countryCode: .*GB/],
+    [{ countryCode: 'EG', subdivisionCode: 'AE-DU' }, /^parent\.location\.subdivisionCode: /],
+  ])('refuses %j, naming the field', (raw, reason) => {
+    expect(() => parseLocation(raw, 'parent.location')).toThrow(reason);
   });
 });
 

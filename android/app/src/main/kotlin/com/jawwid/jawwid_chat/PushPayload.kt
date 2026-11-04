@@ -54,9 +54,16 @@ object PushPayload {
 
     fun body(data: Map<String, String>): String = data["body"]?.take(1000) ?: ""
 
-    /** One notification per delivery: a retried push replaces itself rather than stacking. */
-    fun notificationTag(data: Map<String, String>): String =
-        data["notificationId"]?.takeIf { ID.matches(it) } ?: java.util.UUID.randomUUID().toString()
+    /**
+     * The notification's tag: one per conversation for chat (a newer message replaces the
+     * older), one per delivery otherwise (a retried push replaces itself).
+     */
+    fun tag(data: Map<String, String>): String {
+        val event = data["eventType"]
+        val conversation = data["conversationId"]?.takeIf { ID.matches(it) }
+        if (event in QUIET_WHILE_OPEN && conversation != null) return "chat:$conversation"
+        return data["notificationId"]?.takeIf { ID.matches(it) }?.let { "n:$it" } ?: "n:${java.util.UUID.randomUUID()}"
+    }
 
     /**
      * What a tap intent hands Dart: its extras, but ONLY when it carries this install's
@@ -65,9 +72,20 @@ object PushPayload {
      * in this app's private storage. Null otherwise.
      */
     fun fromTap(extras: Map<String, String>, nonce: String?, expectedNonce: String?): Map<String, String>? {
-        if (nonce.isNullOrEmpty() || expectedNonce.isNullOrEmpty() || nonce != expectedNonce) return null
+        if (!isTrustedTap(nonce, expectedNonce)) return null
         val open = openExtras(extras)
         if (open["eventType"] == null || isCall(open)) return null
         return open
+    }
+
+    /**
+     * Whether an intent came from a notification this app drew: it carries this install's
+     * nonce. Used for notification taps ([fromTap]) and for the call ring's Answer and Open
+     * (MainActivity.handleCallIntent), because the activity they start is exported.
+     */
+    fun isTrustedTap(nonce: String?, expectedNonce: String?): Boolean {
+        if (nonce.isNullOrEmpty() || expectedNonce.isNullOrEmpty()) return false
+        // Constant-time: a secret is never compared character by character.
+        return java.security.MessageDigest.isEqual(nonce.toByteArray(), expectedNonce.toByteArray())
     }
 }

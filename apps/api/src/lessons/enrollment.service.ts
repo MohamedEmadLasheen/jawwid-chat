@@ -14,6 +14,7 @@ import { signAvatar } from '../communication/profile/avatar-urls';
 import { AvatarService } from '../communication/profile/avatar.service';
 import { nextWeeklyStart } from '../platform/time-zone';
 import { familyZonesOf } from '../platform/time-zone.service';
+import { estimatedZoneOf } from '../geo/zones';
 import { academyToday, currentOf, standingInOrder } from '../billing/subscription-reads';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -141,11 +142,12 @@ export class EnrollmentService implements OnModuleInit {
       staffView
         ? this.prisma.family.findUnique({
             where: { id: learner.familyId },
-            select: { id: true, displayName: true, contacts: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } } },
+            select: { id: true, displayName: true, countryCode: true, contacts: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } } },
           })
         : Promise.resolve(null),
     ]);
     const e = enrollment;
+    const familyTimeZone = staffView && family ? ((await familyZonesOf(this.prisma, [family.id])).get(family.id) ?? null) : null;
     return {
       id: learner.id,
       name: learner.name,
@@ -159,7 +161,9 @@ export class EnrollmentService implements OnModuleInit {
         ? {
             family: { id: family.id, name: family.displayName, parents: family.contacts.map((c) => ({ id: c.id, name: c.name })) },
             // PD-22: Admin Web shows the family's local time beside the teacher's.
-            familyTimeZone: (await familyZonesOf(this.prisma, [family.id])).get(family.id) ?? null,
+            familyTimeZone,
+            // PD-45 §7: only where no parent has an app clock; read-only, never written (PD-22).
+            familyTimeZoneEstimate: familyTimeZone ? null : estimatedZoneOf(family.countryCode),
           }
         : {}),
       viewer: standing === 'teacher' ? 'teacher' : 'staff',

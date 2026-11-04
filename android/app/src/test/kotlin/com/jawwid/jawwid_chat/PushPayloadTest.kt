@@ -69,12 +69,23 @@ class PushPayloadTest {
     }
 
     @Test
-    fun oneNotificationPerDelivery() {
-        assertEquals("n-1", PushPayload.notificationTag(reply))
+    fun oneNotificationPerDeliveryAndOnePerChat() {
+        assertEquals("n:n-1", PushPayload.tag(reply))
+        // Chat: one per conversation, so a newer message replaces the older one.
+        assertEquals("chat:c-1", PushPayload.tag(mapOf("eventType" to "message_published", "conversationId" to "c-1", "notificationId" to "n-9")))
         // Without a usable delivery id, two pushes never share a tag (and so a tap intent).
-        val a = PushPayload.notificationTag(mapOf("eventType" to "feedback_replied"))
-        val b = PushPayload.notificationTag(mapOf("eventType" to "feedback_replied"))
+        val a = PushPayload.tag(mapOf("eventType" to "feedback_replied"))
+        val b = PushPayload.tag(mapOf("eventType" to "feedback_replied"))
         assertTrue(a != b)
-        assertTrue(PushPayload.notificationTag(mapOf("notificationId" to "../x")) != "../x")
+        assertTrue(!PushPayload.tag(mapOf("notificationId" to "../x")).contains(".."))
+    }
+
+    @Test
+    fun theCallRingsAnswerAndOpenNeedTheSameNonce() {
+        assertTrue(PushPayload.isTrustedTap("s3cret", "s3cret"))
+        assertFalse(PushPayload.isTrustedTap(null, "s3cret"))
+        assertFalse(PushPayload.isTrustedTap("guess", "s3cret"))
+        assertFalse(PushPayload.isTrustedTap("", ""))
+        assertFalse(PushPayload.isTrustedTap("s3cret", null))
     }
 }

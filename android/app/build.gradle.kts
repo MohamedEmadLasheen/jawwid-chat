@@ -6,11 +6,26 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// PD-32 amendment: FCM needs the Firebase project's google-services.json, which is not
-// committed (it is the project's, like the signing key). Without it the plugin is not
-// applied, the build still builds, and the app simply receives no pushes on Android.
-if (file("google-services.json").exists()) {
+// Store blocker S-05: Firebase (push) is configured by google-services.json from the
+// owner's Firebase project, never committed (.gitignore). A DEBUG build without it runs
+// with push off, so a developer's machine and CI keep building; a RELEASE build without it
+// fails here, before anything is signed, because a store build that cannot ring is not one.
+val hasGoogleServices = file("google-services.json").exists()
+if (hasGoogleServices) {
     apply(plugin = "com.google.gms.google-services")
+}
+gradle.taskGraph.whenReady {
+    val releasing = allTasks.any { t ->
+        t.project == project && (t.name.startsWith("assemble") || t.name.startsWith("bundle")) && t.name.contains("Release")
+    }
+    if (releasing && !hasGoogleServices) {
+        throw GradleException(
+            "android/app/google-services.json is missing. A release build needs it for push " +
+                "notifications and call rings (Firebase Cloud Messaging). Download it from the " +
+                "Firebase project (Project settings > Your apps > Android, package " +
+                "com.jawwid.jawwid_chat) and place it at android/app/google-services.json.",
+        )
+    }
 }
 
 // PD-56 (store compliance): the release key. android/key.properties is git-ignored
@@ -104,9 +119,12 @@ dependencies {
     // crashes on Android 8 and below (minSdk is 26 since PD-56). local_auth_android brings
     // biometric/fragment/core, not appcompat, so the theme's parent comes from here.
     implementation("androidx.appcompat:appcompat:1.7.1")
-    // PD-32 amendment: ordinary pushes (FCM, data-only) drawn by the app.
+
+    // Store blocker S-05: push. Firebase Messaging only (no Analytics), versions from the BoM.
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
+    // NotificationCompat.CallStyle (the incoming-call notification) is core 1.9+.
     implementation("androidx.core:core-ktx:1.13.1")
+    // PD-32: the JVM unit tests of the push payload rules (src/test).
     testImplementation("junit:junit:4.13.2")
 }

@@ -1704,17 +1704,17 @@ class L10nEn extends L10n {
   String get supervisionTicketsHeader => 'Requests';
 
   @override
-  String get ticketCertificate => 'Request a certificate';
+  String get ticketCertificate => 'Suggest a certificate';
 
   @override
   String get ticketLeave => 'Request leave';
 
   @override
-  String get certificateFormTitle => 'Request a certificate';
+  String get certificateFormTitle => 'Suggest a certificate';
 
   @override
   String get certificateFormHint =>
-      'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.';
+      'Sent privately to the student\'s Operations supervisor, who decides. If it is accepted, the certificate is designed and posted to the student\'s group, where you and the parents receive it.';
 
   @override
   String get certificateStudent => 'Student';
@@ -1829,13 +1829,30 @@ class L10nEn extends L10n {
   String get leaveStateCancelled => 'Cancelled';
 
   @override
-  String get cardCertificateRequestedTitle => 'Certificate request';
+  String get cardCertificateRequestedTitle => 'Certificate suggestion';
 
   @override
   String get cardCertificateIssuedTitle => 'Certificate';
 
   @override
-  String get cardCertificateDeclinedTitle => 'Certificate request not approved';
+  String get cardCertificateDeclinedTitle =>
+      'Certificate suggestion not approved';
+
+  @override
+  String get cardCertificateAcceptedTitle => 'Certificate suggestion accepted';
+
+  @override
+  String get cardCertificateAwardedTitle => 'Certificate of appreciation';
+
+  @override
+  String get cardAwardType => 'Award';
+
+  @override
+  String get cardAwardPeriod => 'Period';
+
+  @override
+  String get cardAwardThanks =>
+      'Thank you for your work! The certificate is attached.';
 
   @override
   String get cardLeaveRequestedTitle => 'Leave request';
@@ -2859,10 +2876,10 @@ class L10nEn extends L10n {
   String get signupFailed => 'Something went wrong. Try again.';
 
   @override
-  String get resetOpen => 'Forgot your password? I have a reset code';
+  String get resetOpen => 'Forgot your password? I have a set-up or reset code';
 
   @override
-  String get resetTitle => 'Set a new password';
+  String get resetTitle => 'Set your password';
 
   @override
   String get resetIntro =>
@@ -2889,7 +2906,7 @@ class L10nEn extends L10n {
 
   @override
   String get signInStaffResetHint =>
-      'Teachers and staff: ask your supervisor for a reset code.';
+      'Teachers and staff: ask your supervisor for a set-up or reset code.';
 
   @override
   String get changePasswordTitle => 'Change password';
@@ -2940,11 +2957,11 @@ class L10nEn extends L10n {
       'We\'ll send a code on WhatsApp to the phone number the academy has for you.';
 
   @override
-  String get recoveryHaveCode => 'I have a code from the academy';
+  String get recoveryHaveCode => 'I have a set-up or reset code';
 
   @override
   String get recoveryHaveCodeHint =>
-      'Your supervisor gave you a one-time reset code.';
+      'Your supervisor gave you a one-time set-up or reset code.';
 
   @override
   String get recoveryStillStuck =>

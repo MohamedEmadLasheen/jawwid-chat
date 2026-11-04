@@ -193,12 +193,11 @@ describe('2. editing a Parent Profile', () => {
       phone,
       email,
       countryCode: 'ae',
-      region: 'Dubai',
       adminNote: 'Prefers calls after 6 pm.',
     });
     expect(out).toMatchObject({
       name: 'Hana Example',
-      contact: { phone, email: email.toLowerCase(), countryCode: 'AE', region: 'Dubai' },
+      contact: { phone, email: email.toLowerCase(), countryCode: 'AE', region: null },
       adminNote: 'Prefers calls after 6 pm.',
     });
     expect((await g.prisma.contact.findUniqueOrThrow({ where: { id: f.parent.id } })).name).toBe('Hana Example');
@@ -206,12 +205,21 @@ describe('2. editing a Parent Profile', () => {
 
     const rows = await g.prisma.auditLog.findMany({ where: { entityId: f.parent.id, action: 'parent_profile.updated' } });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.after).toMatchObject({ fields: expect.arrayContaining(['name', 'phone', 'email', 'region', 'adminNote', 'countryCode']) });
+    expect(rows[0]!.after).toMatchObject({ fields: expect.arrayContaining(['name', 'phone', 'email', 'adminNote', 'countryCode']) });
+    expect((rows[0]!.after as { fields: string[] }).fields).not.toContain('region');
     const leaked = await g.prisma.$queryRaw<{ n: bigint }[]>`
       select count(*) as n from chat.audit_log
        where before::text like ${'%123 4567%'} or after::text like ${'%123 4567%'}
           or before::text like ${'%pd17@example%'} or after::text like ${'%pd17@example%'}`;
     expect(Number(leaked[0]!.n)).toBe(0);
+
+    // PD-45 PR-2b: the old free text is still READ ("Old note") but never written again.
+    await g.prisma.parentFile.update({ where: { contactId: f.parent.id }, data: { region: 'Dubai' } });
+    for (const region of ['Giza', null, '']) {
+      expect(await code(parents.update(m.operationsManager.id, f.parent.id, { region }))).toBe(CommErrorCode.VALIDATION);
+    }
+    expect((await g.prisma.parentFile.findUniqueOrThrow({ where: { contactId: f.parent.id } })).region).toBe('Dubai');
+    expect((await parents.detail(m.operationsManager.id, f.parent.id)).contact.region).toBe('Dubai');
 
     // null clears; an absent field is left alone; the name cannot be cleared.
     const cleared = await parents.update(m.operationsManager.id, f.parent.id, { phone: null, adminNote: '' });
@@ -343,6 +351,24 @@ describe('4. who opens a Student Profile', () => {
       expect(p).toMatchObject({ viewer: 'staff', family: { id: f.id, parents: expect.arrayContaining([{ id: f.parent.id, name: expect.any(String) }]) } });
       expect(p).toHaveProperty('birthDate');
     }
+  });
+
+  it('PD-45 §7: staff get the clock the family\'s country implies while no parent has an app clock -- a teacher never does', async () => {
+    const f = m.families[0]!;
+    const child = f.children[0]!;
+    const was = await g.prisma.family.findUniqueOrThrow({ where: { id: f.id } });
+    await g.prisma.actorTimeZone.deleteMany({ where: { actorId: f.parent.id } });
+    await g.prisma.family.update({ where: { id: f.id }, data: { countryCode: 'EG', subdivisionCode: null } });
+    const none = await enrollment.profile(m.superAdmin.id, child.id);
+    expect(none).toMatchObject({ familyTimeZone: null, familyTimeZoneEstimate: 'Africa/Cairo' });
+    await g.prisma.actorTimeZone.create({ data: { actorId: f.parent.id, organizationId: orgId, timeZone: 'Asia/Dubai' } });
+    const real = await enrollment.profile(m.superAdmin.id, child.id);
+    expect(real).toMatchObject({ familyTimeZone: 'Asia/Dubai', familyTimeZoneEstimate: null });
+    await g.prisma.actorTimeZone.delete({ where: { actorId: f.parent.id } });
+    await g.prisma.family.update({ where: { id: f.id }, data: { countryCode: 'US' } });
+    expect(await enrollment.profile(m.superAdmin.id, child.id)).toMatchObject({ familyTimeZone: null, familyTimeZoneEstimate: null });
+    expect(await enrollment.profile(child.teacherId, child.id)).not.toHaveProperty('familyTimeZoneEstimate');
+    await g.prisma.family.update({ where: { id: f.id }, data: { countryCode: was.countryCode, subdivisionCode: was.subdivisionCode } });
   });
 
   it('another teacher, a parent, Sales and an unrelated supervisor: never', async () => {
@@ -531,6 +557,37 @@ describe('PD-45: a family\'s location on the Parent Profile', () => {
     expect((await family(famB().id)).countryCode).toBeNull();
     const set = await parents.update(m.operationsManager.id, famB().parent.id, { countryCode: 'SA' });
     expect(set.suggestedCountryCode).toBeNull();
+  });
+
+  it('says the calling code behind the suggestion, never the number', async () => {
+    const out = await parents.update(m.operationsManager.id, famB().parent.id, { countryCode: null, phone: '+966 50 765 4321' });
+    expect(out.suggestedCallingCode).toBe('966');
+    // The chip carries the prefix and the country only: nothing else of the number rides beside them.
+    expect(JSON.stringify({ c: out.suggestedCountryCode, p: out.suggestedCallingCode, t: out.timeZone })).not.toMatch(/765|4321/);
+    const local = await parents.update(m.operationsManager.id, famB().parent.id, { phone: '050 765 4321' });
+    expect(local.suggestedCallingCode).toBeNull();
+  });
+
+  it('PD-45 §7: reads the app clock, the clock the location implies, and whether they disagree -- and never writes a zone', async () => {
+    const f = famA();
+    await parents.update(m.operationsManager.id, f.parent.id, { countryCode: 'AE', subdivisionCode: null });
+    // No app yet: only the estimate.
+    expect((await parents.detail(m.operationsManager.id, f.parent.id)).timeZone).toEqual({ app: null, estimate: 'Asia/Dubai', mismatch: false });
+    await g.prisma.actorTimeZone.upsert({
+      where: { actorId: f.parent.id },
+      create: { actorId: f.parent.id, organizationId: orgId, timeZone: 'Africa/Cairo' },
+      update: { timeZone: 'Africa/Cairo' },
+    });
+    expect((await parents.detail(m.operationsManager.id, f.parent.id)).timeZone).toEqual({ app: 'Africa/Cairo', estimate: 'Asia/Dubai', mismatch: true });
+    // The same clock under another name (Muscat is UTC+4 all year, as Dubai) is no mismatch.
+    await g.prisma.actorTimeZone.update({ where: { actorId: f.parent.id }, data: { timeZone: 'Asia/Muscat' } });
+    expect((await parents.detail(m.operationsManager.id, f.parent.id)).timeZone).toMatchObject({ app: 'Asia/Muscat', mismatch: false });
+    // A country with several zones has no estimate; no country, none either.
+    await parents.update(m.operationsManager.id, f.parent.id, { countryCode: 'US' });
+    expect((await parents.detail(m.operationsManager.id, f.parent.id)).timeZone).toMatchObject({ estimate: null, mismatch: false });
+    // A location never writes a zone (PD-22): the row is exactly what the app set.
+    expect((await g.prisma.actorTimeZone.findUniqueOrThrow({ where: { actorId: f.parent.id } })).timeZone).toBe('Asia/Muscat');
+    await g.prisma.actorTimeZone.delete({ where: { actorId: f.parent.id } });
   });
 
   it('lists the parents whose location is missing (no country, or a country with subdivisions but none chosen), with each row\'s location', async () => {

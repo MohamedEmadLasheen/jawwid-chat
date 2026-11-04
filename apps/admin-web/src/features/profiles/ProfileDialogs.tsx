@@ -8,7 +8,7 @@ import { METHOD, PAY, PURPOSE_LABEL, fromMinor, owed } from '@/features/payments
 import { LinkPanel, ReasonDialog, ServerError as PaymentError } from '@/features/payments/PaymentParts'
 import { S as SUB, monthsLabel } from '@/features/subscriptions/copy'
 import type { FamilyBilling, InstalmentPaymentMethod, NewFamilyPayment, NewPaymentRequest, ParentProfile, ParentUpdate, PaymentMethod, TimelineInstalment } from './api'
-import { COUNTRIES, EMIRATES, METHOD_LABEL, P, PLAN_MONTHS, countryName, describeError, planLabel, toMinor, useCopy } from './copy'
+import { METHOD_LABEL, P, PLAN_MONTHS, describeError, planLabel, toMinor, useCopy } from './copy'
 import {
   useCancelPaymentRequest,
   useCreateInstalments,
@@ -22,6 +22,8 @@ import {
   useVoidPayment,
 } from './hooks'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useCountries } from '@/shared/location/api'
+import { LocationPicker, type LocationValue } from '@/shared/location/LocationPicker'
 import { newSubmitKey } from '@/core/submit-key'
 
 function Footer({ onCancel, onSave, pending, saveLabel }: { onCancel: () => void; onSave: () => void; pending: boolean; saveLabel?: string }) {
@@ -71,22 +73,29 @@ function Field({ label, hint, error, children }: { label: string; hint?: string;
 
 const blank = (v: string) => (v.trim() === '' ? null : v.trim())
 
-/** Name, phone, e-mail, country, emirate / governorate. Only changed fields are sent; an emptied one is cleared. */
+/**
+ * Name, phone, e-mail and the location (country and, when it has them, its
+ * first-level subdivision) -- PD-45. Only changed fields are sent; an emptied
+ * one is cleared. `region`, the old free text, is never sent: it shows as the
+ * "Old note" while the subdivision is unset. The phone's country is offered as
+ * a chip and saved only if staff use it and press Save.
+ */
 export function EditContactDialog({ profile, onClose }: { profile: ParentProfile; onClose: () => void }) {
   const tx = useCopy()
-  const { locale } = useI18n()
+  const { locale, date } = useI18n()
   const save = useUpdateParent(profile.id)
+  const countries = useCountries()
   const [name, setName] = useState(profile.name)
   const [phone, setPhone] = useState(profile.contact.phone ?? '')
   const [email, setEmail] = useState(profile.contact.email ?? '')
-  const initialCountry = profile.contact.countryCode ?? ''
-  const listed = initialCountry === '' || (COUNTRIES as readonly string[]).includes(initialCountry)
-  const [country, setCountry] = useState(listed ? initialCountry : 'other')
-  const [otherCountry, setOtherCountry] = useState(listed ? '' : initialCountry)
-  const [region, setRegion] = useState(profile.contact.region ?? '')
+  const stored: LocationValue = { countryCode: profile.contact.countryCode, subdivisionCode: profile.contact.subdivisionCode }
+  const [location, setLocation] = useState<LocationValue>(stored)
+  const [dismissed, setDismissed] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
-  const regionList = useId()
-  const code = country === 'other' ? otherCountry.trim().toUpperCase() : country
+
+  const suggested = profile.suggestedCountryCode
+  const suggestion = suggested ? countries.data?.countries.find((c) => c.code === suggested) : undefined
+  const showChip = !!suggestion && !!profile.suggestedCallingCode && !location.countryCode && !dismissed
 
   const submit = () => {
     if (name.trim() === '') return setNameError(tx(P.required))
@@ -94,8 +103,11 @@ export function EditContactDialog({ profile, onClose }: { profile: ParentProfile
     if (name.trim() !== profile.name) body.name = name.trim()
     if (blank(phone) !== profile.contact.phone) body.phone = blank(phone)
     if (blank(email) !== profile.contact.email) body.email = blank(email)
-    if ((code || null) !== profile.contact.countryCode) body.countryCode = code || null
-    if (blank(region) !== profile.contact.region) body.region = blank(region)
+    // Either change sends both: a new country drops a subdivision that is not its own.
+    if (location.countryCode !== stored.countryCode || location.subdivisionCode !== stored.subdivisionCode) {
+      body.countryCode = location.countryCode
+      body.subdivisionCode = location.subdivisionCode
+    }
     if (Object.keys(body).length === 0) return onClose()
     save.mutate(body, { onSuccess: onClose })
   }
@@ -112,38 +124,28 @@ export function EditContactDialog({ profile, onClose }: { profile: ParentProfile
       <Field label={tx(P.email)}>
         {(id) => <input id={id} className="input" type="email" dir="ltr" value={email} maxLength={254} onChange={(e) => setEmail(e.target.value)} />}
       </Field>
-      <Field label={tx(P.country)}>
-        {(id) => (
-          <SearchableSelect id={id} className="select" value={country} onValueChange={(v) => setCountry(v)}>
-            <option value="">{tx(P.noCountry)}</option>
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>
-                {countryName(c, locale)}
-              </option>
-            ))}
-            <option value="other">{tx(P.otherCountry)}</option>
-          </SearchableSelect>
-        )}
-      </Field>
-      {country === 'other' && (
-        <Field label={tx(P.countryCode)}>
-          {(id) => <input id={id} className="input" dir="ltr" value={otherCountry} maxLength={2} onChange={(e) => setOtherCountry(e.target.value)} />}
-        </Field>
+      {profile.contact.locationSource === 'parent' && profile.contact.locationUpdatedAt && (
+        <p className="field__hint" role="note">
+          {tx(P.setByParent, { date: date(profile.contact.locationUpdatedAt) })}
+        </p>
       )}
-      <Field label={tx(P.region)}>
-        {(id) => (
-          <>
-            <input id={id} className="input" dir="auto" value={region} maxLength={80} list={code === 'AE' ? regionList : undefined} onChange={(e) => setRegion(e.target.value)} />
-            {code === 'AE' && (
-              <datalist id={regionList}>
-                {EMIRATES.map((e) => (
-                  <option key={e.en} value={tx(e)} />
-                ))}
-              </datalist>
-            )}
-          </>
-        )}
-      </Field>
+      {showChip && suggestion && (
+        <div className="pf-chip" role="group" aria-label={tx(P.country)}>
+          <span>{tx(P.suggestChip, { code: profile.suggestedCallingCode!, country: locale === 'ar' ? suggestion.ar : suggestion.en })}</span>
+          <button type="button" className="btn btn--sm" onClick={() => setLocation({ countryCode: suggestion.code, subdivisionCode: null })}>
+            {tx(P.useSuggestion)}
+          </button>
+          <button type="button" className="btn btn--sm" onClick={() => setDismissed(true)}>
+            {tx(P.dismissSuggestion)}
+          </button>
+        </div>
+      )}
+      <LocationPicker value={location} onChange={setLocation} />
+      {profile.contact.region && !profile.contact.subdivisionCode && (
+        <p className="field__hint">
+          <bdi>{tx(P.oldNoteIs, { text: profile.contact.region })}</bdi>
+        </p>
+      )}
     </Dialog>
   )
 }

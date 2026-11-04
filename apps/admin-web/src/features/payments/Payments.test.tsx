@@ -451,7 +451,7 @@ describe('New Students > Payment request (before Assign)', () => {
     await userEvent.click(within(dialog).getByRole('link', { name: 'Find Parent Gamma in Parents' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Parents' })).toBeInTheDocument()
     expect(screen.getByRole('searchbox')).toHaveValue('Parent Gamma')
-    await waitFor(() => expect(calls('GET', /\/parent-profiles\?q=Parent(%20|\+)Gamma$/).length).toBeGreaterThan(0))
+    await waitFor(() => expect(calls('GET', /\/parent-profiles\?q=Parent(%20|\+)Gamma&with=location$/).length).toBeGreaterThan(0))
   })
 
   it('stays on a placed student’s card: the button and each request’s status, before and after Assign', async () => {

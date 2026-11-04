@@ -6,7 +6,8 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { SearchField } from '@/shared/components/SearchField'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
-import { parentPath, type ParentAccessFilter } from './api'
+import { parentPath, type ParentAccessFilter, type ParentLocationFilter } from './api'
+import { LocationText } from '@/shared/location/LocationPicker'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useParents } from './hooks'
 import { IntakeDialog } from '@/features/intake/IntakeDialog'
@@ -36,7 +37,16 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
       else p.set('access', next)
       return p
     }, { replace: true })
-  const list = useParents(deferred, access)
+  // PD-45: `?location=missing` -- the families staff complete (plan §6.1 a).
+  const location: ParentLocationFilter = params.get('location') === 'missing' ? 'missing' : 'all'
+  const setLocation = (next: ParentLocationFilter) =>
+    setParams((current) => {
+      const p = new URLSearchParams(current)
+      if (next === 'all') p.delete('location')
+      else p.set('location', next)
+      return p
+    }, { replace: true })
+  const list = useParents(deferred, access, location)
   const items = list.data?.items ?? []
   // PD-42: offered when the server says this viewer enters families.
   const intake = useIntakeOptions()
@@ -56,6 +66,15 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
               { value: 'all', label: tx(P.allParents) },
               { value: 'locked', label: tx(P.accessLocked) },
               { value: 'grace', label: tx(P.accessGrace) },
+            ]}
+          />
+          <FilterChips<ParentLocationFilter>
+            label={tx(P.location)}
+            value={location}
+            onChange={setLocation}
+            options={[
+              { value: 'all', label: tx(P.allParents) },
+              { value: 'missing', label: tx(P.missingLocation) },
             ]}
           />
           {intake.data?.ready && (
@@ -93,6 +112,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                     <th scope="col">{tx(P.parent)}</th>
                     <th scope="col">{tx(P.family)}</th>
                     <th scope="col">{tx(P.children)}</th>
+                    <th scope="col">{tx(P.location)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -106,6 +126,7 @@ export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
                       </td>
                       <td dir="auto">{p.family.name}</td>
                       <td>{p.childrenCount}</td>
+                      <td>{p.location ? <LocationText value={p.location} /> : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
