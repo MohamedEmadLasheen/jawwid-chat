@@ -6,7 +6,6 @@ import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/shells/app_shell.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
-import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/profile/data/profile_photo_repository.dart';
 import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
