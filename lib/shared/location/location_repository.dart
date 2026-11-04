@@ -8,8 +8,8 @@ import 'location.dart';
 /// | Method | Path |
 /// |---|---|
 /// | GET | `/me/location` -- `{countryCode, subdivisionCode, location: {ar, en} \| null, prompt, suggestedCountryCode?}` |
-/// | PUT | `/me/location` `{countryCode, subdivisionCode}` -- answers the same shape; records the answer |
-/// | POST | `/me/location/later` -- the parent chose "Later": the prompt is not shown again |
+/// | PUT | `/me/location` `{countryCode, subdivisionCode}` -- answers the GET shape; stamps the prompt answered |
+/// | POST | `/me/location/later` -- no body, 201 with the GET shape; the parent chose "Later" |
 /// | GET | `/geo/countries` |
 /// | GET | `/geo/countries/:country/subdivisions` |
 ///

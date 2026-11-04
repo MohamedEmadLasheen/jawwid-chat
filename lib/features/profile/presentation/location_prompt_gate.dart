@@ -49,8 +49,9 @@ class _LocationPromptGateState extends ConsumerState<LocationPromptGate> {
     final repo = ref.read(locationRepositoryProvider);
     // The account asked about: if another one is signed in by the time the server answers,
     // that answer was about someone else and is dropped.
+    if (repo == null) return;
     final accountId = ref.read(authControllerProvider).user?.id;
-    if (repo == null || accountId == null || ref.read(locationPromptAskedProvider).contains(accountId)) return;
+    if (accountId == null || ref.read(locationPromptAskedProvider).contains(accountId)) return;
     final MyLocation mine;
     try {
       mine = await repo.mine();
@@ -63,7 +64,7 @@ class _LocationPromptGateState extends ConsumerState<LocationPromptGate> {
     final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => _LocationPromptDialog(repository: repo, suggestedCountryCode: mine.suggestedCountryCode),
+      builder: (ctx) => _LocationPromptDialog(repository: repo, current: mine),
     );
     if (saved == true) ref.invalidate(myLocationProvider);
   }
@@ -73,10 +74,10 @@ class _LocationPromptGateState extends ConsumerState<LocationPromptGate> {
 }
 
 class _LocationPromptDialog extends StatelessWidget {
-  const _LocationPromptDialog({required this.repository, required this.suggestedCountryCode});
+  const _LocationPromptDialog({required this.repository, required this.current});
 
   final LocationRepository repository;
-  final String? suggestedCountryCode;
+  final MyLocation current;
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +94,10 @@ class _LocationPromptDialog extends StatelessWidget {
             const SizedBox(height: Spacing.spacing4),
             LocationForm(
               repository: repository,
-              suggestedCountryCode: suggestedCountryCode,
+              // Incomplete (a country, no subdivision) reopens with what is already there.
+              initialCountryCode: current.countryCode,
+              initialSubdivisionCode: current.subdivisionCode,
+              suggestedCountryCode: current.suggestedCountryCode,
               secondaryLabel: l10n.locationLater,
               onSecondary: () async {
                 // "Later" counts as the one time. Without a record (the request failed)

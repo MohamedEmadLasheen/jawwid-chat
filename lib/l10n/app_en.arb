@@ -3434,5 +3434,6 @@
   "@locationSuggestion": {"description": "PD-45: the country the server suggests from the number; tapping it only fills the picker, nothing is saved.", "placeholders": {"country": {"type": "String"}}},
   "locationPromptBody": "Tell us where you live. You can change it any time from your profile.",
   "locationLater": "Later",
-  "locationLoadFailed": "The list could not be loaded. Please try again."
+  "locationLoadFailed": "The list could not be loaded. Please try again.",
+  "locationSaveConflict": "We couldn't save this. Please contact the academy."
 }

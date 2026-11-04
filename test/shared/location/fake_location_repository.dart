@@ -1,3 +1,4 @@
+import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/shared/location/location.dart';
 import 'package:jawwid_chat/shared/location/location_repository.dart';
 
@@ -5,11 +6,12 @@ import 'package:jawwid_chat/shared/location/location_repository.dart';
 /// does what the server does: the location is set and the prompt is answered. "Later" only
 /// answers the prompt.
 class FakeLocationRepository implements LocationRepository {
-  FakeLocationRepository({MyLocation? initial, this.failSave = false})
+  FakeLocationRepository({MyLocation? initial, this.failSave = false, this.conflict = false})
       : current = initial ?? const MyLocation(prompt: true);
 
   MyLocation current;
   bool failSave;
+  bool conflict;
   int mineCalls = 0;
   int laterCalls = 0;
   final List<({String country, String? subdivision})> saves = [];
@@ -46,6 +48,7 @@ class FakeLocationRepository implements LocationRepository {
 
   @override
   Future<MyLocation> save({required String countryCode, String? subdivisionCode}) async {
+    if (conflict) throw const AppError(AppErrorKind.unknown, code: 'COMM.PARENT_EXISTS');
     if (failSave) throw StateError('save failed');
     saves.add((country: countryCode, subdivision: subdivisionCode));
     final c = _all.byCode(countryCode)!;

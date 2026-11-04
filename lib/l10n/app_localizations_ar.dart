@@ -5256,4 +5256,8 @@ class L10nAr extends L10n {
 
   @override
   String get locationLoadFailed => 'تعذّر تحميل القائمة. حاول مرة أخرى.';
+
+  @override
+  String get locationSaveConflict =>
+      'تعذّر حفظ ذلك. يُرجى التواصل مع الأكاديمية.';
 }

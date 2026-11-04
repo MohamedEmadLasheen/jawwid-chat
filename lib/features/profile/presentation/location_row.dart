@@ -19,9 +19,9 @@ class ProfileLocationRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (ref.watch(currentRoleProvider) != UserRole.parent) return const SizedBox.shrink();
     final repo = ref.watch(locationRepositoryProvider);
     if (repo == null) return const SizedBox.shrink();
+    if (ref.watch(currentRoleProvider) != UserRole.parent) return const SizedBox.shrink();
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final arabic = Localizations.localeOf(context).languageCode == 'ar';
@@ -75,7 +75,7 @@ class ProfileLocationRow extends ConsumerWidget {
 Future<MyLocation?> showLocationSheet(BuildContext context, LocationRepository repo, MyLocation current) {
   final l10n = L10n.of(context);
   Widget body(BuildContext ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
+        padding: EdgeInsetsDirectional.fromSTEB(
           Spacing.spacing5,
           Spacing.spacing4,
           Spacing.spacing5,

@@ -8880,6 +8880,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'The list could not be loaded. Please try again.'**
   String get locationLoadFailed;
+
+  /// No description provided for @locationSaveConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t save this. Please contact the academy.'**
+  String get locationSaveConflict;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

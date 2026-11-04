@@ -5156,4 +5156,8 @@ class L10nEn extends L10n {
   @override
   String get locationLoadFailed =>
       'The list could not be loaded. Please try again.';
+
+  @override
+  String get locationSaveConflict =>
+      'We couldn\'t save this. Please contact the academy.';
 }

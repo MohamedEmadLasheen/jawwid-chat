@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/errors/app_error.dart';
 import '../../design/tokens.dart';
 import '../../design/widgets/searchable_picker.dart';
 import '../../l10n/app_localizations.dart';
@@ -126,9 +127,12 @@ class _LocationFormState extends State<LocationForm> {
       final saved = await widget.repository.save(countryCode: c.code, subdivisionCode: c.hasSubdivisions ? _sub : null);
       if (!mounted) return;
       widget.onDone(saved);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(L10n.of(context).profileSaveFailed)));
+      // 409 COMM.PARENT_EXISTS: a neutral message, never the reason (it concerns another family).
+      final conflict = e is AppError && e.code == 'COMM.PARENT_EXISTS';
+      final l10n = L10n.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(conflict ? l10n.locationSaveConflict : l10n.profileSaveFailed)));
       setState(() => _saving = false);
     }
   }

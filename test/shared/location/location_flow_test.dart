@@ -151,6 +151,17 @@ void main() {
       expect(repo.saves, isEmpty);
     });
 
+    testWidgets('a phone-number collision (409) shows a neutral message in Arabic and English', (tester) async {
+      final repo = FakeLocationRepository(conflict: true);
+      await pump(tester, const MyProfileScreen(), repo);
+      await tester.tap(find.byKey(const ValueKey('profile-location-edit')));
+      await tester.pumpAndSettle();
+      await choose(tester, const ValueKey('location-country'), '🇯🇵 Japan');
+      await tester.tap(find.byKey(const ValueKey('location-save')));
+      await tester.pumpAndSettle();
+      expect(find.text("We couldn't save this. Please contact the academy."), findsOneWidget);
+    });
+
     testWidgets('staff have no Location row, and the app never reads it for them', (tester) async {
       final repo = FakeLocationRepository();
       await pump(tester, const MyProfileScreen(), repo, role: UserRole.teacher);
@@ -170,6 +181,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(prompt, findsNothing);
       expect(repo.laterCalls, 1);
+      expect(repo.saves, isEmpty);
+    });
+
+    testWidgets('an incomplete location (a country, no governorate) reopens with the country kept', (tester) async {
+      final repo = FakeLocationRepository(initial: const MyLocation(prompt: true, countryCode: 'EG'));
+      await pump(tester, shell(UserRole.parent), repo);
+      expect(find.text('🇪🇬 Egypt'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('location-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose a Governorate from the list'), findsOneWidget);
       expect(repo.saves, isEmpty);
     });
 
