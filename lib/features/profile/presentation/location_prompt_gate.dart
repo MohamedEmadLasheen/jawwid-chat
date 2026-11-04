@@ -6,10 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../app_lock/application/app_lock_controller.dart';
 import '../../../shared/location/location.dart';
 import '../../../shared/location/location_form.dart';
 import '../../../shared/location/location_repository.dart';
+import '../../app_lock/application/app_lock_controller.dart';
 
 /// The accounts already shown the prompt in this app session (an account switch asks the
 /// next parent). The durable "answered" stamp is the server's; this only stops a second
