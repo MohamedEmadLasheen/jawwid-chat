@@ -37,6 +37,7 @@ export type NavArea =
   | 'cases'
   | 'certificates'
   | 'lesson-audio'
+  | 'moderation'
   | 'teacher-attendance'
   | 'teacher-grants'
   | 'settings'
@@ -92,7 +93,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `schedule` (PD-38) is offered under People beside the Admin Portal's sections.
     // `certificates` (PD-41) is offered under People: the page and its types.
     // `lesson-audio` (PD-48): the voice-over review page, under More.
-    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants', 'settings']
+    return ['chat', 'tasks', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'payments', 'trials', 'calls', 'teacher-profiles', 'accounts', 'materials', 'schedule', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -106,7 +107,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // PD-38: the scheduling calendar -- offered only when the server confirms it.
     // PD-41: the Certificates page -- offered when GET /certificates/access opens it.
     // PD-48: Lesson audio -- offered when GET /lesson-audio/access opens it (the Teachers manager).
-    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants', 'settings']
+    return ['chat', 'calls', 'organization', 'teachers', 'schedule', 'instalments', 'parents', 'payments', 'trials', 'tasks', 'dashboard', 'stories', 'teacher-profiles', 'accounts', 'materials', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -193,6 +194,8 @@ export interface DepartmentAccess {
   teacherAttendance?: boolean
   /** PD-52: GET /teacher-records/access -- grants.view, the Grants & Testimonials page. */
   teacherGrants?: boolean
+  /** PD-57: GET /me reports `moderation.view` -- the moderation queue. */
+  moderation?: boolean
 }
 
 /**
@@ -224,6 +227,8 @@ const SERVER_CONFIRMED_AREAS: Partial<Record<NavArea, (a: DepartmentAccess) => b
   // PD-52: the Attendance & Complaints page, on the server's basis-and-key answer.
   'teacher-attendance': (a) => a.teacherAttendance === true,
   'teacher-grants': (a) => a.teacherGrants === true,
+  // PD-57: the moderation queue, for whoever holds moderation.view (managers and the super admin by template).
+  moderation: (a) => a.moderation === true,
 }
 
 /** What navigation shows: the areas this role may open, minus those the server has not confirmed. */

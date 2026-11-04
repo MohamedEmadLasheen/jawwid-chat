@@ -111,6 +111,8 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   certificates: 'people',
   // PD-48: lesson voice-over review.
   'lesson-audio': 'more',
+  // PD-57: the moderation queue.
+  moderation: 'more',
   // PD-52: the teacher-records pages, in their own group under People.
   'teacher-attendance': 'people',
   'teacher-grants': 'people',
@@ -139,6 +141,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   cases: '/cases',
   certificates: '/certificates',
   'lesson-audio': '/lesson-audio',
+  moderation: '/moderation',
   'teacher-attendance': ATTENDANCE_PATH,
   'teacher-grants': GRANTS_PATH,
 }
@@ -162,6 +165,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   cases: 'tasks',
   certificates: 'star',
   'lesson-audio': 'approvals',
+  moderation: 'alert',
   'teacher-attendance': 'calendar',
   'teacher-grants': 'star',
 }
@@ -289,6 +293,14 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     path: AREA_PATH['lesson-audio'],
     icon: AREA_ICON['lesson-audio'],
     label: { message: 'nav.lesson-audio' },
+    inDevelopment: false,
+  })
+  // PD-57: the super admin holds every key, so the moderation queue is always offered.
+  out.get('more')?.[0]?.entries.push({
+    key: 'moderation',
+    path: AREA_PATH.moderation,
+    icon: AREA_ICON.moderation,
+    label: { message: 'nav.moderation' },
     inDevelopment: false,
   })
   // PD-52: the two teacher-records pages, in their own group under People.

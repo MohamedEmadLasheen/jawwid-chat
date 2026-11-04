@@ -84,9 +84,9 @@ describe('The navigation registry', () => {
     // PD-16), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
     // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(32)
+    expect(keys).toHaveLength(33)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
@@ -125,6 +125,8 @@ describe('The navigation registry', () => {
           ...(visibleAreas(role).includes('certificates') ? ['certificates'] : []),
           // PD-48: Lesson audio waits for GET /lesson-audio/access.
           ...(visibleAreas(role).includes('lesson-audio') ? ['lesson-audio'] : []),
+          // PD-57: the moderation queue waits for the moderation.view permission.
+          ...(visibleAreas(role).includes('moderation') ? ['moderation'] : []),
           // PD-52: Attendance & complaints waits for GET /teacher-records/access.
           ...(visibleAreas(role).includes('teacher-attendance') ? ['teacher-attendance'] : []),
           ...(visibleAreas(role).includes('teacher-grants') ? ['teacher-grants'] : []),
@@ -142,7 +144,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/certificates', '/materials', '/lesson-audio'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/certificates', '/materials', '/lesson-audio', '/moderation'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -330,7 +332,7 @@ describe('The desktop rail', () => {
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
     // 13 + Payments (PD-27, beside Instalments under Operations & performance)
     // + Materials (PD-29, under Overview) + Lesson audio (PD-48).
-    expect(within(menu).getAllByRole('link')).toHaveLength(16)
+    expect(within(menu).getAllByRole('link')).toHaveLength(17)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -506,7 +508,7 @@ describe('The drawer, below desktop width', () => {
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(32)
+    expect(within(nav).getAllByRole('link')).toHaveLength(33)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

@@ -1,0 +1,2 @@
+/* WP-1C (PD-57): the moderation queue. Reuses the design system's table, badges and fields. */
+.mod-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
