@@ -66,10 +66,24 @@ export function toE164(text: string, region: CountryCode): string | null {
  * leaves this module, never the number (G-07).
  */
 export function suggestedCountryFromPhone(text: string | null): string | null {
+  const parsed = parseInternational(text);
+  return parsed?.country ? listedCountry(parsed.country) : null;
+}
+
+/**
+ * The calling code ("971") of the number behind {@link suggestedCountryFromPhone}, for
+ * the staff chip "The number starts with +971: UAE?" (plan §5.3). The prefix
+ * only -- never the number.
+ */
+export function suggestedCallingCode(text: string | null): string | null {
+  const parsed = parseInternational(text);
+  return parsed?.country && listedCountry(parsed.country) ? parsed.countryCallingCode : null;
+}
+
+function parseInternational(text: string | null) {
   if (!text) return null;
   const digits = text.trim().replace(/^00/, '+');
   if (!digits.startsWith('+') || digits.length < 5 || digits.length > 32 || !/^[+0-9 ()-]+$/.test(digits)) return null;
   const parsed = parsePhoneNumberFromString(digits);
-  if (!parsed || !parsed.isPossible() || !parsed.country) return null;
-  return listedCountry(parsed.country);
+  return parsed && parsed.isPossible() ? parsed : null;
 }

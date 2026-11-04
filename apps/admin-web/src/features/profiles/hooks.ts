@@ -15,6 +15,7 @@ import {
   type NewInstalments,
   type NewPaymentRequest,
   type ParentAccessFilter,
+  type ParentLocationFilter,
   type ParentProfile,
   type ParentUpdate,
 } from './api'
@@ -31,8 +32,8 @@ export function useMayOpenParentProfiles(): boolean {
   return superAdmin || access.data?.billingReader === true
 }
 
-export function useParents(q: string, access: ParentAccessFilter = 'all') {
-  return useQuery({ queryKey: profileKeys.parents(q, access), queryFn: () => profilesApi.parents(q, access) })
+export function useParents(q: string, access: ParentAccessFilter = 'all', location: ParentLocationFilter = 'all') {
+  return useQuery({ queryKey: profileKeys.parents(q, access, location), queryFn: () => profilesApi.parents(q, access, location) })
 }
 
 /** Re-read every few minutes: photo links are signed and expire. */

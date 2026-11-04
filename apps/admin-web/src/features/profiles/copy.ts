@@ -40,15 +40,23 @@ export const P = {
   email: { en: 'Email address', ar: 'البريد الإلكتروني' },
   childrenCount: { en: 'Number of children', ar: 'عدد الأطفال' },
   country: { en: 'Country', ar: 'الدولة' },
-  region: { en: 'Emirate or governorate', ar: 'الإمارة أو المحافظة' },
+  // PD-45: the location (country and first-level subdivision), the old note, and the clocks
+  location: { en: 'Location', ar: 'الموقع' },
+  missingLocation: { en: 'Missing location', ar: 'بلا موقع' },
+  oldNote: { en: 'Old note', ar: 'ملاحظة قديمة' },
+  oldNoteIs: { en: 'Old note: {text}', ar: 'ملاحظة قديمة: {text}' },
+  setByParent: { en: 'Set by the parent on {date}', ar: 'حدّده ولي الأمر في {date}' },
+  suggestChip: { en: 'The number starts with +{code}: {country}?', ar: 'الرقم يبدأ بـ ‎+{code}: {country}؟' },
+  useSuggestion: { en: 'Use', ar: 'استخدام' },
+  dismissSuggestion: { en: 'Dismiss', ar: 'تجاهل' },
+  timeZone: { en: 'Time zone', ar: 'المنطقة الزمنية' },
+  zoneEstimate: { en: '≈ {city} time (from location)', ar: '≈ توقيت {city} (حسب الموقع)' },
+  zoneHint: { en: 'Location: {country} · App clock: {city}', ar: 'الموقع: {country} · ساعة التطبيق: {city}' },
   notRecorded: { en: 'Not recorded', ar: 'غير مسجّل' },
   edit: { en: 'Edit', ar: 'تعديل' },
   editContact: { en: 'Edit contact information', ar: 'تعديل بيانات التواصل' },
   nameHint: { en: 'The name shown in every chat, everywhere.', ar: 'الاسم الظاهر في كل المحادثات.' },
   phoneHint: { en: 'With the country code, e.g. +971 50 123 4567.', ar: 'مع رمز الدولة، مثل ‎+971 50 123 4567.' },
-  otherCountry: { en: 'Other (ISO code)', ar: 'دولة أخرى (رمز ISO)' },
-  countryCode: { en: 'Two-letter country code, e.g. AE', ar: 'رمز الدولة من حرفين، مثل AE' },
-  noCountry: { en: 'Not recorded', ar: 'غير مسجّلة' },
   about: { en: 'About this parent', ar: 'نبذة عن ولي الأمر' },
   aboutHint: {
     en: 'A short internal note for the administration. The parent never sees it, nor do teachers.',
@@ -162,6 +170,7 @@ export const P = {
   minutes: { en: '{n} min', ar: '{n} دقيقة' },
   timezone: { en: 'Times in {zone}', ar: 'المواعيد بتوقيت {zone}' },
   familyLocal: { en: "family's time: {time}", ar: 'بتوقيت الأسرة: {time}' },
+  familyLocalEstimate: { en: "family's time ≈ {time} (from location)", ar: 'بتوقيت الأسرة ≈ {time} (حسب الموقع)' },
   notSet: { en: 'Not set', ar: 'غير محدد' },
   parents: { en: 'Parents', ar: 'أولياء الأمور' },
   parentsHint: {
@@ -197,29 +206,6 @@ export function planLabel(n: number, locale: 'ar' | 'en'): string {
 
 /** The plans the server accepts (chat.family.subscription_plan_months). */
 export const PLAN_MONTHS = [1, 3, 6, 12] as const
-
-/** Countries offered first; any ISO 3166-1 alpha-2 code is accepted. */
-export const COUNTRIES = ['AE', 'SA', 'EG', 'KW', 'QA', 'BH', 'OM', 'JO', 'GB', 'US'] as const
-
-/** The seven emirates, offered as suggestions when the country is the UAE. */
-export const EMIRATES: readonly Pair[] = [
-  { en: 'Abu Dhabi', ar: 'أبوظبي' },
-  { en: 'Dubai', ar: 'دبي' },
-  { en: 'Sharjah', ar: 'الشارقة' },
-  { en: 'Ajman', ar: 'عجمان' },
-  { en: 'Umm Al Quwain', ar: 'أم القيوين' },
-  { en: 'Ras Al Khaimah', ar: 'رأس الخيمة' },
-  { en: 'Fujairah', ar: 'الفجيرة' },
-]
-
-/** A country's name in the reader's language, or its code when the browser has no name for it. */
-export function countryName(code: string, locale: 'ar' | 'en'): string {
-  try {
-    return new Intl.DisplayNames([locale === 'ar' ? 'ar' : 'en'], { type: 'region' }).of(code) ?? code
-  } catch {
-    return code
-  }
-}
 
 /** How many decimals a currency's minor unit has (AED 2, KWD 3, JPY 0). */
 export function minorDigits(currency: string): number {

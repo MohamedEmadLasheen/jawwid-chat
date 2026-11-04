@@ -6,7 +6,9 @@ import { invalidCountryMessage, isGeoForeignKeyViolation } from '../geo/countrie
 import { locationOf, parseLocationPatch } from '../geo/location';
 import { contactKeyHash } from '../new-students/contact-key';
 import { e164ForKey } from '../new-students/intake-input';
-import { suggestedCountryFromPhone } from './parent-phone-directory';
+import { suggestedCallingCode, suggestedCountryFromPhone } from './parent-phone-directory';
+import { estimatedZoneOf, sameClock } from '../geo/zones';
+import { familyZonesOf } from '../platform/time-zone.service';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import type { Actor } from '../platform/types';
@@ -192,16 +194,20 @@ export class ParentRecordService implements OnModuleInit {
 
   /**
    * Partial: an absent field is left alone; null clears it (the name cannot be
-   * cleared). { name, phone, email, countryCode, subdivisionCode, region, adminNote }
+   * cleared). { name, phone, email, countryCode, subdivisionCode, adminNote }
+   *
+   * PD-45 PR-2b (plan §3.4): `region`, the old free text, is still READ (the
+   * "Old note") but no longer written -- any request that names it is a 400
+   * VALIDATION naming the field, decided after the caller is authorised.
    */
   async update(actorId: string, contactId: string, body: Record<string, unknown>) {
     const { actor, contact } = await this.requireEditableContact(actorId, contactId);
 
+    if ('region' in body) throw invalid('region: no longer written; choose the country and its subdivision (countryCode, subdivisionCode)');
     const name = 'name' in body ? requireName(body.name) : undefined;
-    const file: { adminOnlyParentPhone?: string | null; adminOnlyParentEmail?: string | null; region?: string | null; adminNote?: string | null } = {};
+    const file: { adminOnlyParentPhone?: string | null; adminOnlyParentEmail?: string | null; adminNote?: string | null } = {};
     if ('phone' in body) file.adminOnlyParentPhone = optionalPhone(body.phone);
     if ('email' in body) file.adminOnlyParentEmail = optionalEmail(body.email);
-    if ('region' in body) file.region = optionalText('region', body.region, 80);
     if ('adminNote' in body) file.adminNote = optionalText('adminNote', body.adminNote, 1000);
     // PD-45: one of the list (chat.geo_country), and a subdivision always the
     // country's. Checked here to answer early; decided again below, on the row
@@ -317,14 +323,17 @@ export class ParentRecordService implements OnModuleInit {
         },
       },
     });
-    const [file, children] = await Promise.all([
+    const [file, children, zones] = await Promise.all([
       this.prisma.parentFile.findUnique({ where: { contactId } }),
       this.prisma.learner.findMany({
         where: { familyId: contact.familyId, organizationId: contact.organizationId },
         orderBy: { name: 'asc' },
         select: { id: true, name: true, avatarObjectKey: true },
       }),
+      familyZonesOf(this.prisma, [contact.familyId]),
     ]);
+    const app = zones.get(contact.familyId) ?? null;
+    const estimate = estimatedZoneOf(contact.family.countryCode);
     return {
       id: contact.id,
       name: contact.name,
@@ -346,6 +355,10 @@ export class ParentRecordService implements OnModuleInit {
       },
       // PD-45 §6.2: a suggestion while the family has no country; only the code leaves this module (G-07).
       suggestedCountryCode: contact.family.countryCode ? null : suggestedCountryFromPhone(file?.adminOnlyParentPhone ?? null),
+      // ... and the prefix behind it, for the staff chip "The number starts with +971: UAE?" (never the number).
+      suggestedCallingCode: contact.family.countryCode ? null : suggestedCallingCode(file?.adminOnlyParentPhone ?? null),
+      // PD-45 §7, read-only (PD-22: a location never writes a zone): the app clock, the clock the country implies, and whether they differ.
+      timeZone: { app, estimate, mismatch: app !== null && estimate !== null && !sameClock(app, estimate) },
       adminNote: file?.adminNote ?? null,
       childrenCount: children.length,
       children: children.map((c) => ({
@@ -534,7 +547,6 @@ function isInternational(phone: string): boolean {
 const FIELD_NAME = {
   adminOnlyParentPhone: 'phone',
   adminOnlyParentEmail: 'email',
-  region: 'region',
   adminNote: 'adminNote',
 } as const;
 
