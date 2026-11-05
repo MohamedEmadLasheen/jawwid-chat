@@ -15,15 +15,17 @@ Until launch, the production database is a dedicated **Supabase Free** project
 (its own organisation, Frankfurt, never Core's). Everything else is unchanged:
 the API, worker, Admin Web, managed Valkey and Spaces run on DigitalOcean, from
 the **production** pipeline, so the approved store builds never need a rebuild.
-Status on 2026-11-05: the project exists, and the BYPASSRLS preflight passed on it
-through the session pooler.
+Status on 2026-11-05: a project exists and the BYPASSRLS preflight passed on it
+through the session pooler, but it was created in West EU (Ireland), not
+Frankfurt, so it is to be recreated in Frankfurt while still empty.
 
 | Requirement | How |
 |---|---|
 | Hardening | Data API off, `pg_graphql` off, Auth sign-ups off, SSL enforced; `chat` never an exposed schema. |
 | Connections | Session pooler only (port 5432, `<role>.<project-ref>`, `sslmode=require`) for the app, migrations and backups. |
 | Pool sizes | `production` Environment variables `DATABASE_POOL_MAX=5`, `DATABASE_WORKER_POOL_MAX=2`; remove both at the cutover. |
-| Statement timeout | Confirm `options=-c statement_timeout=…` reaches the server through the pooler before the first deploy (`show statement_timeout`). |
+| Region | Central EU (Frankfurt): the session pooler host is `aws-0-eu-central-1.pooler.supabase.com`. A project created elsewhere is recreated in Frankfurt while it is still empty. |
+| Statement timeout | The pooler drops the connection's `options` (measured: `2min` instead of `15s`), so set it on the role once: `alter role postgres set statement_timeout = '15s';`. `apply.sh` exempts migrations (`set local statement_timeout = 0`). Remove the role setting at the cutover. |
 | Backups | `backup-daily.yml` + a weekly copy outside GitHub + a monthly drill (`backup-recovery.md` §3c). |
 | Pausing | The worker queries continuously while it runs; `backup-daily.yml` reads every table daily. Check the dashboard before every submission. |
 | No real users | Store builds on manual release (App Store Connect) and managed publishing (Google Play) until the cutover. |

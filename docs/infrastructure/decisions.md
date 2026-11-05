@@ -513,6 +513,20 @@ preflight passed through the session pooler (2026-11-05, run by the owner).
 - *Session pooler only.* The direct host is IPv6-only and GitHub's runners and
   App Platform are IPv4: every connection uses the session pooler (port 5432,
   user `<role>.<project-ref>`), never the transaction pooler (6543).
+- *Statement timeout on the role.* Supabase's pooler drops the connection's
+  startup `options` (measured 2026-11-05: `PGOPTIONS='-c statement_timeout=15000'`
+  through the session pooler still showed `2min`), so `database-pool.ts`'s 15 s
+  limit never reaches the server there. It is set on the connecting role
+  instead: `alter role postgres set statement_timeout = '15s';`. `apply.sh` runs
+  each migration with `set local statement_timeout = 0`, so the role setting
+  cannot cancel a migration (with a 50 ms role timeout, the old script stopped
+  at migration 22 of 168; the new one applied all 168). `pg_dump` sets its own
+  timeout to 0. A one-off CLI run that needs longer sets it in its session.
+  Remove the role setting at the cutover; on DigitalOcean the `options`
+  parameter reaches the server again.
+- *Frankfurt.* The project's region is Central EU (Frankfurt), next to the App
+  Platform app in `fra`. Realtime delivery makes a dozen database round trips per
+  transaction; another region multiplies its latency.
 - *Smaller pools.* The `production` Environment sets `DATABASE_POOL_MAX=5` and
   `DATABASE_WORKER_POOL_MAX=2` (the deploy workflows default to 7 and 3), so a
   deploy's overlap stays inside the Free pooler. Remove both at the cutover.
@@ -536,7 +550,7 @@ with the risks below accepted knowingly.
 **Trade-offs.** No provider backup or PITR: the recovery point is up to a day.
 The Free project can pause, and a paused database during App Review is a
 rejection. 5 GB of monthly egress is shared with the app's own queries. The
-statement timeout reaches the server through the connection's `options`
-parameter, which must be confirmed through Supabase's pooler. DigitalOcean's
+statement timeout lives on the role rather than the connection while on
+Supabase, so it also applies to anything else connecting as `postgres`. DigitalOcean's
 BYPASSRLS question is postponed to launch, not removed. The cutover is a
 planned outage of about 15–30 minutes, rehearsed once beforehand.
