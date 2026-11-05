@@ -208,8 +208,11 @@ jobs:
           SHUTDOWN_GRACE_MS: '15000'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
-          DATABASE_POOL_MAX: '7'         # the API's pool; database-pool.ts has the 22-connection budget
-          DATABASE_WORKER_POOL_MAX: '3'  # the worker's pool
+          # The API's pool; database-pool.ts has the 22-connection budget. An
+          # Environment variable overrides it for a smaller database (Supabase
+          # Free's pooler during the review period, ADR-014).
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX || '7' }}
+          DATABASE_WORKER_POOL_MAX: ${{ vars.DATABASE_WORKER_POOL_MAX || '3' }}  # the worker's pool
           REDIS_URL: ${{ secrets.REDIS_URL }}
           QUEUE_PREFIX: jawwid-chat-staging
           WORKER_CONCURRENCY: ${{ vars.WORKER_CONCURRENCY }}

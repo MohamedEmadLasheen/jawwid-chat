@@ -9,6 +9,26 @@ Status: 🔴 **NOT READY.** Two different kinds of work remain, and they close s
 - **The owner's accounts and keys.** The deploy path is code-complete, but there is nothing to deploy to. This is most of the backend list below.
 - **Mobile store work.** Most of it is now built (account deletion, the privacy manifest, release signing, app crash reporting, Android push in review). What remains is the call ring with the app closed (S-06), owner credentials, and devices. The gates are S-01..S-08 in `docs/qa/release-gate.md` §2a, which is the source of truth for them. The phone-side test plan is `docs/qa/submission-device-test-plan.md`.
 
+## 0. The review period: database on Supabase Free (ADR-014)
+
+Until launch, the production database is a dedicated **Supabase Free** project
+(its own organisation, Frankfurt, never Core's). Everything else is unchanged:
+the API, worker, Admin Web, managed Valkey and Spaces run on DigitalOcean, from
+the **production** pipeline, so the approved store builds never need a rebuild.
+Status on 2026-11-05: the project exists, and the BYPASSRLS preflight passed on it
+through the session pooler.
+
+| Requirement | How |
+|---|---|
+| Hardening | Data API off, `pg_graphql` off, Auth sign-ups off, SSL enforced; `chat` never an exposed schema. |
+| Connections | Session pooler only (port 5432, `<role>.<project-ref>`, `sslmode=require`) for the app, migrations and backups. |
+| Pool sizes | `production` Environment variables `DATABASE_POOL_MAX=5`, `DATABASE_WORKER_POOL_MAX=2`; remove both at the cutover. |
+| Statement timeout | Confirm `options=-c statement_timeout=…` reaches the server through the pooler before the first deploy (`show statement_timeout`). |
+| Backups | `backup-daily.yml` + a weekly copy outside GitHub + a monthly drill (`backup-recovery.md` §3c). |
+| Pausing | The worker queries continuously while it runs; `backup-daily.yml` reads every table daily. Check the dashboard before every submission. |
+| No real users | Store builds on manual release (App Store Connect) and managed publishing (Google Play) until the cutover. |
+| Cutover at launch | Rehearse once; then stop the API and worker, take a final `backup-db.sh`, run the DigitalOcean preflight, `restore-db.sh` into the DigitalOcean cluster, replace `DATABASE_URL`, remove the pool overrides, deploy, smoke test. About 15–30 minutes. |
+
 Legend for the **Code** column: ✅ built and tested · 🟡 partly built · ❌ not built.
 Legend for the **Owner provides** column: the account, key or decision only the owner can supply. "—" means nothing is needed.
 

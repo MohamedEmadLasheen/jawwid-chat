@@ -475,3 +475,68 @@ managed configuration, so a managed-Valkey quirk would first show in
 production. The planned cost falls from about $129 to about $98 a month for
 production and staging together (estimate, before tax; confirm in the
 DigitalOcean console).
+
+---
+
+## ADR-014 · Supabase Free hosts the database during the store-review period
+
+*2026-11-05. Owner's decision: do not pay for a production database while the
+apps wait two months or more for testing and store approval.*
+
+**Decision.** Until launch, Jawwid Chat's PostgreSQL is a dedicated Supabase Free
+project (its own organisation, region Central EU / Frankfurt; never Core's).
+Only the database moves: the NestJS API, the worker, Admin Web, Redis/Valkey and
+object storage stay on DigitalOcean App Platform as ADR-010..013 describe, and
+nothing of Supabase's own (Auth, Storage, Realtime, the Data API, GraphQL) is
+used. At launch the database moves to DigitalOcean Managed PostgreSQL with
+`backup-db.sh` → `restore-db.sh` and a new `DATABASE_URL`; no application code
+changes.
+
+**Evidence.** Against Supabase's own image (`supabase/postgres:17.6.1.140`,
+whose `postgres` role matches the hosted one: not a superuser, CREATEROLE,
+BYPASSRLS), connected as `postgres`: the BYPASSRLS preflight passes, all 168
+migrations apply and re-apply as a no-op, the Quran loader loads 6,236 verses,
+and `invariants`, `tenant_isolation` and `story_rls` pass. `schema_acceptance`
+fails there by design: it refuses any table outside `chat`, and Supabase ships
+`auth` and `vault`; no migration references them. An encrypted dump from it
+restored into stock `postgres:17` with the ledger, data, RLS and role
+attributes intact, and `invariants` passed there. On the hosted project, the
+preflight passed through the session pooler (2026-11-05, run by the owner).
+
+**Conditions.** These are what make it acceptable; each is required.
+
+- *Hardening.* The Data API and `pg_graphql` are off, Auth sign-ups are off, SSL
+  is enforced, and `chat` is never an exposed schema. The migrations grant
+  Supabase's own `authenticated` role USAGE on `chat` and privileges on 70
+  tables; Supabase's REST and GraphQL endpoints act as that role, so leaving them
+  on would expose the schema to any Supabase-issued session.
+- *Session pooler only.* The direct host is IPv6-only and GitHub's runners and
+  App Platform are IPv4: every connection uses the session pooler (port 5432,
+  user `<role>.<project-ref>`), never the transaction pooler (6543).
+- *Smaller pools.* The `production` Environment sets `DATABASE_POOL_MAX=5` and
+  `DATABASE_WORKER_POOL_MAX=2` (the deploy workflows default to 7 and 3), so a
+  deploy's overlap stays inside the Free pooler. Remove both at the cutover.
+- *Backups.* Supabase Free takes none. `backup-daily.yml` keeps a 30-day encrypted
+  dump as a GitHub artifact, and doubles as the daily activity that stops the
+  Free project pausing. A weekly copy is kept outside GitHub, and a restore drill
+  is run monthly (`backup-recovery.md` §3c).
+- *No real users on it.* Approval is not release: the store builds use manual
+  release (App Store Connect) and managed publishing (Google Play) until the
+  cutover is done.
+
+**Alternatives.** DigitalOcean Managed PostgreSQL from day one (about $15 a month
+more, no cutover, BYPASSRLS settled now). Supabase for staging only (the review
+builds need production push, which the staging pipeline cannot send:
+`deploy-staging.yml` sets `APNS_PRODUCTION=false`). Supabase's paid plan (more
+than DigitalOcean's 1 GiB plan).
+
+**Why.** The owner's call on cost: about $15 a month for the waiting period,
+with the risks below accepted knowingly.
+
+**Trade-offs.** No provider backup or PITR: the recovery point is up to a day.
+The Free project can pause, and a paused database during App Review is a
+rejection. 5 GB of monthly egress is shared with the app's own queries. The
+statement timeout reaches the server through the connection's `options`
+parameter, which must be confirmed through Supabase's pooler. DigitalOcean's
+BYPASSRLS question is postponed to launch, not removed. The cutover is a
+planned outage of about 15–30 minutes, rehearsed once beforehand.
