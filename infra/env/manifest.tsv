@@ -175,11 +175,20 @@ APNS_VOIP_ENABLED	push	no	opt	opt	opt
 LIVEKIT_URL	calling	no	opt	req	req
 LIVEKIT_API_KEY	calling	yes	opt	req	req
 LIVEKIT_API_SECRET	calling	yes	opt	req	req
-CORE_BASE_URL	core	no	req	opt	req
-CORE_API_KEY	core	yes	opt	opt	req
-CORE_WEBHOOK_SECRET	core	yes	opt	opt	req
-CORE_TIMEOUT_MS	core	no	opt	opt	req
-CORE_RETRY_MAX	core	no	opt	opt	req
+# CORE. The only Core code in apps/api is the signed INBOUND webhook
+# (core-boundary/): it reads CORE_WEBHOOK_SECRET (or CORE_WEBHOOK_SECRETS) and,
+# with neither set, answers 503 to every call. Nothing in apps/api reads
+# CORE_BASE_URL, CORE_API_KEY, CORE_TIMEOUT_MS or CORE_RETRY_MAX: no Chat code
+# calls Core. They were downgraded from req in production (2026-11-05, ADR-013),
+# because Phase 1 does not need Core to feed Chat, and a required value with no
+# reader could only be filled with an invented one. Setting the webhook secret
+# is the deliberate step that connects Core, coordinated with the Core team
+# (secrets.md); Chat never writes to Core or its database.
+CORE_BASE_URL	core	no	req	opt	opt
+CORE_API_KEY	core	yes	opt	opt	opt
+CORE_WEBHOOK_SECRET	core	yes	opt	opt	opt
+CORE_TIMEOUT_MS	core	no	opt	opt	opt
+CORE_RETRY_MAX	core	no	opt	opt	opt
 # BACKUP. Read by scripts/infra/backup-db.sh and restore-db.sh -- the BACKUP
 # JOB's environment, not the API's. A backup is a complete copy of every
 # family's messages, so backup-db.sh REFUSES to write an unencrypted one unless

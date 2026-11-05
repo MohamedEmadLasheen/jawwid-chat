@@ -411,3 +411,67 @@ deploy, which is intended, but surprises anyone who makes one. The guard needs
 chosen before the first deploy, because the Admin Web bundle compiles the API
 URL in.
 
+---
+
+## ADR-013 · Launch on the smallest sizes that hold, with staging's Redis in-app
+
+*2026-11-05. The owner chose DigitalOcean (ADR-010) and asked for the lowest
+cost that keeps backups, recovery, security and isolation intact.*
+
+**Decision.**
+
+1. Production launches on the sizes staging already runs: API
+   `apps-s-1vcpu-1gb` (was 2 GB), worker `apps-s-1vcpu-0.5gb` (was 1 GB), Admin
+   Web `apps-s-1vcpu-0.5gb`. Managed Postgres 17 (1 GiB, single node, daily
+   backups and 7-day PITR) and managed Valkey (1 GiB) stay managed. Sizes rise
+   only on the thresholds in `production-runbook.md` §1b.
+2. Staging's Redis is a private component of the staging app (`redis`, Valkey
+   8.1, `internal_ports` only, no ingress rule, no environment), not a managed
+   cluster. Staging's `REDIS_URL` is `redis://redis:6379`. Production never
+   gets one; the `app-spec` guard refuses it.
+3. `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`, `CORE_TIMEOUT_MS`
+   and `CORE_RETRY_MAX` are optional in production, as they already were in
+   staging.
+
+**Alternatives.** Keep the 2 GB API and 1 GB worker. Use the `-fixed` 1 GB API
+plan ($2 cheaper). Merge the API and the worker into one container. Put
+staging's database or Redis inside production's clusters. Fill the Core
+variables with invented values. Serve Admin Web as a free static site.
+
+**Why.**
+
+- *Sizes.* The connection budget in `database-pool.ts` was already written for
+  the 1 GiB Postgres plan, and the workload (about 800 students, 75 teachers,
+  2,600 classes a month, one API instance until RISK-4 closes) is small.
+  Staging's sizes are the ones the code has been run on. The `-fixed` plan
+  cannot run a second instance, which RISK-4's closure will need.
+- *Redis.* Nothing durable lives in Redis: the outbox is in Postgres
+  (`architecture.md`, Redis table). A staging restart clears presence, typing
+  and rate-limit keys, which staging can afford. In production the same restart,
+  on every deploy, would reset the login rate limiter's windows, a security
+  weakening, so production keeps managed Valkey. The component has no password,
+  so its privacy rests on having no route and no public port; the guard holds
+  both.
+- *Not shared clusters.* Postgres roles, including the migration's BYPASSRLS
+  grant, belong to the whole cluster, so a staging database inside production's
+  cluster is not isolated. A staging prefix in production's Valkey would let a
+  staging bug evict or read production keys.
+- *Not merged processes.* A combined entrypoint is an application change that
+  ADR-004 rules out, it saves $5, and one crash would then take both down.
+- *Core.* No Chat code calls Core; the only Core code is the inbound signed
+  webhook, which answers 503 with no secret set. A required variable with no
+  reader can only be filled with an invented value, which is worse than
+  optional. Connecting Core is a deliberate later step, coordinated with the
+  Core team (`secrets.md`).
+- *Not a static site.* ADR-011 stands.
+
+**Trade-offs.** Production starts with a single Postgres node and a single
+Valkey node: a node failure is an outage until DigitalOcean replaces it, with
+PITR and the encrypted pre-deploy and weekly dumps as the data's protection
+(within the proposed 2 h RTO, `backup-recovery.md` §6). The 1 GB API and 0.5 GB
+worker are an estimate until staging measures them; the runbook's thresholds
+say when they are wrong. Staging's Redis is not the production engine's
+managed configuration, so a managed-Valkey quirk would first show in
+production. The planned cost falls from about $129 to about $98 a month for
+production and staging together (estimate, before tax; confirm in the
+DigitalOcean console).

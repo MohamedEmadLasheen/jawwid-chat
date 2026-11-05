@@ -81,18 +81,41 @@ DERIVED = {"API_DOMAIN": "API_ORIGIN", "ADMIN_WEB_DOMAIN": "ADMIN_WEB_URL"}
 # until multi-instance realtime is proven on staging (production-readiness.md
 # RISK-4): two instances without a working Redis adapter deliver each realtime
 # event to only one of them.
+#
+# Launch sizes (ADR-013): production runs the sizes staging already runs. Raise
+# one only on a measured threshold (production-runbook.md §1b): memory above 70%
+# sustained, an out-of-memory restart, or API p95 above 500 ms. The production
+# API keeps `apps-s-1vcpu-1gb`, not the `-fixed` plan, so a second instance stays
+# possible once RISK-4 is closed.
 SIZES = {
     "staging": {
         "api": ("apps-s-1vcpu-1gb", 1),
         "worker": ("apps-s-1vcpu-0.5gb", 1),
         "admin-web": ("apps-s-1vcpu-0.5gb", 1),
+        "redis": ("apps-s-1vcpu-0.5gb", 1),
     },
     "production": {
-        "api": ("apps-s-1vcpu-2gb", 1),
-        "worker": ("apps-s-1vcpu-1gb", 1),
+        "api": ("apps-s-1vcpu-1gb", 1),
+        "worker": ("apps-s-1vcpu-0.5gb", 1),
         "admin-web": ("apps-s-1vcpu-0.5gb", 1),
     },
 }
+
+# Staging's Redis is a private component of the staging app, not a managed
+# cluster (ADR-013). Nothing durable lives in Redis (architecture.md: the outbox
+# is in Postgres), so a restart costs staging its presence, typing and rate-limit
+# keys and nothing else. It has internal_ports only and no ingress rule, so it is
+# reachable from the app's own components and from nowhere else; staging's
+# REDIS_URL is redis://redis:6379. Production keeps managed Valkey: there a
+# restart on every deploy would reset the login rate limiter's windows.
+IN_APP_REDIS_ENVIRONMENTS = ("staging",)
+IN_APP_REDIS_IMAGE = ("valkey", "valkey", "8.1.11-alpine")   # Docker Hub registry, repository, tag
+# protected-mode is off because the component has no password and must accept
+# the API's and the worker's connections over the app's private network; the
+# absence of any ingress rule or public port is what keeps it private (the
+# invariants below refuse one).
+IN_APP_REDIS_COMMAND = ("valkey-server --port 6379 --protected-mode no --appendonly no "
+                        "--maxmemory 256mb --maxmemory-policy noeviction")
 
 PLACEHOLDER = re.compile(r"\$\{([A-Z][A-Z0-9_]*)\}")
 
@@ -139,6 +162,28 @@ def image_block(repository: str, tag_var: str) -> list[str]:
         f"      repository: {repository}",
         f"      tag: ${{{tag_var}}}",
         "      registry_credentials: ${GHCR_PULL_CREDENTIALS}",
+    ]
+
+
+def in_app_redis_block(size: tuple[str, int]) -> list[str]:
+    registry, repository, tag = IN_APP_REDIS_IMAGE
+    return [
+        "  # Staging's Redis (ADR-013): a private component, never routed. Nothing",
+        "  # durable lives in Redis, so a restart only clears presence, typing and",
+        "  # rate-limit keys. Production uses managed Valkey instead.",
+        "  - name: redis",
+        "    image:",
+        "      registry_type: DOCKER_HUB",
+        f"      registry: {registry}",
+        f"      repository: {repository}",
+        f"      tag: {tag}",
+        f"    run_command: {IN_APP_REDIS_COMMAND}",
+        "    internal_ports:",
+        "      - 6379",
+        f"    instance_size_slug: {size[0]}",
+        f"    instance_count: {size[1]}",
+        "    health_check:",
+        "      port: 6379",
     ]
 
 
@@ -245,6 +290,7 @@ def render(env: str, manifest_path: str = MANIFEST) -> str:
         "      http_path: /healthz",
         "    envs:",
         *web_env,
+        *(in_app_redis_block(size["redis"]) if env in IN_APP_REDIS_ENVIRONMENTS else []),
         "workers:",
         "  # The outbox worker: the API image, the worker command (ADR-004). It serves",
         "  # no HTTP, so it has no health check; a crash exits and is restarted.",
@@ -379,6 +425,38 @@ def blocks(text: str):
             yield component, km.group(2), tm.group(1) if tm else None
 
 
+def component_block(text: str, name: str) -> str | None:
+    """The lines of one top-level component (`  - name: <name>`), or None."""
+    lines = text.split("\n")
+    for n, line in enumerate(lines):
+        if line == f"  - name: {name}":
+            end = n + 1
+            while end < len(lines) and not re.match(r"^  - name: |^[a-z_]+:", lines[end]):
+                end += 1
+            return "\n".join(lines[n:end])
+    return None
+
+
+def redis_invariants(env: str, text: str) -> list[str]:
+    """ADR-013: an in-app Redis exists only where it is allowed, and is private."""
+    errs = []
+    block = component_block(text, "redis")
+    if env not in IN_APP_REDIS_ENVIRONMENTS:
+        if block is not None:
+            errs.append(f"{env} must use managed Redis/Valkey, not an in-app redis component (ADR-013)")
+        return errs
+    if block is None:
+        errs.append(f"{env}: the in-app redis component is missing (ADR-013)")
+        return errs
+    if "http_port:" in block or "internal_ports:" not in block:
+        errs.append("redis: must expose internal_ports only, never an http_port (ADR-013)")
+    if re.search(r"(?m)^\s+name: redis$", text.split("services:", 1)[0]):
+        errs.append("redis: must have no ingress rule; it is private to the app (ADR-013)")
+    if "envs:" in block:
+        errs.append("redis: must receive no environment; it holds no secret (ADR-013)")
+    return errs
+
+
 def invariants(env: str, text: str, manifest_path: str = MANIFEST) -> list[str]:
     """Properties the ADRs require of the spec, checked on the committed text so
     an edit to the generator cannot quietly remove one."""
@@ -400,6 +478,7 @@ def invariants(env: str, text: str, manifest_path: str = MANIFEST) -> list[str]:
             errs.append(f"missing {why}: '{needle}'")
     if text.count(f"repository: {API_REPOSITORY}") != 2:
         errs.append("the API and the worker must run the one API image (ADR-004)")
+    errs += redis_invariants(env, text)
     for n, line in enumerate(text.split("\n"), 1):
         s = line.strip()
         if s.startswith("value:") and not re.fullmatch(r"value: \$\{[A-Z][A-Z0-9_]*\}", s):
@@ -544,6 +623,25 @@ def cmd_selftest() -> int:
                "a secret rendered as a plain variable is refused")
         expect(any("static site" in e for e in invariants("staging", spec + "static_sites:\n")),
                "an Admin Web static site is refused")
+
+        prod = render("production")
+        expect(not invariants("production", prod), "the rendered production spec keeps every invariant")
+        expect(component_block(prod, "redis") is None, "production renders no in-app redis")
+        redis = component_block(spec, "redis") or ""
+        expect(bool(redis), "staging renders its in-app redis")
+        with_redis = prod.replace("workers:\n", redis + "\nworkers:\n", 1)
+        expect(any("managed Redis" in e for e in invariants("production", with_redis)),
+               "an in-app redis in production is refused")
+        public = spec.replace("    internal_ports:\n      - 6379\n", "    http_port: 6379\n", 1)
+        expect(any("internal_ports only" in e for e in invariants("staging", public)),
+               "a redis with an http_port is refused")
+        routed = spec.replace("        name: admin-web\nservices:", "        name: redis\nservices:", 1)
+        expect(any("no ingress rule" in e for e in invariants("staging", routed)),
+               "an ingress rule to redis is refused")
+        given_env = spec.replace("    health_check:\n      port: 6379\n",
+                                 "    health_check:\n      port: 6379\n    envs:\n", 1)
+        expect(any("no environment" in e for e in invariants("staging", given_env)),
+               "a redis given an environment is refused")
 
         environ = {r["name"]: f"v-{r['name'].lower()}"
                    for r in app_env_rows(read_manifest(), "staging")

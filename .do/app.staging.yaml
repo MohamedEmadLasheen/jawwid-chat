@@ -453,6 +453,22 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${MATERIALS_FRAME_ORIGINS}
+  # Staging's Redis (ADR-013): a private component, never routed. Nothing
+  # durable lives in Redis, so a restart only clears presence, typing and
+  # rate-limit keys. Production uses managed Valkey instead.
+  - name: redis
+    image:
+      registry_type: DOCKER_HUB
+      registry: valkey
+      repository: valkey
+      tag: 8.1.11-alpine
+    run_command: valkey-server --port 6379 --protected-mode no --appendonly no --maxmemory 256mb --maxmemory-policy noeviction
+    internal_ports:
+      - 6379
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    health_check:
+      port: 6379
 workers:
   # The outbox worker: the API image, the worker command (ADR-004). It serves
   # no HTTP, so it has no health check; a crash exits and is restarted.

@@ -53,7 +53,7 @@ services:
       registry_credentials: ${GHCR_PULL_CREDENTIALS}
     run_command: node dist/main.js
     http_port: 3000
-    instance_size_slug: apps-s-1vcpu-2gb
+    instance_size_slug: apps-s-1vcpu-1gb
     instance_count: 1
     # Readiness (ADR-007): checks Postgres and Redis. Failing it takes the
     # instance out of routing; it never restarts the container.
@@ -460,7 +460,7 @@ workers:
       tag: ${API_IMAGE_TAG}
       registry_credentials: ${GHCR_PULL_CREDENTIALS}
     run_command: node dist/worker.js
-    instance_size_slug: apps-s-1vcpu-1gb
+    instance_size_slug: apps-s-1vcpu-0.5gb
     instance_count: 1
     termination:
       grace_period_seconds: 20
