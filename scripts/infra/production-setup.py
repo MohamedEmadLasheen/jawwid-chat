@@ -4,7 +4,7 @@
   python3 -I scripts/infra/production-setup.py status           # read-only: what is set, what is missing, who provides it
   python3 -I scripts/infra/production-setup.py fixed            # set the values this repository already knows
   python3 -I scripts/infra/production-setup.py generate         # create the random app secrets (never printed)
-  python3 -I scripts/infra/production-setup.py ask NAME [NAME…] # paste a secret you hold (hidden prompt)
+  python3 -I scripts/infra/production-setup.py ask NAME [NAME…] # paste a value you hold (secrets: hidden prompt; plain settings: stored as variables)
   python3 -I scripts/infra/production-setup.py file NAME PATH   # a multi-line secret from a file (.p8, .json)
 
 The owner runs it, on their own machine, with `gh` signed in as the repository
@@ -185,6 +185,28 @@ def cmd_generate(rotate: bool) -> int:
     return rc
 
 
+def cmd_ask(names_: list[str]) -> int:
+    """Secrets through gh's hidden prompt; plain settings (vars.X in the deploy) as Environment variables.
+
+    A value the deploy reads as `vars.X` stored as a secret is invisible to it,
+    so the kind comes from required(), never from the caller.
+    """
+    kinds = required()
+    rc = 0
+    for name in names_:
+        print(f"{name}: {HINTS.get(name, '')}")
+        if kinds.get(name) == "var":
+            value = input(f"{name} (not a secret; shown as you type): ").strip()
+            if not value:
+                print(f"  skip   {name}: empty")
+                rc |= 1
+                continue
+            rc |= report(name, gh(["variable", "set", name, "--env", ENV, "--body", value]))
+        else:
+            rc |= gh(["secret", "set", name, "--env", ENV], interactive=True).returncode
+    return rc
+
+
 def report(name: str, p: subprocess.CompletedProcess) -> int:
     if p.returncode == 0:
         print(f"  set    {name}")
@@ -205,11 +227,7 @@ def main(argv: list[str]) -> int:
     if mode == "generate" and rest in ([], ["--rotate"]):
         return cmd_generate(rotate=bool(rest))
     if mode == "ask" and rest:
-        rc = 0
-        for name in rest:
-            print(f"{name}: {HINTS.get(name, '')}")
-            rc |= gh(["secret", "set", name, "--env", ENV], interactive=True).returncode
-        return rc
+        return cmd_ask(rest)
     if mode == "file" and len(rest) == 2:
         name, path = rest
         with open(os.path.expanduser(path), encoding="utf-8") as f:
