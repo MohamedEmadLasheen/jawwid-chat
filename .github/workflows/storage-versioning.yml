@@ -1,0 +1,82 @@
+name: Object storage versioning (production bucket)
+
+# Runs scripts/infra/storage-versioning.sh against the PRODUCTION bucket with
+# the credentials already saved in the `production` GitHub Environment, so the
+# Spaces keys never leave GitHub: nobody pastes them into a terminal, and GitHub
+# masks them in this job's log. The script itself never prints them either.
+#
+#   verify  read the bucket's versioning and lifecycle back; changes nothing
+#   apply   turn versioning on and set the lifecycle (noncurrent versions
+#           expire after 30 days, abandoned multipart uploads after 1), then
+#           read both back. Idempotent: running it twice changes nothing more.
+#
+# Why it exists: Deploy production refuses to release unless the bucket keeps
+# deleted objects for 30 days (its "Object storage keeps deleted objects for 30
+# days" step runs `verify`). This is the `apply` that step's message points at,
+# without copying the keys out of GitHub (docs/infrastructure/backup-recovery.md,
+# "Object storage").
+#
+# Manual only. The `production` Environment requires the owner's approval for
+# every run and admits only main; the `if:` below is the second lock.
+#
+# Permissions on DigitalOcean Spaces: `apply` needs s3:PutBucketVersioning and
+# s3:PutLifecycleConfiguration. A key limited to one bucket may be refused
+# those; the script then fails, names the refused call, and reports no success
+# it did not observe. Nothing else in the bucket is touched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verify (read only) or apply (set versioning + 30-day lifecycle, then verify)'
+        type: choice
+        options: [verify, apply]
+        default: verify
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storage-versioning-production
+  cancel-in-progress: false
+
+jobs:
+  versioning:
+    name: Production bucket versioning (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The storage settings are present
+        env:
+          HAS_ENDPOINT: ${{ vars.STORAGE_ENDPOINT != '' }}
+          HAS_BUCKET: ${{ vars.STORAGE_BUCKET != '' }}
+          HAS_ACCESS: ${{ secrets.STORAGE_ACCESS_KEY != '' }}
+          HAS_SECRET: ${{ secrets.STORAGE_SECRET_KEY != '' }}
+        run: |
+          rc=0
+          [ "$HAS_ENDPOINT" = "true" ] || { echo "::error title=Storage::vars.STORAGE_ENDPOINT is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_BUCKET" = "true" ] || { echo "::error title=Storage::vars.STORAGE_BUCKET is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_ACCESS" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_ACCESS_KEY is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_SECRET" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_SECRET_KEY is not set in the production GitHub Environment"; rc=1; }
+          exit $rc
+
+      - name: AWS CLI is available
+        run: aws --version
+
+      - name: storage-versioning.sh ${{ inputs.mode }}
+        env:
+          MODE: ${{ inputs.mode }}
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          STORAGE_REGION: ${{ vars.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+        run: |
+          case "$MODE" in
+            verify|apply) scripts/infra/storage-versioning.sh "$MODE" ;;
+            *) echo "::error::mode must be verify or apply"; exit 1 ;;
+          esac
