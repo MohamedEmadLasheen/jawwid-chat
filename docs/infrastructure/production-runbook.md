@@ -73,6 +73,59 @@ a measured threshold, through `SIZES` and a regenerated spec, never in the conso
 | Postgres standby | when a recovery of up to the 2 h RTO (`backup-recovery.md` §6) is no longer acceptable | one standby node |
 | Valkey | memory above 70%, or any evicted key | the 2 GiB plan |
 
+### 1c. Launch cutover: from the review period to managed Valkey (ADR-015)
+
+During the store-review period production runs with `LAUNCH_PHASE=review`: a
+private in-app Redis (`redis`, Valkey 8.1, `REDIS_URL=redis://redis:6379`). **No
+real customer may sign in while it does.** The public launch, meaning the store
+release switched from manual to public, comes **only after** a successful
+`LAUNCH_PHASE=launch` deploy. The database cutover (ADR-014) happens in the same
+window.
+
+**Before the window (any day, no downtime):**
+
+1. Create the cluster: `doctl databases create jawwid-chat-prod-valkey --engine
+   valkey --version 8 --region fra1 --size db-s-1vcpu-1gb --num-nodes 1 --wait`,
+   and assign it to the "Jawwid Chat" project.
+2. Eviction: `doctl databases configuration get <id> --engine valkey`, then set the
+   `…maxmemory_policy` field to `noeviction` with `configuration update`.
+3. Trusted Sources: add **only** the App Platform app
+   (`doctl databases firewalls append <id> --rule app:<DIGITALOCEAN_APP_ID>`), and
+   no IP address. The runner cannot reach it then, which is intended; the deploy
+   checks it through DigitalOcean's API instead.
+4. The `production` token needs **read access to databases** (as well as apps).
+
+**In the window:**
+
+5. Set the `production` secret `REDIS_URL` to the cluster's **TLS** connection
+   string (`rediss://…`, port 25061), and the variable `LAUNCH_PHASE=launch`.
+6. Run **Deploy production**. Before anything changes it now:
+   - resolves the spec, which **drops the in-app `redis` component** and refuses a
+     `REDIS_URL` that is not `rediss://` to a non-in-app host;
+   - runs `scripts/infra/verify-managed-redis.sh`: the cluster is the one
+     `REDIS_URL` names, online, in `fra1`, `noeviction`, and its Trusted Sources
+     are this app only.
+   Any refusal stops the run before the backup and the migrations.
+7. **Connection test:** the smoke test's `GET /health/ready -> 200` proves the API
+   reaches the cluster (readiness fails while Redis is unreachable). Then sign in
+   on a phone, send a message between two accounts, and watch the live tick and
+   the typing indicator arrive: that exercises the worker → API relay and presence.
+
+**What to expect (persistence):** nothing durable lives in Redis. The switch
+clears presence, typing and the source-based login limiter's windows, once. The
+account lockout and the outbox live in Postgres and are untouched. No data is
+copied from the in-app Redis, and none needs to be.
+
+**Rollback:** the previous deploy is still active if the run refuses (ADR-012).
+After a launch deploy, roll back by setting `LAUNCH_PHASE=review` and
+`REDIS_URL=redis://redis:6379` and redeploying the same `image_tag`: the resolver
+re-adds the in-app component. **Only before the store release is public.** Once
+real customers can sign in, fix the managed cluster instead: rolling back would
+put them on the review-period Redis this section exists to keep them off.
+
+**After launch:** delete nothing until a week of normal running. The in-app
+component is already gone from the app. `LAUNCH_PHASE` stays `launch`.
+
 ## 2. What exactly is running?
 
 ```bash

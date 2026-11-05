@@ -185,6 +185,10 @@ jobs:
         # fails CI if one is missing here). The resolved spec holds secrets: it
         # is written mode 600 under RUNNER_TEMP and removed at the end.
         env:
+          # ADR-015: `review` (the store-review period: in-app Redis, no real
+          # user) or `launch` (managed Valkey, verified below). No default: the
+          # resolver refuses anything else, so a launch is always a decision.
+          LAUNCH_PHASE: ${{ vars.LAUNCH_PHASE }}
           NODE_ENV: production
           APP_ENV: production
           # Proxies in front of the API on App Platform. Measure it on the live
@@ -303,6 +307,19 @@ jobs:
           scripts/infra/check-env.sh production
           python3 scripts/infra/app-spec.py resolve production --out "$RUNNER_TEMP/app-spec.yaml"
 
+      - name: "Launch phase: managed Valkey is provisioned and locked down"
+        # ADR-015. Only at LAUNCH_PHASE=launch, and BEFORE the backup and the
+        # migrations, so a refusal changes nothing: the REDIS_URL cluster must
+        # exist in fra1, be online, evict nothing, and admit only this app. The
+        # token needs read access to databases. Connectivity is proven after the
+        # release by the smoke test's /health/ready.
+        if: vars.LAUNCH_PHASE == 'launch'
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DIGITALOCEAN_APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: scripts/infra/verify-managed-redis.sh
+
       - name: Object storage keeps deleted objects for 30 days
         # BEFORE the backup and the migrations, so a refusal changes nothing.
         # Attachments, voice notes, avatars, Materials and whiteboard images
@@ -405,6 +422,7 @@ jobs:
             echo "| commit | \`${{ inputs.image_tag }}\` |"
             echo "| run | ${{ github.run_number }} |"
             echo "| deployed by | ${{ github.actor }} |"
+            echo "| launch phase | ${{ vars.LAUNCH_PHASE }} |"
             echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
           } >> "$GITHUB_STEP_SUMMARY"
 

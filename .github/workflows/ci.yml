@@ -153,6 +153,9 @@ jobs:
       - name: The weekly off-site backup stores only encrypted archives and keeps 8 weeks
         run: bash scripts/qa/guards.sh backup-offsite
 
+      - name: ADR-015 · a launch deploy refuses any Redis but managed, locked-down Valkey
+        run: bash scripts/qa/guards.sh launch-redis
+
   # ------------------------------------------------------------------ backend
   api:
     name: API · typecheck + unit

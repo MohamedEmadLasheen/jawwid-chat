@@ -455,7 +455,7 @@ services:
         value: ${MATERIALS_FRAME_ORIGINS}
   # Staging's Redis (ADR-013): a private component, never routed. Nothing
   # durable lives in Redis, so a restart only clears presence, typing and
-  # rate-limit keys. Production uses managed Valkey instead.
+  # rate-limit keys.
   - name: redis
     image:
       registry_type: DOCKER_HUB
