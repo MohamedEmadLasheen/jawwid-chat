@@ -200,19 +200,21 @@ The account-deletion page Google Play asks for is the API's own:
 
 | Variable | Secret | Local | Staging | Production |
 |---|---|---|---|---|
-| `CORE_BASE_URL` | no | req | req | req |
-| `CORE_API_KEY` | **yes** | opt | req | req |
-| `CORE_WEBHOOK_SECRET` | **yes** | opt | req | req |
+| `CORE_BASE_URL` | no | req | opt | opt |
+| `CORE_API_KEY` | **yes** | opt | opt | opt |
+| `CORE_WEBHOOK_SECRET` | **yes** | opt | opt | opt |
 | `CORE_WEBHOOK_SECRETS` | **yes** | opt | opt | opt |
 | `CORE_WEBHOOK_TOLERANCE_SECONDS` | no | opt | opt | opt |
-| `CORE_TIMEOUT_MS` | no | opt | req | req |
-| `CORE_RETRY_MAX` | no | opt | req | req |
-| `CORE_INVOICES_ENABLED` | no | opt | opt | opt |
+| `CORE_TIMEOUT_MS` | no | opt | opt | opt |
+| `CORE_RETRY_MAX` | no | opt | opt | opt |
 
-`CORE_INVOICES_ENABLED=true` connects Instalment Payments (PD-12 S3) to Core's
-invoice read API at `CORE_BASE_URL`, authenticated with `CORE_API_KEY`. Unset, the
-page says Core is not connected; `CORE_BASE_URL` alone never turns it on. See
-`docs/admin/pd012-s3.md`.
+`infra/env/manifest.tsv` is authoritative; this table mirrors it (2026-11-05,
+ADR-013). The only Core code in the API is the signed inbound webhook, which
+reads `CORE_WEBHOOK_SECRET(S)` and answers 503 when neither is set. Nothing in
+`apps/api` reads `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_TIMEOUT_MS` or
+`CORE_RETRY_MAX` today. The Core invoice read that used them (`CORE_INVOICES_ENABLED`,
+`CoreInvoiceSource`) was removed: instalments are Chat's own records
+(`docs/admin/pd012-s3.md`). Chat never writes to Core or its database.
 
 ### Observability
 

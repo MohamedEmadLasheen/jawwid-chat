@@ -56,6 +56,23 @@ updated. Presence (PD-37) needs Redis 6.2 or later (`ZADD … GT/XX`). The app s
 40 per window); a spike of 429s there means a client pinging too often, not
 an outage — typing simply lapses on the other screens.
 
+### 1b. When to raise a size (ADR-013)
+
+Production launches on the sizes staging runs (`scripts/infra/app-spec.py`
+`SIZES`): API `apps-s-1vcpu-1gb`, worker `apps-s-1vcpu-0.5gb`, Admin Web
+`apps-s-1vcpu-0.5gb`, Postgres 1 GiB single node, Valkey 1 GiB. Raise one only on
+a measured threshold, through `SIZES` and a regenerated spec, never in the console
+(the next deploy would undo it, ADR-012):
+
+| Component | Raise when | To |
+|---|---|---|
+| API | memory above 70% sustained, any out-of-memory restart, or p95 above 500 ms | `apps-s-1vcpu-2gb` |
+| API, second instance | only after RISK-4 is closed on staging, and CPU above 70% sustained | `instance_count: 2`, together with the Postgres row below |
+| Worker | memory above 70% sustained, or outbox lag above a few seconds | `apps-s-1vcpu-1gb` |
+| Postgres | any second API instance (the pool budget in `database-pool.ts` is 20 of 22 during a deploy), storage above 70%, or CPU above 70% | the 2 GiB plan, then raise `DATABASE_POOL_MAX` |
+| Postgres standby | when a recovery of up to the 2 h RTO (`backup-recovery.md` §6) is no longer acceptable | one standby node |
+| Valkey | memory above 70%, or any evicted key | the 2 GiB plan |
+
 ## 2. What exactly is running?
 
 ```bash
