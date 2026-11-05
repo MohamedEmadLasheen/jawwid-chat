@@ -554,3 +554,54 @@ statement timeout lives on the role rather than the connection while on
 Supabase, so it also applies to anything else connecting as `postgres`. DigitalOcean's
 BYPASSRLS question is postponed to launch, not removed. The cutover is a
 planned outage of about 15–30 minutes, rehearsed once beforehand.
+
+---
+
+## ADR-015 · Production's Redis is in-app during the review period, and the launch is guarded
+
+*2026-11-05. Owner's approval: postpone the managed Valkey cluster (about
+$15/month) until launch. Amends ADR-013, which kept production on managed
+Valkey from the start.*
+
+**Decision.** Production carries a production Environment variable
+`LAUNCH_PHASE`, with no default:
+
+- `review`, the store-review period, with no real customer. Production runs the
+  same private in-app Valkey as staging (`redis`, `internal_ports` only, no
+  ingress rule, no environment), marked *REVIEW PERIOD ONLY* in the committed
+  spec. `REDIS_URL` must be exactly `redis://redis:6379`.
+- `launch`. `app-spec.py resolve` drops the in-app component and refuses any
+  `REDIS_URL` that is not `rediss://` to a managed host. Before the backup and
+  the migrations, `scripts/infra/verify-managed-redis.sh` then asks
+  DigitalOcean that the cluster exists, is online, is in `fra1`, evicts nothing,
+  and admits only this app (Trusted Sources).
+
+Any other value, or none, is refused. Staging must use its in-app Redis, so it
+can never name production's. The public launch, meaning the store release made
+public, follows a successful `launch` deploy (`production-runbook.md` §1c).
+
+**Why.** No Chat data is durable in Redis: the outbox and the account lockout
+are in Postgres. What a Redis restart (every deploy) costs is presence, typing,
+an outbox wake hint, and the source-based login limiter's windows. The last is
+a security property (password spraying), acceptable only while no real customer
+signs in. The guard makes "launch on the review Redis" impossible without
+changing this ADR. The health check and every API/worker connection requirement
+are unchanged: `/health/ready` still fails without a reachable Redis.
+
+**Alternatives.** Create managed Valkey now (rejected by the owner on cost). A
+committed per-phase spec flipped by PR (a launch would then depend on someone
+remembering the PR; a variable read by the resolver cannot be skipped). An
+`if:` in the workflow alone (the spec would still carry the component).
+
+**What it cannot do.** It cannot reach the App Store Connect or Google Play
+"release" button. That switch remains a human step, and the runbook makes a
+successful `launch` deploy its precondition. The verifier cannot open a
+connection from the runner (the Trusted Sources keep it out by design);
+connectivity is proven after the release by `/health/ready` in the smoke test.
+
+**Trade-offs.** Until launch: no TLS or password on the in-app Redis (privacy
+rests on its having no route, held by the `app-spec` guard). Limiter windows
+reset on every deploy. A 256 MB cap. No managed monitoring. It saves about $10 a
+month: $15 for the cluster, less the $5 container. The `launch-redis` CI gate
+holds the verifier (doctl stubbed); the resolver's half is in the `app-spec`
+selftest.
