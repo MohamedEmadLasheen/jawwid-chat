@@ -475,3 +475,133 @@ managed configuration, so a managed-Valkey quirk would first show in
 production. The planned cost falls from about $129 to about $98 a month for
 production and staging together (estimate, before tax; confirm in the
 DigitalOcean console).
+
+---
+
+## ADR-014 · Supabase Free hosts the database during the store-review period
+
+*2026-11-05. Owner's decision: do not pay for a production database while the
+apps wait two months or more for testing and store approval.*
+
+**Decision.** Until launch, Jawwid Chat's PostgreSQL is a dedicated Supabase Free
+project (its own organisation, region Central EU / Frankfurt; never Core's).
+Only the database moves: the NestJS API, the worker, Admin Web, Redis/Valkey and
+object storage stay on DigitalOcean App Platform as ADR-010..013 describe, and
+nothing of Supabase's own (Auth, Storage, Realtime, the Data API, GraphQL) is
+used. At launch the database moves to DigitalOcean Managed PostgreSQL with
+`backup-db.sh` → `restore-db.sh` and a new `DATABASE_URL`; no application code
+changes.
+
+**Evidence.** Against Supabase's own image (`supabase/postgres:17.6.1.140`,
+whose `postgres` role matches the hosted one: not a superuser, CREATEROLE,
+BYPASSRLS), connected as `postgres`: the BYPASSRLS preflight passes, all 168
+migrations apply and re-apply as a no-op, the Quran loader loads 6,236 verses,
+and `invariants`, `tenant_isolation` and `story_rls` pass. `schema_acceptance`
+fails there by design: it refuses any table outside `chat`, and Supabase ships
+`auth` and `vault`; no migration references them. An encrypted dump from it
+restored into stock `postgres:17` with the ledger, data, RLS and role
+attributes intact, and `invariants` passed there. On the hosted project, the
+preflight passed through the session pooler (2026-11-05, run by the owner).
+
+**Conditions.** These are what make it acceptable; each is required.
+
+- *Hardening.* The Data API and `pg_graphql` are off, Auth sign-ups are off, SSL
+  is enforced, and `chat` is never an exposed schema. The migrations grant
+  Supabase's own `authenticated` role USAGE on `chat` and privileges on 70
+  tables; Supabase's REST and GraphQL endpoints act as that role, so leaving them
+  on would expose the schema to any Supabase-issued session.
+- *Session pooler only.* The direct host is IPv6-only and GitHub's runners and
+  App Platform are IPv4: every connection uses the session pooler (port 5432,
+  user `<role>.<project-ref>`), never the transaction pooler (6543).
+- *Statement timeout on the role.* Supabase's pooler drops the connection's
+  startup `options` (measured 2026-11-05: `PGOPTIONS='-c statement_timeout=15000'`
+  through the session pooler still showed `2min`), so `database-pool.ts`'s 15 s
+  limit never reaches the server there. It is set on the connecting role
+  instead: `alter role postgres set statement_timeout = '15s';`. `apply.sh` runs
+  each migration with `set local statement_timeout = 0`, so the role setting
+  cannot cancel a migration (with a 50 ms role timeout, the old script stopped
+  at migration 22 of 168; the new one applied all 168). `pg_dump` sets its own
+  timeout to 0. A one-off CLI run that needs longer sets it in its session.
+  Remove the role setting at the cutover; on DigitalOcean the `options`
+  parameter reaches the server again.
+- *Frankfurt.* The project's region is Central EU (Frankfurt), next to the App
+  Platform app in `fra`. Realtime delivery makes a dozen database round trips per
+  transaction; another region multiplies its latency.
+- *Smaller pools.* The `production` Environment sets `DATABASE_POOL_MAX=5` and
+  `DATABASE_WORKER_POOL_MAX=2` (the deploy workflows default to 7 and 3), so a
+  deploy's overlap stays inside the Free pooler. Remove both at the cutover.
+- *Backups.* Supabase Free takes none. `backup-daily.yml` keeps a 30-day encrypted
+  dump as a GitHub artifact, and doubles as the daily activity that stops the
+  Free project pausing. A weekly copy is kept outside GitHub, and a restore drill
+  is run monthly (`backup-recovery.md` §3c).
+- *No real users on it.* Approval is not release: the store builds use manual
+  release (App Store Connect) and managed publishing (Google Play) until the
+  cutover is done.
+
+**Alternatives.** DigitalOcean Managed PostgreSQL from day one (about $15 a month
+more, no cutover, BYPASSRLS settled now). Supabase for staging only (the review
+builds need production push, which the staging pipeline cannot send:
+`deploy-staging.yml` sets `APNS_PRODUCTION=false`). Supabase's paid plan (more
+than DigitalOcean's 1 GiB plan).
+
+**Why.** The owner's call on cost: about $15 a month for the waiting period,
+with the risks below accepted knowingly.
+
+**Trade-offs.** No provider backup or PITR: the recovery point is up to a day.
+The Free project can pause, and a paused database during App Review is a
+rejection. 5 GB of monthly egress is shared with the app's own queries. The
+statement timeout lives on the role rather than the connection while on
+Supabase, so it also applies to anything else connecting as `postgres`. DigitalOcean's
+BYPASSRLS question is postponed to launch, not removed. The cutover is a
+planned outage of about 15–30 minutes, rehearsed once beforehand.
+
+---
+
+## ADR-015 · Production's Redis is in-app during the review period, and the launch is guarded
+
+*2026-11-05. Owner's approval: postpone the managed Valkey cluster (about
+$15/month) until launch. Amends ADR-013, which kept production on managed
+Valkey from the start.*
+
+**Decision.** Production carries a production Environment variable
+`LAUNCH_PHASE`, with no default:
+
+- `review`, the store-review period, with no real customer. Production runs the
+  same private in-app Valkey as staging (`redis`, `internal_ports` only, no
+  ingress rule, no environment), marked *REVIEW PERIOD ONLY* in the committed
+  spec. `REDIS_URL` must be exactly `redis://redis:6379`.
+- `launch`. `app-spec.py resolve` drops the in-app component and refuses any
+  `REDIS_URL` that is not `rediss://` to a managed host. Before the backup and
+  the migrations, `scripts/infra/verify-managed-redis.sh` then asks
+  DigitalOcean that the cluster exists, is online, is in `fra1`, evicts nothing,
+  and admits only this app (Trusted Sources).
+
+Any other value, or none, is refused. Staging must use its in-app Redis, so it
+can never name production's. The public launch, meaning the store release made
+public, follows a successful `launch` deploy (`production-runbook.md` §1c).
+
+**Why.** No Chat data is durable in Redis: the outbox and the account lockout
+are in Postgres. What a Redis restart (every deploy) costs is presence, typing,
+an outbox wake hint, and the source-based login limiter's windows. The last is
+a security property (password spraying), acceptable only while no real customer
+signs in. The guard makes "launch on the review Redis" impossible without
+changing this ADR. The health check and every API/worker connection requirement
+are unchanged: `/health/ready` still fails without a reachable Redis.
+
+**Alternatives.** Create managed Valkey now (rejected by the owner on cost). A
+committed per-phase spec flipped by PR (a launch would then depend on someone
+remembering the PR; a variable read by the resolver cannot be skipped). An
+`if:` in the workflow alone (the spec would still carry the component).
+
+**What it cannot do.** It cannot reach the App Store Connect or Google Play
+"release" button. That switch remains a human step, and the runbook makes a
+successful `launch` deploy its precondition. The verifier cannot open a
+connection from the runner (the Trusted Sources keep it out by design);
+connectivity is proven after the release by `/health/ready` in the smoke test.
+
+**Trade-offs.** Until launch: no TLS or password on the in-app Redis (privacy
+rests on its having no route, held by the `app-spec` guard). Limiter windows
+reset on every deploy. A 256 MB cap. No managed monitoring. It saves about $10 a
+month: $15 for the cluster, less the $5 container. The `launch-redis` CI gate
+holds the verifier (doctl stubbed); the resolver's half is in the `app-spec`
+selftest.

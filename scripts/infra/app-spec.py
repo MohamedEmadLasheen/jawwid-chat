@@ -98,17 +98,28 @@ SIZES = {
         "api": ("apps-s-1vcpu-1gb", 1),
         "worker": ("apps-s-1vcpu-0.5gb", 1),
         "admin-web": ("apps-s-1vcpu-0.5gb", 1),
+        "redis": ("apps-s-1vcpu-0.5gb", 1),   # REVIEW PERIOD ONLY (ADR-015)
     },
 }
 
-# Staging's Redis is a private component of the staging app, not a managed
-# cluster (ADR-013). Nothing durable lives in Redis (architecture.md: the outbox
-# is in Postgres), so a restart costs staging its presence, typing and rate-limit
-# keys and nothing else. It has internal_ports only and no ingress rule, so it is
-# reachable from the app's own components and from nowhere else; staging's
-# REDIS_URL is redis://redis:6379. Production keeps managed Valkey: there a
-# restart on every deploy would reset the login rate limiter's windows.
-IN_APP_REDIS_ENVIRONMENTS = ("staging",)
+# The in-app Redis: a private component of the app, not a managed cluster.
+# Nothing durable lives in Redis (architecture.md: the outbox and the account
+# lockout are in Postgres), so a restart costs presence, typing and the
+# source-based login limiter's windows, and nothing else. It has internal_ports
+# only, no ingress rule and no environment, so it is reachable from the app's
+# own components and from nowhere else; its REDIS_URL is IN_APP_REDIS_URL.
+#
+#   staging     always (ADR-013).
+#   production  ONLY while LAUNCH_PHASE=review, the store-review period with no
+#               real user (ADR-015). `resolve` refuses any other phase than
+#               `review` or `launch`; at `launch` it DROPS the component and
+#               refuses a REDIS_URL that is not managed Valkey over TLS, and the
+#               deploy then verifies that cluster (verify-managed-redis.sh). The
+#               limiter windows resetting on every deploy is acceptable only
+#               while nobody but the team and the store reviewers signs in.
+IN_APP_REDIS_ENVIRONMENTS = ("staging", "production")
+IN_APP_REDIS_URL = "redis://redis:6379"
+LAUNCH_PHASES = ("review", "launch")
 IN_APP_REDIS_IMAGE = ("valkey", "valkey", "8.1.11-alpine")   # Docker Hub registry, repository, tag
 # protected-mode is off because the component has no password and must accept
 # the API's and the worker's connections over the app's private network; the
@@ -165,12 +176,22 @@ def image_block(repository: str, tag_var: str) -> list[str]:
     ]
 
 
-def in_app_redis_block(size: tuple[str, int]) -> list[str]:
+def in_app_redis_block(env: str, size: tuple[str, int]) -> list[str]:
     registry, repository, tag = IN_APP_REDIS_IMAGE
+    if env == "production":
+        why = [
+            "  # REVIEW PERIOD ONLY (ADR-015): a private Redis, never routed, while",
+            "  # LAUNCH_PHASE=review. `app-spec.py resolve` drops this component at",
+            "  # LAUNCH_PHASE=launch, when production must use managed Valkey.",
+        ]
+    else:
+        why = [
+            "  # Staging's Redis (ADR-013): a private component, never routed. Nothing",
+            "  # durable lives in Redis, so a restart only clears presence, typing and",
+            "  # rate-limit keys.",
+        ]
     return [
-        "  # Staging's Redis (ADR-013): a private component, never routed. Nothing",
-        "  # durable lives in Redis, so a restart only clears presence, typing and",
-        "  # rate-limit keys. Production uses managed Valkey instead.",
+        *why,
         "  - name: redis",
         "    image:",
         "      registry_type: DOCKER_HUB",
@@ -290,7 +311,7 @@ def render(env: str, manifest_path: str = MANIFEST) -> str:
         "      http_path: /healthz",
         "    envs:",
         *web_env,
-        *(in_app_redis_block(size["redis"]) if env in IN_APP_REDIS_ENVIRONMENTS else []),
+        *(in_app_redis_block(env, size["redis"]) if env in IN_APP_REDIS_ENVIRONMENTS else []),
         "workers:",
         "  # The outbox worker: the API image, the worker command (ADR-004). It serves",
         "  # no HTTP, so it has no health check; a crash exits and is restarted.",
@@ -388,7 +409,57 @@ def resolve(env: str, template: str, environ: dict, manifest_path: str = MANIFES
                     line = vm.group(1) + json.dumps(value)
         out.append(line)
         i += 1
-    return "\n".join(out), sorted(set(filled)), sorted(set(dropped)), sorted(set(errors))
+    text = "\n".join(out)
+    text, phase_errors = apply_redis_phase(env, text, environ)
+    errors += phase_errors
+    return text, sorted(set(filled)), sorted(set(dropped)), sorted(set(errors))
+
+
+def redis_host(url: str) -> str:
+    rest = url.split("://", 1)[1] if "://" in url else url
+    rest = rest.rsplit("@", 1)[-1]
+    return re.split(r"[:/?]", rest, maxsplit=1)[0]
+
+
+def drop_component(text: str, name: str) -> str:
+    """Remove one top-level component and the comment lines directly above it."""
+    lines = text.split("\n")
+    start = lines.index(f"  - name: {name}")
+    end = start + 1
+    while end < len(lines) and not re.match(r"^  - name: |^  #|^[a-z_]+:", lines[end]):
+        end += 1
+    while start > 0 and lines[start - 1].startswith("  #"):
+        start -= 1
+    return "\n".join(lines[:start] + lines[end:])
+
+
+def apply_redis_phase(env: str, text: str, environ: dict) -> tuple[str, list[str]]:
+    """ADR-013 / ADR-015: which Redis an environment may run on. Error messages
+    never carry REDIS_URL's value: it is a secret (it can hold a password)."""
+    errors: list[str] = []
+    url = environ.get("REDIS_URL", "")
+    if env == "staging":
+        if url and url != IN_APP_REDIS_URL:
+            errors.append(f"staging: REDIS_URL must be the in-app {IN_APP_REDIS_URL} (ADR-013); "
+                          "it must never name another environment's Redis")
+        return text, errors
+    phase = environ.get("LAUNCH_PHASE", "")
+    if phase not in LAUNCH_PHASES:
+        errors.append("production: LAUNCH_PHASE must be set to 'review' or 'launch' "
+                      "(production Environment variable, ADR-015)")
+        return text, errors
+    if phase == "review":
+        if url and url != IN_APP_REDIS_URL:
+            errors.append(f"LAUNCH_PHASE=review: REDIS_URL must be the in-app {IN_APP_REDIS_URL} "
+                          "(ADR-015); a managed Valkey belongs to LAUNCH_PHASE=launch")
+        return text, errors
+    # launch: the review-period component goes, and only managed Valkey over TLS is accepted.
+    if url and (not url.startswith("rediss://") or redis_host(url) in ("redis", "localhost", "127.0.0.1")):
+        errors.append("LAUNCH_PHASE=launch: REDIS_URL must be the managed Valkey cluster over TLS "
+                      "(rediss://<cluster host>), never the in-app redis (ADR-015)")
+    if component_block(text, "redis") is not None:
+        text = drop_component(text, "redis")
+    return text, errors
 
 
 def cmd_resolve(env: str, out_path: str) -> int:
@@ -405,6 +476,11 @@ def cmd_resolve(env: str, out_path: str) -> int:
         f.write(text)
     os.chmod(out_path, 0o600)
     print(f"app spec resolved for {env}: {len(filled)} value(s) set")
+    if env == "production":
+        phase = os.environ.get("LAUNCH_PHASE", "")
+        print(f"launch phase: {phase} -- " + (
+            "in-app redis kept (REVIEW PERIOD ONLY: no real user may sign in)" if phase == "review"
+            else "in-app redis dropped; managed Valkey required (verify-managed-redis.sh)"))
     if dropped:
         print("optional, unset, left out: " + ", ".join(dropped))
     return 0
@@ -438,7 +514,9 @@ def component_block(text: str, name: str) -> str | None:
 
 
 def redis_invariants(env: str, text: str) -> list[str]:
-    """ADR-013: an in-app Redis exists only where it is allowed, and is private."""
+    """ADR-013, ADR-015: an in-app Redis exists only where it is allowed, and is
+    private in every environment. In production it is also marked review-only, so
+    the committed spec says what `resolve` will do with it at launch."""
     errs = []
     block = component_block(text, "redis")
     if env not in IN_APP_REDIS_ENVIRONMENTS:
@@ -454,6 +532,8 @@ def redis_invariants(env: str, text: str) -> list[str]:
         errs.append("redis: must have no ingress rule; it is private to the app (ADR-013)")
     if "envs:" in block:
         errs.append("redis: must receive no environment; it holds no secret (ADR-013)")
+    if env == "production" and "REVIEW PERIOD ONLY (ADR-015)" not in text:
+        errs.append("production: the in-app redis must be marked REVIEW PERIOD ONLY (ADR-015)")
     return errs
 
 
@@ -626,12 +706,14 @@ def cmd_selftest() -> int:
 
         prod = render("production")
         expect(not invariants("production", prod), "the rendered production spec keeps every invariant")
-        expect(component_block(prod, "redis") is None, "production renders no in-app redis")
-        redis = component_block(spec, "redis") or ""
-        expect(bool(redis), "staging renders its in-app redis")
-        with_redis = prod.replace("workers:\n", redis + "\nworkers:\n", 1)
-        expect(any("managed Redis" in e for e in invariants("production", with_redis)),
-               "an in-app redis in production is refused")
+        expect(component_block(prod, "redis") is not None, "production renders its review-period redis")
+        expect(bool(component_block(spec, "redis")), "staging renders its in-app redis")
+        unmarked = prod.replace("REVIEW PERIOD ONLY (ADR-015)", "temporary", 1)
+        expect(any("REVIEW PERIOD ONLY" in e for e in invariants("production", unmarked)),
+               "a production in-app redis not marked review-only is refused")
+        prod_routed = prod.replace("        name: admin-web\nservices:", "        name: redis\nservices:", 1)
+        expect(any("no ingress rule" in e for e in invariants("production", prod_routed)),
+               "an ingress rule to production's redis is refused")
         public = spec.replace("    internal_ports:\n      - 6379\n", "    http_port: 6379\n", 1)
         expect(any("internal_ports only" in e for e in invariants("staging", public)),
                "a redis with an http_port is refused")
@@ -656,9 +738,48 @@ def cmd_selftest() -> int:
             "REALTIME_ORIGIN": "wss://api.staging.invalid",
             "LIVEKIT_ORIGIN": "wss://livekit.invalid",
             "STORAGE_ORIGIN": "https://storage.invalid",
+            "REDIS_URL": IN_APP_REDIS_URL,
         })
         text, filled, dropped, errors = resolve("staging", spec, environ)
         expect(not errors, "a complete environment resolves")
+        _, _, _, errors = resolve("staging", spec, dict(environ, REDIS_URL="rediss://u:p@prod-valkey.invalid:25061"))
+        expect(any("staging: REDIS_URL must be the in-app" in e for e in errors),
+               "staging pointed at another Redis is refused")
+
+        # ADR-015: production's launch phase decides which Redis it may run on.
+        penv = {r["name"]: f"v-{r['name'].lower()}"
+                for r in app_env_rows(read_manifest(), "production") if r["production"] == "req"}
+        penv.update({k: environ[k] for k in ("API_IMAGE_TAG", "ADMIN_WEB_IMAGE_TAG", "GHCR_PULL_CREDENTIALS",
+                                             "LIVEKIT_ORIGIN", "STORAGE_ORIGIN")})
+        penv.update({"API_ORIGIN": "https://api.prod.invalid", "ADMIN_WEB_URL": "https://admin.prod.invalid",
+                     "REALTIME_ORIGIN": "wss://api.prod.invalid", "REDIS_URL": IN_APP_REDIS_URL})
+        managed = "rediss://default:s3cr3t-pw@jawwid-valkey.db.ondigitalocean.invalid:25061"
+        _, _, _, errors = resolve("production", prod, penv)
+        expect(any("LAUNCH_PHASE must be set" in e for e in errors), "production without LAUNCH_PHASE is refused")
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="public"))
+        expect(any("LAUNCH_PHASE must be set" in e for e in errors), "an unknown LAUNCH_PHASE is refused")
+        rtext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="review"))
+        expect(not errors and component_block(rtext, "redis") is not None,
+               "review keeps the in-app redis with REDIS_URL=redis://redis:6379")
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="review", REDIS_URL=managed))
+        expect(any("LAUNCH_PHASE=review" in e for e in errors), "review with a managed REDIS_URL is refused")
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch"))
+        expect(any("LAUNCH_PHASE=launch" in e for e in errors), "launch on the in-app redis is refused")
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch",
+                                                         REDIS_URL=managed.replace("rediss://", "redis://")))
+        expect(any("LAUNCH_PHASE=launch" in e for e in errors), "launch on a managed Valkey without TLS is refused")
+        ltext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed))
+        expect(not errors and component_block(ltext, "redis") is None
+               and "REVIEW PERIOD ONLY" not in ltext and "valkey/valkey" not in ltext,
+               "launch with managed Valkey over TLS drops the in-app redis entirely")
+        expect(all("s3cr3t-pw" not in e for phase in ("review", "launch") for e in
+                   resolve("production", prod, dict(penv, LAUNCH_PHASE=phase, REDIS_URL=managed + "x"))[3]),
+               "no error message carries REDIS_URL's value")
+        lres = os.path.join(tmp, "launch.yaml")
+        with open(lres, "w", encoding="utf-8") as f:
+            f.write(ltext)
+        ok, why = doctl_schema(lres)
+        expect(ok, "the launch-phase spec, redis dropped, passes doctl's schema" + ("" if ok else f" ({why})"))
         expect("SENTRY_DSN" in dropped and "- key: SENTRY_DSN" not in text,
                "an unset optional variable is left out, not set empty")
         expect("${" not in strip_comments(text), "no placeholder survives resolution")

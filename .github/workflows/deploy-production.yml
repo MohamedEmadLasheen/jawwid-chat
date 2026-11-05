@@ -185,6 +185,10 @@ jobs:
         # fails CI if one is missing here). The resolved spec holds secrets: it
         # is written mode 600 under RUNNER_TEMP and removed at the end.
         env:
+          # ADR-015: `review` (the store-review period: in-app Redis, no real
+          # user) or `launch` (managed Valkey, verified below). No default: the
+          # resolver refuses anything else, so a launch is always a decision.
+          LAUNCH_PHASE: ${{ vars.LAUNCH_PHASE }}
           NODE_ENV: production
           APP_ENV: production
           # Proxies in front of the API on App Platform. Measure it on the live
@@ -198,8 +202,11 @@ jobs:
           SHUTDOWN_GRACE_MS: '15000'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
-          DATABASE_POOL_MAX: '7'         # the API's pool; database-pool.ts has the 22-connection budget
-          DATABASE_WORKER_POOL_MAX: '3'  # the worker's pool
+          # The API's pool; database-pool.ts has the 22-connection budget. An
+          # Environment variable overrides it for a smaller database (Supabase
+          # Free's pooler during the review period, ADR-014).
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX || '7' }}
+          DATABASE_WORKER_POOL_MAX: ${{ vars.DATABASE_WORKER_POOL_MAX || '3' }}  # the worker's pool
           REDIS_URL: ${{ secrets.REDIS_URL }}
           QUEUE_PREFIX: jawwid-chat-production
           WORKER_CONCURRENCY: ${{ vars.WORKER_CONCURRENCY }}
@@ -299,6 +306,19 @@ jobs:
         run: |
           scripts/infra/check-env.sh production
           python3 scripts/infra/app-spec.py resolve production --out "$RUNNER_TEMP/app-spec.yaml"
+
+      - name: "Launch phase: managed Valkey is provisioned and locked down"
+        # ADR-015. Only at LAUNCH_PHASE=launch, and BEFORE the backup and the
+        # migrations, so a refusal changes nothing: the REDIS_URL cluster must
+        # exist in fra1, be online, evict nothing, and admit only this app. The
+        # token needs read access to databases. Connectivity is proven after the
+        # release by the smoke test's /health/ready.
+        if: vars.LAUNCH_PHASE == 'launch'
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DIGITALOCEAN_APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: scripts/infra/verify-managed-redis.sh
 
       - name: Object storage keeps deleted objects for 30 days
         # BEFORE the backup and the migrations, so a refusal changes nothing.
@@ -402,6 +422,7 @@ jobs:
             echo "| commit | \`${{ inputs.image_tag }}\` |"
             echo "| run | ${{ github.run_number }} |"
             echo "| deployed by | ${{ github.actor }} |"
+            echo "| launch phase | ${{ vars.LAUNCH_PHASE }} |"
             echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
           } >> "$GITHUB_STEP_SUMMARY"
 

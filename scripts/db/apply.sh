@@ -40,8 +40,14 @@ for file in "$MIGRATIONS"/*.sql; do
   echo "  apply   $version"
   # Each migration runs in one transaction together with its ledger row, so a
   # failed migration is never recorded as applied.
+  # `set local statement_timeout = 0`: a migration is never cancelled by the
+  # RUNTIME's query timeout. Where a pooler drops the connection's `options`
+  # (Supabase's, ADR-014), that timeout is set on the role instead, and the
+  # migration runner connects as the same role. LOCAL ends with this
+  # transaction, so nothing after it is affected.
   {
     echo "begin;"
+    echo "set local statement_timeout = 0;"
     cat "$file"
     echo ";"
     echo "insert into chat.schema_migrations (version) values ('$version');"
