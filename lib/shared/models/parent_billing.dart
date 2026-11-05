@@ -280,7 +280,11 @@ enum RequestPurpose {
   other;
 
   /// Pays for a learner's live one-to-one lessons (apps/api in-app-payability.ts).
-  bool get isLiveOneToOneLessons => this != RequestPurpose.other;
+  /// An allow-list, like the server's: a purpose added later is not payable until listed.
+  bool get isLiveOneToOneLessons => switch (this) {
+        RequestPurpose.subscription || RequestPurpose.renewal || RequestPurpose.instalment || RequestPurpose.balance => true,
+        RequestPurpose.other => false,
+      };
 
   static RequestPurpose? tryParse(Object? raw) => switch (raw) {
         'subscription' => RequestPurpose.subscription,

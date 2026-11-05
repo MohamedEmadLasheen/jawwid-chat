@@ -15,7 +15,7 @@ void main() {
       .whereType<File>()
       .where((f) => f.path.endsWith('.dart'));
 
-  test('the parent billing screens have no platform, release-mode or build-flag gate', () {
+  test('the parent billing screens (and the shell that routes to them) have no platform, release-mode or build-flag gate', () {
     // A store build is a release build on iOS or Android; any of these would let one
     // hide Pay by card or the bank transfer there.
     const gates = [
@@ -26,7 +26,7 @@ void main() {
       'fromEnvironment',
       'TargetPlatform.',
     ];
-    for (final f in dartFiles('lib/features/billing')) {
+    for (final f in [...dartFiles('lib/features/billing'), File('lib/app/shells/app_shell.dart')]) {
       final source = f.readAsStringSync();
       for (final g in gates) {
         expect(source.contains(g), isFalse, reason: '${f.path} uses $g');

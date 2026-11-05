@@ -101,7 +101,14 @@ export class ParentPaymentsService {
       throw new CommError(CommErrorCode.BILLING_STATE, 'several receipts are already waiting to be checked; we will confirm them soon', 409);
     }
 
-    const request = await this.payable(actor.actorId, contact.familyId, body, { allowExpired: true });
+    let request: PaymentRequest;
+    try {
+      request = await this.payable(actor.actorId, contact.familyId, body, { allowExpired: true });
+    } catch (e) {
+      // A receipt the app may not take is not kept: its file goes with the refusal.
+      if (e instanceof CommError && e.code === CommErrorCode.PAYMENT_NOT_IN_APP) await this.storage.delete(objectKey).catch(() => undefined);
+      throw e;
+    }
     const remaining = Number(request.amountMinor) - (await this.ledger.standingSum(this.prisma, { requestId: request.id }));
     if (amountMinor > Math.max(remaining, 0)) throw invalid(`amountMinor: at most what is still owed (${Math.max(remaining, 0)})`);
 

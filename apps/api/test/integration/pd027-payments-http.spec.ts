@@ -33,6 +33,8 @@ import { STRIPE_GATEWAY } from '../../src/billing/stripe.gateway';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
+import { OBJECT_STORAGE } from '../../src/platform/tokens';
+import type { ObjectStorage } from '../../src/communication/attachments/object-storage';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -520,6 +522,7 @@ describe('PD-27 over HTTP', () => {
     expect(receipt.status).toBe(409);
     expect(receipt.code).toBe(CommErrorCode.PAYMENT_NOT_IN_APP);
     expect(await g.prisma.paymentReceipt.count({ where: { requestId: req.id } })).toBe(0);
+    expect(await app.get<ObjectStorage>(OBJECT_STORAGE).readHead(grant.json.objectKey, 1)).toBeNull();
 
     // Outside the app, the web pay link is unchanged, and its Stripe page never calls it a lesson.
     await payByCard(tokenOf(req.link));

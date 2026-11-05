@@ -18,7 +18,10 @@ import {
 
 describe('in-app payability', () => {
   it('classifies every request purpose, and only lesson purposes are payable in the app', () => {
-    for (const p of REQUEST_PURPOSES) expect(typeof isPayableInApp({ purpose: p })).toBe('boolean');
+    // A new purpose must be decided here, one way or the other.
+    const decided = { subscription: true, renewal: true, instalment: true, balance: true, other: false };
+    expect([...REQUEST_PURPOSES].sort()).toEqual(Object.keys(decided).sort());
+    for (const p of REQUEST_PURPOSES) expect(isPayableInApp({ purpose: p })).toBe(decided[p]);
     expect([...IN_APP_PAYABLE_PURPOSES].sort()).toEqual(['balance', 'instalment', 'renewal', 'subscription']);
     expect(isPayableInApp({ purpose: 'other' })).toBe(false);
   });

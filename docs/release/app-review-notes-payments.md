@@ -85,6 +85,15 @@ Stripe configured (`cardAvailable`); bank transfer always does.
   parent's direct chat with their supervisor never locks. This is N-5 question 2, still the
   owner's; it is unchanged here.
 
+- **R-4 Instalments and balances are classified by what they are for, not checked.** An instalment
+  plan (`POST /families/:id/instalments`) and a `balance` request carry a free-text label, and the
+  child is optional, so nothing in the data proves that one is for lessons. They are payable in the
+  app because the academy sells nothing but lessons. **Operating rule for staff:** an instalment
+  plan or a balance is only ever for live one-to-one lesson packages; any other charge is a
+  request with purpose `other`, collected outside the app. **Follow-up:** store a lesson
+  classification on `family_instalment` (needs a migration slot) so the server can refuse a
+  non-lesson instalment the way it refuses `other`.
+
 ## 4. App Store Connect: App Review Information → Notes (paste)
 
 > Jawwid is a Quran academy. In the app, families buy only **live one-to-one Quran lessons**:
