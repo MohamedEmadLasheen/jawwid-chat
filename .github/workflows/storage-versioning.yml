@@ -1,9 +1,10 @@
 name: Object storage versioning (production bucket)
 
 # Runs scripts/infra/storage-versioning.sh against the PRODUCTION bucket with
-# the credentials already saved in the `production` GitHub Environment, so the
-# Spaces keys never leave GitHub: nobody pastes them into a terminal, and GitHub
-# masks them in this job's log. The script itself never prints them either.
+# the ADMINISTRATIVE Spaces key saved in the `production` GitHub Environment
+# (STORAGE_ADMIN_ACCESS_KEY / STORAGE_ADMIN_SECRET_KEY), so no key leaves
+# GitHub: nobody pastes one into a terminal, and GitHub masks them in this job's
+# log. The script itself never prints them either.
 #
 #   verify  read the bucket's versioning and lifecycle back; changes nothing
 #   apply   turn versioning on and set the lifecycle (noncurrent versions
@@ -12,17 +13,17 @@ name: Object storage versioning (production bucket)
 #
 # Why it exists: Deploy production refuses to release unless the bucket keeps
 # deleted objects for 30 days (its "Object storage keeps deleted objects for 30
-# days" step runs `verify`). This is the `apply` that step's message points at,
-# without copying the keys out of GitHub (docs/infrastructure/backup-recovery.md,
-# "Object storage").
+# days" step runs `verify` with the same admin key). This is the `apply` that
+# step's message points at (docs/infrastructure/backup-recovery.md, "Object
+# storage").
+#
+# The application's STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY are NOT used here:
+# they stay bucket-limited for the API at runtime, and Spaces refuses such a key
+# the lifecycle calls. This job never receives them; it only compares the access
+# key ids as a boolean, so an admin key equal to the application key is refused.
 #
 # Manual only. The `production` Environment requires the owner's approval for
 # every run and admits only main; the `if:` below is the second lock.
-#
-# Permissions on DigitalOcean Spaces: `apply` needs s3:PutBucketVersioning and
-# s3:PutLifecycleConfiguration. A key limited to one bucket may be refused
-# those; the script then fails, names the refused call, and reports no success
-# it did not observe. Nothing else in the bucket is touched.
 
 on:
   workflow_dispatch:
@@ -54,14 +55,17 @@ jobs:
         env:
           HAS_ENDPOINT: ${{ vars.STORAGE_ENDPOINT != '' }}
           HAS_BUCKET: ${{ vars.STORAGE_BUCKET != '' }}
-          HAS_ACCESS: ${{ secrets.STORAGE_ACCESS_KEY != '' }}
-          HAS_SECRET: ${{ secrets.STORAGE_SECRET_KEY != '' }}
+          HAS_ADMIN_ACCESS: ${{ secrets.STORAGE_ADMIN_ACCESS_KEY != '' }}
+          HAS_ADMIN_SECRET: ${{ secrets.STORAGE_ADMIN_SECRET_KEY != '' }}
+          ADMIN_IS_APP_KEY: ${{ secrets.STORAGE_ADMIN_ACCESS_KEY != '' && secrets.STORAGE_ADMIN_ACCESS_KEY == secrets.STORAGE_ACCESS_KEY }}
         run: |
           rc=0
           [ "$HAS_ENDPOINT" = "true" ] || { echo "::error title=Storage::vars.STORAGE_ENDPOINT is not set in the production GitHub Environment"; rc=1; }
           [ "$HAS_BUCKET" = "true" ] || { echo "::error title=Storage::vars.STORAGE_BUCKET is not set in the production GitHub Environment"; rc=1; }
-          [ "$HAS_ACCESS" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_ACCESS_KEY is not set in the production GitHub Environment"; rc=1; }
-          [ "$HAS_SECRET" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_SECRET_KEY is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_ADMIN_ACCESS" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_ADMIN_ACCESS_KEY (the administrative Spaces key) is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_ADMIN_SECRET" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_ADMIN_SECRET_KEY (the administrative Spaces key) is not set in the production GitHub Environment"; rc=1; }
+          [ "$ADMIN_IS_APP_KEY" = "false" ] || { echo "::error title=Storage::STORAGE_ADMIN_ACCESS_KEY is the application's STORAGE_ACCESS_KEY; use a separate administrative key"; rc=1; }
+          [ "$rc" -eq 0 ] || echo "Nothing was checked or changed."
           exit $rc
 
       - name: AWS CLI is available
@@ -73,8 +77,8 @@ jobs:
           STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           STORAGE_REGION: ${{ vars.STORAGE_REGION }}
-          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
-          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+          STORAGE_ADMIN_ACCESS_KEY: ${{ secrets.STORAGE_ADMIN_ACCESS_KEY }}
+          STORAGE_ADMIN_SECRET_KEY: ${{ secrets.STORAGE_ADMIN_SECRET_KEY }}
         run: |
           case "$MODE" in
             verify|apply) scripts/infra/storage-versioning.sh "$MODE" ;;
