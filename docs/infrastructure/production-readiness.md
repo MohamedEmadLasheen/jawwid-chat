@@ -33,6 +33,8 @@ Frankfurt, so it is to be recreated in Frankfurt while still empty.
 | Monthly cost (review period) | DigitalOcean: API $12 + worker $5 + Admin Web $5 + in-app Redis $5 + Spaces $5 = **$32**, before tax. Supabase Free $0. A staging app is not included (about $27 more if it runs). Not yet created: managed Valkey ($15), DigitalOcean Postgres ($15.15). |
 | Cutover at launch | Rehearse once; then stop the API and worker, take a final `backup-db.sh`, run the DigitalOcean preflight, `restore-db.sh` into the DigitalOcean cluster, replace `DATABASE_URL`, remove the pool overrides; provision managed Valkey and switch to `LAUNCH_PHASE=launch` (`production-runbook.md` §1c); deploy, smoke test. Only then make the store release public. About 15–30 minutes. |
 
+**Filling the GitHub configuration.** `python3 -I scripts/infra/production-setup.py status` lists every value the production deploy reads, whether it is set, and who provides it. `fixed` sets the values the repository already knows (hostnames, `LAUNCH_PHASE=review`, pool sizes, storage endpoint, APNs bundle and team, the review-period `REDIS_URL`), `generate` creates the four random app secrets without anyone seeing them, and `ask` / `file` take the owner's own secrets through gh's hidden prompt or from a file. It never prints a secret.
+
 Legend for the **Code** column: ✅ built and tested · 🟡 partly built · ❌ not built.
 Legend for the **Owner provides** column: the account, key or decision only the owner can supply. "—" means nothing is needed.
 
