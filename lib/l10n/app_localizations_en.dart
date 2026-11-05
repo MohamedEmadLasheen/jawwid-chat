@@ -3503,6 +3503,10 @@ class L10nEn extends L10n {
       'We\'re confirming your payment. This can take a minute.';
 
   @override
+  String get billingLiveOneToOneService =>
+      'Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.';
+
+  @override
   String get billingPaySheetTitle => 'How would you like to pay?';
 
   @override

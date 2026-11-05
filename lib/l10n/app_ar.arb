@@ -1427,6 +1427,7 @@
     }
   },
   "billingConfirmingPayment": "جارٍ تأكيد دفعتك، وقد يستغرق ذلك دقيقة.",
+  "billingLiveOneToOneService": "دروس قرآن مباشرة فردية: معلّم واحد وطالب واحد في الوقت نفسه. لا تُسجَّل الدروس.",
   "billingPaySheetTitle": "كيف تريد أن تدفع؟",
   "billingPayByCard": "الدفع بالبطاقة",
   "billingPayByCardHint": "تُفتح صفحة دفع آمنة",

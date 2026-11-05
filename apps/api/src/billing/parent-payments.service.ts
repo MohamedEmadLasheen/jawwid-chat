@@ -12,6 +12,7 @@ import { todayIn } from '../leave/leave.service';
 import { BillingService } from './billing.service';
 import { CheckoutService } from './checkout.service';
 import { PaymentLedger } from './payment-ledger.service';
+import { assertPayableInApp } from './in-app-payability';
 import { dateOnly, invalid, optionalText, optionalUuid, requireAmount, requireDate } from './validate';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
 
@@ -164,6 +165,7 @@ export class ParentPaymentsService {
       if (!request) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment request not found');
       if (request.cancelledAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this payment request was cancelled', 409);
       if (request.paidAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this request is already paid', 409);
+      assertPayableInApp(request);
       if (!opts.allowExpired && request.expiresAt <= new Date()) {
         throw new CommError(CommErrorCode.BILLING_STATE, 'this payment request has expired; ask for a new link', 409);
       }

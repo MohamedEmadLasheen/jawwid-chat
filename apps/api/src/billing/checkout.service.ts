@@ -6,6 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { todayIn } from '../leave/leave.service';
+import { checkoutDescription } from './in-app-payability';
 import { PaymentLedger, type RecordedPayment } from './payment-ledger.service';
 import { STRIPE_GATEWAY, toSession, type CheckoutSession, type StripeGateway } from './stripe.gateway';
 import { WEBHOOK_REFUND_REASON } from './idempotency';
@@ -123,9 +124,7 @@ export class CheckoutService {
         amountMinor: remaining,
         currency: fresh.currency,
         productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
-        description: fresh.periodStart && fresh.periodEnd
-          ? `${fresh.periodStart.toISOString().slice(0, 10)} → ${fresh.periodEnd.toISOString().slice(0, 10)}`
-          : null,
+        description: checkoutDescription(fresh, opts.locale),
         successUrl: `${opts.returnUrl}${sep}checkout=success`,
         cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
         expiresAt: new Date(Date.now() + CHECKOUT_MINUTES * 60_000),

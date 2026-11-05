@@ -284,6 +284,13 @@ void main() {
       expect(find.byKey(const ValueKey('pay-by-bank-transfer')), findsOneWidget);
     });
 
+    testWidgets('says what is bought: live one-to-one lessons, not recorded', (tester) async {
+      await open(tester);
+      await tapPay(tester, 'r:r1');
+      expect(find.byKey(const ValueKey('pay-sheet-service')), findsOneWidget);
+      expect(find.text('Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.'), findsOneWidget);
+    });
+
     testWidgets('card: checkout for the request, opened in the browser, then "confirming" until paid', (tester) async {
       await open(tester);
       await tapPay(tester, 'r:r1');
@@ -648,6 +655,42 @@ void main() {
       expect(plainAmount(5, 'AED'), '0.05');
       expect(plainAmount(12345, 'KWD'), '12.345');
       expect(plainAmount(500, 'JPY'), '500');
+    });
+
+    test('store payments policy: a request that is not for live one-to-one lessons is never offered for payment', () {
+      final base = billing();
+      final withOther = ParentBilling(
+        today: base.today,
+        paymentMethod: base.paymentMethod,
+        currency: base.currency,
+        planMonths: base.planMonths,
+        cardAvailable: base.cardAvailable,
+        bankAccount: base.bankAccount,
+        instalments: base.instalments,
+        totals: base.totals,
+        requests: [
+          ...base.requests,
+          const PaymentRequest(
+            id: 'r-other', purpose: RequestPurpose.other, status: RequestStatus.open, label: 'Books',
+            amountMinor: 5000, paidMinor: 0, remainingMinor: 5000, currency: 'AED',
+          ),
+          // A purpose this build does not know: fails closed.
+          const PaymentRequest(
+            id: 'r-unknown', status: RequestStatus.open, label: 'Something new',
+            amountMinor: 5000, paidMinor: 0, remainingMinor: 5000, currency: 'AED',
+          ),
+          // The server's word wins over the purpose.
+          const PaymentRequest(
+            id: 'r-refused', purpose: RequestPurpose.balance, payableInApp: false, status: RequestStatus.open, label: 'Held',
+            amountMinor: 5000, paidMinor: 0, remainingMinor: 5000, currency: 'AED',
+          ),
+        ],
+        receipts: base.receipts,
+        invoices: base.invoices,
+        subscriptions: base.subscriptions,
+      );
+      expect(amountsDue(withOther).map((d) => d.key), ['r:r1', 'i:i2', 'i:i3']);
+      expect(const PaymentRequest(id: 'x', purpose: RequestPurpose.renewal, label: '', amountMinor: 1, paidMinor: 0, remainingMinor: 1, currency: 'AED').payableInApp, isTrue);
     });
 
     test('an instalment with its own open request is one due item, paid by instalment id', () {

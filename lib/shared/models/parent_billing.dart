@@ -279,6 +279,9 @@ enum RequestPurpose {
   balance,
   other;
 
+  /// Pays for a learner's live one-to-one lessons (apps/api in-app-payability.ts).
+  bool get isLiveOneToOneLessons => this != RequestPurpose.other;
+
   static RequestPurpose? tryParse(Object? raw) => switch (raw) {
         'subscription' => RequestPurpose.subscription,
         'renewal' => RequestPurpose.renewal,
@@ -315,6 +318,7 @@ class PaymentRequest {
     required this.remainingMinor,
     required this.currency,
     this.purpose,
+    bool? payableInApp,
     this.status,
     this.childName,
     this.instalmentId,
@@ -324,13 +328,21 @@ class PaymentRequest {
     this.periodEnd,
     this.expiresAt,
     this.createdAt,
-  });
+  }) : _payableInApp = payableInApp;
 
   final String id;
   final String label;
 
   /// Null for a purpose this build does not know.
   final RequestPurpose? purpose;
+
+  final bool? _payableInApp;
+
+  /// Store payments policy (App Store 3.1.3(d), Google Play 1:1 services): the app
+  /// takes a card or bank-transfer payment only for live one-to-one lessons. The
+  /// server says so per request (`payableInApp`); without it, only the lesson
+  /// purposes are payable, and an unknown purpose never is.
+  bool get payableInApp => _payableInApp ?? (purpose != null && purpose!.isLiveOneToOneLessons);
 
   /// Null for a status this build does not know: never offered for payment.
   final RequestStatus? status;

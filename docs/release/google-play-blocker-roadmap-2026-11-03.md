@@ -713,6 +713,12 @@ This table is the inventory of what the app sells today. Sources: `apps/api/pris
 4. Is the **trial** lesson paid, and is it always live and one-to-one?
 5. Should `PaymentRequest.purpose = 'other'` be payable in the app at all, or only by the web pay link and bank transfer?
 
+**Answered 2026-11-05 (owner):** 1, no group class is sold in the app; 3, no standalone digital
+material is sold in the app. Card and bank transfer stay in both store builds. Questions 2 and 4
+stay open. Question 5 was decided by the lead as the safe default: `other` is not payable in the
+app. S-1 (as a purpose classification, no migration), the call part of S-2 (a test, not a
+guard), S-4 and S-5 are done: `docs/release/app-review-notes-payments.md`.
+
 ### 8.5 Safeguards to build after the owner's go (WP-4 phase 4B)
 
 | # | Safeguard | Where |

@@ -95,6 +95,11 @@ async function payByCard(token: string): Promise<string> {
   return location.slice(location.lastIndexOf('/') + 1);
 }
 
+/** What the app (or the web link) asked Stripe for, for one request. */
+function checkoutInputs(requestId: string) {
+  return [...stripe.sessions.values()].filter((s) => s.input.requestId === requestId).map((s) => s.input);
+}
+
 function familyOf(i: number) {
   const f = m.families[i]!;
   const supervisorId = f.children[0]!.supervisorId;
@@ -377,7 +382,7 @@ describe('PD-27 over HTTP', () => {
 
     // A second request, a receipt rejected with a reason the parent reads.
     const second = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
-      purpose: 'other', label: 'Books', amountMinor: 5000,
+      purpose: 'balance', label: 'Earlier lessons', amountMinor: 5000,
     });
     const rid = second.json.request.id;
     const bytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(80, 0x20)]);
@@ -470,7 +475,7 @@ describe('PD-27 over HTTP', () => {
   it('Stripe refusing a checkout reaches nobody raw: the app gets 503 PAYMENTS_UNAVAILABLE, the link page a plain message', async () => {
     const { f } = familyOf(7);
     const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
-      purpose: 'other', label: 'Uniform', amountMinor: 2000, currency: 'AED',
+      purpose: 'renewal', label: 'Renewal', amountMinor: 2000, currency: 'AED',
     })).json.request;
     const stripeError = () => Object.assign(new Error('Invalid locale: must be one of auto, bg, cs, da (sk_test_secret_should_never_leak)'), {
       type: 'StripeInvalidRequestError', code: 'parameter_invalid_empty', statusCode: 400,
@@ -490,6 +495,49 @@ describe('PD-27 over HTTP', () => {
     expect(html).toContain('الدفع بالبطاقة غير متاح حاليًا');
     // Nothing half-made: no checkout row for a session Stripe never opened.
     expect(await g.prisma.paymentCheckout.count({ where: { requestId: req.id } })).toBe(0);
+  });
+
+  it('store payments policy: a request that is not for live one-to-one lessons (purpose other) cannot be paid in the app -- not by card, not by receipt -- but its web link still works', async () => {
+    const { f } = familyOf(7);
+    const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'other', label: 'Books', amountMinor: 3000, currency: 'AED',
+    })).json.request;
+    const mine = await http(f.parent.subject, 'GET', '/me/billing');
+    expect(mine.json.requests.find((r: any) => r.id === req.id)).toMatchObject({ purpose: 'other', payableInApp: false });
+
+    const card = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: req.id });
+    expect(card.status).toBe(409);
+    expect(card.code).toBe(CommErrorCode.PAYMENT_NOT_IN_APP);
+    expect(checkoutInputs(req.id)).toHaveLength(0);
+
+    const bytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(80, 0x20)]);
+    const grant = await http(f.parent.subject, 'POST', '/me/billing/receipts/upload', { mimeType: 'application/pdf', byteSize: bytes.length });
+    const route = grant.json.uploadUrl.slice(grant.json.uploadUrl.indexOf('/storage/'));
+    await fetch(`${base}${route}`, { method: 'PUT', headers: { ...grant.json.headers, authorization: `Bearer ${await tokenFor(f.parent.subject)}` }, body: bytes });
+    const receipt = await http(f.parent.subject, 'POST', '/me/billing/receipts', {
+      objectKey: grant.json.objectKey, requestId: req.id, amountMinor: 3000, transferredOn: today(),
+    });
+    expect(receipt.status).toBe(409);
+    expect(receipt.code).toBe(CommErrorCode.PAYMENT_NOT_IN_APP);
+    expect(await g.prisma.paymentReceipt.count({ where: { requestId: req.id } })).toBe(0);
+
+    // Outside the app, the web pay link is unchanged, and its Stripe page never calls it a lesson.
+    await payByCard(tokenOf(req.link));
+    expect(checkoutInputs(req.id)).toHaveLength(1);
+    expect(checkoutInputs(req.id)[0]!.description).toBeNull();
+  });
+
+  it('a lesson payment\'s Stripe page describes live one-to-one lessons, in the family\'s language', async () => {
+    const { f } = familyOf(7);
+    const child = f.children[0]!;
+    const req = (await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'subscription', label: 'Quran — 1 month', amountMinor: 30000, currency: 'AED', learnerId: child.id,
+    })).json.request;
+    const res = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: req.id });
+    expect(res.status).toBe(201);
+    const [input] = checkoutInputs(req.id);
+    expect(input!.description).toMatch(/^(دروس قرآن مباشرة فردية|Live one-to-one Quran lessons)/);
+    expect(input!.description).toMatch(/لا تُسجَّل الدروس|not recorded/);
   });
 
   it('a cancelled link cannot be paid; its page says so', async () => {

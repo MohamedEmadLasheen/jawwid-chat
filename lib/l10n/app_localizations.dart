@@ -5995,6 +5995,12 @@ abstract class L10n {
   /// **'We\'re confirming your payment. This can take a minute.'**
   String get billingConfirmingPayment;
 
+  /// Pay sheet: what the payment buys. Store payments policy (App Store 3.1.3(d), Google Play 1:1 services): must say live, one-to-one, not recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.'**
+  String get billingLiveOneToOneService;
+
   /// PD-27: Settings -> Payments.
   ///
   /// In en, this message translates to:

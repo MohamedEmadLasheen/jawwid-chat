@@ -4,6 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { MediaUrlSigner } from '../platform/media-url';
 import { PaymentLedger, type InvoiceSnapshot, type PaymentMethod, type RequestPurpose } from './payment-ledger.service';
 import { day } from './validate';
+import { isPayableInApp } from './in-app-payability';
 
 type Person = { id: string; name: string };
 type Child = { id: string | null; name: string };
@@ -13,6 +14,8 @@ export type InvoiceStatus = 'paid' | 'partially_refunded' | 'refunded' | 'void';
 export interface PaymentRequestDto {
   id: string;
   purpose: RequestPurpose;
+  /** Store payments policy: a live one-to-one lesson payment, so the app may take it (in-app-payability.ts). */
+  payableInApp: boolean;
   label: string;
   status: RequestStatus;
   amountMinor: number;
@@ -224,6 +227,7 @@ export class PaymentsReadService {
       const dto: PaymentRequestDto = {
         id: r.id,
         purpose: r.purpose as RequestPurpose,
+        payableInApp: isPayableInApp(r),
         label: r.label,
         status,
         amountMinor: amount,
