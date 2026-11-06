@@ -18,6 +18,11 @@ import { Injectable, type NestMiddleware } from '@nestjs/common';
  */
 export interface RequestContext {
   impersonationId?: string;
+  /**
+   * PD-57: the people each blocker in this request has blocked (platform/blocks.ts),
+   * read once per request; a block or unblock in the request forgets its entry.
+   */
+  blockedBy?: Map<string, ReadonlySet<string>>;
 }
 
 const storage = new AsyncLocalStorage<RequestContext>();
