@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/node';
-import { isPrismaError, redact, safeErrorMessage } from './redact';
+import { redact } from './redact';
+import { acceptRequestId } from './request-log';
 import type { BuildInfoLike, ErrorContext, ErrorTracker } from './error-tracker';
 import { ErrorBudget, errorKind, isCriticalReport } from './error-budget';
 
@@ -29,8 +30,13 @@ import { ErrorBudget, errorKind, isCriticalReport } from './error-budget';
  *   2. `sendDefaultPii: false`, no tracing, no breadcrumbs, no OpenTelemetry
  *      setup and no module-loader hooks.
  *   3. `beforeSend: scrubEvent`, which REBUILDS every event from an allowlist
- *      of fields -- it does not delete known-bad ones -- and runs every string
- *      it keeps through the same redact() the log store uses.
+ *      of fields -- it does not delete known-bad ones -- and carries NO
+ *      FREE TEXT: no exception message, no event message. Every string it
+ *      keeps is an identifier, an approved error code or a label of a known
+ *      shape; a string that does not match its shape is dropped, not
+ *      redacted. redact() recognises credentials and phone numbers, but no
+ *      pattern recognises a child's name or a line of a conversation, so the
+ *      only safe treatment of free text is not to send it.
  *
  * Layer 3 is written to be sufficient alone, and it is what the tests assert,
  * both directly and through a real SDK client with an in-memory transport.
@@ -119,11 +125,46 @@ export function sentryOptions(dsn: string, component: string, build: BuildInfoLi
   };
 }
 
+/**
+ * Shapes. A string is kept only if it matches its field's shape in full; there
+ * is no "redact and keep". Each shape admits identifiers, codes and route
+ * templates, and none admits a space between two words of prose -- which is
+ * what a name or a sentence needs.
+ */
+/** A class or error name: `TypeError`, `PrismaClientKnownRequestError`. */
+const IDENTIFIER = /^[A-Za-z_$][\w$]{0,63}$/;
+/** Prisma error codes: P1001, P2003. */
+const PRISMA_CODE = /^P\d{4}$/;
+/** Node system / internal error codes: ECONNREFUSED, ETIMEDOUT, ERR_STREAM_PREMATURE_CLOSE. */
+const NODE_CODE = /^E[A-Z0-9_]{1,63}$/;
+/** A Postgres SQLSTATE, as Prisma reports it in `meta.code` for a raw-query failure. */
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+/** Postgres statement timeout; detected from the message, but only the fixed code is sent. */
+const STATEMENT_TIMEOUT = /\b57014\b|canceling statement due to statement timeout/;
+/** HTTP: `POST /api/v1/conversations/:id/messages`, a template (request-log.ts never passes a resolved path). */
+const HTTP_ROUTE = /^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|OTHER) (?:\/[\w:.*{}-]*)+$|^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|OTHER) <unmatched>$/;
+/** WebSocket: `WS conversation.subscribe`, `WS handshake`, `WS <unknown>`. */
+const WS_ROUTE = /^WS (?:[\w.:-]{1,64}|<unknown>)$/;
+/** Worker subsystems and process routes: `outbox.drain`, `process.unhandledRejection`, `bootstrap`. */
+const LABEL = /^[\w.:-]{1,64}$/;
+const TAG_SHAPES: Record<(typeof ALLOWED_TAGS)[number], (v: string) => boolean> = {
+  route: (v) => v.length <= 300 && (HTTP_ROUTE.test(v) || WS_ROUTE.test(v) || LABEL.test(v)),
+  actor_kind: (v) => /^[a-z_]{1,32}$/.test(v),
+  status: (v) => /^[1-5]\d\d$/.test(v),
+  component: (v) => /^[a-z]{1,16}$/.test(v),
+  version: (v) => /^[\w.+-]{1,64}$/.test(v),
+};
+/** A stack frame's file, function and module come from code, but are still shape-checked. */
+const FRAME_FILE = /^[\w$@./\\:+-]{1,300}$/;
+const FRAME_FUNCTION = /^[\w$.<>[\]]{1,200}$|^(?:async |new )?[\w$.<>[\]]{1,200}(?: \[as [\w$]{1,64}\])?$|^Promise\.all \(index \d{1,5}\)$/;
+/** environment, release, SDK name and version, runtime and os name and version. */
+const META = /^[\w.+:/@-]{1,128}$/;
+
+const keep = (value: unknown, shape: RegExp): string | undefined =>
+  typeof value === 'string' && shape.test(value) ? value : undefined;
+
 /** Tags this application sets. Any other tag is dropped. */
 const ALLOWED_TAGS = ['route', 'actor_kind', 'status', 'component', 'version'] as const;
-
-/** Contexts that describe the runtime, not a request or a person. */
-const ALLOWED_CONTEXTS = ['runtime', 'os'] as const;
 
 type Frame = NonNullable<NonNullable<Sentry.Exception['stacktrace']>['frames']>[number];
 
@@ -133,52 +174,61 @@ type Frame = NonNullable<NonNullable<Sentry.Exception['stacktrace']>['frames']>[
  * Exported so every claim about what leaves this process is tested against it
  * directly. What survives:
  *
- *   identity      event_id, timestamp, platform, level, environment, release, sdk
- *   message       redacted
- *   exceptions    type; value redacted (a Prisma error: class and code only);
- *                 mechanism type/handled; frames as filename, function, module,
- *                 line, column, in_app -- never vars, never source lines
- *   tags          the five this application sets, values redacted
- *   extra         request_id (redacted) and suppressed (a count) only
- *   contexts      runtime and os
+ *   identity      event_id, timestamp, platform, level, and environment,
+ *                 release and sdk name/version when they match their shape
+ *   message       NOTHING. No event message, no logentry.
+ *   exceptions    type (an identifier, else `Error`) and a value BUILT from
+ *                 approved facts, never copied: the type, plus an approved
+ *                 code read from the error object itself (Prisma P-code,
+ *                 Node E-code, SQLSTATE, the fixed statement-timeout code)
+ *                 and an HTTP status. The error's message is never read.
+ *                 Mechanism type/handled; frames as filename, function,
+ *                 module, line, column, in_app -- each shape-checked, never
+ *                 vars, never source lines.
+ *   tags          the five this application sets, each matching its shape
+ *   extra         request_id (an opaque id shape) and suppressed (a count)
+ *   contexts      runtime and os, name and version only
  *
  * Everything else -- request, user, breadcrumbs, server_name, transaction,
- * modules, other contexts, SDK processing metadata -- does not exist on the
- * event this returns. An allowlist of request fields is a list somebody
- * eventually adds `body` to; there is no request here to add to.
+ * fingerprint, modules, other contexts, SDK processing metadata -- does not
+ * exist on the event this returns.
  */
 export function scrubEvent(event: Sentry.ErrorEvent, hint?: Sentry.EventHint): Sentry.ErrorEvent {
   const out: Sentry.ErrorEvent = {
     type: undefined,
-    event_id: event.event_id,
-    timestamp: event.timestamp,
-    platform: event.platform,
-    level: event.level,
-    environment: event.environment,
-    release: event.release,
-    sdk: event.sdk,
+    event_id: keep(event.event_id, /^[0-9a-f]{32}$/i),
+    timestamp: typeof event.timestamp === 'number' ? event.timestamp : undefined,
+    platform: keep(event.platform, /^[a-z]{1,16}$/),
+    level: keep(event.level, /^(?:fatal|error|warning|log|info|debug)$/) as Sentry.SeverityLevel | undefined,
+    environment: keep(event.environment, META),
+    release: keep(event.release, META),
   };
-
-  if (typeof event.message === 'string') out.message = redact(event.message);
-  if (event.logentry?.message) out.logentry = { message: redact(event.logentry.message) };
+  const sdkName = keep(event.sdk?.name, META);
+  const sdkVersion = keep(event.sdk?.version, META);
+  if (sdkName && sdkVersion) out.sdk = { name: sdkName, version: sdkVersion };
 
   const values = event.exception?.values;
   if (values) {
-    const original = hint?.originalException;
+    const chain = causeChain(hint?.originalException);
     out.exception = {
       values: values.map((exception, i) => {
-        // The outermost exception (last in Sentry's order) is the one the hint
-        // names; a Prisma error anywhere is reduced to its class.
-        const isOriginal = i === values.length - 1 && original instanceof Error;
-        let value: string | undefined;
-        if (isOriginal && isPrismaError(original)) value = safeErrorMessage(original);
-        else if (/^PrismaClient\w*Error$/.test(exception.type ?? '')) value = exception.type;
-        else if (exception.value !== undefined) value = redact(exception.value);
+        const type = keep(exception.type, IDENTIFIER) ?? 'Error';
+        // Sentry orders linked errors innermost first; the hint names the
+        // outermost (last). An error object is used only when its name agrees
+        // with the type Sentry recorded at that position.
+        const candidate = chain[values.length - 1 - i];
+        const source = candidate instanceof Error && nameOf(candidate) === exception.type ? candidate : undefined;
+        const mechanismType = keep(exception.mechanism?.type, /^[\w.]{1,64}$/);
         return {
-          type: exception.type,
-          value,
+          type,
+          value: describe(type, source),
           ...(exception.mechanism
-            ? { mechanism: { type: exception.mechanism.type, handled: exception.mechanism.handled } }
+            ? {
+                mechanism: {
+                  type: mechanismType ?? 'generic',
+                  handled: typeof exception.mechanism.handled === 'boolean' ? exception.mechanism.handled : undefined,
+                },
+              }
             : {}),
           ...(exception.stacktrace?.frames
             ? { stacktrace: { frames: exception.stacktrace.frames.map(safeFrame) } }
@@ -190,34 +240,87 @@ export function scrubEvent(event: Sentry.ErrorEvent, hint?: Sentry.EventHint): S
 
   const tags: Record<string, string> = {};
   for (const key of ALLOWED_TAGS) {
-    const value = event.tags?.[key];
-    if (typeof value === 'string' || typeof value === 'number') tags[key] = redact(String(value));
+    const raw = event.tags?.[key];
+    const value = typeof raw === 'number' ? String(raw) : raw;
+    // Shape first; then redact() must find nothing to change -- belt and braces.
+    if (typeof value === 'string' && TAG_SHAPES[key](value) && redact(value) === value) tags[key] = value;
   }
   if (Object.keys(tags).length > 0) out.tags = tags;
 
   const extra: Record<string, string | number> = {};
-  const requestId = event.extra?.request_id;
-  if (typeof requestId === 'string') extra.request_id = redact(requestId);
+  const requestId = typeof event.extra?.request_id === 'string' ? acceptRequestId(event.extra.request_id) : undefined;
+  if (requestId) extra.request_id = requestId;
   const suppressed = event.extra?.suppressed;
   if (typeof suppressed === 'number' && Number.isSafeInteger(suppressed) && suppressed > 0) extra.suppressed = suppressed;
   if (Object.keys(extra).length > 0) out.extra = extra;
 
   const contexts: NonNullable<Sentry.ErrorEvent['contexts']> = {};
-  for (const key of ALLOWED_CONTEXTS) {
-    if (event.contexts?.[key]) contexts[key] = event.contexts[key];
+  for (const key of ['runtime', 'os'] as const) {
+    const name = keep(event.contexts?.[key]?.name, META);
+    const version = keep(event.contexts?.[key]?.version, META);
+    if (name) contexts[key] = version ? { name, version } : { name };
   }
   if (Object.keys(contexts).length > 0) out.contexts = contexts;
 
   return out;
 }
 
+/**
+ * An exception's value, built -- never copied. The type, then whatever the
+ * error OBJECT says in an approved shape: a code, an HTTP status. The message
+ * is read only for the statement-timeout test, and contributes nothing but the
+ * fixed code `57014`.
+ */
+function describe(type: string, error: Error | undefined): string {
+  if (!error) return type;
+  const e = error as { code?: unknown; errorCode?: unknown; meta?: { code?: unknown }; status?: unknown; getStatus?: unknown };
+  const parts = [type];
+  const code =
+    [e.code, e.errorCode].find((c): c is string => typeof c === 'string' && PRISMA_CODE.test(c)) ??
+    (typeof e.code === 'string' && NODE_CODE.test(e.code) ? e.code : undefined);
+  if (code) parts.push(code);
+  const sqlState = typeof e.meta?.code === 'string' && SQLSTATE.test(e.meta.code) ? e.meta.code : undefined;
+  if (sqlState) parts.push(`sqlstate=${sqlState}`);
+  else if (STATEMENT_TIMEOUT.test(error.message)) parts.push('sqlstate=57014');
+  const status = httpStatus(e);
+  if (status !== undefined) parts.push(`status=${status}`);
+  return parts.join(' ');
+}
+
+function httpStatus(e: { status?: unknown; getStatus?: unknown }): number | undefined {
+  let status: unknown = e.status;
+  if (typeof e.getStatus === 'function') {
+    try {
+      status = (e.getStatus as () => unknown)();
+    } catch {
+      return undefined;
+    }
+  }
+  return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
+}
+
+function nameOf(error: Error): string | undefined {
+  return typeof error.name === 'string' ? error.name : undefined;
+}
+
+/** The original exception and its `cause` chain, outermost first; bounded, and safe against cycles. */
+function causeChain(original: unknown): unknown[] {
+  const chain: unknown[] = [];
+  let current = original;
+  while (current instanceof Error && chain.length < 10 && !chain.includes(current)) {
+    chain.push(current);
+    current = (current as { cause?: unknown }).cause;
+  }
+  return chain;
+}
+
 function safeFrame(frame: Frame): Frame {
   return {
-    filename: frame.filename,
-    function: frame.function,
-    module: frame.module,
-    lineno: frame.lineno,
-    colno: frame.colno,
-    in_app: frame.in_app,
+    filename: keep(frame.filename, FRAME_FILE),
+    function: keep(frame.function, FRAME_FUNCTION),
+    module: keep(frame.module, FRAME_FILE),
+    lineno: typeof frame.lineno === 'number' ? frame.lineno : undefined,
+    colno: typeof frame.colno === 'number' ? frame.colno : undefined,
+    in_app: typeof frame.in_app === 'boolean' ? frame.in_app : undefined,
   };
 }

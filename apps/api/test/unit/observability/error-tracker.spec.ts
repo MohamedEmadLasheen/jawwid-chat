@@ -185,20 +185,25 @@ describe('scrubEvent — what must never reach Sentry', () => {
     expectClean(JSON.stringify(scrubbed));
   });
 
-  it('redacts secrets, phones, emails and signed URLs that reached a message or an exception value', () => {
+  it('sends no free text at all: no event message, no logentry, no exception value copied — not even redacted', () => {
+    // redact() would have caught the phone, the email and the URL here; it
+    // could never have caught the name or the sentence. Neither is sent.
     const scrubbed = scrubEvent(
       eventWith({
-        message: 'auth failed for Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature',
+        message: 'auth failed for Layla Example: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature',
+        logentry: { message: 'parent said ابني مريض اليوم' },
         exception: {
           values: [
             { type: 'Error', value: `fetch ${SIGNED_URL} failed` },
-            { type: 'Error', value: 'invalid contact +20 100 123 4567 / ٠١٠٠١٢٣٤٥٦٧ / parent.one@example.com' },
+            { type: 'Error', value: 'invalid contact Layla Example +20 100 123 4567 / ٠١٠٠١٢٣٤٥٦٧ / parent.one@example.com' },
           ],
         },
       }),
     );
+    expect(scrubbed.message).toBeUndefined();
+    expect(scrubbed.logentry).toBeUndefined();
+    expect(scrubbed.exception!.values!.map((v) => v.value)).toEqual(['Error', 'Error']);
     expectClean(JSON.stringify(scrubbed));
-    expect(scrubbed.exception!.values![0].value).toContain('https://api.example.test/[redacted-url]');
   });
 
   it('reduces a Prisma error to its class and code — Prisma prints the arguments it was given', () => {
@@ -235,7 +240,7 @@ describe('scrubEvent — what must never reach Sentry', () => {
           url: SIGNED_URL,
           name: 'Layla Example',
         },
-        extra: { request_id: '7f3a1b2c', body: 'ابني مريض اليوم', phone: '+201001234567' },
+        extra: { request_id: '4bf92f3577b34da6a3ce929d0e0e4736', body: 'ابني مريض اليوم', phone: '+201001234567' },
       }),
     );
     expect(scrubbed.tags).toEqual({
@@ -244,8 +249,10 @@ describe('scrubEvent — what must never reach Sentry', () => {
       component: 'api',
       actor_kind: 'staff',
     });
-    expect(scrubbed.extra).toEqual({ request_id: '7f3a1b2c' });
+    expect(scrubbed.extra).toEqual({ request_id: '4bf92f3577b34da6a3ce929d0e0e4736' });
     expectClean(JSON.stringify(scrubbed));
+    // A request id that is not an opaque id is not a request id.
+    expect(scrubEvent(eventWith({ extra: { request_id: 'Layla Example' } })).extra).toBeUndefined();
   });
 
   it('survives an event with nothing in it', () => {
@@ -302,7 +309,9 @@ describe('a real SDK client, on an in-memory transport', () => {
     // And the useful half did arrive.
     expect(wire).toContain('POST /api/v1/conversations/:id/messages');
     expect(wire).toContain('4bf92f3577b34da6a3ce929d0e0e4736');
-    expect(wire).toContain('[redacted-phone]');
+    // The exception's value is its class, built from the type -- the message is not on the wire.
+    expect(wire).toContain('"value":"Error"');
+    expect(wire).not.toContain('send to');
     expect(wire).toContain('"release":"abc1234"');
   });
 });
