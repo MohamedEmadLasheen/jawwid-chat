@@ -806,8 +806,13 @@ describe('PD-30 over HTTP', () => {
     try {
       await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('subscription.enforced_since', 'subscription.announced_at', 'subscription.overdue_from')`);
       await addSubscription(child.id, 1);
+      // A FIXED hour, never "now + 9 days": this child shares its teacher with the
+      // holds test's child, whose regular lessons run every day at 23:15-23:45
+      // Cairo, so a run between 22:45 and 23:45 Cairo double-booked the teacher
+      // (409). 08:00 UTC is 10:00 or 11:00 Cairo, far from every slot this file adds.
+      const nineDays = `${addDays(today(), 9)}T08:00:00.000Z`;
       const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
-        learnerId: child.id, startsAt: at(9 * 24 * HOUR), endsAt: at(9 * 24 * HOUR + HOUR / 2),
+        learnerId: child.id, startsAt: nineDays, endsAt: new Date(Date.parse(nineDays) + HOUR / 2).toISOString(),
       });
       expect(future.status).toBe(201);
       futureId = future.json.id;
