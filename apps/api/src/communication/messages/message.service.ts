@@ -49,7 +49,7 @@ import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 import { withOwedMakeups } from './owed-makeup';
 import { MESSAGE_MAX_CHARACTERS, messageTooLong } from './message-length';
-import { blockedBy, hasBlocked, hideableByBlock } from '../../platform/blocks';
+import { blockedBy, hasBlocked, hideableByBlock, notHiddenByBlock } from '../../platform/blocks';
 
 export interface AttachmentInput {
   kind: string;
@@ -942,8 +942,10 @@ export class MessageService {
    * below, so the number on the chat list and the number from
    * `GET /conversations/:id/messages/unread` cannot disagree.
    */
-  private unreadWhere(actorId: string): Prisma.MessageWhereInput {
+  private async unreadWhere(actorId: string): Promise<Prisma.MessageWhereInput> {
     return {
+      // PD-57: what the viewer's block hides is never counted -- a badge is a signal of contact.
+      ...notHiddenByBlock(await blockedBy(this.prisma, actorId)),
       deletedForAll: false,
       hiddenFor: { none: { actorId } },
       receipts: {
@@ -957,7 +959,7 @@ export class MessageService {
 
   async unreadCount(conversationId: string, actorId: string): Promise<number> {
     return this.prisma.message.count({
-      where: { conversationId, ...this.unreadWhere(actorId) },
+      where: { conversationId, ...(await this.unreadWhere(actorId)) },
     });
   }
 
@@ -989,7 +991,7 @@ export class MessageService {
       by: ['conversationId'],
       where: {
         conversationId: { in: conversationIds },
-        ...this.unreadWhere(actorId),
+        ...(await this.unreadWhere(actorId)),
       },
       _count: { _all: true },
     });

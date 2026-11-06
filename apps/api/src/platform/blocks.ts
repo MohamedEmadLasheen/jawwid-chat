@@ -33,6 +33,18 @@ export function hideableByBlock(type: string | null | undefined): boolean {
   return !!type && BLOCK_HIDEABLE_MESSAGE_TYPES.has(type);
 }
 
+/**
+ * A message filter: none of the messages these blocks hide (a blocked author's
+ * hideable types). For counts -- the unread badge, the waiting push -- which must
+ * give no signal of contact either. A message without an author always passes.
+ */
+export function notHiddenByBlock(blocked: ReadonlySet<string>): Prisma.MessageWhereInput {
+  if (blocked.size === 0) return {};
+  return {
+    AND: [{ OR: [{ authorId: null }, { authorId: { notIn: [...blocked] } }, { type: { notIn: [...BLOCK_HIDEABLE_MESSAGE_TYPES] } }] }],
+  };
+}
+
 /** The ids of everyone this viewer has blocked. Empty for staff (staff never block). */
 export async function blockedBy(db: Db, viewerId: string): Promise<ReadonlySet<string>> {
   const cache = currentRequestContext();

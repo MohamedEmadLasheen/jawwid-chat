@@ -557,6 +557,83 @@ describe('§6: abuse limits and support sessions', () => {
   });
 });
 
+/** A message addressed to these readers: written like `post`, with their unread receipts. */
+async function postTo(conversationId: string, authorType: string, authorId: string, body: string, readers: string[]) {
+  const id = await post(conversationId, authorType, authorId, body);
+  await g.prisma.messageReceipt.createMany({ data: readers.map((actorId) => ({ messageId: id, actorId, state: 'sent' })) });
+  return id;
+}
+
+describe('ENG-03 follow-up 1: unread counts never count what a block hides', () => {
+  it('3 messages of the blocked author leave the blocker\'s counts as they were; others\' rise; after unblock they count as unread again', async () => {
+    const f = family(12);
+    const group = groupOf(12);
+    const teacherId = group.teacherIds[0]!;
+    const supervisor = supervisorOf(group.supervisorId);
+    const parent = await as(f.parent.subject);
+    const unreadOf = async (who: Awaited<ReturnType<typeof as>>) => (await who.get(`/conversations/${group.conversationId}/messages/unread`)).json.unread as number;
+    const listOf = async (who: Awaited<ReturnType<typeof as>>) => {
+      const list = await who.get('/conversations');
+      const rows = (list.json.conversations ?? list.json) as Array<{ id: string; unreadCount?: number }>;
+      return { row: rows.find((c) => c.id === group.conversationId)?.unreadCount ?? 0, total: rows.reduce((n, c) => n + (c.unreadCount ?? 0), 0) };
+    };
+    const asSupervisor = await as(supervisor.subject);
+    // A visible unread message first, so "unchanged" is not just zero.
+    await postTo(group.conversationId, 'staff', supervisor.id, 'From the supervisor', [f.parent.id, teacherId]);
+    expect((await block(f.parent.subject, 'teacher', teacherId)).status).toBe(201);
+    const before = { unread: await unreadOf(parent), ...(await listOf(parent)) };
+    const supBefore = await unreadOf(asSupervisor);
+    expect(before.unread).toBe(1);
+    for (let i = 0; i < 3; i++) await postTo(group.conversationId, 'teacher', teacherId, `Teacher line ${i}`, [f.parent.id, supervisor.id]);
+
+    expect({ unread: await unreadOf(parent), ...(await listOf(parent)) }).toEqual(before);
+    expect(await unreadOf(asSupervisor)).toBe(supBefore + 3);
+
+    // Choice: an unblock restores the history as it is -- never read, so unread again.
+    const mine = await parent.get('/me/blocks');
+    expect((await parent.del(`/me/blocks/${mine.json[0].id}`)).status).toBe(204);
+    expect(await unreadOf(parent)).toBe(before.unread + 3);
+    expect((await listOf(parent)).total).toBe(before.total + 3);
+  });
+});
+
+describe('ENG-03 follow-up 2: a push queued before the block is re-checked when it is due', () => {
+  it('the blocker\'s waiting push for the blocked author\'s messages is dropped (BLOCKED); a push that also stands for others\' messages, and other members\' pushes, stay', async () => {
+    const f = family(13);
+    const group = groupOf(13);
+    const teacherId = group.teacherIds[0]!;
+    const supervisorId = group.supervisorId;
+    const due = new Date(Date.now() - 1000);
+    const pipeline = app.get(NotificationPipeline);
+    const queue = (recipientId: string, conversationId: string, extra: Record<string, unknown> = {}) => g.prisma.notification.create({
+      data: {
+        dedupeKey: `new_message:${randomUUID()}:${recipientId}`, ruleKey: 'new_message', templateKey: 'new_message',
+        organizationId: orgId, eventType: 'message_published', recipientId, conversationId, scheduledAt: due, ...extra,
+      },
+    });
+    await postTo(group.conversationId, 'teacher', teacherId, 'Queued before the block', [f.parent.id, supervisorId]);
+    const parentPush = await queue(f.parent.id, group.conversationId);
+    const supervisorPush = await queue(supervisorId, group.conversationId);
+    // A held summary standing for this chat only.
+    const held = await queue(f.parent.id, group.conversationId, {
+      dedupeKey: `held:${randomUUID()}`, templateKey: 'new_messages_held',
+      variables: { held: true, chats: { [group.conversationId]: { count: 1 } }, count: 1 },
+    });
+
+    expect((await block(f.parent.subject, 'teacher', teacherId)).status).toBe(201);
+    await pipeline.guardDueMessages(new Date(), 120_000);
+    expect(await g.prisma.notification.findUniqueOrThrow({ where: { id: parentPush.id } })).toMatchObject({ status: 'cancelled', failureCode: 'BLOCKED' });
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: supervisorPush.id } })).status).toBe('scheduled');
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: held.id } })).status).toBe('cancelled');
+
+    // Another unread message, from someone not blocked: the parent's push stands.
+    await postTo(group.conversationId, 'staff', supervisorId, 'Not blocked', [f.parent.id]);
+    const mixed = await queue(f.parent.id, group.conversationId);
+    await pipeline.guardDueMessages(new Date(), 120_000);
+    expect((await g.prisma.notification.findUniqueOrThrow({ where: { id: mixed.id } })).status).toBe('scheduled');
+  });
+});
+
 describe('§6.4-8: erasure removes blocks in both directions', () => {
   it('the erased parent\'s blocks, made and received, are gone; the case stays', async () => {
     const f = family(7);

@@ -11,7 +11,7 @@ import { NotificationService, type ScheduledDeliveryListener } from './notificat
 import { QuietHoursService } from './quiet-hours.service';
 import { suppressedByBlock, catalogEntry, severityOf, type NotificationCategory } from './notification-catalog';
 import { ACADEMY_ZONE } from '../../platform/time-zone';
-import { hasBlocked } from '../../platform/blocks';
+import { blockedBy, hasBlocked, notHiddenByBlock } from '../../platform/blocks';
 import { messageAudience } from '../outbox/message-audience';
 import { capFreesAt, deferForQuiet, heldAdd, heldCount, heldKeep, heldRead, heldTemplate, type HeldChats } from './chat-push-policy';
 
@@ -545,6 +545,9 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
    * worker immediately before NotificationService.dispatchDue, over every chat
    * push that will be due within `horizonMs`, against the SAME audience rule
    * the fan-out used (message-audience.ts). The dispatcher itself is unchanged.
+   * PD-57: and while it still stands for an unread message no block of the
+   * recipient's hides (else cancelled, failure BLOCKED); a mention by someone the
+   * target has since blocked likewise.
    */
   async guardDueMessages(now = new Date(), horizonMs = 5_000, batch = 1_000): Promise<number> {
     const due = await this.prisma.notification.findMany({
@@ -559,7 +562,27 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
     });
     const drop: string[] = [];
     const closed: string[] = [];
+    const blockedOut: string[] = [];
     const audiences = new Map<string, Set<string>>();
+    // PD-57 (ENG-03): a push queued before a block goes only while it still stands
+    // for something the recipient may see -- an unread message there that no block
+    // of theirs hides. Someone who blocked nobody costs one cached read.
+    const blocks = new Map<string, ReadonlySet<string>>();
+    const visibleUnread = async (recipientId: string, conversationId: string): Promise<boolean> => {
+      if (!blocks.has(recipientId)) blocks.set(recipientId, await blockedBy(this.prisma, recipientId));
+      const blocked = blocks.get(recipientId) as ReadonlySet<string>;
+      if (blocked.size === 0) return true;
+      return (await this.prisma.message.count({
+        where: {
+          conversationId,
+          deletedForAll: false,
+          hiddenFor: { none: { actorId: recipientId } },
+          receipts: { some: { actorId: recipientId, state: { in: ['sent', 'delivered'] } } },
+          ...notHiddenByBlock(blocked),
+        },
+        take: 1,
+      })) > 0;
+    };
     const audienceOf = async (conversationId: string) => {
       if (!audiences.has(conversationId)) audiences.set(conversationId, new Set(await messageAudience(this.prisma, conversationId, null)));
       return audiences.get(conversationId) as Set<string>;
@@ -574,6 +597,11 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
         if (typeof v.mentionId === 'string') {
           const m = await this.prisma.messageMention.findUnique({ where: { id: v.mentionId }, select: { state: true } });
           if (!m || (m.state !== 'notified' && m.state !== 'pending')) closed.push(r.id);
+          // PD-57: a mention by someone the target has since blocked is not sent.
+          else {
+            const by = await this.prisma.messageMention.findUnique({ where: { id: v.mentionId }, select: { mentionedBy: true } });
+            if (by && (await hasBlocked(this.prisma, r.recipientId, by.mentionedBy))) blockedOut.push(r.id);
+          }
         }
         continue;
       }
@@ -592,13 +620,14 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
           const fv = (fresh.variables ?? {}) as Record<string, unknown>;
           const before = (fv.chats ?? {}) as HeldChats;
           const keep: Record<string, boolean> = {};
-          for (const id of Object.keys(before)) keep[id] = (await audienceOf(id)).has(r.recipientId);
+          for (const id of Object.keys(before)) keep[id] = (await audienceOf(id)).has(r.recipientId) && (await visibleUnread(r.recipientId, id));
           const after = heldKeep(before, (id) => keep[id] === true);
           if (Object.keys(after).length !== Object.keys(before).length) await this.reshapeHeld(tx, fresh, fv, after, 'AUDIENCE');
         });
         continue;
       }
       if (!(await audienceOf(r.conversationId as string)).has(r.recipientId)) drop.push(r.id);
+      else if (!(await visibleUnread(r.recipientId, r.conversationId as string))) blockedOut.push(r.id);
     }
     const dropped = drop.length === 0 ? 0 : (await this.prisma.notification.updateMany({
       where: { id: { in: drop }, status: NotificationStatus.SCHEDULED },
@@ -608,7 +637,11 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
       where: { id: { in: closed }, status: NotificationStatus.SCHEDULED },
       data: { status: NotificationStatus.CANCELLED, failureCode: 'MENTION_CLOSED' },
     })).count;
-    return dropped + ended;
+    const blockedDropped = blockedOut.length === 0 ? 0 : (await this.prisma.notification.updateMany({
+      where: { id: { in: blockedOut }, status: NotificationStatus.SCHEDULED },
+      data: { status: NotificationStatus.CANCELLED, failureCode: 'BLOCKED' },
+    })).count;
+    return dropped + ended + blockedDropped;
   }
 
   /**
