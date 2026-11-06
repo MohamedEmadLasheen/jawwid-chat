@@ -80,3 +80,20 @@ export function createErrorTracker(
   };
   return new SentryErrorTracker(dsn, component, build);
 }
+
+/**
+ * The tracker this process created at boot, for the few places that are not
+ * composed in main.ts or worker.ts and cannot be handed one -- the realtime
+ * gateway's exception filter, which Nest instantiates per handler. Inert until
+ * an entrypoint sets it, so a test or a harness that never does reports
+ * nothing.
+ */
+let processTracker: ErrorTracker = new NoopErrorTracker();
+
+export function setProcessErrorTracker(tracker: ErrorTracker): void {
+  processTracker = tracker;
+}
+
+export function processErrorTracker(): ErrorTracker {
+  return processTracker;
+}

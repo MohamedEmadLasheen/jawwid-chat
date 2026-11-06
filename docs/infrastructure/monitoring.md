@@ -106,11 +106,27 @@ loaded. Release is `GIT_COMMIT`, environment `APP_ENV`.
 `RequestErrorCaptureInterceptor`; a 5xx with no exception -- a failed guard --
 as a fixed `HttpServerError`), every worker subsystem failure the loop survives
 (`outbox.drain`, `stories.sweep`, `calls.expireRinging`, `lessons.sweep`,
-`notifications.dispatchDue`), unhandled rejections, uncaught exceptions and a
-failed boot. **Not reported:** 4xx -- a refusal is the authorization service
-working. Tags are labels only: `route` (template), `status`, `component`,
+`notifications.dispatchDue`), unexpected exceptions from WebSocket handlers
+(`WS <event>`, via `WsErrorReportFilter` on the gateway -- Nest applies no
+global filter to gateways) and failed socket handshakes (`WS handshake`),
+unhandled rejections, uncaught exceptions and a failed boot. **Not reported:**
+4xx -- a refusal is the authorization service working; its WebSocket twins
+(`WsException`, an `HttpException` below 500); and a `/health/*` probe's 503,
+which is readiness draining traffic during an outage (the failure behind it is
+reported by whatever hit it; a health route's 500 is still reported). Tags are
+labels only: `route` (template or event name), `status`, `component`,
 `actor_kind`, `version`; `extra` carries `request_id`, which joins an event to
-its log line.
+its log line, and `suppressed` (below).
+
+**Volume** (`error-budget.ts`): every report passes a per-process budget first
+-- one event per kind of failure (component, route, status, error class,
+Prisma code; never the message) per 15 minutes, and at most 20 events an hour
+across all kinds. The next event of a kind after a quiet spell carries
+`suppressed`, how many were held back. An uncaught exception or a failed boot
+skips the hourly limit (the process exits right after). A day-long outage of
+both processes therefore sends under 1,000 events, where it would otherwise
+send on the order of 10,000 an hour. Every failure is still logged in full;
+the budget only removes duplicates from Sentry.
 
 **What can never leave**, in three layers; the third does not trust the first two:
 
@@ -127,6 +143,11 @@ its log line.
    contexts. There is no `request`, `user`, `breadcrumbs`, `server_name`,
    `transaction` or request-derived metadata on the event that is sent.
 
+`test/unit/observability/error-budget.spec.ts` measures the budget on the wire
+(1,000 identical failures send one event; 14,400 across twenty subsystems in an
+hour send 20), and `ws-error-report.filter.spec.ts` drives Nest's own
+WebSocket exception handler and checks that no frame data, socket or token is
+handed over and that the client's `exception` frame is unchanged.
 `test/unit/observability/error-tracker.spec.ts` asserts each layer, and drives a
 real SDK client over an in-memory transport with a scope deliberately loaded
 with a user, a draft, a signed URL and breadcrumbs, then checks the wire bytes.
