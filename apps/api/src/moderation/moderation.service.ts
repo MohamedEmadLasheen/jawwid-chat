@@ -73,9 +73,9 @@ export const ATTACHMENT_URL_TTL_SECONDS = 300;
  *                      the report's departments (the Super Admin if none, and
  *                      for child_safety); a note is required
  *
- * TODO(ENG-04): the 18 h / 24 h sweep (overdue_at, the manager and Super Admin
- * alerts) and report_answered read what this writes: due_at, overdue_at,
- * priority, reporter_answered_at, and the report.created / report.answered events.
+ * ENG-04 (report-escalation.service.ts): the 18 h / 24 h sweep (overdue_at,
+ * the manager and Super Admin alerts), the PD-47 task and report_answered read
+ * what this writes: due_at, status, reason, and the report.answered event.
  */
 @Injectable()
 export class ModerationService {

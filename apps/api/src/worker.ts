@@ -23,6 +23,7 @@ import { SupervisionCaseService } from './cases/supervision-case.service';
 import { TaskService } from './tasks/task.service';
 import { DepartmentRoomService } from './org/department-room.service';
 import { WhiteboardService } from './whiteboards/whiteboard.service';
+import { ReportEscalationService } from './moderation/report-escalation.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -148,6 +149,14 @@ const SEAT_SWEEP_MS = 60_000;
 const CASE_DUE_SWEEP_MS = 10 * 60_000;
 
 /**
+ * PD-57 ENG-04: how often unresolved reports are checked against their 24 h
+ * SLA (report_due_soon at 18 h, report_overdue at 24 h). Each stage is marked
+ * once per report (chat.content_report_alert, rows taken FOR UPDATE SKIP
+ * LOCKED), so every replica may run it; this bounds only how late an alert is.
+ */
+const REPORT_ESCALATION_SWEEP_MS = Number(process.env.REPORT_ESCALATION_SWEEP_MS ?? 5 * 60_000);
+
+/**
  * PD-47: how often the task sources are swept -- missing tasks raised, done
  * ones completed on re-read evidence (chat.work_task_sweep). The source
  * triggers already do both in the source's own transaction; this is the
@@ -239,6 +248,7 @@ async function bootstrap(): Promise<void> {
   const lessonEvents = app.get(LessonEvents);
   const departmentRooms = app.get(DepartmentRoomService);
   const whiteboards = app.get(WhiteboardService);
+  const reportEscalation = app.get(ReportEscalationService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
   // and trial groups seat each teacher's own supervisor; off, the department.
   // Re-seated at boot when the boot turned the switch over (onApplicationBootstrap),
@@ -296,6 +306,7 @@ async function bootstrap(): Promise<void> {
   let nextHeldReevaluation = 0;
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
+  let nextReportEscalationSweep = 0;
   let nextTaskSweep = 0;
   let nextLessonAnnounceSweep = 0;
   let lastTaskIssues = 0;
@@ -525,6 +536,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextCaseDueSweep = Date.now() + CASE_DUE_SWEEP_MS;
+      }
+    }
+
+    // PD-57 ENG-04: reports at 18 h and 24 h unanswered, alerted once per stage.
+    if (Date.now() >= nextReportEscalationSweep) {
+      draining = true;
+      try {
+        await reportEscalation.sweep();
+      } catch (e) {
+        report(log, 'report escalation sweep', 'moderation.escalation', e);
+      } finally {
+        draining = false;
+        nextReportEscalationSweep = Date.now() + REPORT_ESCALATION_SWEEP_MS;
       }
     }
 

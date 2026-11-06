@@ -159,20 +159,25 @@ export const CommEvent = {
    */
   TASK_CHANGED: 'task.changed',
   /**
+   * PD-57 ENG-04: a report reached an SLA stage unresolved (`due_soon` at 18 h,
+   * `overdue` at 24 h), written once per stage by the sweep with its marker
+   * (chat.content_report_alert). Ids only; ReportEscalationService delivers it.
+   */
+  REPORT_ESCALATED: 'report.escalated',
+  /**
    * PD-57 (roadmap §5.4): a report was filed (`change: created`), or an open one
    * was raised to child_safety by a duplicate (`change: raised`). Ids and the
    * priority only: NEVER the conversation (the worker would fan it out to the
    * conversation's room, where the reported person listens), the target, the
    * reporter or any content.
-   * TODO(ENG-04): delivered to staff (report_received_staff, and every Super
-   * Admin at once for priority urgent: report_child_safety); until then it
-   * falls to the worker's default branch and reaches no one.
+   * Delivered by ReportEscalationService (ENG-04): report_received_staff to the
+   * responsible managers, or report_child_safety at once to every Super Admin
+   * and holder of moderation.child_safety.
    */
   REPORT_CREATED: 'report.created',
   /**
    * PD-57: a report was closed with its answer to the reporter. Ids only.
-   * TODO(ENG-04): delivered to the reporter as report_answered; until then it
-   * falls to the worker's default branch and reaches no one.
+   * Delivered to the reporter as report_answered by ReportEscalationService (ENG-04).
    */
   REPORT_ANSWERED: 'report.answered',
   /**
@@ -515,9 +520,17 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_COMPLAINT_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TEACHER_PRAISE_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TASK_CHANGED]: TaskChangedPayload;
+  [CommEvent.REPORT_ESCALATED]: ReportEscalatedPayload;
   [CommEvent.REPORT_CREATED]: ReportCreatedPayload;
   [CommEvent.REPORT_ANSWERED]: ReportAnsweredPayload;
   [CommEvent.CONDUCT_WARNING]: ConductWarningPayload;
+}
+
+/** PD-57 ENG-04. Ids and the stage only. */
+export interface ReportEscalatedPayload {
+  organizationId: string;
+  reportId: string;
+  stage: 'due_soon' | 'overdue';
 }
 
 /** PD-57. No conversationId, no content: ENG-04 reads the report through its own path. */
