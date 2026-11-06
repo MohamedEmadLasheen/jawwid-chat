@@ -258,15 +258,16 @@ function applyTrustedProxy(app: INestApplication): void {
 }
 
 /**
- * PROXY_HOPS_PROBE=on: log the shape of probed requests' forwarding chain, so
- * TRUSTED_PROXY_HOPS can be measured rather than guessed (proxy-hop-probe.ts,
+ * PROXY_HOPS_PROBE=<token>: log the shape of probed requests' forwarding chain,
+ * so TRUSTED_PROXY_HOPS can be measured rather than guessed (proxy-hop-probe.ts,
  * production-runbook.md §1d). Read at boot: a malformed value stops it.
  */
 function applyProxyHopProbe(app: INestApplication): void {
-  if (!readProxyHopsProbe()) return;
+  const token = readProxyHopsProbe();
+  if (!token) return;
   const logger = new Logger('ProxyHopProbe');
-  logger.warn('PROXY_HOPS_PROBE is on: probed requests log their forwarding shape (no addresses). Turn it off after measuring.');
-  app.use(proxyHopProbe((line) => logger.log(line)));
+  logger.warn('PROXY_HOPS_PROBE is on: token-carrying probe requests log their forwarding shape (no addresses). Turn it off after measuring.');
+  app.use(proxyHopProbe(token, (line) => logger.log(line)));
 }
 
 function applySecurityHeaders(app: INestApplication): void {

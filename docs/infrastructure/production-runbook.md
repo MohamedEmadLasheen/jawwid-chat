@@ -84,7 +84,7 @@ window.
 
 **Before the window (any day, no downtime):**
 
-0. `TRUSTED_PROXY_HOPS` is measured and set (§1d), and `PROXY_HOPS_PROBE` is off.
+0. `TRUSTED_PROXY_HOPS` is measured and set (§1d), and the `PROXY_HOPS_PROBE` secret is deleted.
    The launch deploy refuses otherwise.
 1. Create the cluster: `doctl databases create jawwid-chat-prod-valkey --engine
    valkey --version 8 --region fra1 --size db-s-1vcpu-1gb --num-nodes 1 --wait`,
@@ -145,24 +145,30 @@ DigitalOcean does not document it, so it is **measured, never guessed**:
 
 Media and payment links do not depend on it: the deploys set
 `MEDIA_PUBLIC_BASE_URL` and `PAYMENT_LINK_BASE_URL` to the public HTTPS origin
-unless those variables say otherwise, and the API never reads `X-Forwarded-Host`
+unless those variables say otherwise (the deploy refuses a base that is not
+`https://<host>[/<path>]/api/v1`, or an API origin with a trailing slash), and the API never reads `X-Forwarded-Host`
 (App Platform passes a forged one through).
 
-**Steps** (the owner sets the variables; nothing here touches a secret):
+**Steps** (the owner sets the values; the token is a secret and is never printed):
 
-1. Set the `production` variable `PROXY_HOPS_PROBE=on` and run **Deploy
-   production** with the same `image_tag`. The API logs a warning that the probe is on.
+1. Create a probe token (`openssl rand -hex 32`), keep it in your password manager,
+   set it as the `production` **secret** `PROXY_HOPS_PROBE`, and run **Deploy
+   production** with the same `image_tag`. The API logs a warning that the probe is
+   on. Only requests carrying that token are measured, so nobody else can add a
+   reading to the log or use up its 50 lines (per process start).
 2. From a machine whose public IPv4 address you know:
-   `scripts/infra/measure-proxy-hops.sh send https://api.chat.jawwid.com --my-ip <that address>`.
-   It makes three requests to `/health/live`: one plain, one with a forged
-   `X-Forwarded-For`, one with a forged `do-connecting-ip`. Your address is sent
-   only as a SHA-256 hash; the probe logs positions and counts, never an address.
-3. `doctl apps logs "$DIGITALOCEAN_APP_ID" api --type run | scripts/infra/measure-proxy-hops.sh interpret`.
-   It prints `TRUSTED_PROXY_HOPS = N`, or **STOP** with the reason: the API is
-   reachable directly (public TCP peer), your address was not found, or a forged
-   entry lands inside the trusted hops.
-4. On `TRUSTED_PROXY_HOPS = N`: set that variable, remove `PROXY_HOPS_PROBE` (or set
-   it to `off`), and redeploy. The boot log then says
+   `PROXY_HOPS_PROBE_TOKEN=<token> scripts/infra/measure-proxy-hops.sh send https://api.chat.jawwid.com --my-ip <that address>`.
+   It prints a fresh **run id** and makes three requests to `/health/live`: one
+   plain, one with a forged `X-Forwarded-For`, one with a forged `do-connecting-ip`.
+   Your address is sent only as a SHA-256 hash, compared and dropped; the probe
+   logs positions and counts, never an address, a header value or the token.
+3. `doctl apps logs "$DIGITALOCEAN_APP_ID" api --type run | scripts/infra/measure-proxy-hops.sh interpret --run <run id>`.
+   It reads ONLY that run and prints `TRUSTED_PROXY_HOPS = N`, or **STOP** with the
+   reason: a line missing or duplicated, your address not found or at different
+   hops, a public TCP peer (the API reachable directly), or a forged entry inside
+   the trusted hops. On STOP, fix the cause and `send` again (a new run id).
+4. On `TRUSTED_PROXY_HOPS = N`: set that variable, **delete** the `PROXY_HOPS_PROBE`
+   secret, and redeploy. The boot log then says
    `trust proxy = N; login source-IP rate limit enabled`.
 5. Make it required again: in `infra/env/manifest.tsv` change the `TRUSTED_PROXY_HOPS`
    row's STAGING and PROD columns back to `req`, regenerate the specs and templates,

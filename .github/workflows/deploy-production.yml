@@ -120,8 +120,8 @@ jobs:
             *) echo "::error::vars.PRODUCTION_API_BASE_URL must be an https:// origin"; exit 1 ;;
           esac
           host="${API_BASE_URL#https://}"
-          case "${host%/}" in
-            */*) echo "::error::vars.PRODUCTION_API_BASE_URL must be the API origin, with no path"; exit 1 ;;
+          case "$host" in
+            */*) echo "::error::vars.PRODUCTION_API_BASE_URL must be the API origin, with no path and no trailing slash"; exit 1 ;;
           esac
           # PD-28: the teacher web portal -- the Flutter app built for the browser
           # against the same API -- goes into the image under /teacher/. Built
@@ -203,8 +203,8 @@ jobs:
           # forwarded header is read), a wrong count is not
           # (apps/api/src/platform/auth/client-address.ts).
           TRUSTED_PROXY_HOPS: ${{ vars.TRUSTED_PROXY_HOPS }}
-          # `on` only while measuring the hop count (§1d); it logs entry counts, never an address.
-          PROXY_HOPS_PROBE: ${{ vars.PROXY_HOPS_PROBE }}
+          # A token only while measuring the hop count (§1d); it logs entry counts, never an address.
+          PROXY_HOPS_PROBE: ${{ secrets.PROXY_HOPS_PROBE }}
           PORT: '3000'
           LOG_LEVEL: info
           CORS_ALLOWED_ORIGINS: ${{ vars.PRODUCTION_CORS_ALLOWED_ORIGINS }}

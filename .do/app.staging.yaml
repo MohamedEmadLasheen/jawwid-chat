@@ -90,7 +90,7 @@ services:
         value: ${TRUSTED_PROXY_HOPS}
       - key: PROXY_HOPS_PROBE
         scope: RUN_TIME
-        type: GENERAL
+        type: SECRET
         value: ${PROXY_HOPS_PROBE}
       - key: PORT
         scope: RUN_TIME
@@ -503,7 +503,7 @@ workers:
         value: ${TRUSTED_PROXY_HOPS}
       - key: PROXY_HOPS_PROBE
         scope: RUN_TIME
-        type: GENERAL
+        type: SECRET
         value: ${PROXY_HOPS_PROBE}
       - key: PORT
         scope: RUN_TIME

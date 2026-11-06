@@ -17,27 +17,50 @@ import {
   PROBE_EXPECT_HEADER,
   PROBE_HEADER,
   PROBE_SENTINEL,
+  PROBE_TOKEN_HEADER,
   ProxyHopsProbeConfigurationError,
   probeShape,
   proxyHopProbe,
   readProxyHopsProbe,
+  tokenMatches,
 } from '../../../src/infra/http/proxy-hop-probe';
 
 const CLIENT = '203.0.113.7';
 const EDGE = '172.70.1.1';
 const OTHER_USER = '198.51.100.44';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
+const TOKEN = 'a'.repeat(40) + 'B_-9';
+const RUN = '0123456789abcdef';
 
 const probe = (headers: Record<string, string | string[]>, remoteAddress = '10.244.0.5') =>
-  probeShape({ headers: { [PROBE_HEADER]: 'plain-1', ...headers }, socket: { remoteAddress } });
+  probeShape({ headers: { [PROBE_HEADER]: `plain-${RUN}`, ...headers }, socket: { remoteAddress } });
 
 describe('PROXY_HOPS_PROBE', () => {
-  it('is off unless it says on; anything else stops the boot', () => {
-    expect(readProxyHopsProbe({})).toBe(false);
-    expect(readProxyHopsProbe({ PROXY_HOPS_PROBE: 'off' })).toBe(false);
-    expect(readProxyHopsProbe({ PROXY_HOPS_PROBE: ' on ' })).toBe(true);
-    for (const bad of ['1', 'true', 'ON', 'yes']) {
-      expect(() => readProxyHopsProbe({ PROXY_HOPS_PROBE: bad })).toThrow(ProxyHopsProbeConfigurationError);
+  it('is off when unset or off; otherwise it is the token', () => {
+    expect(readProxyHopsProbe({})).toBeUndefined();
+    expect(readProxyHopsProbe({ PROXY_HOPS_PROBE: 'off' })).toBeUndefined();
+    expect(readProxyHopsProbe({ PROXY_HOPS_PROBE: ` ${TOKEN} ` })).toBe(TOKEN);
+  });
+
+  it('refuses anything that is not a long token, and never repeats the value', () => {
+    for (const bad of ['on', '1', 'true', 'short-token', 'x'.repeat(31), 'has space'.repeat(5), 'é'.repeat(40), 'x'.repeat(129)]) {
+      let message = '';
+      try {
+        readProxyHopsProbe({ PROXY_HOPS_PROBE: bad });
+      } catch (e) {
+        expect(e).toBeInstanceOf(ProxyHopsProbeConfigurationError);
+        message = (e as Error).message;
+      }
+      expect(message).not.toBe('');
+      // A value long enough to be a (mistyped) secret is never echoed.
+      if (bad.length >= 8) expect(message).not.toContain(bad);
+    }
+  });
+
+  it('compares the token exactly, whatever the length of the guess', () => {
+    expect(tokenMatches(TOKEN, TOKEN)).toBe(true);
+    for (const guess of [undefined, '', TOKEN.slice(0, -1), TOKEN + 'x', TOKEN.toUpperCase(), 'b'.repeat(44)]) {
+      expect(tokenMatches(guess, TOKEN)).toBe(false);
     }
   });
 });
@@ -70,10 +93,10 @@ describe('probeShape — positions, never addresses', () => {
 
   it('ignores a request without a valid probe label, so nobody writes words into the log', () => {
     expect(probeShape({ headers: {} })).toBeUndefined();
-    for (const label of ['layla', 'plain layla', 'plain-abc', 'PLAIN', 'forged-xff-1'.repeat(3)]) {
+    for (const label of ['layla', 'plain layla', 'plain', 'plain-17', `plain-${RUN}x`, `PLAIN-${RUN}`, `plain-${RUN.toUpperCase()}`, `layla-${RUN}`]) {
       expect(probeShape({ headers: { [PROBE_HEADER]: label } })).toBeUndefined();
     }
-    expect(probeShape({ headers: { [PROBE_HEADER]: 'forged-connecting-ip-17' } })?.label).toBe('forged-connecting-ip-17');
+    expect(probeShape({ headers: { [PROBE_HEADER]: `forged-connecting-ip-${RUN}` } })?.label).toBe(`forged-connecting-ip-${RUN}`);
   });
 
   it('a malformed expect hash matches nothing', () => {
@@ -97,11 +120,25 @@ describe('probeShape — positions, never addresses', () => {
 });
 
 describe('proxyHopProbe middleware', () => {
+  const probed = (token?: string) => ({ headers: { [PROBE_HEADER]: `plain-${RUN}`, ...(token === undefined ? {} : { [PROBE_TOKEN_HEADER]: token }) } });
+
+  it('logs only requests that carry the token; the others are neither logged nor counted', () => {
+    const lines: string[] = [];
+    const mw = proxyHopProbe(TOKEN, (l) => lines.push(l), 3);
+    const next = jest.fn();
+    for (let i = 0; i < 100; i++) mw(probed(i % 2 ? undefined : 'wrong-' + 'x'.repeat(40)), undefined, next);
+    expect(lines).toHaveLength(0);
+    for (let i = 0; i < 5; i++) mw(probed(TOKEN), undefined, next);
+    expect(lines).toHaveLength(3);
+    expect(next).toHaveBeenCalledTimes(105);
+    expect(lines.join('\n')).not.toContain(TOKEN);
+  });
+
   it('logs at most MAX_LINES probed requests and never stops a request', () => {
     const lines: string[] = [];
-    const mw = proxyHopProbe((l) => lines.push(l));
+    const mw = proxyHopProbe(TOKEN, (l) => lines.push(l));
     const next = jest.fn();
-    for (let i = 0; i < MAX_LINES + 10; i++) mw({ headers: { [PROBE_HEADER]: 'plain' } }, undefined, next);
+    for (let i = 0; i < MAX_LINES + 10; i++) mw(probed(TOKEN), undefined, next);
     mw({ headers: {} }, undefined, next);
     expect(lines).toHaveLength(MAX_LINES);
     expect(next).toHaveBeenCalledTimes(MAX_LINES + 11);
@@ -110,7 +147,7 @@ describe('proxyHopProbe middleware', () => {
   it('a request that breaks the probe still goes on', () => {
     const next = jest.fn();
     const hostile = { get headers(): never { throw new Error('boom'); } };
-    proxyHopProbe(() => undefined)(hostile as never, undefined, next);
+    proxyHopProbe(TOKEN, () => undefined)(hostile as never, undefined, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
 });
@@ -121,12 +158,12 @@ describe('the reported hop count is the trust proxy value that gives Express the
   async function measure(xff: string) {
     const lines: string[] = [];
     const probeApp = express();
-    probeApp.use(proxyHopProbe((l) => lines.push(l)) as express.RequestHandler);
+    probeApp.use(proxyHopProbe(TOKEN, (l) => lines.push(l)) as express.RequestHandler);
     probeApp.get('/', (_req, res) => res.end());
     const reported = await new Promise<number>((resolve, reject) => {
       const srv = probeApp.listen(0, () => {
         const { port } = srv.address() as AddressInfo;
-        http.get({ port, headers: { [PROBE_HEADER]: 'plain', [PROBE_EXPECT_HEADER]: hash(CLIENT), 'x-forwarded-for': xff } }, (r) => {
+        http.get({ port, headers: { [PROBE_HEADER]: `plain-${RUN}`, [PROBE_TOKEN_HEADER]: TOKEN, [PROBE_EXPECT_HEADER]: hash(CLIENT), 'x-forwarded-for': xff } }, (r) => {
           r.resume();
           r.on('end', () => {
             srv.close();

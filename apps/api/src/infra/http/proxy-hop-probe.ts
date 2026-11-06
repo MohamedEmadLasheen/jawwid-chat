@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 
 /**
- * A measuring instrument for TRUSTED_PROXY_HOPS, off unless PROXY_HOPS_PROBE=on.
+ * A measuring instrument for TRUSTED_PROXY_HOPS, off unless PROXY_HOPS_PROBE
+ * holds a probe TOKEN.
  *
  * WHY. The hop count is a property of the platform, and DigitalOcean does not
  * document it: its own support page says `do-connecting-ip` holds both the
@@ -11,46 +12,66 @@ import { isIP } from 'node:net';
  * by the operator, with scripts/infra/measure-proxy-hops.sh
  * (production-runbook.md §1d).
  *
- * WHAT IT RECORDS. For a request that carries the probe header, one log line
+ * WHAT IT RECORDS. For a request that carries the probe token, one log line
  * with the SHAPE of the forwarding chain: how many X-Forwarded-For entries
  * arrived, and the POSITION (counted from the right) of three known values in
- * it -- the operator's own address (given to us only as a SHA-256 hash), the
+ * it -- the operator's own address (sent to us as a SHA-256 hash, which is
+ * compared and dropped, never stored or logged: an IPv4 hash is reversible by
+ * trying all 2^32 addresses, so it is treated as the address itself), the
  * address in `do-connecting-ip`, and the documentation-only sentinel
- * 192.0.2.123 the script forges. Positions, counts and booleans only: NO
- * address is ever logged, the operator's is never even received in clear.
+ * 192.0.2.123 the script forges. Positions, counts, booleans and a fixed label
+ * only: NO address, header value or token is ever logged.
  *
  * WHY THE POSITION IS THE ANSWER. Express `trust proxy = N` takes the client
  * from the N-th X-Forwarded-For entry counting from the right (1-based), so an
  * entry found k places from the right (0-based) means N = k + 1.
  *
- * SAFETY. It never changes a response or a decision, it runs only for requests
- * that ask for it, and it logs at most MAX_LINES lines per process, so turning
- * it on cannot flood the logs. Anyone can send the header while it is on; all
- * they get is a bounded number of shape lines in OUR logs.
+ * WHO CAN PROBE. Only a request carrying the token (compared in constant time).
+ * Without it a request is neither logged nor counted, so nobody else can add a
+ * forged measurement to the log or use up the line budget. The token is a
+ * secret of the deployment, never echoed: not in a log line, not in an error.
+ *
+ * SAFETY. It never changes a response or a decision, and it logs at most
+ * MAX_LINES lines per process start (one API instance; a restart or redeploy
+ * starts a new count), so it cannot flood the logs.
  */
 export const PROXY_HOPS_PROBE = 'PROXY_HOPS_PROBE';
 export const PROBE_HEADER = 'x-jawwid-hop-probe';
+export const PROBE_TOKEN_HEADER = 'x-jawwid-hop-probe-token';
 export const PROBE_EXPECT_HEADER = 'x-jawwid-hop-probe-expect';
 /** TEST-NET-1 (RFC 5737): reserved for documentation, never a real client. */
 export const PROBE_SENTINEL = '192.0.2.123';
 export const MAX_LINES = 50;
 
-/** A fixed probe kind and an optional run number: nobody can write words into the log through it. */
-const LABEL = /^(?:plain|forged-xff|forged-connecting-ip)(?:-\d{1,14})?$/;
+/** A fixed probe kind and the run id `send` generated: nobody can write words into the log through it. */
+const LABEL = /^(?:plain|forged-xff|forged-connecting-ip)-[0-9a-f]{16}$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+/** At least 32 characters of a URL-safe alphabet (`openssl rand -hex 32` gives 64). */
+const TOKEN = /^[A-Za-z0-9_-]{32,128}$/;
 
 export class ProxyHopsProbeConfigurationError extends Error {
-  constructor(raw: string) {
-    super(`${PROXY_HOPS_PROBE}='${raw}' must be 'on', 'off' or unset.`);
+  constructor() {
+    // The value is never repeated: it is meant to be a secret token.
+    super(`${PROXY_HOPS_PROBE} must be unset, 'off', or a token of 32 to 128 characters from A-Z a-z 0-9 _ - ` +
+      '(for example `openssl rand -hex 32`).');
     this.name = 'ProxyHopsProbeConfigurationError';
   }
 }
 
-export function readProxyHopsProbe(env: NodeJS.ProcessEnv = process.env): boolean {
+/** The probe token, or undefined when the probe is off. A malformed value stops the boot. */
+export function readProxyHopsProbe(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const raw = (env[PROXY_HOPS_PROBE] ?? '').trim();
-  if (raw === '' || raw === 'off') return false;
-  if (raw === 'on') return true;
-  throw new ProxyHopsProbeConfigurationError(raw);
+  if (raw === '' || raw === 'off') return undefined;
+  if (!TOKEN.test(raw)) throw new ProxyHopsProbeConfigurationError();
+  return raw;
+}
+
+const digest = (s: string) => createHash('sha256').update(s).digest();
+
+/** Constant-time, and length-independent: both sides are hashed to 32 bytes first. */
+export function tokenMatches(given: string | undefined, token: string): boolean {
+  if (typeof given !== 'string' || given.length === 0) return false;
+  return timingSafeEqual(digest(given), digest(token));
 }
 
 export interface ProbeRequest {
@@ -137,12 +158,12 @@ export function probeShape(req: ProbeRequest): ProbeShape | undefined {
   };
 }
 
-/** Express middleware: logs the shape of up to MAX_LINES probed requests, then nothing. */
-export function proxyHopProbe(log: (line: string) => void, maxLines = MAX_LINES) {
+/** Express middleware: logs the shape of up to MAX_LINES token-carrying requests, then nothing. */
+export function proxyHopProbe(token: string, log: (line: string) => void, maxLines = MAX_LINES) {
   let written = 0;
   return (req: ProbeRequest, _res: unknown, next: () => void): void => {
     try {
-      if (written < maxLines) {
+      if (written < maxLines && tokenMatches(headerLines(req.headers[PROBE_TOKEN_HEADER])[0], token)) {
         const shape = probeShape(req);
         if (shape) {
           written++;

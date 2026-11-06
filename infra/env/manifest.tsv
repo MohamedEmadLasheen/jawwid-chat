@@ -26,11 +26,12 @@ APP_ENV	application	no	req	req	req
 # budget; one too many lets a client choose its own address). Make it req again
 # once measured.
 TRUSTED_PROXY_HOPS	application	no	opt	opt	opt
-# PROXY_HOPS_PROBE=on logs the SHAPE of the forwarding chain (entry counts,
-# never an address) for requests that carry the probe header, so the hop count
-# can be measured (production-runbook.md §1d). Off when unset; turn it off again
-# after measuring.
-PROXY_HOPS_PROBE	application	no	opt	opt	opt
+# PROXY_HOPS_PROBE=<token> (openssl rand -hex 32) logs the SHAPE of the
+# forwarding chain (entry counts, never an address) for requests that carry
+# that token, so the hop count can be measured (production-runbook.md §1d).
+# A secret: only its holder can add a measurement to the log. Off when unset
+# or `off`; remove it after measuring. A launch deploy refuses it.
+PROXY_HOPS_PROBE	application	yes	opt	opt	opt
 PORT	application	no	req	req	req
 # LOG_LEVEL is read by JsonLogger (apps/api/src/infra/observability/json-logger.ts)
 # in BOTH processes, the API and the worker: trace | debug | info | warn | error
