@@ -333,6 +333,17 @@ describe('report.created: who is told at once', () => {
     expect((await taskOf(reportId)).map((t) => t.assignee)).toEqual([m.superAdmin.id]);
   });
 
+  it('a block\'s case (reason blocked): no report_received_staff at once -- the managers get ENG-03\'s block notice -- but the 24 h clock, task and escalation still run', async () => {
+    const reportId = await historicReport({ subjectKind: 'teacher', subjectId: groupOf(2).teacherIds[0]!, reason: 'blocked', departmentIds: [m.departments.operations], reporterIndex: 2 });
+    await escalation.deliver(CommEvent.REPORT_CREATED, { organizationId: orgId, reportId, priority: 'normal', change: 'created' });
+    expect(await items(reportId, 'report_received_staff')).toEqual([]);
+    await escalation.sweep(new Date('2026-01-05T10:05:00.000Z'));
+    expect(await taskOf(reportId)).toHaveLength(1);
+    await escalation.sweep(new Date('2026-01-06T04:30:00.000Z'));
+    await drain();
+    expect(await escalatedEvents(reportId)).toContain('due_soon');
+  });
+
   it('a manager who is the report\'s subject is never told, and never holds its task', async () => {
     const reportId = await historicReport({ subjectKind: 'staff', subjectId: m.operationsManager.id, reason: 'harassment', departmentIds: [m.departments.operations], reporterIndex: 2 });
     await escalation.deliver(CommEvent.REPORT_CREATED, { organizationId: orgId, reportId, priority: 'normal', change: 'created' });

@@ -94,6 +94,11 @@ export class ReportEscalationService implements ReportDelivery, OnModuleInit {
     if (report.status !== 'open' && report.status !== 'in_review') return;
     const childSafety = report.reason === 'child_safety';
     if (type === CommEvent.REPORT_CREATED) {
+      // A block's case: the managers were already told by ENG-03's
+      // block_created_manager notice (A-2a, once per case); a second "new
+      // report" alert would only duplicate it. Its clock, task and 18 h / 24 h
+      // escalations still run below.
+      if (report.reason === 'blocked') return;
       const kind: Kind = childSafety ? 'report_child_safety' : 'report_received_staff';
       return this.tell(report, kind, await this.responsible(report), now);
     }
