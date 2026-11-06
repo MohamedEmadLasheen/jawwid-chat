@@ -6,7 +6,7 @@
  *
  *   1. fail closed (§5.5 rule 8): RLS on, no policy, no grant; chat_app,
  *      authenticated and anon can neither read nor write either table
- *   2. a report: the server's clock (created_at, due_at = +48 h), the priority
+ *   2. a report: the server's clock (created_at, due_at = +24 h, owner D-1), the priority
  *      follows the reason (child_safety is urgent), a new report is open
  *   3. what can be reported (§5): someone else's message in its conversation,
  *      never one's own, never a system or card message; a note for "other",
@@ -143,12 +143,25 @@ const notice = async (blockId: string, managerId: string, caseId?: string) =>
     blockId, caseId ?? null, managerId,
   )).id;
 
+/** SQL for the signed-in account of the person whose id is in placeholder `p`. */
+const ACCOUNT_OF = (p: string) =>
+  `coalesce((select account_id from chat.contact where id = ${p}::uuid), (select account_id from chat.teacher where id = ${p}::uuid),
+            (select account_id from chat.staff where id = ${p}::uuid))`;
+
 const block = async (blockerKind: string, blockerId: string, blockedKind: string, blockedId: string, caseId: string | null = null) =>
   (await one<{ id: string }>(
-    `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id, case_report_id)
-     values ($1, $2::uuid, $3, $4::uuid, $5::uuid) returning id::text as id`,
+    `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id, case_report_id)
+     values ($1, $2::uuid, ${ACCOUNT_OF('$2')}, $3, $4::uuid, $5::uuid) returning id::text as id`,
     blockerKind, blockerId, blockedKind, blockedId, caseId,
   )).id;
+
+async function member(conversation: string, kind: string, id: string, joinedAt?: string, leftAt?: string) {
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role, joined_at, left_at)
+     values ($1::uuid, $2, $3::uuid, case $2 when 'contact' then 'parent' when 'teacher' then 'teacher' else 'admin' end, coalesce($4::timestamptz, now()), $5::timestamptz)`,
+    conversation, kind, id, joinedAt ?? null, leftAt ?? null,
+  );
+}
 
 async function account(kind: string, tag: string): Promise<string> {
   return (await one<{ id: string }>(
@@ -198,6 +211,12 @@ beforeEach(async () => {
      values ('student_group', $1::uuid, $2::uuid, 'group_m') returning id::text as id`,
     s.familyId, s.secondLearnerId,
   )).id;
+  // The reporters are members of group_l (closure plan §6: a parent or teacher
+  // reports only within a conversation they are or were in).
+  // BR-1: a group pairing a teacher with a family keeps a live admin member, added first.
+  for (const [kind, id] of [['staff', s.ownerId], ['contact', s.parentId], ['contact', s.otherParentId], ['teacher', s.teacherId]] as const) {
+    await member(conversationId, kind, id);
+  }
   teacherMsg = await message(conversationId, 'teacher', s.teacherId, 'text');
   parentMsg = await message(conversationId, 'contact', s.parentId, 'voice');
   systemMsg = await message(conversationId, 'system', null, 'system');
@@ -256,8 +275,8 @@ describe('1. fail closed: no request role reaches either table (§5.5 rule 8)', 
       `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id)
        values ('${b}', '${theCase}', '${s.ownerId}')`,
       `delete from chat.actor_block_manager_notice`,
-      `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id)
-       values ('contact', '${s.otherParentId}', 'teacher', '${s.teacherId}')`,
+      `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id)
+       values ('contact', '${s.otherParentId}', '${otherParentAccount}', 'teacher', '${s.teacherId}')`,
     ]) {
       expect(await asRole(sql)).toMatch(/permission denied|42501/);
     }
@@ -265,14 +284,14 @@ describe('1. fail closed: no request role reaches either table (§5.5 rule 8)', 
 });
 
 describe('2. a report takes the server\'s clock and its priority from its reason', () => {
-  it('created now, due 48 hours later, open, normal; back-dating and a preset status are ignored', async () => {
+  it('created now, due 24 hours later (D-1), open, normal; back-dating and a preset status are ignored', async () => {
     const [sql, args] = reportSql();
     const backdated = sql
       .replace('subject_kind, subject_id, reason, note, evidence)', 'subject_kind, subject_id, reason, note, evidence, created_at, due_at, status, priority)')
       .replace("$11::jsonb)", "$11::jsonb, '2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z', 'actioned', 'urgent')");
     const id = (await one<{ id: string }>(backdated, ...args)).id;
     const r = await one<{ fresh: boolean; due: boolean; status: string; priority: string }>(
-      `select created_at > now() - interval '1 minute' as fresh, due_at = created_at + interval '48 hours' as due,
+      `select created_at > now() - interval '1 minute' as fresh, due_at = created_at + interval '24 hours' as due,
               status, priority
          from chat.content_report where id = $1::uuid`,
       id,
@@ -306,7 +325,7 @@ describe('2. a report takes the server\'s clock and its priority from its reason
       reason: 'other', note: 'A note.', priority: 'normal', status: 'open',
       overdueAt: null, takenBy: null, resolution: null, answerText: null, reporterAnsweredAt: null,
     });
-    expect(row.dueAt.getTime() - row.createdAt.getTime()).toBe(48 * 3600 * 1000);
+    expect(row.dueAt.getTime() - row.createdAt.getTime()).toBe(24 * 3600 * 1000);
     const b = await block('contact', s.parentId, 'teacher', s.teacherId);
     const blockRow = await g.prisma.actorBlock.findUniqueOrThrow({ where: { id: b } });
     expect(blockRow).toMatchObject({
@@ -431,7 +450,7 @@ describe('5. the guard: what never changes, and the status only moves forward (�
       .toMatch(/taken once/);
     expect(await refusal(`update chat.content_report set taken_by = null, taken_at = null where id = $1::uuid`, id))
       .toMatch(/taken once|content_report_in_review_is_taken/);
-    // Overdue at or after the 48 h mark, once.
+    // Overdue at or after the 24 h mark, once.
     expect(await refusal(`update chat.content_report set overdue_at = created_at where id = $1::uuid`, id))
       .toMatch(/content_report_overdue_after_due/);
     await g.prisma.$executeRawUnsafe(`update chat.content_report set overdue_at = due_at where id = $1::uuid`, id);
@@ -502,23 +521,23 @@ describe('6. a block (§6.1, §6.2)', () => {
     await block('contact', s.parentId, 'staff', s.ownerId);
     await block('teacher', s.teacherId, 'contact', s.parentId);
     expect(await refusal(
-      `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id) values ('staff', $1::uuid, 'contact', $2::uuid)`,
+      `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id) values ('staff', $1::uuid, ${ACCOUNT_OF('$1')}, 'contact', $2::uuid)`,
       s.ownerId, s.parentId,
     )).toMatch(/actor_block_blocker_kind_check/);
   });
 
   it('never oneself, never twice, only between people of the organization', async () => {
     expect(await refusal(
-      `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id) values ('contact', $1::uuid, 'contact', $1::uuid)`,
+      `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id) values ('contact', $1::uuid, ${ACCOUNT_OF('$1')}, 'contact', $1::uuid)`,
       s.parentId,
     )).toMatch(/actor_block_not_self/);
     await block('contact', s.parentId, 'teacher', s.teacherId);
     expect(await refusal(
-      `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id) values ('contact', $1::uuid, 'teacher', $2::uuid)`,
+      `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id) values ('contact', $1::uuid, ${ACCOUNT_OF('$1')}, 'teacher', $2::uuid)`,
       s.parentId, s.teacherId,
     )).toMatch(/actor_block_once|23505/);
     expect(await refusal(
-      `insert into chat.actor_block (blocker_kind, blocker_id, blocked_kind, blocked_id) values ('contact', $1::uuid, 'teacher', $2::uuid)`,
+      `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id) values ('contact', $1::uuid, ${ACCOUNT_OF('$1')}, 'teacher', $2::uuid)`,
       s.parentId, randomUUID(),
     )).toMatch(/between two people of its organization/);
   });
@@ -625,14 +644,38 @@ describe('6b. the managers told of a block (owner decision 2026-11-04)', () => {
     expect((await notices())[0]!.fresh).toBe(true);
   });
 
-  it('unblocking keeps the notices as history, tied to the case; a new block is told afresh', async () => {
+  it('unblocking keeps the notices as history, tied to the case', async () => {
     const { id, theCase } = await blockWithCase();
     await notice(id, s.managerId);
     await g.prisma.$executeRawUnsafe(`delete from chat.actor_block where id = $1::uuid`, id);
     expect(await notices()).toEqual([{ block_id: null, case_report_id: theCase, manager_staff_id: s.managerId, fresh: true }]);
-    const again = await block('contact', s.parentId, 'teacher', s.teacherId, theCase);
+  });
+
+  it('block/unblock cycles while the case is open tell nobody again (closure plan §5)', async () => {
+    const { id, theCase } = await blockWithCase();
+    await notice(id, s.managerId);
+    for (let i = 0; i < 3; i++) {
+      const current = (await one<{ id: string }>(
+        `select id::text from chat.actor_block where blocker_id = $1::uuid and blocked_id = $2::uuid`, s.parentId, s.teacherId)).id;
+      await g.prisma.$executeRawUnsafe(`delete from chat.actor_block where id = $1::uuid`, current);
+      const again = await block('contact', s.parentId, 'teacher', s.teacherId, theCase);
+      expect(await refusal(
+        `insert into chat.actor_block_manager_notice (block_id, case_report_id, manager_staff_id) values ($1::uuid, $2::uuid, $3::uuid)`,
+        again, theCase, s.managerId,
+      )).toMatch(/actor_block_manager_notice_once|23505/);
+    }
+    expect(await notices()).toHaveLength(1);
+  });
+
+  it('a new case (the old one closed) is a new incident, and is told', async () => {
+    const { id, theCase } = await blockWithCase();
+    await notice(id, s.managerId);
+    await close(theCase);
+    await g.prisma.$executeRawUnsafe(`delete from chat.actor_block where id = $1::uuid`, id);
+    const second = await personReport({ reason: 'blocked' });
+    const again = await block('contact', s.parentId, 'teacher', s.teacherId, second);
     await notice(again, s.managerId);
-    expect((await notices()).map((n) => n.block_id).sort()).toEqual([again, null].sort());
+    expect((await notices()).map((n) => n.case_report_id).sort()).toEqual([theCase, second].sort());
   });
 });
 
@@ -703,6 +746,74 @@ describe('8. the report limit is configuration (§5.3)', () => {
   it('ten reports per reporter per hour', async () => {
     const row = await g.prisma.config.findUniqueOrThrow({ where: { key: 'report.limit.per_reporter_hour' } });
     expect(row.value).toBe(10);
+    expect(row.scope).toBe('abuse');
+  });
+});
+
+describe('9. closure plan 2026-11-06: defence in depth for the API (§3, §5, §6)', () => {
+  it('a parent or teacher reports only a message of a conversation they are, or were then, in', async () => {
+    // Not a member of group_m: refused, even naming a real message there.
+    const there = await message(otherConversationId, 'teacher', s.teacherId, 'text');
+    expect(await reportRefusal({ messageId: there, conversationId: otherConversationId }))
+      .toMatch(/by a member of the message's conversation/);
+    // Left before the message was sent: refused.
+    await member(otherConversationId, 'contact', s.parentId, '2020-01-01T00:00:00Z', '2020-01-02T00:00:00Z');
+    expect(await reportRefusal({ messageId: there, conversationId: otherConversationId }))
+      .toMatch(/by a member of the message's conversation/);
+    // A member now (history before they joined included): allowed.
+    await member(otherConversationId, 'contact', s.otherParentId);
+    await report({ reporterId: s.otherParentId, reporterAccountId: otherParentAccount, messageId: there, conversationId: otherConversationId });
+  });
+
+  it('a member who left after the message was sent may still report it', async () => {
+    const there = await message(otherConversationId, 'teacher', s.teacherId, 'text');
+    await member(otherConversationId, 'contact', s.parentId, '2020-01-01T00:00:00Z', '2999-01-01T00:00:00Z');
+    await report({ messageId: there, conversationId: otherConversationId });
+  });
+
+  it('a staff reporter\'s read access is the API\'s (coverage and stepping-in rules): no membership required here', async () => {
+    await report({ reporterKind: 'staff', reporterId: s.ownerId, reporterAccountId: staffAccount });
+  });
+
+  it('a person report through a conversation names one the reporter is in', async () => {
+    expect(await reportRefusal({ targetKind: 'person', messageId: null, conversationId: otherConversationId }))
+      .toMatch(/names a conversation the reporter is in/);
+    await report({ targetKind: 'person', messageId: null, conversationId });
+  });
+
+  it('a message report carries its evidence', async () => {
+    expect(await reportRefusal({ evidence: '{}' })).toMatch(/content_report_message_has_evidence/);
+    await personReport({ evidence: '{}' });
+  });
+
+  it('the departments are set once, and are departments of the organization', async () => {
+    const [sql, args] = reportSql();
+    const withDepartments = (ids: string) => sql
+      .replace('subject_kind, subject_id, reason, note, evidence)', 'subject_kind, subject_id, reason, note, evidence, department_ids)')
+      .replace('$11::jsonb)', `$11::jsonb, '{${ids}}'::uuid[])`);
+    expect(await refusal(withDepartments(randomUUID()), ...args)).toMatch(/departments of its organization/);
+    const id = (await one<{ id: string }>(withDepartments(s.departmentId), ...args)).id;
+    expect((await g.prisma.contentReport.findUniqueOrThrow({ where: { id } })).departmentIds).toEqual([s.departmentId]);
+    expect(await refusal(`update chat.content_report set department_ids = '{}' where id = $1::uuid`, id))
+      .toMatch(/the departments and the clock of a report never change/);
+    // Default: none (the Super Admin only).
+    expect((await g.prisma.contentReport.findUniqueOrThrow({ where: { id: await personReport() } })).departmentIds).toEqual([]);
+  });
+
+  it('a block is made by the blocker\'s own signed-in account, which never changes', async () => {
+    expect(await refusal(
+      `insert into chat.actor_block (blocker_kind, blocker_id, blocker_account_id, blocked_kind, blocked_id)
+       values ('contact', $1::uuid, $2::uuid, 'teacher', $3::uuid)`,
+      s.parentId, otherParentAccount, s.teacherId,
+    )).toMatch(/made by the blocker's own account/);
+    const id = await block('contact', s.parentId, 'teacher', s.teacherId);
+    expect(await refusal(`update chat.actor_block set blocker_account_id = $2::uuid where id = $1::uuid`, id, otherParentAccount))
+      .toMatch(/a block never changes/);
+  });
+
+  it('twenty blocks per blocker per day is configuration', async () => {
+    const row = await g.prisma.config.findUniqueOrThrow({ where: { key: 'block.limit.per_blocker_day' } });
+    expect(row.value).toBe(20);
     expect(row.scope).toBe('abuse');
   });
 });

@@ -3096,7 +3096,7 @@ model ContentReport {
   priority           String    @default("normal")
   /// open | in_review | actioned | dismissed
   status             String    @default("open")
-  /// created_at + 48 hours, set by the database.
+  /// created_at + 24 hours (owner D-1, 2026-11-06), set by the database.
   dueAt              DateTime  @map("due_at") @db.Timestamptz
   overdueAt          DateTime? @map("overdue_at") @db.Timestamptz
   takenBy            String?   @map("taken_by") @db.Uuid
@@ -3108,6 +3108,8 @@ model ContentReport {
   resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz
   answerText         String?   @map("answer_text")
   reporterAnsweredAt DateTime? @map("reporter_answered_at") @db.Timestamptz
+  /// D-3: the departments whose managers and moderators see this report; set once by the server. Empty: Super Admin only.
+  departmentIds      String[]  @default([]) @map("department_ids") @db.Uuid
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   @@index([organizationId, priority, dueAt])
@@ -3129,6 +3131,8 @@ model ActorBlock {
   /// contact | teacher
   blockerKind            String   @map("blocker_kind")
   blockerId              String   @map("blocker_id") @db.Uuid
+  /// The blocker's own signed-in account (checked by the database).
+  blockerAccountId       String   @map("blocker_account_id") @db.Uuid
   /// contact | teacher | staff
   blockedKind            String   @map("blocked_kind")
   blockedId              String   @map("blocked_id") @db.Uuid
@@ -3159,7 +3163,8 @@ model ActorBlockManagerNotice {
   /// Set by the database.
   notifiedAt     DateTime @default(now()) @map("notified_at") @db.Timestamptz
 
-  @@unique([blockId, managerStaffId])
+  /// Once per case and manager: re-blocking while the case is open tells nobody again.
+  @@unique([caseReportId, managerStaffId])
   @@index([caseReportId])
   @@index([managerStaffId, notifiedAt])
   @@map("actor_block_manager_notice")

@@ -10,8 +10,8 @@
 --
 --   chat.content_report   a report of someone else's message or of a person,
 --                         with one of the five reasons (A-1), or `blocked`, the
---                         case every block opens (§6.1 rule 4). A 48-hour clock
---                         (due_at); child_safety is urgent. The reporter, the
+--                         case every block opens (§6.1 rule 4). A 24-hour clock
+--                         (due_at, owner D-1 2026-11-06); child_safety is urgent. The reporter, the
 --                         target, the note, the evidence snapshot, created_at
 --                         and due_at never change; the status only moves
 --                         forward (open -> in_review -> actioned | dismissed);
@@ -27,7 +27,8 @@
 --                         A-2a (owner, 2026-11-04): one row per manager told of
 --                         a block -- every manager responsible for a supervisor
 --                         of the family's children, across departments. Unique
---                         per block and manager (no duplicate notice).
+--                         per case and manager: a block/unblock cycle while the
+--                         case is open tells nobody again.
 --                         Insert-only history: an unblock sets block_id to null
 --                         (ON DELETE SET NULL) and the notice stays, tied to the
 --                         block's case report, which is never deleted. Being
@@ -95,6 +96,7 @@ create table if not exists chat.content_report (
   -- The one text the reporter reads back (§5.4: required to close, <= 1000).
   answer_text           text check (answer_text is null or char_length(btrim(answer_text)) between 1 and 1000),
   reporter_answered_at  timestamptz,
+  department_ids        uuid[] not null default '{}',
   created_at            timestamptz not null default now(),
 
   constraint content_report_reporter_is_whole
@@ -114,8 +116,17 @@ create table if not exists chat.content_report (
     check ((reason = 'child_safety') = (priority = 'urgent')),
   constraint content_report_evidence_is_object
     check (jsonb_typeof(evidence) = 'object'),
-  constraint content_report_due_in_48_hours
-    check (due_at = created_at + interval '48 hours'),
+  -- D-1 (owner, 2026-11-06): 24 hours, replacing A-1's 48.
+  constraint content_report_due_in_24_hours
+    check (due_at = created_at + interval '24 hours'),
+  -- D-3: the departments whose managers and moderators see this report. Set by
+  -- the server when the report is filed (closure plan §3) and never changed.
+  -- Empty: the Super Admin only. child_safety ignores it (D-4).
+  constraint content_report_departments_shape
+    check (array_position(department_ids, null) is null),
+  -- A message report carries its evidence snapshot (the server builds it).
+  constraint content_report_message_has_evidence
+    check (target_kind <> 'message' or evidence <> '{}'::jsonb),
   constraint content_report_overdue_after_due
     check (overdue_at is null or overdue_at >= due_at),
   constraint content_report_taken_is_whole
@@ -144,7 +155,7 @@ comment on column chat.content_report.reporter_id is
 comment on column chat.content_report.evidence is
   'Snapshot at report time (body, attachment object keys, author, timestamps). Kept after the message is deleted and after its author is erased. Never logged.';
 comment on column chat.content_report.due_at is
-  'created_at + 48 hours (A-1). At 36 h the responsible manager is told, at 48 h the Super Admin, and overdue_at is set.';
+  'created_at + 24 hours (D-1, owner 2026-11-06). At 18 h the responsible managers are told, at 24 h the Super Admin, and overdue_at is set.';
 
 -- One unresolved report per reporter and target (§5.3): a duplicate finds it.
 create unique index if not exists content_report_one_open
@@ -155,7 +166,7 @@ create unique index if not exists content_report_one_open
 create index if not exists content_report_queue_idx
   on chat.content_report (organization_id, priority, due_at)
   where status in ('open', 'in_review');
--- The 36 h / 48 h sweep, across organizations.
+-- The 18 h / 24 h sweep, across organizations.
 create index if not exists content_report_due_idx
   on chat.content_report (due_at)
   where status in ('open', 'in_review');
@@ -169,6 +180,9 @@ create index if not exists content_report_reporter_account_idx
   where reporter_account_id is not null;
 create index if not exists content_report_subject_idx
   on chat.content_report (subject_kind, subject_id, created_at desc);
+-- D-3: a department's queue.
+create index if not exists content_report_departments_idx
+  on chat.content_report using gin (department_ids);
 create index if not exists content_report_message_idx
   on chat.content_report (message_id)
   where message_id is not null;
@@ -189,7 +203,7 @@ begin
   if tg_op = 'INSERT' then
     -- The clock is the server's: a report cannot be back-dated or given more time.
     new.created_at := now();
-    new.due_at := new.created_at + interval '48 hours';
+    new.due_at := new.created_at + interval '24 hours';
     new.priority := case when new.reason = 'child_safety' then 'urgent' else 'normal' end;
     new.status := 'open';
     if new.overdue_at is not null or new.taken_by is not null or new.taken_at is not null
@@ -234,6 +248,31 @@ begin
       raise exception 'a message report is about a person''s own message in that conversation (not a system or card message)'
         using errcode = 'check_violation';
     end if;
+    -- Defence in depth for the API's read check (closure plan §6): a parent or a
+    -- teacher reports only a message of a conversation they are in now, or were
+    -- in when it was sent. (Staff read through coverage and stepping-in rules
+    -- that only the API knows; their access is the API's alone.)
+    if new.target_kind = 'message' and new.message_id is not null and new.conversation_id is not null
+       and new.reporter_kind in ('contact', 'teacher') and not exists (
+         select 1 from chat.conversation_member cm
+           join chat.message m on m.id = new.message_id
+          where cm.conversation_id = new.conversation_id
+            and cm.actor_kind = new.reporter_kind and cm.actor_id = new.reporter_id
+            and (cm.left_at is null or (cm.joined_at <= m.created_at and cm.left_at >= m.created_at))) then
+      raise exception 'a message report is by a member of the message''s conversation' using errcode = 'insufficient_privilege';
+    end if;
+    -- A person report through a conversation: the reporter is in it.
+    if new.target_kind = 'person' and new.conversation_id is not null and new.reporter_kind in ('contact', 'teacher')
+       and not exists (select 1 from chat.conversation_member cm
+                        where cm.conversation_id = new.conversation_id
+                          and cm.actor_kind = new.reporter_kind and cm.actor_id = new.reporter_id) then
+      raise exception 'a person report names a conversation the reporter is in' using errcode = 'insufficient_privilege';
+    end if;
+    -- The departments are departments of this organization.
+    if exists (select 1 from unnest(new.department_ids) d(id)
+                where not exists (select 1 from chat.department x where x.id = d.id and x.organization_id = new.organization_id)) then
+      raise exception 'a report''s departments are departments of its organization' using errcode = 'check_violation';
+    end if;
     return new;
   end if;
 
@@ -248,12 +287,12 @@ begin
 
   if (new.id, new.organization_id, new.reporter_kind, new.reporter_id, new.reporter_account_id,
       new.target_kind, new.message_id, new.conversation_id, new.subject_kind, new.subject_id,
-      new.note, new.evidence, new.created_at, new.due_at)
+      new.note, new.evidence, new.created_at, new.due_at, new.department_ids)
      is distinct from
      (old.id, old.organization_id, old.reporter_kind, old.reporter_id, old.reporter_account_id,
       old.target_kind, old.message_id, old.conversation_id, old.subject_kind, old.subject_id,
-      old.note, old.evidence, old.created_at, old.due_at) then
-    raise exception 'the reporter, the target, the note, the evidence and the clock of a report never change'
+      old.note, old.evidence, old.created_at, old.due_at, old.department_ids) then
+    raise exception 'the reporter, the target, the note, the evidence, the departments and the clock of a report never change'
       using errcode = 'check_violation';
   end if;
 
@@ -307,6 +346,8 @@ create table if not exists chat.actor_block (
   -- A-2 / §6.1 rule 5: a parent (contact) or a teacher blocks. Staff never do.
   blocker_kind               text not null check (blocker_kind in ('contact', 'teacher')),
   blocker_id                 uuid not null,
+  -- The blocker's signed-in account, checked like a reporter's (closure plan §6).
+  blocker_account_id         uuid not null references chat.account (id),
   blocked_kind               text not null check (blocked_kind in ('contact', 'teacher', 'staff')),
   blocked_id                 uuid not null,
   created_at                 timestamptz not null default now(),
@@ -344,8 +385,10 @@ begin
   if tg_op = 'INSERT' then
     new.created_at := now();
     if not (case new.blocker_kind
-             when 'contact' then exists (select 1 from chat.contact c where c.id = new.blocker_id and c.organization_id = new.organization_id)
-             when 'teacher' then exists (select 1 from chat.teacher t where t.id = new.blocker_id and t.organization_id = new.organization_id)
+             when 'contact' then exists (select 1 from chat.contact c where c.id = new.blocker_id
+                                           and c.account_id = new.blocker_account_id and c.organization_id = new.organization_id)
+             when 'teacher' then exists (select 1 from chat.teacher t where t.id = new.blocker_id
+                                           and t.account_id = new.blocker_account_id and t.organization_id = new.organization_id)
              else true  -- staff, or an unknown kind: the column's check refuses it
            end)
        or not (case new.blocked_kind
@@ -354,11 +397,13 @@ begin
              when 'staff' then exists (select 1 from chat.staff s where s.id = new.blocked_id and s.organization_id = new.organization_id)
              else true
            end) then
-      raise exception 'a block is between two people of its organization' using errcode = 'check_violation';
+      raise exception 'a block is between two people of its organization, made by the blocker''s own account' using errcode = 'check_violation';
     end if;
-  elsif (new.id, new.organization_id, new.blocker_kind, new.blocker_id, new.blocked_kind, new.blocked_id, new.created_at)
+  elsif (new.id, new.organization_id, new.blocker_kind, new.blocker_id, new.blocker_account_id,
+         new.blocked_kind, new.blocked_id, new.created_at)
         is distinct from
-        (old.id, old.organization_id, old.blocker_kind, old.blocker_id, old.blocked_kind, old.blocked_id, old.created_at)
+        (old.id, old.organization_id, old.blocker_kind, old.blocker_id, old.blocker_account_id,
+         old.blocked_kind, old.blocked_id, old.created_at)
      or (old.case_report_id is not null and new.case_report_id is distinct from old.case_report_id) then
     raise exception 'a block never changes; its case is set once'
       using errcode = 'check_violation';
@@ -388,8 +433,8 @@ create trigger actor_block_is_coherent
 -- When a family blocks someone, every manager responsible for a supervisor of
 -- the family's children is told, across departments, once each. The API
 -- (ENG-02) works out who they are (roadmap §6.3) and writes one row per manager
--- here; the unique constraint is "no duplicate notice to the same manager" in
--- the database. A teacher's block is told the same way (§6.3).
+-- here; the unique constraint is "no duplicate notice to the same manager for
+-- one case" in the database (re-blocking while the case is open re-uses it). A teacher's block is told the same way (§6.3).
 --
 -- block_id is ON DELETE SET NULL, not CASCADE and not RESTRICT:
 --   * CASCADE would erase the record that a manager was told as soon as the
@@ -411,12 +456,16 @@ create table if not exists chat.actor_block_manager_notice (
   manager_staff_id  uuid not null references chat.staff (id),
   notified_at       timestamptz not null default now(),
 
-  constraint actor_block_manager_notice_once unique (block_id, manager_staff_id)
+  -- Once per CASE and manager (closure plan §5, owner 2026-11-06): blocking
+  -- again while the case is open re-uses the case and tells nobody again, so
+  -- block/unblock cycles cannot flood the managers. A new case (the old one
+  -- closed) is a new incident, and is told.
+  constraint actor_block_manager_notice_once unique (case_report_id, manager_staff_id)
 );
 
 comment on table chat.actor_block_manager_notice is
   'PD-57 A-2a (owner, 2026-11-04): one manager told of one block -- every manager responsible for a supervisor of the '
-  'family''s children, across departments, once each. Insert-only history; an unblock nulls block_id and the row stays, '
+  'family''s children, across departments, once per case each. Insert-only history; an unblock nulls block_id and the row stays, '
   'tied to the block''s case report. Grants the manager nothing. No request role may read it.';
 comment on column chat.actor_block_manager_notice.block_id is
   'The block; null once it is lifted or erased (ON DELETE SET NULL). case_report_id still says who blocked whom.';
@@ -472,6 +521,11 @@ create trigger actor_block_manager_notice_is_coherent
 insert into chat.config (key, value, scope, description) values
 ('report.limit.per_reporter_hour', '10'::jsonb, 'abuse',
  'PD-57 (REPORT_SUBMIT): reports one person may file in a rolling hour; the next is refused (429).')
+on conflict (key) do nothing;
+
+insert into chat.config (key, value, scope, description) values
+('block.limit.per_blocker_day', '20'::jsonb, 'abuse',
+ 'PD-57 (closure plan §6): blocks one person may make in a rolling 24 hours; the next is refused (429).')
 on conflict (key) do nothing;
 
 -- ===========================================================================

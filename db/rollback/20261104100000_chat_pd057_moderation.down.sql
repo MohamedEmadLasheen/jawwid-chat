@@ -170,7 +170,7 @@ drop function if exists chat.guard_actor_block_manager_notice();
 drop function if exists chat.guard_actor_block();
 drop function if exists chat.guard_content_report();
 
-delete from chat.config where key = 'report.limit.per_reporter_hour';
+delete from chat.config where key in ('report.limit.per_reporter_hour', 'block.limit.per_blocker_day');
 
 -- ENG-02: the moderation keys. An access role that carries one must be edited
 -- first (the super admin removes the key); this delete then succeeds.
