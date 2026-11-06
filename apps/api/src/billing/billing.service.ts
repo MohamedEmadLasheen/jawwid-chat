@@ -697,7 +697,7 @@ export class BillingService {
   private async subscriptionsForParent(
     familyId: string,
     instalments: FamilyInstalment[],
-    requests: Array<{ status: string; child: { id: string | null } | null }>,
+    requests: Array<{ status: string; payableInApp: boolean; child: { id: string | null } | null }>,
   ) {
     const children = await childSubscriptions(this.prisma, familyId);
     const renewed = await this.prisma.$queryRaw<{ learner_id: string }[]>`
@@ -708,7 +708,9 @@ export class BillingService {
       const open = (id: string | null) => id === null || id === c.child.id;
       const hasOpenPayment =
         instalments.some((i) => !i.paidOn && !i.voidedAt && open(i.learnerId)) ||
-        requests.some((r) => r.status === 'open' && open(r.child?.id ?? null));
+        // Store payments policy: a request the app may not take (not for live
+        // one-to-one lessons) is not something to pay here.
+        requests.some((r) => r.status === 'open' && r.payableInApp && open(r.child?.id ?? null));
       return { ...forParent(c), hasOpenPayment, renewalRequestedToday: askedToday.has(c.child.id) };
     });
   }

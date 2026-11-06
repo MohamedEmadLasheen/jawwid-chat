@@ -61,6 +61,9 @@ List<DueItem> amountsDue(ParentBilling billing) {
 
   for (final r in billing.requests) {
     if (!r.isOpen) continue;
+    // Store payments policy: only live one-to-one lessons are paid in the app.
+    // Anything else is not listed here at all: no Pay, and no pointer elsewhere.
+    if (!r.payableInApp) continue;
     final instalmentId = r.instalmentId;
     if (instalmentId != null) {
       if (openInstalments.containsKey(instalmentId)) requestOf[instalmentId] = r;

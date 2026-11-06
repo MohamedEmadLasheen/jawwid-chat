@@ -3575,6 +3575,10 @@ class L10nAr extends L10n {
       'جارٍ تأكيد دفعتك، وقد يستغرق ذلك دقيقة.';
 
   @override
+  String get billingLiveOneToOneService =>
+      'دروس قرآن مباشرة فردية: معلّم واحد وطالب واحد في الوقت نفسه. لا تُسجَّل الدروس.';
+
+  @override
   String get billingPaySheetTitle => 'كيف تريد أن تدفع؟';
 
   @override

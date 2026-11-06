@@ -128,6 +128,14 @@ class _PaySheetState extends ConsumerState<PaySheet> {
             const SizedBox(height: Spacing.spacing2),
             ContentText(item.label, style: theme.textTheme.bodyMedium?.copyWith(color: tokens.colorTextSecondary)),
             const SizedBox(height: Spacing.spacing1),
+            // What is bought, as the store policies require it be described
+            // (docs/release/app-review-notes-payments.md).
+            Text(
+              l10n.billingLiveOneToOneService,
+              key: const ValueKey('pay-sheet-service'),
+              style: theme.textTheme.bodySmall?.copyWith(color: tokens.colorTextSecondary),
+            ),
+            const SizedBox(height: Spacing.spacing1),
             Text(
               formatMoney(item.remainingMinor, item.currency, locale),
               key: const ValueKey('pay-sheet-amount'),

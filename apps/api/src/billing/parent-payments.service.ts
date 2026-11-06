@@ -12,6 +12,7 @@ import { todayIn } from '../leave/leave.service';
 import { BillingService } from './billing.service';
 import { CheckoutService } from './checkout.service';
 import { PaymentLedger } from './payment-ledger.service';
+import { assertPayableInApp } from './in-app-payability';
 import { dateOnly, invalid, optionalText, optionalUuid, requireAmount, requireDate } from './validate';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
 
@@ -100,7 +101,14 @@ export class ParentPaymentsService {
       throw new CommError(CommErrorCode.BILLING_STATE, 'several receipts are already waiting to be checked; we will confirm them soon', 409);
     }
 
-    const request = await this.payable(actor.actorId, contact.familyId, body, { allowExpired: true });
+    let request: PaymentRequest;
+    try {
+      request = await this.payable(actor.actorId, contact.familyId, body, { allowExpired: true });
+    } catch (e) {
+      // A receipt the app may not take is not kept: its file goes with the refusal.
+      if (e instanceof CommError && e.code === CommErrorCode.PAYMENT_NOT_IN_APP) await this.storage.delete(objectKey).catch(() => undefined);
+      throw e;
+    }
     const remaining = Number(request.amountMinor) - (await this.ledger.standingSum(this.prisma, { requestId: request.id }));
     if (amountMinor > Math.max(remaining, 0)) throw invalid(`amountMinor: at most what is still owed (${Math.max(remaining, 0)})`);
 
@@ -164,6 +172,7 @@ export class ParentPaymentsService {
       if (!request) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment request not found');
       if (request.cancelledAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this payment request was cancelled', 409);
       if (request.paidAt) throw new CommError(CommErrorCode.BILLING_STATE, 'this request is already paid', 409);
+      assertPayableInApp(request);
       if (!opts.allowExpired && request.expiresAt <= new Date()) {
         throw new CommError(CommErrorCode.BILLING_STATE, 'this payment request has expired; ask for a new link', 409);
       }
