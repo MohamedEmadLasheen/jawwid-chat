@@ -106,11 +106,28 @@ loaded. Release is `GIT_COMMIT`, environment `APP_ENV`.
 `RequestErrorCaptureInterceptor`; a 5xx with no exception -- a failed guard --
 as a fixed `HttpServerError`), every worker subsystem failure the loop survives
 (`outbox.drain`, `stories.sweep`, `calls.expireRinging`, `lessons.sweep`,
-`notifications.dispatchDue`), unhandled rejections, uncaught exceptions and a
-failed boot. **Not reported:** 4xx -- a refusal is the authorization service
-working. Tags are labels only: `route` (template), `status`, `component`,
+`notifications.dispatchDue`), unexpected exceptions from WebSocket handlers
+(`WS <event>`, via `WsErrorReportFilter` on the gateway -- Nest applies no
+global filter to gateways) and failed socket handshakes (`WS handshake`),
+unhandled rejections, uncaught exceptions and a failed boot. **Not reported:**
+4xx -- a refusal is the authorization service working; its WebSocket twins
+(`WsException`, an `HttpException` below 500); and a `/health/*` probe's 503,
+which is readiness draining traffic during an outage (the failure behind it is
+reported by whatever hit it; a health route's 500 is still reported). Tags are
+labels only: `route` (template or event name), `status`, `component`,
 `actor_kind`, `version`; `extra` carries `request_id`, which joins an event to
-its log line.
+its log line, and `suppressed` (below).
+
+**Volume** (`error-budget.ts`): every report passes a per-process budget first
+-- one event per kind of failure (component, route, status, error class,
+Prisma code; never the message) per 15 minutes, and at most 20 events an hour
+across all kinds. The next event of a kind after a quiet spell carries
+`suppressed`, how many were held back. An uncaught exception or a failed boot
+skips both limits (the process exits right after). The budget runs on a
+monotonic clock, so a wall-clock correction cannot hide reports. A day-long outage of
+both processes therefore sends under 1,000 events, where it would otherwise
+send on the order of 10,000 an hour. Every failure is still logged in full;
+the budget only removes duplicates from Sentry.
 
 **What can never leave**, in three layers; the third does not trust the first two:
 
@@ -120,13 +137,41 @@ its log line.
    and URLs -- are never loaded, and neither is anything a future SDK adds by
    default.
 2. `sendDefaultPii: false`, no tracing, no breadcrumbs, no OpenTelemetry setup.
-3. `beforeSend` **rebuilds** each event from an allowlist (`scrubEvent`): ids,
-   level, release, environment, the redacted message, exception types and
-   redacted values (Prisma errors as class and code), frame locations without
-   `vars` or source lines, the five tags, `request_id`, and the runtime/os
-   contexts. There is no `request`, `user`, `breadcrumbs`, `server_name`,
-   `transaction` or request-derived metadata on the event that is sent.
+3. `beforeSend` **rebuilds** each event from an allowlist (`scrubEvent`) and
+   carries **no free text**. No event message and no logentry are sent, and
+   an exception's message is never copied -- not even redacted, because no
+   pattern recognises a child's name or a line of a conversation. What is
+   sent: ids, level, release, environment; per exception, its class (its
+   constructor's name, else `Error`) and a value *built* from approved facts on the
+   error object -- a Prisma code (`P2002`), a Node code (`ECONNREFUSED`), a
+   SQLSTATE, the fixed statement-timeout code, an HTTP status
+   (`InternalServerErrorException status=500`); frame locations without
+   `vars` or source lines; the five tags; `request_id`; `suppressed`;
+   runtime/os name and version. Every kept string must match its field's
+   shape in full or it is dropped -- and no shape admits a bare word, which
+   is what a one-word name would be: an exception type is the name of the
+   error's *constructor* -- the class as declared in source -- never the
+   writable `error.name` (which could say `LaylaError`), else `Error`; a route is an HTTP template, `WS area.action`,
+   `WS handshake` or a worker `area.task` label; `actor_kind` and `component`
+   are their closed vocabularies. Stack-frame file and function names are
+   kept (they are the diagnosis): V8 takes them from source code, and no code
+   here renames a function at runtime. There is no `request`, `user`, `breadcrumbs`,
+   `server_name`, `transaction`, `fingerprint` or request-derived metadata on
+   the event that is sent. The full message stays in the redacted log line
+   (`request_id` joins the two), behind the log store's access controls.
 
+`test/unit/observability/sentry-privacy-wire.spec.ts` plants synthetic
+children's and parents' names, Arabic and English chat text, emails, phone
+numbers, tokens, a password and a card number in every source an event could
+draw from (message, cause, name, error properties, Prisma arguments, thrown
+non-Errors, SDK scope, a direct `captureMessage`, application labels, a
+WebSocket frame, an HTTP request, an unhandled rejection) and searches the
+whole serialized envelope stream of a real SDK client for each of them.
+`test/unit/observability/error-budget.spec.ts` measures the budget on the wire
+(1,000 identical failures send one event; 14,400 across twenty subsystems in an
+hour send 20), and `ws-error-report.filter.spec.ts` drives Nest's own
+WebSocket exception handler and checks that no frame data, socket or token is
+handed over and that the client's `exception` frame is unchanged.
 `test/unit/observability/error-tracker.spec.ts` asserts each layer, and drives a
 real SDK client over an in-memory transport with a scope deliberately loaded
 with a user, a draft, a signed URL and breadcrumbs, then checks the wire bytes.

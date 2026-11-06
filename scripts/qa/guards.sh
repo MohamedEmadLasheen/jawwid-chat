@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite storage-admin-keys launch-redis pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons ci-wiring"
 
 title() {
   case "$1" in
@@ -200,6 +200,8 @@ title() {
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
     backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     backup-offsite) echo "The weekly off-site backup stores only encrypted archives and keeps 8 weeks" ;;
+    storage-admin-keys) echo "Spaces: the bucket's versioning and lifecycle are checked with the admin key; the app never receives it" ;;
+    launch-redis)  echo "ADR-015 · a LAUNCH_PHASE=launch deploy refuses any Redis but managed, locked-down Valkey" ;;
     pd-registry)   echo "PD numbers and migration slots — one claim each, every migration claimed" ;;
     quran-dataset) echo "The Quran text is pinned: pins, manifests and files agree; the loader refuses what it must" ;;
     geo-dataset)   echo "PD-45 · the country and subdivision dataset is exactly what its pinned CLDR files and reviewed overlay build" ;;
@@ -334,6 +336,21 @@ gate_backup_offsite() {
   # leaves the runner, every object is read back, and prune keeps exactly the
   # last 8 weeks. AWS CLI stubbed; no network, no credential.
   bash scripts/qa/check-backup-offsite.sh
+}
+
+gate_storage_admin_keys() {
+  # Two Spaces keys, never one: storage-versioning.sh runs on STORAGE_ADMIN_*
+  # only and refuses without it; the deploy's storage check gets the admin key,
+  # the app spec never does. AWS CLI stubbed; no network, no credential.
+  bash scripts/qa/check-storage-admin-keys.sh
+}
+
+gate_launch_redis() {
+  # ADR-015: the review period's in-app Redis cannot reach the public launch.
+  # verify-managed-redis.sh with doctl stubbed; no network, no credential. (The
+  # app spec's own half -- LAUNCH_PHASE, and the in-app component dropped at
+  # launch -- is in the app-spec gate's selftest.)
+  bash scripts/qa/check-verify-managed-redis.sh
 }
 
 gate_pd_registry() {

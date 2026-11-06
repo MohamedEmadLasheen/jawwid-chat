@@ -1,0 +1,86 @@
+name: Object storage versioning (production bucket)
+
+# Runs scripts/infra/storage-versioning.sh against the PRODUCTION bucket with
+# the ADMINISTRATIVE Spaces key saved in the `production` GitHub Environment
+# (STORAGE_ADMIN_ACCESS_KEY / STORAGE_ADMIN_SECRET_KEY), so no key leaves
+# GitHub: nobody pastes one into a terminal, and GitHub masks them in this job's
+# log. The script itself never prints them either.
+#
+#   verify  read the bucket's versioning and lifecycle back; changes nothing
+#   apply   turn versioning on and set the lifecycle (noncurrent versions
+#           expire after 30 days, abandoned multipart uploads after 1), then
+#           read both back. Idempotent: running it twice changes nothing more.
+#
+# Why it exists: Deploy production refuses to release unless the bucket keeps
+# deleted objects for 30 days (its "Object storage keeps deleted objects for 30
+# days" step runs `verify` with the same admin key). This is the `apply` that
+# step's message points at (docs/infrastructure/backup-recovery.md, "Object
+# storage").
+#
+# The application's STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY are NOT used here:
+# they stay bucket-limited for the API at runtime, and Spaces refuses such a key
+# the lifecycle calls. This job never receives them; it only compares the access
+# key ids as a boolean, so an admin key equal to the application key is refused.
+#
+# Manual only. The `production` Environment requires the owner's approval for
+# every run and admits only main; the `if:` below is the second lock.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verify (read only) or apply (set versioning + 30-day lifecycle, then verify)'
+        type: choice
+        options: [verify, apply]
+        default: verify
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storage-versioning-production
+  cancel-in-progress: false
+
+jobs:
+  versioning:
+    name: Production bucket versioning (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The storage settings are present
+        env:
+          HAS_ENDPOINT: ${{ vars.STORAGE_ENDPOINT != '' }}
+          HAS_BUCKET: ${{ vars.STORAGE_BUCKET != '' }}
+          HAS_ADMIN_ACCESS: ${{ secrets.STORAGE_ADMIN_ACCESS_KEY != '' }}
+          HAS_ADMIN_SECRET: ${{ secrets.STORAGE_ADMIN_SECRET_KEY != '' }}
+          ADMIN_IS_APP_KEY: ${{ secrets.STORAGE_ADMIN_ACCESS_KEY != '' && secrets.STORAGE_ADMIN_ACCESS_KEY == secrets.STORAGE_ACCESS_KEY }}
+        run: |
+          rc=0
+          [ "$HAS_ENDPOINT" = "true" ] || { echo "::error title=Storage::vars.STORAGE_ENDPOINT is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_BUCKET" = "true" ] || { echo "::error title=Storage::vars.STORAGE_BUCKET is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_ADMIN_ACCESS" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_ADMIN_ACCESS_KEY (the administrative Spaces key) is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_ADMIN_SECRET" = "true" ] || { echo "::error title=Storage::secrets.STORAGE_ADMIN_SECRET_KEY (the administrative Spaces key) is not set in the production GitHub Environment"; rc=1; }
+          [ "$ADMIN_IS_APP_KEY" = "false" ] || { echo "::error title=Storage::STORAGE_ADMIN_ACCESS_KEY is the application's STORAGE_ACCESS_KEY; use a separate administrative key"; rc=1; }
+          [ "$rc" -eq 0 ] || echo "Nothing was checked or changed."
+          exit $rc
+
+      - name: AWS CLI is available
+        run: aws --version
+
+      - name: storage-versioning.sh ${{ inputs.mode }}
+        env:
+          MODE: ${{ inputs.mode }}
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          STORAGE_REGION: ${{ vars.STORAGE_REGION }}
+          STORAGE_ADMIN_ACCESS_KEY: ${{ secrets.STORAGE_ADMIN_ACCESS_KEY }}
+          STORAGE_ADMIN_SECRET_KEY: ${{ secrets.STORAGE_ADMIN_SECRET_KEY }}
+        run: |
+          case "$MODE" in
+            verify|apply) scripts/infra/storage-versioning.sh "$MODE" ;;
+            *) echo "::error::mode must be verify or apply"; exit 1 ;;
+          esac

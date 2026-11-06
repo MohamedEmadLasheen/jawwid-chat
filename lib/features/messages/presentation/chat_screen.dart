@@ -36,6 +36,10 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/domain/lesson_menu.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
+import '../../moderation/application/blocks_controller.dart';
+import '../../moderation/data/moderation_repository.dart';
+import '../../moderation/presentation/block_actions.dart';
+import '../../moderation/presentation/report_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
 import '../application/drafts_controller.dart';
@@ -536,6 +540,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       message: message,
       withMarks: marks.isAvailable,
       withInfo: info.isAvailable,
+      withReport: ref.read(moderationRepositoryProvider).isAvailable,
     );
     if (result == null || !mounted) return;
 
@@ -563,6 +568,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
         _openFirstAttachment(message);
       case MessageAction.info:
         await _showInfo(message);
+      case MessageAction.report:
+        // PD-57: the sheet says what happened itself; nothing more to do here.
+        final id = message.id;
+        if (id != null) await showReportSheet(context, target: MessageReportTarget(id));
       case MessageAction.deleteForMe:
         await _guard(() => controller.deleteForMe(message));
       case MessageAction.deleteForEveryone:
@@ -1088,6 +1097,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     return ref.read(draftsProvider).value?[widget.conversationId];
   }
 
+  /// PD-57: after a block or an unblock, the newest page, then each still-hidden message of
+  /// someone no longer blocked (older than that page), so "Unblocking restores the history
+  /// at once" holds for what is on screen. Bounded: a long history is restored as it pages.
+  Future<void> _rereadAfterBlockChange(Set<String> blockedIds) async {
+    final controller = ref.read(messagesControllerProvider(widget.conversationId).notifier);
+    await controller.refreshLatest();
+    if (!mounted) return;
+    final stale = ref
+        .read(messagesControllerProvider(widget.conversationId))
+        .log
+        .messages
+        .where((m) => m.isHiddenByBlock && m.sequence != null && !blockedIds.contains(m.authorId))
+        .take(30)
+        .toList();
+    for (final m in stale) {
+      if (!mounted) return;
+      await controller.refreshMessage(m.sequence!);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -1095,6 +1124,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     final controller =
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
     final state = ref.watch(messagesControllerProvider(widget.conversationId));
+
+    // PD-57: a block or an unblock made anywhere (the profile, a placeholder, Settings)
+    // re-reads this thread, so the placeholders appear, or the history comes back, at once.
+    ref.listen(blocksProvider, (previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (before == null || after == null) return;
+      final was = {for (final b in before) b.subject.id};
+      final now = {for (final b in after) b.subject.id};
+      if (was.length == now.length && was.containsAll(now)) return;
+      unawaited(_rereadAfterBlockChange(now));
+    });
 
     // PD-11: prefetch the lesson tickets so "+" opens without a round trip.
     ref.watch(lessonTicketsProvider(widget.conversationId));
@@ -1261,7 +1302,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
           if (paymentLock != null && paymentLock.readOnly)
             PaymentLockBanner(lock: paymentLock, onOpenSubscriptions: widget.onOpenSubscriptions)
           else
-          MessageComposer(
+          // PD-57: a direct chat with someone the user blocked says so where the composer was.
+          BlockedComposerGate(
+            conversationId: widget.conversationId,
+            kind: widget.conversation?.kind,
+            child: MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,
             onSend: (body) {
               controller.send(body, replyTo: _replyingTo);
@@ -1304,6 +1349,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             isReadOnly: widget.isReadOnly,
             requiresApproval: widget.requiresApproval,
+          ),
           ),
         ],
       ),

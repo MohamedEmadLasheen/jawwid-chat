@@ -88,7 +88,7 @@ export const SOURCE_TYPES = [
   // PD-57 (closure plan §4): a report resolved as reassigned, for each manager of its
   // departments (chat.work_task_raise_report_reassignment). Completed by its assignee.
   'report_reassignment',
-  // PD-57 ENG-04: the report's own 24 h SLA, one per report (20261106120000's triggers);
+  // PD-57 ENG-04: the report's own 24 h SLA, one per report (20261106150000's triggers);
   // completed when the report is resolved.
   'content_report',
 ] as const;

@@ -217,6 +217,7 @@ void main() {
           currency: 'AED',
           status: RequestStatus.open,
           purpose: RequestPurpose.renewal,
+          payableInApp: true,
           childName: 'Huda',
           planMonths: 3,
           lessonsIncluded: 24,

@@ -353,6 +353,12 @@ export enum CommErrorCode {
   /** PD-27: card payments are not configured on this deployment (no STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET). 503. */
   PAYMENTS_UNAVAILABLE = 'COMM.PAYMENTS_UNAVAILABLE',
   /**
+   * Store payments policy: this request is not for live one-to-one lessons (e.g.
+   * purpose `other`), so the app's card checkout and bank-transfer receipt refuse
+   * it (App Store 3.1.3(d), Google Play 1:1 services). 409. Never retry in the app.
+   */
+  PAYMENT_NOT_IN_APP = 'COMM.PAYMENT_NOT_IN_APP',
+  /**
    * PD-30: the child's group is read-only for the parent and the teacher -- the
    * subscription's lessons are used up (after the grace lessons) or an
    * instalment is overdue. Staff still write; the parent's direct chat with

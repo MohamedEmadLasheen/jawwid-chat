@@ -88,6 +88,23 @@ describeIfDb('database role capability preflight', () => {
     expect(output).toMatch(/provider/i);
   });
 
+  it('says it could not connect -- not that BYPASSRLS is refused -- when the database is unreachable', () => {
+    // Port 1 on loopback: nothing listens there, so the connection is refused.
+    // Before 2026-11-05 this printed "PREFLIGHT FAILED -- cannot grant
+    // BYPASSRLS", which sent an operator to the provider with the wrong question.
+    const url = new URL(DATABASE_URL!);
+    url.hostname = '127.0.0.1';
+    url.port = '1';
+
+    const { code, output } = runPreflight(`psql -v ON_ERROR_STOP=1 ${url.toString()}`);
+
+    expect(code).toBe(3);
+    expect(output).toMatch(/COULD NOT CONNECT/);
+    expect(output).toMatch(/nothing was checked/);
+    expect(output).not.toMatch(/PREFLIGHT FAILED/);
+    expect(output).not.toContain(url.password || '\u0000never');
+  });
+
   it('leaves no probe role behind, in either direction', () => {
     runPreflight(`psql -v ON_ERROR_STOP=1 ${DATABASE_URL}`);
     // The probe runs inside a transaction that is always rolled back.

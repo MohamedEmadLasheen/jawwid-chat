@@ -230,11 +230,14 @@ export class ConversationController {
   }
 
   /**
-   * PD-30: the banner of a group locked for payment, or null. Advisory -- every
-   * send, reaction and call is refused by the server on its own. It names each
-   * locked child; the parent and staff also read why ("lessons used up",
-   * "instalment 2/3 overdue since ..."), the teacher only that the lessons are
-   * paused (nothing financial). `readOnly` is the viewer's: staff still write.
+   * PD-30: what the banner of a group with a child locked for payment says, or
+   * null. It names each locked child; the parent and staff also read why
+   * ("lessons used up", "instalment 2/3 overdue since ..."), the teacher only
+   * that the lessons are paused (nothing financial).
+   *
+   * The chat stays open (owner, 2026-11-06): only new lesson bookings pause, so
+   * `readOnly` is false for everyone. It stays in the shape because app builds
+   * from before then hide the composer when it is true.
    */
   private async paymentLockView(actor: Actor, conversation: { id: string; type: string }) {
     if (!this.locks?.enforced) return null;
@@ -243,7 +246,7 @@ export class ConversationController {
     if (locked.length === 0) return null;
     const financial = actor.kind !== 'teacher';
     return {
-      readOnly: actor.kind !== 'staff',
+      readOnly: false,
       canPay: actor.kind === 'contact',
       children: locked.map((c) =>
         financial

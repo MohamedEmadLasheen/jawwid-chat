@@ -3575,6 +3575,10 @@ class L10nAr extends L10n {
       'جارٍ تأكيد دفعتك، وقد يستغرق ذلك دقيقة.';
 
   @override
+  String get billingLiveOneToOneService =>
+      'دروس قرآن فردية مباشرة، تجمع بين معلّم واحد وطالب واحد عبر اتصال مباشر. لا يتم تسجيل الدروس.';
+
+  @override
   String get billingPaySheetTitle => 'كيف تريد أن تدفع؟';
 
   @override
@@ -5240,6 +5244,45 @@ class L10nAr extends L10n {
       'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
 
   @override
+  String get locationRowTitle => 'الموقع';
+
+  @override
+  String get locationRowEmpty => 'غير محدد';
+
+  @override
+  String get locationSheetTitle => 'أين تقيم الأسرة؟';
+
+  @override
+  String get locationCountryLabel => 'الدولة';
+
+  @override
+  String locationSubdivisionError(String label) {
+    return 'اختر $label من القائمة';
+  }
+
+  @override
+  String get locationCountryError => 'اختر الدولة من القائمة';
+
+  @override
+  String locationSuggestion(String country) {
+    return 'مقترح: $country';
+  }
+
+  @override
+  String get locationPromptBody =>
+      'أخبرنا أين تقيمون. يمكنك تغييره في أي وقت من ملفك الشخصي.';
+
+  @override
+  String get locationLater => 'لاحقًا';
+
+  @override
+  String get locationLoadFailed => 'تعذّر تحميل القائمة. حاول مرة أخرى.';
+
+  @override
+  String get locationSaveConflict =>
+      'تعذّر حفظ ذلك. يُرجى التواصل مع الأكاديمية.';
+
+  @override
   String get cardScheduledTitle => 'أُضيفت حصة';
 
   @override
@@ -5257,4 +5300,229 @@ class L10nAr extends L10n {
 
   @override
   String get cardNowMissed => 'لم تُعقد هذه الحصة';
+
+  @override
+  String get reportAction => 'إبلاغ';
+
+  @override
+  String get reportPersonAction => 'الإبلاغ عن هذا الشخص';
+
+  @override
+  String get reportMemberAction => 'إبلاغ';
+
+  @override
+  String get reportSheetTitle => 'إبلاغ';
+
+  @override
+  String get reportSheetMessageIntro =>
+      'ما المشكلة في هذه الرسالة؟ لا يطّلع على بلاغك إلا فريقنا، ولن يُخبَر الشخص بذلك.';
+
+  @override
+  String get reportSheetPersonIntro =>
+      'لماذا تُبلّغ عن هذا الشخص؟ لا يطّلع على بلاغك إلا فريقنا، ولن يُخبَر الشخص بذلك.';
+
+  @override
+  String get reportReasonHarassment => 'تحرّش أو تنمّر';
+
+  @override
+  String get reportReasonInappropriate => 'محتوى غير لائق أو جنسي';
+
+  @override
+  String get reportReasonSpam => 'رسائل مزعجة أو احتيال';
+
+  @override
+  String get reportReasonChildSafety => 'سلامة طفل';
+
+  @override
+  String get reportReasonOther => 'سبب آخر (مع ملاحظة)';
+
+  @override
+  String get reportSheetNoteLabel => 'ملاحظة';
+
+  @override
+  String get reportNoteLabelOptional => 'ملاحظة (اختيارية)';
+
+  @override
+  String get reportNoteHint => 'اكتب لنا ما حدث بإيجاز';
+
+  @override
+  String get reportNoteRequired => 'فضلًا أضف ملاحظة قصيرة لنفهم ما حدث.';
+
+  @override
+  String get reportSubmit => 'إرسال البلاغ';
+
+  @override
+  String get reportSentTitle => 'شكرًا لك';
+
+  @override
+  String get reportSentBody =>
+      'استلمنا بلاغك وسيراجعه فريقنا. يمكنك متابعته وقراءة ردّنا في «بلاغاتي».';
+
+  @override
+  String get reportAlreadyBody =>
+      'سبق أن أبلغت عن هذا ونحن ما زلنا ننظر فيه. ستجد ردّنا في «بلاغاتي».';
+
+  @override
+  String get reportDone => 'تم';
+
+  @override
+  String get reportErrorNotVisible =>
+      'لم نعد نجد هذا المحتوى، لذلك لا يمكن الإبلاغ عنه.';
+
+  @override
+  String get reportErrorSelf => 'لا يمكنك الإبلاغ عن نفسك أو عن رسائلك.';
+
+  @override
+  String get reportErrorNotReportable =>
+      'لا يمكن الإبلاغ عن هذا النوع من الرسائل.';
+
+  @override
+  String get reportErrorRateLimited =>
+      'أرسلت عدة بلاغات مؤخرًا. فضلًا حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get reportErrorTerms =>
+      'فضلًا وافق على شروط الاستخدام أولًا، ثم يمكنك الإبلاغ.';
+
+  @override
+  String get reportErrorGeneric => 'تعذّر إرسال بلاغك. فضلًا حاول مرة أخرى.';
+
+  @override
+  String get myReportsTitle => 'بلاغاتي';
+
+  @override
+  String get myReportsSubtitle => 'ما أبلغت عنه وردودنا';
+
+  @override
+  String get myReportsEmptyTitle => 'لا توجد بلاغات';
+
+  @override
+  String get myReportsEmptyBody =>
+      'عندما تُبلّغ عن رسالة أو شخص ستتابع بلاغك هنا.';
+
+  @override
+  String get myReportsTargetMessage => 'رسالة';
+
+  @override
+  String get myReportsTargetPerson => 'شخص';
+
+  @override
+  String get myReportsReasonUnknown => 'أخرى';
+
+  @override
+  String get myReportsStatusOpen => 'تم الاستلام';
+
+  @override
+  String get myReportsStatusInReview => 'قيد المراجعة';
+
+  @override
+  String get myReportsStatusActioned => 'تمت المعالجة';
+
+  @override
+  String get myReportsStatusDismissed => 'أُغلق';
+
+  @override
+  String get myReportsAnswerLabel => 'ردّنا';
+
+  @override
+  String get blockAction => 'حظر';
+
+  @override
+  String get unblockAction => 'إلغاء الحظر';
+
+  @override
+  String get blockPersonAction => 'حظر هذا الشخص';
+
+  @override
+  String get unblockPersonAction => 'إلغاء حظر هذا الشخص';
+
+  @override
+  String get blockPersonFallbackName => 'هذا الشخص';
+
+  @override
+  String blockConfirmTitle(String name) {
+    return 'حظر $name؟';
+  }
+
+  @override
+  String get blockConfirmBody =>
+      'لن يتمكن من مراسلتك أو الاتصال بك، ولن ترى رسائله.';
+
+  @override
+  String get blockConfirmLessons =>
+      'تستمر الدروس كالمعتاد: مكالمات الدروس وبطاقات الدروس ورسائل الأكاديمية تصلك كما هي.';
+
+  @override
+  String get blockConfirmAcademy => 'سنُبلغ الأكاديمية بذلك لتتابع الأمر.';
+
+  @override
+  String blockedSnack(String name) {
+    return 'تم حظر $name.';
+  }
+
+  @override
+  String unblockConfirmTitle(String name) {
+    return 'إلغاء حظر $name؟';
+  }
+
+  @override
+  String get unblockConfirmBody =>
+      'سترى رسائله مجددًا، ويمكنه مراسلتك والاتصال بك.';
+
+  @override
+  String unblockedSnack(String name) {
+    return 'تم إلغاء حظر $name.';
+  }
+
+  @override
+  String get blockErrorNotAllowed =>
+      'لا يمكن حظر هذا الشخص. يمكنك الإبلاغ عنه بدلًا من ذلك.';
+
+  @override
+  String get blockErrorNoSharedConversation =>
+      'يمكنك حظر من تشاركه محادثة فقط.';
+
+  @override
+  String get blockErrorRateLimited =>
+      'لقد حظرت عددًا كبيرًا اليوم. فضلًا حاول لاحقًا.';
+
+  @override
+  String get blockErrorTerms =>
+      'فضلًا وافق على شروط الاستخدام أولًا، ثم يمكنك الحظر.';
+
+  @override
+  String get blockErrorGeneric => 'تعذّر الحظر الآن. فضلًا حاول مرة أخرى.';
+
+  @override
+  String get unblockErrorGeneric =>
+      'تعذّر إلغاء الحظر الآن. فضلًا حاول مرة أخرى.';
+
+  @override
+  String get hiddenByBlockPlaceholder => 'رسالة مخفية: لقد حظرت هذا الشخص';
+
+  @override
+  String blockedComposerNotice(String name) {
+    return 'لقد حظرت $name. ألغِ الحظر لتتمكن من الكتابة.';
+  }
+
+  @override
+  String get blockedPeopleTitle => 'المحظورون';
+
+  @override
+  String get blockedPeopleSubtitle => 'من حظرتهم، ويمكنك إلغاء الحظر في أي وقت';
+
+  @override
+  String get blockedPeopleEmptyTitle => 'لا يوجد أحد محظور';
+
+  @override
+  String get blockedPeopleEmptyBody =>
+      'عندما تحظر شخصًا يظهر هنا، ويمكنك إلغاء حظره.';
+
+  @override
+  String blockedPeopleSince(String date) {
+    return 'محظور منذ $date';
+  }
+
+  @override
+  String get blockedPeopleLoadError => 'تعذّر تحميل قائمة المحظورين.';
 }

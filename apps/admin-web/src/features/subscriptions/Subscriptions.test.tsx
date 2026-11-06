@@ -204,7 +204,7 @@ describe('the locked group banner', () => {
       </I18nProvider>,
     )
     const banner = screen.getByRole('status')
-    expect(banner).toHaveTextContent('Read-only for the parent and the teacher. You can still write.')
+    expect(banner).toHaveTextContent('New lesson bookings are paused. The chat stays open for everyone.')
     expect(banner).toHaveTextContent('Adam: lessons used up')
     expect(banner).toHaveTextContent('Sara: instalment overdue — Term · 2/3')
     rerender(

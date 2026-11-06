@@ -45,8 +45,11 @@ describe('pooledDatabaseUrl', () => {
   it('both deploy workflows fit the 1 GiB plan (22 usable): (API + worker) x 2 during a deploy <= 20, API larger', () => {
     for (const wf of ['deploy-staging.yml', 'deploy-production.yml']) {
       const text = readFileSync(`${__dirname}/../../../../../.github/workflows/${wf}`, 'utf8');
-      const api = Number(/DATABASE_POOL_MAX: '(\d+)'/.exec(text)?.[1]);
-      const worker = Number(/DATABASE_WORKER_POOL_MAX: '(\d+)'/.exec(text)?.[1]);
+      // The DEFAULT each workflow deploys with. An Environment variable of the
+      // same name may lower it for a smaller database (ADR-014); the default is
+      // what this budget holds, and it is the only literal allowed there.
+      const api = Number(/DATABASE_POOL_MAX: \$\{\{ vars\.DATABASE_POOL_MAX \|\| '(\d+)' \}\}/.exec(text)?.[1]);
+      const worker = Number(/DATABASE_WORKER_POOL_MAX: \$\{\{ vars\.DATABASE_WORKER_POOL_MAX \|\| '(\d+)' \}\}/.exec(text)?.[1]);
       expect([wf, api, worker]).toEqual([wf, 7, 3]);
       expect([wf, 2 * (api + worker) <= 20]).toEqual([wf, true]);
     }

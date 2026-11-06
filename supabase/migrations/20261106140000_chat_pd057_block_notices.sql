@@ -15,7 +15,7 @@
 -- moderation queue with the permissions the manager already has.
 --
 -- Needs 20261104100000 (chat.actor_block_manager_notice). No table, no grant.
--- Rollback: db/rollback/20261106110000_chat_pd057_block_notices.down.sql.
+-- Rollback: db/rollback/20261106140000_chat_pd057_block_notices.down.sql.
 -- =============================================================================
 
 insert into chat.notification_template (key, locale, title, body)

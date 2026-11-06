@@ -8,12 +8,14 @@ import '../core/data/http/http_account_deletion_repository.dart';
 import '../core/data/http/http_account_recovery_repository.dart';
 import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_billing_repository.dart';
+import '../core/data/http/http_block_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_feedback_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_moderation_repository.dart';
 import '../core/data/http/http_parent_signup_repository.dart';
 import '../core/data/http/http_password_change_repository.dart';
 import '../core/data/http/http_password_reset_repository.dart';
@@ -64,6 +66,7 @@ import '../features/tasks/application/task_signal_channel.dart';
 import '../features/whiteboards/data/board_draft_files.dart';
 import '../features/whiteboards/data/quran_text_repository.dart';
 import '../features/whiteboards/data/whiteboards_repository.dart';
+import '../shared/location/location_repository.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -238,6 +241,8 @@ List<Override> _httpOverrides() {
     materialsRepositoryProvider.overrideWithValue(
       HttpMaterialsRepository(client: client),
     ),
+    // PD-45: the parent's own location and the country / subdivision lists.
+    locationRepositoryProvider.overrideWithValue(HttpLocationRepository(client: client)),
     // PD-48: the parent's lesson-audio notice (acknowledged once).
     parentNoticeRepositoryProvider.overrideWithValue(
       HttpParentNoticeRepository(client: client),
@@ -246,6 +251,12 @@ List<Override> _httpOverrides() {
     feedbackRepositoryProvider.overrideWithValue(
       HttpFeedbackRepository(client: client),
     ),
+    // PD-57: reporting a message or a person, and the user's own reports.
+    moderationRepositoryProvider.overrideWithValue(
+      HttpModerationRepository(client: client),
+    ),
+    // PD-57 (WP-2B): blocking and unblocking a person, and the user's own blocks.
+    blockRepositoryProvider.overrideWithValue(HttpBlockRepository(client: client)),
     // PD-39: the teacher's boards (the whiteboard).
     whiteboardsRepositoryProvider.overrideWithValue(
       HttpWhiteboardsRepository(client: client),
@@ -413,6 +424,10 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     // PD-32: in memory, the fixture parent's OWN feedback.
     feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
+    // PD-57: in memory, the fixture user's OWN reports.
+    moderationRepositoryProvider.overrideWithValue(FakeModerationRepository()),
+    // PD-57 (WP-2B): in memory, the fixture user's OWN blocks.
+    blockRepositoryProvider.overrideWithValue(FakeBlockRepository()),
     // PD-39: boards in memory, for trying the Boards tab without an API.
     whiteboardsRepositoryProvider.overrideWithValue(FakeWhiteboardsRepository()),
     // A Sales seat can join a fixture trial group (PD-20).

@@ -15,7 +15,7 @@
 --
 -- Needs 20261104100000 (chat.content_report) and the PD-47 task helpers
 -- (chat.work_task_raise, chat.work_task_super_admin).
--- Rollback: db/rollback/20261106100000_chat_pd057_report_effects.down.sql.
+-- Rollback: db/rollback/20261106130000_chat_pd057_report_effects.down.sql.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------

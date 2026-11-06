@@ -8,7 +8,7 @@ import type { SubscriptionLockReader } from '../platform/subscription-lock';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { NotificationService } from '../communication/notifications/notification.service';
 import { CardKind } from '../communication/contracts/vocab';
-import { LessonService, cancelReminders } from '../lessons/lesson.service';
+import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
 import { BillingService } from '../billing/billing.service';
 import type { CardLanguage } from '../lessons/lesson-card';
@@ -39,14 +39,16 @@ type Tx = Prisma.TransactionClient;
  * first pass that sees it on announces the children already in grace or
  * locked (startEnforcementIfFirst).
  *
- * HOLDS. A locked child's regular lessons that have not started are
- * suspended by the system (outcome `suspended`, note 'subscription': counted
- * nowhere, owed to no one, no reminders) and chat.learner_access.held stops
- * the materializer. Unlocking clears held and materializes again; the
- * suspended rows do not hold their slot, so the new lessons take their place
- * and nothing is doubled. reconcileHolds() makes held follow (locked AND
- * enforced) -- after each batch of events and on every sweep, so flipping the
- * switch either way takes effect on the next pass.
+ * HOLDS. Only new lesson bookings pause (owner, 2026-11-06, D-1 of
+ * docs/product/pd030-chat-stays-open-plan.md): a locked child's lessons
+ * already on the calendar go ahead, and chat.learner_access.held stops the
+ * materializer, so no further regular lessons appear. Unlocking clears held
+ * and materializes again; a slot's existing lessons are never doubled.
+ * Lessons suspended for payment before 2026-11-06 (outcome `suspended`, note
+ * 'subscription') stay history: they do not hold their slot either.
+ * reconcileHolds() makes held follow (locked AND enforced) -- after each
+ * batch of events and on every sweep, so flipping the switch either way takes
+ * effect on the next pass.
  */
 @Injectable()
 export class SubscriptionEffects {
@@ -290,27 +292,19 @@ export class SubscriptionEffects {
     return [];
   }
 
-  /** Suspend the child's regular lessons that have not started; stop the materializer. */
+  /** Stop the materializer for the child (D-1: lessons already booked go ahead). */
   private async hold(learnerId: string): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{ state: string; held: boolean }>>`
         SELECT state, held FROM chat.learner_access WHERE learner_id = ${learnerId}::uuid FOR UPDATE`;
       if (!rows[0] || rows[0].held || !this.locks.enforced || (await lockOf(tx, learnerId)) === null) return false;
-      // lesson-writer: announced -- its ids are announced just below (PD-46).
-      const lessons = await tx.$queryRaw<Array<{ id: string }>>`
-        UPDATE chat.lesson
-           SET outcome = 'suspended', outcome_note = 'subscription', outcome_by_kind = 'system', outcome_by = NULL
-         WHERE learner_id = ${learnerId}::uuid AND kind = 'regular' AND outcome IS NULL AND starts_at > now()
-        RETURNING id::text`;
-      await this.lessons.writer.announce(tx, 'paused', lessons.map((l) => l.id));
-      for (const l of lessons) await cancelReminders(tx, l.id);
       await tx.learnerAccess.update({ where: { learnerId }, data: { held: true } });
       await this.audit.audit(tx, {
         action: 'subscription.lessons_held',
         entity: 'learner',
         entityId: learnerId,
-        after: { suspended: lessons.length },
-        reason: 'group locked for payment (PD-30)',
+        after: { suspended: 0, materializerHeld: true },
+        reason: 'locked for payment: new lessons paused, booked lessons kept (PD-30, D-1)',
       });
       return true;
     });
