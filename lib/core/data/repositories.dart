@@ -52,11 +52,20 @@ class GroupMember {
     this.avatarUrl,
     this.canOpenDirect = false,
     this.away,
+    this.actorKind,
   });
 
   final String id;
   final String displayName;
+
+  /// For DISPLAY (a role word, the 1:1 policy). Read from `memberRole`, a label on the
+  /// membership row -- never an identity (a teacher can carry `admin`, RT-025 C5).
   final ParticipantRole role;
+
+  /// PD-57: the identity's own kind from the server's `actorKind` -- `contact`, `teacher` or
+  /// `staff` -- and the only source of a Report or Block subject's kind. Null when the
+  /// server did not send one of those three: nothing is then offered, never a guess.
+  final String? actorKind;
   final String? avatarUrl;
 
   /// Whether the server says the viewer may open a 1:1 with this member.

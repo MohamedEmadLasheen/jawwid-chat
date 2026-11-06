@@ -40,9 +40,14 @@ class ProfilePerson {
     this.role,
     this.avatarUrl,
     this.canOpenDirect = false,
+    this.actorKind,
   });
 
   final String id;
+
+  /// PD-57: the server's `actorKind` (`contact`, `teacher`, `staff`), the only source of a
+  /// Report or Block subject's kind. Null when unknown: nothing is offered.
+  final String? actorKind;
 
   /// May be empty over HTTP: `ConversationMemberDto` has no name field (gap O3). The UI
   /// shows a neutral role word in that case and **never** falls back to the actor id.
@@ -187,6 +192,7 @@ abstract final class ProfileViewBuilder {
             role: member.role,
             avatarUrl: member.avatarUrl,
             canOpenDirect: member.canOpenDirect,
+            actorKind: member.actorKind,
           ),
       ],
       handledByLabel: conversation.handledByLabel,

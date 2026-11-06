@@ -36,6 +36,8 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/domain/lesson_menu.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
+import '../../moderation/data/moderation_repository.dart';
+import '../../moderation/presentation/report_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
 import '../application/drafts_controller.dart';
@@ -536,6 +538,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       message: message,
       withMarks: marks.isAvailable,
       withInfo: info.isAvailable,
+      withReport: ref.read(moderationRepositoryProvider).isAvailable,
     );
     if (result == null || !mounted) return;
 
@@ -563,6 +566,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
         _openFirstAttachment(message);
       case MessageAction.info:
         await _showInfo(message);
+      case MessageAction.report:
+        // PD-57: the sheet says what happened itself; nothing more to do here.
+        final id = message.id;
+        if (id != null) await showReportSheet(context, target: MessageReportTarget(id));
       case MessageAction.deleteForMe:
         await _guard(() => controller.deleteForMe(message));
       case MessageAction.deleteForEveryone:

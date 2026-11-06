@@ -19,6 +19,7 @@ import '../features/materials/presentation/child_materials_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/messages/presentation/starred_messages_screen.dart';
+import '../features/moderation/presentation/my_reports_screen.dart';
 import '../features/notifications/presentation/notification_center_screen.dart';
 import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/profile/presentation/my_profile_screen.dart';
@@ -110,6 +111,9 @@ abstract final class Routes {
 
   /// PD-22: the account's time zone -- follow the phone, or a zone picked by hand.
   static const dateTime = '/settings/date-time';
+
+  /// PD-57: the user's own reports and our answers.
+  static const myReports = '/settings/reports';
 
   /// The teacher's professional profile. A SEPARATE destination from
   /// [myAccount]: that screen is who you are, this one is what families read
@@ -365,6 +369,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.notificationSettings,
         builder: (context, state) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.myReports,
+        pageBuilder: (context, state) => _page(state, const MyReportsScreen()),
       ),
       GoRoute(
         path: Routes.dateTime,
