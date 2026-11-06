@@ -228,7 +228,7 @@ class ProfileBody extends ConsumerWidget {
               onReport: _mayReport(ref, member)
                   ? () => showReportSheet(
                         context,
-                        target: PersonReportTarget(kind: reportActorKind(member.role)!, id: member.id),
+                        target: PersonReportTarget(kind: reportActorKind(member)!, id: member.id),
                       )
                   : null,
             ),
@@ -243,7 +243,7 @@ class ProfileBody extends ConsumerWidget {
   /// that reaches the report route. Whether the report is accepted is the server's answer.
   bool _mayReport(WidgetRef ref, ProfilePerson member) =>
       ref.watch(moderationRepositoryProvider).isAvailable &&
-      mayReportPerson(id: member.id, role: member.role, viewerId: ref.watch(principalIdProvider));
+      mayReportPerson(person: member, viewerId: ref.watch(principalIdProvider));
 
   /// Whether this client may *offer* a direct channel to [member].
   ///
@@ -677,7 +677,7 @@ class ReportPersonTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(moderationRepositoryProvider).isAvailable) return const SizedBox.shrink();
-    if (!mayReportPerson(id: person.id, role: person.role, viewerId: ref.watch(principalIdProvider))) {
+    if (!mayReportPerson(person: person, viewerId: ref.watch(principalIdProvider))) {
       return const SizedBox.shrink();
     }
     return ListTile(
@@ -686,7 +686,7 @@ class ReportPersonTile extends ConsumerWidget {
       title: Text(L10n.of(context).reportPersonAction),
       onTap: () => showReportSheet(
         context,
-        target: PersonReportTarget(kind: reportActorKind(person.role)!, id: person.id),
+        target: PersonReportTarget(kind: reportActorKind(person)!, id: person.id),
       ),
     );
   }

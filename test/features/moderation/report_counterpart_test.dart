@@ -53,8 +53,12 @@ void main() {
             overrides: [
               moderationRepositoryProvider.overrideWithValue(repo),
               directCounterpartProvider('c1').overrideWith(
-                (ref) async =>
-                    const ProfilePerson(id: 't9', displayName: 'Ustadh Kareem', role: ParticipantRole.teacher),
+                (ref) async => const ProfilePerson(
+                  id: 't9',
+                  displayName: 'Ustadh Kareem',
+                  role: ParticipantRole.teacher,
+                  actorKind: 'teacher',
+                ),
               ),
             ],
           ),
@@ -93,6 +97,24 @@ void main() {
         expect(find.byKey(const ValueKey('profile-report-person')), findsNothing);
       });
 
+      testWidgets('a counterpart with no actorKind is offered nothing, whatever its role [$tag]', (tester) async {
+        await tester.pumpWidget(
+          wrap(
+            const ConversationReportTile(conversationId: 'c1'),
+            locale: locale,
+            overrides: [
+              moderationRepositoryProvider.overrideWithValue(FakeModerationRepository()),
+              directCounterpartProvider('c1').overrideWith(
+                (ref) async =>
+                    const ProfilePerson(id: 't9', displayName: 'Ustadh Kareem', role: ParticipantRole.teacher),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('profile-report-person')), findsNothing);
+      });
+
       testWidgets('the profile screen wires it: a 1:1 conversation reports the person, not itself [$tag]', (
         tester,
       ) async {
@@ -111,7 +133,12 @@ void main() {
                 ),
               ),
               directCounterpartProvider('c1').overrideWith(
-                (ref) async => const ProfilePerson(id: 's1', displayName: 'Noura', role: ParticipantRole.admin),
+                (ref) async => const ProfilePerson(
+                  id: 's1',
+                  displayName: 'Noura',
+                  role: ParticipantRole.admin,
+                  actorKind: 'staff',
+                ),
               ),
             ],
           ),

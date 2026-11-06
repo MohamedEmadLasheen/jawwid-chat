@@ -6,7 +6,7 @@ import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/models/user_role.dart';
+import '../../profile/domain/profile_view.dart';
 import '../data/moderation_repository.dart';
 
 /// The reason's words. The labels are DRAFT, pending owner approval N-4 (see the arb).
@@ -18,20 +18,20 @@ String reportReasonLabel(ReportReason reason, L10n l10n) => switch (reason) {
       ReportReason.other => l10n.reportReasonOther,
     };
 
-/// The `{kind}` half of a person's `subject`, from how the client knows the person.
+/// The `{kind}` half of a person's `subject`: the server's `actorKind` (`contact`,
+/// `teacher`, `staff`), never derived from the displayed role, which comes from
+/// `memberRole` (a teacher can carry `admin`, RT-025 C5).
 ///
-/// Null when the role is not one of the three kinds a person can have (`system`, or one
-/// the server did not tell us): then no Report entry is offered rather than a guess sent.
-String? reportActorKind(ParticipantRole? role) => switch (role) {
-      ParticipantRole.parent => 'contact',
-      ParticipantRole.teacher => 'teacher',
-      ParticipantRole.admin => 'staff',
+/// Null when the server sent no such kind (`system`, absent, unknown): then no Report entry
+/// is offered rather than a guess sent.
+String? reportActorKind(ProfilePerson person) => switch (person.actorKind) {
+      'contact' || 'teacher' || 'staff' => person.actorKind,
       _ => null,
     };
 
-/// Whether a Report entry is offered for the person with [id] and [role] to [viewerId].
-bool mayReportPerson({required String id, required ParticipantRole? role, required String? viewerId}) =>
-    id.isNotEmpty && id != viewerId && reportActorKind(role) != null;
+/// Whether a Report entry is offered for [person] to [viewerId].
+bool mayReportPerson({required ProfilePerson person, required String? viewerId}) =>
+    person.id.isNotEmpty && person.id != viewerId && reportActorKind(person) != null;
 
 /// Opens the Report sheet for [target]. Completes with true once a report was sent (or was
 /// already open), false when the user backed out.

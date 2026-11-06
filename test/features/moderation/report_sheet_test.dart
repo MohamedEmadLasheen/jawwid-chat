@@ -317,9 +317,12 @@ void main() {
           subject: ProfilePerson(id: 'c_group', displayName: 'Yusuf'),
           isGroup: true,
           members: [
-            ProfilePerson(id: 'me', displayName: 'Me', role: ParticipantRole.parent),
-            ProfilePerson(id: 'm_teacher', displayName: 'Ustadh Kareem', role: ParticipantRole.teacher),
+            ProfilePerson(id: 'me', displayName: 'Me', role: ParticipantRole.parent, actorKind: 'contact'),
+            // PD-57: the server's actorKind decides the kind; a teacher may carry memberRole admin.
+            ProfilePerson(id: 'm_teacher', displayName: 'Ustadh Kareem', role: ParticipantRole.admin, actorKind: 'teacher'),
             ProfilePerson(id: 'm_system', displayName: 'Jawwid', role: ParticipantRole.system),
+            // No actorKind from the server: no Report, never a guess from the role.
+            ProfilePerson(id: 'm_unknown', displayName: 'Someone', role: ParticipantRole.teacher),
           ],
         );
         await tester.pumpWidget(wrap(
@@ -331,6 +334,7 @@ void main() {
 
         expect(find.byKey(const ValueKey('member-report-me')), findsNothing);
         expect(find.byKey(const ValueKey('member-report-m_system')), findsNothing);
+        expect(find.byKey(const ValueKey('member-report-m_unknown')), findsNothing);
         await tester.tap(find.byKey(const ValueKey('member-report-m_teacher')));
         await tester.pumpAndSettle();
         expect(find.text(l10n.reportSheetPersonIntro), findsOneWidget);
@@ -347,7 +351,7 @@ void main() {
       testWidgets('a one-to-one profile offers Report this person, and not for yourself', (tester) async {
         final l10n = await l10nFor(locale);
         Widget tile(String id) => wrap(
-              Scaffold(body: ReportPersonTile(person: ProfilePerson(id: id, displayName: 'Jawwid Support', role: ParticipantRole.admin))),
+              Scaffold(body: ReportPersonTile(person: ProfilePerson(id: id, displayName: 'Jawwid Support', role: ParticipantRole.admin, actorKind: 'staff'))),
               locale: locale,
               overrides: [moderationRepositoryProvider.overrideWithValue(repo)],
             );
@@ -366,7 +370,7 @@ void main() {
 
       testWidgets('a build without the report route offers no entry at all', (tester) async {
         await tester.pumpWidget(wrap(
-          const Scaffold(body: ReportPersonTile(person: ProfilePerson(id: 'staff_1', displayName: 'S', role: ParticipantRole.admin))),
+          const Scaffold(body: ReportPersonTile(person: ProfilePerson(id: 'staff_1', displayName: 'S', role: ParticipantRole.admin, actorKind: 'staff'))),
           locale: locale,
         ));
         expect(find.byKey(const ValueKey('profile-report-person')), findsNothing);

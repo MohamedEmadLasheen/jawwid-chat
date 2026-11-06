@@ -31,7 +31,7 @@ final directCounterpartProvider = FutureProvider.autoDispose.family<ProfilePerso
     ];
     if (others.length != 1) return null;
     final other = others.single;
-    return ProfilePerson(id: other.id, displayName: other.displayName, role: other.role, avatarUrl: other.avatarUrl);
+    return ProfilePerson(id: other.id, displayName: other.displayName, role: other.role, avatarUrl: other.avatarUrl, actorKind: other.actorKind);
   } catch (_) {
     return null;
   }

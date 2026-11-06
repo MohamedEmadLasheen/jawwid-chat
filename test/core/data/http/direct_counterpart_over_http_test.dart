@@ -88,14 +88,52 @@ void main() {
       expect(person, isNotNull);
       expect(person!.id, 't9');
       expect(person.id, isNot('c1'));
-      expect(reportActorKind(person.role), 'teacher');
+      expect(person.actorKind, 'teacher');
+      expect(reportActorKind(person), 'teacher');
       expect(person.displayName, 'Ustadh Kareem');
       expect(server.requests.every((r) => r.path == '/conversations/c1'), isTrue);
     });
 
     test('a staff counterpart reports as staff', () async {
       final person = await resolve(Reply.ok(dto(members: [me, staff])));
-      expect((person?.id, reportActorKind(person?.role)), ('s1', 'staff'));
+      expect((person?.id, person?.actorKind), ('s1', 'staff'));
+    });
+
+    test('the kind is the server\'s actorKind, never memberRole: a teacher labelled admin is a teacher', () async {
+      final person = await resolve(
+        Reply.ok(
+          dto(
+            members: [
+              me,
+              {...teacher, 'memberRole': 'admin'},
+            ],
+          ),
+        ),
+      );
+      expect(person?.id, 't9');
+      expect(person?.actorKind, 'teacher');
+      expect(reportActorKind(person!), 'teacher');
+    });
+
+    test('no actorKind (or one this client does not know): the person has no kind, so nothing is offered', () async {
+      final missing = {...teacher}..remove('actorKind');
+      final person = await resolve(Reply.ok(dto(members: [me, missing])));
+      expect(person?.id, 't9');
+      expect(person?.actorKind, isNull);
+      expect(reportActorKind(person!), isNull);
+      expect(mayReportPerson(person: person, viewerId: 'me'), isFalse);
+
+      final odd = await resolve(
+        Reply.ok(
+          dto(
+            members: [
+              me,
+              {...teacher, 'actorKind': 'system'},
+            ],
+          ),
+        ),
+      );
+      expect(odd?.actorKind, isNull);
     });
 
     test('never the academy\'s official conversation', () async {

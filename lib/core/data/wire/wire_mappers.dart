@@ -640,11 +640,19 @@ abstract final class WireMappers {
   /// actor no longer resolves, and the UI renders that as `groupMemberUnresolved`
   /// rather than an id — so empty is a value this client already knows how to
   /// show, not a defect to paper over here.
+  /// PD-57: `actorKind` when it is one of the three kinds a person can be blocked or
+  /// reported as (`contact`, `teacher`, `staff`); null otherwise (`system`, absent, unknown).
+  static String? personActorKind(Object? raw) => switch (raw) {
+        Wire.actorContact || Wire.actorTeacher || Wire.actorStaff => raw as String,
+        _ => null,
+      };
+
   static GroupMember groupMember(Map<String, Object?> json) {
     return GroupMember(
       id: (json['actorId'] as String?) ?? '',
       displayName: _nonEmpty(json['displayName']) ?? '',
       role: memberRole(json['memberRole'] as String?),
+      actorKind: personActorKind(json['actorKind']),
       // Absent or non-boolean reads as false: an advisory that defaulted to
       // "you may" would offer actions the server then refuses.
       canOpenDirect: json['canOpenDirect'] == true,
