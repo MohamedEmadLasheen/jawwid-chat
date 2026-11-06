@@ -406,7 +406,11 @@ describe('§5.6-3: a duplicate returns the open report', () => {
     expect(row).toMatchObject({ reason: 'child_safety', priority: 'urgent', status: 'open' });
     expect(await g.prisma.contentReport.count({ where: { reporterId: family(6).parent.id } })).toBe(1);
     // ENG-04's Super Admin alert has its signal, still without content.
-    const events = (await g.prisma.outboxEvent.findMany({ where: { type: 'report.created' } })).filter(
+    // Ordered: without orderBy Postgres may return the two rows either way round
+    // (seen once in CI on 2026-11-06).
+    const events = (
+      await g.prisma.outboxEvent.findMany({ where: { type: 'report.created' }, orderBy: { createdAt: 'asc' } })
+    ).filter(
       (e) => (e.payload as { reportId?: string }).reportId === first.json.id,
     );
     expect(events.map((e) => e.payload)).toEqual([
