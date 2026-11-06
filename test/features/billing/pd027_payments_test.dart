@@ -698,7 +698,8 @@ void main() {
         invoices: base.invoices,
         subscriptions: base.subscriptions,
       );
-      expect(amountsDue(withOther).map((d) => d.key), ['r:r1', 'r:r-other', 'i:i2', 'i:i3']);
+      // `other` is never offered, even if a server bug says it may be.
+      expect(amountsDue(withOther).map((d) => d.key), ['r:r1', 'i:i2', 'i:i3']);
     });
 
     test('R-4: an instalment the server did not verify as a lesson package is never offered', () {

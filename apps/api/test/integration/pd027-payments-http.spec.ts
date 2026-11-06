@@ -33,6 +33,8 @@ import { STRIPE_GATEWAY } from '../../src/billing/stripe.gateway';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
+import { CheckoutService } from '../../src/billing/checkout.service';
+import { PaymentLedger } from '../../src/billing/payment-ledger.service';
 import { OBJECT_STORAGE } from '../../src/platform/tokens';
 import type { ObjectStorage } from '../../src/communication/attachments/object-storage';
 
@@ -643,6 +645,9 @@ describe('R-4: an instalment or a balance is paid in the app only for a verified
 
     const mine = await http(f.parent.subject, 'GET', '/me/billing');
     expect(mine.json.instalments.find((i: any) => i.id === inst.id)).toMatchObject({ payableInApp: false });
+    // Overdue but not payable here: the subscription cards do not offer Pay for it.
+    expect(mine.json.subscriptions.length).toBeGreaterThan(0);
+    expect(mine.json.subscriptions.every((c: any) => c.hasOpenPayment === false)).toBe(true);
 
     // Direct instalment payment: refused BEFORE its request is made.
     const card = await http(f.parent.subject, 'POST', '/me/billing/checkout', { instalmentId: inst.id });
@@ -715,6 +720,22 @@ describe('R-4: an instalment or a balance is paid in the app only for a verified
     const mine = await http(f.parent.subject, 'GET', '/me/billing');
     expect(mine.json.instalments.find((i: any) => i.id === top.id)).toMatchObject({ payableInApp: false });
     expect((await http(f.parent.subject, 'POST', '/me/billing/checkout', { instalmentId: top.id })).code).toBe(CommErrorCode.PAYMENT_NOT_IN_APP);
+
+    // Voided between the app's check and Stripe: the checkout re-checks before asking Stripe.
+    const live = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Race', amountMinor: 7000, firstDueDate: '2026-11-01', learnerId: child.id, lessonsIncluded: 4,
+    });
+    const raced = live.json.instalments.find((i: any) => i.label === 'Race');
+    // The request the app's check passed, made before the void.
+    const racedRow = await g.prisma.familyInstalment.findUniqueOrThrow({ where: { id: raced.id } });
+    const request = await g.prisma.$transaction((tx) => app.get(PaymentLedger).ensureInstalmentRequest(tx, racedRow, null));
+    await g.prisma.learnerSubscription.update({ where: { id: raced.lessonSubscriptionId }, data: { voidedAt: new Date(), voidedBy: m.superAdmin.id, voidReason: 'race' } });
+    await expect(app.get(CheckoutService).open(request, { locale: 'en', returnUrl: 'https://x.test/pay/t', inApp: true }))
+      .rejects.toMatchObject({ code: CommErrorCode.PAYMENT_NOT_IN_APP });
+    expect(checkoutInputs(request.id)).toHaveLength(0);
+    // The web link (not the app) still opens, without calling it a lesson.
+    await app.get(CheckoutService).open(request, { locale: 'en', returnUrl: 'https://x.test/pay/t' });
+    expect(checkoutInputs(request.id)[0]!.description).toBeNull();
   });
 
   it('a balance is payable in the app only with its lesson package; a subscription only with its child and lessons', async () => {
@@ -764,15 +785,20 @@ describe('R-4: an instalment or a balance is paid in the app only for a verified
     const child = f.children[0]!;
     const pkg = await lessonPackage(child.id);
     const foreignPkg = await lessonPackage(familyOf(13).f.children[0]!.id);
-    const inst = await g.prisma.familyInstalment.findFirstOrThrow({ where: { familyId: f.id, lessonSubscriptionId: null } }).catch(async () => {
-      const r = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/instalments`, { label: 'Loose', amountMinor: 100, firstDueDate: '2026-11-01' });
-      return r.json.instalments.find((i: any) => i.label === 'Loose');
-    });
+    const made = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/instalments`, { label: 'DB loose', amountMinor: 100, firstDueDate: '2026-11-01' });
+    const inst = made.json.instalments.find((i: any) => i.label === 'DB loose');
+    expect(inst.lessonSubscriptionId).toBeNull();
     await expect(g.prisma.familyInstalment.update({ where: { id: inst.id }, data: { lessonSubscriptionId: pkg } })).rejects.toThrow(/lesson package never changes/);
     await expect(g.prisma.$executeRawUnsafe(
       `insert into chat.family_instalment (family_id, label, amount_minor, currency, due_date, created_by, lesson_subscription_id)
        values ($1::uuid, 'x', 1, 'AED', '2026-11-01', $2::uuid, $3::uuid)`, f.id, m.superAdmin.id, foreignPkg,
     )).rejects.toThrow(/own family and child/);
+    const voidedPkg = await lessonPackage(child.id);
+    await g.prisma.learnerSubscription.update({ where: { id: voidedPkg }, data: { voidedAt: new Date(), voidedBy: m.superAdmin.id, voidReason: 'test' } });
+    await expect(g.prisma.$executeRawUnsafe(
+      `insert into chat.family_instalment (family_id, learner_id, label, amount_minor, currency, due_date, created_by, lesson_subscription_id)
+       values ($1::uuid, $2::uuid, 'x', 1, 'AED', '2026-11-01', $3::uuid, $4::uuid)`, f.id, child.id, m.superAdmin.id, voidedPkg,
+    )).rejects.toThrow(/voided lesson package/);
     await expect(g.prisma.$executeRawUnsafe(
       `insert into chat.payment_request (organization_id, token, family_id, purpose, label, amount_minor, currency, expires_at, lesson_subscription_id)
        values ((select organization_id from chat.family where id = $1::uuid), 'tok-r4-' || gen_random_uuid(), $1::uuid, 'other', 'x', 1, 'AED', now() + interval '1 day', $2::uuid)`, f.id, pkg,

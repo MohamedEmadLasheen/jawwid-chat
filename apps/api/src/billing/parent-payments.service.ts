@@ -52,6 +52,7 @@ export class ParentPaymentsService {
     const url = await this.checkout.open(request, {
       locale: family?.language === 'en' ? 'en' : 'ar',
       returnUrl: PaymentLedger.linkFor(request.token),
+      inApp: true,
     });
     return { url };
   }
@@ -112,6 +113,10 @@ export class ParentPaymentsService {
     const remaining = Number(request.amountMinor) - (await this.ledger.standingSum(this.prisma, { requestId: request.id }));
     if (amountMinor > Math.max(remaining, 0)) throw invalid(`amountMinor: at most what is still owed (${Math.max(remaining, 0)})`);
 
+    const dropRefusedFile = async (e: unknown) => {
+      if (e instanceof CommError && e.code === CommErrorCode.PAYMENT_NOT_IN_APP) await this.storage.delete(objectKey).catch(() => undefined);
+      throw e;
+    };
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
       await lockIdempotencyKey(tx, objectKey);
@@ -120,6 +125,8 @@ export class ParentPaymentsService {
         assertReplay('receipt', sameReceipt(concurrent));
         return; // a concurrent duplicate: the first one wrote it
       }
+      // Checked again where the receipt is written (a package voided since).
+      await assertPayableInApp(tx, request);
       const receipt = await tx.paymentReceipt.create({
         data: {
           organizationId: contact.organizationId,
@@ -143,7 +150,7 @@ export class ParentPaymentsService {
         after: { receiptId: receipt.id, requestId: request.id, amountMinor, currency: request.currency, transferredOn, contactId: contact.id },
         reason: 'bank-transfer receipt sent by a parent',
       });
-    });
+    }).catch(dropRefusedFile);
     return this.billing.mine(actorId);
   }
 

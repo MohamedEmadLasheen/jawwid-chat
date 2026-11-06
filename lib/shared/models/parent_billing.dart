@@ -284,6 +284,14 @@ enum RequestPurpose {
   balance,
   other;
 
+  /// A purpose that can pay for lessons at all (apps/api in-app-payability.ts). A
+  /// second, client-side check under the server's `payableInApp`: `other` and a
+  /// purpose this build does not know are never offered, whatever the server says.
+  bool get canPayForLessons => switch (this) {
+        RequestPurpose.subscription || RequestPurpose.renewal || RequestPurpose.instalment || RequestPurpose.balance => true,
+        RequestPurpose.other => false,
+      };
+
   static RequestPurpose? tryParse(Object? raw) => switch (raw) {
         'subscription' => RequestPurpose.subscription,
         'renewal' => RequestPurpose.renewal,

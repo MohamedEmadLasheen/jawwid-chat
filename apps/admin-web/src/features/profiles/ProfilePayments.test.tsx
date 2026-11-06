@@ -604,6 +604,8 @@ describe('PD-27 on the Parent Profile', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove row 3' }))
     expect(within(dialog).getByText(/^Total: .*1,250\.25$/)).toBeInTheDocument()
     await chooseOption(userEvent, within(dialog).getByLabelText('For'), 'k-1')
+    // This viewer's server answers no ledger (404 here): the picker says so instead of failing quietly.
+    expect(await within(dialog).findByText(/lesson packages could not be loaded/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(calls('POST', /\/families\/f-1\/instalments$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/families\/f-1\/instalments$/)[0])).toEqual({

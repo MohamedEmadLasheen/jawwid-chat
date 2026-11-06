@@ -107,6 +107,10 @@ export const PAY = {
   // Store payments policy: the app takes payment only for a verified lesson package.
   lessonPackage: { en: 'Lesson package', ar: 'باقة الدروس' },
   noLessonPackage: { en: 'None: not payable in the app', ar: 'بدون: لا يُدفع في التطبيق' },
+  lessonPackagesUnavailable: {
+    en: 'The child’s lesson packages could not be loaded. Without one, the family can pay this only outside the app.',
+    ar: 'تعذّر تحميل باقات دروس الطفل. وبدون باقة لا يمكن للعائلة دفع هذا إلا خارج التطبيق.',
+  },
   lessonPackageOption: { en: 'Lessons: {n} · from {date}', ar: 'الدروس: {n} · من {date}' },
   planInAppHint: {
     en: 'The family can pay this in the app only for a lesson package: enter its lessons, or choose the child’s package.',

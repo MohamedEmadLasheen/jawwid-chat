@@ -90,7 +90,7 @@ export async function loadPackageFacts(
   return { instalmentPackage, standing };
 }
 
-function notInApp(): CommError {
+export function notInApp(): CommError {
   return new CommError(
     CommErrorCode.PAYMENT_NOT_IN_APP,
     'this payment is not verified as live one-to-one lessons and cannot be paid in the app',

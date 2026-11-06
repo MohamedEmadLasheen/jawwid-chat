@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { CURRENCIES } from '@/features/trials/copy'
@@ -437,7 +437,7 @@ export function NewInstalmentsDialog({
       {children.length > 0 && (
         <Field label={tx(P.child)}>
           {(id) => (
-            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => setLearnerId(v)}>
+            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => { setLearnerId(v); setPackageId('') }}>
               <option value="">{tx(P.wholeFamily)}</option>
               {children.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -671,7 +671,7 @@ export function RequestPaymentDialog({
       {children.length > 0 && (
         <Field label={tx(PAY.child)}>
           {(id) => (
-            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => setLearnerId(v)}>
+            <SearchableSelect id={id} className="select" value={learnerId} onValueChange={(v) => { setLearnerId(v); setPackageId('') }}>
               <option value="">{tx(PAY.wholeFamily)}</option>
               {children.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -1005,12 +1005,9 @@ function LessonPackagePicker({ learnerId, value, onChange }: { learnerId: string
   const { locale } = useI18n()
   const view = useSubscription(learnerId)
   const standing = (view.data?.subscriptions ?? []).filter((s) => s.voided === null)
-  // Another child chosen: a package of the previous one is not this child's.
-  useEffect(() => {
-    if (value && view.data && !standing.some((s) => s.id === value)) onChange('')
-  }, [value, view.data, standing, onChange])
+  // The callers clear the choice when the child changes.
   return (
-    <Field label={tx(PAY.lessonPackage)}>
+    <Field label={tx(PAY.lessonPackage)} hint={view.isError ? tx(PAY.lessonPackagesUnavailable) : undefined}>
       {(id) => (
         <SearchableSelect id={id} className="select" value={value} onValueChange={(v) => onChange(v)}>
           <option value="">{tx(PAY.noLessonPackage)}</option>

@@ -6,7 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { todayIn } from '../leave/leave.service';
-import { checkoutDescription, isPayableInApp, loadPackageFacts } from './in-app-payability';
+import { checkoutDescription, isPayableInApp, loadPackageFacts, notInApp } from './in-app-payability';
 import { PaymentLedger, type RecordedPayment } from './payment-ledger.service';
 import { STRIPE_GATEWAY, toSession, type CheckoutSession, type StripeGateway } from './stripe.gateway';
 import { WEBHOOK_REFUND_REASON } from './idempotency';
@@ -70,7 +70,7 @@ export class CheckoutService {
   }
 
   /** The Stripe Checkout URL for what the request still owes. */
-  async open(request: PaymentRequest, opts: { locale: 'ar' | 'en'; returnUrl: string }): Promise<string> {
+  async open(request: PaymentRequest, opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean }): Promise<string> {
     if (!this.stripe.checkoutAvailable) {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not configured on this deployment', 503);
     }
@@ -116,6 +116,8 @@ export class CheckoutService {
 
     const attempts = await this.prisma.paymentCheckout.count({ where: { requestId: fresh.id } });
     const lessons = isPayableInApp(fresh, await loadPackageFacts(this.prisma, { requests: [fresh] }));
+    // From the app: checked again just before Stripe is asked (a package voided since).
+    if (opts.inApp && !lessons) throw notInApp();
     const sep = opts.returnUrl.includes('?') ? '&' : '?';
     let session: CheckoutSession;
     try {
