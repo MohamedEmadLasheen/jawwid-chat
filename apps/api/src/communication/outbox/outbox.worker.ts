@@ -40,6 +40,12 @@ export class OutboxWorker {
     this.lessonAudience = audience;
   }
 
+  /** PD-57 ENG-04: who hears of a report (ModerationModule registers it at start). */
+  private reportDelivery: ReportDelivery | null = null;
+  useReportDelivery(delivery: ReportDelivery): void {
+    this.reportDelivery = delivery;
+  }
+
   async drain(batchSize = 100, now = new Date()): Promise<number> {
     // CLAIM PRECISION (issue #29). `availableAt` is written by Prisma's
     // client-side default and lands up to ONE millisecond after a clock read
@@ -162,6 +168,18 @@ export class OutboxWorker {
       /** PD-57 WP-2 (roadmap §6.3): the responsible managers newly told of a block. */
       case CommEvent.BLOCK_CREATED: {
         await this.deliverBlockNotice(payload);
+        return;
+      }
+
+      /**
+       * PD-57 ENG-04: a report filed or raised, past an SLA stage, or answered.
+       * No conversation (the reported person must never hear of it): staff and
+       * the reporter through the PD-34 pipeline. See ReportEscalationService.
+       */
+      case CommEvent.REPORT_CREATED:
+      case CommEvent.REPORT_ESCALATED:
+      case CommEvent.REPORT_ANSWERED: {
+        if (this.reportDelivery) await this.reportDelivery.deliver(type, payload);
         return;
       }
 
@@ -1101,7 +1119,8 @@ export class OutboxWorker {
     if (!pending) return;
     // A case's task is the owner's pointer; the case announces itself
     // (PD-35 case_opened / case_assigned / case_due_soon) -- never twice.
-    if (t.source_type === 'case') return;
+    // PD-57: so does a report (report_received_staff / _due_soon / _overdue).
+    if (t.source_type === 'case' || t.source_type === 'content_report') return;
 
     const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
     // The deciders: the responsible managers, else the super admin.
@@ -1217,6 +1236,11 @@ export class OutboxWorker {
 }
 
 /** PD-46: resolves who besides a lesson's teacher hears that it changed. */
+/** PD-57 ENG-04: ReportEscalationService. */
+export interface ReportDelivery {
+  deliver(type: string, payload: Record<string, unknown>): Promise<void>;
+}
+
 export interface LessonAudience {
   staffFor(organizationId: string, lessons: ReadonlyArray<{ teacherId: string; learnerId: string | null }>): Promise<string[]>;
 }

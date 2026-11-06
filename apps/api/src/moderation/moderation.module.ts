@@ -6,6 +6,7 @@ import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { ModerationController } from './moderation.controller';
 import { ModerationService } from './moderation.service';
+import { ReportEscalationService } from './report-escalation.service';
 import { ModerationMediaController } from './moderation-media.controller';
 import { BlocksController } from './blocks.controller';
 import { BlocksService } from './blocks.service';
@@ -27,7 +28,7 @@ import { selectObjectStorage } from '../communication/attachments/storage.provid
 @Module({
   imports: [AuthModule, CommunicationModule, AccountAdminModule],
   controllers: [ReportsController, ModerationController, ModerationMediaController, BlocksController],
-  providers: [ReportsService, ModerationService, BlocksService, BlockService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
+  providers: [ReportsService, ModerationService, ReportEscalationService, BlocksService, BlockService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
   exports: [ReportsService, ModerationService, BlocksService, BlockService],
 })
 export class ModerationModule {}
