@@ -39,7 +39,11 @@ export type ActionKind =
   /** PD-47 PR-4: a task, opened in Tasks (refs.taskId), which re-checks who may see it. */
   | 'open_task'
   /** PD-52: a teacher's records page (refs.page: attendance | grants; refs.teacherId), which re-checks who may see it. */
-  | 'open_teacher_records';
+  | 'open_teacher_records'
+  /** PD-57 ENG-04: a report, opened in the moderation queue (refs.reportId), which re-checks the scope. */
+  | 'open_report'
+  /** PD-57 ENG-04: the reporter's own My reports (refs.reportId), with the answer. */
+  | 'open_my_reports';
 
 export interface CatalogEntry {
   version: number;
@@ -73,6 +77,14 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
   // PD-36 mentions: their own Center entry, under Conversations (PD-34 QA 2026-10-27).
   mention: { version: 1, category: 'conversation', inbox: 'inbox.mention', action: 'open_conversation' },
   mention_group: { version: 1, category: 'conversation', inbox: 'inbox.mention_group', action: 'open_conversation' },
+  // PD-57 ENG-04: a report's SLA, to staff (filed under Tasks; locked: no
+  // opt-out) and its answer, to the reporter. Fixed texts: never a reporter,
+  // a reviewer, a subject or the report's words; ids, reason, priority, dueAt.
+  report_received_staff: { version: 1, category: 'task', inbox: 'inbox.report_received_staff', action: 'open_report' },
+  report_child_safety: { version: 1, category: 'task', inbox: 'inbox.report_child_safety', action: 'open_report' },
+  report_due_soon: { version: 1, category: 'task', inbox: 'inbox.report_due_soon', action: 'open_report' },
+  report_overdue: { version: 1, category: 'task', inbox: 'inbox.report_overdue', action: 'open_report' },
+  report_answered: { version: 1, category: 'system', inbox: 'inbox.report_answered', action: 'open_my_reports' },
 };
 
 const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
