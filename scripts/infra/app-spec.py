@@ -457,6 +457,13 @@ def apply_redis_phase(env: str, text: str, environ: dict) -> tuple[str, list[str
     if url and (not url.startswith("rediss://") or redis_host(url) in ("redis", "localhost", "127.0.0.1")):
         errors.append("LAUNCH_PHASE=launch: REDIS_URL must be the managed Valkey cluster over TLS "
                       "(rediss://<cluster host>), never the in-app redis (ADR-015)")
+    # Unset TRUSTED_PROXY_HOPS (no per-address login budget) and the hop probe
+    # are review-period states: real users never meet them (runbook §1d).
+    if not environ.get("TRUSTED_PROXY_HOPS", "").strip():
+        errors.append("LAUNCH_PHASE=launch: TRUSTED_PROXY_HOPS must be set to the MEASURED hop count "
+                      "(production-runbook.md §1d); unset leaves the per-address login budget off")
+    if environ.get("PROXY_HOPS_PROBE", "").strip() not in ("", "off"):
+        errors.append("LAUNCH_PHASE=launch: PROXY_HOPS_PROBE must be off; it is a measuring tool")
     if component_block(text, "redis") is not None:
         text = drop_component(text, "redis")
     return text, errors
@@ -768,7 +775,16 @@ def cmd_selftest() -> int:
         _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch",
                                                          REDIS_URL=managed.replace("rediss://", "redis://")))
         expect(any("LAUNCH_PHASE=launch" in e for e in errors), "launch on a managed Valkey without TLS is refused")
-        ltext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed))
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed))
+        expect(any("TRUSTED_PROXY_HOPS must be set" in e for e in errors),
+               "launch without a measured TRUSTED_PROXY_HOPS is refused")
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed,
+                                                         TRUSTED_PROXY_HOPS="2", PROXY_HOPS_PROBE="on"))
+        expect(any("PROXY_HOPS_PROBE must be off" in e for e in errors), "launch with the hop probe on is refused")
+        rtext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="review", PROXY_HOPS_PROBE="on"))
+        expect(not errors, "review runs with TRUSTED_PROXY_HOPS unset and the probe on")
+        ltext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed,
+                                                              TRUSTED_PROXY_HOPS="2"))
         expect(not errors and component_block(ltext, "redis") is None
                and "REVIEW PERIOD ONLY" not in ltext and "valkey/valkey" not in ltext,
                "launch with managed Valkey over TLS drops the in-app redis entirely")

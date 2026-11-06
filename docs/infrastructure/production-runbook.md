@@ -84,6 +84,8 @@ window.
 
 **Before the window (any day, no downtime):**
 
+0. `TRUSTED_PROXY_HOPS` is measured and set (§1d), and `PROXY_HOPS_PROBE` is off.
+   The launch deploy refuses otherwise.
 1. Create the cluster: `doctl databases create jawwid-chat-prod-valkey --engine
    valkey --version 8 --region fra1 --size db-s-1vcpu-1gb --num-nodes 1 --wait`,
    and assign it to the "Jawwid Chat" project.
@@ -125,6 +127,53 @@ put them on the review-period Redis this section exists to keep them off.
 
 **After launch:** delete nothing until a week of normal running. The in-app
 component is already gone from the app. `LAUNCH_PHASE` stays `launch`.
+
+### 1d. Measure TRUSTED_PROXY_HOPS (once, after the first deploy)
+
+`TRUSTED_PROXY_HOPS` is the number of proxies in front of the API that append to
+`X-Forwarded-For`; the login, reset, signup and recovery limiters' per-address
+budget keys on the address it yields (`apps/api/src/platform/auth/client-address.ts`).
+DigitalOcean does not document it, so it is **measured, never guessed**:
+
+- **Unset** (the first deploy): no forwarded header is read, nothing can be
+  spoofed, and the per-address budget is OFF. Per-account lockout is unaffected.
+  Acceptable only while no real user can sign in (the review period).
+- **0 is wrong on App Platform**: the TCP peer is DigitalOcean's router, the same
+  for every client, so every client would share ONE budget and about thirty failed
+  sign-ins from anyone would lock everybody out.
+- **One too many** lets a client choose its own address by forging an entry.
+
+Media and payment links do not depend on it: the deploys set
+`MEDIA_PUBLIC_BASE_URL` and `PAYMENT_LINK_BASE_URL` to the public HTTPS origin
+unless those variables say otherwise, and the API never reads `X-Forwarded-Host`
+(App Platform passes a forged one through).
+
+**Steps** (the owner sets the variables; nothing here touches a secret):
+
+1. Set the `production` variable `PROXY_HOPS_PROBE=on` and run **Deploy
+   production** with the same `image_tag`. The API logs a warning that the probe is on.
+2. From a machine whose public IPv4 address you know:
+   `scripts/infra/measure-proxy-hops.sh send https://api.chat.jawwid.com --my-ip <that address>`.
+   It makes three requests to `/health/live`: one plain, one with a forged
+   `X-Forwarded-For`, one with a forged `do-connecting-ip`. Your address is sent
+   only as a SHA-256 hash; the probe logs positions and counts, never an address.
+3. `doctl apps logs "$DIGITALOCEAN_APP_ID" api --type run | scripts/infra/measure-proxy-hops.sh interpret`.
+   It prints `TRUSTED_PROXY_HOPS = N`, or **STOP** with the reason: the API is
+   reachable directly (public TCP peer), your address was not found, or a forged
+   entry lands inside the trusted hops.
+4. On `TRUSTED_PROXY_HOPS = N`: set that variable, remove `PROXY_HOPS_PROBE` (or set
+   it to `off`), and redeploy. The boot log then says
+   `trust proxy = N; login source-IP rate limit enabled`.
+5. Make it required again: in `infra/env/manifest.tsv` change the `TRUSTED_PROXY_HOPS`
+   row's STAGING and PROD columns back to `req`, regenerate the specs and templates,
+   in a PR. A later deploy then cannot lose it.
+
+Evidence so far (2026-11-06, not yet measured on this app): a third-party measurement
+on App Platform saw `X-Forwarded-For: <client>,<Cloudflare edge>` with a private TCP
+peer, which would mean **N = 2**. Express 5 with `trust proxy = 2` returns the client
+for that chain even when the client forges an entry in front (unit test
+`proxy-hop-probe.spec.ts`). That is the expected answer, and the reason to measure
+rather than assume it.
 
 ## 2. What exactly is running?
 

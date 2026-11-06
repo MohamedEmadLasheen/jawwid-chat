@@ -92,13 +92,13 @@ HINTS = {
     "SENTRY_DSN": "Sentry project DSN for the API",
     "SMTP_URL": "smtps://user:password@host:465 from your email provider",
     "RECOVERY_MAIL_FROM": "the sender address, e.g. Jawwid <no-reply@jawwid.com> (SPF/DKIM on that domain)",
-    "TRUSTED_PROXY_HOPS": "proxies in front of the API on App Platform; measure on the live app (runbook), not guessed",
+    "TRUSTED_PROXY_HOPS": "MEASURED after the first deploy (production-runbook.md §1d); leave it unset until then, never guess it",
 }
 ALWAYS_REQUIRED = ("DIGITALOCEAN_ACCESS_TOKEN", "GHCR_PULL_CREDENTIALS", "BACKUP_ENCRYPTION_PASSPHRASE",
                    "LAUNCH_PHASE", "DATABASE_POOL_MAX", "DATABASE_WORKER_POOL_MAX",
                    # The deploy's storage check, never the app (storage-versioning.sh).
                    "STORAGE_ADMIN_ACCESS_KEY", "STORAGE_ADMIN_SECRET_KEY")
-AFTER_FIRST_DEPLOY = ("DIGITALOCEAN_APP_ID",)
+AFTER_FIRST_DEPLOY = ("DIGITALOCEAN_APP_ID", "TRUSTED_PROXY_HOPS")
 
 
 def required() -> dict[str, str]:
