@@ -148,11 +148,20 @@ describe('nothing personal reaches the Sentry wire', () => {
       tracker.captureException(Object.assign(new Error('failure'), { name }), { route: 'outbox.drain', component: 'worker' });
       tracker.captureException(Object.assign(new TypeError('failure'), { name }), { route: 'outbox.drain', component: 'worker' });
     }
+    // Codex review: nor does an own `constructor` property shadowing the class.
+    for (const name of ['LaylaError', 'ليلىError']) {
+      const shadowed = Object.assign(new RangeError('failure'), { constructor: { name } });
+      tracker.captureException(shadowed, { route: 'outbox.drain', component: 'worker' });
+      const fake = Object.assign(new Error('failure'), { name });
+      Object.defineProperty(fake, 'constructor', { value: function LaylaError() {} });
+      tracker.captureException(fake, { route: 'outbox.drain', component: 'worker' });
+    }
     await flushed();
     const text = sent.slice(before).join('\n');
     expectNothingPersonal(text);
     expect(text).toContain('"type":"Error"');
     expect(text).toContain('"type":"TypeError"');
+    expect(text).toContain('"type":"RangeError"');
   });
 
   it('keeps the error classes this codebase actually throws', async () => {

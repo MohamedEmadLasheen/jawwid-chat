@@ -235,7 +235,7 @@ export function scrubEvent(event: Sentry.ErrorEvent, hint?: Sentry.EventHint): S
         // with the type Sentry recorded at that position.
         const candidate = chain[values.length - 1 - i];
         const source = candidate instanceof Error && nameOf(candidate) === exception.type ? candidate : undefined;
-        const type = (source && keep(source.constructor?.name, CLASS_NAME)) ?? 'Error';
+        const type = (source && keep(declaredClassName(source), CLASS_NAME)) ?? 'Error';
         const mechanismType = keep(exception.mechanism?.type, /^[\w.]{1,64}$/);
         return {
           type,
@@ -315,6 +315,26 @@ function httpStatus(e: { status?: unknown; getStatus?: unknown }): number | unde
     }
   }
   return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
+}
+
+/**
+ * The name of the class that built this error, read from its PROTOTYPE -- an
+ * own `constructor` property on the instance (`error.constructor = {name: ...}`)
+ * is ignored -- and only when that constructor really is the function whose
+ * prototype it is. What remains is a class declaration's name; renaming a class
+ * at runtime from data (`Object.defineProperty(cls, 'name', ...)`) is not done
+ * anywhere in this codebase and is the one thing no runtime check can rule out.
+ */
+function declaredClassName(error: Error): string | undefined {
+  try {
+    const proto = Object.getPrototypeOf(error) as { constructor?: unknown } | null;
+    const ctor = proto && Object.prototype.hasOwnProperty.call(proto, 'constructor') ? proto.constructor : undefined;
+    if (typeof ctor !== 'function' || (ctor as { prototype?: unknown }).prototype !== proto) return undefined;
+    const name = Object.getOwnPropertyDescriptor(ctor, 'name')?.value;
+    return typeof name === 'string' ? name : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function nameOf(error: Error): string | undefined {
