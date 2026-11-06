@@ -175,6 +175,13 @@ export const CommEvent = {
    * falls to the worker's default branch and reaches no one.
    */
   REPORT_ANSWERED: 'report.answered',
+  /**
+   * PD-57 closure plan §4: a report was resolved as `warned`. The worker sends
+   * the reported person the fixed Code of Conduct reminder (`conduct_warning`).
+   * The payload names the recipient and a warning id of its own, NEVER the
+   * report, the reporter, the message or the conversation.
+   */
+  CONDUCT_WARNING: 'moderation.conduct_warning',
   /** PD-11 T3, for Core: a learner changed teacher in Chat. */
   LEARNER_TRANSFERRED: 'learner.transferred',
   /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
@@ -510,6 +517,7 @@ export interface CommEventPayloads {
   [CommEvent.TASK_CHANGED]: TaskChangedPayload;
   [CommEvent.REPORT_CREATED]: ReportCreatedPayload;
   [CommEvent.REPORT_ANSWERED]: ReportAnsweredPayload;
+  [CommEvent.CONDUCT_WARNING]: ConductWarningPayload;
 }
 
 /** PD-57. No conversationId, no content: ENG-04 reads the report through its own path. */
@@ -524,6 +532,14 @@ export interface ReportCreatedPayload {
 export interface ReportAnsweredPayload {
   organizationId: string;
   reportId: string;
+}
+
+/** PD-57. The warned person; `warningId` is the notification's own key, unrelated to the report. */
+export interface ConductWarningPayload {
+  organizationId: string;
+  warningId: string;
+  recipientKind: 'contact' | 'teacher' | 'staff';
+  recipientId: string;
 }
 
 /** PD-47. A client drops a revision lower than one it has; it refetches through its own authorized route. */

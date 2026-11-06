@@ -548,7 +548,9 @@ revoke all on function chat.guard_actor_block_manager_notice() from public;
 -- ===========================================================================
 -- moderation.view (the queue and the evidence, every view audited) and
 -- moderation.act (take and resolve), for the department managers; the super
--- admin holds every key. Neither is delegable. The block is generated from
+-- admin holds every key. moderation.child_safety (owner D-4, 2026-11-06): the
+-- child-safety reports, for the Super Admin and whoever it grants the key to;
+-- in no bundle and no template. None is delegable. The block is generated from
 -- apps/api/src/platform/permissions (catalogue.ts, legacy-bundles.ts) and
 -- checked by test/unit/authorization/pd040-catalogue-seed.spec.ts. Inside a
 -- DO block only so that the migration stays idempotent.
@@ -562,7 +564,8 @@ begin
 -- BEGIN GENERATED pd057 catalogue rows -- by test/unit/authorization/pd040-catalogue-seed.spec.ts; do not edit
 insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values
   ('moderation.view', 'moderation', 'view', 'View reports and their evidence', 'عرض البلاغات وأدلتها', 'pii', false, 'PD-57'),
-  ('moderation.act', 'moderation', 'act', 'Take and resolve reports', 'استلام البلاغات والبت فيها', 'admin', false, 'PD-57');
+  ('moderation.act', 'moderation', 'act', 'Take and resolve reports', 'استلام البلاغات والبت فيها', 'admin', false, 'PD-57'),
+  ('moderation.child_safety', 'moderation', 'child_safety', 'See and handle child-safety reports', 'الاطلاع على بلاغات سلامة الأطفال ومعالجتها', 'pii', false, 'PD-57');
 
 insert into chat.legacy_permission_bundle (tier, department_kind, permission_key) values
   ('manager', 'operations', 'moderation.act'),

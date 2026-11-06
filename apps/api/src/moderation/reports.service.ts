@@ -25,11 +25,13 @@ import {
   type SubjectKind,
 } from './dto';
 import { isProtectedSubject, personOf, type Person } from './people';
+import { reportDepartments } from './departments';
 
 /** Compiled default for chat.config `report.limit.per_reporter_hour` (20261104100000 seeds the same). */
 export const REPORT_LIMIT_DEFAULT = 10;
 const LIMIT_KEY = 'report.limit.per_reporter_hour';
-const DUE_MS = 48 * 3_600_000;
+/** Owner D-1 (2026-11-06): 24 hours. The database sets the same clock; this only satisfies the type. */
+export const DUE_MS = 24 * 3_600_000;
 const MINE_LIMIT = 200;
 /** How many of a person's conversations a staff reporter's read access is checked against. */
 const STAFF_SHARED_CANDIDATES = 200;
@@ -111,6 +113,8 @@ export class ReportsService {
       if (open) return { status: 200 as const, body: receipt(await this.fold(tx, open, input)) };
 
       await this.withinLimit(tx, reporterKind, actor.actorId);
+      // D-3: whose queue it is in, decided now and never changed (closure plan §3).
+      const departmentIds = await reportDepartments(tx, { kind: target.subject.kind, id: target.subject.id });
 
       const created = await tx.contentReport.create({
         data: {
@@ -126,6 +130,7 @@ export class ReportsService {
           reason: input.reason,
           note: input.note,
           evidence: target.evidence as Prisma.InputJsonValue,
+          departmentIds,
           // The database sets the clock and the priority (guard_content_report); these only satisfy the type.
           dueAt: new Date(Date.now() + DUE_MS),
         },

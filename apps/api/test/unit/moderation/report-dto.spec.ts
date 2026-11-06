@@ -67,6 +67,8 @@ function report(over: Partial<ContentReport> = {}): ContentReport {
 }
 
 const names = new Map([[REVIEWER, 'Reviewer R']]);
+const SUBJECT = '88888888-8888-4888-8888-888888888888';
+const subjects = new Map([[`teacher:${SUBJECT}`, 'Teacher T (live)']]);
 
 function refusal(fn: () => unknown): { code: string; status: number } {
   try {
@@ -103,24 +105,38 @@ describe('the reporter reads status and the answer, nothing else', () => {
 
 describe('no staff shape names the reporter', () => {
   it('the queue row, the decision and the detail', () => {
-    const shapes = [queueRow(report(), names), decisionRow(report(), names), detail(report(), names, { deletedAt: null, subjectName: 'Teacher T' })];
+    const shapes = [
+      queueRow(report(), names, subjects),
+      decisionRow(report(), names, subjects),
+      detail(report(), names, subjects, { deletedAt: null, canAct: true }),
+    ];
     for (const shape of shapes) {
       const text = JSON.stringify(shape);
       for (const leak of [REPORTER, REPORTER_ACCOUNT, CONVERSATION, 'reporterId', 'reporterKind', 'reporterAccountId', 'conversationId']) {
         expect(text).not.toContain(leak);
       }
     }
-    expect(Object.keys(queueRow(report(), names)).sort()).toEqual(
-      ['createdAt', 'dueAt', 'id', 'overdueAt', 'priority', 'reason', 'reporterAnsweredAt', 'status', 'takenBy', 'takenByName', 'targetKind'].sort(),
+    expect(Object.keys(queueRow(report(), names, subjects)).sort()).toEqual(
+      ['createdAt', 'dueAt', 'id', 'overdueAt', 'priority', 'reason', 'reporterAnsweredAt', 'status', 'subject', 'takenBy', 'takenByName', 'targetKind'].sort(),
     );
   });
 
-  it('the detail: evidence without object keys; deletedAt read live', () => {
-    const d = detail(report(), names, { deletedAt: new Date('2026-01-06T00:00:00Z'), subjectName: 'Teacher T' });
+  it('closure plan §4: every row names its subject {kind, id, name}: the live name, else the snapshot\'s', () => {
+    expect(queueRow(report(), names, subjects).subject).toEqual({ kind: 'teacher', id: SUBJECT, name: 'Teacher T (live)' });
+    expect(queueRow(report(), names, new Map()).subject).toEqual({ kind: 'teacher', id: SUBJECT, name: 'Teacher T' });
+    expect(detail(report(), names, subjects, { deletedAt: null, canAct: false }).subject).toEqual({ kind: 'teacher', id: SUBJECT, name: 'Teacher T (live)' });
+    const person = report({ targetKind: 'person', messageId: null, evidence: {} as never });
+    expect(queueRow(person, names, new Map()).subject).toEqual({ kind: 'teacher', id: SUBJECT, name: '' });
+  });
+
+  it('the detail: evidence without object keys ({index, kind, mime, name, size}); deletedAt read live; canAct', () => {
+    const d = detail(report(), names, subjects, { deletedAt: new Date('2026-01-06T00:00:00Z'), canAct: true });
+    expect(d.canAct).toBe(true);
+    expect(detail(report(), names, subjects, { deletedAt: null, canAct: false }).canAct).toBe(false);
     expect(d.evidence).toEqual({
       type: 'image',
       body: 'what was said',
-      attachments: [{ kind: 'image', mimeType: 'image/png', byteSize: 10, name: 'a.png' }],
+      attachments: [{ index: 0, kind: 'image', mime: 'image/png', name: 'a.png', size: 10 }],
       author: { kind: 'teacher', name: 'Teacher T' },
       sentAt: '2026-01-05T09:00:00.000Z',
       editedAt: null,
@@ -173,6 +189,19 @@ describe('POST /reports body', () => {
 });
 
 describe('staff requests', () => {
+  it('closure plan §4: a note is required for reassigned and account_suspended (400 VALIDATION)', () => {
+    for (const resolution of ['reassigned', 'account_suspended']) {
+      for (const note of [undefined, '', '   ']) {
+        expect(refusal(() => parseResolveInput({ resolution, answer: 'ok', ...(note === undefined ? {} : { note }) }))).toEqual({
+          code: CommErrorCode.VALIDATION,
+          status: 400,
+        });
+      }
+      expect(parseResolveInput({ resolution, answer: 'ok', note: 'why' })).toEqual({ resolution, answer: 'ok', note: 'why' });
+    }
+    expect(parseResolveInput({ resolution: 'warned', answer: 'ok' }).note).toBeNull();
+  });
+
   it('resolve: the answer is required and bounded', () => {
     expect(parseResolveInput({ resolution: 'no_action', answer: ' ok ', note: '' })).toEqual({ resolution: 'no_action', answer: 'ok', note: null });
     for (const body of [{ resolution: 'warned' }, { resolution: 'warned', answer: 'x'.repeat(1001) }, { resolution: 'nope', answer: 'x' }, { resolution: 'warned', answer: 'x', extra: 1 }]) {

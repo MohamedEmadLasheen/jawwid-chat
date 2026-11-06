@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-582 routes.
+584 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -365,6 +365,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/media/avatars/:id` | public | `communication/api/media.controller.ts#MediaController.avatar` |
 | GET | `/api/v1/media/invoices/:invoiceId` | public | `billing/billing-media.controller.ts#BillingMediaController.invoice` |
 | GET | `/api/v1/media/payment-receipts/:receiptId` | public | `billing/billing-media.controller.ts#BillingMediaController.receipt` |
+| GET | `/api/v1/media/report-evidence/:id` | public | `moderation/moderation-media.controller.ts#ModerationMediaController.evidence` |
 | GET | `/api/v1/media/staff/:staffId` | public | `staff-profile/staff-photo.controller.ts#StaffPhotoController.photo` |
 | GET | `/api/v1/media/stories/:storyId` | public | `communication/api/media.controller.ts#MediaController.story` |
 | GET | `/api/v1/media/teacher-certificates/:certificateId` | public | `communication/api/teacher-media.controller.ts#TeacherMediaController.certificate` |
@@ -372,6 +373,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/mentions/:id/dismiss` | chat.use | `communication/api/mention.controller.ts#MentionController.dismiss` |
 | GET | `/api/v1/moderation/reports` | moderation.view | `moderation/moderation.controller.ts#ModerationController.list` |
 | GET | `/api/v1/moderation/reports/:id` | moderation.view | `moderation/moderation.controller.ts#ModerationController.detail` |
+| POST | `/api/v1/moderation/reports/:id/attachments/:index/url` | moderation.view | `moderation/moderation.controller.ts#ModerationController.attachmentUrl` |
 | POST | `/api/v1/moderation/reports/:id/resolve` | moderation.act | `moderation/moderation.controller.ts#ModerationController.resolve` |
 | POST | `/api/v1/moderation/reports/:id/take` | moderation.act | `moderation/moderation.controller.ts#ModerationController.take` |
 | POST | `/api/v1/notifications/:id/delivered` | self-service | `communication/api/notification.controller.ts#NotificationController.delivered` |

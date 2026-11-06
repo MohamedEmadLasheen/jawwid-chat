@@ -249,7 +249,7 @@ const LATER: readonly Later[] = [
     // (and the super admin, who holds every key). Neither key is delegable.
     migration: '20261104100000_chat_pd057_moderation.sql',
     tag: 'pd057',
-    permissions: ['moderation.view', 'moderation.act'],
+    permissions: ['moderation.view', 'moderation.act', 'moderation.child_safety'],
     bundles: (['operations', 'sales', 'teachers'] as const).flatMap((kind) =>
       (['moderation.act', 'moderation.view'] as const).map((key) => ['manager', kind, key] as const),
     ),

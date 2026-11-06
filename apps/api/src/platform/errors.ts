@@ -632,6 +632,11 @@ export enum CommErrorCode {
   /** The report is closed (actioned or dismissed) and never changes. 409. */
   REPORT_CLOSED = 'COMM.REPORT_CLOSED',
   /**
+   * PD-57 closure plan §4: POST /moderation/reports/:id/attachments/:index/url
+   * -- the report (in the caller's scope) has no attachment at that index. 404.
+   */
+  REPORT_ATTACHMENT_NOT_FOUND = 'COMM.REPORT_ATTACHMENT_NOT_FOUND',
+  /**
    * TEACHER-027: the database could not serve the request in time (unreachable,
    * no pool connection, a transaction or statement timeout). Nothing was
    * committed. 503 with Retry-After; retry the same request.

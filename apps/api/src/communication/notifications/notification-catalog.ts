@@ -116,6 +116,9 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   certificate_returned: { version: 1, category: 'task', inbox: 'inbox.generic' },
   certificate_uploaded: { version: 1, category: 'task', inbox: 'inbox.generic' },
   certificate_suggestion_decided: { version: 1, category: 'task', inbox: 'inbox.generic' },
+  // PD-57 closure plan §4: a report resolved as `warned`. A fixed Code of
+  // Conduct reminder, no button: never a report, a reporter or a message.
+  conduct_warning: { version: 1, category: 'system', inbox: 'inbox.conduct_warning' },
 };
 
 const FALLBACK: CatalogEntry = { version: 1, category: 'system', inbox: 'inbox.generic' };

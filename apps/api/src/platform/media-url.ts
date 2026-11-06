@@ -26,7 +26,10 @@ export type MediaVariant = 'o' | 't'; // original, thumbnail
  * Profile V2 -- not PD-12's student certificates, which are message
  * attachments), or a parent's bank-transfer receipt (`payment-receipts`: the
  * family's parents and the staff who read that family's money -- PD-27), or an
- * invoice PDF (`invoices`: rendered on request, the same readers -- PD-27).
+ * invoice PDF (`invoices`: rendered on request, the same readers -- PD-27),
+ * or one attachment of a report's evidence (`report-evidence`: `<reportId>.<index>`,
+ * for staff whose moderation scope holds the report -- PD-57; it outlives the
+ * message's deletion, as the evidence does).
  */
 export type MediaKind =
   | 'attachments'
@@ -36,7 +39,8 @@ export type MediaKind =
   | 'wallpapers'
   | 'teacher-certificates'
   | 'payment-receipts'
-  | 'invoices';
+  | 'invoices'
+  | 'report-evidence';
 
 const MEDIA_KINDS: ReadonlySet<string> = new Set<MediaKind>([
   'attachments',
@@ -47,6 +51,7 @@ const MEDIA_KINDS: ReadonlySet<string> = new Set<MediaKind>([
   'teacher-certificates',
   'payment-receipts',
   'invoices',
+  'report-evidence',
 ]);
 
 export interface MediaUrlClaims {

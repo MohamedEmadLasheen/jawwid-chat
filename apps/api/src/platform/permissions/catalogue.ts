@@ -199,6 +199,11 @@ const ENTRIES = {
   // in a role. Filing a report needs no key (self-service).
   'moderation.view': { label: { en: 'View reports and their evidence', ar: 'عرض البلاغات وأدلتها' }, risk: 'pii', introducedBy: 'PD-57' },
   'moderation.act': { label: { en: 'Take and resolve reports', ar: 'استلام البلاغات والبت فيها' }, risk: 'admin', introducedBy: 'PD-57' },
+  // PD-57 D-4 (owner, 2026-11-06): child-safety reports are seen and acted on
+  // only by the Super Admin and holders of this key, on top of moderation.view
+  // (and moderation.act to act). Not delegable and in no legacy bundle or role
+  // template: the Super Admin grants it deliberately, person by person.
+  'moderation.child_safety': { label: { en: 'See and handle child-safety reports', ar: 'الاطلاع على بلاغات سلامة الأطفال ومعالجتها' }, risk: 'pii', introducedBy: 'PD-57' },
 } as const satisfies Record<string, Entry>;
 
 export type PermissionKey = keyof typeof ENTRIES;

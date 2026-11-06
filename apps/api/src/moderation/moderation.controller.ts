@@ -35,6 +35,17 @@ export class ModerationController {
     return this.moderation.detail(actorId, id);
   }
 
+  /**
+   * Closure plan §4: a signed GET for one evidence attachment, valid 5 minutes,
+   * for the caller only; audited `report.attachment_viewed`. 200 {url, expiresAt}.
+   */
+  @Requires('moderation.view')
+  @Post(':id/attachments/:index/url')
+  @HttpCode(200)
+  attachmentUrl(@ActorId() actorId: string, @Param('id') id: string, @Param('index') index: string) {
+    return this.moderation.attachmentUrl(actorId, id, index);
+  }
+
   @Requires('moderation.act')
   @Post(':id/take')
   @HttpCode(200)

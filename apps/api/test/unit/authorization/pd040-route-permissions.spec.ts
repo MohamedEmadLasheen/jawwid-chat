@@ -125,10 +125,21 @@ describe('PD-40: every route declares what it asks of staff', () => {
         .filter((r) => r.access?.kind === 'requires' && r.access.anyOf.includes(key as never))
         .map((r) => `${r.method} ${r.path}`)
         .sort();
-    expect(opened('moderation.view')).toEqual(['GET /moderation/reports', 'GET /moderation/reports/:id']);
+    expect(opened('moderation.view')).toEqual([
+      'GET /moderation/reports',
+      'GET /moderation/reports/:id',
+      // Closure plan §4: an evidence attachment's 5-minute link, for the same scope.
+      'POST /moderation/reports/:id/attachments/:index/url',
+    ]);
+    // D-4: child_safety narrows inside the queue's keys; it opens no route of its own.
+    expect(opened('moderation.child_safety')).toEqual([]);
     expect(opened('moderation.act')).toEqual(['POST /moderation/reports/:id/resolve', 'POST /moderation/reports/:id/take']);
     // Exactly one key each: nothing else opens the queue.
     expect(routes.filter((r) => r.path.startsWith('/moderation')).every((r) => r.access?.kind === 'requires' && r.access.anyOf.length === 1)).toBe(true);
+    // The evidence bytes: a signed media link (public to the bearer guard), re-authorized by the moderation scope.
+    expect(routes.filter((r) => r.path.startsWith('/media/report-evidence')).map((r) => [r.method, r.path, r.isPublic])).toEqual([
+      ['GET', '/media/report-evidence/:id', true],
+    ]);
     expect(routes.filter((r) => r.path === '/reports' || r.path === '/me/reports').map((r) => [r.method, r.path, r.access?.kind])).toEqual(
       expect.arrayContaining([
         ['POST', '/reports', 'self'],

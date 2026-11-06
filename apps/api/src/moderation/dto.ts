@@ -22,6 +22,8 @@ export type ReportStatus = (typeof REPORT_STATUSES)[number];
 export const UNRESOLVED: readonly ReportStatus[] = ['open', 'in_review'];
 export const RESOLUTIONS = ['no_action', 'message_removed', 'warned', 'account_suspended', 'reassigned'] as const;
 export type Resolution = (typeof RESOLUTIONS)[number];
+/** Closure plan §4: these resolutions need the staff note. */
+export const NOTE_REQUIRED: readonly Resolution[] = ['reassigned', 'account_suspended'];
 export const SUBJECT_KINDS = ['contact', 'teacher', 'staff'] as const;
 export type SubjectKind = (typeof SUBJECT_KINDS)[number];
 
@@ -132,9 +134,26 @@ export function forReporter(r: ContentReport) {
 }
 
 export type StaffNames = ReadonlyMap<string, string>;
+/** The reported people's live names, keyed `${kind}:${id}` (subjectKey). */
+export type SubjectNames = ReadonlyMap<string, string>;
+
+export const subjectKey = (kind: string, id: string) => `${kind}:${id}`;
+
+/**
+ * Closure plan §4: the reported person (never the reporter), on every row:
+ * the live name, else the one the evidence snapshot kept, else ''.
+ */
+export function subjectOf(r: ContentReport, subjects: SubjectNames) {
+  const e = (r.evidence ?? {}) as EvidenceSnapshot;
+  return {
+    kind: r.subjectKind as SubjectKind,
+    id: r.subjectId,
+    name: subjects.get(subjectKey(r.subjectKind, r.subjectId)) ?? e.author?.name ?? '',
+  };
+}
 
 /** GET /moderation/reports: a queue row. Never the reporter, never the content. */
-export function queueRow(r: ContentReport, staff: StaffNames) {
+export function queueRow(r: ContentReport, staff: StaffNames, subjects: SubjectNames) {
   return {
     id: r.id,
     targetKind: r.targetKind as 'message' | 'person',
@@ -148,6 +167,7 @@ export function queueRow(r: ContentReport, staff: StaffNames) {
     takenBy: r.takenBy,
     takenByName: r.takenBy ? (staff.get(r.takenBy) ?? null) : null,
     reporterAnsweredAt: r.reporterAnsweredAt?.toISOString() ?? null,
+    subject: subjectOf(r, subjects),
   };
 }
 
@@ -162,26 +182,42 @@ export interface EvidenceSnapshot {
   forwarded?: boolean;
 }
 
+/** The snapshot's attachments as staff read them: metadata and a position, never the object key. */
+export function evidenceAttachments(r: Pick<ContentReport, 'evidence'>) {
+  const e = (r.evidence ?? {}) as EvidenceSnapshot;
+  return (e.attachments ?? []).map((a, index) => ({
+    index,
+    kind: a.kind ?? '',
+    mime: a.mimeType ?? '',
+    name: a.name ?? '',
+    size: a.byteSize ?? 0,
+  }));
+}
+
 /**
  * GET /moderation/reports/:id: the row, the reporter's note, the evidence and
  * the decision. `evidence.deletedAt` is read live (the author may delete the
  * message after the report); the rest is the snapshot. Attachment object keys
- * stay on the server: a key is a name, not a capability.
+ * stay on the server: a key is a name, not a capability (closure plan §4:
+ * `{index, kind, mime, name, size}`; the bytes through POST
+ * .../attachments/:index/url). `canAct`: the caller holds moderation.act (the
+ * report is in their scope, or they would not read it).
  */
 export function detail(
   r: ContentReport,
   staff: StaffNames,
-  live: { deletedAt: Date | null; subjectName: string | null },
+  subjects: SubjectNames,
+  live: { deletedAt: Date | null; canAct: boolean },
 ) {
   const e = (r.evidence ?? {}) as EvidenceSnapshot;
   return {
-    ...queueRow(r, staff),
-    subject: { kind: r.subjectKind as SubjectKind, id: r.subjectId, name: live.subjectName ?? e.author?.name ?? null },
+    ...queueRow(r, staff, subjects),
+    canAct: live.canAct,
     note: r.note,
     evidence: {
       type: e.type ?? null,
       body: e.body ?? null,
-      attachments: (e.attachments ?? []).map((a) => ({ kind: a.kind ?? null, mimeType: a.mimeType ?? null, byteSize: a.byteSize ?? null, name: a.name ?? null })),
+      attachments: evidenceAttachments(r),
       author: { kind: e.author?.kind ?? r.subjectKind, name: e.author?.name ?? null },
       sentAt: e.sentAt ?? null,
       editedAt: e.editedAt ?? null,
@@ -199,9 +235,9 @@ export function detail(
 }
 
 /** POST take / resolve: the row and the decision, without the evidence (reading it is a view of its own). */
-export function decisionRow(r: ContentReport, staff: StaffNames) {
+export function decisionRow(r: ContentReport, staff: StaffNames, subjects: SubjectNames) {
   return {
-    ...queueRow(r, staff),
+    ...queueRow(r, staff, subjects),
     takenAt: r.takenAt?.toISOString() ?? null,
     resolution: (r.resolution as Resolution | null) ?? null,
     resolutionNote: r.resolutionNote,
@@ -235,6 +271,9 @@ export function parseResolveInput(body: Record<string, unknown>): ResolveInput {
     if (typeof body.note !== 'string') throw invalid('note: must be text');
     note = body.note.trim() || null;
     if (note && note.length > RESOLUTION_NOTE_MAX) throw invalid(`note: must be at most ${RESOLUTION_NOTE_MAX} characters`);
+  }
+  if (note === null && (NOTE_REQUIRED as readonly string[]).includes(body.resolution)) {
+    throw invalid(`note: required for ${body.resolution} (what was done, for the managers who follow it up)`);
   }
   return { resolution: body.resolution as Resolution, note, answer };
 }

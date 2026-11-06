@@ -44,6 +44,24 @@ export function isProtectedSubject(p: Pick<Person, 'kind' | 'role'>): boolean {
   return p.kind === 'staff' && (p.role === StaffRole.MANAGER || p.role === StaffRole.SUPER_ADMIN);
 }
 
+/** The live names of the people some reports are about, keyed `${kind}:${id}` (dto.subjectKey). */
+export async function subjectNames(
+  db: Db,
+  rows: ReadonlyArray<{ subjectKind: string; subjectId: string }>,
+): Promise<Map<string, string>> {
+  const ids = (kind: SubjectKind) => [...new Set(rows.filter((r) => r.subjectKind === kind).map((r) => r.subjectId))];
+  const [contacts, teachers, staff] = await Promise.all([
+    ids('contact').length ? db.contact.findMany({ where: { id: { in: ids('contact') } }, select: { id: true, name: true } }) : [],
+    ids('teacher').length ? db.teacher.findMany({ where: { id: { in: ids('teacher') } }, select: { id: true, name: true } }) : [],
+    ids('staff').length ? db.staff.findMany({ where: { id: { in: ids('staff') } }, select: { id: true, name: true } }) : [],
+  ]);
+  return new Map([
+    ...contacts.map((c) => [`contact:${c.id}`, c.name] as [string, string]),
+    ...teachers.map((t) => [`teacher:${t.id}`, t.name] as [string, string]),
+    ...staff.map((s) => [`staff:${s.id}`, s.name] as [string, string]),
+  ]);
+}
+
 /** Display names of staff ids, for the reviewer columns of the staff responses. */
 export async function staffNames(db: Db, ids: readonly string[]): Promise<Map<string, string>> {
   if (!ids.length) return new Map();

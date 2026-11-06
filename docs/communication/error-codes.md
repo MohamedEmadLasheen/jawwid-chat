@@ -193,7 +193,8 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.REPORT_NOT_REPORTABLE` | 400 | PD-57: a system or card message (the academy's), or the academy's official account, a manager or the Super Admin (the administrative channel). |
 | `COMM.REPORT_NOTE_REQUIRED` | 400 | PD-57: the reason `other` needs a note (1-500 characters; a blank note is no note). |
 | `COMM.REPORT_KEY_REUSED` | 409 | PD-57: this Idempotency-Key was used by the same reporter for another report. Send the new report with a new key. |
-| `COMM.REPORT_NOT_FOUND` | 404 | PD-57: no such report in the caller's organization; another organization's answers the same. |
+| `COMM.REPORT_NOT_FOUND` | 404 | PD-57: no such report in the caller's organization; another organization's answers the same. Also (closure plan 2026-11-06 §3): a report outside the caller's moderation scope (another department's, a child-safety report without `moderation.child_safety`, or one about the caller), on the queue's detail, take, resolve and attachment routes. |
+| `COMM.REPORT_ATTACHMENT_NOT_FOUND` | 404 | PD-57: `POST /moderation/reports/:id/attachments/:index/url` -- the report has no attachment at that index (the report itself is in the caller's scope). |
 | `COMM.REPORT_ALREADY_TAKEN` | 409 | PD-57: `POST /moderation/reports/:id/take` -- another staff member already took it. Taking one's own again answers 200. Reload. |
 | `COMM.REPORT_CLOSED` | 409 | PD-57: the report is actioned or dismissed and never changes. A resolve replayed by the same staff member with the same Idempotency-Key answers 200 instead. Reload. |
 

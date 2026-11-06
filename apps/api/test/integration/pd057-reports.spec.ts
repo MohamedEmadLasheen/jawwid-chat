@@ -25,7 +25,9 @@
  *  10. after the reporter's erasure the report is kept, anonymous
  *  11. staff of another organization reach nothing
  *
- * The Super Admin push, the 36 h / 48 h sweep and report_answered are ENG-04's.
+ * The Super Admin push, the 18 h / 24 h sweep and report_answered are ENG-04's.
+ * The scope (closure plan 2026-11-06 §3), the attachments and the resolution
+ * effects are pd057-moderation-scope.spec.ts.
  * Synthetic people only (G-20).
  */
 import { randomUUID } from 'node:crypto';
@@ -222,7 +224,7 @@ describe('every route is behind the bearer guard', () => {
 });
 
 describe('§5.6-1: a parent reports a teacher message in the Student Group', () => {
-  it('201 {id, status, dueAt} 48 h out; evidence snapshot; the teacher sees no trace; the event carries no content', async () => {
+  it('201 {id, status, dueAt} 24 h out (owner D-1); evidence snapshot; the teacher sees no trace; the event carries no content', async () => {
     const group = groupOf(0);
     const teacherId = group.teacherIds[0]!;
     const teacher = m.teachers.find((t) => t.id === teacherId)!;
@@ -236,7 +238,7 @@ describe('§5.6-1: a parent reports a teacher message in the Student Group', () 
     expect(r.json.status).toBe('open');
 
     const row = await g.prisma.contentReport.findUniqueOrThrow({ where: { id: r.json.id } });
-    expect(new Date(r.json.dueAt).getTime() - row.createdAt.getTime()).toBe(48 * 3_600_000);
+    expect(new Date(r.json.dueAt).getTime() - row.createdAt.getTime()).toBe(24 * 3_600_000);
     expect(row).toMatchObject({
       organizationId: orgId,
       reporterKind: 'contact',
@@ -505,7 +507,8 @@ describe('§5.6-5 and §5.5-3: the staff queue and the evidence', () => {
   });
 
   it('with it: the evidence of a deleted message, audited as report.viewed; no reporter identity anywhere', async () => {
-    const manager = await as(m.operationsManager.subject);
+    // A teacher's message: the Teachers department's report (closure plan §3).
+    const manager = await as(m.teachersManager.subject);
     const detail = await manager.get(`/moderation/reports/${reportId}`);
     expect(detail.status).toBe(200);
     expect(detail.json).toMatchObject({
@@ -527,7 +530,7 @@ describe('§5.6-5 and §5.5-3: the staff queue and the evidence', () => {
     expect(detail.json.evidence.deletedAt).toEqual(expect.any(String));
     expect(detail.json.evidence.sentAt).toEqual(expect.any(String));
     const views = await g.prisma.auditLog.findMany({ where: { action: 'report.viewed', entityId: reportId } });
-    expect(views.map((v) => v.actorId)).toEqual([m.operationsManager.id]);
+    expect(views.map((v) => v.actorId)).toEqual([m.teachersManager.id]);
     expect(auditText(views)).not.toContain('Evidence that');
 
     const list = await manager.get('/moderation/reports');
@@ -535,7 +538,7 @@ describe('§5.6-5 and §5.5-3: the staff queue and the evidence', () => {
     expect(Array.isArray(list.json)).toBe(true);
     const row = (list.json as Array<Record<string, unknown>>).find((x) => x.id === reportId)!;
     expect(Object.keys(row).sort()).toEqual(
-      ['createdAt', 'dueAt', 'id', 'overdueAt', 'priority', 'reason', 'reporterAnsweredAt', 'status', 'takenBy', 'takenByName', 'targetKind'].sort(),
+      ['createdAt', 'dueAt', 'id', 'overdueAt', 'priority', 'reason', 'reporterAnsweredAt', 'status', 'subject', 'takenBy', 'takenByName', 'targetKind'].sort(),
     );
     for (const text of [detail.text, list.text]) {
       for (const mark of await reporterMarks(10)) expect(text).not.toContain(mark);
@@ -569,7 +572,7 @@ describe('§5.6-6 and the queue: urgent first, then by dueAt; filters', () => {
         `insert into chat.content_report (id, organization_id, reporter_kind, reporter_id, reporter_account_id, target_kind, conversation_id,
                                           subject_kind, subject_id, reason, priority, status, created_at, due_at, overdue_at)
          values ($1::uuid, $2::uuid, 'contact', $3::uuid, $4::uuid, 'person', $5::uuid, 'teacher', $6::uuid, 'spam', 'normal', 'open',
-                 '2026-01-05T10:00:00Z', '2026-01-07T10:00:00Z', '2026-01-07T10:05:00Z')`,
+                 '2026-01-05T10:00:00Z', '2026-01-06T10:00:00Z', '2026-01-06T10:05:00Z')`,
         overdueId,
         orgId,
         reporter,
@@ -599,7 +602,7 @@ describe('§5.6-6 and the queue: urgent first, then by dueAt; filters', () => {
     expect(urgentOnly.every((r) => r.priority === 'urgent')).toBe(true);
     const overdue = (await owner.get('/moderation/reports?overdue=true')).json as Array<{ id: string; overdueAt: string | null }>;
     expect(overdue.map((r) => r.id)).toEqual([overdueId]);
-    expect(overdue[0]!.overdueAt).toBe('2026-01-07T10:05:00.000Z');
+    expect(overdue[0]!.overdueAt).toBe('2026-01-06T10:05:00.000Z');
     const notOverdue = (await owner.get('/moderation/reports?overdue=false')).json as Array<{ id: string }>;
     expect(notOverdue.map((r) => r.id)).not.toContain(overdueId);
     const statusOpen = (await owner.get('/moderation/reports?status=open')).json as Array<{ status: string }>;
@@ -617,12 +620,13 @@ describe('§5.6-7/8: take and resolve', () => {
     const group = groupOf(12);
     const messageId = await post(group.conversationId, 'teacher', group.teacherIds[0]!, 'Take me.');
     const filed = await (await as(family(12).parent.subject)).post('/reports', { targetKind: 'message', messageId, reason: 'spam' });
-    const ops = await as(m.operationsManager.subject);
-    const sales = await as(m.salesManager.subject);
+    // A teacher's message: the Teachers manager's and the Super Admin's (closure plan §3).
+    const ops = await as(m.teachersManager.subject);
+    const sales = await as(m.superAdmin.subject);
 
     const taken = await ops.post(`/moderation/reports/${filed.json.id}/take`);
     expect(taken.status).toBe(200);
-    expect(taken.json).toMatchObject({ id: filed.json.id, status: 'in_review', takenBy: m.operationsManager.id, takenByName: m.operationsManager.name });
+    expect(taken.json).toMatchObject({ id: filed.json.id, status: 'in_review', takenBy: m.teachersManager.id, takenByName: m.teachersManager.name });
     expect((await ops.post(`/moderation/reports/${filed.json.id}/take`)).status).toBe(200);
     const conflict = await sales.post(`/moderation/reports/${filed.json.id}/take`);
     expect({ status: conflict.status, code: conflict.code }).toEqual({ status: 409, code: CommErrorCode.REPORT_ALREADY_TAKEN });
@@ -647,6 +651,9 @@ describe('§5.6-7/8: take and resolve', () => {
       { resolution: 'warned', answer: 'x'.repeat(1001) },
       { resolution: 'banned', answer: 'ok' },
       { resolution: 'warned', answer: 'ok', note: 'x'.repeat(2001) },
+      // Closure plan §4: a note is required for these two.
+      { resolution: 'reassigned', answer: 'ok' },
+      { resolution: 'account_suspended', answer: 'ok', note: '  ' },
     ]) {
       const r = await owner.post(`/moderation/reports/${id}/resolve`, body);
       expect({ body, status: r.status, code: r.code }).toEqual({ body, status: 400, code: CommErrorCode.VALIDATION });
