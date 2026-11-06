@@ -268,6 +268,15 @@ export class AuthorizationService {
      * caller that does not resolve it cannot open a family channel.
      */
     staffReachesFamily = false,
+    /**
+     * PD-57 (roadmap §6.2): `b` has blocked `a`, the requester -- a blocked
+     * person never opens a direct conversation with the blocker. Resolved by
+     * the caller (platform/blocks.ts). Only ever the blocked person themself:
+     * the staff covering the family's direct conversation are someone else and
+     * are not affected (D-6 exception 4); a manager or the Super Admin cannot
+     * be blocked at all.
+     */
+    blockedByOther = false,
   ): Decision {
     // Tenant first (RT-030). A direct conversation is filed under its two
     // participants' organization, so they must share one -- and an actor in
@@ -327,6 +336,9 @@ export class AuthorizationService {
     // manager, or the super admin. Never an open directory, in either direction.
     if (kinds === 'contact+staff' && !staffReachesFamily) {
       return deny(CommErrorCode.STAFF_OUT_OF_SCOPE, 'this family is outside the staff member\'s charge');
+    }
+    if (blockedByOther) {
+      return deny(CommErrorCode.DIRECT_BLOCKED, 'this person is not available for a direct conversation');
     }
     return allow();
   }

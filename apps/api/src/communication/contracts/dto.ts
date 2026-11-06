@@ -102,6 +102,13 @@ export interface MessageDto {
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean;
   /**
+   * PD-57 (closure plan §5): the VIEWER blocked its author. Present (true) only
+   * then, on the author's text, image, video, voice or file messages -- never a
+   * system or card message -- with the body, attachments, mentions and
+   * reactions removed. The client draws "Message hidden: you blocked this person".
+   */
+  hiddenByBlock?: true;
+  /**
    * PD-37: the ticks on the VIEWER'S OWN message -- `sent`, `delivered` (every
    * countable recipient has it) or `read` (every countable recipient read it).
    * Null on anyone else's message, on a message deleted for everyone, and in a
@@ -356,10 +363,13 @@ export interface LastMessageDto {
   authorId: string | null;
   deleted: boolean;
   createdAt: string;
+  /** PD-57: the viewer blocked its author; `text` is null. Present only then. */
+  hiddenByBlock?: true;
 }
 
 /** A list-row preview of a message. Text is capped: a row shows a line, not a page. */
-export function toLastMessageDto(m: Message & { card?: { kind: string } | null }): LastMessageDto {
+export function toLastMessageDto(m: Message & { card?: { kind: string } | null; hiddenByBlock?: boolean }): LastMessageDto {
+  if (m.hiddenByBlock) return { ...toLastMessageDto({ ...m, body: null, hiddenByBlock: false }), hiddenByBlock: true };
   const deleted = m.deletedForAll;
   const system = m.type === 'system';
   return {
@@ -706,6 +716,22 @@ export function toMessageDto(
         : null,
     mentions: mentioned.mentions,
     mentionsViewer: mentioned.mentionsViewer,
+  };
+}
+
+/** PD-57: a message the viewer's block hides (see MessageDto.hiddenByBlock). */
+export function hideForBlock(dto: MessageDto): MessageDto {
+  return {
+    ...dto,
+    body: null,
+    systemEvent: null,
+    editedAt: null,
+    attachments: [],
+    reactions: [],
+    card: null,
+    mentions: [],
+    mentionsViewer: false,
+    hiddenByBlock: true,
   };
 }
 

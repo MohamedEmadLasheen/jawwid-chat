@@ -636,6 +636,24 @@ export enum CommErrorCode {
    * -- the report (in the caller's scope) has no attachment at that index. 404.
    */
   REPORT_ATTACHMENT_NOT_FOUND = 'COMM.REPORT_ATTACHMENT_NOT_FOUND',
+  // --- PD-57 WP-2: Block (closure plan 2026-11-06 §5, roadmap §6.2) ---
+  /**
+   * The caller may not block, or nobody may block this person. `detail.reason`:
+   * `staff_caller` (staff never block), `self`, `official_account`, `manager`
+   * (any department manager) or `super_admin`. 403.
+   */
+  BLOCK_NOT_ALLOWED = 'COMM.BLOCK_NOT_ALLOWED',
+  /** No such person, or none the caller shares a conversation with now. 404. */
+  BLOCK_NO_SHARED_CONVERSATION = 'COMM.BLOCK_NO_SHARED_CONVERSATION',
+  /** No block of the caller's with this id. 404. */
+  BLOCK_NOT_FOUND = 'COMM.BLOCK_NOT_FOUND',
+  /** The other person has blocked the caller: no direct conversation with them. 403. */
+  DIRECT_BLOCKED = 'COMM.DIRECT_BLOCKED',
+  /**
+   * The person called cannot take a call now (they blocked the caller, and it is
+   * not a lesson call): answered like a busy line, nobody is rung. 409.
+   */
+  CALL_UNAVAILABLE = 'COMM.CALL_UNAVAILABLE',
   /**
    * TEACHER-027: the database could not serve the request in time (unreachable,
    * no pool connection, a transaction or statement timeout). Nothing was

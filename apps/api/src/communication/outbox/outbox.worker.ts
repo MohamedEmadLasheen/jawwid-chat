@@ -10,6 +10,7 @@ import { statusUpdatesByAuthor } from '../messages/receipt-status';
 import { mentionRuleFor } from '../mentions/mention-policy';
 import { NotificationPipeline } from '../notifications/notification-pipeline.service';
 import { messageAudience } from './message-audience';
+import { blockersOf, hasBlocked, hideableByBlock } from '../../platform/blocks';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
 /**
@@ -37,6 +38,12 @@ export class OutboxWorker {
   private lessonAudience: LessonAudience | null = null;
   useLessonAudience(audience: LessonAudience): void {
     this.lessonAudience = audience;
+  }
+
+  /** PD-57 ENG-04: who hears of a report (ModerationModule registers it at start). */
+  private reportDelivery: ReportDelivery | null = null;
+  useReportDelivery(delivery: ReportDelivery): void {
+    this.reportDelivery = delivery;
   }
 
   async drain(batchSize = 100, now = new Date()): Promise<number> {
@@ -94,7 +101,7 @@ export class OutboxWorker {
           const staff = await this.staffMemberIds(conversationId);
           await this.realtime.toUsers(staff, type, payload as never);
         } else {
-          await this.realtime.toThread(conversationId, type, payload as never);
+          await this.toThreadMarkingBlocked(conversationId, payload);
         }
         await this.notifyNewMessage(conversationId, payload);
         return;
@@ -108,6 +115,8 @@ export class OutboxWorker {
       case CommEvent.MENTION_CREATED: {
         const target = payload.targetActorId as string | undefined;
         if (!target || !conversationId) return;
+        // PD-57: a mention by someone the target blocked reaches them in no way.
+        if (await hasBlocked(this.prisma, target, payload.mentionedBy as string | undefined)) return;
         await this.realtime.toUsers([target], type, payload as never);
         await this.notifyMention(conversationId, payload);
         return;
@@ -153,6 +162,24 @@ export class OutboxWorker {
        */
       case CommEvent.CONDUCT_WARNING: {
         await this.deliverConductWarning(payload);
+        return;
+      }
+
+      /** PD-57 WP-2 (roadmap §6.3): the responsible managers newly told of a block. */
+      case CommEvent.BLOCK_CREATED: {
+        await this.deliverBlockNotice(payload);
+        return;
+      }
+
+      /**
+       * PD-57 ENG-04: a report filed or raised, past an SLA stage, or answered.
+       * No conversation (the reported person must never hear of it): staff and
+       * the reporter through the PD-34 pipeline. See ReportEscalationService.
+       */
+      case CommEvent.REPORT_CREATED:
+      case CommEvent.REPORT_ESCALATED:
+      case CommEvent.REPORT_ANSWERED: {
+        if (this.reportDelivery) await this.reportDelivery.deliver(type, payload);
         return;
       }
 
@@ -705,7 +732,7 @@ export class OutboxWorker {
     const authorId = payload.authorId as string | null;
     // PD-35 seat rules and PD-33 cover substitution, in one place shared with
     // the pipeline's send-time check (message-audience.ts).
-    const members = (await messageAudience(this.prisma, conversationId, authorId)).map((actorId) => ({ actorId }));
+    const members = (await messageAudience(this.prisma, conversationId, authorId, { messageType: payload.type as string | undefined })).map((actorId) => ({ actorId }));
     // PD-36: someone mentioned in THIS message has the mention push (rule
     // `mention`, through a mute); the message itself still lists in their
     // Notification Center, but is not pushed a second time.
@@ -870,6 +897,66 @@ export class OutboxWorker {
     });
   }
 
+  /**
+   * PD-57 (roadmap §6.2): `message.created` to the conversation room. It never
+   * carries a body; whoever blocked the author of a text, image, video, voice
+   * or file message receives their own copy marked `hiddenByBlock`, so the
+   * placeholder is drawn. Only the payload differs (perActor): who receives the
+   * event is decided by the gateway exactly as before. Not realtime.gateway.ts
+   * (#439's).
+   */
+  private async toThreadMarkingBlocked(conversationId: string, payload: Record<string, unknown>): Promise<void> {
+    const authorId = payload.authorId as string | null;
+    const blockers = authorId && hideableByBlock(payload.type as string) ? await blockersOf(this.prisma, authorId) : [];
+    if (blockers.length === 0 || !this.realtime.toThreadAudience) {
+      await this.realtime.toThread(conversationId, CommEvent.MESSAGE_CREATED, payload as never);
+      return;
+    }
+    const perActor = Object.fromEntries(blockers.map((id) => [id, { ...payload, hiddenByBlock: true }]));
+    await this.realtime.toThreadAudience(conversationId, CommEvent.MESSAGE_CREATED, payload as never, { perActor });
+  }
+
+  /**
+   * PD-57 WP-2 (roadmap §6.3, A-2a): `block_created_manager` to each manager
+   * whose notice was just written, once per (case, manager) -- the dedupe key.
+   * In-app (the names, behind sign-in) and a push that names nobody, under the
+   * normal quiet hours. Refs: the case only; being told grants nothing.
+   */
+  private async deliverBlockNotice(payload: Record<string, unknown>): Promise<void> {
+    if (!this.pipeline) return;
+    const reportId = payload.reportId as string | undefined;
+    const managers = Array.isArray(payload.managerStaffIds) ? (payload.managerStaffIds as string[]) : [];
+    if (!reportId || managers.length === 0) return;
+    const [blocker, blocked] = await Promise.all([
+      this.identity.resolveActor(payload.blockerId as string),
+      this.identity.resolveActor(payload.blockedId as string),
+    ]);
+    const family = blocker?.kind === ActorKind.CONTACT && blocker.familyId
+      ? await this.prisma.family.findUnique({ where: { id: blocker.familyId }, select: { displayName: true } })
+      : null;
+    for (const managerId of managers) {
+      const recipient = await this.identity.resolveActor(managerId);
+      if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.STAFF || recipient.organizationId !== payload.organizationId) continue;
+      await this.pipeline.emit({
+        dedupeKey: `block_created_manager:${reportId}:${managerId}`,
+        ruleKey: null,
+        eventType: 'block_created_manager',
+        templateKey: 'block_created_manager',
+        recipientId: managerId,
+        locale: recipient.locale,
+        priority: 'normal',
+        subject: { type: 'content_report', id: reportId },
+        refs: { reportId },
+        variables: {
+          blocker_name: blocker?.displayName ?? '',
+          blocked_name: blocked?.displayName ?? '',
+          party_name: family?.displayName ?? blocker?.displayName ?? '',
+        },
+        scheduledAt: new Date(),
+      });
+    }
+  }
+
   private async deliverCase(type: CommEventName, payload: Record<string, unknown>): Promise<void> {
     const caseId = payload.caseId as string | undefined;
     if (!caseId) return;
@@ -1032,7 +1119,8 @@ export class OutboxWorker {
     if (!pending) return;
     // A case's task is the owner's pointer; the case announces itself
     // (PD-35 case_opened / case_assigned / case_due_soon) -- never twice.
-    if (t.source_type === 'case') return;
+    // PD-57: so does a report (report_received_staff / _due_soon / _overdue).
+    if (t.source_type === 'case' || t.source_type === 'content_report') return;
 
     const notFor = (ids: Array<string | null>) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
     // The deciders: the responsible managers, else the super admin.
@@ -1148,6 +1236,11 @@ export class OutboxWorker {
 }
 
 /** PD-46: resolves who besides a lesson's teacher hears that it changed. */
+/** PD-57 ENG-04: ReportEscalationService. */
+export interface ReportDelivery {
+  deliver(type: string, payload: Record<string, unknown>): Promise<void>;
+}
+
 export interface LessonAudience {
   staffFor(organizationId: string, lessons: ReadonlyArray<{ teacherId: string; learnerId: string | null }>): Promise<string[]>;
 }

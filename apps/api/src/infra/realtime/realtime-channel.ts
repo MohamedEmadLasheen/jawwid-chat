@@ -64,7 +64,14 @@ export function decodeEnvelope(raw: string): RealtimeEnvelope | null {
       // CHATSCHED-015: `exceptActors` only ever narrows (it names who was already sent the
       // event), so it is a usable audience on its own -- but it must be a list.
       (parsed.audience.exceptActors === undefined || Array.isArray(parsed.audience.exceptActors)) &&
-      (parsed.audience.onlyActors !== undefined || parsed.audience.countableOnly === true || Array.isArray(parsed.audience.exceptActors))
+      // PD-57: `perActor` alone is the whole room with some people's payload
+      // replaced (a blocker's hiddenByBlock copy). It never widens who receives
+      // the event, so it is usable on its own (found by pd057-lifecycle.e2e.ts:
+      // it used to be discarded, and the room got nothing).
+      (parsed.audience.onlyActors !== undefined ||
+        parsed.audience.countableOnly === true ||
+        Array.isArray(parsed.audience.exceptActors) ||
+        parsed.audience.perActor !== undefined)
     ) {
       return parsed;
     }

@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-584 routes.
+587 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -309,6 +309,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/billing/invoices/:id/link` | not for staff | `billing/payments.controller.ts#PaymentsController.myInvoiceLink` |
 | POST | `/api/v1/me/billing/receipts` | not for staff | `billing/payments.controller.ts#PaymentsController.submitReceipt` |
 | POST | `/api/v1/me/billing/receipts/upload` | not for staff | `billing/payments.controller.ts#PaymentsController.authorizeReceiptUpload` |
+| GET | `/api/v1/me/blocks` | self-service | `moderation/blocks.controller.ts#BlocksController.mine` |
+| POST | `/api/v1/me/blocks` | self-service | `moderation/blocks.controller.ts#BlocksController.block` |
+| DELETE | `/api/v1/me/blocks/:id` | self-service | `moderation/blocks.controller.ts#BlocksController.unblock` |
 | GET | `/api/v1/me/calendar` | self-service | `calendar/calendar.controller.ts#CalendarController.mine` |
 | PATCH | `/api/v1/me/children/:learnerId` | not for staff | `communication/api/parent-profile.controller.ts#ParentProfileController.updateChild` |
 | DELETE | `/api/v1/me/children/:learnerId/avatar` | not for staff | `communication/api/profile-photo.controller.ts#ProfilePhotoController.childRemove` |
