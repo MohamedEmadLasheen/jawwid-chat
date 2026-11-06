@@ -23,6 +23,7 @@ import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
 import '../../lessons/presentation/group_children_section.dart';
 import '../../materials/presentation/child_materials_entry.dart';
+import '../../moderation/application/direct_counterpart.dart';
 import '../../moderation/data/moderation_repository.dart';
 import '../../moderation/presentation/report_sheet.dart';
 import '../../teacher_profile/presentation/teacher_profile_screen.dart';
@@ -85,8 +86,10 @@ class ConversationProfileScreen extends ConsumerWidget {
             // a person: muting yourself is not a thing.
             actions: [
               ConversationActions(conversationId: conversationId),
-              // PD-57: report the person on a 1:1 profile (a group reports its members).
-              if (!value.isGroup) ReportPersonTile(person: value.subject),
+              // PD-57: report the person on a 1:1 profile (a group reports its members). The
+              // profile's subject is the CONVERSATION, so the person is resolved from its
+              // members; nothing is offered until they are known.
+              if (!value.isGroup) ConversationReportTile(conversationId: conversationId),
               // PD-15: each child of the group -- age, course, times, package. A family
               // group names no single learner, so each child's progress and Materials
               // come with that child's card here (a learner group shows them below).
@@ -686,5 +689,24 @@ class ReportPersonTile extends ConsumerWidget {
         target: PersonReportTarget(kind: reportActorKind(person.role)!, id: person.id),
       ),
     );
+  }
+}
+
+/// PD-57: "Report this person" on a one-to-one profile, for the conversation's other person
+/// ([directCounterpartProvider]) -- their actor id and kind, never the conversation's id.
+/// Absent while that person is unknown, when they cannot be established (a group, the
+/// academy's official conversation, an unclear member list), and in a build without the
+/// report route.
+class ConversationReportTile extends ConsumerWidget {
+  const ConversationReportTile({super.key, required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(moderationRepositoryProvider).isAvailable) return const SizedBox.shrink();
+    final person = ref.watch(directCounterpartProvider(conversationId)).value;
+    if (person == null) return const SizedBox.shrink();
+    return ReportPersonTile(person: person);
   }
 }
