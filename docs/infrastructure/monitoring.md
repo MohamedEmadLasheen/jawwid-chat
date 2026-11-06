@@ -141,17 +141,17 @@ the budget only removes duplicates from Sentry.
    carries **no free text**. No event message and no logentry are sent, and
    an exception's message is never copied -- not even redacted, because no
    pattern recognises a child's name or a line of a conversation. What is
-   sent: ids, level, release, environment; per exception, its class (an
-   identifier, else `Error`) and a value *built* from approved facts on the
+   sent: ids, level, release, environment; per exception, its class (its
+   constructor's name, else `Error`) and a value *built* from approved facts on the
    error object -- a Prisma code (`P2002`), a Node code (`ECONNREFUSED`), a
    SQLSTATE, the fixed statement-timeout code, an HTTP status
    (`InternalServerErrorException status=500`); frame locations without
    `vars` or source lines; the five tags; `request_id`; `suppressed`;
    runtime/os name and version. Every kept string must match its field's
    shape in full or it is dropped -- and no shape admits a bare word, which
-   is what a one-word name would be: an exception type must be an error-class
-   name (`…Error`, `…Exception`, `…Refusal`, `…Refused`, `…RetryLater`,
-   `…Rejection`), else `Error`; a route is an HTTP template, `WS area.action`,
+   is what a one-word name would be: an exception type is the name of the
+   error's *constructor* -- the class as declared in source -- never the
+   writable `error.name` (which could say `LaylaError`), else `Error`; a route is an HTTP template, `WS area.action`,
    `WS handshake` or a worker `area.task` label; `actor_kind` and `component`
    are their closed vocabularies. Stack-frame file and function names are
    kept (they are the diagnosis): V8 takes them from source code, and no code

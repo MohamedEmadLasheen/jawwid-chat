@@ -14,6 +14,7 @@
  *                        attaches something new is caught here, not in Sentry
  */
 import * as Sentry from '@sentry/node';
+import { Prisma } from '@prisma/client';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createErrorTracker, NoopErrorTracker } from '../../../src/infra/observability/error-tracker';
@@ -207,15 +208,18 @@ describe('scrubEvent — what must never reach Sentry', () => {
   });
 
   it('reduces a Prisma error to its class and code — Prisma prints the arguments it was given', () => {
-    const original = Object.assign(
-      new Error('Invalid `prisma.message.create()` invocation:\n{ data: { body: "ابني مريض اليوم" } }'),
-      { name: 'PrismaClientKnownRequestError', code: 'P2003' },
+    // The real Prisma classes: the exception type is taken from the constructor.
+    const cause = new Prisma.PrismaClientValidationError('body: "Layla Example"', { clientVersion: '6.0.0' });
+    const original = new Prisma.PrismaClientKnownRequestError(
+      'Invalid `prisma.message.create()` invocation:\n{ data: { body: "ابني مريض اليوم" } }',
+      { code: 'P2003', clientVersion: '6.0.0' },
     );
+    Object.assign(original, { cause });
     const scrubbed = scrubEvent(
       eventWith({
         exception: {
           values: [
-            { type: 'PrismaClientValidationError', value: 'body: "Layla Example"' },
+            { type: 'PrismaClientValidationError', value: cause.message },
             { type: 'PrismaClientKnownRequestError', value: original.message },
           ],
         },

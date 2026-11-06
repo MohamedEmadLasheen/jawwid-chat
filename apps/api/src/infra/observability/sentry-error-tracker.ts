@@ -132,14 +132,15 @@ export function sentryOptions(dsn: string, component: string, build: BuildInfoLi
  * what a name or a sentence needs.
  */
 /**
- * An error CLASS: a capitalised identifier ending in one of the suffixes error
- * classes use here -- `TypeError`, `PrismaClientKnownRequestError`,
- * `InternalServerErrorException`, `PackageRefused`, `SeedRefusal`,
- * `CoreRetryLater`. Not merely "an identifier": `error.name` is a writable
- * string, and a one-word value (`Layla`) is an identifier too. Anything else
- * is sent as `Error`.
+ * An exception's type is the name of its CONSTRUCTOR -- the class as declared
+ * in source code (`TypeError`, `PrismaClientKnownRequestError`,
+ * `PackageRefused`) -- never `error.name`. `error.name` is a writable string,
+ * and no shape can tell `LaylaError` from `PaymentError`; a constructor name is
+ * fixed by a class declaration and carries no runtime data. An exception whose
+ * error object is not available (a thrown non-Error, a linked error that does
+ * not line up) is sent as `Error`.
  */
-const ERROR_CLASS = /^(?:[A-Z][A-Za-z0-9]{0,55})?(?:Error|Exception|Refusal|Refused|RetryLater|Rejection)$/;
+const CLASS_NAME = /^[A-Za-z_$][\w$]{0,63}$/;
 /** Prisma error codes: P1001, P2003. */
 const PRISMA_CODE = /^P\d{4}$/;
 /** Node system / internal error codes: ECONNREFUSED, ETIMEDOUT, ERR_STREAM_PREMATURE_CLOSE. */
@@ -194,7 +195,7 @@ type Frame = NonNullable<NonNullable<Sentry.Exception['stacktrace']>['frames']>[
  *   identity      event_id, timestamp, platform, level, and environment,
  *                 release and sdk name/version when they match their shape
  *   message       NOTHING. No event message, no logentry.
- *   exceptions    type (an error-class name, else `Error`) and a value BUILT from
+ *   exceptions    type (the error's constructor name, else `Error`) and a value BUILT from
  *                 approved facts, never copied: the type, plus an approved
  *                 code read from the error object itself (Prisma P-code,
  *                 Node E-code, SQLSTATE, the fixed statement-timeout code)
@@ -229,12 +230,12 @@ export function scrubEvent(event: Sentry.ErrorEvent, hint?: Sentry.EventHint): S
     const chain = causeChain(hint?.originalException);
     out.exception = {
       values: values.map((exception, i) => {
-        const type = keep(exception.type, ERROR_CLASS) ?? 'Error';
         // Sentry orders linked errors innermost first; the hint names the
         // outermost (last). An error object is used only when its name agrees
         // with the type Sentry recorded at that position.
         const candidate = chain[values.length - 1 - i];
         const source = candidate instanceof Error && nameOf(candidate) === exception.type ? candidate : undefined;
+        const type = (source && keep(source.constructor?.name, CLASS_NAME)) ?? 'Error';
         const mechanismType = keep(exception.mechanism?.type, /^[\w.]{1,64}$/);
         return {
           type,

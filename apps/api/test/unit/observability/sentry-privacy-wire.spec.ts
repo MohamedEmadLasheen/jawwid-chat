@@ -16,6 +16,7 @@
  * template and the stack frames still arrive.
  */
 import * as Sentry from '@sentry/node';
+import { Prisma } from '@prisma/client';
 import { EventEmitter } from 'node:events';
 import { InternalServerErrorException, type ArgumentsHost } from '@nestjs/common';
 import { WsExceptionsHandler } from '@nestjs/websockets/exceptions/ws-exceptions-handler';
@@ -25,6 +26,9 @@ import { WsErrorReportFilter } from '../../../src/infra/observability/ws-error-r
 import { requestLogMiddleware } from '../../../src/infra/observability/request-log';
 import { JsonLogger } from '../../../src/infra/observability/json-logger';
 import { installProcessErrorHandlers } from '../../../src/infra/observability/process-errors';
+import { PackageRefused } from '../../../src/materials/package-validation';
+import { CoreRetryLater } from '../../../src/core-boundary/core-ingest.service';
+import { HttpServerError } from '../../../src/infra/observability/request-log';
 
 /** Every value that must never appear on the wire. All synthetic. */
 const CHILD_NAMES = ['Layla Example', 'Yusuf Example', 'ليلى', 'يوسف'];
@@ -136,22 +140,46 @@ describe('nothing personal reaches the Sentry wire', () => {
     expect(text).not.toContain('"component"');
   });
 
+  it('in a name that merely LOOKS like an error class', async () => {
+    // Codex review: `LaylaError` passes any suffix check. The type is the
+    // constructor's name, so a writable `error.name` never reaches the wire.
+    const before = sent.length;
+    for (const name of ['LaylaError', 'OmarException', 'YusufRefusal', 'MariamRefused', 'ليلىError']) {
+      tracker.captureException(Object.assign(new Error('failure'), { name }), { route: 'outbox.drain', component: 'worker' });
+      tracker.captureException(Object.assign(new TypeError('failure'), { name }), { route: 'outbox.drain', component: 'worker' });
+    }
+    await flushed();
+    const text = sent.slice(before).join('\n');
+    expectNothingPersonal(text);
+    expect(text).toContain('"type":"Error"');
+    expect(text).toContain('"type":"TypeError"');
+  });
+
   it('keeps the error classes this codebase actually throws', async () => {
     const before = sent.length;
-    for (const name of ['PackageRefused', 'CoreRetryLater', 'SeedRefusal', 'HttpServerError', 'AbortError']) {
-      tracker.captureException(Object.assign(new Error('failure'), { name }), { route: 'outbox.drain', component: 'worker' });
-    }
-    const text = (await flushed(), sent.slice(before).join('\n'));
-    for (const name of ['PackageRefused', 'CoreRetryLater', 'SeedRefusal', 'HttpServerError', 'AbortError']) {
+    class SeedRefusal extends Error {}
+    const errors = [
+      new PackageRefused(sentence(0)),
+      new CoreRetryLater(sentence(1)),
+      new SeedRefusal(sentence(2)),
+      new HttpServerError(503),
+      new RangeError(sentence(3)),
+    ];
+    for (const e of errors) tracker.captureException(e, { route: 'outbox.drain', component: 'worker' });
+    await flushed();
+    const text = sent.slice(before).join('\n');
+    expectNothingPersonal(text);
+    for (const name of ['PackageRefused', 'CoreRetryLater', 'SeedRefusal', 'HttpServerError', 'RangeError']) {
       expect(text).toContain(`"type":"${name}"`);
     }
+    expect(text).toContain('HttpServerError status=503');
     expect(text).toContain('"route":"outbox.drain"');
   });
 
   it('in a Prisma error, which prints the arguments it was given', async () => {
-    const error = Object.assign(
-      new Error(`Invalid \`prisma.message.create()\` invocation:\n{ data: { body: "${CHAT[2]}", author: "${PARENT_NAMES[2]}" } }\nUnique constraint failed on the fields: (\`email\`) Key (email)=(${EMAILS[0]})`),
-      { name: 'PrismaClientKnownRequestError', code: 'P2002', meta: { target: ['email'], modelName: 'Contact', value: CHILD_NAMES[0] } },
+    const error = new Prisma.PrismaClientKnownRequestError(
+      `Invalid \`prisma.message.create()\` invocation:\n{ data: { body: "${CHAT[2]}", author: "${PARENT_NAMES[2]}" } }\nUnique constraint failed on the fields: (\`email\`) Key (email)=(${EMAILS[0]})`,
+      { code: 'P2002', clientVersion: '6.0.0', meta: { target: ['email'], modelName: 'Contact', value: CHILD_NAMES[0] } },
     );
     tracker.captureException(error, { route: 'POST /api/v1/conversations/:id/messages', status: 500 });
     const text = await flushed();
