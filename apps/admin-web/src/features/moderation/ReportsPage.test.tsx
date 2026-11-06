@@ -7,7 +7,7 @@ import { holdsAny, navAreas, visibleAreas } from '@/core/permissions/capabilitie
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { chooseOption } from '@/test/select'
 import { ReportsPage } from './ReportsPage'
-import { MOD, REASON, RESOLUTION } from './copy'
+import { MOD, REASON, RESOLUTION, SUBJECT_KIND } from './copy'
 import type { QueueReport, ReportDetail as Detail } from './api'
 
 /**
@@ -26,13 +26,17 @@ function json(body: unknown, status = 200) {
 let fetchMock: ReturnType<typeof vi.fn>
 let queue: QueueReport[]
 let detail: Detail
+/** Reports the server now scopes away from this reviewer: 404 everywhere, but still in the first list. */
+let gone: Set<string>
+const notFound = () => json({ error: { code: 'COMM.REPORT_NOT_FOUND', message: 'Report not found' } }, 404)
 const calls = (method: string, pattern: RegExp) =>
   fetchMock.mock.calls.filter(([u, i]) => pattern.test(String(u)) && ((i as RequestInit)?.method ?? 'GET') === method)
 const headerOf = (init: RequestInit, name: string) => new Headers(init.headers).get(name)
 
 const report = (over: Partial<QueueReport>): QueueReport => ({
   id: 'r1', targetKind: 'message', reason: 'spam', priority: 'normal', status: 'open',
-  createdAt: iso(NOW - 2 * H), dueAt: iso(NOW + 46 * H), ...over,
+  createdAt: iso(NOW - 2 * H), dueAt: iso(NOW + 22 * H),
+  subject: { kind: 'teacher', id: 'sub-t', name: 'Subject Teacher' }, ...over,
 })
 const MANAGER = makeStaff({ id: 'm1', role: 'manager', permissions: ['moderation.view', 'moderation.act'] })
 const VIEWER = makeStaff({ id: 'm2', role: 'manager', permissions: ['moderation.view'] })
@@ -40,19 +44,35 @@ const VIEWER = makeStaff({ id: 'm2', role: 'manager', permissions: ['moderation.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
+  gone = new Set()
   queue = [
-    report({ id: 'cs', reason: 'child_safety', priority: 'urgent', dueAt: iso(NOW + 40 * H) }),
-    report({ id: 'late', reason: 'harassment', dueAt: iso(NOW - (2 * H + 30 * 60_000)), overdueAt: iso(NOW - H) }),
-    report({ id: 'soon', reason: 'spam', status: 'in_review', takenBy: 'Reviewer B', dueAt: iso(NOW + 5 * H + 15 * 60_000) }),
+    report({ id: 'cs', reason: 'child_safety', priority: 'urgent', dueAt: iso(NOW + 20 * H) }),
+    report({ id: 'late', reason: 'harassment', targetKind: 'person', subject: { kind: 'contact', id: 'sub-c', name: 'Parent P' }, dueAt: iso(NOW - (2 * H + 30 * 60_000)), overdueAt: iso(NOW - H) }),
+    report({ id: 'soon', reason: 'spam', status: 'in_review', takenBy: 'Reviewer B', subject: { kind: 'staff', id: 'sub-s', name: 'Staff S' }, dueAt: iso(NOW + 5 * H + 15 * 60_000) }),
     report({ id: 'done', reason: 'other', status: 'actioned', reporterAnsweredAt: iso(NOW - H) }),
   ]
-  detail = { ...queue[0]!, note: 'a note', evidence: { body: 'deleted words', author: { name: 'Author X' }, deletedAt: iso(NOW - H), attachments: ['k1', 'k2'] } }
+  detail = {
+    ...queue[0]!,
+    canAct: true,
+    note: 'a note',
+    evidence: {
+      body: 'deleted words',
+      author: { name: 'Author X' },
+      deletedAt: iso(NOW - H),
+      attachments: [
+        { index: 0, kind: 'image', mime: 'image/png', name: 'a.png', size: 10 },
+        { index: 1, kind: 'image', mime: 'image/png', name: 'b.png', size: 20 },
+      ],
+    },
+  }
   fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = String(input)
     const method = (init.method ?? 'GET').toUpperCase()
-    if (method === 'GET' && /\/moderation\/reports\/[^/?]+$/.test(url)) return json(detail)
-    if (method === 'GET' && /\/moderation\/reports(\?|$)/.test(url)) return json(queue)
-    if (method === 'POST' && /\/take$/.test(url)) return json({})
+    if (method === 'GET' && /\/moderation\/reports\/[^/?]+$/.test(url)) {
+      return gone.has(url.split('/').pop()!) ? notFound() : json(detail)
+    }
+    if (method === 'GET' && /\/moderation\/reports(\?|$)/.test(url)) return json(queue.filter((r) => !gone.has(r.id)))
+    if (method === 'POST' && /\/take$/.test(url)) return gone.has(url.split('/').at(-2)!) ? notFound() : json({})
     if (method === 'POST' && /\/resolve$/.test(url)) return json({})
     return json({ error: { code: 'unrouted', message: url } }, 404)
   })
@@ -84,13 +104,17 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
     expect(within(els[1]!).getByText(L(REASON.harassment))).toBeInTheDocument()
     expect(screen.getByText(L(MOD.title))).toBeInTheDocument()
     expect(screen.getByText(L(MOD.draftNote))).toBeInTheDocument()
+    // D-1: the SLA is 24 hours, never the old 48.
+    expect(screen.getByText(L(MOD.subtitle))).toBeInTheDocument()
+    expect(L(MOD.subtitle)).toMatch(/24|٢٤/)
+    expect(L(MOD.subtitle)).not.toMatch(/48|٤٨/)
   })
 
   it('shows the due clock from a fixed now: time left, the warning, and overdue', async () => {
     renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
     const els = await rows()
     const clock = (i: number) => within(els[i]!).getByTestId('due-clock')
-    expect(clock(0)).toHaveTextContent(L2(MOD.left, { h: 40, m: 0 }))
+    expect(clock(0)).toHaveTextContent(L2(MOD.left, { h: 20, m: 0 }))
     expect(clock(0)).toHaveAttribute('data-state', 'ok')
     expect(clock(1)).toHaveTextContent(L2(MOD.past, { h: 2, m: 30 }))
     expect(clock(1)).toHaveAttribute('data-state', 'overdue')
@@ -168,7 +192,48 @@ describe.each([['en'], ['ar']] as const)('The moderation queue (%s)', (locale) =
     expect(text).not.toContain('Reporter Name')
     expect(text).not.toContain('rep-1')
     expect(text).not.toContain('acc-1')
-    expect(text).not.toContain('k1')
+    // The reported person is shown; attachments are metadata only.
+    expect(screen.getByTestId('report-subject')).toHaveTextContent('Subject Teacher')
+    expect(ev).toHaveTextContent('a.png')
+  })
+
+  it('shows the reported person (name and kind) in each row, for person and message reports, and no reporter', async () => {
+    queue[0] = { ...queue[0]!, reporterId: 'rep-1', reporter: { name: 'Reporter Name' } } as QueueReport
+    renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
+    const els = await rows()
+    const subj = (i: number) => within(els[i]!).getByTestId('row-subject')
+    expect(subj(0)).toHaveTextContent('Subject Teacher')
+    expect(subj(0)).toHaveTextContent(L(SUBJECT_KIND.teacher))
+    expect(within(els[0]!).getByText(L(MOD.targetMessage))).toBeInTheDocument()
+    expect(subj(1)).toHaveTextContent('Parent P')
+    expect(subj(1)).toHaveTextContent(L(SUBJECT_KIND.contact))
+    expect(within(els[1]!).getByText(L(MOD.targetPerson))).toBeInTheDocument()
+    expect(subj(2)).toHaveTextContent(L(SUBJECT_KIND.staff))
+    const text = document.body.textContent ?? ''
+    expect(text).not.toContain('Reporter Name')
+    expect(text).not.toContain('rep-1')
+  })
+
+  it('says calmly when a report is not available (404 on the detail), drops the row and closes the detail', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
+    const els = await rows()
+    gone.add('cs')
+    await user.click(within(els[0]!).getByRole('button', { name: L(MOD.view) }))
+    await waitFor(() => expect(screen.getAllByTestId('report-row')).toHaveLength(3))
+    expect(screen.getByText(L(MOD.notAvailable))).toBeInTheDocument()
+    expect(screen.queryByText(L(MOD.detailTitle))).toBeNull()
+    expect(screen.queryByText(L(REASON.child_safety))).toBeNull()
+  })
+
+  it('says calmly when a report is not available on Take (404) and drops the row', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<ReportsPage />, { locale, staff: MANAGER })
+    const els = await rows()
+    gone.add('cs')
+    await user.click(within(els[0]!).getByRole('button', { name: L(MOD.take) }))
+    expect(await screen.findByText(L(MOD.notAvailable))).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByTestId('report-row')).toHaveLength(3))
   })
 
   it('resolve needs an answer, then POSTs {resolution, note, answer} to /resolve', async () => {

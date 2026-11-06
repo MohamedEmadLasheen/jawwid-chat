@@ -1,5 +1,5 @@
 import type { Pair } from '@/features/organization/copy'
-import type { ReportReasonOrBlocked, ReportStatus, Resolution } from './api'
+import type { ReportReasonOrBlocked, ReportStatus, Resolution, SubjectKind } from './api'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
 
@@ -34,12 +34,37 @@ export const RESOLUTION: Record<Resolution, Pair> = {
   reassigned: { ar: 'إعادة إسناد (تتم في الأدوات الحالية)', en: 'Reassign (done in the existing tools)' },
 }
 
+/** What each resolution does on the server (closure plan §4). */
+export const RESOLUTION_HELP: Record<Resolution, Pair> = {
+  no_action: { ar: 'يُرفض البلاغ ولا يُتخذ أي إجراء آخر.', en: 'The report is dismissed; nothing else happens.' },
+  message_removed: { ar: 'تُحذف الرسالة للجميع (لبلاغات الرسائل فقط).', en: 'The message is deleted for everyone (message reports only).' },
+  warned: {
+    ar: 'يتلقى الشخص المُبلَّغ عنه تذكيرًا بمدونة السلوك، دون ذكر أي بلاغ أو مُبلِّغ.',
+    en: 'The reported person gets a Code of Conduct reminder that never mentions a report or a reporter.',
+  },
+  account_suspended: {
+    ar: 'يُوقف حساب الشخص المُبلَّغ عنه. يتطلب صلاحية إدارة الحسابات، والملاحظة مطلوبة.',
+    en: "The reported person's account is suspended. Needs the account administration permission; a note is required.",
+  },
+  reassigned: {
+    ar: 'تُنشأ مهمة إعادة إسناد لمديري الأقسام المعنية، وتتم الإعادة في أدوات الإشراف الحالية. الملاحظة مطلوبة.',
+    en: "A reassignment task is raised for the departments' managers; the change itself is made in the supervision tools. A note is required.",
+  },
+}
+
+/** The reported person's kind (closure plan §4 `subject.kind`). */
+export const SUBJECT_KIND: Record<SubjectKind, Pair> = {
+  contact: { ar: 'ولي أمر', en: 'Parent' },
+  teacher: { ar: 'معلّم', en: 'Teacher' },
+  staff: { ar: 'موظف', en: 'Staff' },
+}
+
 export const MOD = {
   navLabel: { ar: 'البلاغات', en: 'Reports' },
   title: { ar: 'قائمة البلاغات', en: 'Moderation queue' },
   subtitle: {
-    ar: 'الحالات العاجلة أولًا، ثم الأقرب موعدًا. الرد على المُبلِّغ خلال ٤٨ ساعة.',
-    en: 'Urgent first, then by time left. The reporter is answered within 48 hours.',
+    ar: 'الحالات العاجلة أولًا، ثم الأقرب موعدًا. الرد على المُبلِّغ خلال ٢٤ ساعة.',
+    en: 'Urgent first, then by time left. The reporter is answered within 24 hours.',
   },
   draftNote: { ar: 'تسميات الأسباب مسودّة بانتظار اعتماد المالك.', en: 'Reason labels are drafts pending owner approval.' },
   filterStatus: { ar: 'تصفية حسب الحالة', en: 'Filter by status' },
@@ -82,6 +107,18 @@ export const MOD = {
   noEvidence: { ar: 'لا يوجد دليل.', en: 'No evidence.' },
   resolutionLabel: { ar: 'القرار', en: 'Resolution' },
   resolutionNote: { ar: 'ملاحظة داخلية (اختياري)', en: 'Internal note (optional)' },
+  resolutionNoteRequired: { ar: 'ملاحظة داخلية (مطلوبة)', en: 'Internal note (required)' },
+  noteRequired: { ar: 'الملاحظة الداخلية مطلوبة لهذا القرار.', en: 'An internal note is required for this resolution.' },
+  noSuspendPermission: { ar: 'ليس لديك صلاحية إيقاف الحسابات.', en: "You don't have permission to suspend accounts." },
+  notAvailable: { ar: 'هذا البلاغ غير متاح لك، أو لم يعد موجودًا.', en: 'This report is not available to you, or no longer exists.' },
+  subject: { ar: 'الشخص المُبلَّغ عنه', en: 'Reported person' },
+  viewAttachment: { ar: 'عرض المرفق {name}', en: 'View attachment {name}' },
+  childSafetyWarnTitle: { ar: 'تنبيه: محتوى يخص سلامة طفل', en: "Warning: child-safety content" },
+  childSafetyWarnBody: {
+    ar: 'قد يحتوي هذا المرفق على مواد مؤذية. سيُفتح في علامة تبويب جديدة ويُسجَّل فتحه في سجل التدقيق. لا تنزّله ولا تشاركه.',
+    en: 'This attachment may contain harmful material. It opens in a new tab and the view is recorded in the audit log. Do not download or share it.',
+  },
+  childSafetyContinue: { ar: 'متابعة وفتح المرفق', en: 'Continue and open' },
   answerLabel: { ar: 'الرد على المُبلِّغ', en: 'Answer to the reporter' },
   answerHint: {
     ar: 'مطلوب. سيراه المُبلِّغ وحده، ولن يعرف الشخص المُبلَّغ عنه بوجود بلاغ. حتى ١٠٠٠ حرف.',

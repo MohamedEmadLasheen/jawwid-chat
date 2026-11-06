@@ -3,7 +3,7 @@ import type { ReportStatus } from './api'
 import { MOD, useCopy } from './copy'
 import { dueClock } from './dueClock'
 
-/** The time left against the 48 h, or how late it is. Plain Latin digits, as the rest of the console. */
+/** The time left against the 24 h, or how late it is. Plain Latin digits, as the rest of the console. */
 export function DueClockView({ dueAt, status, nowMs, overdueAt }: { dueAt: string; status: ReportStatus; nowMs: number; overdueAt?: string | null }) {
   const tx = useCopy()
   const c = dueClock(dueAt, status, nowMs, overdueAt)

@@ -10,8 +10,8 @@ import { SearchableSelect } from '@/shared/components/SearchableSelect'
 import { REASONS, STATUSES, type QueueFilters, type ReportReason, type ReportStatus } from './api'
 import { MOD, REASON, STATUS, useCopy } from './copy'
 import { DueClockView } from './DueClockView'
-import { useNow, useReports, useTake } from './hooks'
-import { ReportDetail } from './ReportDetail'
+import { isNotAvailable, useForgetReport, useNow, useReports, useTake } from './hooks'
+import { ReportDetail, SubjectView } from './ReportDetail'
 import './moderation.css'
 
 export const MODERATION_VIEW_KEYS = ['moderation.view'] as const
@@ -22,6 +22,9 @@ const ACT_KEYS = ['moderation.act'] as const
  * server's order, kept as returned. Every picker is a SearchableSelect. The
  * contract has no `reason` query parameter, so the reason filter narrows the
  * rows already returned. UX only: the server decides each request.
+ * Access is scoped on the server (closure plan §3): a 404 on the detail, take,
+ * resolve or an attachment means "not available to you", so the row is
+ * dropped, the detail closed, and a calm notice shown.
  */
 export function ReportsPage() {
   const tx = useCopy()
@@ -38,7 +41,14 @@ export function ReportsPage() {
   const take = useTake()
   const nowMs = useNow()
   const rows = useMemo(() => (list.data ?? []).filter((r) => reason === '' || r.reason === reason), [list.data, reason])
-  const takeError = take.error instanceof ApiError ? take.error : null
+  const takeError = take.error instanceof ApiError && !take.error.isNotFound ? take.error : null
+  const forget = useForgetReport()
+  const [goneNotice, setGoneNotice] = useState(false)
+  function gone(id: string) {
+    forget(id)
+    setOpenId((cur) => (cur === id ? null : cur))
+    setGoneNotice(true)
+  }
 
   return (
     <div className="page">
@@ -74,6 +84,11 @@ export function ReportsPage() {
           {tx(MOD.overdueOnly)}
         </label>
       </div>
+      {goneNotice && (
+        <div className="field__hint" role="status">
+          {tx(MOD.notAvailable)}
+        </div>
+      )}
       {takeError && (
         <div className="field__error" role="alert">
           {takeError.code === 'COMM.REPORT_ALREADY_TAKEN' ? tx(MOD.alreadyTaken) : takeError.localized(locale)}
@@ -105,7 +120,9 @@ export function ReportsPage() {
                         </Badge>
                       )}
                     </td>
-                    <td>{tx(r.targetKind === 'message' ? MOD.targetMessage : MOD.targetPerson)}</td>
+                    <td>
+                      <SubjectView subject={r.subject} targetKind={r.targetKind} testId="row-subject" />
+                    </td>
                     <td>
                       {tx(STATUS[r.status] ?? { ar: r.status, en: r.status })}{' '}
                       {r.reporterAnsweredAt ? <Badge tone="ok">{tx(MOD.answered)}</Badge> : null}
@@ -115,11 +132,11 @@ export function ReportsPage() {
                     </td>
                     <td>{dateTime(r.createdAt)}</td>
                     <td className="mod-actions">
-                      <button type="button" className="btn btn--sm" onClick={() => setOpenId(r.id)}>
+                      <button type="button" className="btn btn--sm" onClick={() => { setGoneNotice(false); setOpenId(r.id) }}>
                         {tx(MOD.view)}
                       </button>
                       {canAct && r.status === 'open' && (
-                        <button type="button" className="btn btn--sm" disabled={take.isPending} onClick={() => take.mutate(r.id)}>
+                        <button type="button" className="btn btn--sm" disabled={take.isPending} onClick={() => take.mutate(r.id, { onError: (e) => isNotAvailable(e) && gone(r.id) })}>
                           {tx(MOD.take)}
                         </button>
                       )}
@@ -136,7 +153,7 @@ export function ReportsPage() {
           </table>
         </div>
       </QueryBoundary>
-      {openId && <ReportDetail id={openId} canAct={canAct} onClose={() => setOpenId(null)} />}
+      {openId && <ReportDetail id={openId} canAct={canAct} onClose={() => setOpenId(null)} onGone={gone} />}
     </div>
   )
 }

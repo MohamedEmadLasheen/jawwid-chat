@@ -1,18 +1,20 @@
 import { api, newIdempotencyKey } from '@/core/api/client'
 
 /**
- * WP-1C (PD-57): the moderation queue's API. Built against the FROZEN contract
- * in docs/release/google-play-blocker-roadmap-2026-11-03.md §5.4:
+ * WP-1C (PD-57): the moderation queue's API. Built against roadmap §5.4 as
+ * amended by docs/release/pd57-closure-plan-2026-11-06.md §3-§4 (which wins):
  *
  *   GET  /moderation/reports?status&priority&overdue   (moderation.view)
  *   GET  /moderation/reports/:id                        (moderation.view; the server audits `report.viewed`)
  *   POST /moderation/reports/:id/take                   (moderation.act)  -> 200
  *   POST /moderation/reports/:id/resolve                (moderation.act)  {resolution, note?, answer}
+ *   POST /moderation/reports/:id/attachments/:index/url (moderation.view) -> {url, expiresAt}, 5 min
  *
- * §5.4 does not spell out the queue row or detail shape, so the types below
- * are the §5.3 column names in camelCase, and every field the page does not
- * need is left out on purpose. §5.5: the reporter's identity is never typed,
- * stored or rendered here, even if a response were to carry it.
+ * Access is scoped on the server (Super Admin: all; others: their departments;
+ * child_safety: Super Admin + moderation.child_safety). A report this reviewer
+ * may not see answers 404 everywhere, so the UI never assumes it sees it all.
+ * §5.5: the reporter's identity is never typed, stored or rendered here, even
+ * if a response were to carry it. The *subject* (the reported person) is shown.
  */
 export const REASONS = ['harassment', 'inappropriate', 'spam', 'child_safety', 'other'] as const
 export type ReportReason = (typeof REASONS)[number]
@@ -29,6 +31,26 @@ export type Resolution = (typeof RESOLUTIONS)[number]
 
 export const ANSWER_MAX = 1000
 
+/** Resolutions the server refuses without a note (closure plan §4). */
+export const NOTE_REQUIRED: readonly Resolution[] = ['reassigned', 'account_suspended']
+
+export type SubjectKind = 'contact' | 'teacher' | 'staff'
+/** The reported person (never the reporter). */
+export interface ReportSubject {
+  kind: SubjectKind
+  id: string
+  name: string
+}
+
+/** Attachment metadata only: no object key ever reaches the console. */
+export interface EvidenceAttachment {
+  index: number
+  kind: string
+  mime: string
+  name: string
+  size: number
+}
+
 export interface QueueReport {
   id: string
   targetKind: 'message' | 'person'
@@ -37,23 +59,25 @@ export interface QueueReport {
   status: ReportStatus
   createdAt: string
   dueAt: string
-  /** Set by the server's sweep at 48 h. */
+  /** Set by the server's sweep at 24 h (D-1). */
   overdueAt?: string | null
   /** Who took it: the reviewer, a staff member. Never the reporter. */
   takenBy?: string | null
   reporterAnsweredAt?: string | null
+  subject: ReportSubject
 }
 
 export interface ReportEvidence {
   body?: string | null
-  /** The snapshot's attachment keys are names, not capabilities: only their number is shown. */
-  attachments?: unknown[] | null
+  attachments?: EvidenceAttachment[] | null
   author?: { name?: string | null } | null
   sentAt?: string | null
   deletedAt?: string | null
 }
 
 export interface ReportDetail extends QueueReport {
+  /** Whether this reviewer may take/resolve this report. UX only: the server still decides. */
+  canAct: boolean
   note?: string | null
   evidence?: ReportEvidence | null
   resolution?: Resolution | null
@@ -89,4 +113,7 @@ export const moderationApi = {
     api.post<unknown>(`/moderation/reports/${encodeURIComponent(id)}/take`, undefined, key),
   resolve: (id: string, body: { resolution: Resolution; note?: string; answer: string }, key: string = newIdempotencyKey()) =>
     api.post<unknown>(`/moderation/reports/${encodeURIComponent(id)}/resolve`, body, key),
+  /** A fresh signed GET (5 min) per call; audited server-side. Never cached. */
+  attachmentUrl: (id: string, index: number) =>
+    api.post<{ url: string; expiresAt: string }>(`/moderation/reports/${encodeURIComponent(id)}/attachments/${index}/url`),
 }
