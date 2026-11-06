@@ -148,8 +148,14 @@ the budget only removes duplicates from Sentry.
    (`InternalServerErrorException status=500`); frame locations without
    `vars` or source lines; the five tags; `request_id`; `suppressed`;
    runtime/os name and version. Every kept string must match its field's
-   shape in full (identifier, code, route template, `WS <event>`, label) or
-   it is dropped. There is no `request`, `user`, `breadcrumbs`,
+   shape in full or it is dropped -- and no shape admits a bare word, which
+   is what a one-word name would be: an exception type must be an error-class
+   name (`…Error`, `…Exception`, `…Refusal`, `…Refused`, `…RetryLater`,
+   `…Rejection`), else `Error`; a route is an HTTP template, `WS area.action`,
+   `WS handshake` or a worker `area.task` label; `actor_kind` and `component`
+   are their closed vocabularies. Stack-frame file and function names are
+   kept (they are the diagnosis): V8 takes them from source code, and no code
+   here renames a function at runtime. There is no `request`, `user`, `breadcrumbs`,
    `server_name`, `transaction`, `fingerprint` or request-derived metadata on
    the event that is sent. The full message stays in the redacted log line
    (`request_id` joins the two), behind the log store's access controls.

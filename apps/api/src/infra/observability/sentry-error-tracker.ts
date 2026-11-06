@@ -131,8 +131,15 @@ export function sentryOptions(dsn: string, component: string, build: BuildInfoLi
  * templates, and none admits a space between two words of prose -- which is
  * what a name or a sentence needs.
  */
-/** A class or error name: `TypeError`, `PrismaClientKnownRequestError`. */
-const IDENTIFIER = /^[A-Za-z_$][\w$]{0,63}$/;
+/**
+ * An error CLASS: a capitalised identifier ending in one of the suffixes error
+ * classes use here -- `TypeError`, `PrismaClientKnownRequestError`,
+ * `InternalServerErrorException`, `PackageRefused`, `SeedRefusal`,
+ * `CoreRetryLater`. Not merely "an identifier": `error.name` is a writable
+ * string, and a one-word value (`Layla`) is an identifier too. Anything else
+ * is sent as `Error`.
+ */
+const ERROR_CLASS = /^(?:[A-Z][A-Za-z0-9]{0,55})?(?:Error|Exception|Refusal|Refused|RetryLater|Rejection)$/;
 /** Prisma error codes: P1001, P2003. */
 const PRISMA_CODE = /^P\d{4}$/;
 /** Node system / internal error codes: ECONNREFUSED, ETIMEDOUT, ERR_STREAM_PREMATURE_CLOSE. */
@@ -143,18 +150,28 @@ const SQLSTATE = /^[0-9A-Z]{5}$/;
 const STATEMENT_TIMEOUT = /\b57014\b|canceling statement due to statement timeout/;
 /** HTTP: `POST /api/v1/conversations/:id/messages`, a template (request-log.ts never passes a resolved path). */
 const HTTP_ROUTE = /^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|OTHER) (?:\/[\w:.*{}-]*)+$|^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|OTHER) <unmatched>$/;
-/** WebSocket: `WS conversation.subscribe`, `WS handshake`, `WS <unknown>`. */
-const WS_ROUTE = /^WS (?:[\w.:-]{1,64}|<unknown>)$/;
-/** Worker subsystems and process routes: `outbox.drain`, `process.unhandledRejection`, `bootstrap`. */
-const LABEL = /^[\w.:-]{1,64}$/;
+/** WebSocket: `WS conversation.subscribe` (every handler is `area.action`), `WS handshake`, `WS <unknown>`. */
+const WS_ROUTE = /^WS (?:[a-z]{1,32}\.[a-z]{1,32}|handshake|<unknown>)$/;
+/**
+ * Worker subsystems and process routes: always `area.task` (`outbox.drain`,
+ * `cases.due_soon`, `process.unhandledRejection`), or `bootstrap`. Never a
+ * bare word, which is what a name would be.
+ */
+const LABEL = /^[a-z]{1,32}\.[a-zA-Z_]{1,40}$|^bootstrap$/;
 const TAG_SHAPES: Record<(typeof ALLOWED_TAGS)[number], (v: string) => boolean> = {
   route: (v) => v.length <= 300 && (HTTP_ROUTE.test(v) || WS_ROUTE.test(v) || LABEL.test(v)),
-  actor_kind: (v) => /^[a-z_]{1,32}$/.test(v),
+  // The closed vocabularies, not shapes: a one-word name is a lowercase word too.
+  actor_kind: (v) => ['contact', 'staff', 'teacher', 'system'].includes(v),
   status: (v) => /^[1-5]\d\d$/.test(v),
-  component: (v) => /^[a-z]{1,16}$/.test(v),
+  component: (v) => v === 'api' || v === 'worker',
   version: (v) => /^[\w.+-]{1,64}$/.test(v),
 };
-/** A stack frame's file, function and module come from code, but are still shape-checked. */
+/**
+ * A stack frame's file, function and module come from V8's call stack: source
+ * file paths and function names as written in code, never runtime data (no
+ * code here renames a function at runtime). They are kept because they are
+ * the diagnosis; they are still shape-checked, so prose cannot pass.
+ */
 const FRAME_FILE = /^[\w$@./\\:+-]{1,300}$/;
 const FRAME_FUNCTION = /^[\w$.<>[\]]{1,200}$|^(?:async |new )?[\w$.<>[\]]{1,200}(?: \[as [\w$]{1,64}\])?$|^Promise\.all \(index \d{1,5}\)$/;
 /** environment, release, SDK name and version, runtime and os name and version. */
@@ -177,7 +194,7 @@ type Frame = NonNullable<NonNullable<Sentry.Exception['stacktrace']>['frames']>[
  *   identity      event_id, timestamp, platform, level, and environment,
  *                 release and sdk name/version when they match their shape
  *   message       NOTHING. No event message, no logentry.
- *   exceptions    type (an identifier, else `Error`) and a value BUILT from
+ *   exceptions    type (an error-class name, else `Error`) and a value BUILT from
  *                 approved facts, never copied: the type, plus an approved
  *                 code read from the error object itself (Prisma P-code,
  *                 Node E-code, SQLSTATE, the fixed statement-timeout code)
@@ -212,7 +229,7 @@ export function scrubEvent(event: Sentry.ErrorEvent, hint?: Sentry.EventHint): S
     const chain = causeChain(hint?.originalException);
     out.exception = {
       values: values.map((exception, i) => {
-        const type = keep(exception.type, IDENTIFIER) ?? 'Error';
+        const type = keep(exception.type, ERROR_CLASS) ?? 'Error';
         // Sentry orders linked errors innermost first; the hint names the
         // outermost (last). An error object is used only when its name agrees
         // with the type Sentry recorded at that position.

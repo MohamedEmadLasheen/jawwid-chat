@@ -115,6 +115,39 @@ describe('nothing personal reaches the Sentry wire', () => {
     expect(text).toContain('"type":"Error"');
   });
 
+  it('in ONE-WORD values, which pass any merely identifier-shaped check', async () => {
+    // Codex review: a single word is an identifier, a label and a lowercase word.
+    const before = sent.length;
+    for (const word of ['Layla', 'Yusuf', 'ليلى', 'Omar']) {
+      tracker.captureException(Object.assign(new Error('failure'), { name: word }), {
+        route: word,
+        actorKind: word.toLowerCase(),
+        component: word.toLowerCase(),
+      });
+      tracker.captureException(new Error('failure'), { route: `WS ${word}` });
+      tracker.captureException(new Error('failure'), { route: `${word.toLowerCase()}` });
+    }
+    await flushed();
+    const text = sent.slice(before).join('\n');
+    expect(sent.length - before).toBeGreaterThanOrEqual(12);
+    expectNothingPersonal(text);
+    expect(text).not.toContain('"route"'); // none of those labels was a route
+    expect(text).not.toContain('"actor_kind"');
+    expect(text).not.toContain('"component"');
+  });
+
+  it('keeps the error classes this codebase actually throws', async () => {
+    const before = sent.length;
+    for (const name of ['PackageRefused', 'CoreRetryLater', 'SeedRefusal', 'HttpServerError', 'AbortError']) {
+      tracker.captureException(Object.assign(new Error('failure'), { name }), { route: 'outbox.drain', component: 'worker' });
+    }
+    const text = (await flushed(), sent.slice(before).join('\n'));
+    for (const name of ['PackageRefused', 'CoreRetryLater', 'SeedRefusal', 'HttpServerError', 'AbortError']) {
+      expect(text).toContain(`"type":"${name}"`);
+    }
+    expect(text).toContain('"route":"outbox.drain"');
+  });
+
   it('in a Prisma error, which prints the arguments it was given', async () => {
     const error = Object.assign(
       new Error(`Invalid \`prisma.message.create()\` invocation:\n{ data: { body: "${CHAT[2]}", author: "${PARENT_NAMES[2]}" } }\nUnique constraint failed on the fields: (\`email\`) Key (email)=(${EMAILS[0]})`),
