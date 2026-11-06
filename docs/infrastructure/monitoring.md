@@ -123,7 +123,8 @@ its log line, and `suppressed` (below).
 Prisma code; never the message) per 15 minutes, and at most 20 events an hour
 across all kinds. The next event of a kind after a quiet spell carries
 `suppressed`, how many were held back. An uncaught exception or a failed boot
-skips the hourly limit (the process exits right after). A day-long outage of
+skips both limits (the process exits right after). The budget runs on a
+monotonic clock, so a wall-clock correction cannot hide reports. A day-long outage of
 both processes therefore sends under 1,000 events, where it would otherwise
 send on the order of 10,000 an hour. Every failure is still logged in full;
 the budget only removes duplicates from Sentry.

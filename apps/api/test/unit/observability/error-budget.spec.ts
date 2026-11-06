@@ -7,6 +7,7 @@
  * bytes the SDK would send, not inferred from a mock.
  */
 import * as Sentry from '@sentry/node';
+import { performance } from 'node:perf_hooks';
 import {
   DEFAULT_ERROR_BUDGET,
   ErrorBudget,
@@ -80,11 +81,36 @@ describe('ErrorBudget — across kinds', () => {
     expect(budget.admit('d').send).toBe(false);
   });
 
-  it('a critical report (the process is about to exit) skips the global limit, not the per-kind one', () => {
+  it('a critical report (the process is about to exit) skips both limits', () => {
     const budget = new ErrorBudget({ globalLimit: 1, now: clock().now });
     expect(budget.admit('a').send).toBe(true);
+    expect(budget.admit('b').send).toBe(false); // global limit reached
     expect(budget.admit('crash', true).send).toBe(true);
-    expect(budget.admit('crash', true).send).toBe(false);
+    expect(budget.admit('crash', true).send).toBe(true); // per-kind interval does not apply either
+    expect(budget.admit('a', true)).toEqual({ send: true, suppressed: 0 });
+  });
+
+  it('a clock that goes backwards never extends a suppression or fills the window', () => {
+    const c = clock();
+    const budget = new ErrorBudget({ globalLimit: 1, now: c.now });
+    expect(budget.admit('k').send).toBe(true);
+    c.advance(-60 * MIN); // the clock is corrected an hour back
+    // The send dated "in the future" counts for nothing: the next report goes.
+    expect(budget.admit('k')).toEqual({ send: true, suppressed: 0 });
+  });
+
+  it('by default the clock is monotonic, not the wall clock', () => {
+    const wall = jest.spyOn(Date, 'now').mockReturnValue(0);
+    try {
+      const budget = new ErrorBudget({ perKeyIntervalMs: 1 });
+      expect(budget.admit('k').send).toBe(true);
+      // Date.now is frozen; only a monotonic clock can let the interval pass.
+      const until = performance.now() + 5;
+      while (performance.now() < until) { /* spin a few ms */ }
+      expect(budget.admit('k').send).toBe(true);
+    } finally {
+      wall.mockRestore();
+    }
   });
 
   it('remembers a bounded number of kinds, forgetting the least recently touched', () => {

@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import type { ErrorContext } from './error-tracker';
 
 /**
@@ -28,8 +29,15 @@ import type { ErrorContext } from './error-tracker';
  * so two different faults on one route are still two kinds.
  *
  * `critical` (an uncaught exception, a failed boot: the process exits right
- * after) skips the global limit. Those are the reports that matter most, a
- * process sends at most one, and a crash loop is bounded by the restart rate.
+ * after) skips BOTH limits. Those are the reports that matter most, a process
+ * sends at most one before it exits, and a crash loop is bounded by the
+ * platform's restart rate.
+ *
+ * Time is MONOTONIC (performance.now), so an NTP or manual correction of the
+ * wall clock can neither extend a suppression nor fill the window with sends
+ * dated in the future. An elapsed time that is somehow negative (an injected
+ * clock in a test) is treated as an interval that has passed: the failure mode
+ * of a confused clock is one extra event, never a hidden one.
  *
  * Every failure is still LOGGED in full by the caller, so suppression only ever
  * removes duplicates from the error tracker, never from the record.
@@ -71,27 +79,34 @@ export class ErrorBudget {
 
   constructor(options: Partial<ErrorBudgetOptions> = {}) {
     this.options = { ...DEFAULT_ERROR_BUDGET, ...options };
-    this.now = options.now ?? Date.now;
+    this.now = options.now ?? (() => performance.now());
   }
 
   admit(key: string, critical = false): BudgetDecision {
     const now = this.now();
     const { perKeyIntervalMs, globalLimit, globalWindowMs } = this.options;
     const state = this.kinds.get(key);
+    const within = (t: number, ms: number) => now - t >= 0 && now - t < ms;
 
-    if (state && now - state.lastSentAt < perKeyIntervalMs) {
+    if (critical) return this.send(key, now, state);
+
+    if (state && within(state.lastSentAt, perKeyIntervalMs)) {
       state.suppressed++;
       this.remember(key, state);
       return { send: false };
     }
 
-    this.sent = this.sent.filter((t) => now - t < globalWindowMs);
-    if (!critical && this.sent.length >= globalLimit) {
+    this.sent = this.sent.filter((t) => within(t, globalWindowMs));
+    if (this.sent.length >= globalLimit) {
       // Held back, but not marked as sent: the next one of this kind tries again.
       this.remember(key, { lastSentAt: state?.lastSentAt ?? Number.NEGATIVE_INFINITY, suppressed: (state?.suppressed ?? 0) + 1 });
       return { send: false };
     }
 
+    return this.send(key, now, state);
+  }
+
+  private send(key: string, now: number, state: KindState | undefined): BudgetDecision {
     const suppressed = state?.suppressed ?? 0;
     this.remember(key, { lastSentAt: now, suppressed: 0 });
     this.sent.push(now);

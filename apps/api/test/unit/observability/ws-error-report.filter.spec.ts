@@ -13,13 +13,20 @@ import { ArgumentsHost, ForbiddenException, InternalServerErrorException, Intrin
 import { EXCEPTION_FILTERS_METADATA } from '@nestjs/common/constants';
 import { WsException } from '@nestjs/websockets';
 import { WsExceptionsHandler } from '@nestjs/websockets/exceptions/ws-exceptions-handler';
+import { ExceptionFiltersContext } from '@nestjs/websockets/context/exception-filters-context';
+import { NestContainer } from '@nestjs/core/injector/container';
 import { RealtimeGateway } from '@communication/realtime/realtime.gateway';
 import {
   isUnexpectedWsError,
   wsEventLabel,
   WsErrorReportFilter,
 } from '../../../src/infra/observability/ws-error-report.filter';
-import type { ErrorContext, ErrorTracker } from '../../../src/infra/observability/error-tracker';
+import {
+  NoopErrorTracker,
+  setProcessErrorTracker,
+  type ErrorContext,
+  type ErrorTracker,
+} from '../../../src/infra/observability/error-tracker';
 import { SentryErrorTracker } from '../../../src/infra/observability/sentry-error-tracker';
 
 const MESSAGE_BODY = 'ابني مريض اليوم';
@@ -78,6 +85,44 @@ describe('the gateway declares the filter', () => {
   it('RealtimeGateway carries a WsErrorReportFilter — Nest applies no global filter to gateways', () => {
     const filters = Reflect.getMetadata(EXCEPTION_FILTERS_METADATA, RealtimeGateway) as unknown[];
     expect(filters.some((f) => f instanceof WsErrorReportFilter)).toBe(true);
+  });
+});
+
+describe('the real wiring: Nest builds the gateway handler and the boot tracker receives the report', () => {
+  beforeEach(() => jest.spyOn(process.stdout, 'write').mockImplementation(() => true));
+  afterEach(() => {
+    jest.restoreAllMocks();
+    setProcessErrorTracker(new NoopErrorTracker());
+  });
+
+  it('a throw from conversation.subscribe, through Nest’s own filter context, reaches the process tracker once', () => {
+    const { tracker, captured } = fakeTracker();
+    setProcessErrorTracker(tracker);
+    // Exactly what Nest's WsContextCreator does for each @SubscribeMessage handler.
+    const handler = new ExceptionFiltersContext(new NestContainer()).create(
+      Object.create(RealtimeGateway.prototype) as object,
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      RealtimeGateway.prototype.subscribe as never,
+      'RealtimeModule',
+    );
+    const client = fakeClient();
+    handler.handle(new Error('db down'), host(client));
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].context).toEqual({ route: 'WS conversation.subscribe', component: 'api' });
+    expect(client.emit.mock.calls).toEqual(defaultEmit(new Error('db down')));
+  });
+
+  it('with no tracker set (a harness, a test), the same path reports nothing and still answers', () => {
+    const handler = new ExceptionFiltersContext(new NestContainer()).create(
+      Object.create(RealtimeGateway.prototype) as object,
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      RealtimeGateway.prototype.subscribe as never,
+      'RealtimeModule',
+    );
+    const client = fakeClient();
+    expect(() => handler.handle(new Error('db down'), host(client))).not.toThrow();
+    expect(client.emit).toHaveBeenCalledTimes(1);
   });
 });
 
