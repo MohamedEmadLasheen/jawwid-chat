@@ -125,8 +125,9 @@ Unchanged from roadmap §6.2 (`POST /me/blocks`, `GET /me/blocks`, `DELETE /me/b
 ## 6. Abuse and bypass rules
 
 - Reports: 10 per reporter per rolling hour; one open report per reporter and target; a report about a
-  message requires that the reporter could read it (API: `readableNow`; database: the reporter was a
-  member of the conversation when the message was sent, for parents and teachers).
+  message requires that the reporter could read it (API: `readableNow`; database, for parents and
+  teachers: a member now, since members read the whole history, or a member when it was sent); a person
+  report naming a conversation requires the reporter is or was in it.
 - Blocks: 20 per blocker per rolling 24 h; block/unblock cycles never re-notify managers while the
   case is open; staff can never block; protected targets can never be blocked.
 - Bypass: a blocked person cannot open a new direct conversation with the blocker, cannot ring them
