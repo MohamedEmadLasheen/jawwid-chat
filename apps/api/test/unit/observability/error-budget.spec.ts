@@ -90,6 +90,13 @@ describe('ErrorBudget — across kinds', () => {
     expect(budget.admit('a', true)).toEqual({ send: true, suppressed: 0 });
   });
 
+  it('a critical report takes no room from ordinary ones', () => {
+    const budget = new ErrorBudget({ globalLimit: 1, now: clock().now });
+    expect(budget.admit('crash', true).send).toBe(true);
+    expect(budget.admit('crash', true).send).toBe(true);
+    expect(budget.admit('ordinary').send).toBe(true);
+  });
+
   it('a clock that goes backwards never extends a suppression or fills the window', () => {
     const c = clock();
     const budget = new ErrorBudget({ globalLimit: 1, now: c.now });

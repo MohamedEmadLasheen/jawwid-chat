@@ -88,7 +88,8 @@ export class ErrorBudget {
     const state = this.kinds.get(key);
     const within = (t: number, ms: number) => now - t >= 0 && now - t < ms;
 
-    if (critical) return this.send(key, now, state);
+    // Neither checked nor counted: a critical report takes no room from ordinary ones.
+    if (critical) return { send: true, suppressed: state?.suppressed ?? 0 };
 
     if (state && within(state.lastSentAt, perKeyIntervalMs)) {
       state.suppressed++;
