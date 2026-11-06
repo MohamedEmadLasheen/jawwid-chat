@@ -6,18 +6,22 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/text_direction.dart';
 
-/// PD-30: what stands where the composer was, in a group locked for payment.
+/// PD-30 amendment, D-3 (owner, 2026-11-06): a strip ABOVE the composer, in a group with a
+/// child whose new lesson bookings are paused. It never replaces the composer: the chat
+/// stays open for everyone, and lessons already booked go ahead.
 ///
-/// It names each locked child. A parent reads why ("Adam: lessons used up", "Adam:
-/// instalment 2/3 overdue since Oct 2, 2026") and gets the way to Subscriptions, opened
-/// at that child; a teacher reads only that the child's lessons are paused -- the server
-/// sends a teacher no reason, so none can be shown.
-///
-/// Advisory, like the lock it draws: every send is refused by the server on its own.
+/// - A parent reads why for each child ("Adam: lessons used up", "Adam: instalment 2/3
+///   overdue since Oct 2, 2026") and gets the way to Subscriptions, opened at that child.
+/// - A teacher reads only the heading and that the chat stays open. Nothing financial and
+///   no child line: [financial] is false for a teacher, and the server sends a teacher no
+///   reason either.
 class PaymentLockBanner extends StatelessWidget {
-  const PaymentLockBanner({super.key, required this.lock, this.onOpenSubscriptions});
+  const PaymentLockBanner({super.key, required this.lock, required this.financial, this.onOpenSubscriptions});
 
   final PaymentLock lock;
+
+  /// Whether this viewer may read the family's financial state (a parent, staff); false for a teacher.
+  final bool financial;
 
   /// Opens Subscriptions at the child; null hides the button (also when ![lock.canPay]).
   final ValueChanged<String>? onOpenSubscriptions;
@@ -28,43 +32,37 @@ class PaymentLockBanner extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = JawwidTokens.of(context);
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final canPay = lock.canPay && onOpenSubscriptions != null;
-    final lineStyle = theme.textTheme.bodyMedium?.copyWith(color: tokens.colorStatusWarningFg);
+    final canPay = financial && lock.canPay && onOpenSubscriptions != null;
+    final lineStyle = theme.textTheme.bodyMedium?.copyWith(color: tokens.colorStatusInfoFg);
 
-    return SafeArea(
-      top: false,
-      child: DecoratedBox(
-        key: const ValueKey('payment-lock-banner'),
-        decoration: BoxDecoration(
-          color: tokens.colorStatusWarningBg,
-          border: Border(top: BorderSide(color: tokens.colorBorderSubtle)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing4, vertical: Spacing.spacing3),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.pause_circle_outline, size: 20, color: tokens.colorStatusWarningFg),
-                  const SizedBox(width: Spacing.spacing2),
-                  Expanded(
-                    child: Text(
-                      l10n.lockBannerTitle,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: tokens.colorStatusWarningFg,
-                        fontWeight: FontWeight.w700,
-                      ),
+    return DecoratedBox(
+      key: const ValueKey('payment-lock-banner'),
+      decoration: BoxDecoration(
+        color: tokens.colorStatusInfoBg,
+        border: Border(top: BorderSide(color: tokens.colorBorderSubtle)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing4, vertical: Spacing.spacing3),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 20, color: tokens.colorStatusInfoFg),
+                const SizedBox(width: Spacing.spacing2),
+                Expanded(
+                  child: Text(
+                    l10n.lockBannerTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: tokens.colorStatusInfoFg,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
-              ),
-              if (lock.children.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.spacing1),
-                  child: Text(l10n.lockBannerGeneric, style: lineStyle),
                 ),
+              ],
+            ),
+            if (financial)
               for (final child in lock.children)
                 Padding(
                   key: ValueKey('payment-lock-child-${child.id}'),
@@ -93,16 +91,19 @@ class PaymentLockBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-            ],
-          ),
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.spacing2),
+              child: Text(l10n.lockBannerGeneric, style: lineStyle),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// One child's lines: a reason each when the server sent reasons (a parent, staff),
-/// otherwise only that the lessons are paused (a teacher).
+/// One child's lines, for a viewer who may read why: a reason each when the server sent
+/// reasons, otherwise only that the child's new lessons are paused.
 List<String> lockLines(LockedChild child, L10n l10n, String locale) {
   final lines = <String>[
     if (child.reasons.contains('balance')) l10n.lockBannerChildBalance(child.name),

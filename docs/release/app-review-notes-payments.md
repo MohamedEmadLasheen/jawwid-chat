@@ -90,9 +90,12 @@ Stripe configured (`cardAvailable`); bank transfer always does.
     (2026-11-06, `docs/product/pd-registry/PD-30-amendment-chat-open.md`): the group chat and its
     calls are never refused for payment, in every app build; only new bookings pause. Only an
     instalment the family can pay in the app (a lesson package's) can start the lock.
-  - Still open: the owner's wording for the cards, pushes and banner (D-3).
+  - The owner's wording (D-3, 2026-11-06, `docs/product/pd030-d3-wording.md`): every card, push and
+    banner says only new lessons pause, and lessons already booked go ahead. None says the chat is
+    paused, and payment is described as booking new lessons, never as opening the chat.
   - Production enforcement (`SUBSCRIPTION_LOCK_ENFORCED`) is off, so nothing locks there today.
-    Keep it off until the D-3 wording ships.
+    The owner keeps it off until the app update with the D-3 banner is released and the owner
+    approves production activation.
 
 - **R-4 Instalments and balances: resolved (2026-11-06).** Each now names the lesson package it
   pays for, and the server refuses an in-app payment for one that names none (table in §2).

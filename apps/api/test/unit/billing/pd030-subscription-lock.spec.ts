@@ -202,13 +202,30 @@ describe('PD-30 — what the cards and the pay page say', () => {
     const locked = renderCardBody('subscription_locked', {
       learnerName: 'Adam', reasons: ['balance', 'overdue'], instalmentLabel: 'Term · 2/3', overdueSince: '2026-10-27',
     }, 'en');
-    expect(locked).toContain("Adam's lessons are paused");
-    expect(locked).toContain('used up');
-    expect(locked).toContain('Instalment Term · 2/3 overdue since 2026-10-27');
+    // D-3 (owner, 2026-11-06): only NEW lessons pause; booked lessons go ahead.
+    expect(locked).toBe([
+      '⏸️ New lessons for Adam are paused',
+      "The subscription's lessons are used up",
+      'Instalment Term · 2/3 overdue since 2026-10-27',
+      'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.',
+    ].join('\n'));
+    expect(renderCardBody('subscription_locked', { learnerName: 'آدم', reasons: ['overdue'], instalmentLabel: '2/3', overdueSince: '2026-10-27' }, 'ar'))
+      .toBe([
+        '⏸️ توقّف حجز حصص جديدة لـآدم',
+        'القسط 2/3 متأخر منذ 2026-10-27',
+        'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».',
+      ].join('\n'));
     // The group's card carries nothing financial: the teacher reads the group.
-    const paused = renderCardBody('lessons_paused', { learnerName: 'Adam' }, 'en');
-    expect(paused).toBe("⏸️ Adam's lessons are paused.");
-    expect(renderCardBody('subscription_unlocked', { learnerName: 'Adam' }, 'ar')).toContain('عادت حصص Adam');
+    const paused = renderCardBody('lessons_paused', { learnerName: 'Adam', reasons: ['overdue'], instalmentLabel: '2/3' }, 'en');
+    expect(paused).toBe('⏸️ New lessons for Adam are paused for now. Lessons already booked go ahead, and this chat stays open.');
+    expect(renderCardBody('lessons_paused', { learnerName: 'آدم' }, 'ar'))
+      .toBe('⏸️ توقّف حجز حصص جديدة لـآدم مؤقتًا. الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة.');
+    for (const lang of ['en', 'ar'] as const) {
+      const text = renderCardBody('lessons_paused', { learnerName: 'Adam', reasons: ['balance', 'overdue'], instalmentLabel: '2/3', overdueSince: '2026-10-27' }, lang);
+      expect(text).not.toMatch(/instalment|overdue|used up|subscription|Subscriptions|قسط|القسط|متأخر|انتهت|اشتراك|الاشتراكات|2\/3|2026-10-27/i);
+    }
+    expect(renderCardBody('subscription_unlocked', { learnerName: 'Adam' }, 'en')).toBe('▶️ New lessons for Adam are back on the schedule.');
+    expect(renderCardBody('subscription_unlocked', { learnerName: 'آدم' }, 'ar')).toBe('▶️ عادت الحصص الجديدة لـآدم إلى الجدول.');
   });
 
   it('the pay page shows the package as "3 months — 24 lessons"', () => {

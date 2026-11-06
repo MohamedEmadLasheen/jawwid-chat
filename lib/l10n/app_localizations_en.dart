@@ -3284,7 +3284,7 @@ class L10nEn extends L10n {
   String get subscriptionRenewalRequested => 'Renewal requested';
 
   @override
-  String get lockBannerTitle => 'Lessons are paused';
+  String get lockBannerTitle => 'New lessons are paused';
 
   @override
   String lockBannerChildBalance(String name) {
@@ -3298,11 +3298,12 @@ class L10nEn extends L10n {
 
   @override
   String lockBannerChildPaused(String name) {
-    return '$name\'s lessons are paused';
+    return '$name: new lessons paused';
   }
 
   @override
-  String get lockBannerGeneric => 'This group is paused for now.';
+  String get lockBannerGeneric =>
+      'The chat stays open, and lessons already booked go ahead.';
 
   @override
   String get lockBannerOpenSubscriptions => 'Go to Subscriptions';
@@ -3324,16 +3325,21 @@ class L10nEn extends L10n {
   String get outcomeSuspendedPayment => 'Suspended — payment';
 
   @override
-  String get cardLessonsPausedTitle => 'Lessons paused';
+  String get cardLessonsPausedTitle => 'New lessons paused';
 
   @override
-  String get cardSubscriptionLockedTitle => 'Lessons paused — payment';
+  String get cardLessonsPausedBody =>
+      'Lessons already booked go ahead, and this chat stays open.';
 
   @override
-  String get cardSubscriptionLockedHint => 'Renew or pay in Subscriptions.';
+  String get cardSubscriptionLockedTitle => 'New lessons paused — payment';
 
   @override
-  String get cardSubscriptionUnlockedTitle => 'Lessons are back on';
+  String get cardSubscriptionLockedHint =>
+      'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.';
+
+  @override
+  String get cardSubscriptionUnlockedTitle => 'New lessons are back on';
 
   @override
   String get roleSales => 'Sales';

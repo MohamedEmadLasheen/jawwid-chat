@@ -5,7 +5,7 @@ the parent–teacher group chat stays fully accessible. Only new lesson bookings
 
 **Status (2026-11-06):** D-1 and D-2 approved by the owner ("Approve D-1 and D-2"). The API part
 (PRs 1 and 2 below, without the D-3 texts) is in branch `claude/pd030-chat-stays-open`; the decision
-record is `pd-registry/PD-30-amendment-chat-open.md`. D-3 (wording) is still open.
+record is `pd-registry/PD-30-amendment-chat-open.md`. D-3 (wording) approved the same day: `pd030-d3-wording.md`.
 
 This closes risk R-3 of `docs/release/app-review-notes-payments.md`. Locking the in-app chat
 behind payment can read as "pay to unlock an app feature" (App Store 3.1.1, Google Play
@@ -54,7 +54,7 @@ turns enforcement on in production.
   - **Recommended:** count only instalments of a lesson package, so a non-lesson debt never
     pauses lessons.
   - This is a change to `chat.compute_learner_access`, which needs a migration slot.
-- **D-3. Wording.** The group card, the supervisor card, the push texts and the banner, in
+- **D-3. Wording. APPROVED, 2026-11-06 (`pd030-d3-wording.md`).** The group card, the supervisor card, the push texts and the banner, in
   Arabic and English. This replaces the still-pending approved suspension message (A-4,
   roadmap §8.6).
 

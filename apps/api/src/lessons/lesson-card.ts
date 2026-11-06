@@ -159,14 +159,19 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
         : `⏳ ${learner}'s subscription lessons are used up. ${graceLeftLabel(Number(p.graceLeft), false)} until renewal.`;
     case CardKind.SUBSCRIPTION_LOCKED:
       return join(
-        ar ? `⏸️ توقفت حصص ${learner}` : `⏸️ ${learner}'s lessons are paused`,
+        ar ? `⏸️ توقّف حجز حصص جديدة لـ${learner}` : `⏸️ New lessons for ${learner} are paused`,
         lockReasonLines(p, ar),
-        ar ? 'جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».' : 'Renew or pay the instalment in Subscriptions.',
+        ar
+          ? 'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».'
+          : 'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.',
       );
     case CardKind.LESSONS_PAUSED:
-      return ar ? `⏸️ توقفت حصص ${learner} مؤقتًا.` : `⏸️ ${learner}'s lessons are paused.`;
+      // PD-30 D-3 (owner, 2026-11-06). The group card: the teacher reads it, so nothing financial.
+      return ar
+        ? `⏸️ توقّف حجز حصص جديدة لـ${learner} مؤقتًا. الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة.`
+        : `⏸️ New lessons for ${learner} are paused for now. Lessons already booked go ahead, and this chat stays open.`;
     case CardKind.SUBSCRIPTION_UNLOCKED:
-      return ar ? `▶️ عادت حصص ${learner}.` : `▶️ ${learner}'s lessons are back on.`;
+      return ar ? `▶️ عادت الحصص الجديدة لـ${learner} إلى الجدول.` : `▶️ New lessons for ${learner} are back on the schedule.`;
     case CardKind.RENEWAL_REQUESTED:
       return ar ? `🔁 طلب ولي الأمر تجديد اشتراك ${learner}.` : `🔁 The parent asked to renew ${learner}'s subscription.`;
     default:

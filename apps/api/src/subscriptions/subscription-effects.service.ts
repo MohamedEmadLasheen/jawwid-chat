@@ -29,9 +29,10 @@ type Tx = Prisma.TransactionClient;
  *   grace     the family's direct chat with its supervisor (chosen by who is
  *             in it, never a teacher): "N grace lessons left". Never the
  *             group: the teacher sees nothing financial.
- *   locked    the group: "the lessons are paused" (no reason); the direct
- *             chat: why, and where to pay.
- *   unlocked  the group: "the lessons are back on".
+ *   locked    the group: "new lessons are paused; booked lessons go ahead; the
+ *             chat stays open" (no reason); the direct chat: why, and where to
+ *             pay (D-3 wording, docs/product/pd030-d3-wording.md).
+ *   unlocked  the group: "new lessons are back on the schedule".
  *   Each also pushes to every active parent and to the child's supervisor.
  *
  * With SUBSCRIPTION_LOCK_ENFORCED off nothing is announced (the events are

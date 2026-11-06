@@ -8,7 +8,6 @@ import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
-import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
@@ -19,10 +18,11 @@ import 'package:jawwid_chat/shared/models/user_role.dart';
 
 import 'fake_voice_devices.dart';
 
-/// PD-30 in the chat: a group locked for payment shows a banner where the composer was --
-/// naming each child, with the reason and the way to Subscriptions for a parent, and only
-/// "lessons are paused" for a teacher. A send the server refuses as locked shows the same
-/// banner rather than a failure to retry.
+/// PD-30 in the chat, after D-3 (owner, 2026-11-06): the chat stays open and only new lesson
+/// bookings pause. A group with such a child shows an informational strip ABOVE the composer,
+/// never in its place. A parent reads the reason for each child and gets "Go to Subscriptions"
+/// ("عرض الاشتراكات"); a teacher reads only that new lessons are paused and the chat stays open
+/// -- nothing financial, even if a server sent it.
 void main() {
   late FakeBackend backend;
   late FakeVoiceRecorder recorder;
@@ -126,94 +126,102 @@ void main() {
     });
   });
 
-  group('the locked banner replaces the composer', () {
-    testWidgets('a parent: each child with the reason, and Go to Subscriptions at that child', (tester) async {
+  const enLine = 'The chat stays open, and lessons already booked go ahead.';
+  const arLine = 'المحادثة تبقى مفتوحة، والحصص المحجوزة مسبقًا تُقام في موعدها.';
+  // Anything that tells the family's financial state.
+  final financialText = RegExp(r'used up|overdue|instalment|Subscriptions|انتهت|متأخر|القسط|الاشتراكات|2/3');
+
+  group('D-3: the banner sits above the composer; the chat stays open', () {
+    testWidgets('a parent: each child with the reason, Go to Subscriptions at that child, and the composer', (tester) async {
       final opened = <String>[];
       await tester.pumpWidget(harness(role: UserRole.parent, conversation: locked(parentLock), onOpenSubscriptions: opened.add));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('payment-lock-banner')), findsOneWidget);
-      expect(find.text('Lessons are paused'), findsOneWidget);
+      expect(find.text('New lessons are paused'), findsOneWidget);
       expect(find.text('Adam: lessons used up'), findsOneWidget);
       // Overdue from the day after the due date.
       expect(find.text('Sara: instalment 2/3 overdue since Oct 2, 2026'), findsOneWidget);
-      // No composer: no text field, no send, no attach.
-      expect(find.byType(TextField), findsNothing);
-      expect(find.byIcon(Icons.send), findsNothing);
+      expect(find.text(enLine), findsOneWidget);
+      expect(find.text('Go to Subscriptions'), findsNWidgets(2));
+      // The composer stays, below the banner -- even though this lock says readOnly
+      // (no server sends that any more; an old one must not close the chat).
+      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('payment-lock-banner'))).dy,
+        lessThan(tester.getTopLeft(find.byType(TextField)).dy),
+      );
 
       await tester.tap(find.byKey(const ValueKey('payment-lock-open-k2')));
       expect(opened, ['k2']);
     });
 
-    testWidgets('a teacher: only that the lessons are paused -- no reason, no button', (tester) async {
-      const teacherLock = PaymentLock(readOnly: true, canPay: false, children: [LockedChild(id: 'k1', name: 'Adam')]);
-      await tester.pumpWidget(harness(role: UserRole.teacher, conversation: locked(teacherLock), onOpenSubscriptions: (_) {}));
+    testWidgets('a parent, in Arabic: the reason and «عرض الاشتراكات»', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, conversation: locked(parentLock), onOpenSubscriptions: (_) {}, locale: const Locale('ar')));
       await tester.pumpAndSettle();
 
-      expect(find.text("Adam's lessons are paused"), findsOneWidget);
-      expect(find.textContaining('used up'), findsNothing);
-      expect(find.textContaining('overdue'), findsNothing);
-      expect(find.byKey(const ValueKey('payment-lock-open-k1')), findsNothing);
-      expect(find.byType(TextField), findsNothing);
-    });
-
-    testWidgets('staff (readOnly false): the composer stays', (tester) async {
-      await tester.pumpWidget(harness(
-        role: UserRole.sales,
-        conversation: locked(const PaymentLock(readOnly: false, canPay: false, children: [LockedChild(id: 'k1', name: 'Adam', reasons: ['balance'])])),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('payment-lock-banner')), findsNothing);
+      expect(find.text('حجز الحصص الجديدة متوقف مؤقتًا'), findsOneWidget);
+      expect(find.text('Adam: انتهت الحصص'), findsOneWidget);
+      expect(find.textContaining('Sara: القسط 2/3 متأخر منذ'), findsOneWidget);
+      expect(find.text(arLine), findsOneWidget);
+      expect(find.text('عرض الاشتراكات'), findsNWidgets(2));
+      expect(find.text('الذهاب إلى الاشتراكات'), findsNothing);
       expect(find.byType(TextField), findsOneWidget);
     });
 
-    // PD-30 amendment (owner, 2026-11-06): the server sends readOnly false to everyone, so a
-    // locked child's group keeps its composer for the parent and the teacher in this build too.
-    for (final role in [UserRole.parent, UserRole.teacher]) {
-      testWidgets('${role.name} with readOnly false (chat stays open): the composer stays', (tester) async {
-        await tester.pumpWidget(harness(
-          role: role,
-          conversation: locked(const PaymentLock(readOnly: false, canPay: false, children: [LockedChild(id: 'k1', name: 'Adam')])),
-        ));
+    testWidgets('a parent, a child the server gave no reason for: "new lessons paused"', (tester) async {
+      await tester.pumpWidget(harness(
+        role: UserRole.parent,
+        conversation: locked(const PaymentLock(readOnly: false, canPay: true, children: [LockedChild(id: 'k1', name: 'Adam')])),
+        onOpenSubscriptions: (_) {},
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Adam: new lessons paused'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    for (final (locale, title, line) in [
+      (const Locale('en'), 'New lessons are paused', enLine),
+      (const Locale('ar'), 'حجز الحصص الجديدة متوقف مؤقتًا', arLine),
+    ]) {
+      testWidgets('a teacher (${locale.languageCode}): only the heading and that the chat stays open -- nothing financial', (tester) async {
+        // Even a lock carrying reasons and canPay (no server sends a teacher that) shows nothing financial.
+        await tester.pumpWidget(harness(role: UserRole.teacher, conversation: locked(parentLock), onOpenSubscriptions: (_) {}, locale: locale));
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const ValueKey('payment-lock-banner')), findsNothing);
+        expect(find.text(title), findsOneWidget);
+        expect(find.text(line), findsOneWidget);
+        expect(find.byKey(const ValueKey('payment-lock-child-k1')), findsNothing);
+        expect(find.byKey(const ValueKey('payment-lock-open-k1')), findsNothing);
+        expect(find.byType(FilledButton), findsNothing);
+        final banner = find.byKey(const ValueKey('payment-lock-banner'));
+        final texts = tester.widgetList<Text>(find.descendant(of: banner, matching: find.byType(Text)));
+        for (final t in texts) {
+          expect(t.data ?? t.textSpan?.toPlainText() ?? '', isNot(matches(financialText)));
+        }
         expect(find.byType(TextField), findsOneWidget);
       });
     }
 
-    testWidgets('in Arabic', (tester) async {
-      await tester.pumpWidget(harness(role: UserRole.parent, conversation: locked(parentLock), onOpenSubscriptions: (_) {}, locale: const Locale('ar')));
+    testWidgets('staff: the reasons, no pay button, and the composer', (tester) async {
+      await tester.pumpWidget(harness(
+        role: UserRole.sales,
+        conversation: locked(const PaymentLock(readOnly: false, canPay: false, children: [LockedChild(id: 'k1', name: 'Adam', reasons: ['balance'])])),
+        onOpenSubscriptions: (_) {},
+      ));
       await tester.pumpAndSettle();
 
-      expect(find.text('الحصص متوقفة مؤقتًا'), findsOneWidget);
-      expect(find.text('Adam: انتهت الحصص'), findsOneWidget);
-      expect(find.text('الذهاب إلى الاشتراكات'), findsNWidgets(2));
+      expect(find.text('Adam: lessons used up'), findsOneWidget);
+      expect(find.byKey(const ValueKey('payment-lock-open-k1')), findsNothing);
+      expect(find.byType(TextField), findsOneWidget);
     });
-  });
 
-  testWidgets('a send refused as COMM.SUBSCRIPTION_LOCKED shows the banner, not an error', (tester) async {
-    final conversations = _LockedOnRead(backend, parentLock);
-    await tester.pumpWidget(harness(
-      role: UserRole.parent,
-      messages: _RefusesLocked(backend),
-      conversations: conversations,
-      onOpenSubscriptions: (_) {},
-    ));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('payment-lock-banner')), findsNothing);
-
-    await tester.enterText(find.byType(TextField), 'Hello');
-    // The send button replaces the microphone only once the field has text.
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pumpAndSettle();
-
-    expect(conversations.reads, 1);
-    expect(find.byKey(const ValueKey('payment-lock-banner')), findsOneWidget);
-    expect(find.text('Adam: lessons used up'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
+    testWidgets('no child paused: no banner', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('payment-lock-banner')), findsNothing);
+      expect(find.byType(TextField), findsOneWidget);
+    });
   });
 
   group('PD-30 cards in the thread', () {
@@ -234,12 +242,13 @@ void main() {
           'card': {'kind': kind, 'lessonId': null, 'payload': payload},
         }, viewerActorId: 'p1');
 
-    Widget bubble(Message m) => ProviderScope(
+    Widget bubble(Message m, {Locale locale = const Locale('en')}) => ProviderScope(
           overrides: [currentRoleProvider.overrideWithValue(UserRole.parent)],
           child: MaterialApp(
-            theme: JawwidTheme.light(isArabic: false),
+            locale: locale,
+            theme: JawwidTheme.light(isArabic: locale.languageCode == 'ar'),
             supportedLocales: JawwidApp.supportedLocales,
-            localizationsDelegates: const [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate],
+            localizationsDelegates: const [L10n.delegate, ...GlobalMaterialLocalizations.delegates],
             home: Scaffold(body: MessageBubble(message: m, showAuthor: true)),
           ),
         );
@@ -252,11 +261,12 @@ void main() {
       }
     });
 
-    testWidgets('paused, locked and back on have their own card', (tester) async {
+    testWidgets('paused, locked and back on have their own card (D-3)', (tester) async {
       await tester.pumpWidget(bubble(card('lessons_paused', const {'learnerId': 'k1', 'learnerName': 'Adam'}, 'fallback')));
       await tester.pumpAndSettle();
-      expect(find.text('Lessons paused'), findsOneWidget);
+      expect(find.text('New lessons paused'), findsOneWidget);
       expect(find.text('Adam'), findsOneWidget);
+      expect(find.text('Lessons already booked go ahead, and this chat stays open.'), findsOneWidget);
       expect(find.text('fallback'), findsNothing);
 
       await tester.pumpWidget(bubble(card('subscription_locked', const {
@@ -267,40 +277,40 @@ void main() {
         'overdueSince': '2026-10-02',
       }, 'fallback')));
       await tester.pumpAndSettle();
-      expect(find.text('Lessons paused — payment'), findsOneWidget);
+      expect(find.text('New lessons paused — payment'), findsOneWidget);
       expect(find.text('Lessons used up'), findsOneWidget);
       // overdueSince is already the day after the due date; shown in the reader's format.
       expect(find.textContaining('Instalment 2/3 overdue since'), findsOneWidget);
       expect(find.textContaining('Oct 2'), findsOneWidget);
-      expect(find.text('Renew or pay in Subscriptions.'), findsOneWidget);
+      expect(
+        find.text('Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'),
+        findsOneWidget,
+      );
 
       await tester.pumpWidget(bubble(card('subscription_unlocked', const {'learnerId': 'k1', 'learnerName': 'Adam'}, 'fallback')));
       await tester.pumpAndSettle();
-      expect(find.text('Lessons are back on'), findsOneWidget);
+      expect(find.text('New lessons are back on'), findsOneWidget);
+    });
+
+    testWidgets('in Arabic (D-3)', (tester) async {
+      await tester.pumpWidget(bubble(card('lessons_paused', const {'learnerId': 'k1', 'learnerName': 'آدم'}, 'fallback'), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(find.text('توقّف حجز الحصص الجديدة'), findsOneWidget);
+      expect(find.text('الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة.'), findsOneWidget);
+
+      await tester.pumpWidget(bubble(card('subscription_locked', const {
+        'learnerId': 'k1', 'learnerName': 'آدم', 'reasons': ['balance'],
+      }, 'fallback'), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(find.text('توقّف حجز الحصص الجديدة — الدفع'), findsOneWidget);
+      expect(
+        find.text('الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».'),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(bubble(card('subscription_unlocked', const {'learnerId': 'k1', 'learnerName': 'آدم'}, 'fallback'), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(find.text('عادت الحصص الجديدة'), findsOneWidget);
     });
   });
-}
-
-/// Every send is refused: the group locked after the screen opened.
-class _RefusesLocked extends FakeMessageRepository {
-  _RefusesLocked(super.backend);
-
-  @override
-  Future<Message> send(OutgoingMessage message) async =>
-      throw const AppError(AppErrorKind.forbidden, code: BillingErrors.subscriptionLocked);
-}
-
-/// The conversation, read again after the refusal, says which child and why.
-class _LockedOnRead extends FakeConversationRepository {
-  _LockedOnRead(super.backend, this.lock);
-
-  final PaymentLock lock;
-  int reads = 0;
-
-  @override
-  Future<Conversation> byId(String conversationId) async {
-    reads++;
-    final c = await super.byId(conversationId);
-    return Conversation(id: c.id, kind: c.kind, title: c.title, updatedAt: c.updatedAt, paymentLock: lock);
-  }
 }

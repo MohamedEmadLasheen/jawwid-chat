@@ -342,7 +342,7 @@ describe('Conversations', () => {
           // PD-30: a card the system posted carries its own words.
           {
             id: 's3', seq: '3', authorKind: 'system', authorName: null, type: 'card',
-            visibility: 'customer', moderation: 'published', body: "⏸️ Adam's lessons are paused.",
+            visibility: 'customer', moderation: 'published', body: "⏸️ New lessons for Adam are paused for now. Lessons already booked go ahead, and this chat stays open.",
             deleted: false, attachments: 0, createdAt: NOW,
           },
         ],
@@ -352,7 +352,7 @@ describe('Conversations', () => {
 
     expect(await screen.findByText('Student Group created for Learner L')).toBeInTheDocument()
     expect(screen.getByText('System update')).toBeInTheDocument()
-    expect(screen.getByText("⏸️ Adam's lessons are paused.")).toBeInTheDocument()
+    expect(screen.getByText("⏸️ New lessons for Adam are paused for now. Lessons already booked go ahead, and this chat stays open.")).toBeInTheDocument()
     expect(screen.queryByText(/"kind"/)).not.toBeInTheDocument()
   })
 })
