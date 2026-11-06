@@ -8,6 +8,7 @@ import '../core/data/http/http_account_deletion_repository.dart';
 import '../core/data/http/http_account_recovery_repository.dart';
 import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_billing_repository.dart';
+import '../core/data/http/http_block_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_feedback_repository.dart';
@@ -254,6 +255,8 @@ List<Override> _httpOverrides() {
     moderationRepositoryProvider.overrideWithValue(
       HttpModerationRepository(client: client),
     ),
+    // PD-57 (WP-2B): blocking and unblocking a person, and the user's own blocks.
+    blockRepositoryProvider.overrideWithValue(HttpBlockRepository(client: client)),
     // PD-39: the teacher's boards (the whiteboard).
     whiteboardsRepositoryProvider.overrideWithValue(
       HttpWhiteboardsRepository(client: client),
@@ -423,6 +426,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     feedbackRepositoryProvider.overrideWithValue(FakeFeedbackRepository()),
     // PD-57: in memory, the fixture user's OWN reports.
     moderationRepositoryProvider.overrideWithValue(FakeModerationRepository()),
+    // PD-57 (WP-2B): in memory, the fixture user's OWN blocks.
+    blockRepositoryProvider.overrideWithValue(FakeBlockRepository()),
     // PD-39: boards in memory, for trying the Boards tab without an API.
     whiteboardsRepositoryProvider.overrideWithValue(FakeWhiteboardsRepository()),
     // A Sales seat can join a fixture trial group (PD-20).

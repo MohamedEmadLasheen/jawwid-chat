@@ -189,6 +189,26 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.SCHEDULED_CALL_DENIED` | 403 | PD-13: only the person who scheduled a call cancels it. (Scheduling itself answers with the call-capability refusal, e.g. `COMM.PARENT_CANNOT_START_GROUP_CALL`.) Never retry. |
 | `COMM.SCHEDULED_CALL_NOT_JOINABLE` | 409 | PD-13: cancelled, not open yet (more than 10 minutes before its start), or over (2 hours after it). Show the state; do not retry automatically. |
 
+| `COMM.REPORT_TARGET_NOT_VISIBLE` | 404 | PD-57: `POST /reports` -- the message is not one the reporter can read now (another conversation, deleted, hidden for them, no such message), or the person shares no conversation with them (or there is no such person). One answer for all, so a report never confirms that anything exists. |
+| `COMM.REPORT_SELF` | 400 | PD-57: the reporter's own message, or themself. |
+| `COMM.REPORT_NOT_REPORTABLE` | 400 | PD-57: a system or card message (the academy's), or the academy's official account, a manager or the Super Admin (the administrative channel). |
+| `COMM.REPORT_NOTE_REQUIRED` | 400 | PD-57: the reason `other` needs a note (1-500 characters; a blank note is no note). |
+| `COMM.REPORT_KEY_REUSED` | 409 | PD-57: this Idempotency-Key was used by the same reporter for another report. Send the new report with a new key. |
+| `COMM.REPORT_NOT_FOUND` | 404 | PD-57: no such report in the caller's organization; another organization's answers the same. Also (closure plan 2026-11-06 §3): a report outside the caller's moderation scope (another department's, a child-safety report without `moderation.child_safety`, or one about the caller), on the queue's detail, take, resolve and attachment routes. |
+| `COMM.REPORT_ATTACHMENT_NOT_FOUND` | 404 | PD-57: `POST /moderation/reports/:id/attachments/:index/url` -- the report has no attachment at that index (the report itself is in the caller's scope). |
+| `COMM.BLOCK_NOT_ALLOWED` | 403 | PD-57: `POST /me/blocks` -- the caller is staff, or the target is themself, the official account, a department manager or the Super Admin. `error.detail.reason`: `staff_caller`, `self`, `official_account`, `manager`, `super_admin`. |
+| `COMM.BLOCK_NO_SHARED_CONVERSATION` | 404 | PD-57: `POST /me/blocks` -- no such person, or none the caller is a live member of a conversation with. |
+| `COMM.BLOCK_NOT_FOUND` | 404 | PD-57: `DELETE /me/blocks/:id` -- no block of the caller's with this id. |
+| `COMM.DIRECT_BLOCKED` | 403 | PD-57: `POST /conversations/direct` -- the other person blocked the caller. Staff covering the family's direct conversation are not affected. |
+| `COMM.CALL_UNAVAILABLE` | 409 | PD-57: `POST /calls` -- everyone the call would ring blocked the caller, and it is not a lesson call; answered like a busy line, nobody is rung. |
+| `COMM.REPORT_ALREADY_TAKEN` | 409 | PD-57: `POST /moderation/reports/:id/take` -- another staff member already took it. Taking one's own again answers 200. Reload. |
+| `COMM.REPORT_CLOSED` | 409 | PD-57: the report is actioned or dismissed and never changes. A resolve replayed by the same staff member with the same Idempotency-Key answers 200 instead. Reload. |
+
+`POST /reports` over its limit (`report.limit.per_reporter_hour`, 10 per rolling
+hour, counted from the reports themselves) answers `COMMON.RATE_LIMITED` (429) with
+`Retry-After`. A duplicate of the reporter's open report is answered (200) whatever
+the count. `COMM.TERMS_NOT_ACCEPTED` (403) joins it once ENG-10's terms guard lands.
+
 Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
 file that was not uploaded into the learner's group, and
 `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` (400) when the stored bytes are not the PDF or

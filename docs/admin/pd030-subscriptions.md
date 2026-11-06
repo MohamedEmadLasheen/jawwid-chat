@@ -31,7 +31,7 @@ because an instalment becomes overdue by the calendar.
 - **Grace**: at balance 0 two more lessons may happen ("2 left", then "1 left"); at −2 the child is locked.
   `subscription.grace_lessons` in `chat.config` (default 2).
 - **Overdue**: an instalment of this child's **lesson package** (`lesson_subscription_id` names a
-  standing `chat.learner_subscription`; D-2, owner 2026-11-06, migration `20261106130000`), unpaid
+  standing `chat.learner_subscription`; D-2, owner 2026-11-06, migration `20261106160000`), unpaid
   (`paid_on` null — paid in part is still unpaid), not voided, due before today and **on or after
   `subscription.overdue_from`**. An instalment that names no package (a family-wide one, or one never
   verified as lessons, which is also not payable in the app) is listed but never locks.

@@ -484,6 +484,8 @@ abstract final class WireMappers {
       createdAt: parseTime(json['createdAt']) ?? DateTime.now(),
       isMine: isMine,
       isDeleted: json['deletedAt'] != null || json['deletedForAll'] == true,
+      // PD-57: only a literal true hides; an absent field (an older server) never does.
+      isHiddenByBlock: json['hiddenByBlock'] == true,
     );
   }
 

@@ -49,7 +49,7 @@ turns enforcement on in production.
   - **Dependency:** how far ahead lessons are materialized decides how many lessons a lapsed
     family keeps receiving. Measure the horizon before choosing.
 - **D-2. What starts the lock. APPROVED (recommended option), 2026-11-06; migration
-  `20261106130000_chat_pd030_lock_lesson_instalments`.** An overdue instalment that is not for a lesson package (R-4:
+  `20261106160000_chat_pd030_lock_lesson_instalments`.** An overdue instalment that is not for a lesson package (R-4:
   `lesson_subscription_id` is null) still starts the lock (reason `overdue`).
   - **Recommended:** count only instalments of a lesson package, so a non-lesson debt never
     pauses lessons.

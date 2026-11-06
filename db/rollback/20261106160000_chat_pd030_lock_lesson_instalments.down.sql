@@ -1,9 +1,9 @@
--- Roll back 20261106130000_chat_pd030_lock_lesson_instalments: every overdue
+-- Roll back 20261106160000_chat_pd030_lock_lesson_instalments: every overdue
 -- instalment of the child (or of the family, naming no child) locks again, as in
 -- 20261028110000. The stored chat.learner_access rows follow on the effects
 -- worker's next pass.
 --
---   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261106130000_chat_pd030_lock_lesson_instalments.down.sql
+--   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261106160000_chat_pd030_lock_lesson_instalments.down.sql
 
 set local lock_timeout = '5s';
 
@@ -87,4 +87,4 @@ $$;
 
 revoke all on function chat.compute_learner_access(uuid) from public;
 
-delete from chat.schema_migrations where version = '20261106130000_chat_pd030_lock_lesson_instalments';
+delete from chat.schema_migrations where version = '20261106160000_chat_pd030_lock_lesson_instalments';

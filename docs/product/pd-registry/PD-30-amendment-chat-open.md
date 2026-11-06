@@ -28,7 +28,7 @@ What changes from PD-30 (2026-10-26):
    lessons booked before the lock.
 4. **D-2: only a lesson package's instalment locks.** An overdue instalment locks only when it names a
    standing lesson package (`family_instalment.lesson_subscription_id`, R-4); migration
-   `20261106130000_chat_pd030_lock_lesson_instalments`. So an instalment that locks is always one the
+   `20261106160000_chat_pd030_lock_lesson_instalments`. So an instalment that locks is always one the
    family can pay in the app.
 
 Still to do (D-3, the owner's wording): the group card ("the lessons are paused"), the supervisor

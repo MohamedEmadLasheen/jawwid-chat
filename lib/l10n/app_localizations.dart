@@ -9180,6 +9180,168 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Our answer'**
   String get myReportsAnswerLabel;
+
+  /// PD-57: the Block button and the confirm button of the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get blockAction;
+
+  /// PD-57: the Unblock button (placeholder, composer bar, Blocked people, profile).
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock'**
+  String get unblockAction;
+
+  /// PD-57: row on a one-to-one profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Block this person'**
+  String get blockPersonAction;
+
+  /// PD-57: row on a one-to-one profile, when the person is blocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock this person'**
+  String get unblockPersonAction;
+
+  /// PD-57: used in place of a name the server did not send.
+  ///
+  /// In en, this message translates to:
+  /// **'this person'**
+  String get blockPersonFallbackName;
+
+  /// PD-57: title of the confirmation before blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Block {name}?'**
+  String blockConfirmTitle(String name);
+
+  /// PD-57: what a block does.
+  ///
+  /// In en, this message translates to:
+  /// **'They won\'t be able to message or call you, and you won\'t see their messages.'**
+  String get blockConfirmBody;
+
+  /// PD-57 D-6: the educational exceptions, said plainly.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons continue as usual: lesson calls, lesson cards and messages from the academy still reach you.'**
+  String get blockConfirmLessons;
+
+  /// PD-57: every block notifies the responsible managers.
+  ///
+  /// In en, this message translates to:
+  /// **'The academy is told, so they can follow up.'**
+  String get blockConfirmAcademy;
+
+  /// PD-57: calm confirmation after blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is blocked.'**
+  String blockedSnack(String name);
+
+  /// PD-57: title of the confirmation before unblocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock {name}?'**
+  String unblockConfirmTitle(String name);
+
+  /// PD-57: what an unblock does.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll see their messages again, and they can message and call you.'**
+  String get unblockConfirmBody;
+
+  /// PD-57: calm confirmation after unblocking.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is unblocked.'**
+  String unblockedSnack(String name);
+
+  /// PD-57: COMM.BLOCK_NOT_ALLOWED (403): staff, a protected account, or yourself.
+  ///
+  /// In en, this message translates to:
+  /// **'This person can\'t be blocked. You can report them instead.'**
+  String get blockErrorNotAllowed;
+
+  /// PD-57: COMM.BLOCK_NO_SHARED_CONVERSATION (404).
+  ///
+  /// In en, this message translates to:
+  /// **'You can only block someone you share a conversation with.'**
+  String get blockErrorNoSharedConversation;
+
+  /// PD-57: COMMON.RATE_LIMITED (429).
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve blocked many people today. Please try again later.'**
+  String get blockErrorRateLimited;
+
+  /// PD-57: COMM.TERMS_NOT_ACCEPTED (403).
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the terms of use first, then you can block.'**
+  String get blockErrorTerms;
+
+  /// PD-57: any other failure while blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t block them right now. Please try again.'**
+  String get blockErrorGeneric;
+
+  /// PD-57: any failure while unblocking.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t unblock them right now. Please try again.'**
+  String get unblockErrorGeneric;
+
+  /// PD-57: one line in place of a blocked person's message.
+  ///
+  /// In en, this message translates to:
+  /// **'Message hidden: you blocked this person'**
+  String get hiddenByBlockPlaceholder;
+
+  /// PD-57: stands where the composer was, in a direct chat with someone you blocked.
+  ///
+  /// In en, this message translates to:
+  /// **'You blocked {name}. Unblock to write.'**
+  String blockedComposerNotice(String name);
+
+  /// PD-57: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked people'**
+  String get blockedPeopleTitle;
+
+  /// PD-57: under the Settings row.
+  ///
+  /// In en, this message translates to:
+  /// **'People you blocked; unblock them any time'**
+  String get blockedPeopleSubtitle;
+
+  /// PD-57: empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No one is blocked'**
+  String get blockedPeopleEmptyTitle;
+
+  /// PD-57: empty state body.
+  ///
+  /// In en, this message translates to:
+  /// **'When you block someone, they appear here and you can unblock them.'**
+  String get blockedPeopleEmptyBody;
+
+  /// PD-57: when the block was made.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked {date}'**
+  String blockedPeopleSince(String date);
+
+  /// PD-57: error state of Blocked people.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t load the people you blocked.'**
+  String get blockedPeopleLoadError;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

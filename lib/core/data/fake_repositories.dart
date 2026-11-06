@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../features/moderation/data/block_repository.dart';
 import '../../features/moderation/data/moderation_repository.dart';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
@@ -527,4 +528,76 @@ class FakeModerationRepository implements ModerationRepository {
 
   @override
   Future<List<MyReport>> mine() async => List.unmodifiable(_reports);
+}
+
+/// PD-57 (WP-2B), in memory: the fixture user's own blocks.
+///
+/// Behaves like the contract where a screen depends on it: blocking someone already blocked
+/// answers the existing block (the 200), the newest block comes first, and unblocking an
+/// unknown id is a 404. [refuseWith] makes every block fail with that code;
+/// [refuseUnblockWith] does the same for unblocking; [failListWith] fails the list.
+class FakeBlockRepository implements BlockRepository {
+  FakeBlockRepository({
+    List<PersonBlock> blocks = const [],
+    this.refuseWith,
+    this.refuseUnblockWith,
+    this.failListWith,
+  }) : _blocks = [...blocks];
+
+  final List<PersonBlock> _blocks;
+
+  String? refuseWith;
+  String? refuseUnblockWith;
+  AppError? failListWith;
+
+  /// What was blocked, oldest first.
+  final blocked = <BlockSubject>[];
+
+  /// The block ids that were unblocked, oldest first.
+  final unblocked = <String>[];
+
+  int _next = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  static AppError _refusal(String code) => AppError(
+        switch (code) {
+          BlockErrors.notAllowed || BlockErrors.termsNotAccepted => AppErrorKind.forbidden,
+          BlockErrors.noSharedConversation => AppErrorKind.notFound,
+          BlockErrors.rateLimited => AppErrorKind.rateLimited,
+          _ => AppErrorKind.server,
+        },
+        code: code,
+      );
+
+  @override
+  Future<PersonBlock> block(BlockSubject subject) async {
+    final code = refuseWith;
+    if (code != null) throw _refusal(code);
+    blocked.add(subject);
+    for (final existing in _blocks) {
+      if (existing.subject == subject) return existing;
+    }
+    final created = PersonBlock(id: 'block_${_next++}', subject: subject, createdAt: DateTime.now());
+    _blocks.insert(0, created);
+    return created;
+  }
+
+  @override
+  Future<List<PersonBlock>> mine() async {
+    final failure = failListWith;
+    if (failure != null) throw failure;
+    return List.unmodifiable(_blocks);
+  }
+
+  @override
+  Future<void> unblock(String blockId) async {
+    final code = refuseUnblockWith;
+    if (code != null) throw _refusal(code);
+    final before = _blocks.length;
+    _blocks.removeWhere((b) => b.id == blockId);
+    if (_blocks.length == before) throw const AppError(AppErrorKind.notFound, code: 'COMMON.NOT_FOUND');
+    unblocked.add(blockId);
+  }
 }

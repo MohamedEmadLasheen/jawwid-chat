@@ -158,6 +158,43 @@ export const CommEvent = {
    * no one.
    */
   TASK_CHANGED: 'task.changed',
+  /**
+   * PD-57 WP-2 (roadmap §6.3, A-2a): a block was made and these responsible
+   * managers were newly told of it (chat.actor_block_manager_notice rows just
+   * inserted; a re-block while the case is open names nobody and is not sent).
+   * Ids only, NEVER a conversation: the worker sends each one
+   * `block_created_manager` (in-app + push, normal quiet hours).
+   */
+  BLOCK_CREATED: 'moderation.block_created',
+  /**
+   * PD-57 ENG-04: a report reached an SLA stage unresolved (`due_soon` at 18 h,
+   * `overdue` at 24 h), written once per stage by the sweep with its marker
+   * (chat.content_report_alert). Ids only; ReportEscalationService delivers it.
+   */
+  REPORT_ESCALATED: 'report.escalated',
+  /**
+   * PD-57 (roadmap §5.4): a report was filed (`change: created`), or an open one
+   * was raised to child_safety by a duplicate (`change: raised`). Ids and the
+   * priority only: NEVER the conversation (the worker would fan it out to the
+   * conversation's room, where the reported person listens), the target, the
+   * reporter or any content.
+   * Delivered by ReportEscalationService (ENG-04): report_received_staff to the
+   * responsible managers, or report_child_safety at once to every Super Admin
+   * and holder of moderation.child_safety.
+   */
+  REPORT_CREATED: 'report.created',
+  /**
+   * PD-57: a report was closed with its answer to the reporter. Ids only.
+   * Delivered to the reporter as report_answered by ReportEscalationService (ENG-04).
+   */
+  REPORT_ANSWERED: 'report.answered',
+  /**
+   * PD-57 closure plan §4: a report was resolved as `warned`. The worker sends
+   * the reported person the fixed Code of Conduct reminder (`conduct_warning`).
+   * The payload names the recipient and a warning id of its own, NEVER the
+   * report, the reporter, the message or the conversation.
+   */
+  CONDUCT_WARNING: 'moderation.conduct_warning',
   /** PD-11 T3, for Core: a learner changed teacher in Chat. */
   LEARNER_TRANSFERRED: 'learner.transferred',
   /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
@@ -200,6 +237,12 @@ export interface MessageCreatedPayload {
    * conversation would be a push storm. Absent = an ordinary message.
    */
   silent?: boolean;
+  /**
+   * PD-57: set only on the copy a blocker of the author receives (the author's
+   * text, image, video, voice or file message), so the placeholder is drawn.
+   * The payload never carries a body for anyone.
+   */
+  hiddenByBlock?: boolean;
 }
 
 export interface MentionCreatedPayload {
@@ -491,6 +534,52 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_COMPLAINT_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TEACHER_PRAISE_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TASK_CHANGED]: TaskChangedPayload;
+  [CommEvent.REPORT_ESCALATED]: ReportEscalatedPayload;
+  [CommEvent.REPORT_CREATED]: ReportCreatedPayload;
+  [CommEvent.REPORT_ANSWERED]: ReportAnsweredPayload;
+  [CommEvent.CONDUCT_WARNING]: ConductWarningPayload;
+  [CommEvent.BLOCK_CREATED]: BlockCreatedPayload;
+}
+
+/** PD-57 ENG-04. Ids and the stage only. */
+export interface ReportEscalatedPayload {
+  organizationId: string;
+  reportId: string;
+  stage: 'due_soon' | 'overdue';
+}
+
+/** PD-57. No conversationId, no content: ENG-04 reads the report through its own path. */
+export interface ReportCreatedPayload {
+  organizationId: string;
+  reportId: string;
+  priority: 'urgent' | 'normal';
+  change: 'created' | 'raised';
+}
+
+/** PD-57. Ids only. */
+export interface ReportAnsweredPayload {
+  organizationId: string;
+  reportId: string;
+}
+
+/** PD-57. The warned person; `warningId` is the notification's own key, unrelated to the report. */
+export interface ConductWarningPayload {
+  organizationId: string;
+  warningId: string;
+  recipientKind: 'contact' | 'teacher' | 'staff';
+  recipientId: string;
+}
+
+/** PD-57 WP-2. Ids only. */
+export interface BlockCreatedPayload {
+  organizationId: string;
+  blockId: string;
+  reportId: string;
+  blockerKind: 'contact' | 'teacher';
+  blockerId: string;
+  blockedKind: 'contact' | 'teacher' | 'staff';
+  blockedId: string;
+  managerStaffIds: string[];
 }
 
 /** PD-47. A client drops a revision lower than one it has; it refetches through its own authorized route. */
