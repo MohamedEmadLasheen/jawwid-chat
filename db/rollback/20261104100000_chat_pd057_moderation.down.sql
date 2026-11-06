@@ -170,6 +170,6 @@ drop function if exists chat.guard_actor_block_manager_notice();
 drop function if exists chat.guard_actor_block();
 drop function if exists chat.guard_content_report();
 
-delete from chat.config where key = 'report.limit.per_reporter_hour';
+delete from chat.config where key in ('report.limit.per_reporter_hour', 'block.limit.per_blocker_day');
 
 delete from chat.schema_migrations where version = '20261104100000_chat_pd057_moderation';

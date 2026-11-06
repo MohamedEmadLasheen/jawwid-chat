@@ -1,6 +1,8 @@
 # Google Play blockers: implementation roadmap
 
 **Revision 2, 2026-11-03.**
+
+> **Amended 2026-11-06 by owner decisions D-1 to D-6** (`pd57-closure-plan-2026-11-06.md`): the report SLA is **24 h** (alerts at 18 h and 24 h), moderation access is scoped by department, child-safety reports are restricted to the Super Admin and `moderation.child_safety`, and blocking is enforced on the server with explicit educational exceptions. Where the two differ, the closure plan wins.
 - It replaces revision 1 (local commit `4551a81a`) and adds the owner's approved decisions.
 - **State: PLAN. No product code is written.** Nothing is pushed, merged, deployed, uploaded or published.
 - Base: `main` @ `3d669299`. Paths are relative to the repository root. Line numbers are from that commit and are a guide, not a contract.
