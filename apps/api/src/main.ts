@@ -11,7 +11,7 @@ import { readBuildInfo } from './infra/build-info';
 import { loadAuthConfig } from './platform/auth/auth.config';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 import { JsonLogger } from './infra/observability/json-logger';
-import { createErrorTracker } from './infra/observability/error-tracker';
+import { createErrorTracker, setProcessErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
 import {
@@ -41,6 +41,8 @@ const logger = new JsonLogger('api', build);
 // developer machine). Created alongside the logger, and the process handlers
 // installed at once, so a failure during wiring is reported too.
 const errors = createErrorTracker('api', build);
+// The same tracker for the code Nest instantiates itself (the realtime gateway's filter).
+setProcessErrorTracker(errors);
 installProcessErrorHandlers(errors, logger);
 
 async function bootstrap(): Promise<void> {

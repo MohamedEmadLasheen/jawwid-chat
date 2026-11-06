@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/node';
 import { isPrismaError, redact, safeErrorMessage } from './redact';
 import type { BuildInfoLike, ErrorContext, ErrorTracker } from './error-tracker';
+import { ErrorBudget, errorKind, isCriticalReport } from './error-budget';
 
 /**
  * Error tracking via Sentry. Loaded only when SENTRY_DSN is set (error-tracker.ts).
@@ -33,6 +34,13 @@ import type { BuildInfoLike, ErrorContext, ErrorTracker } from './error-tracker'
  *
  * Layer 3 is written to be sufficient alone, and it is what the tests assert,
  * both directly and through a real SDK client with an in-memory transport.
+ *
+ * ## Volume
+ *
+ * Every report passes an ErrorBudget first (error-budget.ts): one event per
+ * kind of failure per 15 minutes, 20 an hour per process, so an outage cannot
+ * spend the month's quota in minutes. An event sent after a quiet spell
+ * carries `suppressed`, the number of the same kind held back meanwhile.
  */
 export class SentryErrorTracker implements ErrorTracker {
   readonly name = 'sentry';
@@ -43,6 +51,8 @@ export class SentryErrorTracker implements ErrorTracker {
     build: BuildInfoLike,
     /** Tests only: an in-memory transport, so nothing leaves the process. */
     overrides: Pick<Sentry.NodeOptions, 'transport'> = {},
+    /** Tests only: a budget on a fake clock. */
+    private readonly budget: ErrorBudget = new ErrorBudget(),
   ) {
     Sentry.init({ ...sentryOptions(dsn, component, build), ...overrides });
   }
@@ -53,6 +63,11 @@ export class SentryErrorTracker implements ErrorTracker {
 
   captureException(error: unknown, context: ErrorContext = {}): void {
     try {
+      const decision = this.budget.admit(errorKind(error, context), isCriticalReport(context));
+      if (!decision.send) return;
+      const extra: Record<string, unknown> = {};
+      if (context.requestId) extra.request_id = context.requestId;
+      if (decision.suppressed > 0) extra.suppressed = decision.suppressed;
       Sentry.captureException(error, {
         tags: {
           route: context.route,
@@ -61,8 +76,9 @@ export class SentryErrorTracker implements ErrorTracker {
           component: context.component,
         },
         // The request id, so an event joins the log line that recorded the
-        // same failure. An opaque per-request id; it identifies nobody.
-        extra: context.requestId ? { request_id: context.requestId } : undefined,
+        // same failure. An opaque per-request id; it identifies nobody. And
+        // how many of the same kind the budget held back since the last one.
+        extra: Object.keys(extra).length > 0 ? extra : undefined,
       });
     } catch {
       /* reporting an error must never become the error */
@@ -123,7 +139,7 @@ type Frame = NonNullable<NonNullable<Sentry.Exception['stacktrace']>['frames']>[
  *                 mechanism type/handled; frames as filename, function, module,
  *                 line, column, in_app -- never vars, never source lines
  *   tags          the five this application sets, values redacted
- *   extra         request_id only, redacted
+ *   extra         request_id (redacted) and suppressed (a count) only
  *   contexts      runtime and os
  *
  * Everything else -- request, user, breadcrumbs, server_name, transaction,
@@ -179,8 +195,12 @@ export function scrubEvent(event: Sentry.ErrorEvent, hint?: Sentry.EventHint): S
   }
   if (Object.keys(tags).length > 0) out.tags = tags;
 
+  const extra: Record<string, string | number> = {};
   const requestId = event.extra?.request_id;
-  if (typeof requestId === 'string') out.extra = { request_id: redact(requestId) };
+  if (typeof requestId === 'string') extra.request_id = redact(requestId);
+  const suppressed = event.extra?.suppressed;
+  if (typeof suppressed === 'number' && Number.isSafeInteger(suppressed) && suppressed > 0) extra.suppressed = suppressed;
+  if (Object.keys(extra).length > 0) out.extra = extra;
 
   const contexts: NonNullable<Sentry.ErrorEvent['contexts']> = {};
   for (const key of ALLOWED_CONTEXTS) {

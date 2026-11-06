@@ -25,7 +25,7 @@ import { DepartmentRoomService } from './org/department-room.service';
 import { WhiteboardService } from './whiteboards/whiteboard.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
-import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
+import { createErrorTracker, setProcessErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
 import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
 import { safeErrorMessage } from './infra/observability/redact';
 import { LessonEvents } from './lessons/lesson-events';
@@ -197,6 +197,8 @@ const logger = new JsonLogger('worker', build);
 // subsystem error to keep the others running. Without a tracker those are a
 // log line on a machine nobody is watching. Inert without SENTRY_DSN.
 const errors: ErrorTracker = createErrorTracker('worker', build);
+// The same tracker for the code Nest instantiates itself (the realtime gateway's filter).
+setProcessErrorTracker(errors);
 installProcessErrorHandlers(errors, logger);
 
 /**
