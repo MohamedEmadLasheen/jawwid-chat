@@ -263,6 +263,9 @@ describe('§6.4-1 and §6.4-7: a parent blocks their supervisor', () => {
     const report = await g.prisma.contentReport.findUniqueOrThrow({ where: { id: blockRow.caseReportId! } });
     expect(report).toMatchObject({ reason: 'blocked', targetKind: 'person', reporterKind: 'contact', reporterId: f.parent.id, subjectKind: 'staff', subjectId: supervisorId, status: 'open', priority: 'normal' });
     expect(report.departmentIds).toContain(m.departments.operations);
+    // A NEW case is announced like any report (ENG-02's report.created, ids and priority only).
+    const announced = await g.prisma.outboxEvent.findMany({ where: { type: 'report.created', payload: { path: ['reportId'], equals: report.id } } });
+    expect(announced.map((e) => e.payload)).toEqual([{ organizationId: orgId, reportId: report.id, priority: 'normal', change: 'created' }]);
     const audit = await g.prisma.auditLog.findFirstOrThrow({ where: { action: 'block.created', entityId: blockRow.id } });
     expect(JSON.stringify(audit.after)).not.toMatch(/words/);
 
@@ -329,6 +332,8 @@ describe('§6.4-1 / A-2a: the responsible managers', () => {
       expect(await blockedNotices(row.caseReportId!)).toHaveLength(2);
       expect(await managerItems(row.caseReportId!)).toHaveLength(2);
       expect(await g.prisma.contentReport.count({ where: { reporterId: f.parent.id, reason: 'blocked' } })).toBe(1);
+      // The re-block re-used the case: still one report.created for it.
+      expect(await g.prisma.outboxEvent.count({ where: { type: 'report.created', payload: { path: ['reportId'], equals: row.caseReportId! } } })).toBe(1);
     } finally {
       await moveTo(m.departments.operations);
     }
@@ -342,6 +347,8 @@ describe('§6.4-1 / A-2a: the responsible managers', () => {
     const r = await block(f.parent.subject, 'teacher', teacherId);
     expect(r.status).toBe(201);
     expect((await g.prisma.actorBlock.findUniqueOrThrow({ where: { id: r.json.id } })).caseReportId).toBe(filed.json.id);
+    // Re-using an open report announces nothing more: only the report's own filing.
+    expect(await g.prisma.outboxEvent.count({ where: { type: 'report.created', payload: { path: ['reportId'], equals: filed.json.id } } })).toBe(1);
   });
 
   it('a teacher who blocks a parent: the department manager of the teacher\'s supervisor is told', async () => {

@@ -57,7 +57,8 @@ export interface BlockDto {
  *             re-uses its open case and would not be counted.
  *   the case  the blocker's open person report about the blocked person (any
  *             reason) is the case, else a new `blocked` one (§6.1 rule 4), its
- *             departments from both sides (closure plan §3)
+ *             departments from both sides (closure plan §3); a new case is
+ *             announced with ENG-02's `report.created`, a re-used one is not
  *   managers  §6.3, one notice per (case, manager), ON CONFLICT DO NOTHING:
  *             re-blocking while the case is open tells nobody again; only the
  *             notices actually written are sent `block_created_manager`
@@ -330,7 +331,16 @@ export class BlocksService {
         // The database sets the clock and the priority; this only satisfies the type.
         dueAt: new Date(Date.now() + DUE_MS),
       },
-      select: { id: true },
+      select: { id: true, priority: true },
+    });
+    // A NEW case is announced exactly as ENG-02 announces a report (ReportCreatedPayload),
+    // so the queue's flow is one. A re-used open report announces nothing more.
+    // (ENG-04 sends no immediate staff alert for reason `blocked`: block_created_manager is it.)
+    await this.outbox.enqueue(tx, CommEvent.REPORT_CREATED, {
+      organizationId,
+      reportId: created.id,
+      priority: created.priority as 'urgent' | 'normal',
+      change: 'created',
     });
     return created.id;
   }
