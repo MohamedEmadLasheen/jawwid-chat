@@ -30,7 +30,10 @@ So the bucket keeps versions:
 * **It is enforced, not hoped for.** `storage-versioning.sh apply` sets both
   and reads them back. The production deploy runs `storage-versioning.sh
   verify` before the backup and refuses to release if either is missing or
-  wrong, including a rule that would expire current objects.
+  wrong, including a rule that would expire current objects. Both run with the
+  separate admin Spaces key (`STORAGE_ADMIN_*`), never the application's
+  bucket-limited key, which cannot read the lifecycle and must not be able to
+  change it.
 * **The expiry is proven on the provider.** `--verify-expiry start` and then
   `check` show that the provider really removes old versions. That uses a
   1-day rule on the `_lifecycle-probe/` prefix, so the proof takes days, not a
@@ -229,6 +232,34 @@ openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -iter <iter> \
 No credential is in the repository. `scripts/qa/check-backup-offsite.sh` (CI
 guard `backup-offsite`) holds the upload, retention and own-key contract with the
 AWS CLI stubbed.
+
+### 3c. The review period on Supabase Free (ADR-014)
+
+While the database is on Supabase Free there is **no provider backup and no
+point-in-time recovery**, so the layers in §2 shift down by one:
+
+1. **Daily** (`backup-daily.yml`, 01:47 UTC): an encrypted dump of `chat`, kept
+   30 days as a GitHub artifact. It needs only the `backup` Environment's
+   `BACKUP_DATABASE_URL` and `BACKUP_ENCRYPTION_PASSPHRASE`, no bucket. The URL
+   is the read-only `jawwid_backup` role from §3b, created on Supabase exactly as
+   written there (migration owner `postgres`), and it goes through the **session
+   pooler** (port 5432, user `jawwid_backup.<project-ref>`, `sslmode=require`).
+   The job reads every table, which is also the daily activity that keeps the
+   Free project from pausing.
+2. **Before every deploy**: unchanged (§2).
+3. **Weekly, outside GitHub**: download the newest daily artifact (with its
+   `.hmac` and `.sha256`) to storage the owner controls. A GitHub account
+   problem must not take every copy with it.
+4. **Monthly drill**: restore the newest artifact into a local `postgres:17`
+   with `restore-db.sh` and run `db/tests/invariants.sql` (§5). Record it.
+
+`backup-weekly.yml` targets a DigitalOcean Spaces bucket. Until that bucket
+exists its Sunday run fails loudly by design; disable it in the Actions tab for
+the review period, and re-enable it with the bucket.
+
+The recovery point is up to one day. That is accepted only because no real
+user is on this database: the store builds stay on manual release until the
+cutover to DigitalOcean (ADR-014).
 
 ## 4. Restoring
 

@@ -1,0 +1,94 @@
+name: Daily database backup (encrypted, GitHub artifact)
+
+# The review period's backup (ADR-014). While Jawwid Chat's database is on
+# Supabase Free, the provider takes NO backups and offers no point-in-time
+# recovery, so this job is the first line, not the third: every day, an
+# ENCRYPTED logical dump of the chat schema, kept 30 days as a workflow artifact.
+# It needs no bucket, so it costs nothing.
+#
+# It also keeps the Free project awake. Supabase pauses a Free project after
+# about a week of too little database activity; pg_dump reads every table every
+# day. (The worker's outbox polling does the same while the app runs; this is
+# the floor when it does not.)
+#
+# Same `backup` GitHub Environment as backup-weekly.yml, and only these two:
+#   secrets  BACKUP_DATABASE_URL           the READ-ONLY jawwid_backup role
+#                                          (backup-recovery.md §3b), through
+#                                          Supabase's SESSION pooler (port 5432,
+#                                          user jawwid_backup.<project-ref>):
+#                                          the direct host is IPv6-only and
+#                                          GitHub's runners are IPv4
+#            BACKUP_ENCRYPTION_PASSPHRASE  also held outside GitHub (§3)
+# Nothing in the repository. Retire this workflow, or keep it as a cheap extra
+# copy, once production runs on DigitalOcean's managed Postgres (ADR-014).
+
+on:
+  schedule:
+    - cron: '47 1 * * *' # every day 01:47 UTC: quiet hours in Cairo, off the top of the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-daily
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted dump of chat -> 30-day artifact
+    runs-on: ubuntu-latest
+    environment: backup
+    # Only main's copy of this workflow may reach the backup secrets (the
+    # environment's branch rule says the same; this is the second lock).
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The backup credentials are present
+        # Fails loudly, never a silent no-op: a scheduled job that skips is a
+        # backup nobody knows is missing.
+        env:
+          HAS_DB: ${{ secrets.BACKUP_DATABASE_URL != '' }}
+          HAS_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE != '' }}
+        run: |
+          rc=0
+          [ "$HAS_DB" = "true" ] || { echo "::error title=Backup::BACKUP_DATABASE_URL (the read-only jawwid_backup role, session pooler) is not set in the backup GitHub Environment"; rc=1; }
+          [ "$HAS_PASSPHRASE" = "true" ] || { echo "::error title=Backup::BACKUP_ENCRYPTION_PASSPHRASE is not set in the backup GitHub Environment"; rc=1; }
+          exit $rc
+
+      - name: Back up the database, encrypted in the pipe
+        # backup-db.sh refuses without the key for APP_ENV=production, before
+        # pg_dump runs; no plaintext archive ever exists on the runner.
+        env:
+          APP_ENV: production
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          # The runner's pg_dump is 16; pg_dump refuses a newer server (17).
+          PG_IMAGE: postgres:17-alpine
+        run: scripts/infra/backup-db.sh --out ./backups --schema chat
+
+      - name: Only encrypted archives leave the runner
+        # The artifact is every family's messages. Refuse to upload anything but
+        # the archive, its integrity tag and its checksum.
+        run: |
+          set -euo pipefail
+          ls backups/*.dump.enc backups/*.dump.enc.hmac backups/*.dump.enc.sha256 >/dev/null
+          stray="$(find backups -type f ! -name '*.dump.enc' ! -name '*.dump.enc.hmac' ! -name '*.dump.enc.sha256')"
+          if [ -n "$stray" ]; then
+            echo "::error title=Backup::refusing to upload a file that is not an encrypted archive: $stray"
+            exit 1
+          fi
+
+      - name: Upload the encrypted backup (kept 30 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-backup-${{ github.run_number }}
+          path: backups/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Remove the local copy
+        if: always()
+        run: rm -rf ./backups

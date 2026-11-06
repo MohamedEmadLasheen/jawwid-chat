@@ -27,7 +27,7 @@ Passing builds and tests are **not** treated as proof that the app is store-read
 |---|---|---|---|---|
 | 1 | No production backend (S-08): store builds have nothing to sign in to | both | BLOCKED | owner (infrastructure) |
 | 2 | No way to report what users post: chat, stories, feedback (S-09; App Store 1.2, Play UGC policy) | both | FAIL | owner decision O-1, then engineering |
-| 3 | "Pay by card" opens Stripe Checkout (S-10; App Store 3.1.1 / 3.1.3(d); Play Payments) | both | FAIL (risk) | owner decision O-2 |
+| 3 | "Pay by card" opens Stripe Checkout (S-10; App Store 3.1.1 / 3.1.3(d); Play Payments) | both | PASS (owner decision 2026-11-05: live 1:1 lessons only; residual risks R-1 to R-3) | `app-review-notes-payments.md` |
 | 4 | Teacher deletion says "contact the academy" (`TEACHER_DELETION_BLOCKED`; App Store 5.1.1(v)) | App Store (Play also expects in-app deletion) | FAIL | owner decision O-3 |
 | 5 | No iOS Distribution certificate and no App Store profile: `xcodebuild -exportArchive` fails | App Store | BLOCKED | owner (Apple account) |
 | 6 | Firebase project, `google-services.json` and server `FCM_*`; APNs key on the server. Also reconcile the two push implementations (ship `674765a1`) and verify it | both (push) | BLOCKED | owner (credentials); engineering (reconcile, verify) |

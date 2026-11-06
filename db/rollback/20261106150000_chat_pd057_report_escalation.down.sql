@@ -1,4 +1,4 @@
--- Roll back 20261106120000_chat_pd057_report_escalation (PD-57 ENG-04): the
+-- Roll back 20261106150000_chat_pd057_report_escalation (PD-57 ENG-04): the
 -- SLA alert markers, the report notification rules and texts, and the
 -- `content_report` PD-47 task source.
 --
@@ -8,7 +8,7 @@
 -- Notification rows that reference the rules keep the rule rows: delete the
 -- rules only where nothing references them.
 --
---   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261106120000_chat_pd057_report_escalation.down.sql
+--   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261106150000_chat_pd057_report_escalation.down.sql
 
 set local lock_timeout = '5s';
 

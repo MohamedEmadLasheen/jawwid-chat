@@ -388,7 +388,7 @@ export class ModerationService {
    * manager of the report's departments -- the Super Admin when there is none,
    * and for child_safety (D-4: no department sees it). The task reads the
    * report's id and the note (chat.work_task_raise_report_reassignment,
-   * 20261106100000). The reassignment itself is done in the supervision tools.
+   * 20261106130000). The reassignment itself is done in the supervision tools.
    */
   private async raiseReassignment(tx: Prisma.TransactionClient, actor: Actor, report: ContentReport): Promise<void> {
     const [row] = await tx.$queryRaw<Array<{ raised: number }>>`

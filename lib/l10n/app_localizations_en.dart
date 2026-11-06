@@ -3503,6 +3503,10 @@ class L10nEn extends L10n {
       'We\'re confirming your payment. This can take a minute.';
 
   @override
+  String get billingLiveOneToOneService =>
+      'Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.';
+
+  @override
   String get billingPaySheetTitle => 'How would you like to pay?';
 
   @override
@@ -5139,6 +5143,46 @@ class L10nEn extends L10n {
       'Please contact the academy to close your lessons and payroll before deleting your account.';
 
   @override
+  String get locationRowTitle => 'Location';
+
+  @override
+  String get locationRowEmpty => 'Not set';
+
+  @override
+  String get locationSheetTitle => 'Where does the family live?';
+
+  @override
+  String get locationCountryLabel => 'Country';
+
+  @override
+  String locationSubdivisionError(String label) {
+    return 'Choose a $label from the list';
+  }
+
+  @override
+  String get locationCountryError => 'Choose a country from the list';
+
+  @override
+  String locationSuggestion(String country) {
+    return 'Suggested: $country';
+  }
+
+  @override
+  String get locationPromptBody =>
+      'Tell us where you live. You can change it any time from your profile.';
+
+  @override
+  String get locationLater => 'Later';
+
+  @override
+  String get locationLoadFailed =>
+      'The list could not be loaded. Please try again.';
+
+  @override
+  String get locationSaveConflict =>
+      'We couldn\'t save this. Please contact the academy.';
+
+  @override
   String get cardScheduledTitle => 'Lesson added';
 
   @override
@@ -5156,4 +5200,129 @@ class L10nEn extends L10n {
 
   @override
   String get cardNowMissed => 'This lesson did not take place';
+
+  @override
+  String get reportAction => 'Report';
+
+  @override
+  String get reportPersonAction => 'Report this person';
+
+  @override
+  String get reportMemberAction => 'Report';
+
+  @override
+  String get reportSheetTitle => 'Report';
+
+  @override
+  String get reportSheetMessageIntro =>
+      'What is wrong with this message? Only our team sees your report. The person is not told.';
+
+  @override
+  String get reportSheetPersonIntro =>
+      'Why are you reporting this person? Only our team sees your report. The person is not told.';
+
+  @override
+  String get reportReasonHarassment => 'Harassment or bullying';
+
+  @override
+  String get reportReasonInappropriate => 'Inappropriate or sexual content';
+
+  @override
+  String get reportReasonSpam => 'Spam or scam';
+
+  @override
+  String get reportReasonChildSafety => 'A child\'s safety';
+
+  @override
+  String get reportReasonOther => 'Something else (a note is required)';
+
+  @override
+  String get reportSheetNoteLabel => 'Note';
+
+  @override
+  String get reportNoteLabelOptional => 'Note (optional)';
+
+  @override
+  String get reportNoteHint => 'Tell us what happened, in a few words';
+
+  @override
+  String get reportNoteRequired => 'Please add a short note so we understand.';
+
+  @override
+  String get reportSubmit => 'Send report';
+
+  @override
+  String get reportSentTitle => 'Thank you';
+
+  @override
+  String get reportSentBody =>
+      'We received your report and our team will look at it. You can follow it, and read our answer, in My reports.';
+
+  @override
+  String get reportAlreadyBody =>
+      'You already reported this and we are still looking into it. You will see our answer in My reports.';
+
+  @override
+  String get reportDone => 'Done';
+
+  @override
+  String get reportErrorNotVisible =>
+      'We can no longer find this, so it cannot be reported.';
+
+  @override
+  String get reportErrorSelf =>
+      'You cannot report yourself or your own messages.';
+
+  @override
+  String get reportErrorNotReportable =>
+      'This kind of message cannot be reported.';
+
+  @override
+  String get reportErrorRateLimited =>
+      'You have sent several reports recently. Please try again a little later.';
+
+  @override
+  String get reportErrorTerms =>
+      'Please accept the terms of use first, then you can report.';
+
+  @override
+  String get reportErrorGeneric =>
+      'We could not send your report. Please try again.';
+
+  @override
+  String get myReportsTitle => 'My reports';
+
+  @override
+  String get myReportsSubtitle => 'What you reported, and our answers';
+
+  @override
+  String get myReportsEmptyTitle => 'No reports';
+
+  @override
+  String get myReportsEmptyBody =>
+      'When you report a message or a person, you can follow it here.';
+
+  @override
+  String get myReportsTargetMessage => 'A message';
+
+  @override
+  String get myReportsTargetPerson => 'A person';
+
+  @override
+  String get myReportsReasonUnknown => 'Other';
+
+  @override
+  String get myReportsStatusOpen => 'Received';
+
+  @override
+  String get myReportsStatusInReview => 'Being reviewed';
+
+  @override
+  String get myReportsStatusActioned => 'Resolved';
+
+  @override
+  String get myReportsStatusDismissed => 'Closed';
+
+  @override
+  String get myReportsAnswerLabel => 'Our answer';
 }

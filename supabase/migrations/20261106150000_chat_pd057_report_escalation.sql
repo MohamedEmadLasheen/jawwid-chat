@@ -25,7 +25,7 @@
 -- pipeline) chooses the recipients and sends; nothing here sends.
 -- Needs 20261104100000 (chat.content_report) and the PD-47 task helpers.
 -- Idempotent (G-19).
--- Rollback: db/rollback/20261106120000_chat_pd057_report_escalation.down.sql.
+-- Rollback: db/rollback/20261106150000_chat_pd057_report_escalation.down.sql.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------

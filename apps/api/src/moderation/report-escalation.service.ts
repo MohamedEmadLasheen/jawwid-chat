@@ -59,7 +59,7 @@ interface ReportRow {
  * `report.escalated` in the same transaction, over rows taken FOR UPDATE SKIP
  * LOCKED: two workers, or a restart, alert each stage once. It also raises a
  * missing PD-47 `content_report` task and completes the task of a resolved
- * report (the triggers of 20261106120000 do both in the report's own
+ * report (the triggers of 20261106150000 do both in the report's own
  * transaction; this is the guarantee, as PD-47's own sweep is for its sources).
  */
 @Injectable()

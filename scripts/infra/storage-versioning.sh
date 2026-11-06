@@ -27,13 +27,21 @@
 # lifecycle expiry of current objects, and noncurrent expiry only indirectly.
 # The probe writes a few bytes under that prefix and nowhere else.
 #
-# Environment (the API's own names, so the same Environment values work):
-#   STORAGE_ENDPOINT    https://<region>.digitaloceanspaces.com (or another S3 endpoint)
-#   STORAGE_BUCKET      the bucket
-#   STORAGE_REGION      optional; defaults to us-east-1 (Spaces ignores it)
-#   STORAGE_ACCESS_KEY  \  a key that may read (verify) or also write (apply)
-#   STORAGE_SECRET_KEY  /  the bucket's versioning + lifecycle configuration
+# Environment:
+#   STORAGE_ENDPOINT          https://<region>.digitaloceanspaces.com (or another S3 endpoint)
+#   STORAGE_BUCKET            the bucket
+#   STORAGE_REGION            optional; defaults to us-east-1 (Spaces ignores it)
+#   STORAGE_ADMIN_ACCESS_KEY  \  the ADMINISTRATIVE key: reads (verify) or also
+#   STORAGE_ADMIN_SECRET_KEY  /  writes (apply) the bucket's configuration
 # Credentials are passed to the AWS CLI in its environment and NEVER printed.
+#
+# TWO KEYS, NEVER ONE. STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY belong to the
+# application at runtime and stay bucket-limited (Read/Write/Delete); on Spaces
+# such a key is refused the lifecycle calls, and widening it would hand every
+# API process the power to switch off the 30-day recovery. This script therefore
+# never reads the application key: without STORAGE_ADMIN_* it refuses, and an
+# admin key equal to the application key is refused too (the separation would
+# be a name only). The admin key never reaches the app spec.
 #
 # Permissions:
 #   verify                 s3:GetBucketVersioning, s3:GetLifecycleConfiguration
@@ -59,14 +67,23 @@ PROBE_DEADLINE_DAYS=3
 err() { echo "::error title=Object storage versioning::$*" >&2; }
 die() { err "$*"; exit 1; }
 
-for v in STORAGE_ENDPOINT STORAGE_BUCKET STORAGE_ACCESS_KEY STORAGE_SECRET_KEY; do
+for v in STORAGE_ENDPOINT STORAGE_BUCKET; do
   [ -n "${!v:-}" ] || die "$v is not set"
 done
+for v in STORAGE_ADMIN_ACCESS_KEY STORAGE_ADMIN_SECRET_KEY; do
+  [ -n "${!v:-}" ] || die "$v is not set -- bucket versioning and lifecycle are checked with the ADMINISTRATIVE Spaces key, never the application's STORAGE_ACCESS_KEY (add it to the production GitHub Environment; production-readiness.md). Nothing was checked or changed."
+done
+if [ -n "${STORAGE_ACCESS_KEY:-}" ] && [ "$STORAGE_ADMIN_ACCESS_KEY" = "$STORAGE_ACCESS_KEY" ]; then
+  die "STORAGE_ADMIN_ACCESS_KEY is the application's STORAGE_ACCESS_KEY -- the administrative key must be a separate key. Nothing was checked or changed."
+fi
 command -v aws >/dev/null 2>&1 || die "the AWS CLI (aws) is not installed"
 command -v python3 >/dev/null 2>&1 || die "python3 is not installed"
 
-export AWS_ACCESS_KEY_ID="$STORAGE_ACCESS_KEY"
-export AWS_SECRET_ACCESS_KEY="$STORAGE_SECRET_KEY"
+export AWS_ACCESS_KEY_ID="$STORAGE_ADMIN_ACCESS_KEY"
+export AWS_SECRET_ACCESS_KEY="$STORAGE_ADMIN_SECRET_KEY"
+# The application key is not this script's to use: drop it so no child process
+# (the AWS CLI, python) can pick it up.
+unset STORAGE_ACCESS_KEY STORAGE_SECRET_KEY
 export AWS_DEFAULT_REGION="${STORAGE_REGION:-us-east-1}"
 [ "$AWS_DEFAULT_REGION" = "auto" ] && AWS_DEFAULT_REGION=us-east-1
 unset AWS_PROFILE AWS_SESSION_TOKEN

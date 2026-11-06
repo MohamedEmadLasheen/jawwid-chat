@@ -5995,6 +5995,12 @@ abstract class L10n {
   /// **'We\'re confirming your payment. This can take a minute.'**
   String get billingConfirmingPayment;
 
+  /// Pay sheet: what the payment buys. Store payments policy (App Store 3.1.3(d), Google Play 1:1 services): must say live, one-to-one, not recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.'**
+  String get billingLiveOneToOneService;
+
   /// PD-27: Settings -> Payments.
   ///
   /// In en, this message translates to:
@@ -8851,6 +8857,72 @@ abstract class L10n {
   /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
   String get deleteAccountTeacherBlocked;
 
+  /// PD-45 PR-4: the Location row of the parent's own profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get locationRowTitle;
+
+  /// No description provided for @locationRowEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get locationRowEmpty;
+
+  /// No description provided for @locationSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Where does the family live?'**
+  String get locationSheetTitle;
+
+  /// No description provided for @locationCountryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get locationCountryLabel;
+
+  /// PD-45 plan 5.3: the country's own field label (Governorate / Emirate / ...) in the sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} from the list'**
+  String locationSubdivisionError(String label);
+
+  /// No description provided for @locationCountryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a country from the list'**
+  String get locationCountryError;
+
+  /// PD-45: the country the server suggests from the number; tapping it only fills the picker, nothing is saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested: {country}'**
+  String locationSuggestion(String country);
+
+  /// No description provided for @locationPromptBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us where you live. You can change it any time from your profile.'**
+  String get locationPromptBody;
+
+  /// No description provided for @locationLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get locationLater;
+
+  /// No description provided for @locationLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The list could not be loaded. Please try again.'**
+  String get locationLoadFailed;
+
+  /// No description provided for @locationSaveConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t save this. Please contact the academy.'**
+  String get locationSaveConflict;
+
   /// Title of the card posted when a lesson is added outside the weekly times (CHATSCHED-001).
   ///
   /// In en, this message translates to:
@@ -8880,6 +8952,234 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'This lesson did not take place'**
   String get cardNowMissed;
+
+  /// Long-press menu entry on someone else's message, and the Report button on a person.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportAction;
+
+  /// PD-57: row on a person's profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this person'**
+  String get reportPersonAction;
+
+  /// PD-57: tooltip prefix on a member row, followed by the name.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportMemberAction;
+
+  /// PD-57: title of the Report sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportSheetTitle;
+
+  /// PD-57: under the title when reporting a message. Matches §5.5(1): the reported person is never told.
+  ///
+  /// In en, this message translates to:
+  /// **'What is wrong with this message? Only our team sees your report. The person is not told.'**
+  String get reportSheetMessageIntro;
+
+  /// PD-57: under the title when reporting a person.
+  ///
+  /// In en, this message translates to:
+  /// **'Why are you reporting this person? Only our team sees your report. The person is not told.'**
+  String get reportSheetPersonIntro;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Harassment or bullying'**
+  String get reportReasonHarassment;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Inappropriate or sexual content'**
+  String get reportReasonInappropriate;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Spam or scam'**
+  String get reportReasonSpam;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'A child\'s safety'**
+  String get reportReasonChildSafety;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else (a note is required)'**
+  String get reportReasonOther;
+
+  /// PD-57: label of the note field.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get reportSheetNoteLabel;
+
+  /// PD-57: label of the note field for the four reasons where it is optional.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get reportNoteLabelOptional;
+
+  /// PD-57: hint in the note field.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what happened, in a few words'**
+  String get reportNoteHint;
+
+  /// PD-57: shown when the reason is Something else and the note is empty (COMM.REPORT_NOTE_REQUIRED).
+  ///
+  /// In en, this message translates to:
+  /// **'Please add a short note so we understand.'**
+  String get reportNoteRequired;
+
+  /// PD-57: the send button.
+  ///
+  /// In en, this message translates to:
+  /// **'Send report'**
+  String get reportSubmit;
+
+  /// PD-57: confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you'**
+  String get reportSentTitle;
+
+  /// PD-57: calm confirmation after sending (201).
+  ///
+  /// In en, this message translates to:
+  /// **'We received your report and our team will look at it. You can follow it, and read our answer, in My reports.'**
+  String get reportSentBody;
+
+  /// PD-57: confirmation when the same report is already open (200).
+  ///
+  /// In en, this message translates to:
+  /// **'You already reported this and we are still looking into it. You will see our answer in My reports.'**
+  String get reportAlreadyBody;
+
+  /// PD-57: closes the confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get reportDone;
+
+  /// PD-57: COMM.REPORT_TARGET_NOT_VISIBLE (404).
+  ///
+  /// In en, this message translates to:
+  /// **'We can no longer find this, so it cannot be reported.'**
+  String get reportErrorNotVisible;
+
+  /// PD-57: COMM.REPORT_SELF (400).
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot report yourself or your own messages.'**
+  String get reportErrorSelf;
+
+  /// PD-57: COMM.REPORT_NOT_REPORTABLE (400).
+  ///
+  /// In en, this message translates to:
+  /// **'This kind of message cannot be reported.'**
+  String get reportErrorNotReportable;
+
+  /// PD-57: COMMON.RATE_LIMITED (429).
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent several reports recently. Please try again a little later.'**
+  String get reportErrorRateLimited;
+
+  /// PD-57: COMM.TERMS_NOT_ACCEPTED (403).
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the terms of use first, then you can report.'**
+  String get reportErrorTerms;
+
+  /// PD-57: any other failure; the sheet stays open so nothing typed is lost.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not send your report. Please try again.'**
+  String get reportErrorGeneric;
+
+  /// PD-57: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'My reports'**
+  String get myReportsTitle;
+
+  /// PD-57: under the Settings row.
+  ///
+  /// In en, this message translates to:
+  /// **'What you reported, and our answers'**
+  String get myReportsSubtitle;
+
+  /// PD-57: empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No reports'**
+  String get myReportsEmptyTitle;
+
+  /// PD-57: empty state body.
+  ///
+  /// In en, this message translates to:
+  /// **'When you report a message or a person, you can follow it here.'**
+  String get myReportsEmptyBody;
+
+  /// PD-57: what the report was about.
+  ///
+  /// In en, this message translates to:
+  /// **'A message'**
+  String get myReportsTargetMessage;
+
+  /// PD-57: what the report was about.
+  ///
+  /// In en, this message translates to:
+  /// **'A person'**
+  String get myReportsTargetPerson;
+
+  /// PD-57: a reason this build does not know.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get myReportsReasonUnknown;
+
+  /// PD-57: report status open.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get myReportsStatusOpen;
+
+  /// PD-57: report status in_review.
+  ///
+  /// In en, this message translates to:
+  /// **'Being reviewed'**
+  String get myReportsStatusInReview;
+
+  /// PD-57: report status actioned.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get myReportsStatusActioned;
+
+  /// PD-57: report status dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get myReportsStatusDismissed;
+
+  /// PD-57: heading of the answer block.
+  ///
+  /// In en, this message translates to:
+  /// **'Our answer'**
+  String get myReportsAnswerLabel;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

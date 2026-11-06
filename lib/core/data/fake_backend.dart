@@ -181,16 +181,19 @@ class FakeBackend {
             id: 'm_parent',
             displayName: 'ولي الأمر',
             role: ParticipantRole.parent,
+            actorKind: 'contact',
           ),
         const GroupMember(
           id: 'm_teacher',
           displayName: 'المعلم',
           role: ParticipantRole.teacher,
+          actorKind: 'teacher',
         ),
         const GroupMember(
           id: 'm_admin',
           displayName: 'المشرفة',
           role: ParticipantRole.admin,
+          actorKind: 'staff',
         ),
       ],
     );
@@ -216,8 +219,14 @@ class FakeBackend {
       learner: const LearnerRef(id: '', displayName: ''),
       requiresApproval: false,
       members: [
-        GroupMember(id: 'm_teacher_$conversationId', displayName: teacherName, role: ParticipantRole.teacher),
-        if (withViewer) GroupMember(id: user.id, displayName: user.displayName, role: ParticipantRole.admin),
+        GroupMember(
+          id: 'm_teacher_$conversationId',
+          displayName: teacherName,
+          role: ParticipantRole.teacher,
+          actorKind: 'teacher',
+        ),
+        if (withViewer)
+          GroupMember(id: user.id, displayName: user.displayName, role: ParticipantRole.admin, actorKind: 'staff'),
       ],
     );
   }
@@ -234,7 +243,10 @@ class FakeBackend {
       conversationId: conversationId,
       learner: group.learner,
       requiresApproval: group.requiresApproval,
-      members: [...group.members, GroupMember(id: user.id, displayName: user.displayName, role: ParticipantRole.admin)],
+      members: [
+        ...group.members,
+        GroupMember(id: user.id, displayName: user.displayName, role: ParticipantRole.admin, actorKind: 'staff'),
+      ],
     );
   }
 

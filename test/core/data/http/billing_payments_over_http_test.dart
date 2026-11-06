@@ -223,6 +223,26 @@ void main() {
     expect(b.cardAvailable, isTrue);
   });
 
+  test('store payments policy: payableInApp is the server\'s word; anything but a literal true is not payable', () async {
+    server.on('GET', '/me/billing', [
+      const Reply.ok({
+        'instalments': [
+          {'id': 'i-yes', 'label': 'a', 'amountMinor': 1, 'currency': 'AED', 'dueDate': '2026-11-01', 'status': 'due', 'payableInApp': true},
+          {'id': 'i-no', 'label': 'b', 'amountMinor': 1, 'currency': 'AED', 'dueDate': '2026-11-01', 'status': 'due', 'payableInApp': false},
+          {'id': 'i-silent', 'label': 'c', 'amountMinor': 1, 'currency': 'AED', 'dueDate': '2026-11-01', 'status': 'due'},
+        ],
+        'requests': [
+          {'id': 'r-yes', 'purpose': 'balance', 'label': 'a', 'status': 'open', 'amountMinor': 1, 'currency': 'AED', 'payableInApp': true},
+          {'id': 'r-text', 'purpose': 'subscription', 'label': 'b', 'status': 'open', 'amountMinor': 1, 'currency': 'AED', 'payableInApp': 'true'},
+          {'id': 'r-silent', 'purpose': 'subscription', 'label': 'c', 'status': 'open', 'amountMinor': 1, 'currency': 'AED'},
+        ],
+      }),
+    ]);
+    final b = await repository().myBilling();
+    expect({for (final i in b.instalments) i.id: i.payableInApp}, {'i-yes': true, 'i-no': false, 'i-silent': false});
+    expect({for (final r in b.requests) r.id: r.payableInApp}, {'r-yes': true, 'r-text': false, 'r-silent': false});
+  });
+
   test('a bank account without its one required field is no bank account', () async {
     server.on('GET', '/me/billing', [
       const Reply.ok({

@@ -2,7 +2,7 @@
  * PD-57 ENG-02, the closure plan of 2026-11-06 (owner D-1..D-4) over real HTTP:
  * real logins, the global bearer and permission guards, the support-session
  * interceptor, the real routes, and the database of 20261104100000 and
- * 20261106100000.
+ * 20261106130000.
  *
  *   §3  a report's departments are worked out when it is filed
  *       (reportDepartments); who sees a report: the Super Admin all; a
