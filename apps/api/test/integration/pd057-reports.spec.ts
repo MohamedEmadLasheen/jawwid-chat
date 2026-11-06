@@ -43,6 +43,7 @@ import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
 import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
+import { AccountAdminService } from '../../src/account-admin/account-admin.service';
 import { ModerationModule } from '../../src/moderation/moderation.module';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
@@ -685,6 +686,58 @@ describe('§5.6-7/8: take and resolve', () => {
       (e) => (e.payload as { reportId?: string }).reportId === id,
     );
     expect(answered.map((e) => e.payload)).toEqual([{ organizationId: orgId, reportId: id }]);
+  });
+
+  /** A family parent's account status (the parent is per family; a teacher is shared by other tests). */
+  const parentStatus = async (i: number) =>
+    (await g.prisma.account.findUniqueOrThrow({ where: { subject: family(i).parent.subject }, select: { status: true } })).status;
+  /** The group's teacher reports the family's parent as a person. */
+  const teacherReportsParent = async (i: number) => {
+    const teacherId = groupOf(i).teacherIds[0]!;
+    const teacher = m.teachers.find((t) => t.id === teacherId)!;
+    const filed = await (await as(teacher.subject)).post('/reports', {
+      targetKind: 'person', subject: { kind: 'contact', id: family(i).parent.id }, reason: 'harassment',
+    });
+    expect(filed.status).toBe(201);
+    return filed.json.id as string;
+  };
+
+  it('account_suspended suspends the reported person\'s account in the transaction that closes the report', async () => {
+    const id = await teacherReportsParent(25);
+    expect(await parentStatus(25)).toBe('active');
+    const done = await (await as(m.superAdmin.subject)).post(`/moderation/reports/${id}/resolve`, {
+      resolution: 'account_suspended', note: 'Repeated harassment.', answer: 'We have acted on your report.',
+    });
+    expect(done.status).toBe(200);
+    expect(done.json).toMatchObject({ status: 'actioned', resolution: 'account_suspended' });
+    expect(await parentStatus(25)).toBe('suspended');
+  });
+
+  it('Codex review of #474: a suspension that loses the race to another moderator suspends nobody', async () => {
+    const id = await teacherReportsParent(26);
+    // Another moderator closes the report after this request's checks, before its transaction.
+    const accounts = app.get(AccountAdminService);
+    const original = accounts.authorizeSuspend.bind(accounts);
+    const spy = jest.spyOn(accounts, 'authorizeSuspend').mockImplementation(async (actor, accountId) => {
+      await original(actor, accountId);
+      await g.prisma.$executeRawUnsafe(
+        `update chat.content_report
+            set status = 'dismissed', taken_by = $2::uuid, taken_at = now(), resolution = 'no_action',
+                resolved_by = $2::uuid, resolved_at = now(), answer_text = 'Nothing found.', reporter_answered_at = now()
+          where id = $1::uuid`, id, m.teachersManager.id,
+      );
+    });
+    try {
+      const lost = await (await as(m.superAdmin.subject)).post(`/moderation/reports/${id}/resolve`, {
+        resolution: 'account_suspended', note: 'Repeated harassment.', answer: 'We have acted on your report.',
+      });
+      expect({ status: lost.status, code: lost.code }).toEqual({ status: 409, code: CommErrorCode.REPORT_CLOSED });
+      // The checks ran (the race was really staged), and the write never happened.
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await parentStatus(26)).toBe('active');
   });
 
   it('§5.6-8: message_removed deletes the message for everyone, audited with the report; the reporter reads the answer, never the reviewer', async () => {
