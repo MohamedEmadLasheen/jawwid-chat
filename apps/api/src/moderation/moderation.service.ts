@@ -248,11 +248,17 @@ export class ModerationService {
     if (input.resolution === 'message_removed' && (current.targetKind !== 'message' || !current.messageId)) {
       throw new CommError(CommErrorCode.VALIDATION, 'resolution: message_removed is for a report of a message', 400);
     }
-    if (input.resolution === 'account_suspended') await this.suspendSubject(actor, accountId, current);
+    // Checked before; written inside the locked transaction below, so a
+    // resolution that loses a race to another moderator suspends nobody.
+    const suspension = input.resolution === 'account_suspended' ? await this.prepareSuspension(actor, accountId, current) : null;
+    let suspended: { changed: boolean; revoked: number } | null = null;
 
     const row = await this.prisma.$transaction(async (tx) => {
       const report = await this.lockReport(tx, scope, id);
       if (!UNRESOLVED.includes(report.status as (typeof UNRESOLVED)[number])) throw closed();
+      if (suspension) {
+        suspended = await this.accounts.suspendInTx(tx, actor, suspension.own, suspension.subjectAccountId, `suspended after report ${report.id}`);
+      }
       if (input.resolution === 'message_removed') {
         await this.messages.removeForModeration(tx, {
           messageId: report.messageId as string,
@@ -292,6 +298,7 @@ export class ModerationService {
       await this.outbox.enqueue(tx, CommEvent.REPORT_ANSWERED, { organizationId: report.organizationId, reportId: report.id });
       return resolved;
     });
+    if (suspension && suspended) await this.accounts.afterSuspend(actor, suspension.subjectAccountId, suspended);
     return this.decision(row);
   }
 
@@ -400,11 +407,12 @@ export class ModerationService {
    * `account_suspended`: the PD-21 suspension of the reported person's
    * account, decided by its own rules (who administers which accounts; never
    * the super admin's or one's own). The caller must hold accounts.administer
-   * too: moderation.act never widens what an account may administer. Done
-   * before the report closes; suspending is idempotent, so a retry after a
-   * failed close changes nothing more.
+   * too: moderation.act never widens what an account may administer. Only
+   * CHECKED here; the suspension is WRITTEN inside resolve's transaction,
+   * after the report is locked and found still open (Codex review of #474:
+   * a resolution that loses a race to another moderator must suspend nobody).
    */
-  private async suspendSubject(actor: Actor, accountId: string | undefined, report: ContentReport) {
+  private async prepareSuspension(actor: Actor, accountId: string | undefined, report: ContentReport): Promise<{ own: string; subjectAccountId: string }> {
     if (!(await this.permissions.has(actor, 'accounts.administer'))) {
       throw new CommError(CommErrorCode.PERMISSION_DENIED, 'suspending an account needs accounts.administer');
     }
@@ -412,7 +420,8 @@ export class ModerationService {
     if (!subject?.accountId) throw new CommError(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND, 'the reported person has no account to suspend');
     const own = accountId ?? (await this.prisma.staff.findUnique({ where: { id: actor.actorId }, select: { accountId: true } }))?.accountId;
     if (!own) throw new CommError(CommErrorCode.PERMISSION_DENIED, 'this staff account cannot suspend accounts');
-    await this.accounts.suspend(actor, own, subject.accountId, { reason: `suspended after report ${report.id}` });
+    await this.accounts.authorizeSuspend(actor, subject.accountId);
+    return { own, subjectAccountId: subject.accountId };
   }
 }
 
