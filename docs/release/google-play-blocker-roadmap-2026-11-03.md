@@ -1,6 +1,8 @@
 # Google Play blockers: implementation roadmap
 
 **Revision 2, 2026-11-03.**
+
+> **Amended 2026-11-06 by owner decisions D-1 to D-6** (`pd57-closure-plan-2026-11-06.md`): the report SLA is **24 h** (alerts at 18 h and 24 h), moderation access is scoped by department, child-safety reports are restricted to the Super Admin and `moderation.child_safety`, and blocking is enforced on the server with explicit educational exceptions. Where the two differ, the closure plan wins.
 - It replaces revision 1 (local commit `4551a81a`) and adds the owner's approved decisions.
 - **State: PLAN. No product code is written.** Nothing is pushed, merged, deployed, uploaded or published.
 - Base: `main` @ `3d669299`. Paths are relative to the repository root. Line numbers are from that commit and are a guide, not a contract.
@@ -26,6 +28,7 @@ Companion report: `docs/release/google-play-readiness-2026-11-03.md` (draft PR #
 |---|---|---|
 | **A-1 Report** | Five reasons. A response within **48 hours**. **Child-safety reports go to the Super Admin immediately.** An admin moderation queue and a way to answer the reporter. | WP-1 (§5) |
 | **A-2 Block** | Blocking hides the blocked person's messages, notifications and calls from the blocker. It **never interrupts lessons** or the educational process. **Every block notifies the responsible manager.** Staff may report families but **cannot block** them. An **administrative communication channel is preserved** where educational operations need it. | WP-2 (§6) |
+| **A-2a Block: every responsible manager** (owner, 2026-11-04; refines A-2's "notifies the responsible manager") | When a family blocks someone: (1) find **every supervisor** assigned to the family's children; (2) find **every manager responsible** for those supervisors; (3) notify **each one, across departments**; (4) **no duplicate** notice to the same manager; (5) record the block in the **administrative audit log**; (6) **least privilege**: being notified gives a manager **no** access to family accounts, private conversations or anything beyond their existing permissions. | WP-2 (§6.2, §6.3) |
 | **A-3 Terms** | **Separate terms** for families, teachers and staff, plus a **shared Code of Conduct**. The accepted **version and timestamp** are recorded. Acceptance is enforced for **every way an account is created**, including staff-created accounts. **No existing consent or legal requirement is weakened.** | WP-3 (§7) |
 | **A-4 Lesson-suspension message** | Arabic: **تم إيقاف حصص {اسم الطفل} مؤقتًا، وستتواصل معكم الأكاديمية.** English: **Lessons for {child} are temporarily paused. The academy will contact you.** In code, both use the placeholder `{child}`; the Arabic `{اسم الطفل}` is the same slot. | WP-4 phase 4C (§8) |
 | **A-5 CI** | PR #408's CI changes are reviewed. Branch protection, security checks, required tests and release gates are **not weakened**. Code Owner approval is **obtained**. | §4 |
@@ -419,7 +422,8 @@ Admin Web, `ReportsPage.test.tsx` and `ReportDetail.test.tsx`:
 **Table `chat.actor_block`** (in the WP-1 migration):
 - `id`, `organization_id`;
 - `blocker_kind`, `blocker_id`, `blocked_kind`, `blocked_id`;
-- `created_at`, `case_report_id`, `notified_manager_staff_id`;
+- `created_at`, `case_report_id`;
+- the managers told of it are rows of **`chat.actor_block_manager_notice`** (A-2a): `id`, `organization_id`, `block_id` (→ `actor_block`, **on delete set null**, so an unblock keeps the history), `case_report_id` (→ the block's case, never deleted), `manager_staff_id`, `notified_at`; **unique (`block_id`, `manager_staff_id`)**; insert-only; RLS fail-closed;
 - unique (blocker, blocked); deleting the row unblocks;
 - RLS fail-closed.
 
@@ -442,17 +446,22 @@ Message DTOs gain `hiddenByBlock: true`, with the body, attachments and preview 
 | Opening a direct conversation | `platform/authorization.service.ts` `canOpenDirect` (:261) | Refuses a blocked person opening a direct conversation with the blocker (`COMM.DIRECT_BLOCKED`), except staff covering the administrative channel |
 | Erasure | `chat.erase_account` | Deletes the erased account's blocks in both directions |
 
-### 6.3 "The responsible manager"
+### 6.3 "The responsible managers" (A-2a, owner decision 2026-11-04)
 
-Worked out from data that already exists:
+Worked out from data that already exists. A block notifies **every** responsible manager, not one.
 
-| Blocker | Responsible manager |
+| Blocker | Responsible managers |
 |---|---|
-| Family | The **department manager** (`Department.managerId`) of the family's supervisor (`LearnerSupervision.supervisorId` for any of the family's learners) |
+| Family | (1) every supervisor assigned to any of the family's children (`LearnerSupervision.supervisorId`, all learners of the family); (2) the manager responsible for each of those supervisors (the `Department.managerId` of each supervisor's department); (3) **all of them, across departments**, each told once |
 | Teacher | The department manager of the teacher's supervisor (PD-35 teacher supervision) |
 
+**Rules**
+- **No duplicate notice** to the same manager for one block: one `chat.actor_block_manager_notice` row per manager, unique (`block_id`, `manager_staff_id`) in the database.
+- **The audit log** records every block (`block.created`, through the existing audit service), naming the blocker, the blocked person and the managers told.
+- **Least privilege:** being notified grants a manager **nothing**. It is not a permission, it opens no family account or private conversation, and the notice carries only the names and a link to the case, which the manager opens with the permissions they already have (`moderation.view`).
+
 **Fallbacks**
-- If the blocked person **is** that manager, or there is no manager, it goes to every Super Admin.
+- A blocked person who **is** one of those managers is not told of their own block, and every Super Admin is told in their place (the other managers are still told). If there is no manager at all, every Super Admin is told.
 - The notification (`block_created_manager`) names the blocker, the blocked person and the family or teacher, and links to the case.
 - It is delivered in-app and by push, under the normal quiet hours. It is not urgent unless a child-safety report accompanies it.
 
@@ -462,7 +471,7 @@ Worked out from data that already exists:
 1. A parent blocks their supervisor:
    - for the parent only, the supervisor's chat messages are hidden in the direct conversation and the group, and other members see them;
    - lesson cards and system messages stay visible;
-   - a case opens, and the department manager gets `block_created_manager`.
+   - a case opens, and every responsible manager gets `block_created_manager` once (A-2a): a family whose children have supervisors in two departments tells both managers, and a manager over two of those supervisors is told once.
 2. No push row is created for the blocker for the blocked person's messages. A non-lesson call does not ring.
 3. **A parent who blocked the teacher still gets that teacher's lesson call ring, the lesson reminders and the cards.**
 4. A blocked supervisor cannot open a new direct conversation with the parent. The covering staff member's messages in the family's direct conversation are delivered.
