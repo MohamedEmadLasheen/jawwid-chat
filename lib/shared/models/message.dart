@@ -184,6 +184,7 @@ class Message {
     this.isInternal = false,
     this.mentions = const [],
     this.mentionsMe = false,
+    this.isHiddenByBlock = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -267,6 +268,12 @@ class Message {
   /// (server `MessageDto.mentionsViewer`). The bubble is highlighted.
   final bool mentionsMe;
 
+  /// PD-57: the viewer blocked this message's author (server `MessageDto.hiddenByBlock`).
+  /// The server has already removed the body, attachments and preview -- for the blocker
+  /// only -- so the bubble draws a one-line placeholder with Unblock. Never set on a
+  /// `system` or `card` message (D-6).
+  final bool isHiddenByBlock;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -309,6 +316,7 @@ class Message {
         isInternal: isInternal,
         mentions: mentions,
         mentionsMe: mentionsMe,
+        isHiddenByBlock: isHiddenByBlock,
       );
 
   Message copyWith({
@@ -354,6 +362,7 @@ class Message {
       isInternal: isInternal,
       mentions: mentions,
       mentionsMe: mentionsMe,
+      isHiddenByBlock: isHiddenByBlock,
     );
   }
 }

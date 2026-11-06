@@ -13,6 +13,7 @@ import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../calls/presentation/scheduled_call_card_view.dart';
 import '../../lessons/presentation/lesson_card_view.dart';
+import '../../moderation/presentation/block_actions.dart';
 import '../../supervision/presentation/supervision_card_view.dart';
 import '../../trials/presentation/trial_card_view.dart';
 import 'system_message_text.dart';
@@ -97,6 +98,16 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.isSystem) return _SystemMessage(message: message);
+    // PD-57: the viewer blocked the author; the server sent no body. One line, Unblock on it.
+    if (message.isHiddenByBlock) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing4, vertical: Spacing.spacing1),
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: HiddenByBlockLine(message: message),
+        ),
+      );
+    }
 
     final l10n = L10n.of(context);
     final theme = Theme.of(context);

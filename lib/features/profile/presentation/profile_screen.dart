@@ -25,6 +25,7 @@ import '../../lessons/presentation/group_children_section.dart';
 import '../../materials/presentation/child_materials_entry.dart';
 import '../../moderation/application/direct_counterpart.dart';
 import '../../moderation/data/moderation_repository.dart';
+import '../../moderation/presentation/block_actions.dart';
 import '../../moderation/presentation/report_sheet.dart';
 import '../../teacher_profile/presentation/teacher_profile_screen.dart';
 import '../application/profile_controller.dart';
@@ -90,6 +91,9 @@ class ConversationProfileScreen extends ConsumerWidget {
               // profile's subject is the CONVERSATION, so the person is resolved from its
               // members; nothing is offered until they are known.
               if (!value.isGroup) ConversationReportTile(conversationId: conversationId),
+              // PD-57 (WP-2B): block the same person (never the academy's official
+              // conversation, never a group: a group blocks its members).
+              if (!value.isGroup) ConversationBlockTile(conversationId: conversationId),
               // PD-15: each child of the group -- age, course, times, package. A family
               // group names no single learner, so each child's progress and Materials
               // come with that child's card here (a learner group shows them below).
@@ -231,6 +235,8 @@ class ProfileBody extends ConsumerWidget {
                         target: PersonReportTarget(kind: reportActorKind(member)!, id: member.id),
                       )
                   : null,
+              // PD-57 (WP-2B): Block beside Report; the button hides itself where not offered.
+              withBlock: true,
             ),
           if (view.requiresApproval)
             ProfileNote(text: l10n.groupApprovalNotice),
@@ -460,9 +466,13 @@ class MemberTile extends StatelessWidget {
     this.onMessage,
     this.onReport,
     this.isOpening = false,
+    this.withBlock = false,
   });
 
   final ProfilePerson member;
+
+  /// PD-57 (WP-2B): offer Block / Unblock on this row (the button decides whether it may).
+  final bool withBlock;
 
   /// PD-57: null when this person cannot be reported from here (yourself, an unknown kind).
   final VoidCallback? onReport;
@@ -542,6 +552,7 @@ class MemberTile extends StatelessWidget {
               icon: const Icon(Icons.flag_outlined),
               tooltip: '${l10n.reportMemberAction}: $name',
             ),
+          if (withBlock) MemberBlockButton(member: member, name: name),
           // No call action here: calling arrives with the call UI, and an
           // affordance with no screen behind it is worse than none.
           if (isOpening)
