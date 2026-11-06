@@ -80,6 +80,9 @@ export type TimelineStatus = 'overdue' | 'due' | 'upcoming' | 'paid' | 'voided'
 export interface TimelineInstalment {
   id: string
   planId: string | null
+  /** Store payments policy: the lesson package it pays for; payable in the app only while that package stands. */
+  lessonSubscriptionId?: string | null
+  payableInApp?: boolean
   label: string
   child: { id: string; name: string } | null
   amountMinor: number
@@ -140,6 +143,8 @@ export interface NewInstalments {
   /** PD-30: a plan for one child's subscription credits these lessons when it is created. */
   lessonsIncluded?: number
   planMonths?: number
+  /** Store payments policy: or the child's existing lesson package it pays for. */
+  lessonSubscriptionId?: string
 }
 
 /** PD-27: a custom schedule, 1-24 rows, instead of the equal split. */
@@ -150,6 +155,7 @@ export interface CustomInstalments {
   items: Array<{ amountMinor: number; dueDate: string }>
   lessonsIncluded?: number
   planMonths?: number
+  lessonSubscriptionId?: string
 }
 
 export interface NewPaymentRequest {
@@ -165,6 +171,8 @@ export interface NewPaymentRequest {
   periodStart?: string
   periodEnd?: string
   expiresInDays?: number
+  /** Store payments policy: a balance's lesson package. */
+  lessonSubscriptionId?: string
 }
 
 export interface NewFamilyPayment {

@@ -54,7 +54,8 @@ class DueItem {
 List<DueItem> amountsDue(ParentBilling billing) {
   final openInstalments = {
     for (final i in billing.instalments)
-      if (i.status != InstalmentStatus.paid && i.owedMinor > 0) i.id: i,
+      // Store payments policy: only an instalment of a verified lesson package.
+      if (i.status != InstalmentStatus.paid && i.owedMinor > 0 && i.payableInApp) i.id: i,
   };
   final requestOf = <String, PaymentRequest>{};
   final standalone = <DueItem>[];
@@ -63,7 +64,7 @@ List<DueItem> amountsDue(ParentBilling billing) {
     if (!r.isOpen) continue;
     // Store payments policy: only live one-to-one lessons are paid in the app.
     // Anything else is not listed here at all: no Pay, and no pointer elsewhere.
-    if (!r.payableInApp) continue;
+    if (!r.payableInApp || !(r.purpose?.canPayForLessons ?? false)) continue;
     final instalmentId = r.instalmentId;
     if (instalmentId != null) {
       if (openInstalments.containsKey(instalmentId)) requestOf[instalmentId] = r;

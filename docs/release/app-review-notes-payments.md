@@ -32,10 +32,11 @@ Sources: <https://developer.apple.com/app-store/review/guidelines/#other-purchas
 
 | Item | What it is | In the app? | Enforced by |
 |---|---|---|---|
-| Subscription / renewal | A package of live lessons for **one** learner | Yes: card or bank transfer | `apps/api/src/billing/in-app-payability.ts` |
-| Instalment | Part of a package's price | Yes | the same |
-| Balance | What is still owed for packages already given | Yes | the same |
-| `other` (any other charge) | Not classified as a lesson | **No.** The app shows no Pay for it; checkout and receipt refuse it with `409 COMM.PAYMENT_NOT_IN_APP`. Staff can still collect it outside the app (web pay link, cash). Admin Web cannot create one. | `assertPayableInApp` in `parent-payments.service.ts`; `amountsDue` in `lib/features/billing/domain/amount_due.dart` |
+| Subscription / renewal | A package of live lessons for **one** learner | Yes, **only when it names the child and the lessons it buys**; otherwise no | `apps/api/src/billing/in-app-payability.ts` |
+| Instalment | Part of a lesson package's price | Yes, **only when it names a lesson package that stands** (`family_instalment.lesson_subscription_id`). A plan made with its lessons names the package it creates; a plan can also name the child's existing package. Otherwise no. | the same; migration `20261106100000_chat_pd027_lesson_package_link` |
+| Balance | What is still owed for a lesson package | Yes, **only when it names that package** (`payment_request.lesson_subscription_id`, balance requests only). Otherwise no. | the same |
+| `other` (any other charge) | Not classified as a lesson | **No.** | the same |
+| Anything refused above | — | The app shows no Pay for it. Card checkout and bank-transfer receipts refuse it with `409 COMM.PAYMENT_NOT_IN_APP`, checked before anything is written; a refused receipt's file is deleted. Staff can still collect it outside the app (web pay link, cash). Admin Web marks it "Not payable in the app", and its forms explain why. | `assertPayableInApp` and `assertInstalmentPayableInApp` in `parent-payments.service.ts`; `amountsDue` in `lib/features/billing/domain/amount_due.dart` |
 | Any purpose added later | — | **No**, until classified in `in-app-payability.ts` (fails closed, server and app) | the same |
 | Group classes | — | Not sold. A `Lesson` has exactly one `learner_id` and one `teacher_id` (`schema.prisma`), so a paid lesson cannot have two learners. Group chats (`class_group`, `student_group`) are chats, never priced. | the schema |
 | Materials, games, lesson audio | Free | Not sold, not part of any package | (no price or SKU exists) |
@@ -45,7 +46,7 @@ Sources: <https://developer.apple.com/app-store/review/guidelines/#other-purchas
 language:
 
 - EN: "Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded."
-- AR: "دروس قرآن مباشرة فردية: معلّم واحد وطالب واحد في الوقت نفسه. لا تُسجَّل الدروس."
+- AR (owner wording, 2026-11-06): "دروس قرآن فردية مباشرة، تجمع بين معلّم واحد وطالب واحد عبر اتصال مباشر. لا يتم تسجيل الدروس."
 
 A non-lesson charge paid by web link is never described as a lesson.
 
@@ -81,18 +82,20 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 - **R-3 Both, the PD-30 chat lock.** When a package's lessons run out (after the grace lessons) or
   an instalment is overdue, the child's group chat becomes read-only for the parent and teacher.
   A reviewer could read that as paying to unlock an app feature (Apple 3.1.1, Google Payments §2).
-  The lock is part of the lesson service (the chat is the lesson's coordination channel), and the
-  parent's direct chat with their supervisor never locks. This is N-5 question 2, still the
-  owner's; it is unchanged here.
+  The parent's direct chat with their supervisor never locks.
+  - **Owner decision (2026-11-06):** the group chat stays fully accessible, and only new lesson
+    bookings pause.
+  - The plan is `docs/product/pd030-chat-stays-open-plan.md` (not implemented yet).
+  - Production enforcement (`SUBSCRIPTION_LOCK_ENFORCED`) is off, so nothing locks there today.
+    Keep it off until the plan ships.
 
-- **R-4 Instalments and balances are classified by what they are for, not checked.** An instalment
-  plan (`POST /families/:id/instalments`) and a `balance` request carry a free-text label, and the
-  child is optional, so nothing in the data proves that one is for lessons. They are payable in the
-  app because the academy sells nothing but lessons. **Operating rule for staff:** an instalment
-  plan or a balance is only ever for live one-to-one lesson packages; any other charge is a
-  request with purpose `other`, collected outside the app. **Follow-up:** store a lesson
-  classification on `family_instalment` (needs a migration slot) so the server can refuse a
-  non-lesson instalment the way it refuses `other`.
+- **R-4 Instalments and balances: resolved (2026-11-06).** Each now names the lesson package it
+  pays for, and the server refuses an in-app payment for one that names none (table in §2).
+  - The database keeps the link to the same family and child, and to a package that stands. The
+    link never changes after it is written.
+  - Existing plans that were made with their lessons were linked by the migration.
+  - **Any other existing open instalment or balance is no longer payable in the app.** Staff
+    collect it outside the app, or re-create it naming the child's package.
 
 ## 4. App Store Connect: App Review Information → Notes (paste)
 
