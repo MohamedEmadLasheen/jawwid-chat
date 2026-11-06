@@ -1,4 +1,5 @@
 import { signActorAvatar } from '../profile/avatar-urls';
+import { blockersAmong, hasBlocked } from '../../platform/blocks';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, ConversationMember, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -498,11 +499,13 @@ export class ConversationService {
       .map((other) => ConversationService.staffFamilyPair(viewer, other))
       .filter((p): p is { staffId: string; familyId: string } => p !== null);
     const reach = await this.authz.reachesFamilyMany(pairs, new Date());
+    // PD-57: the members who blocked the viewer (only staff can be refused by one).
+    const blockedMe = viewer.kind === ActorKind.STAFF ? await blockersAmong(this.prisma, viewer.actorId, others.map((o) => o.actorId)) : new Set<string>();
 
     for (const other of others) {
       const pair = ConversationService.staffFamilyPair(viewer, other);
       const reaches = pair !== null && reach.has(`${pair.staffId}:${pair.familyId}`);
-      if (this.authz.canOpenDirect(viewer, other, reaches).allowed) {
+      if (this.authz.canOpenDirect(viewer, other, reaches, blockedMe.has(other.actorId)).allowed) {
         openable.add(actorRefKey({ actorId: other.actorId, actorKind: other.kind }));
       }
     }
@@ -547,7 +550,8 @@ export class ConversationService {
     const pair = ConversationService.staffFamilyPair(a, b);
     const staffSide = pair ? (a.actorId === pair.staffId ? a : b) : null;
     const reaches = pair && staffSide ? await this.authz.reachesFamily(staffSide, pair.familyId, new Date()) : false;
-    const decision = this.authz.canOpenDirect(a, b, reaches);
+    // PD-57: a person the other side blocked does not open (or reopen) the channel.
+    const decision = this.authz.canOpenDirect(a, b, reaches, await hasBlocked(this.prisma, b.actorId, a.actorId));
     if (!decision.allowed) {
       // Another organization's actor is answered exactly as `requireActor`
       // answers an unknown one: same code, same status, same message.
