@@ -104,6 +104,27 @@ export const PAY = {
     ar: 'يُنشئ رابط دفع فريدًا. يفتحه ولي الأمر دون تسجيل دخول ويدفع بالبطاقة، ولا تُسجَّل الدفعة إلا بعد تأكيد Stripe.',
   },
   purpose: { en: 'For', ar: 'الغرض' },
+  // Store payments policy: the app takes payment only for a verified lesson package.
+  lessonPackage: { en: 'Lesson package', ar: 'باقة الدروس' },
+  noLessonPackage: { en: 'None: not payable in the app', ar: 'بدون: لا يُدفع في التطبيق' },
+  lessonPackageOption: { en: 'Lessons: {n} · from {date}', ar: 'الدروس: {n} · من {date}' },
+  planInAppHint: {
+    en: 'The family can pay this in the app only for a lesson package: enter its lessons, or choose the child’s package.',
+    ar: 'لا يمكن للعائلة دفع هذا في التطبيق إلا إذا كان لباقة دروس: أدخل عدد الدروس، أو اختر باقة الطفل.',
+  },
+  balanceInAppHint: {
+    en: 'Choose the child and the lesson package this balance is owed for. Without one, the family can pay it only outside the app.',
+    ar: 'اختر الطفل وباقة الدروس المستحق عنها هذا الرصيد. وبدونها لا يمكن للعائلة دفعه إلا خارج التطبيق.',
+  },
+  packageInAppHint: {
+    en: 'Name the child and the lessons. Without them, the family can pay it only outside the app.',
+    ar: 'حدّد الطفل وعدد الدروس. وبدونهما لا يمكن للعائلة دفعه إلا خارج التطبيق.',
+  },
+  otherInAppHint: {
+    en: 'Not a lesson package: the family can pay it only outside the app (the payment link or in person).',
+    ar: 'ليست باقة دروس: لا يمكن للعائلة دفعها إلا خارج التطبيق (رابط الدفع أو حضوريًا).',
+  },
+  notPayableInApp: { en: 'Not payable in the app', ar: 'لا يُدفع في التطبيق' },
   label: { en: 'Label', ar: 'الوصف' },
   labelHint: { en: 'What the parent sees, e.g. “3-month subscription”.', ar: 'ما يراه ولي الأمر، مثل «اشتراك 3 أشهر».' },
   amount: { en: 'Amount', ar: 'المبلغ' },

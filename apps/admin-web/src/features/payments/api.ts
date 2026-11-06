@@ -58,6 +58,10 @@ export interface PaymentRequest {
   cancelled?: { at: string; by: Person; reason: string } | null
   /** Set while the request belongs to a trial not yet assigned. */
   trialId?: string | null
+  /** Store payments policy: verified as a lesson package, so the parent may pay it in the app. */
+  payableInApp?: boolean
+  /** A balance's lesson package. */
+  lessonSubscriptionId?: string | null
 }
 
 export interface PaymentRefund {

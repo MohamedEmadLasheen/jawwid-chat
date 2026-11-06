@@ -54,7 +54,8 @@ class DueItem {
 List<DueItem> amountsDue(ParentBilling billing) {
   final openInstalments = {
     for (final i in billing.instalments)
-      if (i.status != InstalmentStatus.paid && i.owedMinor > 0) i.id: i,
+      // Store payments policy: only an instalment of a verified lesson package.
+      if (i.status != InstalmentStatus.paid && i.owedMinor > 0 && i.payableInApp) i.id: i,
   };
   final requestOf = <String, PaymentRequest>{};
   final standalone = <DueItem>[];

@@ -205,10 +205,15 @@ class BillingInstalment {
     this.remainingMinor,
     this.partial = false,
     this.requestId,
+    this.payableInApp = false,
   });
 
   final String id;
   final String label;
+
+  /// Store payments policy: the server verified it pays for a lesson package, so the
+  /// app may offer Pay. False when the server did not say so: never offered.
+  final bool payableInApp;
 
   /// The child this instalment is for; null when it is the whole family's.
   final String? childName;
@@ -279,13 +284,6 @@ enum RequestPurpose {
   balance,
   other;
 
-  /// Pays for a learner's live one-to-one lessons (apps/api in-app-payability.ts).
-  /// An allow-list, like the server's: a purpose added later is not payable until listed.
-  bool get isLiveOneToOneLessons => switch (this) {
-        RequestPurpose.subscription || RequestPurpose.renewal || RequestPurpose.instalment || RequestPurpose.balance => true,
-        RequestPurpose.other => false,
-      };
-
   static RequestPurpose? tryParse(Object? raw) => switch (raw) {
         'subscription' => RequestPurpose.subscription,
         'renewal' => RequestPurpose.renewal,
@@ -322,7 +320,7 @@ class PaymentRequest {
     required this.remainingMinor,
     required this.currency,
     this.purpose,
-    bool? payableInApp,
+    this.payableInApp = false,
     this.status,
     this.childName,
     this.instalmentId,
@@ -332,7 +330,7 @@ class PaymentRequest {
     this.periodEnd,
     this.expiresAt,
     this.createdAt,
-  }) : _payableInApp = payableInApp;
+  });
 
   final String id;
   final String label;
@@ -340,13 +338,10 @@ class PaymentRequest {
   /// Null for a purpose this build does not know.
   final RequestPurpose? purpose;
 
-  final bool? _payableInApp;
-
   /// Store payments policy (App Store 3.1.3(d), Google Play 1:1 services): the app
-  /// takes a card or bank-transfer payment only for live one-to-one lessons. The
-  /// server says so per request (`payableInApp`); without it, only the lesson
-  /// purposes are payable, and an unknown purpose never is.
-  bool get payableInApp => _payableInApp ?? (purpose != null && purpose!.isLiveOneToOneLessons);
+  /// takes a card or bank-transfer payment only for a verified lesson package. Only
+  /// the server can verify it (`payableInApp`); without its word, never offered.
+  final bool payableInApp;
 
   /// Null for a status this build does not know: never offered for payment.
   final RequestStatus? status;

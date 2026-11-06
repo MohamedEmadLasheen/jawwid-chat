@@ -3576,7 +3576,7 @@ class L10nAr extends L10n {
 
   @override
   String get billingLiveOneToOneService =>
-      'دروس قرآن مباشرة فردية: معلّم واحد وطالب واحد في الوقت نفسه. لا تُسجَّل الدروس.';
+      'دروس قرآن فردية مباشرة، تجمع بين معلّم واحد وطالب واحد عبر اتصال مباشر. لا يتم تسجيل الدروس.';
 
   @override
   String get billingPaySheetTitle => 'كيف تريد أن تدفع؟';

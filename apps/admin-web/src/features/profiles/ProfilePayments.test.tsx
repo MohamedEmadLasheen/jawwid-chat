@@ -530,6 +530,62 @@ describe('PD-27 on the Parent Profile', () => {
     expect(calls('GET', /\/invoices\/inv-1\/link$/)).toHaveLength(1)
   })
 
+  it('store payments policy: a plan or a balance names the child\'s lesson package; one without is marked not payable in the app', async () => {
+    const ledger = (id: string, voided = false) => ({
+      id, planMonths: 3, lessonsIncluded: 24, startsOn: '2026-09-01', source: 'payment_request' as const, requestId: 'r-x',
+      note: null, createdAt: '2026-09-01T08:00:00Z', createdBy: null, voided: voided ? { at: '2026-10-01T08:00:00Z', by: null, reason: 'x' } : null,
+    })
+    on('GET', /\/learners\/k-1\/subscription$/, () => json({
+      enforced: true, canRecord: true, canAddSubscription: false, canGrantException: false, standing: undefined,
+      subscriptions: [ledger('pkg-1'), ledger('pkg-void', true)], exceptions: [], renewalRequests: [],
+    }))
+    serve(billing({
+      instalments: [instalment({ id: 'i-loose', label: 'Uniform', payableInApp: false })],
+      requests: [request({ id: 'r-loose', label: 'Old balance', purpose: 'balance', payableInApp: false })],
+    }))
+    on('POST', /\/families\/f-1\/instalments$/, () => json(billing()))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+
+    // What the parent cannot pay in the app is marked, for the instalment and the request.
+    expect(await screen.findAllByText('Not payable in the app')).toHaveLength(2)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add instalments' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add instalments' })
+    expect(within(dialog).getByTestId('plan-in-app-hint')).toBeInTheDocument()
+    await userEvent.type(within(dialog).getByLabelText('Label'), 'Top-up')
+    await userEvent.type(within(dialog).getByLabelText('Amount of each instalment'), '50')
+    await chooseOption(userEvent, within(dialog).getByLabelText('For'), 'k-1')
+    const picker = await within(dialog).findByLabelText('Lesson package')
+    await chooseOption(userEvent, picker, 'pkg-1')
+    expect(within(dialog).queryByTestId('plan-in-app-hint')).toBeNull()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(calls('POST', /\/families\/f-1\/instalments$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/families\/f-1\/instalments$/)[0])).toMatchObject({ label: 'Top-up', learnerId: 'k-1', lessonSubscriptionId: 'pkg-1' })
+  })
+
+  it('a balance request sends the lesson package chosen for it', async () => {
+    on('GET', /\/learners\/k-1\/subscription$/, () => json({
+      enforced: true, canRecord: true, canAddSubscription: false, canGrantException: false, standing: undefined,
+      subscriptions: [{ id: 'pkg-1', planMonths: null, lessonsIncluded: 8, startsOn: '2026-09-01', source: 'staff', requestId: null, note: 'x', createdAt: '2026-09-01T08:00:00Z', createdBy: null, voided: null }],
+      exceptions: [], renewalRequests: [],
+    }))
+    serve(billing({ requests: [] }))
+    const created = request({ id: 'r-b', label: 'Balance', purpose: 'balance' })
+    on('POST', /\/families\/f-1\/payment-requests$/, () => json({ request: created, billing: billing({ requests: [created] }) }))
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Request payment' }))
+    const dialog = screen.getByRole('dialog', { name: 'Request a payment' })
+    await chooseOption(userEvent, within(dialog).getByLabelText('For'), 'balance')
+    expect(within(dialog).getByTestId('request-in-app-hint')).toHaveTextContent('Without one, the family can pay it only outside the app.')
+    await userEvent.type(within(dialog).getByLabelText('Label'), 'Balance')
+    await userEvent.type(within(dialog).getByLabelText('Amount'), '100')
+    await chooseOption(userEvent, within(dialog).getByLabelText('Child'), 'k-1')
+    await chooseOption(userEvent, await within(dialog).findByLabelText('Lesson package'), 'pkg-1')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create link' }))
+    await waitFor(() => expect(calls('POST', /\/families\/f-1\/payment-requests$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/families\/f-1\/payment-requests$/)[0])).toMatchObject({ purpose: 'balance', learnerId: 'k-1', lessonSubscriptionId: 'pkg-1' })
+  })
+
   it('a custom schedule sends items, one row per instalment', async () => {
     serve(billing())
     on('POST', /\/families\/f-1\/instalments$/, () => json(billing()))

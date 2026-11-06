@@ -1,12 +1,13 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { CURRENCIES } from '@/features/trials/copy'
-import { formatMoney } from '@/features/instalments/copy'
+import { formatDay, formatMoney } from '@/features/instalments/copy'
 import type { Payment, PaymentRequest, PlanMonths, RequestPurpose } from '@/features/payments/api'
 import { METHOD, PAY, PURPOSE_LABEL, fromMinor, owed } from '@/features/payments/copy'
 import { LinkPanel, ReasonDialog, ServerError as PaymentError } from '@/features/payments/PaymentParts'
 import { S as SUB, monthsLabel } from '@/features/subscriptions/copy'
+import { useSubscription } from '@/features/subscriptions/hooks'
 import type { FamilyBilling, InstalmentPaymentMethod, NewFamilyPayment, NewPaymentRequest, ParentProfile, ParentUpdate, PaymentMethod, TimelineInstalment } from './api'
 import { METHOD_LABEL, P, PLAN_MONTHS, describeError, planLabel, toMinor, useCopy } from './copy'
 import {
@@ -261,13 +262,17 @@ export function NewInstalmentsDialog({
   // PD-30: a plan for one child's subscription may carry its lessons.
   const [lessons, setLessons] = useState('')
   const [lessonPlan, setLessonPlan] = useState('')
+  // Store payments policy: without its own lessons, the child's existing package it pays for.
+  const [packageId, setPackageId] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const modeName = useId()
   const lessonsMinor = lessons.trim() === '' ? null : Number(lessons)
   const lessonsValid = lessonsMinor === null || (Number.isInteger(lessonsMinor) && lessonsMinor >= 1 && lessonsMinor <= 1000)
   const withLessons = learnerId && lessonsMinor !== null && lessonsValid
     ? { lessonsIncluded: lessonsMinor, ...(lessonPlan ? { planMonths: Number(lessonPlan) } : {}) }
-    : {}
+    : learnerId && lessonsMinor === null && packageId
+      ? { lessonSubscriptionId: packageId }
+      : {}
 
   const setRow = (i: number, patch: Partial<{ amount: string; dueDate: string }>) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
@@ -464,6 +469,8 @@ export function NewInstalmentsDialog({
           </Field>
         </div>
       )}
+      {learnerId && lessons.trim() === '' && <LessonPackagePicker learnerId={learnerId} value={packageId} onChange={setPackageId} />}
+      {!(learnerId && (lessons.trim() !== '' || packageId)) && <p className="field__hint" data-testid="plan-in-app-hint">{tx(PAY.planInAppHint)}</p>}
     </Dialog>
   )
 }
@@ -581,6 +588,7 @@ export function RequestPaymentDialog({
   const [periodEnd, setPeriodEnd] = useState('')
   const [days, setDays] = useState('14')
   const [lessons, setLessons] = useState('')
+  const [packageId, setPackageId] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   if (created) {
@@ -618,6 +626,7 @@ export function RequestPaymentDialog({
     if (pkg && lessonCount !== null) body.lessonsIncluded = lessonCount
     if (pkg && periodStart) body.periodStart = periodStart
     if (pkg && periodEnd) body.periodEnd = periodEnd
+    if (purpose === 'balance' && learnerId && packageId) body.lessonSubscriptionId = packageId
     create.mutate(body, { onSuccess: ({ request }) => setCreated(request) })
   }
 
@@ -702,6 +711,16 @@ export function RequestPaymentDialog({
           </div>
         </>
       )}
+      {purpose === 'balance' && learnerId && <LessonPackagePicker learnerId={learnerId} value={packageId} onChange={setPackageId} />}
+      <p className="field__hint" data-testid="request-in-app-hint">
+        {purpose === 'other'
+          ? tx(PAY.otherInAppHint)
+          : purpose === 'balance'
+            ? tx(PAY.balanceInAppHint)
+            : takesPackage(purpose)
+              ? tx(PAY.packageInAppHint)
+              : null}
+      </p>
       <Field label={tx(PAY.expiresIn)} hint={tx(PAY.expiresInHint)} error={errors.days}>
         {(id, d) => (
           <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={90} value={days} aria-describedby={d} onChange={(e) => setDays(e.target.value)} />
@@ -974,5 +993,34 @@ export function RefundPaymentDialog({ billing, payment, onClose }: { billing: Fa
         {(id, d) => <textarea id={id} className="input tf-textarea" dir="auto" rows={3} maxLength={500} value={reason} aria-describedby={d} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Dialog>
+  )
+}
+
+/**
+ * Store payments policy: the child's lesson packages that stand (PD-30 ledger), for an
+ * instalment plan or a balance to name. "None" leaves it payable outside the app only.
+ */
+function LessonPackagePicker({ learnerId, value, onChange }: { learnerId: string; value: string; onChange: (id: string) => void }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const view = useSubscription(learnerId)
+  const standing = (view.data?.subscriptions ?? []).filter((s) => s.voided === null)
+  // Another child chosen: a package of the previous one is not this child's.
+  useEffect(() => {
+    if (value && view.data && !standing.some((s) => s.id === value)) onChange('')
+  }, [value, view.data, standing, onChange])
+  return (
+    <Field label={tx(PAY.lessonPackage)}>
+      {(id) => (
+        <SearchableSelect id={id} className="select" value={value} onValueChange={(v) => onChange(v)}>
+          <option value="">{tx(PAY.noLessonPackage)}</option>
+          {standing.map((s) => (
+            <option key={s.id} value={s.id}>
+              {tx(PAY.lessonPackageOption, { n: s.lessonsIncluded, date: formatDay(s.startsOn, locale) })}
+            </option>
+          ))}
+        </SearchableSelect>
+      )}
+    </Field>
   )
 }

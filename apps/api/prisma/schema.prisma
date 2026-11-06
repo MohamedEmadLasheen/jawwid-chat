@@ -498,17 +498,17 @@ model MessageApproval {
 }
 
 model OutboxEvent {
-  id          String    @id @default(uuid()) @db.Uuid
-  type        String
-  payload     Json
-  status      String    @default("pending")
-  attempts    Int       @default(0)
-  lastError   String?   @map("last_error")
-  availableAt DateTime  @default(now()) @map("available_at") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  publishedAt DateTime? @map("published_at") @db.Timestamptz
+  id             String    @id @default(uuid()) @db.Uuid
+  type           String
+  payload        Json
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  availableAt    DateTime  @default(now()) @map("available_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
   /// PD-46: lesson:<id>:<revision>:<change>; unique where not null (partial index in SQL).
-  idempotencyKey String? @map("idempotency_key")
+  idempotencyKey String?   @map("idempotency_key")
 
   @@map("outbox_event")
   @@schema("chat")
@@ -2515,25 +2515,27 @@ model FamilyBilling {
 
 /// What a family owes and has paid. Append-only (chat.guard_family_instalment).
 model FamilyInstalment {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  familyId       String    @map("family_id") @db.Uuid
-  learnerId      String?   @map("learner_id") @db.Uuid
-  planId         String?   @map("plan_id") @db.Uuid
-  label          String
-  amountMinor    BigInt    @map("amount_minor")
-  currency       String
-  dueDate        DateTime  @map("due_date") @db.Date
-  createdBy      String    @map("created_by") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  paidOn         DateTime? @map("paid_on") @db.Date
-  paidMethod     String?   @map("paid_method")
-  paidReference  String?   @map("paid_reference")
-  paidRecordedBy String?   @map("paid_recorded_by") @db.Uuid
-  paidRecordedAt DateTime? @map("paid_recorded_at") @db.Timestamptz
-  voidedAt       DateTime? @map("voided_at") @db.Timestamptz
-  voidedBy       String?   @map("voided_by") @db.Uuid
-  voidReason     String?   @map("void_reason")
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  familyId             String    @map("family_id") @db.Uuid
+  learnerId            String?   @map("learner_id") @db.Uuid
+  planId               String?   @map("plan_id") @db.Uuid
+  /// Store payments policy: the lesson package it pays for; null = not payable in the app (20261106100000).
+  lessonSubscriptionId String?   @map("lesson_subscription_id") @db.Uuid
+  label                String
+  amountMinor          BigInt    @map("amount_minor")
+  currency             String
+  dueDate              DateTime  @map("due_date") @db.Date
+  createdBy            String    @map("created_by") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  paidOn               DateTime? @map("paid_on") @db.Date
+  paidMethod           String?   @map("paid_method")
+  paidReference        String?   @map("paid_reference")
+  paidRecordedBy       String?   @map("paid_recorded_by") @db.Uuid
+  paidRecordedAt       DateTime? @map("paid_recorded_at") @db.Timestamptz
+  voidedAt             DateTime? @map("voided_at") @db.Timestamptz
+  voidedBy             String?   @map("voided_by") @db.Uuid
+  voidReason           String?   @map("void_reason")
 
   @@map("family_instalment")
   @@schema("chat")
@@ -2543,31 +2545,33 @@ model FamilyInstalment {
 /// change (chat.guard_payment_request); 20261022170000_chat_pd027_payments.sql
 /// owns the DDL and the rules.
 model PaymentRequest {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  token           String    @unique
-  familyId        String?   @map("family_id") @db.Uuid
-  trialLessonId   String?   @map("trial_lesson_id") @db.Uuid
-  learnerId       String?   @map("learner_id") @db.Uuid
-  childName       String?   @map("child_name")
-  payerName       String?   @map("payer_name")
-  instalmentId    String?   @map("instalment_id") @db.Uuid
-  purpose         String
-  label           String
-  amountMinor     BigInt    @map("amount_minor")
-  currency        String
-  planMonths      Int?      @map("plan_months") @db.SmallInt
-  periodStart     DateTime? @map("period_start") @db.Date
-  periodEnd       DateTime? @map("period_end") @db.Date
-  expiresAt       DateTime  @map("expires_at") @db.Timestamptz
-  paidAt          DateTime? @map("paid_at") @db.Timestamptz
-  createdBy       String?   @map("created_by") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz
-  cancelledBy     String?   @map("cancelled_by") @db.Uuid
-  cancelReason    String?   @map("cancel_reason")
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String    @map("organization_id") @db.Uuid
+  token                String    @unique
+  familyId             String?   @map("family_id") @db.Uuid
+  trialLessonId        String?   @map("trial_lesson_id") @db.Uuid
+  learnerId            String?   @map("learner_id") @db.Uuid
+  childName            String?   @map("child_name")
+  payerName            String?   @map("payer_name")
+  instalmentId         String?   @map("instalment_id") @db.Uuid
+  purpose              String
+  label                String
+  amountMinor          BigInt    @map("amount_minor")
+  currency             String
+  planMonths           Int?      @map("plan_months") @db.SmallInt
+  periodStart          DateTime? @map("period_start") @db.Date
+  periodEnd            DateTime? @map("period_end") @db.Date
+  expiresAt            DateTime  @map("expires_at") @db.Timestamptz
+  paidAt               DateTime? @map("paid_at") @db.Timestamptz
+  createdBy            String?   @map("created_by") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  cancelledAt          DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledBy          String?   @map("cancelled_by") @db.Uuid
+  cancelReason         String?   @map("cancel_reason")
   /// PD-30: the lessons a subscription / renewal request buys, credited when it is paid in full.
-  lessonsIncluded Int?      @map("lessons_included")
+  lessonsIncluded      Int?      @map("lessons_included")
+  /// Store payments policy: the lesson package a balance request is owed for (20261106100000).
+  lessonSubscriptionId String?   @map("lesson_subscription_id") @db.Uuid
 
   @@map("payment_request")
   @@schema("chat")

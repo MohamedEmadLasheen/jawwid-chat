@@ -238,6 +238,7 @@ function RequestItem({ request: r, canCancel, onCancel }: { request: PaymentRequ
         <RequestStatusBadge status={r.status} />
         <strong dir="auto">{r.label}</strong>
         <span className="tf-muted">{tx(PURPOSE_LABEL[r.purpose])}</span>
+        {open && r.payableInApp === false && <Badge tone="neutral">{tx(PAY.notPayableInApp)}</Badge>}
       </div>
       <p className="pf-entry__meta pf-amount">{tx(PAY.amountLine, { amount: money(r.amountMinor), paid: money(r.paidMinor), remaining: money(r.remainingMinor) })}</p>
       <div className="pf-entry__meta">
