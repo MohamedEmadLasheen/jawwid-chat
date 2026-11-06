@@ -5423,4 +5423,106 @@ class L10nAr extends L10n {
 
   @override
   String get myReportsAnswerLabel => 'ردّنا';
+
+  @override
+  String get blockAction => 'حظر';
+
+  @override
+  String get unblockAction => 'إلغاء الحظر';
+
+  @override
+  String get blockPersonAction => 'حظر هذا الشخص';
+
+  @override
+  String get unblockPersonAction => 'إلغاء حظر هذا الشخص';
+
+  @override
+  String get blockPersonFallbackName => 'هذا الشخص';
+
+  @override
+  String blockConfirmTitle(String name) {
+    return 'حظر $name؟';
+  }
+
+  @override
+  String get blockConfirmBody =>
+      'لن يتمكن من مراسلتك أو الاتصال بك، ولن ترى رسائله.';
+
+  @override
+  String get blockConfirmLessons =>
+      'تستمر الدروس كالمعتاد: مكالمات الدروس وبطاقات الدروس ورسائل الأكاديمية تصلك كما هي.';
+
+  @override
+  String get blockConfirmAcademy => 'سنُبلغ الأكاديمية بذلك لتتابع الأمر.';
+
+  @override
+  String blockedSnack(String name) {
+    return 'تم حظر $name.';
+  }
+
+  @override
+  String unblockConfirmTitle(String name) {
+    return 'إلغاء حظر $name؟';
+  }
+
+  @override
+  String get unblockConfirmBody =>
+      'سترى رسائله مجددًا، ويمكنه مراسلتك والاتصال بك.';
+
+  @override
+  String unblockedSnack(String name) {
+    return 'تم إلغاء حظر $name.';
+  }
+
+  @override
+  String get blockErrorNotAllowed =>
+      'لا يمكن حظر هذا الشخص. يمكنك الإبلاغ عنه بدلًا من ذلك.';
+
+  @override
+  String get blockErrorNoSharedConversation =>
+      'يمكنك حظر من تشاركه محادثة فقط.';
+
+  @override
+  String get blockErrorRateLimited =>
+      'لقد حظرت عددًا كبيرًا اليوم. فضلًا حاول لاحقًا.';
+
+  @override
+  String get blockErrorTerms =>
+      'فضلًا وافق على شروط الاستخدام أولًا، ثم يمكنك الحظر.';
+
+  @override
+  String get blockErrorGeneric => 'تعذّر الحظر الآن. فضلًا حاول مرة أخرى.';
+
+  @override
+  String get unblockErrorGeneric =>
+      'تعذّر إلغاء الحظر الآن. فضلًا حاول مرة أخرى.';
+
+  @override
+  String get hiddenByBlockPlaceholder => 'رسالة مخفية: لقد حظرت هذا الشخص';
+
+  @override
+  String blockedComposerNotice(String name) {
+    return 'لقد حظرت $name. ألغِ الحظر لتتمكن من الكتابة.';
+  }
+
+  @override
+  String get blockedPeopleTitle => 'المحظورون';
+
+  @override
+  String get blockedPeopleSubtitle => 'من حظرتهم، ويمكنك إلغاء الحظر في أي وقت';
+
+  @override
+  String get blockedPeopleEmptyTitle => 'لا يوجد أحد محظور';
+
+  @override
+  String get blockedPeopleEmptyBody =>
+      'عندما تحظر شخصًا يظهر هنا، ويمكنك إلغاء حظره.';
+
+  @override
+  String blockedPeopleSince(String date) {
+    return 'محظور منذ $date';
+  }
+
+  @override
+  String get blockedPeopleLoadError => 'تعذّر تحميل قائمة المحظورين.';
 }
