@@ -15,6 +15,7 @@ import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
+import { blockersAmong } from '../../platform/blocks';
 import { CallEndReason, CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
@@ -78,6 +79,11 @@ const durationLost = (capSeconds: number) => Prisma.sql`
   end`;
 const MAX_HISTORY_PAGE = 100;
 
+/** PD-57 lesson call (CallService.isLessonCall): this many minutes before a lesson starts... */
+export const LESSON_CALL_EARLY_MINUTES = 15;
+/** ...until this many minutes after it ends. */
+export const LESSON_CALL_LATE_MINUTES = 15;
+
 /**
  * A keyset cursor: the last row's `started_at` and `id`, opaque to the client.
  *
@@ -134,13 +140,15 @@ export class CallService {
     this.requireConversationOrganization(initiator, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, initiator.actorId);
 
-    const { decision, participantActors, callType: type } = await this.decideInitiate(
+    const { decision, participantActors: decided, callType: type } = await this.decideInitiate(
       initiator,
       conv,
       membership,
       now,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // PD-57: nobody who blocked the caller is rung -- unless it is a lesson call.
+    const participantActors = await this.withoutBlockers(initiator, conv, decided, now);
 
     // Unguessable and server-owned.
     const roomName = `jawwid-${conv.id}-${randomUUID()}`;
@@ -193,6 +201,64 @@ export class CallService {
     }).catch((e: unknown) => {
       throw this.callRefusal(e) ?? e;
     });
+  }
+
+  /**
+   * PD-57 (roadmap §6.1 rule 2, §6.2; closure plan §5, D-6 exception 1): a
+   * callee who blocked the caller is not rung -- not seated on the call, so no
+   * ring, no push, no missed call. When that leaves nobody to ring (a 1:1, or a
+   * group whose every other member blocked the caller) the caller is answered
+   * COMM.CALL_UNAVAILABLE (409), like a busy line, and no call is made.
+   *
+   * EXCEPT A LESSON CALL, which always rings (isLessonCall). Asked on start
+   * only: callCapability stays advisory and says nothing about blocks.
+   */
+  private async withoutBlockers(initiator: Actor, conv: Conversation, participants: Actor[], now: Date): Promise<Actor[]> {
+    const callees = participants.filter((a) => a.actorId !== initiator.actorId);
+    const blockers = await blockersAmong(this.prisma, initiator.actorId, callees.map((a) => a.actorId));
+    if (blockers.size === 0) return participants;
+    const kept: Actor[] = [];
+    for (const a of participants) {
+      if (!blockers.has(a.actorId) || (await this.isLessonCall(initiator, conv, a, now))) kept.push(a);
+    }
+    if (!kept.some((a) => a.actorId !== initiator.actorId)) {
+      throw new CommError(CommErrorCode.CALL_UNAVAILABLE, 'the person you are calling is unavailable', 409);
+    }
+    return kept;
+  }
+
+  /**
+   * PD-57 D-6 exception 1: is this call, for this callee, a LESSON CALL? Exactly:
+   *
+   *   - the caller is a teacher, and the callee a parent (contact);
+   *   - the conversation is about learners (chat.conversation.learner_id, or
+   *     chat.conversation_learner rows: the Student Group, a family group);
+   *   - one of those learners is in the callee's family;
+   *   - that learner has a lesson with THIS teacher that is not cancelled,
+   *     moved or voided (outcome still open, or `held`) and is on now: from
+   *     LESSON_CALL_EARLY before its start to LESSON_CALL_LATE after its end,
+   *     at the moment the call is started.
+   *
+   * A call carries no lesson id; this is how a call is tied to the lesson it
+   * is for. Outside that window the same teacher's call is an ordinary call,
+   * and a block keeps it from ringing.
+   */
+  private async isLessonCall(caller: Actor, conv: Conversation, callee: Actor, now: Date): Promise<boolean> {
+    if (caller.kind !== 'teacher' || callee.kind !== 'contact') return false;
+    const [row] = await this.prisma.$queryRaw<Array<{ ok: number }>>`
+      SELECT 1 AS ok
+        FROM chat.lesson l
+        JOIN chat.learner ln ON ln.id = l.learner_id
+        JOIN chat.contact c ON c.id = ${callee.actorId}::uuid AND c.family_id = ln.family_id
+       WHERE l.teacher_id = ${caller.actorId}::uuid
+         AND l.organization_id = ${conv.organizationId}::uuid
+         AND (l.learner_id = ${conv.learnerId}::uuid
+              OR l.learner_id IN (SELECT cl.learner_id FROM chat.conversation_learner cl WHERE cl.conversation_id = ${conv.id}::uuid))
+         AND (l.outcome IS NULL OR l.outcome = 'held')
+         AND ${now}::timestamptz BETWEEN l.starts_at - ${LESSON_CALL_EARLY_MINUTES} * interval '1 minute'
+                                     AND l.ends_at + ${LESSON_CALL_LATE_MINUTES} * interval '1 minute'
+       LIMIT 1`;
+    return !!row;
   }
 
   /**

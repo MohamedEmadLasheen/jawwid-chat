@@ -1,4 +1,5 @@
 import type { PrismaService } from '../../platform/prisma.service';
+import { blockersAmong, hideableByBlock } from '../../platform/blocks';
 
 type Db = Pick<PrismaService, '$queryRaw'>;
 
@@ -17,9 +18,18 @@ type Db = Pick<PrismaService, '$queryRaw'>;
  *     per person (PD-33);
  *   - in a department room (PD-35 B6), only those still in its department --
  *     chat.department_room_party, live: a member row the sweep has not yet
- *     ended reaches no one.
+ *     ended reaches no one;
+ *   - PD-57: for the author's text, image, video, voice or file message
+ *     (`opts.messageType`), never anyone who blocked the author -- no push and
+ *     no Notification Center entry. A system or card message (lesson cards,
+ *     schedule, cancellations) reaches them all the same (D-6 exception 2).
  */
-export async function messageAudience(db: Db, conversationId: string, authorId: string | null): Promise<string[]> {
+export async function messageAudience(
+  db: Db,
+  conversationId: string,
+  authorId: string | null,
+  opts: { messageType?: string | null } = {},
+): Promise<string[]> {
   const live = await db.$queryRaw<Array<{ actor_id: string; seat_row: boolean }>>`
     SELECT cm.actor_id::text AS actor_id,
            EXISTS (SELECT 1 FROM chat.conversation_seat st WHERE st.member_id = cm.id AND st.left_at IS NULL) AS seat_row
@@ -47,5 +57,8 @@ export async function messageAudience(db: Db, conversationId: string, authorId: 
       JOIN chat.conversation c ON c.id = ${conversationId}::uuid
      WHERE c.type <> 'department_room' OR chat.department_room_party(r.id, c.department_id)`;
   const kept = new Set(parties.map((p) => p.id));
-  return audience.filter((id) => kept.has(id));
+  const inRoom = audience.filter((id) => kept.has(id));
+  if (!authorId || !hideableByBlock(opts.messageType)) return inRoom;
+  const blockers = await blockersAmong(db, authorId, inRoom);
+  return inRoom.filter((id) => !blockers.has(id));
 }

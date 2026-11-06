@@ -93,6 +93,10 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   case_opened: { version: 1, category: 'task', inbox: 'inbox.case_opened', action: 'open_case' },
   case_assigned: { version: 1, category: 'task', inbox: 'inbox.case_assigned', action: 'open_case' },
   case_due_soon: { version: 1, category: 'task', inbox: 'inbox.case_due_soon', action: 'open_case' },
+  // PD-57 WP-2 (roadmap §6.3): a block, to each responsible manager. Names behind
+  // sign-in only (the push names nobody); refs.reportId is the case, opened with
+  // the permissions the manager already has.
+  block_created_manager: { version: 1, category: 'task', inbox: 'inbox.block_created_manager' },
   // PD-47 PR-4: a task, to the person who must act on it. Generic texts: never
   // the task's title, an amount, a card or a family (a lock screen is not
   // behind sign-in); the task is read in Tasks, which re-checks who may see it.
@@ -142,3 +146,23 @@ export const TAB_CATEGORIES: Readonly<Partial<Record<InboxTab, readonly Notifica
   conversations: ['conversation', 'call'],
   announcements: ['announcement', 'system', 'marketing'],
 };
+
+/**
+ * PD-57 (closure plan 2026-11-06 §5, D-6 exception 3): the Notification Center
+ * kinds a block NEVER suppresses, by category -- an explicit allowlist:
+ *
+ *   lesson   lesson reminders, schedule changes, clock shifts, cancellations
+ *   payment  invoices, reminders, receipts (administrative)
+ *   task     work for staff: cases, tasks, reports, block notices (administrative)
+ *   system   the academy's own notices (conduct reminders, the fallback kind)
+ *
+ * Everything else (conversation, call, announcement, marketing) authored by a
+ * person the recipient blocked is skipped. Changing this list changes what a
+ * block lets through: it is tested (block-allowlist.spec.ts).
+ */
+export const BLOCK_EXEMPT_CATEGORIES: ReadonlySet<NotificationCategory> = new Set<NotificationCategory>(['lesson', 'payment', 'task', 'system']);
+
+/** Would a block suppress this kind of entry (when its author is blocked)? */
+export function suppressedByBlock(ruleKey: string | null | undefined, eventType: string): boolean {
+  return !BLOCK_EXEMPT_CATEGORIES.has(catalogEntry(ruleKey, eventType).category);
+}

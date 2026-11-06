@@ -148,6 +148,14 @@ describe('PD-40: every route declares what it asks of staff', () => {
     );
   });
 
+  it('PD-57 WP-2: blocking is self-service (the service refuses staff with COMM.BLOCK_NOT_ALLOWED)', () => {
+    expect(routes.filter((r) => r.path.startsWith('/me/blocks')).map((r) => [r.method, r.path, r.access?.kind]).sort()).toEqual([
+      ['DELETE', '/me/blocks/:id', 'self'],
+      ['GET', '/me/blocks', 'self'],
+      ['POST', '/me/blocks', 'self'],
+    ]);
+  });
+
   it('docs/security/pd040-route-permissions.md is up to date', () => {
     const want = table(routes);
     if (process.env.PD040_WRITE_ROUTE_TABLE === '1') writeFileSync(TABLE, want);

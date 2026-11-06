@@ -9,8 +9,9 @@ import { CommEvent } from '../contracts/events';
 import { ActorKind, NotificationStatus } from '../contracts/vocab';
 import { NotificationService, type ScheduledDeliveryListener } from './notification.service';
 import { QuietHoursService } from './quiet-hours.service';
-import { catalogEntry, severityOf, type NotificationCategory } from './notification-catalog';
+import { suppressedByBlock, catalogEntry, severityOf, type NotificationCategory } from './notification-catalog';
 import { ACADEMY_ZONE } from '../../platform/time-zone';
+import { hasBlocked } from '../../platform/blocks';
 import { messageAudience } from '../outbox/message-audience';
 import { capFreesAt, deferForQuiet, heldAdd, heldCount, heldKeep, heldRead, heldTemplate, type HeldChats } from './chat-push-policy';
 
@@ -55,6 +56,8 @@ export interface EmitInput {
    * than left cancelled under its never-reusable key.
    */
   reviveCancelled?: boolean;
+  /** PD-57: who the entry is from, when a person (a block may suppress it; see emit). */
+  author?: string | null;
 }
 
 export interface MessageEmitInput {
@@ -110,6 +113,12 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
 
   /** Creates (or finds) the item and, when the person should be pushed, its delivery. Returns the item id. */
   async emit(input: EmitInput): Promise<string | null> {
+    // PD-57 (roadmap §6.2, D-6 exception 3): nothing from a person the recipient
+    // blocked -- except the lesson, schedule and administrative kinds
+    // (notification-catalog.ts BLOCK_EXEMPT_CATEGORIES), which always go.
+    if (input.author && suppressedByBlock(input.ruleKey, input.eventType) && (await hasBlocked(this.prisma, input.recipientId, input.author))) {
+      return null;
+    }
     const organizationId = await this.organizationFor(input.recipientId, input.conversationId);
     if (!organizationId) {
       this.log.error(`notification ${input.ruleKey ?? input.eventType} refused: recipient not placeable in an organization`);

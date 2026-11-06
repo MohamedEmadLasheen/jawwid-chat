@@ -7,6 +7,9 @@ import { ReportsService } from './reports.service';
 import { ModerationController } from './moderation.controller';
 import { ModerationService } from './moderation.service';
 import { ModerationMediaController } from './moderation-media.controller';
+import { BlocksController } from './blocks.controller';
+import { BlocksService } from './blocks.service';
+import { BlockService } from '../platform/blocks';
 import { OBJECT_STORAGE } from '../platform/tokens';
 import { selectObjectStorage } from '../communication/attachments/storage.provider';
 
@@ -18,11 +21,13 @@ import { selectObjectStorage } from '../communication/attachments/storage.provid
  * AccountAdminModule the PD-21 suspension behind `account_suspended`.
  * ModerationMediaController serves an evidence attachment's bytes (closure
  * plan §4) from the object storage, behind the moderation scope.
+ * PD-57 WP-2: Block (BlocksController, /me/blocks); its enforcement lives where
+ * the data is read (platform/blocks.ts).
  */
 @Module({
   imports: [AuthModule, CommunicationModule, AccountAdminModule],
-  controllers: [ReportsController, ModerationController, ModerationMediaController],
-  providers: [ReportsService, ModerationService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
-  exports: [ReportsService, ModerationService],
+  controllers: [ReportsController, ModerationController, ModerationMediaController, BlocksController],
+  providers: [ReportsService, ModerationService, BlocksService, BlockService, { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage }],
+  exports: [ReportsService, ModerationService, BlocksService, BlockService],
 })
 export class ModerationModule {}

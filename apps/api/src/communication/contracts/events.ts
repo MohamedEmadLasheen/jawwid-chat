@@ -159,6 +159,14 @@ export const CommEvent = {
    */
   TASK_CHANGED: 'task.changed',
   /**
+   * PD-57 WP-2 (roadmap §6.3, A-2a): a block was made and these responsible
+   * managers were newly told of it (chat.actor_block_manager_notice rows just
+   * inserted; a re-block while the case is open names nobody and is not sent).
+   * Ids only, NEVER a conversation: the worker sends each one
+   * `block_created_manager` (in-app + push, normal quiet hours).
+   */
+  BLOCK_CREATED: 'moderation.block_created',
+  /**
    * PD-57 (roadmap §5.4): a report was filed (`change: created`), or an open one
    * was raised to child_safety by a duplicate (`change: raised`). Ids and the
    * priority only: NEVER the conversation (the worker would fan it out to the
@@ -224,6 +232,12 @@ export interface MessageCreatedPayload {
    * conversation would be a push storm. Absent = an ordinary message.
    */
   silent?: boolean;
+  /**
+   * PD-57: set only on the copy a blocker of the author receives (the author's
+   * text, image, video, voice or file message), so the placeholder is drawn.
+   * The payload never carries a body for anyone.
+   */
+  hiddenByBlock?: boolean;
 }
 
 export interface MentionCreatedPayload {
@@ -518,6 +532,7 @@ export interface CommEventPayloads {
   [CommEvent.REPORT_CREATED]: ReportCreatedPayload;
   [CommEvent.REPORT_ANSWERED]: ReportAnsweredPayload;
   [CommEvent.CONDUCT_WARNING]: ConductWarningPayload;
+  [CommEvent.BLOCK_CREATED]: BlockCreatedPayload;
 }
 
 /** PD-57. No conversationId, no content: ENG-04 reads the report through its own path. */
@@ -540,6 +555,18 @@ export interface ConductWarningPayload {
   warningId: string;
   recipientKind: 'contact' | 'teacher' | 'staff';
   recipientId: string;
+}
+
+/** PD-57 WP-2. Ids only. */
+export interface BlockCreatedPayload {
+  organizationId: string;
+  blockId: string;
+  reportId: string;
+  blockerKind: 'contact' | 'teacher';
+  blockerId: string;
+  blockedKind: 'contact' | 'teacher' | 'staff';
+  blockedId: string;
+  managerStaffIds: string[];
 }
 
 /** PD-47. A client drops a revision lower than one it has; it refetches through its own authorized route. */
