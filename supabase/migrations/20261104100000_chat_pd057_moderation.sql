@@ -250,8 +250,10 @@ begin
     end if;
     -- Defence in depth for the API's read check (closure plan §6): a parent or a
     -- teacher reports only a message of a conversation they are in now, or were
-    -- in when it was sent. (Staff read through coverage and stepping-in rules
-    -- that only the API knows; their access is the API's alone.)
+    -- in when it was sent. A current member reads the whole history
+    -- (MessageService.visibilityFilter does not look at joined_at), so a
+    -- current member may report an older message. (Staff read through coverage
+    -- and stepping-in rules that only the API knows; their access is the API's.)
     if new.target_kind = 'message' and new.message_id is not null and new.conversation_id is not null
        and new.reporter_kind in ('contact', 'teacher') and not exists (
          select 1 from chat.conversation_member cm
@@ -261,7 +263,8 @@ begin
             and (cm.left_at is null or (cm.joined_at <= m.created_at and cm.left_at >= m.created_at))) then
       raise exception 'a message report is by a member of the message''s conversation' using errcode = 'insufficient_privilege';
     end if;
-    -- A person report through a conversation: the reporter is in it.
+    -- A person report through a conversation: the reporter is or was in it
+    -- (someone who left a group after being harassed there may still report).
     if new.target_kind = 'person' and new.conversation_id is not null and new.reporter_kind in ('contact', 'teacher')
        and not exists (select 1 from chat.conversation_member cm
                         where cm.conversation_id = new.conversation_id
