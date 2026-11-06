@@ -30,8 +30,11 @@ because an instalment becomes overdue by the calendar.
 - **Balance** = all standing subscriptions' lessons − used. Grace lessons come out of the next one.
 - **Grace**: at balance 0 two more lessons may happen ("2 left", then "1 left"); at −2 the child is locked.
   `subscription.grace_lessons` in `chat.config` (default 2).
-- **Overdue**: an instalment of the family, or of this child, unpaid (`paid_on` null — paid in part is
-  still unpaid), not voided, due before today and **on or after `subscription.overdue_from`**
+- **Overdue**: an instalment of this child's **lesson package** (`lesson_subscription_id` names a
+  standing `chat.learner_subscription`; D-2, owner 2026-11-06, migration `20261106130000`), unpaid
+  (`paid_on` null — paid in part is still unpaid), not voided, due before today and **on or after
+  `subscription.overdue_from`**. An instalment that names no package (a family-wide one, or one never
+  verified as lessons, which is also not payable in the app) is listed but never locks.
   — go-live: the academy day enforcement was FIRST switched on (recorded once by the worker, see
   *Switch*). Unset until then, and then no instalment locks.
 
@@ -44,43 +47,44 @@ It is computed NOW from the inputs (`chat.compute_learner_access`) — an instal
 midnight or an exception that ran out counts at once, and a stale or missing `chat.learner_access` row
 never opens a group the inputs lock (fail closed). The stored row is what the worker announces and holds
 from. It answers the STATE, whatever `SUBSCRIPTION_LOCK_ENFORCED` says; callers apply the switch. Every PD-30
-check goes through it (`SubscriptionLockReader.lockOf` / `isLocked`: canSend, calls, reactions, booking,
-the hold that stops the materializer), and other features ask it too (PD-31's moves and bookings, via
+check goes through it (`SubscriptionLockReader.lockOf` / `isLocked`: booking, moves, the hold that stops
+the materializer; since 2026-11-06 never a chat write or a call), and other features ask it too (PD-31's moves and bookings, via
 `SchedulingService.lockOf()`).
 
 ## What "locked" does (when `SUBSCRIPTION_LOCK_ENFORCED=true`)
 
+**Amended 2026-11-06 (owner; `../product/pd-registry/PD-30-amendment-chat-open.md`):** the chat stays
+fully accessible; only new lesson bookings pause.
+
 | | Parent | Teacher | Staff (supervisor, managers, super admin) |
 |---|---|---|---|
-| Message, edit, reaction, pin, forward into, delete for everyone, upload, in the child's family / student group | 403 `COMM.SUBSCRIPTION_LOCKED` | 403 | allowed |
-| Call in that group (`call-capability` says `canCall: false`) | refused | refused | allowed |
-| The family's direct chat with the supervisor | never locked | — | — |
-| Book a lesson / make-up for the child | refused | refused | refused (grant an exception instead) |
-| Banner (`GET /conversations/:id` → `paymentLock`) | child + reason + `canPay` | child only ("lessons paused") | child + reason, `readOnly: false` |
+| Message, edit, reaction, pin, forward into, delete for everyone, upload, in the child's family / student group | allowed | allowed | allowed |
+| Call in that group | allowed | allowed | allowed |
+| The family's direct chat with the supervisor | allowed | — | — |
+| Book a lesson / make-up, move a lesson, ask for new weekly times | refused (`COMM.SUBSCRIPTION_LOCKED`) | refused | refused (grant an exception instead) |
+| Lessons already on the calendar | go ahead (D-1) | go ahead | go ahead |
+| Banner (`GET /conversations/:id` → `paymentLock`) | child + reason + `canPay`, `readOnly: false` | child only, `readOnly: false` | child + reason, `readOnly: false` |
 
 A family group with several children locks when any one of them is locked; lessons stay per child. A
 family group with no `conversation_learner` rows (legacy) is taken to be about every child of its family.
 
-**Holds.** On the next sweep after a lock, the child's **regular** lessons that have not started become
-`suspended` with `outcome_by_kind = 'system'` and note `subscription` — owed to no one (payroll pays
-only `held` / `student_no_show`), out of every statistic, reminders cancelled — and the materializer
-creates none (`chat.learner_suspended_on` asks `chat.learner_access.held`; its only caller is the
-materializer, which looks only forward, so the "any day" answer for a held child changes nothing past).
-Staff and the family read "Suspended — payment" (`suspendedFor: 'payment'`); a TEACHER reads only
-"suspended" (no `suspendedFor`, no note) — nothing financial reaches a teacher. On unlock the next sweep clears `held` and
-materializes: a suspended row does not hold its slot, so each regular time gets exactly one lesson again,
-and the Schedule hides the held copy (in the query, before the row limit). Make-ups already booked are
-not held.
+**Holds (D-1, owner 2026-11-06).** On the next sweep after a lock, `chat.learner_access.held` is set
+and the materializer creates no further regular lessons for the child (`chat.learner_suspended_on` asks
+`held`). It is also read by the Schedule's next-start query (`slotNextStarts`, which since D-1 counts a
+held day that still has its booked lesson), PD-31's blocked-occurrence check and trials. **Lessons already on the
+calendar are not touched: they go ahead, are reminded, owed and counted as usual.** The materializer
+runs `lesson.materialize_weeks` ahead (default 4), so a locked child keeps up to that many weeks of
+regular lessons that were booked before the lock. On unlock the next sweep clears `held` and
+materializes again; each regular time gets exactly one lesson.
 
-**Not owed, not counted** — where that is decided: PD-18 payroll pays only
-`PAID_OUTCOMES = ['held', 'student_no_show']` (`apps/api/src/teacher-file/teacher-payroll.service.ts`),
-and PD-15's month leaves `suspended` out of `totalScheduled`
-(`monthSummary`, `apps/api/src/lessons/stats.service.ts`). `pd030-subscription-lock-http.spec.ts`
-("holds: …") asserts both: the teacher's `totalScheduled` drops by exactly the held lessons and returns
-when they are re-materialized, and `PAID_OUTCOMES` excludes `suspended`.
+Before 2026-11-06 the hold also suspended the booked lessons (`suspended`, `outcome_by_kind = 'system'`,
+note `subscription`). Rows suspended that way stay as history: they are owed to no one (payroll pays only
+`PAID_OUTCOMES = ['held', 'student_no_show']`), out of `totalScheduled`, read "Suspended — payment" by
+staff and only "suspended" by a teacher, and do not hold their slot, so the Schedule hides such a copy
+once its time is filled again.
 
 **Lock order.** A child's `chat.learner_access` row first, then its lesson rows — everywhere: the hold
-takes the access row and then suspends lessons, and an outcome written on a lesson takes the access row
+takes the access row (and, since D-1, no lesson row), and an outcome written on a lesson takes the access row
 in a BEFORE trigger (`chat.pd030_lesson_locks_access_first`), before the lesson's own row lock. The
 state row is written only when the computed state differs.
 

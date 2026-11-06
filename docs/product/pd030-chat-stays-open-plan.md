@@ -3,7 +3,9 @@
 **Owner decision, 2026-11-06.** When a family runs out of lessons or has an overdue instalment,
 the parent–teacher group chat stays fully accessible. Only new lesson bookings pause.
 
-**Status:** plan only. Nothing here is implemented in the R-4 PR.
+**Status (2026-11-06):** D-1 and D-2 approved by the owner ("Approve D-1 and D-2"). The API part
+(PRs 1 and 2 below, without the D-3 texts) is in branch `claude/pd030-chat-stays-open`; the decision
+record is `pd-registry/PD-30-amendment-chat-open.md`. D-3 (wording) is still open.
 
 This closes risk R-3 of `docs/release/app-review-notes-payments.md`. Locking the in-app chat
 behind payment can read as "pay to unlock an app feature" (App Store 3.1.1, Google Play
@@ -38,13 +40,16 @@ turns enforcement on in production.
 
 ## 3. Decisions needed from the owner
 
-- **D-1. Lessons already booked when the lock starts.** Today they are suspended (E-4).
+- **D-1. Lessons already booked when the lock starts. APPROVED (recommended option), 2026-11-06.**
+  Measured: `lesson.materialize_weeks` = 4, so a locked child keeps up to four weeks of lessons
+  booked before the lock. Before, they were suspended (E-4).
   "Only new lesson bookings pause" suggests they should go ahead.
   - **Recommended:** a lesson already on the calendar is held as booked. The materializer is still
     held, so no further regular lessons appear.
   - **Dependency:** how far ahead lessons are materialized decides how many lessons a lapsed
     family keeps receiving. Measure the horizon before choosing.
-- **D-2. What starts the lock.** An overdue instalment that is not for a lesson package (R-4:
+- **D-2. What starts the lock. APPROVED (recommended option), 2026-11-06; migration
+  `20261106130000_chat_pd030_lock_lesson_instalments`.** An overdue instalment that is not for a lesson package (R-4:
   `lesson_subscription_id` is null) still starts the lock (reason `overdue`).
   - **Recommended:** count only instalments of a lesson package, so a non-lesson debt never
     pauses lessons.
@@ -82,11 +87,17 @@ turns enforcement on in production.
 
 ## 5. Dependencies and overlaps
 
-- Open PR #464 (PD-57 Report sheet) changes `chat_screen.dart`. Rebase on it, or land after it.
+- PR #464 (PD-57 Report sheet, `chat_screen.dart`) is merged; build the Flutter part on main.
+- Open PR #478 (PD-57 Block API) changes `authorization.service.ts` and `message.service.ts`
+  near the removed lock checks; whichever lands second rebases.
+- **No app update is needed for the chat to open.** The app hides its composer and banner only when
+  `paymentLock.readOnly` is true (`chat_screen.dart`), and the server now always sends false. The
+  Flutter and Admin Web PRs (3 and 4) add the informational banner, which needs the D-3 wording.
 - Open PR #449 (PD-32) changes `notification-catalog.ts`. The same applies.
 - The API contract for `paymentLock` on `GET /conversations/:id` keeps its shape, so older app
-  builds still render. An older build would still hide the composer until it is updated. That is
-  acceptable, because production enforcement is off.
+  builds still render, and with `readOnly` false they keep the composer. They also show no banner,
+  so the parent loses the banner's "open subscriptions" button until PR 3 ships. Ship PR 3 before
+  enforcement is turned on in production.
 - Do not turn `SUBSCRIPTION_LOCK_ENFORCED` on in production before this ships. Turning it on is
   an owner action, not part of any PR.
 

@@ -1478,7 +1478,11 @@ export class SchedulingService {
          AND NOT EXISTS (SELECT 1 FROM chat.lesson l
                           WHERE l.schedule_slot_id = s.id AND l.starts_at = o.at AND l.outcome IS NOT NULL)
          AND NOT EXISTS (SELECT 1 FROM chat.teacher_day_off off WHERE off.teacher_id = s.teacher_id AND off.day = o.day)
-         AND NOT chat.learner_suspended_on(s.learner_id, o.day)
+         -- PD-30 D-1 (2026-11-06): a child held for payment keeps the lessons already
+         -- booked, so a held day that has its lesson is still the next start.
+         AND (NOT chat.learner_suspended_on(s.learner_id, o.day)
+              OR EXISTS (SELECT 1 FROM chat.lesson b
+                          WHERE b.schedule_slot_id = s.id AND b.starts_at = o.at AND b.outcome IS NULL))
        GROUP BY s.id`;
     return new Map(rows.filter((r) => r.next_at !== null).map((r) => [r.id, r.next_at as Date]));
   }

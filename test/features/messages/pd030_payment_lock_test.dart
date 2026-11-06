@@ -168,6 +168,21 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
     });
 
+    // PD-30 amendment (owner, 2026-11-06): the server sends readOnly false to everyone, so a
+    // locked child's group keeps its composer for the parent and the teacher in this build too.
+    for (final role in [UserRole.parent, UserRole.teacher]) {
+      testWidgets('${role.name} with readOnly false (chat stays open): the composer stays', (tester) async {
+        await tester.pumpWidget(harness(
+          role: role,
+          conversation: locked(const PaymentLock(readOnly: false, canPay: false, children: [LockedChild(id: 'k1', name: 'Adam')])),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('payment-lock-banner')), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+      });
+    }
+
     testWidgets('in Arabic', (tester) async {
       await tester.pumpWidget(harness(role: UserRole.parent, conversation: locked(parentLock), onOpenSubscriptions: (_) {}, locale: const Locale('ar')));
       await tester.pumpAndSettle();

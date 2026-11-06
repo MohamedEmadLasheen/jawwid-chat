@@ -329,6 +329,19 @@ describe('GET /dashboard/billing -- instalments, receipts and locked subscriptio
     await staleRow(s.learnerId, 'open');
     expect(tileOf(await both(s.managerId), 'parents.locked')?.count).toBe(0);
     // PD-30 goes live a month back: learner_l's instalment 3 days overdue locks it at once, with no sweep run.
+    // Only an instalment of a lesson package that stands locks (D-2, 2026-11-06): give learner_l a
+    // fresh package with lessons to spare, and make the overdue instalment that package's.
+    await carried(s.learnerId, 20, 0);
+    await g.prisma.$transaction([
+      g.prisma.$executeRawUnsafe(`set local session_replication_role = replica`),
+      g.prisma.$executeRawUnsafe(
+        `update chat.family_instalment i
+            set lesson_subscription_id = (select s.id from chat.learner_subscription s
+                                           where s.learner_id = $1::uuid and s.voided_at is null limit 1)
+          where i.learner_id = $1::uuid and i.paid_on is null and i.due_date < chat.academy_today()`,
+        s.learnerId,
+      ),
+    ]);
     await goLive(30);
     await expectParity(s.managerId, true, true);
     mgr = await both(s.managerId);
