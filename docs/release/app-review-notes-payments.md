@@ -64,7 +64,7 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 | Not recorded, no replay | — | "not available for replay afterwards" | PASS for the call (no egress, guarded). **Risk:** see R-2 below. |
 | Only lesson items paid outside store billing | — | Mixed SKUs | PASS: non-lesson items refused in the app (tested) |
 | Marketed as live 1:1 lessons, never content or features | 3.1.1 | "marketed to users as digital" | PASS in the app (pay sheet, Stripe page). The **store listings** must say the same (owner, at submission). |
-| Nothing digital unlocked by paying | 3.1.1 | Payments §2 | **Risk:** see R-3 below. |
+| Nothing digital unlocked by paying | 3.1.1 | Payments §2 | PASS: the chat is never locked for payment; an unpaid package pauses only new lesson bookings (R-3 below) |
 | In-app links to the non-store payment | 3.1.3 intro | §4, unless exempt | Permitted under the exemption on Google Play. **Risk on Apple:** see R-1 below. |
 
 ### Residual risks (the owner accepted the approach; these are what a reviewer may raise)
@@ -79,15 +79,20 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 - **R-2 Google, persistent lesson artefacts.** Whiteboard pages persist after a lesson and can be
   exported; lesson reports are written by the teacher. Neither is a recording of the session.
   Describe them in review as the teacher's notes, not a replay.
-- **R-3 Both, the PD-30 chat lock.** When a package's lessons run out (after the grace lessons) or
-  an instalment is overdue, the child's group chat becomes read-only for the parent and teacher.
-  A reviewer could read that as paying to unlock an app feature (Apple 3.1.1, Google Payments §2).
-  The parent's direct chat with their supervisor never locks.
+- **R-3 Both, the PD-30 chat lock (resolved on the server, 2026-11-06).** Under PD-30 as first
+  built, when a package's lessons ran out (after the grace lessons) or an instalment was overdue, the
+  child's group chat became read-only for the parent and teacher. A reviewer could read that as
+  paying to unlock an app feature (Apple 3.1.1, Google Payments §2). Now only new lesson bookings
+  pause; the chat is never locked for payment.
   - **Owner decision (2026-11-06):** the group chat stays fully accessible, and only new lesson
     bookings pause.
-  - The plan is `docs/product/pd030-chat-stays-open-plan.md` (not implemented yet).
+  - The plan is `docs/product/pd030-chat-stays-open-plan.md`. The server part is done
+    (2026-11-06, `docs/product/pd-registry/PD-30-amendment-chat-open.md`): the group chat and its
+    calls are never refused for payment, in every app build; only new bookings pause. Only an
+    instalment the family can pay in the app (a lesson package's) can start the lock.
+  - Still open: the owner's wording for the cards, pushes and banner (D-3).
   - Production enforcement (`SUBSCRIPTION_LOCK_ENFORCED`) is off, so nothing locks there today.
-    Keep it off until the plan ships.
+    Keep it off until the D-3 wording ships.
 
 - **R-4 Instalments and balances: resolved (2026-11-06).** Each now names the lesson package it
   pays for, and the server refuses an in-app payment for one that names none (table in §2).

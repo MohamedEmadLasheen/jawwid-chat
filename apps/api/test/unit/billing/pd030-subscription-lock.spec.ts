@@ -1,9 +1,11 @@
 /**
  * PD-30 (2026-10-26): the subscription lock's pure rules.
  *
- *  - canSend / canCall: a family or student group with a locked child is
- *    read-only for the parent and the teacher; staff still write; a direct
- *    chat is never consulted; enforcement off = nothing refused.
+ *  - canSend / canCall: the chat stays open (owner, 2026-11-06, R-3 of
+ *    docs/release/app-review-notes-payments.md): a group with a locked child is
+ *    writable and callable for the parent, the teacher and staff alike, and the
+ *    lock is never consulted. Only new lesson bookings pause (LessonService.
+ *    assertMayBook, proven over HTTP).
  *  - who grants an exception: the super admin, the Operations Manager, the
  *    Sales Manager -- nobody else.
  *  - "Lesson N of M": the next lesson's place in the subscriptions in order.
@@ -48,8 +50,9 @@ const LIVE_GROUP: LiveMember[] = [
 ];
 const KINDS = LIVE_GROUP.map((m) => m.actorKind);
 
-function authz(lock: FakeLock) {
-  return new AuthorizationService(new FakeCoverage(null), new FakeStaffScope({ 'admin-1': StaffAccessBasis.RESPONSIBLE }), lock);
+/** The lock is not an input any more: whatever it says, the chat rules are the same. */
+function authz(_lock: FakeLock) {
+  return new AuthorizationService(new FakeCoverage(null), new FakeStaffScope({ 'admin-1': StaffAccessBasis.RESPONSIBLE }));
 }
 
 describe('PD-30 — a group locked for payment', () => {
@@ -59,33 +62,29 @@ describe('PD-30 — a group locked for payment', () => {
   it.each([
     ['the parent', parent()],
     ['the teacher', teacher()],
-  ])('refuses %s a message and a call in a locked student or family group', async (_who, actor) => {
+    ['staff', admin()],
+  ])('lets %s write and call in a student or family group with a locked child, without asking the lock', async (_who, actor) => {
     const a = authz(new FakeLock(true, [ADAM]));
     for (const conv of [group, familyGroup]) {
       const send = await a.canSend(actor, conv, member(actor), { visibility: 'customer' }, NOW, null, KINDS, LIVE_GROUP);
-      expect(send).toMatchObject({ allowed: false, code: CommErrorCode.SUBSCRIPTION_LOCKED });
+      expect(send.allowed).toBe(true);
       const call = await a.canCall(actor, conv, member(actor), KINDS.map((kind) => ({ kind })) as never, NOW, null, LIVE_GROUP, CallIntent.INITIATE);
-      expect(call).toMatchObject({ allowed: false, code: CommErrorCode.SUBSCRIPTION_LOCKED });
-      expect(await a.refusePaymentLockFor(actor, conv)).toMatchObject({ allowed: false, code: CommErrorCode.SUBSCRIPTION_LOCKED });
+      expect(call.allowed).toBe(true);
     }
   });
 
-  it('lets staff write in the locked group', async () => {
-    const a = authz(new FakeLock(true, [ADAM]));
-    const staff = admin();
-    const send = await a.canSend(staff, group, member(staff), { visibility: 'customer' }, NOW, null, KINDS, LIVE_GROUP);
-    expect(send.allowed).toBe(true);
-    expect(await a.refusePaymentLockFor(staff, group)).toBeNull();
+  it('has no payment rule left for chat writes (reactions and deletes asked it)', () => {
+    const a = authz(new FakeLock(true, [ADAM])) as unknown as Record<string, unknown>;
+    expect(a.refusePaymentLockFor).toBeUndefined();
+    expect(a.refusePaymentLock).toBeUndefined();
   });
 
-  it('never consults the lock for a direct chat: the parent and their supervisor always talk', async () => {
-    const lock = new FakeLock(true, [ADAM]);
-    const a = authz(lock);
+  it('the parent and their supervisor always talk in their direct chat', async () => {
+    const a = authz(new FakeLock(true, [ADAM]));
     const direct = conversation({ id: 'd-1', type: 'direct' });
     const p = parent();
     const send = await a.canSend(p, direct, member(p), { visibility: 'customer' }, NOW, null, ['contact', 'staff'], []);
     expect(send.allowed).toBe(true);
-    expect(lock.asked).toEqual([]);
   });
 
   it('refuses nothing when no child is locked, or when enforcement is off', async () => {
