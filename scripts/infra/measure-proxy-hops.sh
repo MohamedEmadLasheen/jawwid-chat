@@ -44,9 +44,9 @@ send() {
   fi
   local run; run="$(date +%s)"
   local url="$origin/health/live"
-  curl -4 -fsS -o /dev/null "${expect[@]}" -H "x-jawwid-hop-probe: plain-$run" "$url"
-  curl -4 -fsS -o /dev/null "${expect[@]}" -H "x-jawwid-hop-probe: forged-xff-$run" -H "X-Forwarded-For: $SENTINEL" "$url"
-  curl -4 -fsS -o /dev/null "${expect[@]}" -H "x-jawwid-hop-probe: forged-connecting-ip-$run" -H "do-connecting-ip: $SENTINEL" "$url"
+  curl -4 -fsS -o /dev/null ${expect[@]+"${expect[@]}"} -H "x-jawwid-hop-probe: plain-$run" "$url"
+  curl -4 -fsS -o /dev/null ${expect[@]+"${expect[@]}"} -H "x-jawwid-hop-probe: forged-xff-$run" -H "X-Forwarded-For: $SENTINEL" "$url"
+  curl -4 -fsS -o /dev/null ${expect[@]+"${expect[@]}"} -H "x-jawwid-hop-probe: forged-connecting-ip-$run" -H "do-connecting-ip: $SENTINEL" "$url"
   echo "sent run $run; now read the API log through: $0 interpret"
 }
 
