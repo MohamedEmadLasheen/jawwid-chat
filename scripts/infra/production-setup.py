@@ -80,6 +80,8 @@ HINTS = {
     "STORAGE_BUCKET": "the private Spaces bucket in fra1 (e.g. jawwid-chat-prod-media)",
     "STORAGE_ACCESS_KEY": "Spaces access key for that bucket",
     "STORAGE_SECRET_KEY": "Spaces secret key for that bucket",
+    "STORAGE_ADMIN_ACCESS_KEY": "a SEPARATE Spaces key (Full Access) used only by the deploy's storage check and the versioning workflow; never the app's key",
+    "STORAGE_ADMIN_SECRET_KEY": "the secret of that separate admin Spaces key",
     "APNS_KEY_ID": "Apple Developer -> Keys -> APNs key id",
     "APNS_PRIVATE_KEY": "the .p8 file: `file APNS_PRIVATE_KEY ~/Downloads/AuthKey_XXXX.p8`",
     "FCM_PROJECT_ID": "Firebase project id",
@@ -93,7 +95,9 @@ HINTS = {
     "TRUSTED_PROXY_HOPS": "proxies in front of the API on App Platform; measure on the live app (runbook), not guessed",
 }
 ALWAYS_REQUIRED = ("DIGITALOCEAN_ACCESS_TOKEN", "GHCR_PULL_CREDENTIALS", "BACKUP_ENCRYPTION_PASSPHRASE",
-                   "LAUNCH_PHASE", "DATABASE_POOL_MAX", "DATABASE_WORKER_POOL_MAX")
+                   "LAUNCH_PHASE", "DATABASE_POOL_MAX", "DATABASE_WORKER_POOL_MAX",
+                   # The deploy's storage check, never the app (storage-versioning.sh).
+                   "STORAGE_ADMIN_ACCESS_KEY", "STORAGE_ADMIN_SECRET_KEY")
 AFTER_FIRST_DEPLOY = ("DIGITALOCEAN_APP_ID",)
 
 

@@ -30,7 +30,10 @@ So the bucket keeps versions:
 * **It is enforced, not hoped for.** `storage-versioning.sh apply` sets both
   and reads them back. The production deploy runs `storage-versioning.sh
   verify` before the backup and refuses to release if either is missing or
-  wrong, including a rule that would expire current objects.
+  wrong, including a rule that would expire current objects. Both run with the
+  separate admin Spaces key (`STORAGE_ADMIN_*`), never the application's
+  bucket-limited key, which cannot read the lifecycle and must not be able to
+  change it.
 * **The expiry is proven on the provider.** `--verify-expiry start` and then
   `check` show that the provider really removes old versions. That uses a
   1-day rule on the `_lifecycle-probe/` prefix, so the proof takes days, not a

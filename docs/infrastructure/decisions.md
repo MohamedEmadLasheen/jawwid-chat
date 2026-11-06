@@ -605,3 +605,43 @@ reset on every deploy. A 256 MB cap. No managed monitoring. It saves about $10 a
 month: $15 for the cluster, less the $5 container. The `launch-redis` CI gate
 holds the verifier (doctl stubbed); the resolver's half is in the `app-spec`
 selftest.
+
+## ADR-016 · Two Spaces keys: the application's stays bucket-limited, an admin key checks the bucket
+
+**Status.** Accepted, 2026-11-05.
+
+**Context.** The production bucket (`jawwid-chat-prod-media`, `fra1`) has
+versioning Enabled and the 30-day / 1-day / probe lifecycle rules. The deploy
+re-checks them on every release. On DigitalOcean Spaces, the application's
+bucket-limited key (Read/Write/Delete) can read versioning but is refused
+`GetBucketLifecycleConfiguration` and every `Put…` configuration call. So the
+deploy's check could not pass on the application key without widening it.
+
+**Decision.** Two keys, never one.
+- `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` are the application's and only
+  the application's. They stay bucket-limited and reach the API and worker
+  through the app spec.
+- `STORAGE_ADMIN_ACCESS_KEY` / `STORAGE_ADMIN_SECRET_KEY` (Full Access) are
+  production GitHub Environment secrets used ONLY by `storage-versioning.sh`:
+  in Deploy production's "Object storage keeps deleted objects" step and in the
+  "Object storage versioning" workflow. They are never in the manifest, the app
+  spec, or app code.
+- `storage-versioning.sh` reads only `STORAGE_ADMIN_*`. Without them it refuses
+  before any call, never falling back to the application key. It refuses an
+  admin key equal to the application key, and unsets the application key before
+  running the AWS CLI. The deploy's credentials step fails early on both cases.
+- `scripts/qa/guards.sh storage-admin-keys` (CI) holds all of it, with the AWS
+  CLI stubbed and a static read of the workflows and app configuration.
+
+**Why.** Widening the application key would let any API process, or anyone who
+obtains its key, turn off the 30-day recovery and delete every version. The
+admin key's power is confined to a step the owner approves (the `production`
+Environment requires the owner's approval for every run).
+
+**Alternatives.** Widen the application key (rejected: it removes the bound on
+what a compromised API can destroy). Skip the lifecycle read in the deploy
+(rejected: the check would no longer prove the 30-day recovery).
+
+**Trade-offs.** One more secret pair to rotate. A Full Access key can reach
+every bucket on the account. Today this is the only one; if more buckets are
+added, revisit whether Spaces offers a narrower admin scope.

@@ -45,7 +45,7 @@ Legend for the **Owner provides** column: the account, key or decision only the 
 | **App Platform app (production)** | ✅ | `.do/app.production.yaml`, generated from `infra/env/manifest.tsv` by `scripts/infra/app-spec.py` and checked in CI (`app-spec` guard). Region `fra`. Components: `api` (`node dist/main.js`, 1 vCPU/1 GB, health `/health/ready` + `/health/live`), `worker` (same image, `node dist/worker.js`, 0.5 GB), `admin-web` (nginx, 0.5 GB). Launch sizes per ADR-013; when to raise one is `production-runbook.md` §1b. Production cannot be created before staging: the production workflow refuses an API image staging has not built. Release: `.github/workflows/deploy-production.yml` → `scripts/infra/do-release.sh`. Its order: preflight → Admin Web build → credentials → `check-env.sh` → bucket versioning check → database role preflight → encrypted `pg_dump` → migrations → `doctl` release → smoke test. | A DigitalOcean account and project. GitHub Environment `production`, with required reviewers and deploys limited to `main`. `DIGITALOCEAN_ACCESS_TOKEN`, `GHCR_PULL_CREDENTIALS`, then `DIGITALOCEAN_APP_ID` after `first_deploy`. Optionally `DIGITALOCEAN_PROJECT_ID`. Steps 1, 4, 5 and 9 below. |
 | **Managed Postgres 17, backups, PITR** | 🟡 | The spec has deliberately no `databases:` block: the database arrives as the secret `DATABASE_URL`, and `check-env.sh` refuses `sslmode=disable`. The migration grants BYPASSRLS, so `scripts/db/preflight-role-capability.sh` must pass on the provider before the provider is chosen; the deploy re-runs it. Portable encrypted backup: `scripts/infra/backup-db.sh` / `restore-db.sh` (AES-256 + HMAC). It runs **before every deploy** and is kept 30 days as a workflow artifact, and it is drilled in CI (G-41). **A weekly scheduled backup now exists**: `backup-weekly.yml` (Sundays) dumps, encrypts and stores the copy in Spaces for 8 weeks (`backup-recovery.md` §3b), and the CI guard `backup-offsite` holds its upload and retention contract. DigitalOcean's daily backups and 7-day PITR are the first line. | The managed cluster (the "Jawwid Chat" project already holds one: verify it is PG 17 and run the preflight). Turn on and confirm the provider's daily backups and point-in-time recovery. DigitalOcean documents PITR for the last 7 days on managed Postgres; record the actual window. `BACKUP_ENCRYPTION_PASSPHRASE`, with a copy kept outside GitHub. Set up the `backup` GitHub Environment, the read-only `jawwid_backup` role and a key limited to a dedicated backup bucket (`backup-recovery.md` §3b), run `backup-weekly.yml` once by hand, then the §5a drill from that copy. |
 | **Redis** | ✅ | `REDIS_URL` + `QUEUE_PREFIX`. Used by realtime (`communication/realtime/redis.provider.ts`, the Socket.IO adapter), presence, typing and rate limiters. Nothing durable lives in it: the outbox is in Postgres (`architecture.md`), so AOF is not required; `noeviction` is recommended; Redis ≥ 6.2 is required (`production-runbook.md` §1a). **Staging** runs it as a private in-app component (`redis`, Valkey 8.1, `REDIS_URL=redis://redis:6379`, ADR-013). **Production** runs the same in-app component during the review period only (`LAUNCH_PHASE=review`), and managed Valkey from `LAUNCH_PHASE=launch`, which the deploy verifies before changing anything (ADR-015, `production-runbook.md` §1c). Multi-instance realtime is unproven (RISK-4), so production runs **one** API instance until it is proven. | Review period: the variable `LAUNCH_PHASE=review`. At launch: a managed Valkey 1 GiB cluster in `fra1`, Trusted Sources limited to the app, eviction policy `noeviction`, a token with database read access, then `LAUNCH_PHASE=launch`. Staging: nothing. |
-| **Object storage (Spaces)** | ✅ | The S3 adapter `communication/attachments/s3-object-storage.ts`; a partial configuration refuses to boot. `scripts/infra/storage-versioning.sh` turns on versioning, 30-day expiry of old versions and 1-day abandoned uploads. The production deploy verifies them and refuses to release without them. Spaces only (R2 has no versioning). | A private bucket in `fra1`, created **before** anything is uploaded, plus a Spaces key with `GetBucketVersioning` / `GetLifecycleConfiguration`. `STORAGE_*` values and `STORAGE_SIGNING_SECRET`. Run `storage-versioning.sh apply`, then `--verify-expiry` (step 7). |
+| **Object storage (Spaces)** | ✅ | The S3 adapter `communication/attachments/s3-object-storage.ts`; a partial configuration refuses to boot. `scripts/infra/storage-versioning.sh` turns on versioning, 30-day expiry of old versions and 1-day abandoned uploads. The production deploy verifies them and refuses to release without them. Spaces only (R2 has no versioning). | A private bucket in `fra1`, created **before** anything is uploaded, plus two Spaces keys: the app's, limited to the bucket, and a separate admin key (`STORAGE_ADMIN_*`, deploy check only) with `GetBucketVersioning` / `GetLifecycleConfiguration`. `STORAGE_*` values and `STORAGE_SIGNING_SECRET`. Run `storage-versioning.sh apply`, then `--verify-expiry` (step 7). |
 | **Domains and TLS** | ✅ | The spec names `${API_DOMAIN}` (primary) and `${ADMIN_WEB_DOMAIN}` (alias), minimum TLS 1.2. App Platform issues the certificates once DNS resolves. The store apps must use this HTTPS origin, never a local one (the local test stack's CA does not apply). | The domain and DNS CNAMEs. The variables `PRODUCTION_API_BASE_URL`, `PRODUCTION_REALTIME_URL`, `PRODUCTION_ADMIN_WEB_URL`, `PRODUCTION_CORS_ALLOWED_ORIGINS`, `TRUSTED_PROXY_HOPS` (step 3). |
 | **Secrets** | ✅ | Every value is in `infra/env/manifest.tsv` (marked secret or variable, and required, optional or forbidden per environment), templated in `infra/env/production.env.example`, inventoried in `secrets.md` §2 and judged by `scripts/infra/check-env.sh`. That script rejects placeholders, wildcard CORS, sandbox APNs, `NODE_ENV≠production` and TLS-off database URLs. CI scans the full git history for secrets. | Production requires: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RESET_CODE_HASH_SECRET`, the storage keys and `STORAGE_SIGNING_SECRET`, `APNS_PRIVATE_KEY`, `FCM_SERVICE_ACCOUNT_JSON`, `LIVEKIT_API_KEY`/`SECRET`, `SENTRY_DSN`, `SMTP_URL`. Optional: `STRIPE_*`, `TEACHER_PAYOUT_KEYS`, `LESSON_APPROVALS_SIGNING_KEY`, `WHATSAPP_ACCESS_TOKEN`, and the `CORE_*` group (ADR-013). |
 | **APNs (iOS push)** | 🟡 | Server: `notifications/apns.provider.ts`, selected by `push.provider.selector.ts`. The deploy hard-codes `APNS_PRODUCTION=true`, and `check-env.sh` forbids anything else. Without a key it falls back to logging, which is what the local test stack runs: no push is delivered there, recorded as the LAUNCH BLOCKER on rows D-14/D-17b. VoIP (call ring with the app closed) is gated by `APNS_VOIP_ENABLED`: in the manifest (optional, default off), the app spec and both deploy workflows. Turn it on in staging first, once the iOS CallKit build is proven on a device (S-06). | An Apple **APNs auth key (.p8)** from the paid developer team: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`. The bundle id must match the store app. |
@@ -156,30 +156,40 @@ Spaces bucket, no Spaces key and no Valkey. The domain is chosen (step 3).
    bucket keeps versions (`backup-recovery.md` §1).
    * **Spaces, not R2.** Cloudflare R2 does not implement bucket versioning, so
      it cannot meet this requirement. Use the same region as the app (`fra1`).
-   * Create the bucket (private), and a Spaces access key for the API.
-   * With that key in your shell (never pasted anywhere), run:
-     ```bash
-     STORAGE_ENDPOINT=https://fra1.digitaloceanspaces.com STORAGE_BUCKET=<bucket>        STORAGE_ACCESS_KEY=… STORAGE_SECRET_KEY=… scripts/infra/storage-versioning.sh apply
-     ```
-     It enables versioning, sets a lifecycle that expires deleted or overwritten
+   * Create the bucket (private) and **two Spaces keys, never one**:
+     - the **application key** (`STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY`):
+       *Limited Access*, Read/Write/Delete on this bucket only. The API and
+       worker run with it. Never widen it: it would hand every API process the
+       power to switch off the 30-day recovery.
+     - the **admin key** (`STORAGE_ADMIN_ACCESS_KEY` /
+       `STORAGE_ADMIN_SECRET_KEY`): *Full Access*, used ONLY by the deploy's
+       storage check and the "Object storage versioning" workflow. Spaces
+       refuses a bucket-limited key `GetBucketLifecycleConfiguration` and the
+       `Put…` calls. It never reaches the app spec, and
+       `scripts/qa/guards.sh storage-admin-keys` fails CI if it would.
+     Save all four as secrets in the `production` GitHub Environment
+     (`production-setup.py ask …`).
+   * Run the **"Object storage versioning"** workflow with `mode: apply` (owner
+     approves the run). The keys never leave GitHub. It enables versioning, sets a lifecycle that expires deleted or overwritten
      versions after **30 days** and abandoned uploads after 1 day, reads both
      back, and fails unless they took.
    * Then prove the provider honours the expiry rule: run `--verify-expiry
      start`, and `--verify-expiry check <id>` two to three days later.
      DigitalOcean documents expiry of current objects, and of old versions only
      indirectly. Until `check` passes, the 30-day bound is unproven.
-   * The production deploy re-checks versioning and the lifecycle on every run,
-     and refuses to release without them. The API's storage key therefore needs
-     read access to the bucket's configuration (`s3:GetBucketVersioning`,
-     `s3:GetLifecycleConfiguration`). A full-access Spaces key has it; a key
-     limited to one bucket may not, and the deploy then says so.
+   * The production deploy re-checks versioning and the lifecycle on every run
+     with the **admin** key, and refuses to release without them, or when the
+     admin key is missing or is the application key. The application key needs
+     no access to the bucket's configuration.
 8. **Provision the remaining services and set their values** in each
    Environment, under the manifest's own names (`infra/env/<env>.env.example`
    lists every one; `scripts/infra/check-env.sh <env>` is what judges them):
    `DATABASE_URL`, `REDIS_URL` (staging: `redis://redis:6379`, its in-app
    component, ADR-013), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
    storage (`STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_REGION`,
-   `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_SIGNING_SECRET`),
+   `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_SIGNING_SECRET`, and
+   in production the deploy-only `STORAGE_ADMIN_ACCESS_KEY` /
+   `STORAGE_ADMIN_SECRET_KEY` of step 7),
    LiveKit for production, and push, Core and `SENTRY_DSN` where the
    environment requires them.
    **`SMTP_URL` (secret) and `RECOVERY_MAIL_FROM` (variable) are REQUIRED in
