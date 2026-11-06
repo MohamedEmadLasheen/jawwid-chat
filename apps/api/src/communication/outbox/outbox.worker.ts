@@ -146,6 +146,16 @@ export class OutboxWorker {
         return;
       }
 
+      /**
+       * PD-57 closure plan §4: the reported person is reminded of the Code of
+       * Conduct. No conversation; a Center entry and a push through the PD-34
+       * pipeline. See deliverConductWarning.
+       */
+      case CommEvent.CONDUCT_WARNING: {
+        await this.deliverConductWarning(payload);
+        return;
+      }
+
       /** PD-36: a summons answered or closed -- Group Info re-reads; so does the target's list. */
       case CommEvent.MENTION_UPDATED: {
         const target = payload.targetActorId as string | undefined;
@@ -832,6 +842,32 @@ export class OutboxWorker {
         scheduledAt: new Date(),
       });
     }
+  }
+
+  /**
+   * PD-57 (closure plan §4, `warned`): the fixed bilingual Code of Conduct
+   * reminder to the warned person, once per warning (the dedupe key). The
+   * texts take no variables and the entry carries no refs: nothing names the
+   * report, the reporter, the message or the conversation. Someone no longer
+   * live is not told.
+   */
+  private async deliverConductWarning(payload: Record<string, unknown>): Promise<void> {
+    if (!this.pipeline) return;
+    const recipientId = payload.recipientId as string | undefined;
+    const warningId = payload.warningId as string | undefined;
+    if (!recipientId || !warningId) return;
+    const recipient = await this.identity.resolveActor(recipientId);
+    if (!recipient || !recipient.isActive || recipient.kind !== payload.recipientKind) return;
+    await this.pipeline.emit({
+      dedupeKey: `conduct_warning:${warningId}:${recipientId}`,
+      ruleKey: null,
+      eventType: 'conduct_warning',
+      templateKey: 'conduct_warning',
+      recipientId,
+      locale: recipient.locale,
+      priority: 'normal',
+      scheduledAt: new Date(),
+    });
   }
 
   private async deliverCase(type: CommEventName, payload: Record<string, unknown>): Promise<void> {

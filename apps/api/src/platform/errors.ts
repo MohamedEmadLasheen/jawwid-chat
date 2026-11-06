@@ -605,6 +605,37 @@ export enum CommErrorCode {
   PARENT_EXISTS = 'COMM.PARENT_EXISTS',
   /** A child with this name (and date of birth) is already in the family; resend with confirmDuplicate for twins. 409. */
   CHILD_EXISTS = 'COMM.CHILD_EXISTS',
+  // --- PD-57 WP-1: Report (roadmap 2026-11-03 §5.4) ---
+  /**
+   * The message or person is not one the reporter can see now: a message they
+   * cannot read (or no such message), a person they share no conversation with
+   * (or no such person). One answer for all, so a report never confirms that a
+   * message or a person exists. 404.
+   */
+  REPORT_TARGET_NOT_VISIBLE = 'COMM.REPORT_TARGET_NOT_VISIBLE',
+  /** The reporter's own message, or themself. 400. */
+  REPORT_SELF = 'COMM.REPORT_SELF',
+  /**
+   * Not reportable: a system or card message (the server's), or the academy's
+   * official account, a manager or the Super Admin (the administrative
+   * channel, roadmap §6.1 rule 6). 400.
+   */
+  REPORT_NOT_REPORTABLE = 'COMM.REPORT_NOT_REPORTABLE',
+  /** The reason `other` needs a note (1-500 characters). 400. */
+  REPORT_NOTE_REQUIRED = 'COMM.REPORT_NOTE_REQUIRED',
+  /** This Idempotency-Key was used by this reporter for another report; use a new key. 409. */
+  REPORT_KEY_REUSED = 'COMM.REPORT_KEY_REUSED',
+  /** No such report in the caller's organization (another organization's reads the same). 404. */
+  REPORT_NOT_FOUND = 'COMM.REPORT_NOT_FOUND',
+  /** Another staff member has already taken this report. 409. */
+  REPORT_ALREADY_TAKEN = 'COMM.REPORT_ALREADY_TAKEN',
+  /** The report is closed (actioned or dismissed) and never changes. 409. */
+  REPORT_CLOSED = 'COMM.REPORT_CLOSED',
+  /**
+   * PD-57 closure plan §4: POST /moderation/reports/:id/attachments/:index/url
+   * -- the report (in the caller's scope) has no attachment at that index. 404.
+   */
+  REPORT_ATTACHMENT_NOT_FOUND = 'COMM.REPORT_ATTACHMENT_NOT_FOUND',
   /**
    * TEACHER-027: the database could not serve the request in time (unreachable,
    * no pool connection, a transaction or statement timeout). Nothing was

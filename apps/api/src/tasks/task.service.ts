@@ -85,6 +85,9 @@ export const SOURCE_TYPES = [
   'family_without_account', 'teacher_account_deleted',
   // AMB-9: a group left without a live admin (chat.work_task_sweep_group_admin).
   'group_admin_absent',
+  // PD-57 (closure plan §4): a report resolved as reassigned, for each manager of its
+  // departments (chat.work_task_raise_report_reassignment). Completed by its assignee.
+  'report_reassignment',
 ] as const;
 const FINANCIAL: ReadonlySet<SourceType> = new Set(['instalment', 'package_low', 'renewal_request', 'receipt_review', 'checkout_failed']);
 export type SourceType = (typeof SOURCE_TYPES)[number];
@@ -1136,6 +1139,12 @@ export class TaskService {
                WHEN 'group_admin_absent' THEN (SELECT jsonb_build_object('groupTitle', c.title, 'conversationId', c.id, 'groupType', c.type)
                                                  FROM chat.work_task_group_admin_spell sp JOIN chat.conversation c ON c.id = sp.conversation_id
                                                 WHERE sp.id = t.source_id)
+               -- PD-57: the report it follows up (opened in the moderation queue, which
+               -- re-checks the scope) and the resolver's note. Never the reporter.
+               WHEN 'report_reassignment' THEN (SELECT jsonb_build_object('reportId', r.id, 'reason', r.reason, 'note', r.resolution_note,
+                                                                          'subjectKind', r.subject_kind, 'subjectId', r.subject_id)
+                                                  FROM chat.report_reassignment_task q JOIN chat.content_report r ON r.id = q.report_id
+                                                 WHERE q.id = t.source_id)
              END AS title_params,
              -e.rank AS k1,
              CASE WHEN t.category = 'financial' THEN 0 ELSE 1 END AS k2,

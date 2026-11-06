@@ -158,6 +158,30 @@ export const CommEvent = {
    * no one.
    */
   TASK_CHANGED: 'task.changed',
+  /**
+   * PD-57 (roadmap §5.4): a report was filed (`change: created`), or an open one
+   * was raised to child_safety by a duplicate (`change: raised`). Ids and the
+   * priority only: NEVER the conversation (the worker would fan it out to the
+   * conversation's room, where the reported person listens), the target, the
+   * reporter or any content.
+   * TODO(ENG-04): delivered to staff (report_received_staff, and every Super
+   * Admin at once for priority urgent: report_child_safety); until then it
+   * falls to the worker's default branch and reaches no one.
+   */
+  REPORT_CREATED: 'report.created',
+  /**
+   * PD-57: a report was closed with its answer to the reporter. Ids only.
+   * TODO(ENG-04): delivered to the reporter as report_answered; until then it
+   * falls to the worker's default branch and reaches no one.
+   */
+  REPORT_ANSWERED: 'report.answered',
+  /**
+   * PD-57 closure plan §4: a report was resolved as `warned`. The worker sends
+   * the reported person the fixed Code of Conduct reminder (`conduct_warning`).
+   * The payload names the recipient and a warning id of its own, NEVER the
+   * report, the reporter, the message or the conversation.
+   */
+  CONDUCT_WARNING: 'moderation.conduct_warning',
   /** PD-11 T3, for Core: a learner changed teacher in Chat. */
   LEARNER_TRANSFERRED: 'learner.transferred',
   /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
@@ -491,6 +515,31 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_COMPLAINT_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TEACHER_PRAISE_RECEIVED]: TeacherRecordReceivedPayload;
   [CommEvent.TASK_CHANGED]: TaskChangedPayload;
+  [CommEvent.REPORT_CREATED]: ReportCreatedPayload;
+  [CommEvent.REPORT_ANSWERED]: ReportAnsweredPayload;
+  [CommEvent.CONDUCT_WARNING]: ConductWarningPayload;
+}
+
+/** PD-57. No conversationId, no content: ENG-04 reads the report through its own path. */
+export interface ReportCreatedPayload {
+  organizationId: string;
+  reportId: string;
+  priority: 'urgent' | 'normal';
+  change: 'created' | 'raised';
+}
+
+/** PD-57. Ids only. */
+export interface ReportAnsweredPayload {
+  organizationId: string;
+  reportId: string;
+}
+
+/** PD-57. The warned person; `warningId` is the notification's own key, unrelated to the report. */
+export interface ConductWarningPayload {
+  organizationId: string;
+  warningId: string;
+  recipientKind: 'contact' | 'teacher' | 'staff';
+  recipientId: string;
 }
 
 /** PD-47. A client drops a revision lower than one it has; it refetches through its own authorized route. */

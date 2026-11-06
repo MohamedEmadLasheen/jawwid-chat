@@ -34,6 +34,7 @@ import { SupervisionCaseModule } from './cases/supervision-case.module';
 import { ActionLogModule } from './action-log/action-log.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TaskModule } from './tasks/task.module';
+import { ModerationModule } from './moderation/moderation.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -104,6 +105,8 @@ import { TaskModule } from './tasks/task.module';
     DashboardModule,
     // PD-47: tasks -- every person's responsibilities, with the four exits.
     TaskModule,
+    // PD-57 WP-1: Report -- filing, the reporter's list, the moderation queue.
+    ModerationModule,
   ],
 })
 export class AppModule {}

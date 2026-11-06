@@ -1591,32 +1591,98 @@ export class MessageService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.message.update({
-        where: { id: messageId },
-        data: {
-          deletedAt: new Date(),
-          deletedBy: actor.actorId,
-          deletedForAll: true,
-          redactedReason: reason,
-        },
-      });
-      // PD-36: a deleted message mentions nobody; its open summonses close.
-      await this.mentions?.onDeletedForAll(tx, messageId, new Date());
-      await this.audit.audit(tx, {
-        actorId: actor.actorId,
-        action: 'message.delete_for_everyone',
-        entity: 'message',
-        entityId: messageId,
-        reason,
-        after: moderating ? { moderatedAuthorKind: message.authorType } : undefined,
-      });
-      await this.outbox.enqueue(tx, CommEvent.MESSAGE_DELETED, {
-        conversationId: message.conversationId!,
-        messageId,
-        deletedForAll: true,
-      });
+    await this.prisma.$transaction((tx) =>
+      this.writeDeletedForAll(tx, message, actor.actorId, reason, moderating ? { moderatedAuthorKind: message.authorType } : undefined),
+    );
+  }
+
+  /**
+   * PD-57 (roadmap §5.4, `message_removed`): a report's resolution deletes the
+   * reported message for everyone, through the same writes as
+   * `deleteForEveryone` -- the row, the mentions, the `message.delete_for_everyone`
+   * audit row and the `message.deleted` event -- so it looks to every reader
+   * like any moderated deletion and names neither the report nor the reporter
+   * (§5.5 rule 1). The audit row names the report.
+   *
+   * WHO MAY is the caller's to decide: ModerationService calls this only for
+   * staff holding `moderation.act`, on a report of their own organization, in
+   * the transaction that closes the report. Here: the message must be that
+   * organization's, and a lesson report card is never deleted this way (its
+   * lesson record owns it, as in `deleteForEveryone`). An already deleted
+   * message is left as it is.
+   */
+  async removeForModeration(
+    tx: Prisma.TransactionClient,
+    input: { messageId: string; organizationId: string; moderatorId: string; reportId: string },
+  ): Promise<void> {
+    const message = await tx.message.findUnique({ where: { id: input.messageId }, include: { card: { select: { kind: true } } } });
+    if (!message || message.organizationId !== input.organizationId || !message.conversationId) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    }
+    if (message.card?.kind === 'lesson_report') {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_EDITABLE, 'a lesson report card is deleted from the lesson record', 409);
+    }
+    if (message.deletedForAll) return;
+    await this.writeDeletedForAll(tx, message, input.moderatorId, `removed after report ${input.reportId}`, {
+      moderatedAuthorKind: message.authorType,
+      reportId: input.reportId,
     });
+  }
+
+  private async writeDeletedForAll(
+    tx: Prisma.TransactionClient,
+    message: { id: string; conversationId: string | null },
+    actorId: string,
+    reason: string,
+    after: Record<string, unknown> | undefined,
+  ): Promise<void> {
+    await tx.message.update({
+      where: { id: message.id },
+      data: {
+        deletedAt: new Date(),
+        deletedBy: actorId,
+        deletedForAll: true,
+        redactedReason: reason,
+      },
+    });
+    // PD-36: a deleted message mentions nobody; its open summonses close.
+    await this.mentions?.onDeletedForAll(tx, message.id, new Date());
+    await this.audit.audit(tx, {
+      actorId,
+      action: 'message.delete_for_everyone',
+      entity: 'message',
+      entityId: message.id,
+      reason,
+      after,
+    });
+    await this.outbox.enqueue(tx, CommEvent.MESSAGE_DELETED, {
+      conversationId: message.conversationId!,
+      messageId: message.id,
+      deletedForAll: true,
+    });
+  }
+
+  /**
+   * PD-57 (roadmap §5.5 rule 5): may this actor read this message NOW, by the
+   * rules every read path uses -- the conversation (tenant, staff scope,
+   * membership, activity: `canReadResolved`) and the message
+   * (`visibilityFilter`: internal, pending, rejected, "deleted for me"), and not
+   * deleted for everyone? The message with its attachments when so, null on any
+   * refusal: a report must not tell an unreadable message from a missing one.
+   */
+  async readableNow(messageId: string, actorId: string) {
+    if (!isUuid(messageId)) return null;
+    const loaded = await this.loadForActor(messageId.toLowerCase(), actorId).catch((e: unknown) => {
+      if (e instanceof CommError) return null;
+      throw e;
+    });
+    if (!loaded) return null;
+    const { actor, conv } = loaded;
+    const message = await this.prisma.message.findFirst({
+      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: loaded.message.id, deletedForAll: false }] },
+      include: { attachments: { orderBy: { createdAt: 'asc' } } },
+    });
+    return message ? { actor, conv, message } : null;
   }
 
   /**
