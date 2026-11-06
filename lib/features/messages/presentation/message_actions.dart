@@ -85,6 +85,9 @@ Future<MessageActionResult?> showMessageActions(
 /// a long press that opens an empty sheet is worse than one that does nothing.
 bool canActOn(Message message) {
   if (message.isSystem || message.isDeleted) return false;
+  // PD-57: the placeholder of a blocked person's message has nothing to act on; its one
+  // action, Unblock, is on the line itself.
+  if (message.isHiddenByBlock) return false;
   // Still in the outbox. It has no server id, so there is nothing to react to,
   // reply to or delete — and the bubble already offers Retry and Discard.
   return !message.deliveryState.isLocal;

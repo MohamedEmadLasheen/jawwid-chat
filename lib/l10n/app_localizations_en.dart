@@ -5321,4 +5321,111 @@ class L10nEn extends L10n {
 
   @override
   String get myReportsAnswerLabel => 'Our answer';
+
+  @override
+  String get blockAction => 'Block';
+
+  @override
+  String get unblockAction => 'Unblock';
+
+  @override
+  String get blockPersonAction => 'Block this person';
+
+  @override
+  String get unblockPersonAction => 'Unblock this person';
+
+  @override
+  String get blockPersonFallbackName => 'this person';
+
+  @override
+  String blockConfirmTitle(String name) {
+    return 'Block $name?';
+  }
+
+  @override
+  String get blockConfirmBody =>
+      'They won\'t be able to message or call you, and you won\'t see their messages.';
+
+  @override
+  String get blockConfirmLessons =>
+      'Lessons continue as usual: lesson calls, lesson cards and messages from the academy still reach you.';
+
+  @override
+  String get blockConfirmAcademy =>
+      'The academy is told, so they can follow up.';
+
+  @override
+  String blockedSnack(String name) {
+    return '$name is blocked.';
+  }
+
+  @override
+  String unblockConfirmTitle(String name) {
+    return 'Unblock $name?';
+  }
+
+  @override
+  String get unblockConfirmBody =>
+      'You\'ll see their messages again, and they can message and call you.';
+
+  @override
+  String unblockedSnack(String name) {
+    return '$name is unblocked.';
+  }
+
+  @override
+  String get blockErrorNotAllowed =>
+      'This person can\'t be blocked. You can report them instead.';
+
+  @override
+  String get blockErrorNoSharedConversation =>
+      'You can only block someone you share a conversation with.';
+
+  @override
+  String get blockErrorRateLimited =>
+      'You\'ve blocked many people today. Please try again later.';
+
+  @override
+  String get blockErrorTerms =>
+      'Please accept the terms of use first, then you can block.';
+
+  @override
+  String get blockErrorGeneric =>
+      'We couldn\'t block them right now. Please try again.';
+
+  @override
+  String get unblockErrorGeneric =>
+      'We couldn\'t unblock them right now. Please try again.';
+
+  @override
+  String get hiddenByBlockPlaceholder =>
+      'Message hidden: you blocked this person';
+
+  @override
+  String blockedComposerNotice(String name) {
+    return 'You blocked $name. Unblock to write.';
+  }
+
+  @override
+  String get blockedPeopleTitle => 'Blocked people';
+
+  @override
+  String get blockedPeopleSubtitle =>
+      'People you blocked; unblock them any time';
+
+  @override
+  String get blockedPeopleEmptyTitle => 'No one is blocked';
+
+  @override
+  String get blockedPeopleEmptyBody =>
+      'When you block someone, they appear here and you can unblock them.';
+
+  @override
+  String blockedPeopleSince(String date) {
+    return 'Blocked $date';
+  }
+
+  @override
+  String get blockedPeopleLoadError =>
+      'We couldn\'t load the people you blocked.';
 }
