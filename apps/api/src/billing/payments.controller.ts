@@ -5,6 +5,7 @@ import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard
 import { ParentPaymentsService } from './parent-payments.service';
 import { PaymentsService } from './payments.service';
 import { NotForStaff, Requires } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * PD-27 routes (docs/admin/pd027-payments.md). Behind the global bearer guard.
@@ -100,6 +101,7 @@ export class PaymentsController {
 
   @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   @NotForStaff()
+  @RequiresLegal()
   @Post('me/billing/receipts/upload')
   authorizeReceiptUpload(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.parents.authorizeReceiptUpload(actorId, body ?? {});

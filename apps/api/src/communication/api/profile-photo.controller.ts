@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ActorId } from './actor.decorator';
 import { AvatarService } from '../profile/avatar.service';
 import { NotForStaff, SelfService } from '../../platform/permissions/route-access';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 /**
  * Profile photos for parents and teachers (their own) and for parents'
@@ -21,24 +22,28 @@ export class ProfilePhotoController {
   }
 
   @SelfService()
+  @RequiresLegal()
   @Post('avatar/upload')
   upload(@ActorId() actorId: string, @Body() body: { mimeType?: unknown; byteSize?: unknown }) {
     return this.avatars.authorizeUpload(actorId, { kind: 'self' }, body ?? {});
   }
 
   @SelfService()
+  @RequiresLegal()
   @Post('avatar')
   commit(@ActorId() actorId: string, @Body() body: { objectKey?: unknown }) {
     return this.avatars.commit(actorId, { kind: 'self' }, body ?? {});
   }
 
   @SelfService()
+  @RequiresLegal()
   @Delete('avatar')
   remove(@ActorId() actorId: string) {
     return this.avatars.remove(actorId, { kind: 'self' });
   }
 
   @NotForStaff()
+  @RequiresLegal()
   @Post('children/:learnerId/avatar/upload')
   childUpload(
     @ActorId() actorId: string,
@@ -49,12 +54,14 @@ export class ProfilePhotoController {
   }
 
   @NotForStaff()
+  @RequiresLegal()
   @Post('children/:learnerId/avatar')
   childCommit(@ActorId() actorId: string, @Param('learnerId') learnerId: string, @Body() body: { objectKey?: unknown }) {
     return this.avatars.commit(actorId, { kind: 'child', learnerId }, body ?? {});
   }
 
   @NotForStaff()
+  @RequiresLegal()
   @Delete('children/:learnerId/avatar')
   childRemove(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
     return this.avatars.remove(actorId, { kind: 'child', learnerId });

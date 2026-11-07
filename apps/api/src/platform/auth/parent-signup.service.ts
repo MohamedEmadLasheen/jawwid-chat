@@ -8,6 +8,7 @@ import { AuthError, AuthErrorCode } from './auth.errors';
 import { hashPassword } from './password';
 import { isPasswordLengthAcceptable } from './password-policy';
 import { subjectHash } from './subject-hash';
+import { LegalService } from '../../legal/legal.service';
 
 /** Wrong tries before a code is spent and a new one must be asked for. */
 export const SIGNUP_CODE_TRIES = 5;
@@ -63,6 +64,7 @@ export class ParentSignupService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    private readonly legal: LegalService,
   ) {}
 
   async request(rawEmail: string): Promise<{ ok: true; delivery: 'relay' }> {
@@ -106,12 +108,27 @@ export class ParentSignupService {
    * rest are refused as locked. Nothing is checked outside the lock and acted
    * on inside it.
    */
-  async verify(rawEmail: string, rawCode: string, password: string, lessonAudioNotice: number | null = null): Promise<{ ok: true }> {
+  async verify(
+    rawEmail: string,
+    rawCode: string,
+    password: string,
+    lessonAudioNotice: number | null = null,
+    legalInput: SignupLegalInput = {},
+  ): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
     const code = rawCode.trim();
     if (!isPasswordLengthAcceptable(password)) {
       throw new AuthError(AuthErrorCode.PASSWORD_TOO_WEAK);
     }
+    // PD-58 (§7.4): the family terms and the Code of Conduct in force, exactly
+    // (400 COMM.LEGAL_REQUIRED without them). Decided from the body and the
+    // configuration only, before the code is looked at: it says nothing about
+    // the e-mail. Recorded below in the SAME transaction as the password.
+    const legal = await this.legal.validateSignup({
+      acceptLegal: legalInput.acceptLegal,
+      client: legalInput.client,
+      locale: legalInput.locale,
+    });
     // Hashed for every attempt, before anything is looked up: as costly for an
     // unknown e-mail or a wrong code as for a right one, so timing tells nothing.
     const passwordHash = await hashPassword(password);
@@ -154,6 +171,9 @@ export class ParentSignupService {
       if (lessonAudioNotice === PARENT_NOTICES.lesson_audio) {
         await acknowledgeParentNotice(tx, account.contactId, 'lesson_audio', PARENT_NOTICES.lesson_audio);
       }
+      // PD-58: the Terms of Use, a SEPARATE record (chat.terms_acceptance): it
+      // never stands in for the lesson-audio notice above, nor that for it.
+      if (legal) await this.legal.recordInTx(tx, account.id, legal);
       // The parent is not staff (audit_log.actor_id names staff): no actor, the account as entity.
       await this.audit.audit(tx, {
         actorId: null,
@@ -187,6 +207,16 @@ export class ParentSignupService {
     if (!enrolled || !contact) return null;
     return { id: account.id, organizationId: account.organizationId, contactId: contact.id, familyId: contact.familyId };
   }
+}
+
+/** PD-58: what a sign-up body carries for the Terms of Use (validated by LegalService). */
+export interface SignupLegalInput {
+  /** [{documentKey, version}]: the family terms and the Code of Conduct in force. */
+  readonly acceptLegal?: unknown;
+  /** android | ios | web_portal | admin_web */
+  readonly client?: unknown;
+  /** 'ar', 'en', ... */
+  readonly locale?: unknown;
 }
 
 /**

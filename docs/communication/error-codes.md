@@ -219,6 +219,26 @@ A client may never send a message of type `card`; `POST /conversations/:id/messa
 answers `COMMON.VALIDATION` (400). Cards are written only by the ticket that
 recorded them.
 
+## Terms of Use (PD-58)
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.TERMS_NOT_ACCEPTED` | 403 | PD-58: the caller has not accepted the version in force of its kind's terms and of the Code of Conduct, and the route creates content others see (`@RequiresLegal()`). `error.detail.required` lists `{documentKey, version, urlAr, urlEn}`. Refresh the identity (`GET /me`), show the terms gate, accept with `POST /me/legal/accept`, then retry. |
+| `COMM.LEGAL_WRONG_DOCUMENTS` | 400 | PD-58: the documents accepted are not this account kind's own (its terms plus `code_of_conduct`), are duplicated, or leave out one still required. Never retry unchanged. |
+| `COMM.LEGAL_VERSION_STALE` | 409 | PD-58: a version accepted is no longer the one in force (`error.detail.documentKey`). Reload `GET /me` and accept what it lists. |
+| `COMM.LEGAL_REQUIRED` | 400 | PD-58 + PD-16: `POST /auth/signup/verify` without `acceptLegal` (the family terms and the Code of Conduct listed by `GET /auth/signup/legal`). Nothing was set. |
+| `COMM.LEGAL_NOT_CONFIGURED` | 503 | PD-58: the owner's `legal.current.*` configuration is missing (production) or names a version never published. An operator fixes it; the client shows a generic failure. Never read as "no terms required". |
+
+A support session cannot accept for the person: `POST /me/legal/accept` answers
+`COMM.SUPPORT_SESSION_FORBIDDEN` (403). A body that names an account (or any
+field beyond `documents`, `client`, `locale`) is `COMMON.VALIDATION` (400): the
+account is always the token's.
+
+LD-11: `POST /reports` with `reason: 'child_safety'` never answers
+`COMM.TERMS_NOT_ACCEPTED`. `GET /me/legal` answers `COMM.LEGAL_NOT_CONFIGURED`
+(503) when the configuration cannot be decided. The gated routes and the payloads
+are in `docs/contracts/API-CONTRACT.md` §1.1c.
+
 ## Client guidance
 
 - **Never retry** a BR-1 or role denial: it is a rule, not a transient failure.

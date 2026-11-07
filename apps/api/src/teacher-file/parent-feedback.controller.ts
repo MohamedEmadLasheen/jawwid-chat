@@ -3,6 +3,7 @@ import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ParentFeedbackService } from './parent-feedback.service';
 import { NotForStaff, Requires } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * PD-32 parent feedback about a teacher. Behind the global bearer guard; who
@@ -25,6 +26,7 @@ export class ParentFeedbackController {
 
   /** { learnerId, category: praise | suggestion | complaint, body } */
   @NotForStaff()
+  @RequiresLegal()
   @Post('me/feedback')
   @HttpCode(201)
   file(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
@@ -47,6 +49,7 @@ export class ParentFeedbackController {
 
   /** { response, resolve? } */
   @Requires('teacher_supervision.record', 'teacher_attendance.decide', 'teacher_grants.record')
+  @RequiresLegal()
   @Post('parent-feedback/:id/reply')
   reply(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.feedback.reply(actorId, id, body ?? {});

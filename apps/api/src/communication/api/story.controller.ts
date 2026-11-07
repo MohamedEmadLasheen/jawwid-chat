@@ -5,6 +5,7 @@ import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.gu
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { Requires } from '../../platform/permissions/route-access';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 /**
  * Stories.
@@ -104,6 +105,7 @@ export class StoryController {
    * The bytes never pass through this API when storage is S3.
    */
   @Requires('stories.publish')
+  @RequiresLegal()
   @Post('media')
   // An upload grant like an attachment's, and the same budget: each one
   // authorises a write to object storage.
@@ -120,6 +122,7 @@ export class StoryController {
 
   /** Create a draft. The audience is validated now and resolved at publish. */
   @Requires('stories.publish')
+  @RequiresLegal()
   @Post()
   async create(
     @ActorId() actorId: string,
@@ -173,6 +176,7 @@ export class StoryController {
 
   /** Resolve the audience and go live. Publisher-only, checked server-side. */
   @Requires('stories.publish')
+  @RequiresLegal()
   @Post(':id/publish')
   @RateLimited(ActionScope.STORY_PUBLISH)
   async publish(@ActorId() actorId: string, @Param('id') id: string) {

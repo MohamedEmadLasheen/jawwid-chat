@@ -6,6 +6,7 @@ import { CommErrorFilter } from './http-exception.filter';
 import { Requires } from '../../platform/permissions/route-access';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { CallEndReason } from '../contracts/vocab';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 @Controller('calls')
 @UseFilters(CommErrorFilter)
@@ -17,6 +18,7 @@ export class CallController {
    * the room name is minted server-side; neither is client-supplied.
    */
   @Requires('calls.use')
+  @RequiresLegal()
   @Post()
   @RateLimited(ActionScope.CALL_START)
   async start(@ActorId() actorId: string, @Body() body: { conversationId: string }) {

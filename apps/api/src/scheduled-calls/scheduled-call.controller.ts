@@ -4,6 +4,7 @@ import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ScheduledCallService } from './scheduled-call.service';
 import { Requires } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /** PD-13: scheduled calls and members-only call links. */
 @Controller('scheduled-calls')
@@ -39,6 +40,7 @@ export class ScheduledCallController {
 
   /** `{ callId, conversationId, mode: 'started' | 'joined' }`. */
   @Requires('calls.use')
+  @RequiresLegal()
   @Post(':id/join')
   // Starts the call when nobody is in it yet, so it shares the call-start
   // budget with POST /calls rather than being a second way around it.

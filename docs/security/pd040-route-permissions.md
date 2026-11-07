@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-587 routes.
+590 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -62,6 +62,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/auth/recovery/options` | public | `account-recovery/account-recovery.controller.ts#AccountRecoveryController.options` |
 | POST | `/api/v1/auth/recovery/password` | public | `account-recovery/account-recovery.controller.ts#AccountRecoveryController.password` |
 | POST | `/api/v1/auth/refresh` | public | `platform/auth/auth.controller.ts#AuthController.refresh` |
+| GET | `/api/v1/auth/signup/legal` | public | `legal/legal.controller.ts#SignupLegalController.current` |
 | POST | `/api/v1/auth/signup/request` | public | `platform/auth/parent-signup.controller.ts#ParentSignupController.request` |
 | POST | `/api/v1/auth/signup/verify` | public | `platform/auth/parent-signup.controller.ts#ParentSignupController.verify` |
 | GET | `/api/v1/billing/settings` | billing.view | `billing/payments.controller.ts#PaymentsController.settings` |
@@ -329,6 +330,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/leave` | not for staff | `leave/leave.controller.ts#LeaveController.own` |
 | POST | `/api/v1/me/leave-requests` | not for staff | `leave/leave.controller.ts#LeaveController.request` |
 | POST | `/api/v1/me/leave-requests/:id/withdraw` | not for staff | `leave/leave.controller.ts#LeaveController.withdraw` |
+| GET | `/api/v1/me/legal` | self-service | `legal/legal.controller.ts#LegalController.state` |
+| POST | `/api/v1/me/legal/accept` | self-service | `legal/legal.controller.ts#LegalController.accept` |
 | GET | `/api/v1/me/location` | not for staff | `parent-profile/my-location.controller.ts#MyLocationController.read` |
 | PUT | `/api/v1/me/location` | not for staff | `parent-profile/my-location.controller.ts#MyLocationController.save` |
 | POST | `/api/v1/me/location/later` | not for staff | `parent-profile/my-location.controller.ts#MyLocationController.later` |
