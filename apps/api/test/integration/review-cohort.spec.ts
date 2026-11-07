@@ -55,6 +55,9 @@ let defaultOrg: string;
 async function cleanup() {
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}' or organization_id in (select id from chat.organization where slug = '${REVIEW_ORG_SLUG}')`);
+  // Push tokens are stamped with the review organization (registerDevice) and
+  // are not among the tables truncate() empties.
+  await g.prisma.$executeRawUnsafe(`delete from chat.device_token where organization_id in (select id from chat.organization where slug = '${REVIEW_ORG_SLUG}')`);
   await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug = '${REVIEW_ORG_SLUG}'`);
 }
 
