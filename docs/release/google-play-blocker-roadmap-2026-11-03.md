@@ -541,7 +541,7 @@ Flutter, `test/features/moderation/block_test.dart`:
 
 ### 7.2 Database
 
-Migration `20261104110000_chat_pd058_terms_acceptance.sql`, with its slot claimed.
+Migration `20261104110000_chat_pd058_terms_acceptance.sql`, with its slot claimed (shipped as `20261107110000_chat_pd058_terms.sql`: renumbered on 2026-11-07).
 
 `chat.legal_document_version`:
 - columns: `document_key`, `version` (text, as the owner names it), `url_ar`, `url_en`, `effective_at`, `created_at`, `created_by`;
