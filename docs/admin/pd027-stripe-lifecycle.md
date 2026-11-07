@@ -291,3 +291,29 @@ select outcome, type, count(*) from chat.stripe_event where received_at > now() 
 -- card attempts still open after their expiry (the reconciler should clear these within minutes)
 select stripe_session_id, created_at from chat.payment_checkout where status = 'open' and expires_at < now() - interval '15 minutes';
 ```
+
+## 6. Tests
+
+All tests use the in-memory Stripe stand-in (`apps/api/test/integration/fake-stripe.ts`). Webhook
+signatures are signed and verified by the real Stripe SDK. No network, no real payment.
+
+| Scenario | Where |
+|---|---|
+| Successful payment (link and app); one customer, metadata only; server-side amount (a body `amountMinor` ignored); recorded once with charge, brand, last 4; lessons credited once | `pd027-stripe-lifecycle-http.spec.ts` › a successful card payment |
+| Out of order: `payment_intent.succeeded` before `checkout.session.completed` | same |
+| Duplicate delivery (same event, redelivered; a second confirming event) | same, and the existing `pd027-payments-http.spec.ts` |
+| Renewal: a second paid package, credited once | same |
+| Customer creation refused, or the customer deleted in the Dashboard: the parent still pays (guest) | same |
+| Declined card: counted once per event, code only, parent told why (app and link page), staff see it | › a payment that fails |
+| Cancelled and expired checkouts | same |
+| Invalid signatures (wrong secret, forged header, tampered body): 400, no event row | same |
+| Incorrect amount or currency, by either confirming event: never recorded, audited | same |
+| Refund before its payment (deferred, then recorded); Dashboard refund via `charge.refunded`, once; failed refund; pending-then-failed refund audited | › refunds |
+| Database failure mid-webhook: 500, nothing left, the retry records once | › recovery |
+| Stripe unreachable (event lookup, card details, reconcile): retried or recorded without details, never lost | same |
+| Lost webhook: the reconciler records once, marks expired, survives Stripe being down; per-payment reconcile | same |
+| Stripe Billing events (`invoice.*`, `customer.subscription.*`): change nothing | › Stripe Billing events |
+| Ledger filters, totals, paging, detail; family scope; parents, teachers, unauthenticated refused; another family's request refused; webhook-log tenancy | › the transaction ledger |
+| Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
+| Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
+| App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
