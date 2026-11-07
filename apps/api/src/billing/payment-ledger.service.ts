@@ -41,6 +41,15 @@ export interface RecordPaymentInput {
   reference: string | null;
   stripeCheckoutSessionId?: string | null;
   stripePaymentIntentId?: string | null;
+  /** 20261107120000: a card payment's Stripe references and payment method (checked by `safe`). */
+  stripe?: {
+    customerId: string | null;
+    chargeId: string | null;
+    methodType: string | null;
+    cardBrand: string | null;
+    cardLast4: string | null;
+    cardWallet: string | null;
+  } | null;
   receiptId?: string | null;
   /** The audit row's actor (null = the system: a Stripe confirmation). */
   auditActorId: string | null;
@@ -149,6 +158,16 @@ export class PaymentLedger {
         reference: input.reference,
         stripeCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
         stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+        ...(input.method === 'card' && input.stripe
+          ? {
+              stripeCustomerId: input.stripe.customerId,
+              stripeChargeId: input.stripe.chargeId,
+              paymentMethodType: input.stripe.methodType,
+              cardBrand: input.stripe.cardBrand,
+              cardLast4: input.stripe.cardLast4,
+              cardWallet: input.stripe.cardWallet,
+            }
+          : {}),
         receiptId: input.receiptId ?? null,
       },
     });

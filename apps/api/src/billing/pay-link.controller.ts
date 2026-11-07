@@ -7,6 +7,7 @@ import { parseBankAccount } from './billing.service';
 import { CheckoutService } from './checkout.service';
 import { BANK_ACCOUNT_KEY, PaymentLedger } from './payment-ledger.service';
 import { renderPayPage, type PayLang, type PayPageModel } from './pay-page';
+import { lastCardFailures } from './payments-read.service';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -81,6 +82,7 @@ export class PayLinkController {
     if (!child && request.learnerId) child = (await this.prisma.learner.findUnique({ where: { id: request.learnerId }, select: { name: true } }))?.name ?? null;
     const amount = Number(request.amountMinor);
     const status = request.paidAt ? 'paid' : request.cancelledAt ? 'cancelled' : request.expiresAt <= new Date() ? 'expired' : 'open';
+    const failure = status === 'open' ? (await lastCardFailures(this.prisma, [request.id])).get(request.id) ?? null : null;
     return {
       status,
       payerName,
@@ -100,6 +102,7 @@ export class PayLinkController {
       cardAvailable: this.checkout.available,
       checkout,
       error: null,
+      cardFailure: failure?.code ?? null,
     };
   }
 

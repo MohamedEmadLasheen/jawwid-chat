@@ -11,6 +11,7 @@ import '../../../shared/utils/text_direction.dart';
 import '../domain/amount_due.dart';
 import '../domain/money_format.dart';
 import 'my_payments_screen.dart';
+import 'payment_sections.dart';
 
 /// What the parent did in the pay sheet.
 enum PayOutcome {
@@ -142,6 +143,12 @@ class _PaySheetState extends ConsumerState<PaySheet> {
               style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: Spacing.spacing5),
+            // PD-27 completion: the last card attempt failed -- said again where the
+            // parent chooses how to pay next.
+            if (item.lastCardFailure != null) ...[
+              CardFailureBanner(key: const ValueKey('pay-sheet-card-failure'), failure: item.lastCardFailure!),
+              const SizedBox(height: Spacing.spacing3),
+            ],
             if (widget.cardAvailable)
               option(
                 key: const ValueKey('pay-by-card'),

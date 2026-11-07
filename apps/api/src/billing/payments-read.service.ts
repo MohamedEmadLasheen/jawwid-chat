@@ -37,6 +37,12 @@ export interface PaymentRequestDto {
   createdBy?: Person | null;
   cancelled?: { at: string; by: Person | null; reason: string } | null;
   trialId?: string | null;
+  /**
+   * PD-27 completion: an open request whose latest card attempt was declined or
+   * failed -- Stripe's code (e.g. insufficient_funds), never its message -- so
+   * the parent is told why after leaving Stripe's page. null otherwise.
+   */
+  lastCardFailure: { code: string; at: string } | null;
 }
 
 export interface PaymentDto {
@@ -52,6 +58,8 @@ export interface PaymentDto {
   child: Child | null;
   reference: string | null;
   invoice: { id: string; number: string } | null;
+  /** A card payment's brand, last 4 and wallet (Stripe's report; never more). */
+  card: { brand: string | null; last4: string | null; wallet: string | null } | null;
   recordedBy?: Person | null;
   voided?: { at: string; by: Person; reason: string } | null;
   refunds?: { id: string; amountMinor: number; reason: string; at: string; source: 'stripe' | 'staff' }[];
@@ -72,6 +80,8 @@ export interface InvoiceDto {
   planMonths: number | null;
   periodStart: string | null;
   periodEnd: string | null;
+  /** A card payment's brand, last 4 and wallet -- what the parent's history shows. */
+  card: { brand: string | null; last4: string | null; wallet: string | null } | null;
 }
 
 export interface ReceiptDto {
@@ -155,10 +165,12 @@ export class PaymentsReadService {
   ): Promise<MoneyView> {
     const { requests, payments, receipts } = rows;
     const paymentIds = payments.map((p) => p.id);
-    const [invoices, refunds, packages] = await Promise.all([
+    const openRequestIds = requests.filter((r) => !r.paidAt && !r.cancelledAt).map((r) => r.id);
+    const [invoices, refunds, packages, failures] = await Promise.all([
       paymentIds.length ? this.prisma.invoice.findMany({ where: { paymentId: { in: paymentIds } } }) : Promise.resolve([] as Invoice[]),
       paymentIds.length ? this.prisma.paymentRefund.findMany({ where: { paymentId: { in: paymentIds } }, orderBy: { createdAt: 'asc' } }) : Promise.resolve([] as PaymentRefund[]),
       loadPackageFacts(this.prisma, { requests }),
+      lastCardFailures(this.prisma, openRequestIds),
     ]);
     // Receipts name their request's label; the request may not be in `requests` (the queue).
     const extraRequestIds = receipts.map((r) => r.requestId).filter((id) => !requests.some((q) => q.id === id));
@@ -246,6 +258,7 @@ export class PaymentsReadService {
         periodEnd: r.periodEnd ? day(r.periodEnd) : null,
         expiresAt: r.expiresAt.toISOString(),
         createdAt: r.createdAt.toISOString(),
+        lastCardFailure: status === 'open' ? failures.get(r.id) ?? null : null,
       };
       if (viewer.staff) {
         dto.link = PaymentLedger.linkFor(r.token);
@@ -275,6 +288,7 @@ export class PaymentsReadService {
         child: childOf(p),
         reference: p.reference,
         invoice: inv ? { id: inv.id, number: inv.number } : null,
+        card: cardOf(p),
       };
       if (viewer.staff) {
         dto.recordedBy = person(p.recordedBy);
@@ -320,6 +334,26 @@ export class PaymentsReadService {
   }
 }
 
+/**
+ * Per open request: its LATEST card attempt's failure, if it had one (declined
+ * on Stripe's page, or an async method that failed). A newer clean attempt
+ * clears it -- the parent is trying again.
+ */
+export async function lastCardFailures(prisma: PrismaService, requestIds: string[]): Promise<Map<string, { code: string; at: string }>> {
+  const out = new Map<string, { code: string; at: string }>();
+  if (requestIds.length === 0) return out;
+  const rows = await prisma.$queryRaw<{ request_id: string; status: string; failure_count: number; failure_code: string | null; at: Date }[]>`
+    SELECT DISTINCT ON (c.request_id) c.request_id, c.status, c.failure_count, c.failure_code,
+           coalesce(c.last_failed_at, c.updated_at) AS at
+      FROM chat.payment_checkout c
+     WHERE c.request_id = ANY(${requestIds}::uuid[])
+     ORDER BY c.request_id, c.created_at DESC`;
+  for (const r of rows) {
+    if (r.failure_count > 0 || r.status === 'failed') out.set(r.request_id, { code: r.failure_code ?? 'failed', at: r.at.toISOString() });
+  }
+  return out;
+}
+
 export function presentInvoice(inv: Invoice, p: Payment, refundedMinor: number, child: Child | null): InvoiceDto {
   const s = inv.snapshot as unknown as InvoiceSnapshot;
   const amount = Number(p.amountMinor);
@@ -345,5 +379,11 @@ export function presentInvoice(inv: Invoice, p: Payment, refundedMinor: number, 
     planMonths: s.planMonths,
     periodStart: s.periodStart,
     periodEnd: s.periodEnd,
+    card: cardOf(p),
   };
+}
+
+/** A card payment's brand, last 4 and wallet, when Stripe reported them. */
+export function cardOf(p: Payment): { brand: string | null; last4: string | null; wallet: string | null } | null {
+  return p.method === 'card' && (p.cardBrand || p.cardLast4) ? { brand: p.cardBrand, last4: p.cardLast4, wallet: p.cardWallet } : null;
 }

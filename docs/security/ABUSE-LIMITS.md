@@ -56,6 +56,7 @@ Every abuse case this product has is an *authorized* action:
 | `abuse.throttle.lesson_audio_read_actor` | 60 | `GET /lesson-audio/:lesson` (PD-48: a lesson's signed voice-over URLs, one question per lesson opened) |
 | `abuse.throttle.whiteboard_write_actor` | 240 | every PD-39 board write: `POST /whiteboards`, `POST /whiteboards/:id/…` (an autosave every ~2 s while a teacher draws, plus page actions), and `POST /teacher-boards/:id/copy` |
 | `abuse.throttle.location_write_actor` | 10 | `PUT /me/location`, `POST /me/location/later` (PD-45: a parent's own location; no seeded row — the compiled default applies until one is added) |
+| `abuse.throttle.checkout_start_actor` | 10 | `POST /me/billing/checkout` (PD-27: each opens a Stripe Checkout Session, a Stripe API call; also capped at 10 an hour per request; no seeded row — the compiled default applies) |
 | `abuse.realtime.frames_per_socket_per_minute` | 600 | every inbound WebSocket frame |
 
 PD-32 adds three limits counted in the database rather than in the action store,
