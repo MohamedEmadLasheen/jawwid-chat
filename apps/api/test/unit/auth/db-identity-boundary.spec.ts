@@ -37,9 +37,11 @@ function code(path: string): string {
 const IDENTITY = /(chat\.actor_(subject|organization|staff_id)|request\.jwt|\bset\s+(local\s+)?role\b|\bset\s+session\s+authorization\b)/i;
 const GATES = /chat\.(transferring_ownership|syncing_assignment|provisioning_super_admin)/i;
 const ALLOWED_IDENTITY = new Set(['platform/actor-database.ts']);
-// cli/qa-teacher-assignment.ts: the PD-8 QA seed's stand-in for Core
-// assignment ingestion (chat.syncing_assignment only), one function, reachable
-// only from the local-only seed CLI. Reviewed 2026-10-15; see that file.
+// cli/qa-teacher-assignment.ts: the stand-in for Core assignment ingestion
+// (chat.syncing_assignment only), one function, reachable only from the two
+// synthetic-data CLIs: the PD-8 QA seed (reviewed 2026-10-15) and the store
+// review cohort, which runs against production for its own review
+// organization only (reviewed 2026-11-07). See that file.
 const ALLOWED_GATES = new Set(['cli/super-admin-bootstrap.ts', 'cli/qa-teacher-assignment.ts']);
 
 export function auditSources(apiSrc: string, webSrc: string): string[] {
