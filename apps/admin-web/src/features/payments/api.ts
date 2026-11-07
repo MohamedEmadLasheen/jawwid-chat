@@ -198,6 +198,175 @@ export interface NewTrialRequest {
   expiresInDays?: number
 }
 
+// ---- The transaction ledger (docs/admin/pd027-stripe-lifecycle.md §3.5) ----
+// Mirrored from apps/api/src/billing/transactions.service.ts and
+// stripe-reconciler.service.ts. Read only, except Reconcile (canVerify).
+
+/** Derived by the server: voided, else refunded in full, else partly, else standing. */
+export type TransactionStatus = 'standing' | 'partially_refunded' | 'refunded' | 'voided'
+/** A card attempt (one Stripe Checkout Session). */
+export type AttemptStatus = 'open' | 'complete' | 'expired' | 'failed'
+/** `failed` (the default): declined, failed, or expired unpaid. */
+export type AttemptFilter = 'failed' | 'open' | 'expired' | 'complete' | 'all'
+
+export interface StripeRefs {
+  checkoutSessionId: string | null
+  paymentIntentId: string | null
+  chargeId: string | null
+  customerId: string | null
+  /** false: Stripe test mode; null: unknown (no session). */
+  livemode: boolean | null
+}
+
+export interface Transaction {
+  id: string
+  status: TransactionStatus
+  method: PaymentMethod
+  amountMinor: number
+  refundedMinor: number
+  currency: string
+  paidOn: string
+  recordedAt: string
+  /** null: a trial's payment before Assign. */
+  family: { id: string; name: string } | null
+  trialId: string | null
+  child: Child | null
+  request: { id: string; label: string; purpose: RequestPurpose; planMonths: number | null } | null
+  instalmentId: string | null
+  invoice: { id: string; number: string } | null
+  reference: string | null
+  /** null: Stripe. */
+  recordedBy: Person | null
+  card: { brand: string | null; last4: string | null; wallet: string | null } | null
+  /** Card payments only. */
+  stripe: StripeRefs | null
+}
+
+export interface TransactionTotal {
+  currency: string
+  count: number
+  amountMinor: number
+  refundedMinor: number
+  netMinor: number
+}
+
+export interface TransactionList {
+  items: Transaction[]
+  nextCursor: string | null
+  totals: TransactionTotal[]
+  /** This viewer reconciles with Stripe and reads the webhook log (canVerify). */
+  canReconcile: boolean
+}
+
+export interface TransactionFilters {
+  status?: TransactionStatus | ''
+  method?: PaymentMethod | ''
+  purpose?: RequestPurpose | ''
+  planMonths?: PlanMonths | ''
+  /** Paid on, YYYY-MM-DD, inclusive. */
+  from?: string
+  to?: string
+  familyId?: string
+  /** Family, child, invoice number, or an exact Stripe id. At most 100 characters. */
+  q?: string
+}
+
+export interface CardAttempt {
+  sessionId: string
+  status: AttemptStatus
+  amountMinor: number
+  currency: string
+  createdAt: string
+  expiresAt: string
+  /** Declines on Stripe's page; the attempt may still be paid after them. */
+  failureCount: number
+  /** Stripe's decline or error code, never its message. */
+  failureCode: string | null
+  lastFailedAt: string | null
+  paymentIntentId: string | null
+  customerId: string | null
+}
+
+export interface CardAttemptRow extends CardAttempt {
+  /** Set when this attempt was paid. */
+  paymentId: string | null
+  request: { id: string; label: string; purpose: RequestPurpose }
+  family: { id: string; name: string } | null
+  trialId: string | null
+}
+
+export interface StripeEvent {
+  id: string
+  type: string
+  livemode: boolean
+  receivedAt: string
+  stripeCreatedAt: string | null
+  outcome: string
+  objectId: string | null
+  paymentIntentId: string | null
+}
+
+export interface TransactionRefund {
+  id: string
+  amountMinor: number
+  reason: string
+  at: string
+  source: 'stripe' | 'staff'
+  recordedBy: Person | null
+  stripeRefundId: string | null
+}
+
+export interface TransactionDetail {
+  payment: Transaction & {
+    voided: { at: string; by: Person | null; reason: string | null } | null
+    paymentMethodType: string | null
+  }
+  refunds: TransactionRefund[]
+  request: {
+    id: string
+    label: string
+    purpose: RequestPurpose
+    amountMinor: number
+    currency: string
+    planMonths: number | null
+    periodStart: string | null
+    periodEnd: string | null
+    status: RequestStatus
+  } | null
+  attempts: CardAttempt[]
+  events: StripeEvent[]
+  /** A card payment with a payment intent, and a viewer who may reconcile. */
+  canReconcile: boolean
+}
+
+export interface PaymentReconciliation {
+  paymentId: string
+  inSync: boolean
+  /** Refunds Stripe made that Chat lacked, recorded now. */
+  recordedRefunds: number
+  chat: { amountMinor: number; refundedMinor: number; currency: string }
+  stripe: { status: string; amountReceivedMinor: number; amountRefundedMinor: number; currency: string }
+}
+
+export interface ReconcileSweepResult {
+  checked: number
+  recorded: number
+  expired: number
+  refundsRecorded: number
+  errors: number
+}
+
+export interface Page<T> {
+  items: T[]
+  nextCursor: string | null
+}
+
+export interface StripeEventFilters {
+  outcome?: string
+  /** A prefix: `refund.` matches every refund event. */
+  type?: string
+}
+
 const id = (v: string) => encodeURIComponent(v)
 
 /** The trial's requests, on the trials controller beside PD-16's other New Students routes. */
@@ -217,6 +386,26 @@ export const paymentsApi = {
   /** A trial's request answers `{request}`; a family's answers its billing (see profiles/api). */
   cancelTrialRequest: (requestId: string, reason: string) =>
     api.post<{ request: PaymentRequest }>(`/payment-requests/${id(requestId)}/cancel`, { reason }),
+  /** Keys in a fixed order; the client drops the empty ones. */
+  transactions: (f: TransactionFilters, cursor: string | null, limit?: number) =>
+    api.get<TransactionList>('/payments', {
+      status: f.status,
+      method: f.method,
+      purpose: f.purpose,
+      planMonths: f.planMonths,
+      from: f.from,
+      to: f.to,
+      familyId: f.familyId,
+      q: f.q,
+      cursor,
+      limit,
+    }),
+  transaction: (paymentId: string) => api.get<TransactionDetail>(`/payments/${id(paymentId)}`),
+  reconcilePayment: (paymentId: string) => api.post<PaymentReconciliation>(`/payments/${id(paymentId)}/reconcile`),
+  attempts: (status: AttemptFilter, cursor: string | null) => api.get<Page<CardAttemptRow>>('/payment-attempts', { status, cursor }),
+  stripeEvents: (f: StripeEventFilters, cursor: string | null) =>
+    api.get<Page<StripeEvent>>('/stripe/events', { outcome: f.outcome, type: f.type, cursor }),
+  reconcileNow: () => api.post<ReconcileSweepResult>('/stripe/reconcile'),
 }
 
 export const paymentKeys = {
@@ -224,4 +413,9 @@ export const paymentKeys = {
   receipts: (status: ReceiptStatus) => ['pd27-payments', 'receipts', status] as const,
   settings: ['pd27-payments', 'settings'] as const,
   trial: (trialId: string) => ['pd27-payments', 'trial', trialId] as const,
+  transactions: (f: TransactionFilters) => ['pd27-payments', 'transactions', f] as const,
+  /** Whether this viewer reconciles (the Stripe events tab): one row of the list. */
+  transaction: (paymentId: string) => ['pd27-payments', 'transaction', paymentId] as const,
+  attempts: (status: AttemptFilter) => ['pd27-payments', 'attempts', status] as const,
+  stripeEvents: (f: StripeEventFilters) => ['pd27-payments', 'stripe-events', f] as const,
 }

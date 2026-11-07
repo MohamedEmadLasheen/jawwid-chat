@@ -1,3 +1,4 @@
+import { CommError, CommErrorCode } from '../../platform/errors';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { actorIsLive } from '../../platform/liveness';
 import { Prisma } from '@prisma/client';
@@ -391,9 +392,21 @@ export class NotificationService {
     isVoip?: boolean;
     locale?: string;
   }): Promise<void> {
+    // The actor's own organization, SET EXPLICITLY (as auth.service.ts does for
+    // device and session): the column default is the DEFAULT tenant, so a
+    // token of any other organization's member -- the store review accounts,
+    // the first one -- was stamped with Jawwid's (found 2026-11-07).
+    const [row] = await this.prisma.$queryRaw<Array<{ organization_id: string }>>`
+      SELECT organization_id::text FROM chat.staff WHERE id = ${input.actorId}::uuid
+      UNION ALL SELECT organization_id::text FROM chat.contact WHERE id = ${input.actorId}::uuid
+      UNION ALL SELECT organization_id::text FROM chat.teacher WHERE id = ${input.actorId}::uuid
+      LIMIT 1`;
+    if (!row) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
+    const organizationId = row.organization_id;
     await this.prisma.deviceToken.upsert({
       where: { token: input.token },
       create: {
+        organizationId,
         actorId: input.actorId,
         token: input.token,
         platform: input.platform,
@@ -408,6 +421,7 @@ export class NotificationService {
       // whether a device may receive a call push, a stale value is the
       // difference between a phone that rings and one that does not.
       update: {
+        organizationId,
         actorId: input.actorId,
         platform: input.platform,
         isVoip: input.isVoip ?? false,

@@ -46,12 +46,28 @@ across many modules, or owner decisions.
 ## 3. Risk levels and approval gates
 | Level | Examples | Gate |
 |---|---|---|
-| Low | Tests, docs, copy, isolated UI, a pure function | Lead merges when checks pass |
-| Medium | API behaviour, a new endpoint, a non-destructive additive migration, a dependency added | Lead merges after its own review plus checks; Codex review recommended |
-| High | Authorization, payments and refunds, data deletion or rewrite, destructive migrations, auth/session, infrastructure, CI/protections, Quran or lesson content | **Owner approval before implementation and before merge.** Never auto-merged. The wrapper refuses `--risk high` without `--owner-approval "<owner's words>"`. |
+| Low | Tests, docs, copy, isolated UI, a pure function, refactoring with no behaviour change | Lead merges when the merge conditions below hold |
+| Medium | API behaviour, a new endpoint, ordinary backend or app features, bug fixes, a dependency added | Lead merges when the merge conditions below hold; Codex review recommended |
+| High | Authentication, authorization, account security; payments, Stripe, billing, refunds or any financial logic; **any** schema change or migration; data deletion or rewrite; children's personal data, privacy or child safety; security policies, repository permissions, CI/protections, deployment protection; infrastructure; protected projects or their boundaries; Quran or lesson content; anything irreversible or unusually high-impact | **Owner approval before implementation and before merge.** A security review does not replace it. Never auto-merged. The wrapper refuses `--risk high` without `--owner-approval "<owner's words>"`. |
 
-Always owner-only: production deploys, production migrations, Jawwid Core, Code Owner approvals,
-changes to protections or paid resources.
+**Merge conditions** (owner, 2026-11-07). The lead merges a Low or Medium PR without asking only when
+ALL hold:
+1. The change matches the approved task and its acceptance criteria.
+2. Every CI check on the head commit has passed, not only the required ones.
+3. An independent review (a reviewer that did not write the change) accepted it, recorded as a PR
+   comment `Review: ACCEPT @ <full head sha>`.
+4. Every requested change and review thread is resolved.
+5. Any security review the risk level calls for has passed.
+6. GitHub's own rules are satisfied (Code Owner approval where required). Never `--admin`, never a bypass.
+7. The merged commit is the reviewed and tested one: `gh pr merge <n> --merge --match-head-commit <sha>`.
+8. No merge conflict and no unexplained failure.
+
+After merging: confirm the PR shows MERGED, `origin/main` is the expected merge commit, and main's CI on
+it goes green. A failure is investigated and reported, never hidden. Merging never deploys.
+
+Always owner-only: production deploys, production migrations or data changes, store submissions,
+Jawwid Core and the other protected projects, Code Owner approvals, changes to protections, permissions
+or paid resources.
 
 ## 4. Review standard (important changes)
 - Read the complete diff, not a summary.

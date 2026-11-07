@@ -92,6 +92,7 @@ export class PaymentsController {
   // ---- the parent ----------------------------------------------------
 
   /** { requestId } | { instalmentId } -> { url } */
+  @RateLimited(ActionScope.CHECKOUT_START)
   @NotForStaff()
   @Post('me/billing/checkout')
   checkout(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {

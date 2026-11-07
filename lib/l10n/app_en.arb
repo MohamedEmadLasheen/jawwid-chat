@@ -2117,6 +2117,42 @@
   "@billingBankTransferHint": {
     "description": "PD-27: Settings -> Payments."
   },
+  "billingCardFailureLead": "Your last card payment did not go through:",
+  "@billingCardFailureLead": {
+    "description": "PD-27: banner on an open payment whose last card attempt failed. Followed by the reason and the next step (apps/api card-failure.ts)."
+  },
+  "billingCardFailureNext": "Try another card, or pay by bank transfer.",
+  "@billingCardFailureNext": {
+    "description": "PD-27: the card-failure banner's next step."
+  },
+  "billingCardFailureInsufficientFunds": "your bank declined it for insufficient funds.",
+  "@billingCardFailureInsufficientFunds": {
+    "description": "PD-27: card-failure reason (insufficient_funds)."
+  },
+  "billingCardFailureExpiredCard": "the card has expired.",
+  "@billingCardFailureExpiredCard": {
+    "description": "PD-27: card-failure reason (expired_card)."
+  },
+  "billingCardFailureIncorrectCvc": "the security code (CVC) was incorrect.",
+  "@billingCardFailureIncorrectCvc": {
+    "description": "PD-27: card-failure reason (incorrect_cvc, invalid_cvc)."
+  },
+  "billingCardFailureIncorrectNumber": "the card number was incorrect.",
+  "@billingCardFailureIncorrectNumber": {
+    "description": "PD-27: card-failure reason (incorrect_number, invalid_number)."
+  },
+  "billingCardFailureAuthentication": "your bank's verification (3D Secure) was not completed.",
+  "@billingCardFailureAuthentication": {
+    "description": "PD-27: card-failure reason (authentication_required, payment_intent_authentication_failure)."
+  },
+  "billingCardFailureProcessingError": "there was an error processing the card.",
+  "@billingCardFailureProcessingError": {
+    "description": "PD-27: card-failure reason (processing_error)."
+  },
+  "billingCardFailureDeclined": "your bank declined the card.",
+  "@billingCardFailureDeclined": {
+    "description": "PD-27: card-failure reason for every other code. Never says stolen, lost or fraud."
+  },
   "billingPaymentsUnavailable": "Card payment isn't available right now. You can pay by bank transfer.",
   "@billingPaymentsUnavailable": {
     "description": "PD-27: Settings -> Payments."

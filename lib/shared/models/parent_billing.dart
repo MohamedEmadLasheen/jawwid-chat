@@ -338,10 +338,15 @@ class PaymentRequest {
     this.periodEnd,
     this.expiresAt,
     this.createdAt,
+    this.lastCardFailure,
   });
 
   final String id;
   final String label;
+
+  /// PD-27 completion: the server sets it only on an open request whose latest card
+  /// attempt was declined or failed. Null otherwise, and from a server that predates it.
+  final CardFailure? lastCardFailure;
 
   /// Null for a purpose this build does not know.
   final RequestPurpose? purpose;
@@ -373,6 +378,39 @@ class PaymentRequest {
   final DateTime? createdAt;
 
   bool get isOpen => status == RequestStatus.open && remainingMinor > 0;
+}
+
+/// PD-27 completion: why a request's latest card attempt failed. [code] is Stripe's
+/// decline or error code (`insufficient_funds`, `expired_card`...), never Stripe's
+/// message; the app words it (features/billing/domain/card_failure.dart).
+class CardFailure {
+  const CardFailure({required this.code, this.at});
+
+  final String code;
+
+  /// When the attempt failed; null when the server did not say.
+  final DateTime? at;
+
+  @override
+  bool operator ==(Object other) => other is CardFailure && other.code == code && other.at == at;
+
+  @override
+  int get hashCode => Object.hash(code, at);
+}
+
+/// PD-27 completion: the card a payment was made with, as Stripe reported it -- never
+/// more than the brand, the last four digits and the wallet. Any part may be unknown.
+class PaymentCard {
+  const PaymentCard({this.brand, this.last4, this.wallet});
+
+  /// Stripe's brand: `visa`, `mastercard`, `amex`...
+  final String? brand;
+
+  /// Exactly four digits, or null.
+  final String? last4;
+
+  /// Stripe's wallet type: `apple_pay`, `google_pay`...; null for a card typed in.
+  final String? wallet;
 }
 
 enum InvoiceStatus {
@@ -409,10 +447,15 @@ class BillingInvoice {
     this.lessonsIncluded,
     this.periodStart,
     this.periodEnd,
+    this.card,
   });
 
   final String id;
   final String number;
+
+  /// PD-27 completion: the card its payment was made with; null for any other method,
+  /// and when the server did not say.
+  final PaymentCard? card;
   final DateTime? issuedAt;
   final InvoiceStatus? status;
   final int amountMinor;

@@ -28,10 +28,11 @@
 -- The complaint lifecycle and its resolution rules are unchanged.
 -- Idempotent (G-19).
 --
--- Renumbered 2026-11-07: was 20261103120000, then 20261107100000. Later
--- migrations landed on main first (20261104100000, 20261106100000 to
--- 20261106170000, 20261107110000). No dependency on them; the content is
--- unchanged.
+-- Renumbered 2026-11-07: was 20261103120000, then 20261107100000, then
+-- 20261107120000 (taken on main by #494, PD-27). Later migrations landed on
+-- main first (20261104100000, 20261106100000 to 20261106170000,
+-- 20261107110000, 20261107120000), and #497/#498 hold 20261107130000 and
+-- 20261107140000. No dependency on them; the content is unchanged.
 -- =============================================================================
 
 create table if not exists chat.parent_feedback_reply_seen (

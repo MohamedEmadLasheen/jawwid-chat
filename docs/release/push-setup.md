@@ -122,7 +122,7 @@ device test with a development build, **QA must use `APNS_PRODUCTION=false`**. A
 ## 3. Real-device test plan (after §1 and §2 are in place)
 
 **Environment:** the local QA stack only (`~/jawwid-qa-env`, `APP_ENV=staging`, synthetic
-accounts), rebuilt from this branch so it carries migration `20261107120000`. The phone reaches
+accounts), rebuilt from this branch so it carries migration `20261107150000`. The phone reaches
 it over the private tailnet.
 
 For each phone (Android, and the iPhone 16 Pro Max), and for each of **foreground**,

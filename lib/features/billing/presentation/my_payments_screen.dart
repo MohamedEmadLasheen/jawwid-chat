@@ -56,6 +56,11 @@ class MyPaymentsScreen extends ConsumerStatefulWidget {
 class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
   /// [DueItem.key]s whose card checkout was opened and is not yet seen paid.
   final _confirming = <String>{};
+
+  /// PD-27 completion: per confirming item, the card failure it showed when its checkout
+  /// was opened. A different one in a re-read is the new attempt failing: confirming
+  /// ends and the banner says why.
+  final _failureWhenOpened = <String, CardFailure?>{};
   late final AppLifecycleListener _lifecycle;
   Timer? _poll;
   var _polls = 0;
@@ -177,7 +182,10 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
     if (!mounted || outcome == null) return;
     switch (outcome) {
       case PayOutcome.cardOpened:
-        setState(() => _confirming.add(item.key));
+        setState(() {
+          _confirming.add(item.key);
+          _failureWhenOpened[item.key] = item.lastCardFailure;
+        });
       case PayOutcome.noLongerOpen:
         _snack(l10n.billingNoLongerOpen);
         unawaited(_refresh());
@@ -205,12 +213,23 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
     final l10n = L10n.of(context);
     final state = ref.watch(myBillingProvider);
 
-    // A confirming item that is no longer due has been paid (or closed): stop saying so.
+    // A confirming item that is no longer due has been paid (or closed), and one with a
+    // new card failure was declined: stop saying "confirming" for either.
     ref.listen(myBillingProvider, (_, next) {
       final billing = next.value;
       if (billing == null || _confirming.isEmpty) return;
-      final due = amountsDue(billing).map((i) => i.key).toSet();
-      if (_confirming.any((k) => !due.contains(k))) setState(() => _confirming.retainAll(due));
+      final due = {for (final i in amountsDue(billing)) i.key: i};
+      bool settled(String k) {
+        final item = due[k];
+        return item == null || (item.lastCardFailure != null && item.lastCardFailure != _failureWhenOpened[k]);
+      }
+
+      if (_confirming.any(settled)) {
+        setState(() {
+          _confirming.removeWhere(settled);
+          _failureWhenOpened.removeWhere((k, _) => !_confirming.contains(k));
+        });
+      }
     });
 
     return Scaffold(

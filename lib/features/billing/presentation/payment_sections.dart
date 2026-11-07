@@ -6,6 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/parent_billing.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../domain/amount_due.dart';
+import '../domain/card_failure.dart';
 import '../domain/money_format.dart';
 import 'my_payments_screen.dart';
 
@@ -74,6 +75,43 @@ class _Row extends StatelessWidget {
   }
 }
 
+/// PD-27 completion: "Your last card payment did not go through: (why). Try another
+/// card, or pay by bank transfer." -- on an open payment whose latest card attempt
+/// failed, in the parent's language (the reason is never Stripe's own message).
+class CardFailureBanner extends StatelessWidget {
+  const CardFailureBanner({super.key, required this.failure});
+
+  final CardFailure failure;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = JawwidTokens.of(context);
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: tokens.colorStatusDangerBg, borderRadius: BorderRadius.circular(Spacing.spacing3)),
+        child: Padding(
+          padding: const EdgeInsets.all(Spacing.spacing3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.credit_card_off_outlined, size: 16, color: tokens.colorStatusDangerFg),
+              const SizedBox(width: Spacing.spacing3),
+              Expanded(
+                child: Text(
+                  cardFailureText(failure.code, L10n.of(context)),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens.colorStatusDangerFg),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One thing to pay now: what is left of it, for whom, for what, by when -- and Pay.
 class DueTile extends StatelessWidget {
   const DueTile({super.key, required this.item, required this.confirming, required this.onPay});
@@ -81,6 +119,7 @@ class DueTile extends StatelessWidget {
   final DueItem item;
 
   /// A card checkout was opened for it and the server has not yet said it is paid.
+  /// While it is, an earlier card failure is not shown: it is about the last attempt.
   final bool confirming;
   final VoidCallback onPay;
 
@@ -153,6 +192,11 @@ class DueTile extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        if (!confirming && item.lastCardFailure != null)
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, 0, Spacing.spacing5, Spacing.spacing3),
+            child: CardFailureBanner(key: ValueKey('billing-card-failure-${item.key}'), failure: item.lastCardFailure!),
           ),
       ],
     );
@@ -235,6 +279,7 @@ class InvoiceTile extends StatelessWidget {
       ?v.childName,
     ].join(' · ');
     final package = packageLine(v.planMonths, v.periodStart, v.periodEnd, l10n, locale, lessons: v.lessonsIncluded);
+    final card = cardLabel(v.card, l10n);
     final chip = switch (v.status) {
       InvoiceStatus.paid => (l10n.billingStatusPaid, tokens.colorStatusSuccessFg, tokens.colorStatusSuccessBg),
       InvoiceStatus.partiallyRefunded =>
@@ -254,6 +299,8 @@ class InvoiceTile extends StatelessWidget {
           if (what.isNotEmpty) ContentText(what, style: secondary),
           if (package != null) Text(package, style: secondary),
           if (when.isNotEmpty) Text(when, style: secondary),
+          // "Visa •••• 4242 · Apple Pay": laid out in its own direction, like a name.
+          if (card != null) ContentText(card, key: ValueKey('billing-invoice-card-${v.id}'), style: secondary),
           if (v.refundedMinor > 0)
             Text(l10n.billingRefundedAmount(formatMoney(v.refundedMinor, v.currency, locale)), style: secondary),
         ],
