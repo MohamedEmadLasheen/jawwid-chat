@@ -12,6 +12,7 @@ import { NotificationPipeline } from './communication/notifications/notification
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 import { PaymentReminders } from './billing/payment-reminders.service';
+import { StripeReconciler } from './billing/stripe-reconciler.service';
 import { SupervisorCoverService } from './org/supervisor-cover.service';
 import { FamilyAccessService } from './account-admin/family-access.service';
 import { MentionService } from './communication/mentions/mention.service';
@@ -91,6 +92,14 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
  * it; hourly is enough for reminders measured in days.
  */
 const PAYMENT_REMINDER_SWEEP_MS = 60 * 60_000;
+/**
+ * PD-27 completion: how often card attempts are reconciled with Stripe (a paid
+ * checkout whose webhook never came is recorded; refunds that arrived before
+ * their payment are synced). Its own loop: it waits on Stripe's network, which
+ * must never delay a message. Idempotent (CheckoutService's unique keys), so
+ * every replica may run it. 0 turns it off.
+ */
+const STRIPE_RECONCILE_MS = Number(process.env.STRIPE_RECONCILE_MS ?? 300_000);
 /** PD-34: adopt legacy deliveries into the Notification Center; purge once a day. */
 const NOTIFICATION_ADOPT_MS = Number(process.env.NOTIFICATION_ADOPT_MS ?? 10_000);
 const NOTIFICATION_PURGE_MS = 24 * 60 * 60_000;
@@ -239,6 +248,7 @@ async function bootstrap(): Promise<void> {
   const scheduling = app.get(SchedulingService);
   const lifecycle = app.get(LifecycleService);
   const paymentReminders = app.get(PaymentReminders);
+  const stripeReconciler = app.get(StripeReconciler);
   const pipeline = app.get(NotificationPipeline);
   const covers = app.get(SupervisorCoverService);
   const familyAccess = app.get(FamilyAccessService);
@@ -264,6 +274,7 @@ async function bootstrap(): Promise<void> {
   let running = true;
   let draining = false;
   let subscriptionBusy = false;
+  let reconcileBusy = false;
 
   const stop = (signal: string) => {
     if (!running) return;
@@ -273,7 +284,7 @@ async function bootstrap(): Promise<void> {
     // mid-publish would leave rows claimed but unpublished, and at-least-once
     // delivery only holds if a claimed row is either published or released.
     const wait = setInterval(() => {
-      if (!draining && !subscriptionBusy) {
+      if (!draining && !subscriptionBusy && !reconcileBusy) {
         clearInterval(wait);
         void flushErrorTracker(errors)
           .then(() => app.close())
@@ -328,6 +339,24 @@ async function bootstrap(): Promise<void> {
         subscriptionBusy = false;
       }
       for (let waited = 0; running && waited < SUBSCRIPTION_SWEEP_MS; waited += 500) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  })();
+
+  // PD-27 completion: reconciliation with Stripe, in its own loop (see STRIPE_RECONCILE_MS).
+  const reconcileLoop = (async () => {
+    if (!(STRIPE_RECONCILE_MS > 0)) return;
+    while (running) {
+      reconcileBusy = true;
+      try {
+        await stripeReconciler.sweep();
+      } catch (e) {
+        report(log, 'stripe reconcile', 'billing.stripe_reconcile', e);
+      } finally {
+        reconcileBusy = false;
+      }
+      for (let waited = 0; running && waited < STRIPE_RECONCILE_MS; waited += 500) {
         await new Promise((r) => setTimeout(r, 500));
       }
     }
@@ -687,6 +716,7 @@ async function bootstrap(): Promise<void> {
     await pacer.pause(pacer.delayAfter(published));
   }
   await subscriptionLoop;
+  await reconcileLoop;
   await closeWake?.();
 }
 

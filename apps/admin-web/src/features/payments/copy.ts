@@ -2,7 +2,19 @@ import { ApiError } from '@/core/api/errors'
 import type { Pair } from '@/features/organization/copy'
 import { formatMoney } from '@/features/instalments/copy'
 import { minorDigits } from '@/features/profiles/copy'
-import type { InvoiceStatus, PaymentMethod, PaymentRequest, ReceiptStatus, RequestPurpose, RequestStatus } from './api'
+import type {
+  AttemptFilter,
+  AttemptStatus,
+  CardAttempt,
+  InvoiceStatus,
+  PaymentMethod,
+  PaymentRequest,
+  ReceiptStatus,
+  RequestPurpose,
+  RequestStatus,
+  Transaction,
+  TransactionStatus,
+} from './api'
 
 export { useCopy, type Pair } from '@/features/organization/copy'
 export { formatDay, formatMoney } from '@/features/instalments/copy'
@@ -300,6 +312,258 @@ export const INVOICE_STATUS: Record<InvoiceStatus, Pair> = {
   partially_refunded: { en: 'Partially refunded', ar: 'مستردة جزئيًا' },
   refunded: { en: 'Refunded', ar: 'مستردة' },
   void: { en: 'Void', ar: 'ملغاة' },
+}
+
+/**
+ * PD-27 completion: the transaction ledger -- Transactions, Card attempts and
+ * Stripe events (docs/admin/pd027-stripe-lifecycle.md §3.6). Read only; the
+ * one act is Reconcile, which asks Stripe and records only what Stripe says.
+ */
+export const LED = {
+  transactionsTab: { en: 'Transactions', ar: 'المعاملات' },
+  attemptsTab: { en: 'Card attempts', ar: 'محاولات البطاقة' },
+  eventsTab: { en: 'Stripe events', ar: 'أحداث Stripe' },
+  filters: { en: 'Filters', ar: 'عوامل التصفية' },
+  anyStatus: { en: 'Any status', ar: 'كل الحالات' },
+  anyMethod: { en: 'Any method', ar: 'كل الطرق' },
+  anyPurpose: { en: 'Anything', ar: 'الكل' },
+  anyPlan: { en: 'Any package', ar: 'كل الباقات' },
+  planMonths: { en: 'Package', ar: 'الباقة' },
+  from: { en: 'Paid from', ar: 'مدفوعة من' },
+  to: { en: 'Paid to', ar: 'مدفوعة حتى' },
+  search: { en: 'Search: family, child, invoice number or Stripe id', ar: 'بحث: الأسرة أو الطفل أو رقم الفاتورة أو معرّف Stripe' },
+  clearSearch: { en: 'Clear the search', ar: 'مسح البحث' },
+  clearFilters: { en: 'Clear filters', ar: 'مسح عوامل التصفية' },
+  totals: { en: 'Totals', ar: 'الإجماليات' },
+  totalsHint: { en: 'Every payment that matches, not only those loaded. A voided payment is counted but adds no money.', ar: 'كل الدفعات المطابقة، لا المعروضة فقط. تُعدّ الدفعة الملغاة ولا يُضاف مبلغها.' },
+  count: { en: 'Payments', ar: 'الدفعات' },
+  totalAmount: { en: 'Received', ar: 'المستلم' },
+  totalRefunded: { en: 'Refunded', ar: 'المسترد' },
+  net: { en: 'Net', ar: 'الصافي' },
+  noTransactions: { en: 'No payments match.', ar: 'لا توجد دفعات مطابقة.' },
+  transactions: { en: 'Transactions', ar: 'المعاملات' },
+  colFamily: { en: 'Family', ar: 'الأسرة' },
+  colChild: { en: 'Child', ar: 'الطفل' },
+  colFor: { en: 'For', ar: 'عن' },
+  colMethod: { en: 'Method', ar: 'الطريقة' },
+  colAmount: { en: 'Amount', ar: 'المبلغ' },
+  colRefunded: { en: 'Refunded', ar: 'المسترد' },
+  colStatus: { en: 'Status', ar: 'الحالة' },
+  colPaidOn: { en: 'Paid on', ar: 'تاريخ الدفع' },
+  colInvoice: { en: 'Invoice', ar: 'الفاتورة' },
+  beforeAssign: { en: 'New student (not assigned yet)', ar: 'طالب جديد (لم يُسنَد بعد)' },
+  details: { en: 'Details', ar: 'التفاصيل' },
+  detailsNamed: { en: 'Details of the payment of {amount}, {date}', ar: 'تفاصيل الدفعة بمبلغ {amount}، {date}' },
+  loadMore: { en: 'Load more', ar: 'تحميل المزيد' },
+  loading: { en: 'Loading…', ar: 'جارٍ التحميل…' },
+
+  // Detail
+  detailTitle: { en: 'Payment of {amount}', ar: 'دفعة بمبلغ {amount}' },
+  summary: { en: 'Payment', ar: 'الدفعة' },
+  recordedAt: { en: 'Recorded', ar: 'تاريخ التسجيل' },
+  recordedBy: { en: 'Recorded by', ar: 'سجّلها' },
+  stripe: { en: 'Stripe', ar: 'Stripe' },
+  voided: { en: 'Voided', ar: 'أُلغيت' },
+  stripeRefs: { en: 'Stripe references', ar: 'مراجع Stripe' },
+  checkoutSession: { en: 'Checkout session', ar: 'جلسة الدفع' },
+  paymentIntent: { en: 'Payment intent', ar: 'نية الدفع' },
+  charge: { en: 'Charge', ar: 'عملية الخصم' },
+  customer: { en: 'Customer', ar: 'العميل' },
+  testMode: { en: 'Test mode', ar: 'وضع الاختبار' },
+  copy: { en: 'Copy', ar: 'نسخ' },
+  copyNamed: { en: 'Copy {label}', ar: 'نسخ {label}' },
+  copyValueFailed: { en: 'Could not copy. Select it and copy.', ar: 'تعذّر النسخ. حدّده وانسخه.' },
+  refunds: { en: 'Refunds', ar: 'الاستردادات' },
+  noRefunds: { en: 'No refunds.', ar: 'لا توجد استردادات.' },
+  refundBy: { en: 'recorded by {name}', ar: 'سجّله {name}' },
+  request: { en: 'Payment request', ar: 'طلب الدفع' },
+  noRequest: { en: 'Not paid against a request.', ar: 'لم تُدفع مقابل طلب.' },
+  attempts: { en: 'Card attempts', ar: 'محاولات البطاقة' },
+  noAttempts: { en: 'No card attempts.', ar: 'لا توجد محاولات بالبطاقة.' },
+  attemptOpened: { en: 'Opened {date}', ar: 'فُتحت {date}' },
+  declines: { en: 'Declines: {n}', ar: 'مرات الرفض: {n}' },
+  lastFailed: { en: 'Last failed', ar: 'آخر إخفاق' },
+  lastFailedAt: { en: 'last failed {date}', ar: 'آخر إخفاق {date}' },
+  events: { en: 'Webhook events', ar: 'أحداث الـWebhook' },
+  noEvents: { en: 'No webhook events.', ar: 'لا توجد أحداث Webhook.' },
+  reconcile: { en: 'Reconcile with Stripe', ar: 'مطابقة مع Stripe' },
+  reconciling: { en: 'Asking Stripe…', ar: 'جارٍ سؤال Stripe…' },
+  reconcileHint: {
+    en: 'Compares this payment with Stripe’s own numbers. A refund Stripe made that is missing here is recorded; nothing else changes.',
+    ar: 'يقارن هذه الدفعة بأرقام Stripe نفسها. يُسجَّل أي استرداد أجراه Stripe ولا يظهر هنا، ولا يتغير شيء غير ذلك.',
+  },
+  inSync: { en: 'In sync with Stripe.', ar: 'مطابقة لـStripe.' },
+  outOfSync: { en: 'Chat and Stripe differ.', ar: 'تختلف Chat عن Stripe.' },
+  chatSide: { en: 'Chat', ar: 'Chat' },
+  stripeSide: { en: 'Stripe', ar: 'Stripe' },
+  stripeStatus: { en: 'Stripe status', ar: 'الحالة في Stripe' },
+  amountReceived: { en: 'Amount', ar: 'المبلغ' },
+  amountRefunded: { en: 'Refunded', ar: 'المسترد' },
+  refundsRecorded: { en: 'Refunds recorded now: {n}', ar: 'استردادات سُجّلت الآن: {n}' },
+
+  // Card attempts
+  attemptsHint: {
+    en: 'Each time a parent opened card payment. “Failed” covers declined cards, failed payments and links left unpaid until they expired.',
+    ar: 'كل مرة فتح فيها ولي الأمر الدفع بالبطاقة. تشمل «المتعثرة» البطاقات المرفوضة والدفعات الفاشلة والروابط التي انتهت دون دفع.',
+  },
+  noCardAttempts: { en: 'No card attempts here.', ar: 'لا توجد محاولات بطاقة هنا.' },
+  colRequest: { en: 'Request', ar: 'الطلب' },
+  colTries: { en: 'Declines', ar: 'مرات الرفض' },
+  colWhy: { en: 'Why', ar: 'السبب' },
+  colPaid: { en: 'Paid', ar: 'مدفوعة' },
+  yes: { en: 'Yes', ar: 'نعم' },
+  no: { en: 'No', ar: 'لا' },
+  rawCode: { en: 'Stripe code', ar: 'رمز Stripe' },
+
+  // Stripe events
+  eventsHint: {
+    en: 'Every verified message Stripe sent, and what Chat did with it. The body is never kept.',
+    ar: 'كل رسالة موثّقة أرسلها Stripe وما فعلته Chat بها. لا يُحفظ محتوى الرسالة أبدًا.',
+  },
+  outcome: { en: 'Outcome', ar: 'النتيجة' },
+  anyOutcome: { en: 'Any outcome', ar: 'كل النتائج' },
+  type: { en: 'Event type', ar: 'نوع الحدث' },
+  anyType: { en: 'Any type', ar: 'كل الأنواع' },
+  colReceived: { en: 'Received', ar: 'وقت الاستلام' },
+  colType: { en: 'Type', ar: 'النوع' },
+  colOutcome: { en: 'Outcome', ar: 'النتيجة' },
+  colObject: { en: 'Stripe object', ar: 'كائن Stripe' },
+  colMode: { en: 'Mode', ar: 'الوضع' },
+  live: { en: 'Live', ar: 'حقيقي' },
+  noStripeEvents: { en: 'No Stripe events here.', ar: 'لا توجد أحداث Stripe هنا.' },
+  reconcileNow: { en: 'Reconcile now', ar: 'المطابقة الآن' },
+  reconcileNowHint: {
+    en: 'Asks Stripe about card attempts left open, and syncs refunds that arrived before their payment. It also runs by itself every few minutes.',
+    ar: 'يسأل Stripe عن محاولات البطاقة التي بقيت مفتوحة، ويزامن الاستردادات التي وصلت قبل دفعتها. ويعمل تلقائيًا كل بضع دقائق أيضًا.',
+  },
+  sweepChecked: { en: 'Checked', ar: 'فُحصت' },
+  sweepRecorded: { en: 'Payments recorded', ar: 'دفعات سُجّلت' },
+  sweepExpired: { en: 'Marked expired', ar: 'عُلّمت منتهية' },
+  sweepRefunds: { en: 'Refunds recorded', ar: 'استردادات سُجّلت' },
+  sweepErrors: { en: 'Errors', ar: 'أخطاء' },
+  sweepDone: { en: 'Reconciled with Stripe.', ar: 'تمت المطابقة مع Stripe.' },
+} satisfies Record<string, Pair>
+
+export const TRANSACTION_STATUS: Record<TransactionStatus, Pair> = {
+  standing: { en: 'Paid', ar: 'مدفوعة' },
+  partially_refunded: { en: 'Partially refunded', ar: 'مستردة جزئيًا' },
+  refunded: { en: 'Refunded', ar: 'مستردة' },
+  voided: { en: 'Voided', ar: 'ملغاة' },
+}
+
+export const ATTEMPT_FILTER: Record<AttemptFilter, Pair> = {
+  failed: { en: 'Failed', ar: 'متعثرة' },
+  open: { en: 'Open', ar: 'مفتوحة' },
+  expired: { en: 'Expired', ar: 'منتهية' },
+  complete: { en: 'Complete', ar: 'مكتملة' },
+  all: { en: 'All', ar: 'الكل' },
+}
+
+export const ATTEMPT_STATUS: Record<AttemptStatus, Pair> = {
+  open: { en: 'Open', ar: 'مفتوحة' },
+  complete: { en: 'Complete', ar: 'مكتملة' },
+  expired: { en: 'Expired', ar: 'منتهية' },
+  failed: { en: 'Failed', ar: 'فشلت' },
+}
+
+/** apps/api/src/billing/checkout.service.ts WebhookOutcome; an unknown one shows as sent. */
+export const EVENT_OUTCOME: Record<string, Pair> = {
+  recorded: { en: 'Payment recorded', ar: 'سُجّلت الدفعة' },
+  duplicate: { en: 'Duplicate delivery', ar: 'تسليم مكرر' },
+  already_recorded: { en: 'Already recorded', ar: 'مسجّلة من قبل' },
+  awaiting_payment: { en: 'Awaiting payment', ar: 'بانتظار الدفع' },
+  unknown_session: { en: 'Unknown session', ar: 'جلسة غير معروفة' },
+  mismatch: { en: 'Amount mismatch', ar: 'المبلغ غير مطابق' },
+  checkout_expired: { en: 'Attempt expired', ar: 'انتهت المحاولة' },
+  checkout_failed: { en: 'Attempt failed', ar: 'فشلت المحاولة' },
+  refund_recorded: { en: 'Refund recorded', ar: 'سُجّل الاسترداد' },
+  refund_deferred: { en: 'Refund waiting for its payment', ar: 'استرداد بانتظار دفعته' },
+  refund_not_final: { en: 'Refund not final', ar: 'استرداد غير نهائي' },
+  payment_failed: { en: 'Card declined', ar: 'رُفضت البطاقة' },
+  ignored_not_chat: { en: 'Ignored: not from Chat', ar: 'تُجوهل: ليس من Chat' },
+  ignored: { en: 'Ignored', ar: 'تُجوهل' },
+}
+
+/** The event types Chat acts on (§3.2), offered as the type filter; the server matches a prefix. */
+export const EVENT_TYPES: readonly string[] = [
+  'checkout.session.completed',
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
+  'checkout.session.expired',
+  'payment_intent.succeeded',
+  'payment_intent.payment_failed',
+  'refund.created',
+  'refund.updated',
+  'charge.refunded',
+  'invoice.',
+  'customer.subscription.',
+]
+
+/**
+ * apps/api/src/billing/card-failure.ts, the same kinds, worded for staff. Codes
+ * that would alarm or accuse (lost_card, stolen_card, fraudulent, ...) read as
+ * the generic decline; staff see the raw code beside it.
+ */
+export type CardFailureKind = 'insufficient_funds' | 'expired_card' | 'incorrect_cvc' | 'incorrect_number' | 'authentication' | 'processing_error' | 'declined'
+
+export function cardFailureKind(code: string | null | undefined): CardFailureKind {
+  switch (code) {
+    case 'insufficient_funds':
+      return 'insufficient_funds'
+    case 'expired_card':
+      return 'expired_card'
+    case 'incorrect_cvc':
+    case 'invalid_cvc':
+      return 'incorrect_cvc'
+    case 'incorrect_number':
+    case 'invalid_number':
+      return 'incorrect_number'
+    case 'authentication_required':
+    case 'payment_intent_authentication_failure':
+      return 'authentication'
+    case 'processing_error':
+      return 'processing_error'
+    default:
+      return 'declined'
+  }
+}
+
+export const CARD_FAILURE: Record<CardFailureKind, Pair> = {
+  insufficient_funds: { en: 'The bank declined it for insufficient funds.', ar: 'رفض البنك الدفع لعدم كفاية الرصيد.' },
+  expired_card: { en: 'The card has expired.', ar: 'البطاقة منتهية الصلاحية.' },
+  incorrect_cvc: { en: 'The security code (CVC) was incorrect.', ar: 'رمز التحقق (CVC) غير صحيح.' },
+  incorrect_number: { en: 'The card number was incorrect.', ar: 'رقم البطاقة غير صحيح.' },
+  authentication: { en: 'The bank’s verification (3D Secure) was not completed.', ar: 'لم يكتمل تحقق البنك (3D Secure).' },
+  processing_error: { en: 'There was an error processing the card.', ar: 'حدث خطأ أثناء معالجة البطاقة.' },
+  declined: { en: 'The bank declined the card.', ar: 'رفض البنك الدفع بالبطاقة.' },
+}
+
+/** Why an attempt failed, or null when it did not: a decline's kind, else its status. */
+export function attemptFailure(a: Pick<CardAttempt, 'failureCode' | 'failureCount' | 'status'>): Pair | null {
+  if (a.failureCode || a.failureCount > 0) return CARD_FAILURE[cardFailureKind(a.failureCode)]
+  if (a.status === 'failed') return { en: 'The payment failed.', ar: 'فشل الدفع.' }
+  if (a.status === 'expired') return { en: 'Left unpaid until it expired.', ar: 'انتهت دون دفع.' }
+  return null
+}
+
+const BRAND: Record<string, string> = {
+  visa: 'Visa',
+  mastercard: 'Mastercard',
+  amex: 'American Express',
+  discover: 'Discover',
+  diners: 'Diners Club',
+  jcb: 'JCB',
+  unionpay: 'UnionPay',
+}
+const WALLET: Record<string, string> = { apple_pay: 'Apple Pay', google_pay: 'Google Pay', link: 'Link' }
+
+/** "Visa •••• 4242 (Apple Pay)"; null when Stripe told us nothing about the card. */
+export function cardLabel(card: Transaction['card']): string | null {
+  if (!card || (!card.brand && !card.last4)) return null
+  const brand = card.brand ? (BRAND[card.brand] ?? card.brand.charAt(0).toUpperCase() + card.brand.slice(1)) : ''
+  const last4 = card.last4 ? `•••• ${card.last4}` : ''
+  const wallet = card.wallet ? ` (${WALLET[card.wallet] ?? card.wallet})` : ''
+  return `${[brand, last4].filter(Boolean).join(' ')}${wallet}`
 }
 
 /** Arabic counts days by number: يوم واحد، يومان، 3–10 أيام، 11+ يومًا. */

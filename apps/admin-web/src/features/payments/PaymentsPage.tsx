@@ -5,16 +5,17 @@ import { Badge } from '@/shared/components/Badge'
 import { Dialog } from '@/shared/components/Dialog'
 import { FilterChips } from '@/shared/components/FilterChips'
 import { PageHeader } from '@/shared/components/PageHeader'
-import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
 import type { BankAccount, BillingSettings, InvoiceIssuer, Receipt, ReceiptStatus } from './api'
-import { PAY, describeError, type Pair, formatDay, formatMoney, reminderLabel, toMinor, useCopy } from './copy'
+import { LED, PAY, describeError, type Pair, formatDay, formatMoney, reminderLabel, toMinor, useCopy } from './copy'
 import { RenewalRequestsPanel } from '@/features/subscriptions/RenewalRequestsPanel'
 import { S } from '@/features/subscriptions/copy'
-import { useApproveReceipt, useBillingSettings, useReceipts, useRejectReceipt, useSaveBillingSettings } from './hooks'
+import { useApproveReceipt, useBillingSettings, useLedgerAccess, useReceipts, useRejectReceipt, useSaveBillingSettings } from './hooks'
+import { AttemptsTab, StripeEventsTab, TransactionsTab } from './LedgerTabs'
 import { Field, Footer, ReasonDialog, ReceiptFile, ReceiptStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
-type Tab = 'receipts' | 'renewals' | 'settings'
+type Tab = 'receipts' | 'transactions' | 'attempts' | 'events' | 'renewals' | 'settings'
 const STATUSES: readonly ReceiptStatus[] = ['pending', 'approved', 'rejected']
 const FILTER_LABEL: Record<ReceiptStatus, Pair> = {
   pending: { en: 'Pending', ar: 'قيد الانتظار' },
@@ -37,8 +38,18 @@ const DECIDED_LABEL: Record<'approved' | 'rejected', Pair> = {
 export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const [params, setParams] = useSearchParams()
+  // The Stripe events tab is the reconcilers' only (the transactions list's `canReconcile`).
+  const ledger = useLedgerAccess()
+  const canReconcile = ledger.data === true
   const asked = params.get('tab')
-  const tab: Tab = asked === 'settings' || asked === 'renewals' ? asked : 'receipts'
+  const tab: Tab =
+    asked === 'settings' || asked === 'renewals' || asked === 'transactions' || asked === 'attempts'
+      ? asked
+      : asked === 'events' && canReconcile
+        ? 'events'
+        : 'receipts'
+  // A link straight to the events tab waits for the server's word before falling back.
+  const waiting = asked === 'events' && ledger.isLoading
   const choose = (next: Tab) => {
     const p = new URLSearchParams(params)
     if (next === 'receipts') p.delete('tab')
@@ -57,12 +68,29 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
             onChange={choose}
             options={[
               { value: 'receipts', label: tx(PAY.receiptsTab) },
+              { value: 'transactions', label: tx(LED.transactionsTab) },
+              { value: 'attempts', label: tx(LED.attemptsTab) },
+              ...(canReconcile ? [{ value: 'events' as const, label: tx(LED.eventsTab) }] : []),
               { value: 'renewals', label: tx(S.renewalsTitle) },
               { value: 'settings', label: tx(PAY.settingsTab) },
             ]}
           />
         </div>
-        {tab === 'receipts' ? <ReceiptsTab /> : tab === 'renewals' ? <RenewalRequestsPanel /> : <SettingsTab />}
+        {waiting ? (
+          <LoadingState />
+        ) : tab === 'receipts' ? (
+          <ReceiptsTab />
+        ) : tab === 'transactions' ? (
+          <TransactionsTab />
+        ) : tab === 'attempts' ? (
+          <AttemptsTab />
+        ) : tab === 'events' ? (
+          <StripeEventsTab />
+        ) : tab === 'renewals' ? (
+          <RenewalRequestsPanel />
+        ) : (
+          <SettingsTab />
+        )}
       </div>
     </div>
   )

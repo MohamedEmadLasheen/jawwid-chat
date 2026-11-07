@@ -115,6 +115,24 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
 
   Iterable<Map<Object?, Object?>> rows(Object? v) => v is List ? v.whereType<Map<Object?, Object?>>() : const [];
 
+  // PD-27 completion. Both are absent from an older server, and read as null.
+  CardFailure? cardFailure(Object? v) {
+    if (v is! Map) return null;
+    final code = text(v['code']);
+    return code == null ? null : CardFailure(code: code.trim(), at: instant(v['at']));
+  }
+
+  PaymentCard? card(Object? v) {
+    if (v is! Map) return null;
+    final last4 = text(v['last4']);
+    final c = PaymentCard(
+      brand: text(v['brand'])?.trim().toLowerCase(),
+      last4: last4 != null && RegExp(r'^\d{4}$').hasMatch(last4) ? last4 : null,
+      wallet: text(v['wallet'])?.trim().toLowerCase(),
+    );
+    return c.brand == null && c.last4 == null && c.wallet == null ? null : c;
+  }
+
   final instalments = <BillingInstalment>[];
   for (final raw in rows(d['instalments'])) {
     final id = text(raw['id']);
@@ -174,6 +192,7 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
       periodEnd: parseCalendarDay(raw['periodEnd']),
       expiresAt: instant(raw['expiresAt']),
       createdAt: instant(raw['createdAt']),
+      lastCardFailure: cardFailure(raw['lastCardFailure']),
     ));
   }
 
@@ -204,6 +223,7 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
       lessonsIncluded: months(raw['lessonsIncluded']),
       periodStart: parseCalendarDay(raw['periodStart']),
       periodEnd: parseCalendarDay(raw['periodEnd']),
+      card: card(raw['card']),
     ));
   }
 
