@@ -470,7 +470,6 @@ export class ParentFeedbackService {
     return row;
   }
 
-  /** The signed-in parent, in their own session -- never staff acting as them (PD-21). */
   /** The items of [rows] whose reply this parent account has opened. */
   private async seenBy(contactId: string, rows: ReadonlyArray<{ id: string; parentResponse: string | null }>): Promise<Set<string>> {
     const answered = rows.filter((r) => r.parentResponse !== null).map((r) => r.id);
@@ -482,6 +481,7 @@ export class ParentFeedbackService {
     return new Set(seen.map((x) => x.feedbackId));
   }
 
+  /** The signed-in parent, in their own session -- never staff acting as them (PD-21). */
   private async requireParent(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const denied = () => new CommError(CommErrorCode.FEEDBACK_DENIED, 'feedback about a teacher is filed by the child\'s parent');

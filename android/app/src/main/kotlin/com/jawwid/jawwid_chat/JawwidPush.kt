@@ -201,6 +201,9 @@ object JawwidPush {
             manager.notify(tag, MESSAGE_ID, builder.build())
         } catch (e: SecurityException) {
             android.util.Log.w(TAG, "notification refused", e)
+        } catch (e: IllegalArgumentException) {
+            // A malformed notification must never take the messaging service down (as notify() above).
+            android.util.Log.e(TAG, "notification malformed", e)
         }
     }
 
