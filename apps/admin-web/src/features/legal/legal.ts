@@ -17,12 +17,26 @@ export interface LegalBlock {
   unavailable: string[]
 }
 
+/**
+ * The URLs come from the owner's configuration and become `href`s: only an
+ * absolute https URL is accepted, so a typo or a `javascript:` value can never
+ * be rendered as a link (the block then fails closed to "unavailable").
+ */
+function isHttpsUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function isDocument(value: unknown): value is LegalDocument {
   if (typeof value !== 'object' || value === null) return false
   const d = value as Record<string, unknown>
   return (
     typeof d.documentKey === 'string' && typeof d.version === 'string' &&
-    typeof d.urlAr === 'string' && typeof d.urlEn === 'string'
+    isHttpsUrl(d.urlAr) && isHttpsUrl(d.urlEn)
   )
 }
 

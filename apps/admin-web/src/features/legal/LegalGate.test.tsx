@@ -53,6 +53,14 @@ function mount(legal: LegalBlock | undefined, locale: 'en' | 'ar' = 'en') {
 }
 
 describe('legal state', () => {
+  it('fails closed on a document URL that is not https (never rendered as a link)', () => {
+    const bad = { ...DOCS[0], urlEn: 'javascript:alert(1)' }
+    expect(parseLegal({ state: 'required', required: [bad, DOCS[1]], unavailable: [] })?.state).toBe('unavailable')
+    expect(parseLegal({ state: 'required', required: [{ ...DOCS[0], urlAr: 'http://x.test/ar' }], unavailable: [] })?.state).toBe('unavailable')
+    expect(parseLegal({ state: 'required', required: [{ ...DOCS[0], urlAr: 'not a url' }], unavailable: [] })?.state).toBe('unavailable')
+    expect(parseLegal(REQUIRED)?.state).toBe('required')
+  })
+
   it('no legal field (today\'s API) means no gate', () => {
     expect(legalGateState(parseLegal(undefined))).toBe('none')
     mount(undefined)
