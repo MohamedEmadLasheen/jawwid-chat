@@ -40,7 +40,9 @@ cd "$ROOT"
   --dart-define=JAWWID_API_BASE_URL="$API_BASE_URL" \
   --dart-define=JAWWID_LESSONS_ORIGIN="${LESSONS_ORIGIN:-}" \
   --dart-define=PRIVACY_POLICY_URL="${PRIVACY_POLICY_URL:-}" \
-  --dart-define=TERMS_URL="${TERMS_URL:-}"
+  --dart-define=TERMS_URL="${TERMS_URL:-}" \
+  --dart-define=SUPPORT_URL="${SUPPORT_URL:-}" \
+  --dart-define=SUPPORT_EMAIL="${SUPPORT_EMAIL:-}"
 
 # Replace the previous build, keeping the placeholder that lets the Admin Web
 # image build without a portal in it (local Admin Web work).

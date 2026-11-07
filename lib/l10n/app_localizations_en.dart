@@ -5102,6 +5102,12 @@ class L10nEn extends L10n {
   String get legalTerms => 'Terms of use';
 
   @override
+  String get supportHelpAction => 'Help and support';
+
+  @override
+  String get supportContactAction => 'Contact support';
+
+  @override
   String get deleteAccountTitle => 'Delete account';
 
   @override
@@ -5385,7 +5391,12 @@ class L10nEn extends L10n {
 
   @override
   String get blockErrorNotAllowed =>
-      'This person can\'t be blocked. You can report them instead.';
+      'This person can\'t be blocked. If you have a concern, please contact support.';
+
+  @override
+  String blockErrorNotAllowedWithEmail(String email) {
+    return 'This person can\'t be blocked. If you have a concern, please contact support at $email.';
+  }
 
   @override
   String get blockErrorNoSharedConversation =>

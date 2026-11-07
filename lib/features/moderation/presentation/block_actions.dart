@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
@@ -23,8 +24,15 @@ String blockDisplayName(String name, L10n l10n) => name.trim().isEmpty ? l10n.bl
 
 /// A calm sentence for each refusal of the contract; anything else is the generic one.
 /// The server's own message is never shown.
-String blockErrorText(AppError error, L10n l10n) => switch (error.code) {
-  BlockErrors.notAllowed => l10n.blockErrorNotAllowed,
+///
+/// [supportEmail] is the build's support address (null or empty when there is none): a person
+/// who cannot be blocked (the official account, a manager, the Super Admin) cannot be reported
+/// either, so the sentence points to support instead.
+String blockErrorText(AppError error, L10n l10n, {String? supportEmail}) => switch (error.code) {
+  BlockErrors.notAllowed =>
+    (supportEmail == null || supportEmail.isEmpty)
+        ? l10n.blockErrorNotAllowed
+        : l10n.blockErrorNotAllowedWithEmail(supportEmail),
   BlockErrors.noSharedConversation => l10n.blockErrorNoSharedConversation,
   BlockErrors.rateLimited => l10n.blockErrorRateLimited,
   BlockErrors.termsNotAccepted => l10n.blockErrorTerms,
@@ -133,7 +141,11 @@ class _BlockConfirmDialogState extends ConsumerState<BlockConfirmDialog> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = blockErrorText(asAppErrorOf(error), l10n);
+        _error = blockErrorText(
+          asAppErrorOf(error),
+          l10n,
+          supportEmail: ref.read(supportContactProvider).emailAddress,
+        );
       });
     }
   }

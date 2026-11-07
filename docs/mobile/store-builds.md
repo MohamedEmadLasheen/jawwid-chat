@@ -11,6 +11,8 @@ build can therefore never ship without its privacy and terms links.
 API_BASE_URL=https://api.example.org/api/v1 \
 PRIVACY_POLICY_URL='https://example.org/{lang}/privacy' \
 TERMS_URL='https://example.org/{lang}/terms' \
+SUPPORT_URL='https://example.org/{lang}/help' \
+SUPPORT_EMAIL=support@example.org \
 LESSONS_ORIGIN=https://lessons.example.org \
 scripts/mobile/build-store.sh ios
 ```
@@ -22,11 +24,16 @@ Use `android` instead of `ios` for Google Play, or `check` to run only the check
 | `API_BASE_URL` | yes | the production API, ending in `/api/v1`; compiled in (`JAWWID_API_BASE_URL`) |
 | `PRIVACY_POLICY_URL` | yes | the owner's privacy policy; `{lang}` becomes `ar` or `en` |
 | `TERMS_URL` | yes | the owner's terms of use; `{lang}` as above |
+| `SUPPORT_URL` | yes | the support / help page (Apple 1.2 and 1.5: published contact information); an https URL, `{lang}` as above. The app shows it as "Help and support" in Settings and under the sign-in form |
+| `SUPPORT_EMAIL` | yes | the support address, like `support@example.org`. The app shows it as "Contact support" (opens the mail app) in Settings and under the sign-in form, and names it where a person cannot be blocked |
 | `LESSONS_ORIGIN` | no | PD-29 lesson audio (`JAWWID_LESSONS_ORIGIN`); unset means no audio |
 | `SENTRY_DSN` | no, but set it for the store | the app's Sentry DSN (S-07); unset means the build reports no crashes, and the script warns |
 | `SENTRY_ENVIRONMENT` | no | the Sentry environment; `production` by default |
 
-None of these is a secret.
+None of these is a secret. The script refuses to start when `SUPPORT_URL` is missing or not
+https, or `SUPPORT_EMAIL` is missing or not an address. A non-store build (a plain
+`flutter run`, `scripts/mobile/build-teacher-web.sh`) may leave them unset: the app then hides
+the matching row instead of showing a broken one.
 
 - **`ios`** runs `flutter build ipa --release`. Xcode signs with team
   `KX683HAR3Y` and `Runner/RunnerRelease.entitlements` (`aps-environment`
@@ -89,6 +96,8 @@ None of these is a secret.
 | Store | Field | Value |
 |---|---|---|
 | both | privacy policy URL | `PRIVACY_POLICY_URL` with `{lang}` filled in |
+| App Store | support URL | `SUPPORT_URL` with `{lang}` filled in |
+| both | support / contact e-mail | `SUPPORT_EMAIL` |
 | Google Play | account deletion URL | `<API origin>/api/v1/account-deletion`; `?lang=en` for English |
 | App Store | account deletion | in the app: Settings → Delete account (parents and teachers) |
 
