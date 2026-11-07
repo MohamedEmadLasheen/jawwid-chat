@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-587 routes.
+593 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -416,10 +416,14 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/parent-profiles/:contactId/avatar/upload` | parents.edit | `parent-profile/parent-record.controller.ts#ParentRecordController.authorizePhotoUpload` |
 | GET | `/api/v1/pay/:token` | public | `billing/pay-link.controller.ts#PayLinkController.page` |
 | POST | `/api/v1/pay/:token/checkout` | public | `billing/pay-link.controller.ts#PayLinkController.startCheckout` |
+| GET | `/api/v1/payment-attempts` | billing.view | `billing/transactions.controller.ts#TransactionsController.attempts` |
 | GET | `/api/v1/payment-receipts` | billing.view | `billing/payments.controller.ts#PaymentsController.receipts` |
 | POST | `/api/v1/payment-receipts/:id/approve` | billing.record | `billing/payments.controller.ts#PaymentsController.approveReceipt` |
 | POST | `/api/v1/payment-receipts/:id/reject` | billing.record | `billing/payments.controller.ts#PaymentsController.rejectReceipt` |
 | POST | `/api/v1/payment-requests/:id/cancel` | billing.record | `billing/payments.controller.ts#PaymentsController.cancelRequest` |
+| GET | `/api/v1/payments` | billing.view | `billing/transactions.controller.ts#TransactionsController.list` |
+| GET | `/api/v1/payments/:id` | billing.view | `billing/transactions.controller.ts#TransactionsController.detail` |
+| POST | `/api/v1/payments/:id/reconcile` | billing.verify | `billing/transactions.controller.ts#TransactionsController.reconcilePayment` |
 | POST | `/api/v1/payments/:id/refunds` | billing.verify | `billing/payments.controller.ts#PaymentsController.refund` |
 | POST | `/api/v1/payments/:id/void` | billing.record | `billing/payments.controller.ts#PaymentsController.voidPayment` |
 | GET | `/api/v1/presence` | chat.use | `communication/api/presence.controller.ts#PresenceController.read` |
@@ -469,6 +473,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/stories/audience/families/:familyId` | stories.publish | `communication/api/story.controller.ts#StoryController.setFamily` |
 | GET | `/api/v1/stories/feed` | stories.view | `communication/api/story.controller.ts#StoryController.feed` |
 | POST | `/api/v1/stories/media` | stories.publish | `communication/api/story.controller.ts#StoryController.media` |
+| GET | `/api/v1/stripe/events` | billing.verify | `billing/transactions.controller.ts#TransactionsController.events` |
+| POST | `/api/v1/stripe/reconcile` | billing.verify | `billing/transactions.controller.ts#TransactionsController.reconcileNow` |
 | POST | `/api/v1/stripe/webhook` | public | `billing/stripe-webhook.controller.ts#StripeWebhookController.webhook` |
 | POST | `/api/v1/subscription-exceptions/:id/revoke` | subscriptions.manage | `billing/subscriptions.controller.ts#SubscriptionsController.revoke` |
 | POST | `/api/v1/subscriptions/:id/void` | billing.record | `billing/subscriptions.controller.ts#SubscriptionsController.void` |

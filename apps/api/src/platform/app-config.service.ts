@@ -173,6 +173,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'abuse.throttle.reward_give_actor': 30,
   /** PD-45 PR-4: a parent's own location saves and Later answers (PUT /me/location, POST /me/location/later). A person does this once. */
   'abuse.throttle.location_write_actor': 10,
+  /** PD-27: Stripe Checkouts a parent opens per window (each is a Stripe API call; a person opens one). */
+  'abuse.throttle.checkout_start_actor': 10,
   /**
    * PD-39 PR-4: board images and PDF export. OFF until the environment's
    * bucket exists with object versioning on (design §11.3, a hard

@@ -32,6 +32,8 @@ export interface CheckoutInput {
   locale: 'ar' | 'en';
   /** Stripe's own idempotency: a retried create returns the same session. */
   idempotencyKey: string;
+  /** The family's Stripe Customer (metadata only); null pays as a guest (a trial before Assign). */
+  customerId?: string | null;
 }
 
 export interface CheckoutSession {
@@ -47,6 +49,39 @@ export interface CheckoutSession {
   paymentIntentId: string | null;
   metadata: Record<string, string>;
   expiresAt: Date;
+  customerId?: string | null;
+}
+
+/** A refund as Chat reads it, from a webhook or from Stripe's list. */
+export interface RefundFacts {
+  id: string;
+  amountMinor: number;
+  /** pending | requires_action | succeeded | failed | canceled */
+  status: string | null;
+  paymentIntentId: string | null;
+  reason: string | null;
+  metadata: Record<string, string>;
+}
+
+/**
+ * A payment intent's facts for the ledger and for reconciliation: the charge,
+ * the customer, the payment method (brand, last 4, wallet -- never more), and
+ * what Stripe says was received and refunded. Every string is checked against
+ * the database's own pattern here (`safe`), so an unexpected value from Stripe
+ * is dropped rather than failing the insert (and the webhook) forever.
+ */
+export interface PaymentIntentFacts {
+  id: string;
+  status: string;
+  currency: string;
+  amountReceivedMinor: number;
+  amountRefundedMinor: number;
+  chargeId: string | null;
+  customerId: string | null;
+  methodType: string | null;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  cardWallet: string | null;
 }
 
 export interface RefundResult {
@@ -67,15 +102,26 @@ export interface StripeGateway {
   refund(paymentIntentId: string, amountMinor: number, idempotencyKey: string, metadata?: Record<string, string>): Promise<RefundResult>;
   /** Throws on any signature, tolerance or parse failure. */
   verifyWebhook(rawBody: Buffer, signature: string | undefined): Stripe.Event;
+  /** Live or test mode of the configured key (null without one): a customer exists in one mode only. */
+  readonly livemode: boolean | null;
+  /** A Customer for a family: metadata only -- no name, no e-mail. */
+  createCustomer(input: { familyId: string; organizationId: string; idempotencyKey: string }): Promise<string>;
+  /** The Checkout Session a payment intent belongs to, or null. */
+  findCheckoutByPaymentIntent(paymentIntentId: string): Promise<CheckoutSession | null>;
+  paymentIntentFacts(paymentIntentId: string): Promise<PaymentIntentFacts>;
+  /** Every refund of a payment intent (newest first, up to 100). */
+  listRefunds(paymentIntentId: string): Promise<RefundFacts[]>;
 }
 
 export class StripeSdkGateway implements StripeGateway {
   private readonly client: Stripe | null;
   private readonly webhookSecret: string | null;
+  private readonly key: string | null;
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
     const key = env.STRIPE_SECRET_KEY?.trim();
     const secret = env.STRIPE_WEBHOOK_SECRET?.trim();
+    this.key = key || null;
     this.client = key ? new Stripe(key, { maxNetworkRetries: 2, timeout: 20_000 }) : null;
     this.webhookSecret = secret || null;
   }
@@ -86,6 +132,35 @@ export class StripeSdkGateway implements StripeGateway {
 
   get webhookAvailable(): boolean {
     return this.webhookSecret !== null;
+  }
+
+  get livemode(): boolean | null {
+    return this.key === null ? null : /^(sk|rk)_live_/.test(this.key);
+  }
+
+  async createCustomer(input: { familyId: string; organizationId: string; idempotencyKey: string }): Promise<string> {
+    const customer = await this.requireClient().customers.create(
+      { metadata: { familyId: input.familyId, organizationId: input.organizationId } },
+      { idempotencyKey: input.idempotencyKey },
+    );
+    return customer.id;
+  }
+
+  async findCheckoutByPaymentIntent(paymentIntentId: string): Promise<CheckoutSession | null> {
+    const page = await this.requireClient().checkout.sessions.list({ payment_intent: paymentIntentId, limit: 1 });
+    const s = page.data[0];
+    return s ? toSession(s) : null;
+  }
+
+  async paymentIntentFacts(paymentIntentId: string): Promise<PaymentIntentFacts> {
+    const pi = await this.requireClient().paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+    const charge = typeof pi.latest_charge === 'object' && pi.latest_charge ? pi.latest_charge : null;
+    return toIntentFacts(pi, charge);
+  }
+
+  async listRefunds(paymentIntentId: string): Promise<RefundFacts[]> {
+    const page = await this.requireClient().refunds.list({ payment_intent: paymentIntentId, limit: 100 });
+    return page.data.map(toRefundFacts);
   }
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutSession> {
@@ -113,6 +188,7 @@ export class StripeSdkGateway implements StripeGateway {
         cancel_url: input.cancelUrl,
         expires_at: Math.floor(input.expiresAt.getTime() / 1000),
         locale: stripeCheckoutLocale(input.locale),
+        ...(input.customerId ? { customer: input.customerId } : {}),
       },
       { idempotencyKey: input.idempotencyKey },
     );
@@ -172,5 +248,53 @@ export function toSession(s: Stripe.Checkout.Session): CheckoutSession {
     paymentIntentId: typeof pi === 'string' ? pi : pi?.id ?? null,
     metadata: (s.metadata ?? {}) as Record<string, string>,
     expiresAt: new Date(s.expires_at * 1000),
+    customerId: safe.customer(typeof s.customer === 'string' ? s.customer : s.customer?.id ?? null),
+  };
+}
+
+/**
+ * The database's patterns (20261107100000), applied before a write: a value
+ * that does not fit is dropped (null), never sent to an insert that would fail.
+ */
+const pattern = (re: RegExp) => (v: string | null | undefined): string | null => (typeof v === 'string' && re.test(v) ? v : null);
+export const safe = {
+  customer: pattern(/^cus_[A-Za-z0-9]{1,250}$/),
+  charge: pattern(/^(ch|py)_[A-Za-z0-9]{1,250}$/),
+  paymentIntent: pattern(/^pi_[A-Za-z0-9]{1,250}$/),
+  methodType: pattern(/^[a-z_]{1,40}$/),
+  brand: pattern(/^[a-z_]{1,30}$/),
+  last4: pattern(/^[0-9]{4}$/),
+  wallet: pattern(/^[a-z_]{1,30}$/),
+  failureCode: pattern(/^[a-z0-9_]{1,64}$/),
+  objectId: (v: string | null | undefined): string | null => (typeof v === 'string' && v.length >= 1 && v.length <= 255 ? v : null),
+};
+
+export function toRefundFacts(r: Stripe.Refund): RefundFacts {
+  const pi = r.payment_intent;
+  return {
+    id: r.id,
+    amountMinor: r.amount,
+    status: r.status ?? null,
+    paymentIntentId: typeof pi === 'string' ? pi : pi?.id ?? null,
+    reason: r.reason ?? null,
+    metadata: (r.metadata ?? {}) as Record<string, string>,
+  };
+}
+
+export function toIntentFacts(pi: Stripe.PaymentIntent, charge: Stripe.Charge | null): PaymentIntentFacts {
+  const details = charge?.payment_method_details ?? null;
+  const card = details?.card ?? null;
+  return {
+    id: pi.id,
+    status: pi.status,
+    currency: pi.currency.toUpperCase(),
+    amountReceivedMinor: pi.amount_received ?? 0,
+    amountRefundedMinor: charge?.amount_refunded ?? 0,
+    chargeId: safe.charge(charge?.id ?? null),
+    customerId: safe.customer(typeof pi.customer === 'string' ? pi.customer : pi.customer?.id ?? null),
+    methodType: safe.methodType(details?.type ?? null),
+    cardBrand: safe.brand(card?.brand ?? null),
+    cardLast4: safe.last4(card?.last4 ?? null),
+    cardWallet: safe.wallet(card?.wallet?.type ?? null),
   };
 }

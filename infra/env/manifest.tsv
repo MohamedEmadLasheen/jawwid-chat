@@ -227,8 +227,10 @@ TEACHER_PAYOUT_KEYS	payroll	yes	opt	opt	opt
 # STRIPE_SECRET_KEY is CONSUMED by apps/api/src/billing (PD-27): card payments
 # through Stripe Checkout (the payment link's "Pay by card", the app's Pay) and
 # card refunds. Unset = no card option is offered anywhere and a checkout
-# answers 503; bank transfers and cash work without it. Restricted key scopes:
-# Checkout Sessions write, Refunds write.
+# answers 503; bank transfers and cash work without it. Restricted key (rk_live_)
+# scopes: Checkout Sessions write, Refunds write, Customers write, PaymentIntents
+# read, Charges read (docs/admin/pd027-stripe-lifecycle.md: customers, payment
+# method details, reconciliation).
 STRIPE_SECRET_KEY	payments	yes	opt	opt	opt
 # STRIPE_WEBHOOK_SECRET is CONSUMED by POST /api/v1/stripe/webhook (PD-27): the
 # endpoint's signing secret (whsec_...). A card payment is recorded ONLY from a
