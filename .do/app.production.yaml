@@ -88,6 +88,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${TRUSTED_PROXY_HOPS}
+      - key: PROXY_HOPS_PROBE
+        scope: RUN_TIME
+        type: SECRET
+        value: ${PROXY_HOPS_PROBE}
       - key: PORT
         scope: RUN_TIME
         type: GENERAL
@@ -493,6 +497,10 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${TRUSTED_PROXY_HOPS}
+      - key: PROXY_HOPS_PROBE
+        scope: RUN_TIME
+        type: SECRET
+        value: ${PROXY_HOPS_PROBE}
       - key: PORT
         scope: RUN_TIME
         type: GENERAL

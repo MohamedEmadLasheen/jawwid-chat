@@ -120,6 +120,9 @@ SIZES = {
 IN_APP_REDIS_ENVIRONMENTS = ("staging", "production")
 IN_APP_REDIS_URL = "redis://redis:6379"
 LAUNCH_PHASES = ("review", "launch")
+LINK_BASES = ("MEDIA_PUBLIC_BASE_URL", "PAYMENT_LINK_BASE_URL")
+# https://host[:port], optional path segments, then /api/v1 once (one trailing slash allowed).
+LINK_BASE = re.compile(r"https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/(?!api/v1(?:/|$))[A-Za-z0-9._~-]+)*/api/v1/?")
 IN_APP_REDIS_IMAGE = ("valkey", "valkey", "8.1.11-alpine")   # Docker Hub registry, repository, tag
 # protected-mode is off because the component has no password and must accept
 # the API's and the worker's connections over the app's private network; the
@@ -437,6 +440,13 @@ def apply_redis_phase(env: str, text: str, environ: dict) -> tuple[str, list[str
     """ADR-013 / ADR-015: which Redis an environment may run on. Error messages
     never carry REDIS_URL's value: it is a secret (it can hold a password)."""
     errors: list[str] = []
+    # The link bases (media, payment links) are absolute URLs ending in the API
+    # prefix, once: a doubled slash or a second /api/v1 builds links that 404.
+    for name in LINK_BASES:
+        base = environ.get(name, "")
+        if base and not LINK_BASE.fullmatch(base):
+            errors.append(f"{name} must be https://<host>[/<path>]/api/v1, with no empty path segment "
+                          "and the API prefix exactly once")
     url = environ.get("REDIS_URL", "")
     if env == "staging":
         if url and url != IN_APP_REDIS_URL:
@@ -457,6 +467,13 @@ def apply_redis_phase(env: str, text: str, environ: dict) -> tuple[str, list[str
     if url and (not url.startswith("rediss://") or redis_host(url) in ("redis", "localhost", "127.0.0.1")):
         errors.append("LAUNCH_PHASE=launch: REDIS_URL must be the managed Valkey cluster over TLS "
                       "(rediss://<cluster host>), never the in-app redis (ADR-015)")
+    # Unset TRUSTED_PROXY_HOPS (no per-address login budget) and the hop probe
+    # are review-period states: real users never meet them (runbook §1d).
+    if not environ.get("TRUSTED_PROXY_HOPS", "").strip():
+        errors.append("LAUNCH_PHASE=launch: TRUSTED_PROXY_HOPS must be set to the MEASURED hop count "
+                      "(production-runbook.md §1d); unset leaves the per-address login budget off")
+    if environ.get("PROXY_HOPS_PROBE", "").strip() not in ("", "off"):
+        errors.append("LAUNCH_PHASE=launch: PROXY_HOPS_PROBE must be off; it is a measuring tool")
     if component_block(text, "redis") is not None:
         text = drop_component(text, "redis")
     return text, errors
@@ -768,7 +785,24 @@ def cmd_selftest() -> int:
         _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch",
                                                          REDIS_URL=managed.replace("rediss://", "redis://")))
         expect(any("LAUNCH_PHASE=launch" in e for e in errors), "launch on a managed Valkey without TLS is refused")
-        ltext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed))
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed))
+        expect(any("TRUSTED_PROXY_HOPS must be set" in e for e in errors),
+               "launch without a measured TRUSTED_PROXY_HOPS is refused")
+        _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed,
+                                                         TRUSTED_PROXY_HOPS="2", PROXY_HOPS_PROBE="0" * 64))
+        expect(any("PROXY_HOPS_PROBE must be off" in e for e in errors), "launch with the hop probe on is refused")
+        rtext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="review", PROXY_HOPS_PROBE="0" * 64))
+        expect(not errors, "review runs with TRUSTED_PROXY_HOPS unset and the probe on")
+        for good in ("https://api.prod.invalid/api/v1", "https://cdn.prod.invalid/chat/api/v1/"):
+            _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="review", MEDIA_PUBLIC_BASE_URL=good,
+                                                             PAYMENT_LINK_BASE_URL=good))
+            expect(not errors, f"a link base {good} is accepted")
+        for bad in ("https://api.prod.invalid//api/v1", "https://api.prod.invalid/api/v1/api/v1",
+                    "http://api.prod.invalid/api/v1", "https://api.prod.invalid", "https://api.prod.invalid/api/v1//"):
+            _, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="review", PAYMENT_LINK_BASE_URL=bad))
+            expect(any("PAYMENT_LINK_BASE_URL must be" in e for e in errors), f"a link base {bad} is refused")
+        ltext, _, _, errors = resolve("production", prod, dict(penv, LAUNCH_PHASE="launch", REDIS_URL=managed,
+                                                              TRUSTED_PROXY_HOPS="2"))
         expect(not errors and component_block(ltext, "redis") is None
                and "REVIEW PERIOD ONLY" not in ltext and "valkey/valkey" not in ltext,
                "launch with managed Valkey over TLS drops the in-app redis entirely")

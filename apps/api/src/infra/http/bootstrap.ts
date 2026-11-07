@@ -1,6 +1,7 @@
 import { INestApplication, Logger } from '@nestjs/common';
 import { originOfRequest, runWithRequestOrigin } from '../../platform/request-origin';
 import { readClientAddressPolicy } from '../../platform/auth/client-address';
+import { proxyHopProbe, readProxyHopsProbe } from './proxy-hop-probe';
 
 /**
  * Infrastructure concerns applied to the HTTP application at startup.
@@ -49,6 +50,7 @@ export function applyInfrastructure(
   options: InfrastructureOptions = {},
 ): void {
   applyTrustedProxy(app);
+  applyProxyHopProbe(app);
   applyWebhookBodyParser(app);
   applyMaterialsImportBodyParser(app);
   applyWhiteboardPageBodyParser(app);
@@ -253,6 +255,19 @@ function applyTrustedProxy(app: INestApplication): void {
   } else {
     logger.log(`trust proxy = ${String(policy.trustProxy)}; login source-IP rate limit enabled`);
   }
+}
+
+/**
+ * PROXY_HOPS_PROBE=<token>: log the shape of probed requests' forwarding chain,
+ * so TRUSTED_PROXY_HOPS can be measured rather than guessed (proxy-hop-probe.ts,
+ * production-runbook.md §1d). Read at boot: a malformed value stops it.
+ */
+function applyProxyHopProbe(app: INestApplication): void {
+  const token = readProxyHopsProbe();
+  if (!token) return;
+  const logger = new Logger('ProxyHopProbe');
+  logger.warn('PROXY_HOPS_PROBE is on: token-carrying probe requests log their forwarding shape (no addresses). Turn it off after measuring.');
+  app.use(proxyHopProbe(token, (line) => logger.log(line)));
 }
 
 function applySecurityHeaders(app: INestApplication): void {

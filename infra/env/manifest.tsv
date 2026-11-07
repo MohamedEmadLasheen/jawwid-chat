@@ -18,7 +18,20 @@
 #NAME	GROUP	SECRET	LOCAL	STAGING	PROD
 NODE_ENV	application	no	req	req	req
 APP_ENV	application	no	req	req	req
-TRUSTED_PROXY_HOPS	application	no	opt	req	req
+# TRUSTED_PROXY_HOPS is the number of proxies in front of the API that append
+# to X-Forwarded-For (apps/api/src/platform/auth/client-address.ts). OPTIONAL
+# until it is MEASURED on the live app (production-runbook.md §1d): unset means
+# no forwarded header is read and the login source-IP budget is off, which is
+# safe; a guessed value is not (0 on App Platform makes every client share one
+# budget; one too many lets a client choose its own address). Make it req again
+# once measured.
+TRUSTED_PROXY_HOPS	application	no	opt	opt	opt
+# PROXY_HOPS_PROBE=<token> (openssl rand -hex 32) logs the SHAPE of the
+# forwarding chain (entry counts, never an address) for requests that carry
+# that token, so the hop count can be measured (production-runbook.md §1d).
+# A secret: only its holder can add a measurement to the log. Off when unset
+# or `off`; remove it after measuring. A launch deploy refuses it.
+PROXY_HOPS_PROBE	application	yes	opt	opt	opt
 PORT	application	no	req	req	req
 # LOG_LEVEL is read by JsonLogger (apps/api/src/infra/observability/json-logger.ts)
 # in BOTH processes, the API and the worker: trace | debug | info | warn | error

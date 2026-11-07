@@ -198,11 +198,12 @@ Spaces bucket, no Spaces key and no Valkey. The domain is chosen (step 3).
    production without it leaves people unable to sign in. Both are needed:
    `SMTP_URL` alone leaves the e-mail channel off. The manifest marks both
    `req`, so the production deploy refuses without them.
-   Also set **`TRUSTED_PROXY_HOPS`** (variable). It
-   is required, and it is the number of proxies App Platform puts in front of
-   the API. Establish it from DigitalOcean rather than by guessing, and confirm
-   it after the first deploy (the login rate limiter keys on the address it
-   yields).
+   Leave **`TRUSTED_PROXY_HOPS`** unset for the first deploy: it is MEASURED on
+   the live app afterwards (`production-runbook.md` §1d), never guessed. 0 is
+   wrong on App Platform (every client would share one login budget), and one
+   too many lets a client forge its address. Unset is safe (no forwarded header
+   is read) but leaves the per-address login budget off, so the
+   `LAUNCH_PHASE=launch` deploy refuses to run without it.
 9. **First deploy.** Actions → **Deploy staging** → `first_deploy` = true. The run
    creates the app and prints its id. Save the id as the `DIGITALOCEAN_APP_ID`
    secret of `staging`; every later run requires it and refuses without it.
