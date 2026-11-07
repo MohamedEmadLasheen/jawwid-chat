@@ -2,8 +2,10 @@ import { escapeHtml } from '../billing/pay-page';
 
 export type DeletionLang = 'ar' | 'en';
 export type DeletionPageState =
-  | { kind: 'form'; error?: 'incomplete' | 'expired' | 'invalid' | 'rate_limited' | 'staff' | 'teacher_blocked' }
-  | { kind: 'done' };
+  | { kind: 'form'; error?: 'incomplete' | 'expired' | 'invalid' | 'rate_limited' | 'staff' }
+  | { kind: 'done' }
+  /** O-3: a teacher with lessons, students or payroll open -- a request, deleted by the deadline. */
+  | { kind: 'requested'; deadlineAt: string };
 
 const T = {
   ar: {
@@ -27,13 +29,14 @@ const T = {
     confirm: 'أفهم أن الحذف نهائي ولا يمكن التراجع عنه',
     submit: 'حذف حسابي نهائيًا',
     done: 'تم حذف حسابك. خرجت من جميع الأجهزة، ويمكنك إغلاق هذه الصفحة.',
+    requested: (date: string) =>
+      `سُجّل طلب حذف حسابك. لديك دروس أو طلاب أو رواتب مفتوحة، فتغلقها الأكاديمية أولًا، ثم يُحذف حسابك في موعد أقصاه ${date}. يمكنك إلغاء الطلب من التطبيق: الإعدادات ← حذف الحساب.`,
     errors: {
       incomplete: 'اكتب البريد الإلكتروني وكلمة المرور، وأكّد أنك تفهم أن الحذف نهائي.',
       expired: 'انتهت صلاحية الصفحة. أعد المحاولة من هذه الصفحة.',
       invalid: 'اسم الدخول أو كلمة المرور غير صحيحة.',
       rate_limited: 'محاولات كثيرة. حاول مرة أخرى بعد قليل.',
       staff: 'حسابات فريق العمل تُغلق عن طريق الإدارة.',
-      teacher_blocked: 'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.',
     },
     other: 'English',
   },
@@ -58,17 +61,23 @@ const T = {
     confirm: 'I understand that deleting is final and cannot be undone',
     submit: 'Delete my account for good',
     done: 'Your account has been deleted. You are signed out everywhere; you can close this page.',
+    requested: (date: string) =>
+      `Your deletion request is recorded. You still have lessons, students or payroll open: the academy closes them first, and your account is deleted by ${date} at the latest. You can cancel the request in the app: Settings → Delete account.`,
     errors: {
       incomplete: 'Enter your e-mail address and password, and confirm that you understand deleting is final.',
       expired: 'This page expired. Please try again from this page.',
       invalid: 'The sign-in name or password is not right.',
       rate_limited: 'Too many attempts. Try again in a little while.',
       staff: 'Staff accounts are closed by the administration.',
-      teacher_blocked: 'Please contact the academy to close your lessons and payroll before deleting your account.',
     },
     other: 'العربية',
   },
 } as const;
+
+/** The deadline's day, in the academy's language (Gregorian, Latin digits in English). */
+export function deadlineDate(lang: DeletionLang, iso: string): string {
+  return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(iso));
+}
 
 /** PD-56: the public account-deletion page. No script; every value escaped. */
 export function renderDeletionPage(lang: DeletionLang, state: DeletionPageState, nonce: string, formToken: string): string {
@@ -79,6 +88,8 @@ export function renderDeletionPage(lang: DeletionLang, state: DeletionPageState,
   const body =
     state.kind === 'done'
       ? `<p class="ok" role="status">${e(t.done)}</p>`
+      : state.kind === 'requested'
+        ? `<p class="ok" role="status">${e(t.requested(deadlineDate(lang, state.deadlineAt)))}</p>`
       : `${state.error ? `<p class="err" role="alert">${e(t.errors[state.error])}</p>` : ''}
 <form method="post" action="?lang=${lang}">
   <input type="hidden" name="token" value="${e(formToken)}">

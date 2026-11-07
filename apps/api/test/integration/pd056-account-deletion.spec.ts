@@ -10,13 +10,14 @@
  *   2. the parent's own PD-42 contact keys go (another parent keeps theirs):
  *      the same e-mail signing up again is never linked to the old family
  *   3. a teacher with a future lesson, an assigned student or open payroll is
- *      refused before anything changes; one with nothing open is deleted, the
- *      payout account goes, and the Teachers manager gets a notice
+ *      erased in nothing: a deletion request is recorded instead (O-3,
+ *      pd056-teacher-deletion-request.spec.ts); one with nothing open is
+ *      deleted, the payout account goes, and the Teachers manager gets a notice
  *   4. staff cannot delete -- themselves or anyone -- here; erasing twice
  *      changes nothing
  *   5. the public page (Google Play's link): no script, an anti-forgery token,
  *      an unknown account, a wrong password and a locked account read the same,
- *      the right password deletes, a blocked teacher is told to ask the academy
+ *      the right password deletes, a teacher with work open gets a request (O-3)
  *
  * Synthetic people only (G-20).
  */
@@ -250,13 +251,14 @@ describe('PD-56: deleting one\'s own account', () => {
     expect(await g.prisma.$queryRaw`SELECT 1 FROM chat.family_contact_key WHERE key_hash = ${mine}`).toEqual([]);
   });
 
-  it('3. a teacher with a future lesson, an assigned student or open payroll is refused unchanged; with nothing open, deleted', async () => {
+  it('3. a teacher with a future lesson, an assigned student or open payroll is erased in nothing (a request instead); with nothing open, deleted', async () => {
     const blocked = async (t: { subject: string; id: string; accountId: string }, reason: string) => {
       const { token } = await login(t.subject);
       const r = await call(token, 'POST', '/me/account/delete', { password: PASSWORD });
-      expect({ reason, status: r.status, code: r.code }).toEqual({ reason, status: 409, code: 'AUTH.TEACHER_DELETION_BLOCKED' });
-      expect((r.json.error as { message: string }).message).toMatch(/contact the academy/);
-      // Nothing written: still themselves, still signed in, no notice.
+      // O-3: not a refusal -- a deletion request, deleted within 30 days.
+      expect({ reason, status: r.status, deleted: r.json.deleted, items: (r.json.request as { openItems: string[] }).openItems })
+        .toEqual({ reason, status: 200, deleted: false, items: [reason] });
+      // Nothing erased: still themselves, still signed in, no notice.
       expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ name: expect.stringMatching(/^teacher_/), isActive: true });
       expect((await call(token, 'GET', '/me')).status).toBe(200);
       expect((await tasks('teacher_account_deleted')).filter((x) => x.source_id === t.id)).toEqual([]);
@@ -358,12 +360,13 @@ describe('PD-56: deleting one\'s own account', () => {
     expect((await login(family.parent.subject)).status).toBe(401);
     expect(await g.prisma.contact.findUniqueOrThrow({ where: { id: family.parent.id } })).toMatchObject({ name: 'Deleted user' });
 
-    // A teacher with something open is told, after the password, to ask the academy.
+    // O-3: a teacher with something open gets, after the password, a deletion request -- never "ask the academy".
     const busy = await newTeacher('page');
     await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${busy.id}'::uuid where id = '${m.families[4]!.children[0]!.id}'::uuid`);
     const teacher = await form({ username: busy.subject, password: PASSWORD, confirm: 'yes' });
-    expect(teacher.status).toBe(409);
-    expect(teacher.html).toContain('Please contact the academy to close your lessons and payroll');
+    expect(teacher.status).toBe(200);
+    expect(teacher.html).toContain('Your deletion request is recorded');
+    expect(teacher.html).not.toContain('contact the academy');
     expect((await login(busy.subject)).status).toBe(200);
 
     // Staff, through the page: refused after the password, nothing changes.

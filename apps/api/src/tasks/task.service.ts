@@ -83,6 +83,9 @@ export const SOURCE_TYPES = [
   // PD-56: after an erasure -- a family nobody can sign in to (settled by chat.work_task_sweep_erasure),
   // and a teacher's departure (a notice, withdrawn when raised: the Teachers manager acknowledges it).
   'family_without_account', 'teacher_account_deleted',
+  // PD-56 O-3: a teacher asked to delete their account with lessons, students or payroll open; the
+  // Teachers manager closes them by the deadline. Completed when the request is; withdrawn when cancelled.
+  'teacher_deletion_request',
   // AMB-9: a group left without a live admin (chat.work_task_sweep_group_admin).
   'group_admin_absent',
   // PD-57 (closure plan §4): a report resolved as reassigned, for each manager of its
@@ -1056,6 +1059,7 @@ export class TaskService {
                WHEN 'lesson_ruling' THEN (SELECT l.teacher_id::text FROM chat.lesson_ruling q JOIN chat.lesson l ON l.id = q.lesson_id WHERE q.id = t.source_id)
                WHEN 'teacher_setup' THEN t.source_id::text
                WHEN 'teacher_account_deleted' THEN t.source_id::text
+               WHEN 'teacher_deletion_request' THEN (SELECT q.teacher_id::text FROM chat.account_deletion_request q WHERE q.id = t.source_id)
                WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
                WHEN 'trial_attendance' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = t.source_id)
                WHEN 'complaint' THEN (SELECT e.teacher_id::text FROM chat.teacher_supervision_entry e WHERE e.id = t.source_id)
@@ -1108,7 +1112,14 @@ export class TaskService {
                                                                              'count', (SELECT count(*)::int FROM chat.learner l WHERE l.family_id = f.id))
                                                      FROM chat.family f WHERE f.id = t.source_id)
                WHEN 'teacher_account_deleted' THEN jsonb_build_object('teacherId', t.source_id,
-                                                                      'count', (SELECT count(*)::int FROM chat.learner l WHERE l.teacher_id = t.source_id))
+                                                                      'count', (SELECT count(*)::int FROM chat.learner l WHERE l.teacher_id = t.source_id),
+                                                                      -- O-3: a request's erasure at its deadline can leave lessons ahead on them.
+                                                                      'lessons', (SELECT count(*)::int FROM chat.lesson l
+                                                                                   WHERE l.teacher_id = t.source_id AND l.outcome IS NULL AND l.starts_at >= now()))
+               -- PD-56 O-3. The teacher by name (still theirs until the erasure) and the deadline.
+               WHEN 'teacher_deletion_request' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id, 'deadlineAt', q.deadline_at)
+                                                       FROM chat.account_deletion_request q JOIN chat.teacher te ON te.id = q.teacher_id
+                                                      WHERE q.id = t.source_id)
                WHEN 'new_student_assign' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
                                                  FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
                WHEN 'new_student_group' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id)

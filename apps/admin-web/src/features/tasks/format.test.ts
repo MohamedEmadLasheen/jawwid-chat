@@ -119,11 +119,18 @@ describe('PD-56: an erased account leaves work for staff', () => {
     expect(sourceLink(t)).toBe('/teachers/files/t1')
   })
 
+  it('a teacher who asked to delete their account (PD-56 O-3) names them and leads to their Teacher File', () => {
+    const t = task('teacher_deletion_request', 'r1', { teacherName: 'teacher_x', teacherId: 't9', deadlineAt: '2026-12-07T13:45:00Z' })
+    expect(titleOf(t, en, fmt)).toBe('Close the lessons and payroll of teacher_x, who asked to delete their account')
+    expect(sourceLink(t)).toBe('/teachers/files/t9')
+    expect(sourceLink(task('teacher_deletion_request', 'r1', {}))).toBeNull()
+  })
+
   it('both have their label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['family_without_account', 'teacher_account_deleted'] as const) {
+    for (const type of ['family_without_account', 'teacher_account_deleted', 'teacher_deletion_request'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
-      expect(titleOf(task(type, 's1', { familyName: 'F', teacherId: 's1', learnerId: 'l1', count: 1 }), en, fmt)).not.toMatch(/[{}]/)
+      expect(titleOf(task(type, 's1', { familyName: 'F', teacherName: 'T', teacherId: 's1', learnerId: 'l1', count: 1 }), en, fmt)).not.toMatch(/[{}]/)
     }
   })
 })

@@ -5136,7 +5136,7 @@ class L10nEn extends L10n {
 
   @override
   String get deleteAccountKeptTeacher =>
-      'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
+      'Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
 
   @override
   String get deleteAccountPasswordLabel => 'Your password';
@@ -5163,8 +5163,45 @@ class L10nEn extends L10n {
   String get deleteAccountDone => 'Your account has been deleted.';
 
   @override
-  String get deleteAccountTeacherBlocked =>
-      'Please contact the academy to close your lessons and payroll before deleting your account.';
+  String get deleteAccountRequestIntro =>
+      'You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.';
+
+  @override
+  String get deleteAccountRequestAction => 'Request account deletion';
+
+  @override
+  String deleteAccountRequestConfirm(String date) {
+    return 'Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by $date at the latest. You can cancel the request until then.';
+  }
+
+  @override
+  String get deleteAccountRequested => 'Your deletion request is recorded.';
+
+  @override
+  String get deleteAccountRequestStatusTitle => 'Deletion requested';
+
+  @override
+  String deleteAccountRequestStatus(String requested, String deadline) {
+    return 'Requested on $requested; your account will be deleted by $deadline.';
+  }
+
+  @override
+  String get deleteAccountRequestCancel => 'Cancel request';
+
+  @override
+  String get deleteAccountRequestCancelConfirm =>
+      'Cancel your deletion request? Your account stays as it is.';
+
+  @override
+  String get deleteAccountRequestKeep => 'Keep the request';
+
+  @override
+  String get deleteAccountRequestCancelled =>
+      'Your deletion request was cancelled.';
+
+  @override
+  String get deleteAccountRequestCancelFailed =>
+      'The request could not be cancelled. Try again.';
 
   @override
   String get locationRowTitle => 'Location';

@@ -85,6 +85,10 @@ const BY_RULE: Readonly<Record<string, CatalogEntry>> = {
   report_due_soon: { version: 1, category: 'task', inbox: 'inbox.report_due_soon', action: 'open_report' },
   report_overdue: { version: 1, category: 'task', inbox: 'inbox.report_overdue', action: 'open_report' },
   report_answered: { version: 1, category: 'system', inbox: 'inbox.report_answered', action: 'open_my_reports' },
+  // PD-56 O-3: a teacher's deletion request still open at day 21 and day 28 of
+  // its 30. To staff; fixed texts that name no teacher; opens the task.
+  teacher_deletion_day21: { version: 1, category: 'task', inbox: 'inbox.teacher_deletion_day21', action: 'open_task' },
+  teacher_deletion_day28: { version: 1, category: 'task', inbox: 'inbox.teacher_deletion_day28', action: 'open_task' },
 };
 
 const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {

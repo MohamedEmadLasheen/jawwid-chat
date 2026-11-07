@@ -102,6 +102,7 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `AUTH.ACCOUNT_LOCKED` | 403 | Login: temporarily locked after repeated failures. Terminal until unlock. |
 | `AUTH.SESSION_REVOKED` | 401 | Refresh token revoked, rotated-and-reused, or session deleted. Terminal. |
 | `AUTH.FORBIDDEN` | 403 | Authenticated but lacks the permission key (used only where no `COMM.*` code is more specific). |
+| `AUTH.DELETION_REQUEST_NOT_PENDING` | 409 | PD-56 O-3: cancelling a teacher's account deletion request when none is pending (§1.1c). `AUTH.TEACHER_DELETION_BLOCKED` is retired: a teacher with work open gets a request, never a refusal. |
 | `COMMON.VALIDATION` | 400 | Body / query fails schema validation. `message` names the field. |
 | `COMMON.NOT_FOUND` | 404 | Unknown route or resource with no domain-specific code. |
 | `COMMON.IDEMPOTENCY_CONFLICT` | 409 | Same `Idempotency-Key`, different request body. |
@@ -143,6 +144,20 @@ Text that a parent or a teacher writes for other people is checked against a wor
 - **The list** is data: `apps/api/src/platform/content-filter/word-list.draft.json`, a DRAFT pending owner approval (LD-12). A test runs it over the whole Quran (`data/quran`) and the lessons' Arabic and fails on any match.
 - **Switch:** chat.config `moderation.content_filter.enabled` (default `true`; only a JSON `false` turns it off, read with the usual 30 s cache). No deploy is needed.
 - **Images** are not scanned. A reported image reaches the moderation queue as part of the report (PD-57).
+
+### 1.1c Account deletion (PD-56; O-3, owner 2026-11-07)
+
+A parent or a teacher deletes their own account in the app (Apple 5.1.1(v), Google Play). "The teacher requests deletion in the app; staff close the lessons and payroll; the account is deleted within 30 days."
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /me/account/deletion` | the holder (self-service) | — | `{ kind, immediate, openItems, request, deadlineIfRequested }`. `immediate: false` for a teacher with a lesson ahead, an assigned student or payroll of this or last month (`openItems`: `future_lessons`, `assigned_learners`, `open_payroll`). `request`: the pending one, else the latest, else `null`. `deadlineIfRequested`: now + 30 days on the database clock. Staff: `AUTH.FORBIDDEN` 403. |
+| `POST /me/account/delete` | the holder | `{ password }` | `{ deleted: true }` (every session ended), or for a teacher with work open `{ deleted: false, request }`: nothing is erased, the session stays. Asking again returns the same pending request. Wrong password `AUTH.INVALID_CREDENTIALS` 401; staff `AUTH.FORBIDDEN` 403. |
+| `POST /me/account/deletion-request/cancel` | the holder (teacher) | — | `{ request }` (state `cancelled`). None pending: `AUTH.DELETION_REQUEST_NOT_PENDING` 409; not a teacher: `AUTH.FORBIDDEN` 403. |
+| `GET /teacher-files/:teacherId/deletion-request` | `teacher_files.view`; a Teacher File reader for a teacher in their scope (PD-10, PD-35) | — | `{ request, leftOpen: { futureLessons, assignedLearners, openPayroll } \| null, canComplete }`. |
+| `POST /teacher-files/:teacherId/deletion-request/complete` | `teachers.offboard`; the super admin or the Teachers manager (PD-43's offboarding rule), teacher in scope | `{ confirm: true }` | `{ requestId, leftOpen, request }` (state `completed`, `completedVia: 'staff'`): the erasure ran. No pending request `COMM.TEACHER_FILE_CONFLICT` 409; not allowed `COMM.TEACHER_ONBOARDING_DENIED` 403; out of scope `COMM.TEACHER_FILE_NOT_FOUND` 404; no `confirm` `COMMON.VALIDATION` 400. |
+
+`request` is `{ id, state: 'pending' | 'completed' | 'cancelled', requestedAt, deadlineAt, openItems, completedAt, completedVia: 'staff' | 'deadline' | 'holder' | null, cancelledAt }` (ISO times). `deadlineAt` is `requestedAt` + 30 days. The worker reminds the Teachers manager, the task's assignee and the teacher's supervisor at day 21 and day 28 (`teacher_deletion_day21`, `teacher_deletion_day28`), and erases the account at `deadlineAt` if it is still pending. The public page `POST /account-deletion` makes the same request and shows its date.
 
 ### 1.2 Permission keys
 

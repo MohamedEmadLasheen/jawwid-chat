@@ -108,6 +108,9 @@ export function sourceLink(t: Pick<TaskSummary, 'source' | 'titleParams'>): stri
     case 'teacher_setup':
     case 'teacher_account_deleted':
       return `/teachers/files/${encodeURIComponent(t.source.id)}`
+    case 'teacher_deletion_request':
+      // PD-56 O-3: the source is the request; the Teacher File has its banner and "Close and delete account".
+      return typeof t.titleParams?.teacherId === 'string' ? `/teachers/files/${encodeURIComponent(t.titleParams.teacherId)}` : null
     case 'family_without_account':
       // PD-56: the family's first child; its page reaches the family and its contacts.
       return typeof t.titleParams?.learnerId === 'string' ? `/students/${encodeURIComponent(t.titleParams.learnerId)}` : null

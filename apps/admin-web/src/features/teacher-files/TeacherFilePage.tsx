@@ -23,6 +23,7 @@ import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 import { OpenCaseButton } from '@/features/cases/OpenCaseDialog'
 import { OffboardButton, ReactivateButton } from './Offboarding'
+import { DeletionRequestBanner } from './DeletionRequest'
 import { ChangeSignInButton } from './ChangeSignIn'
 import { LessonReports } from './LessonReports'
 
@@ -93,6 +94,8 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                     ) : undefined
                   }
                 />
+                {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending). */}
+                {data.teacher.isActive && <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />}
                 <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
                 {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
                 {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}

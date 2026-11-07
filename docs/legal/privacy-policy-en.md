@@ -492,7 +492,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 ### 10.4 Teachers
 
-10.4.1 A teacher cannot delete their account while any of these is still open: a future lesson, an assigned student, or this month's or last month's payroll. The teacher is asked to contact the Academy so that their students can be moved and payroll completed.
+10.4.1 A teacher who still has a future lesson, an assigned student, or this month's or last month's payroll open can request deletion in the app (Settings → Delete account) or on the web page in section 10.1.2. The app shows the date by which the account will be deleted. The Academy then moves the teacher's students and completes their payroll, and the account is deleted within 30 days of the request at the latest, even if something is still open. Until then the teacher can cancel the request in the app. A teacher with nothing open is deleted at once.
 
 10.4.2 When a teacher's account is deleted, we delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account, and the Teachers department manager is told.
 
