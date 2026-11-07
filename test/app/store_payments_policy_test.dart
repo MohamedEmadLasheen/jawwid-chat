@@ -43,6 +43,8 @@ void main() {
       'JAWWID_API_BASE_URL',
       'PRIVACY_POLICY_URL',
       'TERMS_URL',
+      'SUPPORT_URL',
+      'SUPPORT_EMAIL',
       'JAWWID_LESSONS_ORIGIN',
       'SENTRY_DSN',
       'SENTRY_ENVIRONMENT',

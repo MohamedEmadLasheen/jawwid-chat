@@ -270,6 +270,8 @@ class SettingsScreen extends ConsumerWidget {
           ),
           // PD-56: the privacy policy and the terms of use (the owner's texts).
           const LegalLinksTiles(),
+          // P-5: Help and support, Contact support (build-time values; a missing one hides its row).
+          const SupportLinksTiles(),
           const Divider(),
 
           // PD-56 (store compliance): parents and teachers delete their own account here.
