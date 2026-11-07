@@ -11,8 +11,8 @@ export { useCopy, type Pair } from '@/features/organization/copy'
 export const S = {
   title: { en: 'Subscription', ar: 'الاشتراك' },
   hint: {
-    en: 'Lessons bought and used. When they run out, two grace lessons follow, then the group is read-only for the parent and the teacher until a renewal is paid.',
-    ar: 'الحصص المشتراة والمستخدمة. عند نفادها تُتاح حصتا سماح، ثم تصبح المجموعة للقراءة فقط لولي الأمر والمعلم حتى يُدفع التجديد.',
+    en: 'Lessons bought and used. When they run out, two grace lessons follow, then no new lessons are booked until a renewal is paid. The chat stays open.',
+    ar: 'الحصص المشتراة والمستخدمة. عند نفادها تُتاح حصتا سماح، ثم لا تُحجز حصص جديدة حتى يُدفع التجديد. المحادثة تبقى مفتوحة.',
   },
   notEnforced: {
     en: 'The payment lock is switched off on this server: the state is shown, nothing is refused.',
@@ -79,8 +79,9 @@ export const S = {
   waiting: { en: 'Waiting', ar: 'بانتظار' },
   // The chat banner (staff view)
   lockedBanner: {
-    en: 'Read-only for the parent and the teacher. You can still write.',
-    ar: 'للقراءة فقط لولي الأمر والمعلم. يمكنك الكتابة.',
+    // PD-30 amendment, D-3 wording (owner, 2026-11-06).
+    en: 'New lesson bookings are paused. Lessons already booked go ahead, and the chat stays open for everyone.',
+    ar: 'حجز الحصص الجديدة متوقف مؤقتًا. الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة للجميع.',
   },
 }
 

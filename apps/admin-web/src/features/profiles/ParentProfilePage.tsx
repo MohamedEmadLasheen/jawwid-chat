@@ -625,6 +625,7 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
         <strong dir="auto">{item.label}</strong>
         <span className="pf-amount">{formatMoney(item.amountMinor, item.currency, locale)}</span>
         {open && item.partial && <Badge tone="warn">{tx(PAY.partiallyPaid)}</Badge>}
+        {open && item.payableInApp === false && <Badge tone="neutral">{tx(PAY.notPayableInApp)}</Badge>}
       </div>
       {open && item.partial && (
         <p className="pf-entry__meta pf-amount">

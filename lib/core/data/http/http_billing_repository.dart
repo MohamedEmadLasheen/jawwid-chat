@@ -144,6 +144,7 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
       remainingMinor: whole(raw['remainingMinor']),
       partial: raw['partial'] == true,
       requestId: text(raw['requestId']),
+      payableInApp: raw['payableInApp'] == true,
     ));
   }
 
@@ -158,6 +159,7 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
     requests.add(PaymentRequest(
       id: id,
       purpose: RequestPurpose.tryParse(raw['purpose']),
+      payableInApp: raw['payableInApp'] == true,
       label: text(raw['label']) ?? '',
       status: RequestStatus.tryParse(raw['status']),
       amountMinor: amount,

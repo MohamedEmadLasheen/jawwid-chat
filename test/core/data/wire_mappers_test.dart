@@ -725,4 +725,23 @@ void main() {
       expect([deleted.lastMessagePreview, deleted.lastMessageKind], ['', 'deleted']);
     });
   });
+
+  // PD-57: the subject kind of a Report or a Block is the identity's own kind, never the
+  // membership label (a teacher can carry memberRole 'admin', RT-025 C5).
+  group('groupMember actorKind', () {
+    test('is read from actorKind, not memberRole', () {
+      final m = WireMappers.groupMember({'actorId': 't9', 'actorKind': 'teacher', 'memberRole': 'admin'});
+      expect(m.actorKind, 'teacher');
+      expect(m.role, ParticipantRole.admin, reason: 'the display role is unchanged');
+    });
+
+    test('the three kinds, and nothing else', () {
+      for (final kind in ['contact', 'teacher', 'staff']) {
+        expect(WireMappers.groupMember({'actorId': 'a', 'actorKind': kind}).actorKind, kind);
+      }
+      expect(WireMappers.groupMember({'actorId': 'a', 'memberRole': 'teacher'}).actorKind, isNull);
+      expect(WireMappers.groupMember({'actorId': 'a', 'actorKind': 'system'}).actorKind, isNull);
+      expect(WireMappers.groupMember({'actorId': 'a', 'actorKind': 7}).actorKind, isNull);
+    });
+  });
 }

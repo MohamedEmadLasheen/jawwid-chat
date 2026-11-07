@@ -221,7 +221,7 @@ interface BankAccount {      // every field optional except accountName
 | Route | Body | Answer |
 |---|---|---|
 | `GET /me/billing` | | PD-17 shape **+** `requests: PaymentRequest[]` (open and paid; not cancelled/expired), `invoices: Invoice[]` (not void), `receipts: Receipt[]`, `bankAccount: BankAccount \| null`, `cardAvailable: boolean`. Instalments gain `paidMinor`, `remainingMinor`, `partial`, `requestId`. |
-| `POST /me/billing/checkout` | `{requestId} \| {instalmentId}` | `{ url }` — open it in the browser (Stripe Checkout). 503 `PAYMENTS_UNAVAILABLE` without Stripe. |
+| `POST /me/billing/checkout` | `{requestId} \| {instalmentId}` | `{ url }` — open it in the browser (Stripe Checkout). 503 `PAYMENTS_UNAVAILABLE` without Stripe. 409 `PAYMENT_NOT_IN_APP` for a request or instalment not verified as a lesson package (`payableInApp: false`; also refused by `POST /me/billing/receipts`). `POST /families/:id/instalments` takes `lessonSubscriptionId` (instead of `lessonsIncluded`) and `POST /families/:id/payment-requests` takes it for a `balance`: the child's standing lesson package. |
 | `POST /me/billing/receipts/upload` | `{mimeType, byteSize}` | `{objectKey, uploadUrl, method: 'PUT', headers, expiresAt}` — PUT the bytes with exactly these headers |
 | `POST /me/billing/receipts` | `{objectKey, requestId \| instalmentId, amountMinor, transferredOn, note?}` | `GET /me/billing`'s shape |
 | `GET /me/billing/invoices/:id/link` | | `{ url }` — open it (PDF) |

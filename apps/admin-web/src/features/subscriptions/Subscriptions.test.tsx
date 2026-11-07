@@ -204,7 +204,8 @@ describe('the locked group banner', () => {
       </I18nProvider>,
     )
     const banner = screen.getByRole('status')
-    expect(banner).toHaveTextContent('Read-only for the parent and the teacher. You can still write.')
+    // D-3 (owner, 2026-11-06).
+    expect(banner).toHaveTextContent('New lesson bookings are paused. Lessons already booked go ahead, and the chat stays open for everyone.')
     expect(banner).toHaveTextContent('Adam: lessons used up')
     expect(banner).toHaveTextContent('Sara: instalment overdue — Term · 2/3')
     rerender(
@@ -213,6 +214,17 @@ describe('the locked group banner', () => {
       </I18nProvider>,
     )
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('in Arabic (D-3)', () => {
+    render(
+      <I18nProvider initialLocale="ar">
+        <PaymentLockBanner lock={{ readOnly: false, canPay: false, children: [{ id: 'k-1', name: 'آدم', reasons: ['balance'], overdue: null }] }} />
+      </I18nProvider>,
+    )
+    const banner = screen.getByRole('status')
+    expect(banner).toHaveTextContent('حجز الحصص الجديدة متوقف مؤقتًا. الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة للجميع.')
+    expect(banner).toHaveTextContent('آدم: انتهت الحصص')
   })
 })
 

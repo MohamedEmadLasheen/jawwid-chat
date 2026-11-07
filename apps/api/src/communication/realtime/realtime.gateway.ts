@@ -1,4 +1,4 @@
-import { Inject, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Inject, Logger, OnModuleDestroy, Optional, UseFilters } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -10,6 +10,8 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { processErrorTracker } from '../../infra/observability/error-tracker';
+import { WsErrorReportFilter } from '../../infra/observability/ws-error-report.filter';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { Actor } from '../../platform/types';
 import {
@@ -247,6 +249,10 @@ function handshakeToken(client: Socket): string | null {
  * path uses, and only then joins. Guessing or forging a room name gains nothing.
  */
 @WebSocketGateway({ cors: { origin: false } })
+// Nest applies no global filter to gateways: an unexpected handler exception
+// reaches the error tracker only through this (ws-error-report.filter.ts).
+// The client is answered exactly as before.
+@UseFilters(new WsErrorReportFilter())
 export class RealtimeGateway
   implements
     OnGatewayInit,
@@ -565,6 +571,16 @@ export class RealtimeGateway
     } catch (e) {
       realtimeMetrics.handshakeFailed++;
       this.log.error(`realtime handshake failed; closing that socket: ${(e as Error).name}`);
+      // The error and two labels -- never the socket, its handshake or its
+      // token. One kind of failure per window (error-budget.ts), so a burst of
+      // reconnects during an outage is one event, not one per client.
+      // Guarded: a throw here would reject handleConnection -- the unhandled
+      // rejection this catch exists to prevent.
+      try {
+        processErrorTracker().captureException(e, { route: 'WS handshake', component: 'api' });
+      } catch {
+        /* reporting an error must never become the error */
+      }
       // Close the TRANSPORT, not `disconnect(true)`: clients read a server
       // disconnect as "your credential was refused" and spend their one
       // refresh on it, while a transport close is an ordinary drop they retry

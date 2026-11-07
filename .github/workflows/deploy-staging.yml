@@ -121,8 +121,8 @@ jobs:
             *) echo "::error::vars.STAGING_API_BASE_URL must be an https:// origin"; exit 1 ;;
           esac
           host="${API_BASE_URL#https://}"
-          case "${host%/}" in
-            */*) echo "::error::vars.STAGING_API_BASE_URL must be the API origin, with no path"; exit 1 ;;
+          case "$host" in
+            */*) echo "::error::vars.STAGING_API_BASE_URL must be the API origin, with no path and no trailing slash"; exit 1 ;;
           esac
           # Both are compiled into the bundle. Unguarded, a missing realtime URL
           # builds and ships a staging Admin Web that silently cannot connect.
@@ -197,10 +197,13 @@ jobs:
         env:
           NODE_ENV: production
           APP_ENV: staging
-          # Proxies in front of the API on App Platform. Measure it on the live
-          # app; a guessed count lets clients choose their own address
+          # Proxies in front of the API on App Platform. MEASURED on the live
+          # app (production-runbook.md §1d), never guessed: unset is safe (no
+          # forwarded header is read), a wrong count is not
           # (apps/api/src/platform/auth/client-address.ts).
           TRUSTED_PROXY_HOPS: ${{ vars.TRUSTED_PROXY_HOPS }}
+          # A token only while measuring the hop count (§1d); it logs entry counts, never an address.
+          PROXY_HOPS_PROBE: ${{ secrets.PROXY_HOPS_PROBE }}
           PORT: '3000'
           LOG_LEVEL: info
           CORS_ALLOWED_ORIGINS: ${{ vars.STAGING_CORS_ALLOWED_ORIGINS }}
@@ -208,8 +211,11 @@ jobs:
           SHUTDOWN_GRACE_MS: '15000'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
-          DATABASE_POOL_MAX: '7'         # the API's pool; database-pool.ts has the 22-connection budget
-          DATABASE_WORKER_POOL_MAX: '3'  # the worker's pool
+          # The API's pool; database-pool.ts has the 22-connection budget. An
+          # Environment variable overrides it for a smaller database (Supabase
+          # Free's pooler during the review period, ADR-014).
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX || '7' }}
+          DATABASE_WORKER_POOL_MAX: ${{ vars.DATABASE_WORKER_POOL_MAX || '3' }}  # the worker's pool
           REDIS_URL: ${{ secrets.REDIS_URL }}
           QUEUE_PREFIX: jawwid-chat-staging
           WORKER_CONCURRENCY: ${{ vars.WORKER_CONCURRENCY }}
@@ -228,7 +234,10 @@ jobs:
           STORAGE_REQUEST_TIMEOUT_MS: ${{ vars.STORAGE_REQUEST_TIMEOUT_MS }}
           STORAGE_MAX_ATTEMPTS: ${{ vars.STORAGE_MAX_ATTEMPTS }}
           STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
-          MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL }}
+          # Default: this API's public HTTPS origin. Without it a link is built
+          # from the request, and with TRUSTED_PROXY_HOPS unset the request is
+          # plain http inside App Platform: an http:// link the apps refuse.
+          MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL || format('{0}/api/v1', vars.STAGING_API_BASE_URL) }}
           MATERIALS_SITE_BASE_URL: ${{ vars.MATERIALS_SITE_BASE_URL }}
           MATERIALS_FRAME_ORIGINS: ${{ vars.MATERIALS_FRAME_ORIGINS }}
           LESSON_APPROVALS_SIGNING_KEY: ${{ secrets.LESSON_APPROVALS_SIGNING_KEY }}
@@ -277,7 +286,10 @@ jobs:
           # and cash still work) and the public origin payment links point at.
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          PAYMENT_LINK_BASE_URL: ${{ vars.PAYMENT_LINK_BASE_URL }}
+          # Default: this API's public HTTPS origin. Without it a link is built
+          # from the request, and with TRUSTED_PROXY_HOPS unset the request is
+          # plain http inside App Platform: an http:// link the apps refuse.
+          PAYMENT_LINK_BASE_URL: ${{ vars.PAYMENT_LINK_BASE_URL || format('{0}/api/v1', vars.STAGING_API_BASE_URL) }}
           # PD-30: the payment lock is on in staging, off in production until the owner
           # sets the production variable to 'true'.
           SUBSCRIPTION_LOCK_ENFORCED: ${{ vars.SUBSCRIPTION_LOCK_ENFORCED || 'true' }}

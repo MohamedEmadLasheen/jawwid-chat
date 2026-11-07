@@ -5,16 +5,17 @@ import { REASON_LABEL, S, useCopy } from './copy'
 import './subscriptions.css'
 
 /**
- * PD-30: a group locked for payment, as staff see it in the chat -- which
- * child, why, and that the parent and the teacher cannot write while staff
- * still can. Advisory: the server refuses their messages and calls itself.
+ * PD-30: a group with a child locked for payment, as staff see it in the chat --
+ * which child, why, and that only new lesson bookings are paused. Informational
+ * (D-3, owner 2026-11-06): the chat stays open for everyone and booked lessons go
+ * ahead; the server refuses new bookings itself.
  */
 export function PaymentLockBanner({ lock }: { lock: PaymentLock | null | undefined }) {
   const tx = useCopy()
   const { locale } = useI18n()
   if (!lock || lock.children.length === 0) return null
   return (
-    <div className="banner banner--warn sub-lock" role="status">
+    <div className="banner banner--info sub-lock" role="status">
       <strong>{tx(S.lockedBanner)}</strong>
       <ul>
         {lock.children.map((c) => (

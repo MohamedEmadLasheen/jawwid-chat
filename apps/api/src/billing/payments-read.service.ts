@@ -4,6 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { MediaUrlSigner } from '../platform/media-url';
 import { PaymentLedger, type InvoiceSnapshot, type PaymentMethod, type RequestPurpose } from './payment-ledger.service';
 import { day } from './validate';
+import { isPayableInApp, loadPackageFacts } from './in-app-payability';
 
 type Person = { id: string; name: string };
 type Child = { id: string | null; name: string };
@@ -13,6 +14,10 @@ export type InvoiceStatus = 'paid' | 'partially_refunded' | 'refunded' | 'void';
 export interface PaymentRequestDto {
   id: string;
   purpose: RequestPurpose;
+  /** Store payments policy: a live one-to-one lesson payment, so the app may take it (in-app-payability.ts). */
+  payableInApp: boolean;
+  /** A balance's lesson package (chat.learner_subscription). */
+  lessonSubscriptionId: string | null;
   label: string;
   status: RequestStatus;
   amountMinor: number;
@@ -150,9 +155,10 @@ export class PaymentsReadService {
   ): Promise<MoneyView> {
     const { requests, payments, receipts } = rows;
     const paymentIds = payments.map((p) => p.id);
-    const [invoices, refunds] = await Promise.all([
+    const [invoices, refunds, packages] = await Promise.all([
       paymentIds.length ? this.prisma.invoice.findMany({ where: { paymentId: { in: paymentIds } } }) : Promise.resolve([] as Invoice[]),
       paymentIds.length ? this.prisma.paymentRefund.findMany({ where: { paymentId: { in: paymentIds } }, orderBy: { createdAt: 'asc' } }) : Promise.resolve([] as PaymentRefund[]),
+      loadPackageFacts(this.prisma, { requests }),
     ]);
     // Receipts name their request's label; the request may not be in `requests` (the queue).
     const extraRequestIds = receipts.map((r) => r.requestId).filter((id) => !requests.some((q) => q.id === id));
@@ -224,6 +230,8 @@ export class PaymentsReadService {
       const dto: PaymentRequestDto = {
         id: r.id,
         purpose: r.purpose as RequestPurpose,
+        payableInApp: isPayableInApp(r, packages),
+        lessonSubscriptionId: r.lessonSubscriptionId,
         label: r.label,
         status,
         amountMinor: amount,

@@ -9,23 +9,26 @@
  *  - counting and "Lesson N of M": held and no-show lessons use the balance,
  *    the report card says "1 of 3", a renewal continues "3 of 8";
  *  - grace: two more lessons after the balance runs out, announced to the
- *    family's direct chat (never the group); then the group locks -- read-only
- *    for the parent and the teacher (messages, reactions, calls), staff still
- *    write, the parent's direct chat never locks, no lesson is booked;
+ *    family's direct chat (never the group); then the child locks. The chat
+ *    stays open (owner, 2026-11-06): the parent and the teacher still write,
+ *    react and call in the group. Only new lesson bookings pause;
  *  - paying (a renewal request paid in cash) unlocks at once; voiding the
  *    payment takes the lessons back and locks again;
- *  - an instalment overdue since go-live locks; one due before go-live only
- *    lists; paying it unlocks; an exception lets the child go on;
+ *  - an instalment of a lesson package overdue since go-live locks; one due
+ *    before go-live only lists; one that names no lesson package never locks
+ *    (D-2, 2026-11-06); paying it unlocks; an exception lets the child go on;
  *  - a renewal request from a locked banner, once per day;
  *  - the sweep and a payment arriving together leave one state and one card;
- *  - holds: the lessons that have not started are suspended for payment (not
- *    owed, not counted), the materializer creates none while held, and the
- *    unlock re-materializes them without a duplicate;
+ *  - holds: lessons already on the calendar go ahead (D-1, 2026-11-06), the
+ *    materializer creates none while held, and the unlock materializes again
+ *    without a duplicate;
  *  - with enforcement off nothing is refused and nothing is announced.
  *
  * Synthetic people only (G-20).
  */
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
@@ -52,6 +55,7 @@ import { buildGraph, truncate } from './harness';
 import { addLesson } from './lesson-fixture';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { FakeStripe } from './fake-stripe';
+import { TemplateService } from '@communication/notifications/template.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -96,6 +100,18 @@ function addDays(date: string, n: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 }
 const at = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+/**
+ * A future booking `inDays` from today, at 08:00 UTC (10:00 or 11:00 in Cairo): a
+ * fixed time of day, never "now + n days". The weekly-slot test below materializes a
+ * lesson every evening at 23:15 Cairo (and Mondays at 21:00) for a teacher that other
+ * families share, so a booking at "now + n days" hit the teacher's no-double-booking
+ * rule (409 LESSON_TEACHER_BUSY) whenever the suite ran between about 22:45 and 23:45
+ * Cairo time -- seen in CI on 2026-11-06 at 20:53 UTC.
+ */
+function bookingAt(inDays: number): { startsAt: string; endsAt: string } {
+  const start = Date.parse(`${addDays(new Date().toISOString().slice(0, 10), inDays)}T08:00:00Z`);
+  return { startsAt: new Date(start).toISOString(), endsAt: new Date(start + HOUR / 2).toISOString() };
+}
 
 /** Enforcement as if it had been switched on before the test (go-live recorded, announcements done). */
 async function switchedOnBefore() {
@@ -173,6 +189,31 @@ async function addSubscription(childId: string, lessonsIncluded: number, startsO
   return r;
 }
 
+/** A standing lesson package for the child (8 lessons), for an instalment to name (R-4, D-2). */
+async function lessonPackage(childId: string): Promise<string> {
+  await addSubscription(childId, 8);
+  const pkg = await g.prisma.learnerSubscription.findFirstOrThrow({
+    where: { learnerId: childId, voidedAt: null }, orderBy: { createdAt: 'desc' }, select: { id: true },
+  });
+  return pkg.id;
+}
+
+/** An instalment of the child's lesson package: the only kind an overdue one locks with (D-2). */
+async function packageInstalment(familyId: string, childId: string, label: string, firstDueDate: string) {
+  const r = await http(m.operationsManager.subject, 'POST', `/families/${familyId}/instalments`, {
+    label, amountMinor: 5000, firstDueDate, learnerId: childId, lessonSubscriptionId: await lessonPackage(childId),
+  });
+  expect(r.status).toBe(201);
+  return g.prisma.familyInstalment.findFirstOrThrow({ where: { familyId, label } });
+}
+
+/** A lesson the Teachers department books: the one thing a lock still refuses. */
+async function book(childId: string, inDays: number) {
+  return http(m.teachersManager.subject, 'POST', '/lessons', {
+    learnerId: childId, ...bookingAt(inDays),
+  });
+}
+
 beforeAll(async () => {
   process.env.SUBSCRIPTION_LOCK_ENFORCED = 'true';
   await g.prisma.$connect();
@@ -238,6 +279,18 @@ afterAll(async () => {
 });
 
 describe('PD-30 over HTTP', () => {
+  it('future bookings are at a fixed time of day, clear of the weekly-slot lessons, whenever the suite runs', () => {
+    const cairo = (iso: string) =>
+      new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+    for (const n of [3, 4, 5, 6, 9, 11, 12]) {
+      const { startsAt, endsAt } = bookingAt(n);
+      expect(Date.parse(startsAt)).toBeGreaterThan(Date.now() + (n - 1) * 24 * HOUR); // still days ahead
+      expect(Date.parse(endsAt) - Date.parse(startsAt)).toBe(HOUR / 2);
+      // Far from the slots the weekly-slot test materializes (21:00 and 23:15 Cairo).
+      expect(cairo(startsAt) >= '09:00' && cairo(endsAt) <= '12:00').toBe(true);
+    }
+  });
+
   it('the ledger: billing readers read it, recorders add and void, only three roles grant exceptions', async () => {
     const { child, teacher, parent, supervisor } = family();
     expect((await http(null, 'GET', `/learners/${child.id}/subscription`)).status).toBe(401);
@@ -299,7 +352,7 @@ describe('PD-30 over HTTP', () => {
     expect(actions).toEqual(expect.arrayContaining(['subscription.added', 'subscription.voided', 'subscription_exception.revoked']));
   });
 
-  it('lessons used up: Lesson N of M, two grace lessons, then the group locks for the parent and the teacher only', async () => {
+  it('lessons used up: Lesson N of M, two grace lessons, then only new bookings pause -- the chat stays open', async () => {
     const { child, teacher, parent, supervisor, groupId, directId, f } = family();
     await addSubscription(child.id, 3);
     // PD-15's package is now the ledger's: shown from it, no longer typed.
@@ -310,7 +363,7 @@ describe('PD-30 over HTTP', () => {
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) ids.push(await pastLesson(child.id));
     const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: at(5 * 24 * HOUR), endsAt: at(5 * 24 * HOUR + HOUR / 2),
+      learnerId: child.id, ...bookingAt(5),
     });
     expect(future.status).toBe(201);
 
@@ -344,33 +397,38 @@ describe('PD-30 over HTTP', () => {
     await report(teacher.subject, ids[4]!);
     expect(await access(child.id)).toMatchObject({ state: 'locked', reasons: ['balance'], balance: -2, graceLeft: 0 });
 
-    // Read-only for the parent and the teacher -- messages, reactions, calls.
-    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
-    expect((await send(teacher.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    // The chat stays open (owner, 2026-11-06): the parent and the teacher write,
+    // react, delete for everyone and call in the group, exactly as staff do.
+    expect((await send(parent.subject, groupId)).status).toBe(201);
+    const teacherSent = await send(teacher.subject, groupId);
+    expect(teacherSent.status).toBe(201);
     const staffSent = await send(supervisor.subject, groupId);
     expect(staffSent.status).toBe(201);
-    expect((await http(parent.subject, 'POST', `/conversations/${groupId}/messages/${staffSent.json.id}/reactions`, { emoji: '👍' })).code)
-      .toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
-    const capability = await http(parent.subject, 'GET', `/conversations/${groupId}/call-capability`);
-    expect(capability.json).toMatchObject({ canCall: false, code: CommErrorCode.SUBSCRIPTION_LOCKED });
-    expect((await http(teacher.subject, 'GET', `/conversations/${groupId}/call-capability`)).json.canCall).toBe(false);
-    // The parent's direct chat with the supervisor is never locked.
+    expect((await http(parent.subject, 'POST', `/conversations/${groupId}/messages/${staffSent.json.id}/reactions`, { emoji: '👍' })).status)
+      .toBe(201);
+    expect((await http(teacher.subject, 'POST', `/conversations/${groupId}/messages/${staffSent.json.id}/reactions`, { emoji: '👍' })).status)
+      .toBe(201);
+    expect((await http(teacher.subject, 'DELETE', `/conversations/${groupId}/messages/${teacherSent.json.id}`)).status).toBeLessThan(300);
+    expect((await http(parent.subject, 'GET', `/conversations/${groupId}/call-capability`)).json).toMatchObject({ canCall: true });
+    expect((await http(teacher.subject, 'GET', `/conversations/${groupId}/call-capability`)).json).toMatchObject({ canCall: true });
     expect((await send(parent.subject, directId)).status).toBe(201);
 
-    // The banner: the child and the reason for the parent and staff; only the child for the teacher.
+    // The conversation still names the locked child (the reason for the parent
+    // and staff, only the child for the teacher), and is read-only for nobody:
+    // an app built before 2026-11-06 keeps its composer.
     const asParent = await http(parent.subject, 'GET', `/conversations/${groupId}`);
     expect(asParent.json.paymentLock).toEqual({
-      readOnly: true, canPay: true, children: [{ id: child.id, name: child.name, reasons: ['balance'], overdue: null }],
+      readOnly: false, canPay: true, children: [{ id: child.id, name: child.name, reasons: ['balance'], overdue: null }],
     });
     expect((await http(teacher.subject, 'GET', `/conversations/${groupId}`)).json.paymentLock).toEqual({
-      readOnly: true, canPay: false, children: [{ id: child.id, name: child.name }],
+      readOnly: false, canPay: false, children: [{ id: child.id, name: child.name }],
     });
     expect((await http(supervisor.subject, 'GET', `/conversations/${groupId}`)).json.paymentLock.readOnly).toBe(false);
     expect((await http(parent.subject, 'GET', `/conversations/${directId}`)).json.paymentLock).toBeNull();
 
     // No new lesson for a locked child -- not even from the Teachers department.
     const refused = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: at(6 * 24 * HOUR), endsAt: at(6 * 24 * HOUR + HOUR / 2),
+      learnerId: child.id, ...bookingAt(6),
     });
     expect(refused.code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
 
@@ -385,22 +443,14 @@ describe('PD-30 over HTTP', () => {
     expect(locked[0]!.payload).toMatchObject({ learnerId: child.id, reasons: ['balance'] });
     expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_locked', familyId: f.id } })).toBeGreaterThan(0);
 
-    // The lesson that had not started is held for payment; the teacher's Schedule says so.
+    // D-1 (owner, 2026-11-06): the lesson already on the calendar goes ahead.
+    // The hold stops only the materializer (no new regular lessons).
     expect(await access(child.id)).toMatchObject({ held: true });
-    const held = await g.prisma.lesson.findUniqueOrThrow({ where: { id: future.json.id } });
-    expect(held).toMatchObject({ outcome: 'suspended', outcomeByKind: 'system', outcomeBy: null, outcomeNote: 'subscription' });
-    // PD-46: the hold's raw UPDATE announces what it suspended, in its own
-    // transaction -- `paused`, at the revision it produced -- and leaves
-    // nothing of it for the sweep.
-    const pausedSignal = await g.prisma.outboxEvent.findMany({ where: { idempotencyKey: `lesson:${held.id}:${held.revision}:paused` } });
-    expect(pausedSignal).toHaveLength(1);
-    expect(await g.prisma.lessonChangeUnannounced.count({ where: { lessonId: held.id } })).toBe(0);
-    // The teacher's Schedule says "suspended" -- nothing financial reaches a teacher; staff read why.
+    const kept = await g.prisma.lesson.findUniqueOrThrow({ where: { id: future.json.id } });
+    expect(kept).toMatchObject({ outcome: null });
+    expect(await g.prisma.outboxEvent.count({ where: { idempotencyKey: { startsWith: `lesson:${kept.id}:`, endsWith: ':paused' } } })).toBe(0);
     const asTeacher = (await http(teacher.subject, 'GET', '/lessons')).json.lessons.find((l: any) => l.id === future.json.id);
-    expect(asTeacher).toMatchObject({ outcome: 'suspended', outcomeNote: null });
-    expect(asTeacher).not.toHaveProperty('suspendedFor');
-    const asStaff = (await http(m.teachersManager.subject, 'GET', `/lessons?learnerId=${child.id}`)).json.lessons.find((l: any) => l.id === future.json.id);
-    expect(asStaff).toMatchObject({ outcome: 'suspended', suspendedFor: 'payment' });
+    expect(asTeacher).toMatchObject({ outcome: null });
     expect(PAID_OUTCOMES).not.toContain('suspended');
 
     // Nothing to pay yet: "Request renewal" instead, once a day; the supervisor and Sales hear of it.
@@ -456,7 +506,7 @@ describe('PD-30 over HTTP', () => {
     expect(ledger.voidedAt).not.toBeNull();
   });
 
-  it('an instalment overdue since go-live locks; one due before go-live is only listed; an exception lets the child go on; paying unlocks', async () => {
+  it('a lesson-package instalment overdue since go-live pauses bookings; one due before go-live, or naming no package, never does; an exception lets the child go on; paying unlocks', async () => {
     const { child, parent, groupId, f } = family();
     // Due before go-live: listed, never locks.
     await setGoLive(addDays(today(), -3));
@@ -480,7 +530,9 @@ describe('PD-30 over HTTP', () => {
     expect(await access(child.id)).toMatchObject({ state: 'locked', reasons: ['overdue'], overdueInstalmentId: due.id, balance: 24 });
     // The plan credited its lessons when it was created.
     expect(await g.prisma.learnerSubscription.count({ where: { learnerId: child.id, source: 'instalment_plan', voidedAt: null } })).toBe(1);
-    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    expect(due.lessonSubscriptionId).not.toBeNull();
+    expect((await send(parent.subject, groupId)).status).toBe(201); // the chat stays open
+    expect((await book(child.id, 4)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
     expect((await http(parent.subject, 'GET', `/conversations/${groupId}`)).json.paymentLock.children[0]).toMatchObject({
       reasons: ['overdue'], overdue: { label: due.label, dueDate: addDays(today(), -1) },
     });
@@ -495,7 +547,7 @@ describe('PD-30 over HTTP', () => {
     });
     expect(exc.status).toBe(201);
     expect(exc.json.standing).toMatchObject({ state: 'open', excepted: ['overdue'] });
-    expect((await send(parent.subject, groupId)).status).toBe(201);
+    expect((await book(child.id, 4)).status).toBe(201);
     const excused = (await http(parent.subject, 'GET', '/me/billing')).json.subscriptions.find((s: any) => s.child.id === child.id);
     expect(excused).toMatchObject({ state: 'open', lockReasons: [] });
     expect(JSON.stringify(excused)).not.toMatch(/except/i);
@@ -505,18 +557,51 @@ describe('PD-30 over HTTP', () => {
     // Paying the instalment unlocks at once.
     expect((await http(m.operationsManager.subject, 'POST', `/instalments/${due.id}/payment`, { paidOn: today(), method: 'cash' })).status).toBe(201);
     expect(await access(child.id)).toMatchObject({ state: 'open', reasons: [] });
-    expect((await send(parent.subject, groupId)).status).toBe(201);
+    expect((await book(child.id, 5)).status).toBe(201);
+  });
+
+  it('D-2: an overdue instalment that names no lesson package, or a voided one, never pauses lessons', async () => {
+    const { child, f } = family();
+    await setGoLive(addDays(today(), -60));
+    // Not a lesson package's instalment (R-4: not payable in the app either): listed, never locks.
+    const loose = await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Loose', amountMinor: 5000, firstDueDate: addDays(today(), -5), learnerId: child.id,
+    });
+    expect(loose.status).toBe(201);
+    // A family-wide one (no child) is not a lesson package's either.
+    expect((await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Family-wide', amountMinor: 5000, firstDueDate: addDays(today(), -5),
+    })).status).toBe(201);
+    expect(await access(child.id)).toMatchObject({ state: 'open', reasons: [], overdueInstalmentId: null });
+    const [{ lock }] = await g.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(`select chat.learner_lesson_lock($1::uuid) as lock`, child.id);
+    expect(lock).toBeNull();
+    expect((await book(child.id, 3)).status).toBe(201);
+    const listed = await http(m.operationsManager.subject, 'GET', '/instalments');
+    expect(listed.json.items.filter((i: any) => i.family.id === f.id).map((i: any) => i.status)).toEqual(['overdue', 'overdue']);
+
+    // A lesson package's instalment, overdue: locks. Voiding the package (staff) takes the lock away.
+    const inst = await packageInstalment(f.id, child.id, 'Package', addDays(today(), -2));
+    expect(await access(child.id)).toMatchObject({ state: 'locked', reasons: ['overdue'], overdueInstalmentId: inst.id });
+    expect((await book(child.id, 4)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    expect((await http(m.superAdmin.subject, 'POST', `/subscriptions/${inst.lessonSubscriptionId}/void`, { reason: 'Entered twice' })).status).toBe(201);
+    expect(await access(child.id)).toMatchObject({ state: 'open', reasons: [] });
+
+    // A row that names the child's package but no child (the R-4 trigger allows it): it locks
+    // that child, matched through the package.
+    const pkg = await lessonPackage(child.id);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.family_instalment (family_id, learner_id, label, amount_minor, currency, due_date, created_by, lesson_subscription_id)
+       values ($1::uuid, null, 'No child named', 5000, 'EGP', chat.pd030_today() - 2, $2::uuid, $3::uuid)`,
+      f.id, m.operationsManager.id, pkg);
+    expect(await access(child.id)).toMatchObject({ state: 'locked', reasons: ['overdue'] });
   });
 
   it('the sweep and a payment arriving together leave one state and one announcement', async () => {
     const { child, groupId, f } = family();
     await setGoLive(addDays(today(), -60));
-    expect((await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
-      label: 'Race', amountMinor: 5000, firstDueDate: addDays(today(), -2), learnerId: child.id,
-    })).status).toBe(201);
+    const inst = await packageInstalment(f.id, child.id, 'Race', addDays(today(), -2));
     await effects.sweep();
     expect(await access(child.id)).toMatchObject({ state: 'locked', held: true });
-    const inst = await g.prisma.familyInstalment.findFirstOrThrow({ where: { familyId: f.id, label: 'Race' } });
 
     const [, paid] = await Promise.all([
       effects.sweep(),
@@ -536,7 +621,7 @@ describe('PD-30 over HTTP', () => {
     expect(await cards(groupId, 'subscription_unlocked')).toHaveLength(1);
   });
 
-  it('holds: no lesson materialized while held, suspended ones not owed, the unlock re-materializes without a duplicate', async () => {
+  it('holds (D-1): booked lessons go ahead, no lesson is materialized while held, the unlock materializes again without a duplicate', async () => {
     const { child, teacher, f } = family();
     const scheduling = app.get(SchedulingService);
     const stats = app.get(StatsService);
@@ -563,33 +648,42 @@ describe('PD-30 over HTTP', () => {
     };
     const scheduledBefore = await scheduled();
 
-    // Locked (overdue): held -- every lesson that had not started is suspended for payment.
+    // Locked (overdue): held. Every lesson already on the calendar stays booked (D-1).
     await setGoLive(addDays(today(), -60));
-    await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
-      label: 'Hold', amountMinor: 5000, firstDueDate: addDays(today(), -1), learnerId: child.id,
-    });
+    const inst = await packageInstalment(f.id, child.id, 'Hold', addDays(today(), -1));
     await effects.sweep();
-    expect(await standing()).toBe(0);
-    const suspended = await g.prisma.lesson.count({ where: { learnerId: child.id, outcome: 'suspended', outcomeByKind: 'system' } });
-    expect(suspended).toBe(before);
-    expect(await scheduled()).toBe(scheduledBefore - before); // not owed, not counted
+    expect(await access(child.id)).toMatchObject({ state: 'locked', held: true });
+    expect(await standing()).toBe(before);
+    expect(await g.prisma.lesson.count({ where: { learnerId: child.id, outcome: 'suspended' } })).toBe(0);
+    expect(await scheduled()).toBe(scheduledBefore);
+    // A new weekly time agreed while held: the materializer makes none of its lessons.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.learner_schedule_slot (organization_id, learner_id, teacher_id, weekday, start_minute, duration_minutes, timezone, valid_from, created_by)
+       values ($1::uuid, $2::uuid, $3::uuid, 1, 21 * 60, 30, $4, $5::date, $6::uuid)`,
+      orgId, child.id, teacher.id, tz, addDays(today(), 1), m.teachersManager.id,
+    );
     await scheduling.materialize();
-    expect(await standing()).toBe(0); // nothing materialized while held
+    expect(await standing()).toBe(before); // nothing materialized while held
+    // The Schedule still shows the next start of each booked weekly time (D-1); the new
+    // time, with nothing booked, has none while held.
+    const slotsHeld = await scheduling.currentSlots(child.id);
+    const bookedNext = slotsHeld.filter((x: any) => x.nextStartsAt !== null);
+    expect(bookedNext.length).toBe(7);
+    expect(slotsHeld.find((x: any) => x.start === '21:00')?.nextStartsAt ?? null).toBeNull();
 
-    // Paid: released and materialized again -- one standing lesson per slot and start, every time.
-    const inst = await g.prisma.familyInstalment.findFirstOrThrow({ where: { familyId: f.id, label: 'Hold' } });
+    // Paid: released and materialized again -- the new time's lessons appear, one per slot and start.
     await http(m.operationsManager.subject, 'POST', `/instalments/${inst.id}/payment`, { paidOn: today(), method: 'cash' });
     await effects.sweep();
     await scheduling.materialize();
     await effects.sweep();
-    expect(await standing()).toBe(before);
+    expect(await access(child.id)).toMatchObject({ state: 'open', held: false });
+    expect(await standing()).toBeGreaterThan(before);
     const dupes = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
       `select count(*)::int as n from (select schedule_slot_id, starts_at from chat.lesson
          where learner_id = $1::uuid and outcome is null and schedule_slot_id is not null
          group by 1, 2 having count(*) > 1) d`, child.id);
     expect(dupes[0]!.n).toBe(0);
-    expect(await scheduled()).toBe(scheduledBefore);
-    // The Schedule shows each time once: the held copies are history.
+    // The Schedule shows each time once.
     const list = (await http(m.teachersManager.subject, 'GET', `/lessons?learnerId=${child.id}`)).json.lessons.filter((l: any) => l.startsAt > at(0));
     expect(list.filter((l: any) => l.suspendedFor === 'payment')).toHaveLength(0);
     expect(new Set(list.map((l: any) => l.startsAt)).size).toBe(list.length);
@@ -598,9 +692,7 @@ describe('PD-30 over HTTP', () => {
   it('with enforcement off: the state is still computed and shown; nothing is refused or announced; holds are released', async () => {
     const { child, parent, teacher, groupId, f } = family();
     await setGoLive(addDays(today(), -60));
-    await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
-      label: 'Off', amountMinor: 5000, firstDueDate: addDays(today(), -1), learnerId: child.id,
-    });
+    const inst = await packageInstalment(f.id, child.id, 'Off', addDays(today(), -1));
     await effects.sweep();
     expect(await access(child.id)).toMatchObject({ state: 'locked', held: true });
 
@@ -612,7 +704,7 @@ describe('PD-30 over HTTP', () => {
       expect((await send(teacher.subject, groupId)).status).toBe(201);
       expect((await http(parent.subject, 'GET', `/conversations/${groupId}`)).json.paymentLock).toBeNull();
       expect((await http(parent.subject, 'GET', '/me/billing')).json.subscriptions.find((s: any) => s.child.id === child.id).state).toBe('locked');
-      const inst = await g.prisma.familyInstalment.findFirstOrThrow({ where: { familyId: f.id, label: 'Off' } });
+      expect((await book(child.id, 3)).status).toBe(201);
       await http(m.operationsManager.subject, 'POST', `/instalments/${inst.id}/payment`, { paidOn: today(), method: 'cash' });
       await effects.sweep();
       expect(await cards(groupId, 'subscription_unlocked')).toHaveLength(0);
@@ -669,17 +761,15 @@ describe('PD-30 over HTTP', () => {
     expect(await g.prisma.learnerSubscription.count({ where: { requestId: req.json.request.id, voidedAt: null } })).toBe(0);
   });
 
-  it('fails closed: a stale or missing state row never opens a locked group; a group with no child rows covers its family', async () => {
+  it('fails closed: a stale or missing state row never lets a locked child be booked; a group with no child rows covers its family', async () => {
     const { child, parent, groupId, f } = family();
     await setGoLive(addDays(today(), -60));
     const lesson = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: at(11 * 24 * HOUR), endsAt: at(11 * 24 * HOUR + HOUR / 2),
+      learnerId: child.id, ...bookingAt(11),
     });
     expect(lesson.status).toBe(201);
-    await http(m.operationsManager.subject, 'POST', `/families/${f.id}/instalments`, {
-      label: 'Stale', amountMinor: 5000, firstDueDate: addDays(today(), -1), learnerId: child.id,
-    });
-    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    await packageInstalment(f.id, child.id, 'Stale', addDays(today(), -1));
+    expect((await book(child.id, 12)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
     // PD-31's move picker asks the same lock (SchedulingService.lockOf), and only while enforced.
     expect((await http(parent.subject, 'GET', `/lessons/${lesson.json.id}/move-slots`)).json).toMatchObject({ locked: 'overdue', slots: [] });
     process.env.SUBSCRIPTION_LOCK_ENFORCED = 'off';
@@ -690,9 +780,9 @@ describe('PD-30 over HTTP', () => {
     }
     // The worker is not running; the stored row says open (stale), then disappears.
     await g.prisma.$executeRawUnsafe(`update chat.learner_access set state = 'open', reasons = '{}' where learner_id = $1::uuid`, child.id);
-    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    expect((await book(child.id, 12)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
     await g.prisma.$executeRawUnsafe(`delete from chat.learner_access where learner_id = $1::uuid`, child.id);
-    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    expect((await book(child.id, 12)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
     const [{ lock }] = await g.prisma.$queryRawUnsafe<Array<{ lock: string | null }>>(`select chat.learner_lesson_lock($1::uuid) as lock`, child.id);
     expect(lock).toBe('overdue');
     // A request role learns only about children it may see: with no session identity, nothing.
@@ -707,7 +797,7 @@ describe('PD-30 over HTTP', () => {
       await tx.$executeRawUnsafe(`delete from chat.conversation_learner where conversation_id = $1::uuid`, groupId);
     });
     expect(await g.prisma.conversationLearner.count({ where: { conversationId: groupId } })).toBe(0);
-    expect((await send(parent.subject, groupId)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+    expect((await send(parent.subject, groupId)).status).toBe(201); // the chat stays open
     expect((await http(parent.subject, 'GET', `/conversations/${groupId}`)).json.paymentLock.children.map((c: any) => c.id)).toContain(child.id);
   });
 
@@ -736,6 +826,73 @@ describe('PD-30 over HTTP', () => {
     expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_locked', familyId: f.id, recipientId: m.families.find((x) => x.id === f.id)!.children.find((c) => c.id === child.id)!.supervisorId } })).toBe(1);
   });
 
+  it('while locked (D-1, D-3): booked lessons go ahead, both chats work, calls ring and are answered, the teacher learns nothing financial, the parent the reason', async () => {
+    const { f, child, teacher, supervisor, parent, groupId, directId } = family();
+    // Booked BEFORE the lock: one already held (to be reported), one ahead.
+    const held = await pastLesson(child.id);
+    const booked = await http(m.teachersManager.subject, 'POST', '/lessons', { learnerId: child.id, ...bookingAt(10) });
+    expect(booked.status).toBe(201);
+    const aheadBefore = await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.json.id } });
+
+    await setGoLive(addDays(today(), -60));
+    await packageInstalment(f.id, child.id, 'Term · 2/3', addDays(today(), -2));
+    await effects.sweep();
+    await effects.sweep(); // the second pass holds the materializer
+    expect(await access(child.id)).toMatchObject({ state: 'locked', reasons: ['overdue'], held: true });
+
+    // 1. Lessons already booked are unchanged and go ahead: the teacher reports the held one.
+    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.json.id } })).toMatchObject({
+      outcome: null, startsAt: aheadBefore.startsAt, endsAt: aheadBefore.endsAt, teacherId: aheadBefore.teacherId,
+    });
+    await report(teacher.subject, held);
+    expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: held } })).outcome).not.toBeNull();
+    // Only a NEW booking is refused.
+    expect((await book(child.id, 4)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+
+    // 2. The parent-teacher group and the parent-supervisor chat work both ways.
+    for (const who of [parent, teacher, supervisor]) expect((await send(who.subject, groupId)).status).toBe(201);
+    expect((await send(parent.subject, directId)).status).toBe(201);
+    expect((await send(supervisor.subject, directId)).status).toBe(201);
+    for (const who of [parent, teacher]) {
+      expect((await http(who.subject, 'GET', `/conversations/${groupId}/messages`)).status).toBe(200);
+    }
+    expect((await http(parent.subject, 'GET', `/conversations/${directId}/messages`)).status).toBe(200);
+
+    // 3. Calls are started AND received: the callee is rung (call.incoming, a participant
+    //    row) and answers, and gets a media token -- each way round.
+    for (const [caller, callee] of [[parent, teacher], [teacher, parent]] as const) {
+      const started = await http(caller.subject, 'POST', '/calls', { conversationId: groupId });
+      expect(started.status).toBe(201);
+      const callId: string = started.json.callId;
+      expect(await g.prisma.callParticipant.findFirst({ where: { callId, actorId: callee.id } })).not.toBeNull();
+      const rung = await g.prisma.outboxEvent.findMany({ where: { type: 'call.incoming' } });
+      expect(rung.some((e) => (e.payload as { callId?: string }).callId === callId)).toBe(true);
+      expect((await http(callee.subject, 'POST', `/calls/${callId}/accept`)).status).toBeLessThan(300);
+      expect((await http(callee.subject, 'POST', `/calls/${callId}/token`)).status).toBeLessThan(300);
+      expect((await http(caller.subject, 'POST', `/calls/${callId}/token`)).status).toBeLessThan(300);
+      expect((await g.prisma.call.findUniqueOrThrow({ where: { id: callId } })).status).toBe('active');
+      expect((await http(caller.subject, 'POST', `/calls/${callId}/end`)).status).toBeLessThan(300);
+    }
+
+    // 4. The teacher: no reason, no amount, no pay flag, no financial card, no push.
+    const asTeacher = await http(teacher.subject, 'GET', `/conversations/${groupId}`);
+    expect(asTeacher.json.paymentLock).toEqual({ readOnly: false, canPay: false, children: [{ id: child.id, name: child.name }] });
+    const financial = /overdue|instalment|used up|Subscriptions|Term · 2\/3|5000|متأخر|القسط|انتهت|الاشتراكات/i;
+    const teacherThread = (await http(teacher.subject, 'GET', `/conversations/${groupId}/messages`)).json;
+    expect(JSON.stringify(teacherThread)).not.toMatch(financial);
+    expect((await http(teacher.subject, 'GET', `/conversations/${directId}`)).status).toBeGreaterThanOrEqual(400);
+    expect(await g.prisma.notification.count({ where: { recipientId: teacher.id, templateKey: { startsWith: 'subscription_' } } })).toBe(0);
+
+    // 5. The parent: the reason, the instalment, and the way to pay.
+    const asParent = await http(parent.subject, 'GET', `/conversations/${groupId}`);
+    expect(asParent.json.paymentLock).toMatchObject({
+      readOnly: false, canPay: true,
+      children: [{ id: child.id, name: child.name, reasons: ['overdue'], overdue: { label: 'Term · 2/3' } }],
+    });
+    const pushed = await g.prisma.notification.findFirstOrThrow({ where: { recipientId: parent.id, templateKey: 'subscription_locked', familyId: f.id } });
+    expect(String((pushed.variables as Record<string, unknown>).reason)).toMatch(/overdue|متأخر/);
+  });
+
   it('switching enforcement on: go-live recorded once, every child already in grace or locked is told, holds start on the next pass', async () => {
     const { child, teacher, groupId, directId } = family();
     process.env.SUBSCRIPTION_LOCK_ENFORCED = 'false';
@@ -744,7 +901,7 @@ describe('PD-30 over HTTP', () => {
       await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('subscription.enforced_since', 'subscription.announced_at', 'subscription.overdue_from')`);
       await addSubscription(child.id, 1);
       const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
-        learnerId: child.id, startsAt: at(9 * 24 * HOUR), endsAt: at(9 * 24 * HOUR + HOUR / 2),
+        learnerId: child.id, ...bookingAt(9),
       });
       expect(future.status).toBe(201);
       futureId = future.json.id;
@@ -764,11 +921,61 @@ describe('PD-30 over HTTP', () => {
     expect(await cards(directId, 'subscription_locked')).toHaveLength(1);
     expect(await access(child.id)).toMatchObject({ held: false });
     expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: futureId } })).toMatchObject({ outcome: null });
-    // The next pass holds; a third changes nothing and announces nothing again.
+    // The next pass holds (the materializer only: the booked lesson goes ahead, D-1);
+    // a third changes nothing and announces nothing again.
     await effects.sweep();
     expect(await access(child.id)).toMatchObject({ held: true });
-    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: futureId } })).toMatchObject({ outcome: 'suspended' });
+    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: futureId } })).toMatchObject({ outcome: null });
     await effects.sweep();
     expect(await cards(groupId, 'lessons_paused')).toHaveLength(1);
+  });
+  it('D-3 (owner, 2026-11-06): the pushes say only NEW lessons pause, in Arabic and English; rollback and re-apply', async () => {
+    const templates = new TemplateService(g.prisma);
+    const render = (key: string, locale: 'ar' | 'en', variables: Record<string, string>) =>
+      templates.render(key, locale, variables);
+    expect(await render('subscription_locked', 'en', { learner: 'Adam', reason: 'an instalment is overdue' })).toEqual({
+      title: 'Jawwid',
+      body: 'New lessons for Adam are paused: an instalment is overdue. Booked lessons go ahead. Renew in Subscriptions.',
+    });
+    expect(await render('subscription_locked', 'ar', { learner: 'آدم', reason: 'قسط متأخر' })).toEqual({
+      title: 'جَوِّد',
+      body: 'توقّف حجز حصص جديدة لـآدم: قسط متأخر. الحصص المحجوزة تُقام في موعدها. جدّدوا الاشتراك من «الاشتراكات».',
+    });
+    expect(await render('subscription_unlocked', 'en', { learner: 'Adam' }))
+      .toEqual({ title: 'Jawwid', body: 'New lessons for Adam are back on the schedule. Thank you.' });
+    expect(await render('subscription_unlocked', 'ar', { learner: 'آدم' }))
+      .toEqual({ title: 'جَوِّد', body: 'عادت الحصص الجديدة لـآدم إلى الجدول. شكرًا لكم.' });
+
+    // The rollback brings back version 1 (the PD-30 texts); applying the migration again
+    // restores version 2. Both run here from the files themselves, as an operator would.
+    const VERSION = '20261106170000_chat_pd030_d3_push_wording';
+    const root = join(__dirname, '../../../..');
+    const run = async (file: string) => {
+      const statements = readFileSync(join(root, file), 'utf8')
+        .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
+        .split(/;\s*(?:\n|$)/).map((x) => x.trim()).filter(Boolean);
+      await g.prisma.$transaction(async (tx) => {
+        for (const sql of statements) await tx.$executeRawUnsafe(sql);
+      });
+    };
+    const ledger = () => g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*)::bigint AS n FROM chat.schema_migrations WHERE version = ${VERSION}`;
+    expect(Number((await ledger())[0]!.n)).toBe(1);
+    try {
+      await run(`db/rollback/${VERSION}.down.sql`);
+      expect(Number((await ledger())[0]!.n)).toBe(0);
+      expect((await render('subscription_locked', 'en', { learner: 'Adam', reason: 'an instalment is overdue' }))!.body)
+        .toBe("Adam's lessons are paused: an instalment is overdue. Renew in Subscriptions.");
+      expect((await render('subscription_unlocked', 'ar', { learner: 'آدم' }))!.body).toBe('عادت حصص آدم. شكرًا لكم.');
+    } finally {
+      await run(`supabase/migrations/${VERSION}.sql`);
+      await g.prisma.$executeRawUnsafe(`INSERT INTO chat.schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, VERSION);
+    }
+    expect(Number((await ledger())[0]!.n)).toBe(1);
+    expect((await render('subscription_locked', 'ar', { learner: 'آدم', reason: 'قسط متأخر' }))!.body)
+      .toBe('توقّف حجز حصص جديدة لـآدم: قسط متأخر. الحصص المحجوزة تُقام في موعدها. جدّدوا الاشتراك من «الاشتراكات».');
+    expect((await render('subscription_unlocked', 'en', { learner: 'Adam' }))!.body).toBe('New lessons for Adam are back on the schedule. Thank you.');
+    // Applying it twice changes nothing (one row per key, locale and version).
+    await run(`supabase/migrations/${VERSION}.sql`);
+    expect(await g.prisma.notificationTemplate.count({ where: { key: { in: ['subscription_locked', 'subscription_unlocked'] }, version: 2 } })).toBe(4);
   });
 });

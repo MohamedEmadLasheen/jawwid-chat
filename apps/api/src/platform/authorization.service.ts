@@ -1,7 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, ConversationMember } from '@prisma/client';
-import { COVERAGE_SERVICE, STAFF_SCOPE, SUBSCRIPTION_LOCK } from './tokens';
-import { NO_SUBSCRIPTION_LOCK, type SubscriptionLockReader } from './subscription-lock';
+import { COVERAGE_SERVICE, STAFF_SCOPE } from './tokens';
 import type { CoverageService } from './coverage.service';
 import { NO_STAFF_SCOPE, StaffAccessBasis, type ActsFor, type StaffScope } from './staff-scope';
 import { Actor, isConversationStaff, isFamilyFacingStaff } from './types';
@@ -243,10 +242,6 @@ export class AuthorizationService {
     // PD-8: the staff conversation scope. Defaults to nobody-in-scope, so a
     // construction that forgets it narrows staff access instead of widening it.
     @Optional() @Inject(STAFF_SCOPE) private readonly scope: StaffScope = NO_STAFF_SCOPE,
-    // PD-30: a child's group locked for payment. REQUIRED from the container --
-    // an app without the provider fails to boot rather than run with no lock;
-    // only the positional harness constructions get the no-lock default.
-    @Inject(SUBSCRIPTION_LOCK) private readonly locks: SubscriptionLockReader = NO_SUBSCRIPTION_LOCK,
   ) {}
 
   // ------------------------------------------------------------------
@@ -268,6 +263,15 @@ export class AuthorizationService {
      * caller that does not resolve it cannot open a family channel.
      */
     staffReachesFamily = false,
+    /**
+     * PD-57 (roadmap §6.2): `b` has blocked `a`, the requester -- a blocked
+     * person never opens a direct conversation with the blocker. Resolved by
+     * the caller (platform/blocks.ts). Only ever the blocked person themself:
+     * the staff covering the family's direct conversation are someone else and
+     * are not affected (D-6 exception 4); a manager or the Super Admin cannot
+     * be blocked at all.
+     */
+    blockedByOther = false,
   ): Decision {
     // Tenant first (RT-030). A direct conversation is filed under its two
     // participants' organization, so they must share one -- and an actor in
@@ -327,6 +331,9 @@ export class AuthorizationService {
     // manager, or the super admin. Never an open directory, in either direction.
     if (kinds === 'contact+staff' && !staffReachesFamily) {
       return deny(CommErrorCode.STAFF_OUT_OF_SCOPE, 'this family is outside the staff member\'s charge');
+    }
+    if (blockedByOther) {
+      return deny(CommErrorCode.DIRECT_BLOCKED, 'this person is not available for a direct conversation');
     }
     return allow();
   }
@@ -512,8 +519,9 @@ export class AuthorizationService {
       if (direct) return direct;
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
-      const locked = await this.refusePaymentLock(conv);
-      if (locked) return locked;
+      // PD-30 amendment (owner, 2026-11-06): no payment lock on the chat. A
+      // child locked for payment pauses only new lesson bookings
+      // (LessonService.assertMayBook); the group stays writable and callable.
       return allow(null, Moderation.PUBLISHED); // PD-14: never held for approval
     }
 
@@ -533,9 +541,7 @@ export class AuthorizationService {
       }
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
-      const locked = await this.refusePaymentLock(conv);
-      if (locked) return locked;
-      return allow(null, Moderation.PUBLISHED); // PD-14: never held for approval
+      return allow(null, Moderation.PUBLISHED); // PD-14: never held for approval (no payment lock: see above)
     }
 
     // --- staff ---
@@ -585,35 +591,6 @@ export class AuthorizationService {
     }
 
     return allow(this.modeFor(basis, intent.requestedMode), Moderation.PUBLISHED);
-  }
-
-  /**
-   * PD-30 (2026-10-26). A family or student group with a child locked for
-   * payment -- lessons used up after the grace lessons, or an instalment
-   * overdue, with no exception -- is read-only for the parent and the teacher.
-   * One method called from the contact and teacher branches of canSend, and
-   * so from canCall too: a locked group refuses a message and a call alike.
-   * Staff are never refused (they are not asked), and a DIRECT conversation is
-   * never consulted: the parent's chat with their supervisor stays open.
-   *
-   * Returns a denial, or null when the rule does not apply or enforcement is
-   * off (SUBSCRIPTION_LOCK_ENFORCED). refusePaymentLockFor is the same rule for
-   * the writes that do not go through canSend (a reaction).
-   */
-  async refusePaymentLockFor(actor: Actor, conv: Pick<Conv, 'id' | 'type'>): Promise<Decision | null> {
-    if (actor.kind !== ActorKind.CONTACT && actor.kind !== ActorKind.TEACHER) return null;
-    return this.refusePaymentLock(conv);
-  }
-
-  private async refusePaymentLock(conv: Pick<Conv, 'id' | 'type'>): Promise<Decision | null> {
-    if (conv.type !== ConversationType.FAMILY_GROUP && conv.type !== ConversationType.STUDENT_GROUP) return null;
-    if (!this.locks.enforced) return null;
-    const locked = await this.locks.lockedChildren(conv.id);
-    if (locked.length === 0) return null;
-    return deny(
-      CommErrorCode.SUBSCRIPTION_LOCKED,
-      'PD-30: this group is read-only until the subscription is renewed or the overdue instalment is paid',
-    );
   }
 
   /**

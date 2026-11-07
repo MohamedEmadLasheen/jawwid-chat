@@ -195,7 +195,11 @@ model AuditLog {
   before          Json?
   after           Json?
   reason          String
-  at              DateTime @default(now()) @db.Timestamptz
+  /// The database's now(), never the API host's clock: SQL functions (e.g. the
+  /// PD-43 teacher.created row) write this table too, and a Prisma-side now()
+  /// (millisecond, a different machine's clock) would order rows from the two
+  /// writers by clock skew instead of by time. One clock, one transaction time.
+  at              DateTime @default(dbgenerated("now()")) @db.Timestamptz
   /// PD-21: set when written during a support session (an administrator acting as someone).
   impersonationId String?  @map("impersonation_id") @db.Uuid
 
@@ -498,17 +502,17 @@ model MessageApproval {
 }
 
 model OutboxEvent {
-  id          String    @id @default(uuid()) @db.Uuid
-  type        String
-  payload     Json
-  status      String    @default("pending")
-  attempts    Int       @default(0)
-  lastError   String?   @map("last_error")
-  availableAt DateTime  @default(now()) @map("available_at") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  publishedAt DateTime? @map("published_at") @db.Timestamptz
+  id             String    @id @default(uuid()) @db.Uuid
+  type           String
+  payload        Json
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  availableAt    DateTime  @default(now()) @map("available_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
   /// PD-46: lesson:<id>:<revision>:<change>; unique where not null (partial index in SQL).
-  idempotencyKey String? @map("idempotency_key")
+  idempotencyKey String?   @map("idempotency_key")
 
   @@map("outbox_event")
   @@schema("chat")
@@ -2515,25 +2519,27 @@ model FamilyBilling {
 
 /// What a family owes and has paid. Append-only (chat.guard_family_instalment).
 model FamilyInstalment {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  familyId       String    @map("family_id") @db.Uuid
-  learnerId      String?   @map("learner_id") @db.Uuid
-  planId         String?   @map("plan_id") @db.Uuid
-  label          String
-  amountMinor    BigInt    @map("amount_minor")
-  currency       String
-  dueDate        DateTime  @map("due_date") @db.Date
-  createdBy      String    @map("created_by") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  paidOn         DateTime? @map("paid_on") @db.Date
-  paidMethod     String?   @map("paid_method")
-  paidReference  String?   @map("paid_reference")
-  paidRecordedBy String?   @map("paid_recorded_by") @db.Uuid
-  paidRecordedAt DateTime? @map("paid_recorded_at") @db.Timestamptz
-  voidedAt       DateTime? @map("voided_at") @db.Timestamptz
-  voidedBy       String?   @map("voided_by") @db.Uuid
-  voidReason     String?   @map("void_reason")
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  familyId             String    @map("family_id") @db.Uuid
+  learnerId            String?   @map("learner_id") @db.Uuid
+  planId               String?   @map("plan_id") @db.Uuid
+  /// Store payments policy: the lesson package it pays for; null = not payable in the app (20261106100000).
+  lessonSubscriptionId String?   @map("lesson_subscription_id") @db.Uuid
+  label                String
+  amountMinor          BigInt    @map("amount_minor")
+  currency             String
+  dueDate              DateTime  @map("due_date") @db.Date
+  createdBy            String    @map("created_by") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  paidOn               DateTime? @map("paid_on") @db.Date
+  paidMethod           String?   @map("paid_method")
+  paidReference        String?   @map("paid_reference")
+  paidRecordedBy       String?   @map("paid_recorded_by") @db.Uuid
+  paidRecordedAt       DateTime? @map("paid_recorded_at") @db.Timestamptz
+  voidedAt             DateTime? @map("voided_at") @db.Timestamptz
+  voidedBy             String?   @map("voided_by") @db.Uuid
+  voidReason           String?   @map("void_reason")
 
   @@map("family_instalment")
   @@schema("chat")
@@ -2543,31 +2549,33 @@ model FamilyInstalment {
 /// change (chat.guard_payment_request); 20261022170000_chat_pd027_payments.sql
 /// owns the DDL and the rules.
 model PaymentRequest {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  token           String    @unique
-  familyId        String?   @map("family_id") @db.Uuid
-  trialLessonId   String?   @map("trial_lesson_id") @db.Uuid
-  learnerId       String?   @map("learner_id") @db.Uuid
-  childName       String?   @map("child_name")
-  payerName       String?   @map("payer_name")
-  instalmentId    String?   @map("instalment_id") @db.Uuid
-  purpose         String
-  label           String
-  amountMinor     BigInt    @map("amount_minor")
-  currency        String
-  planMonths      Int?      @map("plan_months") @db.SmallInt
-  periodStart     DateTime? @map("period_start") @db.Date
-  periodEnd       DateTime? @map("period_end") @db.Date
-  expiresAt       DateTime  @map("expires_at") @db.Timestamptz
-  paidAt          DateTime? @map("paid_at") @db.Timestamptz
-  createdBy       String?   @map("created_by") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz
-  cancelledBy     String?   @map("cancelled_by") @db.Uuid
-  cancelReason    String?   @map("cancel_reason")
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String    @map("organization_id") @db.Uuid
+  token                String    @unique
+  familyId             String?   @map("family_id") @db.Uuid
+  trialLessonId        String?   @map("trial_lesson_id") @db.Uuid
+  learnerId            String?   @map("learner_id") @db.Uuid
+  childName            String?   @map("child_name")
+  payerName            String?   @map("payer_name")
+  instalmentId         String?   @map("instalment_id") @db.Uuid
+  purpose              String
+  label                String
+  amountMinor          BigInt    @map("amount_minor")
+  currency             String
+  planMonths           Int?      @map("plan_months") @db.SmallInt
+  periodStart          DateTime? @map("period_start") @db.Date
+  periodEnd            DateTime? @map("period_end") @db.Date
+  expiresAt            DateTime  @map("expires_at") @db.Timestamptz
+  paidAt               DateTime? @map("paid_at") @db.Timestamptz
+  createdBy            String?   @map("created_by") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  cancelledAt          DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledBy          String?   @map("cancelled_by") @db.Uuid
+  cancelReason         String?   @map("cancel_reason")
   /// PD-30: the lessons a subscription / renewal request buys, credited when it is paid in full.
-  lessonsIncluded Int?      @map("lessons_included")
+  lessonsIncluded      Int?      @map("lessons_included")
+  /// Store payments policy: the lesson package a balance request is owed for (20261106100000).
+  lessonSubscriptionId String?   @map("lesson_subscription_id") @db.Uuid
 
   @@map("payment_request")
   @@schema("chat")
@@ -3067,7 +3075,7 @@ model LessonChangeUnannounced {
 }
 
 // =====================================================================
-// PD-58 (ENG-09) -- BEGIN. 20261104110000_chat_pd058_terms.sql owns the DDL.
+// PD-58 (ENG-09) -- BEGIN. 20261107110000_chat_pd058_terms.sql owns the DDL.
 // Read-only mapping: both tables are written only by their SQL functions
 // (chat.publish_legal_version, chat.accept_legal_documents) and refuse every
 // UPDATE and DELETE. No relation is added to Account, so this block stands
@@ -3112,3 +3120,108 @@ model TermsAcceptance {
 
 // PD-58 (ENG-09) -- END.
 // =====================================================================
+
+/// PD-57 (A-1, A-2): a report of someone else's message or of a person, or the
+/// case a block opens (reason `blocked`). SQL owns the DDL and the rules:
+/// 20261104100000_chat_pd057_moderation.sql (the server's 48-hour clock; the
+/// reporter, target, note and evidence never change; the status only moves
+/// forward; closed only with an answer; never deleted; one unresolved report per
+/// reporter and target). No request role may read it. Evidence is shown only
+/// with moderation.view and never logged.
+model ContentReport {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// contact | teacher | staff
+  reporterKind       String    @map("reporter_kind")
+  /// Null (with reporterAccountId) once the reporter erased their account.
+  reporterId         String?   @map("reporter_id") @db.Uuid
+  reporterAccountId  String?   @map("reporter_account_id") @db.Uuid
+  /// message | person
+  targetKind         String    @map("target_kind")
+  messageId          String?   @map("message_id") @db.Uuid
+  conversationId     String?   @map("conversation_id") @db.Uuid
+  /// contact | teacher | staff. For a message report, its author.
+  subjectKind        String    @map("subject_kind")
+  subjectId          String    @map("subject_id") @db.Uuid
+  /// harassment | inappropriate | spam | child_safety | other | blocked (server only)
+  reason             String
+  note               String?
+  evidence           Json      @default("{}")
+  /// urgent (child_safety) | normal. Set by the database from the reason.
+  priority           String    @default("normal")
+  /// open | in_review | actioned | dismissed
+  status             String    @default("open")
+  /// created_at + 24 hours (owner D-1, 2026-11-06), set by the database.
+  dueAt              DateTime  @map("due_at") @db.Timestamptz
+  overdueAt          DateTime? @map("overdue_at") @db.Timestamptz
+  takenBy            String?   @map("taken_by") @db.Uuid
+  takenAt            DateTime? @map("taken_at") @db.Timestamptz
+  /// no_action (dismissed) | message_removed | warned | account_suspended | reassigned
+  resolution         String?
+  resolutionNote     String?   @map("resolution_note")
+  resolvedBy         String?   @map("resolved_by") @db.Uuid
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz
+  answerText         String?   @map("answer_text")
+  reporterAnsweredAt DateTime? @map("reporter_answered_at") @db.Timestamptz
+  /// D-3: the departments whose managers and moderators see this report; set once by the server. Empty: Super Admin only.
+  departmentIds      String[]  @default([]) @map("department_ids") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([organizationId, priority, dueAt])
+  @@index([reporterKind, reporterId, createdAt])
+  @@index([subjectKind, subjectId, createdAt])
+  @@map("content_report")
+  @@schema("chat")
+}
+
+/// PD-57 (A-2): a personal block by a parent (contact) or a teacher; staff never
+/// block. Deleting the row unblocks. SQL owns the DDL and the rules:
+/// 20261104100000_chat_pd057_moderation.sql (unique per pair, never oneself;
+/// the case is set once). The managers told of it are ActorBlockManagerNotice
+/// rows. No request role may read it. Lessons and the administrative channel
+/// are never affected (the API).
+model ActorBlock {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// contact | teacher
+  blockerKind            String   @map("blocker_kind")
+  blockerId              String   @map("blocker_id") @db.Uuid
+  /// The blocker's own signed-in account (checked by the database).
+  blockerAccountId       String   @map("blocker_account_id") @db.Uuid
+  /// contact | teacher | staff
+  blockedKind            String   @map("blocked_kind")
+  blockedId              String   @map("blocked_id") @db.Uuid
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// The content_report (target person, the blocker's own) this block opened.
+  caseReportId           String?  @map("case_report_id") @db.Uuid
+
+  @@unique([blockerKind, blockerId, blockedKind, blockedId])
+  @@index([blockedKind, blockedId])
+  @@map("actor_block")
+  @@schema("chat")
+}
+
+/// PD-57, owner decision 2026-11-04: one row per responsible manager told of a
+/// block -- every manager of every supervisor of the family's children, across
+/// departments, once each (unique per block and manager). Insert-only history:
+/// an unblock sets blockId to null and the row stays, tied to the block's case
+/// report. Being told grants the manager nothing (no request role reads it; it
+/// is not a permission). SQL owns the DDL: 20261104100000_chat_pd057_moderation.sql.
+model ActorBlockManagerNotice {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// Null once the block is lifted (or erased); the notice stays.
+  blockId        String?  @map("block_id") @db.Uuid
+  /// The block's case: who blocked whom, kept after the block is gone.
+  caseReportId   String   @map("case_report_id") @db.Uuid
+  managerStaffId String   @map("manager_staff_id") @db.Uuid
+  /// Set by the database.
+  notifiedAt     DateTime @default(now()) @map("notified_at") @db.Timestamptz
+
+  /// Once per case and manager: re-blocking while the case is open tells nobody again.
+  @@unique([caseReportId, managerStaffId])
+  @@index([caseReportId])
+  @@index([managerStaffId, notifiedAt])
+  @@map("actor_block_manager_notice")
+  @@schema("chat")
+}

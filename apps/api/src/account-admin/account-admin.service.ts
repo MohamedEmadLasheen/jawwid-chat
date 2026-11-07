@@ -264,36 +264,59 @@ export class AccountAdminService {
     const reason = requireReason(input.reason);
     await this.authorize(actor, accountId, 'suspend');
 
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      await nameAdministrator(tx, actor);
-      const status = await lockStatus(tx, accountId);
-      if (status === 'suspended') return { changed: false, revoked: 0 };
-      if (status !== 'active') {
-        throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, `a ${status} account cannot be suspended`, 409);
-      }
-      await tx.$queryRaw`
-        SELECT chat.deactivate_principal('account', ${accountId}::uuid, ${`suspended by an administrator: ${reason}`},
-                                         ${actor.actorId}::uuid, 'suspended')::text`;
-      await tx.account.update({ where: { id: accountId }, data: { deactivatedBy: actorAccountId } });
-      const revoked = await this.auth.revokeAccountSessionsInTx(tx, accountId, SUSPENSION_REVOCATION_REASON, {
-        revokedBy: actorAccountId,
-        actorId: actor.actorId,
-      });
-      await this.audit.audit(tx, {
-        actorId: actor.actorId,
-        action: ACCOUNT_AUDIT.SUSPENDED,
-        entity: 'account',
-        entityId: accountId,
-        before: { status: 'active' },
-        after: { status: 'suspended', revokedSessions: revoked },
-        reason,
-      });
-      return { changed: true, revoked };
-    });
-    await this.auth.enforceAccountRevocation(accountId, outcome.revoked > 0);
-    if (outcome.changed) this.log.log(`account ${accountId} suspended by staff ${actor.actorId}`);
+    const outcome = await this.prisma.$transaction((tx) => this.suspendInTx(tx, actor, actorAccountId, accountId, reason));
+    await this.afterSuspend(actor, accountId, outcome);
     const after = await this.loadRow(accountId);
     return this.summary(actor, after, await accountAdminStandingOf(this.prisma, actor), await this.managed(actor, after));
+  }
+
+  /**
+   * PD-57: the suspension's checks, run before a caller's own transaction
+   * (moderation resolves a report and suspends in ONE transaction, so a
+   * resolution that loses a race suspends nobody).
+   */
+  async authorizeSuspend(actor: Actor, accountId: string): Promise<void> {
+    await this.authorize(actor, accountId, 'suspend');
+  }
+
+  /** The suspension's writes, inside the caller's transaction. Call authorizeSuspend first, afterSuspend after commit. */
+  async suspendInTx(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    actorAccountId: string,
+    accountId: string,
+    reason: string,
+  ): Promise<{ changed: boolean; revoked: number }> {
+    await nameAdministrator(tx, actor);
+    const status = await lockStatus(tx, accountId);
+    if (status === 'suspended') return { changed: false, revoked: 0 };
+    if (status !== 'active') {
+      throw new CommError(CommErrorCode.ACCOUNT_ADMIN_STATE, `a ${status} account cannot be suspended`, 409);
+    }
+    await tx.$queryRaw`
+      SELECT chat.deactivate_principal('account', ${accountId}::uuid, ${`suspended by an administrator: ${reason}`},
+                                       ${actor.actorId}::uuid, 'suspended')::text`;
+    await tx.account.update({ where: { id: accountId }, data: { deactivatedBy: actorAccountId } });
+    const revoked = await this.auth.revokeAccountSessionsInTx(tx, accountId, SUSPENSION_REVOCATION_REASON, {
+      revokedBy: actorAccountId,
+      actorId: actor.actorId,
+    });
+    await this.audit.audit(tx, {
+      actorId: actor.actorId,
+      action: ACCOUNT_AUDIT.SUSPENDED,
+      entity: 'account',
+      entityId: accountId,
+      before: { status: 'active' },
+      after: { status: 'suspended', revokedSessions: revoked },
+      reason,
+    });
+    return { changed: true, revoked };
+  }
+
+  /** After the suspension committed: enforce the session revocation. */
+  async afterSuspend(actor: Actor, accountId: string, outcome: { changed: boolean; revoked: number }): Promise<void> {
+    await this.auth.enforceAccountRevocation(accountId, outcome.revoked > 0);
+    if (outcome.changed) this.log.log(`account ${accountId} suspended by staff ${actor.actorId}`);
   }
 
   /**

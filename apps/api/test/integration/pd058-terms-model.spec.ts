@@ -1,5 +1,5 @@
 /**
- * PD-58 (ENG-09) against the real database (migration 20261104110000): the
+ * PD-58 (ENG-09) against the real database (migration 20261107110000, renumbered from 20261104110000): the
  * Terms of Use data model, roadmap 2026-11-03 §7.2.
  *
  *   chat.legal_document_version  the versions the owner publishes; append-only,
@@ -33,7 +33,7 @@ process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwi
 
 jest.setTimeout(120_000);
 
-const MIGRATION = join(__dirname, '../../../../supabase/migrations/20261104110000_chat_pd058_terms.sql');
+const MIGRATION = join(__dirname, '../../../../supabase/migrations/20261107110000_chat_pd058_terms.sql');
 const DOMAIN = 'pd58terms.qa.jawwid.test';
 const prisma = new PrismaService();
 

@@ -25,6 +25,7 @@ import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/certificates/CertificatesPage'
+import { ReportsPage, MODERATION_VIEW_KEYS } from '@/features/moderation/ReportsPage'
 import { LessonAudioPage } from '@/features/lesson-audio/LessonAudioPage'
 import type { Staff } from '@/shared/types/domain'
 import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
@@ -128,6 +129,8 @@ export function AppRoutes() {
         <Route path="/certificates" element={<Area area="certificates"><CertificatesPage /></Area>} />
         {/* PD-48: lesson voice-over review (listen; two different reviewers approve each clip). */}
         <Route path="/lesson-audio" element={<Area area="lesson-audio"><LessonAudioPage /></Area>} />
+        {/* PD-57: the moderation queue; the server decides each request (GET /moderation/reports*). */}
+        <Route path="/moderation" element={<Area area="moderation"><RequirePermission any={MODERATION_VIEW_KEYS}><ReportsPage /></RequirePermission></Area>} />
         <Route path="/teachers/certificates" element={<Navigate to="/certificates?category=student" replace />} />
         {/* PD-26's page: since PD-52 only where its old links land (the two teacher-records pages). */}
         <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />

@@ -45,6 +45,33 @@ if [ -z "${DATABASE_URL:-}" ] && [ -z "${PSQL:-}" ]; then
   exit 2
 fi
 
+# CONNECT FIRST. A connection failure is not a capability answer: reporting it as
+# "cannot grant BYPASSRLS" sends the operator to the provider with the wrong
+# question (it happened, 2026-11-05: a placeholder DATABASE_URL made psql try a
+# local socket). Exit 3 is "nothing was checked"; exit 1 stays "checked, and the
+# provider refuses". psql's message names the host and user, never the password.
+if ! connect_output=$(printf 'select 1;\n' | $PSQL -q -t -A 2>&1); then
+  cat >&2 <<EOF
+
+========================================================================
+PREFLIGHT COULD NOT CONNECT -- nothing was checked
+========================================================================
+
+psql said:
+
+${connect_output}
+
+This is NOT an answer about BYPASSRLS; the database was never reached.
+Check that DATABASE_URL is the real connection string (not a placeholder),
+that a password with @ # / : ? or % in it is percent-encoded, that the URL
+ends in sslmode=require, and that this network can reach the host (an
+IPv4-only network needs the provider's IPv4 endpoint or pooler).
+
+========================================================================
+EOF
+  exit 3
+fi
+
 # A name no migration uses, so a leaked probe role is recognisable. It cannot
 # leak -- the transaction is rolled back -- but naming matters if one ever does.
 PROBE="jawwid_preflight_probe_$$"

@@ -44,10 +44,15 @@
 -- chat_app) may write either table or execute either writer; a signed-in
 -- account reads only its OWN acceptances; nobody but the server reads versions.
 --
--- Erasure: acceptance rows are KEPT (20261102210000's retention header says so).
+-- Erasure: acceptance rows are KEPT with the anonymised account, as the consent
+-- record (chat.erase_account, 20261102210000, anonymises and never deletes).
+-- That migration is applied on main and is not edited; this note is its record.
 --
 -- Idempotent: applying this file again changes nothing.
--- Rollback: db/rollback/20261104110000_chat_pd058_terms.down.sql
+-- Rollback: db/rollback/20261107110000_chat_pd058_terms.down.sql
+--
+-- Slot: 20261107110000. It was 20261104110000 and was renumbered on 2026-11-07
+-- (main had migrations up to 20261106170000; the lead assigned the new slot).
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------

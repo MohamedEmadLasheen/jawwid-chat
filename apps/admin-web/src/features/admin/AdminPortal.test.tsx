@@ -147,7 +147,8 @@ describe('Admin Portal registry and navigation', () => {
     // app/Navigation.test.tsx.)
     // PD-41: plus Certificates under People; PD-48: Lesson audio under More;
     // PD-52: the two teacher-records pages, their own group under People.
-    expect(within(nav).getAllByRole('link')).toHaveLength(32)
+    expect(within(nav).getAllByRole('link')).toHaveLength(33)
+    // PD-57: plus the moderation queue (Reports) under More.
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })
@@ -341,7 +342,7 @@ describe('Conversations', () => {
           // PD-30: a card the system posted carries its own words.
           {
             id: 's3', seq: '3', authorKind: 'system', authorName: null, type: 'card',
-            visibility: 'customer', moderation: 'published', body: "⏸️ Adam's lessons are paused.",
+            visibility: 'customer', moderation: 'published', body: "⏸️ New lessons for Adam are paused for now. Lessons already booked go ahead, and this chat stays open.",
             deleted: false, attachments: 0, createdAt: NOW,
           },
         ],
@@ -351,7 +352,7 @@ describe('Conversations', () => {
 
     expect(await screen.findByText('Student Group created for Learner L')).toBeInTheDocument()
     expect(screen.getByText('System update')).toBeInTheDocument()
-    expect(screen.getByText("⏸️ Adam's lessons are paused.")).toBeInTheDocument()
+    expect(screen.getByText("⏸️ New lessons for Adam are paused for now. Lessons already booked go ahead, and this chat stays open.")).toBeInTheDocument()
     expect(screen.queryByText(/"kind"/)).not.toBeInTheDocument()
   })
 })

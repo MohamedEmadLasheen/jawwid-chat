@@ -208,6 +208,30 @@ class SettingsScreen extends ConsumerWidget {
             const Divider(),
           ],
           // PD-32: Starred messages moved to the Chats screen's "Starred" chip.
+          // PD-57: what the user reported and our answers, in a build with the report route.
+          if (user != null && ref.watch(moderationRepositoryProvider).isAvailable) ...[
+            ListTile(
+              key: const ValueKey('settings-my-reports'),
+              leading: const Icon(Icons.flag_outlined),
+              title: Text(l10n.myReportsTitle),
+              subtitle: Text(l10n.myReportsSubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.myReports),
+            ),
+            const Divider(),
+          ],
+          // PD-57 (WP-2B): the people the user blocked. Staff never block (A-2), so not theirs.
+          if (user != null && user.role != UserRole.sales && ref.watch(blockRepositoryProvider).isAvailable) ...[
+            ListTile(
+              key: const ValueKey('settings-blocked-people'),
+              leading: const Icon(Icons.block),
+              title: Text(l10n.blockedPeopleTitle),
+              subtitle: Text(l10n.blockedPeopleSubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.blockedPeople),
+            ),
+            const Divider(),
+          ],
           // PD-22: the account's time zone, under the same name a phone uses.
           ListTile(
             key: const ValueKey('settings-date-time'),

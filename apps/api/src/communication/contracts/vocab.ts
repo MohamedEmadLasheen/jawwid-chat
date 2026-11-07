@@ -393,11 +393,11 @@ export const CardKind = {
    * the group -- the teacher sees nothing financial.
    */
   SUBSCRIPTION_GRACE: 'subscription_grace',
-  /** PD-30, in the family's direct chat: the child's lessons are paused, and why (lessons used up / instalment overdue). */
+  /** PD-30, in the family's direct chat: the child's NEW lessons are paused, and why (lessons used up / instalment overdue). */
   SUBSCRIPTION_LOCKED: 'subscription_locked',
-  /** PD-30, in the child's group: the lessons are paused -- no reason, no amount (the teacher reads the group). */
+  /** PD-30, in the child's group: new lessons are paused, booked ones go ahead, the chat stays open -- no reason, no amount (the teacher reads the group). */
   LESSONS_PAUSED: 'lessons_paused',
-  /** PD-30, in the child's group: the lessons are back on. */
+  /** PD-30, in the child's group: new lessons are back on the schedule. */
   SUBSCRIPTION_UNLOCKED: 'subscription_unlocked',
   /** PD-30, in the family's direct chat: a parent asked to renew. */
   RENEWAL_REQUESTED: 'subscription_renewal_requested',

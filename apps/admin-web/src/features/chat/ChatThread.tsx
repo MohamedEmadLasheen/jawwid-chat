@@ -736,7 +736,7 @@ export function ChatThread({
         </div>
       )}
 
-      {/* PD-30: read-only for the parent and the teacher; staff still write. */}
+      {/* PD-30: which child is locked and why; the chat stays open (amendment 2026-11-06). */}
       <PaymentLockBanner lock={details.data?.paymentLock} />
 
       {selecting ? (
