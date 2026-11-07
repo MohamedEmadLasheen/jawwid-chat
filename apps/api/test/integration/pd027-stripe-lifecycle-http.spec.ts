@@ -275,6 +275,20 @@ describe('a successful card payment', () => {
     expect(stripe.sessions.get(sessionId)!.input.customerId).toBeNull();
     expect(await g.prisma.stripeCustomer.count({ where: { familyId: f.id } })).toBe(0);
   });
+  it('a family\'s Stripe customer deleted in the Dashboard: the checkout retries as a guest instead of failing', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    expect((await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: request.id })).status).toBe(201);
+    stripe.failNextCheckout = Object.assign(new Error('No such customer'), { type: 'StripeInvalidRequestError', code: 'resource_missing', param: 'customer', statusCode: 400 });
+    const again = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: request.id });
+    expect(again.status).toBe(201);
+    const sessionId = again.json.url.slice(again.json.url.lastIndexOf('/') + 1);
+    expect(stripe.sessions.get(sessionId)!.input).toMatchObject({ customerId: null });
+    expect(stripe.sessions.get(sessionId)!.input.idempotencyKey).toMatch(/:guest$/);
+    // Any other refusal is still a plain 503.
+    stripe.failNextCheckout = Object.assign(new Error('No such price'), { type: 'StripeInvalidRequestError', code: 'resource_missing', param: 'line_items', statusCode: 400 });
+    expect((await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: request.id })).code).toBe(CommErrorCode.PAYMENTS_UNAVAILABLE);
+  });
 });
 
 describe('a payment that fails', () => {
@@ -417,6 +431,28 @@ describe('refunds', () => {
     expect((await webhook(ev)).json.outcome).toBe('refund_not_final');
     expect((await webhook(stripe.chargeRefundedEvent(session.paymentIntentId!))).json.outcome).toBe('already_recorded');
     expect(await g.prisma.paymentRefund.count({ where: { stripeRefundId: refund.id } })).toBe(0);
+  });
+  it('a refund recorded while pending that Stripe then fails is audited and alerted (never silently counted)', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const sessionId = await payByCard(tokenOf(request.link));
+    const session = stripe.complete(sessionId);
+    await webhook(stripe.completedEvent(session));
+    const p = await g.prisma.payment.findUniqueOrThrow({ where: { stripeCheckoutSessionId: sessionId } });
+    const refund = stripe.dashboardRefund(session.paymentIntentId!, 7000, 'pending');
+    const ev = (type: string, status: string) => stripe.signedEvent({
+      id: `evt_test_${type.replace('.', '')}_${randomUUID().slice(0, 8)}`, object: 'event', type, livemode: false, created: Math.floor(Date.now() / 1000),
+      data: { object: { id: refund.id, object: 'refund', amount: 7000, payment_intent: session.paymentIntentId, status, metadata: {} } },
+    });
+    expect((await webhook(ev('refund.created', 'pending'))).json.outcome).toBe('refund_recorded');
+    const failed = ev('refund.failed', 'failed');
+    expect((await webhook(failed)).json.outcome).toBe('refund_failed_after_record');
+    expect((await webhook(failed)).json.outcome).toBe('duplicate');
+    const audits = await g.prisma.auditLog.findMany({ where: { action: 'payment.refund_failed_at_stripe', entityId: f.id } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.after).toMatchObject({ paymentId: p.id, stripeRefundId: refund.id, stripeStatus: 'failed' });
+    // Append-only: the row stands until a person corrects it (documented follow-up).
+    expect(await g.prisma.paymentRefund.count({ where: { stripeRefundId: refund.id } })).toBe(1);
   });
 });
 

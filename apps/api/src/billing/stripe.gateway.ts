@@ -109,7 +109,7 @@ export interface StripeGateway {
   /** The Checkout Session a payment intent belongs to, or null. */
   findCheckoutByPaymentIntent(paymentIntentId: string): Promise<CheckoutSession | null>;
   paymentIntentFacts(paymentIntentId: string): Promise<PaymentIntentFacts>;
-  /** Every refund of a payment intent (newest first, up to 100). */
+  /** Every refund of a payment intent, newest first (all pages). */
   listRefunds(paymentIntentId: string): Promise<RefundFacts[]>;
 }
 
@@ -159,8 +159,9 @@ export class StripeSdkGateway implements StripeGateway {
   }
 
   async listRefunds(paymentIntentId: string): Promise<RefundFacts[]> {
-    const page = await this.requireClient().refunds.list({ payment_intent: paymentIntentId, limit: 100 });
-    return page.data.map(toRefundFacts);
+    // Every page (newest first): a payment may have more than one page of partial refunds.
+    const all = await this.requireClient().refunds.list({ payment_intent: paymentIntentId, limit: 100 }).autoPagingToArray({ limit: 10_000 });
+    return all.map(toRefundFacts);
   }
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutSession> {

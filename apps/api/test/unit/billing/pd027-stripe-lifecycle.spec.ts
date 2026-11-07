@@ -129,6 +129,8 @@ describe('transaction filters', () => {
     [{ limit: '101' }, 'limit'],
     [{ limit: '1.5' }, 'limit'],
     [{ cursor: 'not-a-cursor' }, 'cursor'],
+    // Review finding: a decodable cursor whose id is not a payment's uuid is a 400, never a failed ::uuid cast (500).
+    [{ cursor: Buffer.from('2026-11-07T00:00:00Z|not-a-uuid').toString('base64url') }, 'cursor'],
   ])('refuses %j (400 naming %s)', (query, name) => {
     let err: unknown;
     try {

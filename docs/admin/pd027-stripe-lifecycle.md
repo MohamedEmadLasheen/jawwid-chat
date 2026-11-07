@@ -174,3 +174,120 @@ payment holds the new data, unless exported first).
   second, paid invoice series. "Stripe Invoice ID" therefore does not apply. The Chat invoice number and the
   Stripe charge and payment intent identify a payment.
 - **Jawwid Core:** not read, called or changed.
+- **A refund that Stripe fails after Chat recorded it.** PD-27 records a refund once it is `pending` or
+  `succeeded`, and refund rows are append-only and only add up. If Stripe later reports that refund as
+  `failed` or `canceled` (`refund.updated` or `refund.failed`; rare for cards, for example a closed card
+  account), Chat cannot reverse the row without a schema change that every refund total in the system
+  reads. Decision (2026-11-07, from the independent review): **detect, audit and alert, do not
+  auto-correct**. The event's outcome is `refund_failed_after_record`, an audit row
+  `payment.refund_failed_at_stripe` names the payment and refund, and the API logs an error. Admin shows
+  the outcome in Stripe events. Follow-up: a reversal entry on `chat.payment_refund` (forward-only, with a
+  reason) that the totals subtract.
+
+## 5. Operations: setup, deploy, verify, roll back
+
+Nothing here has been done in staging or production. Every step below is for the owner (or whoever the
+owner authorizes) to run.
+
+### 5.1 Environment
+
+| Variable | Where | |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | API + worker, secret | Unchanged name. Use a **restricted** key (`rk_live_…` in production, `rk_test_…` in staging) with these scopes: Checkout Sessions **write**, Refunds **write**, Customers **write**, PaymentIntents **read**, Charges **read**. The last three are new. Without them, customers are not created and card details and reconciliation are not read, but payments still record. Production refuses a test key (`stripe-config.ts`). |
+| `STRIPE_WEBHOOK_SECRET` | API, secret | Unchanged: the endpoint's `whsec_…`. Production refuses to start without it when a key is set. |
+| `PAYMENT_LINK_BASE_URL` | API | Unchanged. |
+| `STRIPE_RECONCILE_MS` | worker, optional | Reconcile interval. The default is `300000` (5 minutes); `0` turns it off. |
+
+No secret is ever logged, returned or stored by Chat. Configure the secrets only in the platform's secret
+store (`infra/env/manifest.tsv` lists them).
+
+### 5.2 Stripe Dashboard
+
+1. **Developers → Webhooks → Add endpoint**: `https://<api host>/api/v1/stripe/webhook`. Events:
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `checkout.session.expired`, `payment_intent.succeeded`,
+   `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `charge.refunded`.
+   For an existing endpoint, **add** the four new ones: `payment_intent.succeeded`,
+   `payment_intent.payment_failed`, `refund.updated` (if missing) and `charge.refunded`.
+   Do not subscribe `invoice.*` or `customer.subscription.*`: they are harmless (recorded as
+   `ignored_not_chat`) but noise.
+2. Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET`. Staging and production have separate
+   endpoints and separate secrets.
+3. **Developers → API keys → Create restricted key** with the scopes in 5.1.
+4. **Do not delete Stripe Customers that Chat created** (metadata `familyId`). If one is deleted, that
+   family pays as a guest, and the API logs a warning each time.
+5. Stripe Radar, 3-D Secure and payment-method settings stay at Stripe's defaults. Checkout applies them.
+
+### 5.3 Database migration
+
+`supabase/migrations/20261107100000_chat_pd027_stripe_lifecycle.sql` is additive. It adds one table, adds
+nullable or defaulted columns, adds indexes, and replaces `chat.guard_payment` with a superset.
+- Apply through the normal pipeline (`scripts/db/apply.sh` via the deploy workflow), never by hand in
+  production. It takes `lock_timeout = 5s`. The `ALTER TABLE`s on `chat.payment`, `chat.payment_checkout`
+  and `chat.stripe_event` take brief exclusive locks. Columns with a constant default do not rewrite the
+  table on Postgres 11+.
+- Order: the migration first, then the API and worker. Today's code ignores the new columns, so the
+  migration is safe to run before the release.
+- Verified on a private Postgres 17: apply → rollback → apply again, plus `scripts/db/integration-db.sh verify`.
+
+### 5.4 Deploy
+
+Before deploying:
+1. The migration is applied.
+2. The restricted key has the new scopes.
+3. The webhook endpoint has the new events.
+Deploying itself is unchanged. There is no flag to switch on: the reconciler starts with the worker.
+
+### 5.5 Production verification checklist (owner, in test mode first)
+
+Run in **staging with Stripe test mode** first. Test cards: `4242 4242 4242 4242` (succeeds),
+`4000 0000 0000 9995` (insufficient funds), `4000 0000 0000 0069` (expired), `4000 0025 0000 3155` (3-D Secure).
+1. Create a renewal request for a test family. Pay it with 4242 from the link. The payment appears once in
+   Admin → Payments → Transactions with brand and last 4, and the parent's invoice shows the card.
+2. Pay another request with 9995. Card attempts shows the decline (`insufficient_funds`), and the parent's
+   app and the link page say why.
+3. Open a checkout and abandon it. After 45 minutes, the attempt shows as expired.
+4. Refund part of a payment from Admin, then refund the rest from the Stripe Dashboard. Each is recorded
+   once, and the transaction shows "refunded".
+5. Stripe Dashboard → the webhook → **Resend** an old event. Admin → Stripe events shows `duplicate`, and
+   nothing changes.
+6. Disable the webhook endpoint for a few minutes and pay. Within about 15 minutes the worker log shows
+   `stripe reconcile: a paid checkout had no webhook; recorded from Stripe`, and the payment is there
+   once. Re-enable the endpoint: its late delivery shows `already_recorded`.
+7. On one card payment, press **Reconcile with Stripe**. It shows "in sync".
+Then in production, with one small real payment by the owner, refunded afterwards: steps 1, 4 and 7.
+
+### 5.6 Rollback
+
+- **Code:** redeploy the previous release. The old code ignores the new columns and table. Webhook
+  events the old code does not handle (`payment_intent.*`, `charge.refunded`) are answered 200 and
+  `ignored`. Nothing is lost: refunds still arrive as `refund.created`.
+- **Database:** usually unnecessary (additive). If required:
+  `psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107100000_chat_pd027_stripe_lifecycle.down.sql`,
+  **after** the code rollback. It refuses while the new columns hold data, unless that data was exported
+  and `chat.allow_pd027_lifecycle_rollback` is set (see the file). It restores `chat.guard_payment` to
+  20261022170000's body verbatim. Existing payments, refunds and invoices are never touched.
+
+### 5.7 Monitoring and logs
+
+Logs carry event type, outcome, ids and Stripe error categories. They never carry a body, a signature, a
+key, a card number or Stripe's error message. Errors go to Sentry, as before.
+
+| Signal | Meaning | Action |
+|---|---|---|
+| `stripe webhook: rejected, signature did not verify` (warn) | Wrong `STRIPE_WEBHOOK_SECRET`, or a forged call | A burst after a deploy: check the secret |
+| HTTP 5xx on `POST /stripe/webhook` (Stripe Dashboard → webhook → failures) | Database or Stripe unavailable; Stripe retries | Persistent: check the API logs and Sentry (`billing`) |
+| `stripe reconcile: a paid checkout had no webhook; recorded from Stripe` (warn) | A webhook was lost | Occasional is fine; frequent means check the endpoint's events and delivery |
+| `stripe reconcile: payment … differs from Stripe` (warn) | Chat and Stripe disagree after reconciling | Open the payment in Admin and reconcile; escalate if it stays out of sync |
+| `payment.stripe_mismatch` in `chat.audit_log`, outcome `mismatch` | Paid amount or currency differs from what Chat asked | Investigate. It was never recorded as a payment. |
+| outcome `ignored_not_chat` (warn) | Stripe Billing is in use on the account | Nothing in Chat; ask who set it up |
+| outcome `refund_deferred` older than an hour | A refund for a payment Chat never recorded | Admin → Stripe events; find the payment intent in Stripe |
+| `stripe customer not created` / `paying as a guest` (warn) | Customers scope missing, or a customer was deleted | Fix the key scopes |
+
+SQL for operations (read-only):
+```sql
+-- webhook outcomes in the last day
+select outcome, type, count(*) from chat.stripe_event where received_at > now() - interval '1 day' group by 1, 2 order by 3 desc;
+-- card attempts still open after their expiry (the reconciler should clear these within minutes)
+select stripe_session_id, created_at from chat.payment_checkout where status = 'open' and expires_at < now() - interval '15 minutes';
+```

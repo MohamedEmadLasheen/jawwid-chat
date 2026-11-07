@@ -42,6 +42,8 @@ export type WebhookOutcome =
   /** A refund whose payment Chat has not recorded yet (it arrived first): kept, and recorded with the payment. */
   | 'refund_deferred'
   | 'refund_not_final'
+  /** Stripe failed or cancelled a refund Chat had already recorded (as pending): audited and alerted, not reversed. */
+  | 'refund_failed_after_record'
   /** A card was declined on Stripe's page; the attempt stays open (the parent may try again). */
   | 'payment_failed'
   /** Stripe Billing (invoices, subscriptions): Chat opens none (PD-27 / PD-30 are prepaid packages). */
@@ -136,23 +138,33 @@ export class CheckoutService {
     // From the app: checked again just before Stripe is asked (a package voided since).
     if (opts.inApp && !lessons) throw notInApp();
     const sep = opts.returnUrl.includes('?') ? '&' : '?';
-    const customerId = await this.customerFor(fresh);
+    let customerId = await this.customerFor(fresh);
+    const input = {
+      requestId: fresh.id,
+      organizationId: fresh.organizationId,
+      amountMinor: remaining,
+      currency: fresh.currency,
+      productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
+      description: checkoutDescription(fresh, lessons, opts.locale),
+      successUrl: `${opts.returnUrl}${sep}checkout=success`,
+      cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
+      expiresAt: new Date(Date.now() + CHECKOUT_MINUTES * 60_000),
+      locale: opts.locale,
+      idempotencyKey: `checkout:${fresh.id}:${attempts}`,
+    };
     let session: CheckoutSession;
     try {
-      session = await this.stripe.createCheckout({
-        customerId,
-        requestId: fresh.id,
-        organizationId: fresh.organizationId,
-        amountMinor: remaining,
-        currency: fresh.currency,
-        productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
-        description: checkoutDescription(fresh, lessons, opts.locale),
-        successUrl: `${opts.returnUrl}${sep}checkout=success`,
-        cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
-        expiresAt: new Date(Date.now() + CHECKOUT_MINUTES * 60_000),
-        locale: opts.locale,
-        idempotencyKey: `checkout:${fresh.id}:${attempts}`,
-      });
+      try {
+        session = await this.stripe.createCheckout({ ...input, customerId });
+      } catch (e) {
+        // The family's customer was deleted in the Stripe Dashboard: pay as a
+        // guest rather than refuse every card payment of that family.
+        const err = e as { code?: string; param?: string };
+        if (!customerId || err.code !== 'resource_missing' || (err.param && err.param !== 'customer')) throw e;
+        this.log.warn('stripe checkout: the family\'s Stripe customer no longer exists; paying as a guest (do not delete customers Chat created)');
+        customerId = null;
+        session = await this.stripe.createCheckout({ ...input, customerId, idempotencyKey: `${input.idempotencyKey}:guest` });
+      }
     } catch (e) {
       // Stripe's own message never reaches a parent (it can name parameters,
       // and it is English API prose); the category is logged, never the body
@@ -234,6 +246,7 @@ export class CheckoutService {
         return this.intentFailed(meta, event.data.object as Stripe.PaymentIntent);
       case 'refund.created':
       case 'refund.updated':
+      case 'refund.failed':
         return this.refundEvent(meta, toRefundFacts(event.data.object as Stripe.Refund));
       case 'charge.refunded':
         return this.chargeRefunded(meta, event.data.object as Stripe.Charge);
@@ -483,7 +496,14 @@ export class CheckoutService {
    */
   private async recordRefund(meta: EventMeta | null, payment: Payment, refund: RefundFacts): Promise<WebhookOutcome> {
     // Recorded once the refund is on its way; a failed or cancelled one is not money given back.
-    if (refund.status !== 'succeeded' && refund.status !== 'pending') return meta ? this.remember(meta, 'refund_not_final') : 'refund_not_final';
+    if (refund.status !== 'succeeded' && refund.status !== 'pending') {
+      if (!meta) return 'refund_not_final';
+      if (refund.status === 'failed' || refund.status === 'canceled') {
+        const recorded = await this.prisma.paymentRefund.findUnique({ where: { stripeRefundId: refund.id } });
+        if (recorded) return this.refundFailedAfterRecord(meta, payment, refund, recorded.id);
+      }
+      return this.remember(meta, 'refund_not_final');
+    }
     try {
       await this.prisma.$transaction(async (tx) => {
         if (meta) {
@@ -537,6 +557,36 @@ export class CheckoutService {
       throw e;
     }
     return 'refund_recorded';
+  }
+
+  /**
+   * PD-27 records a refund once it is pending, and refund rows only add up (append-only). When
+   * Stripe later fails or cancels one, Chat overstates what went back until a person corrects it:
+   * audited (once, with the event) and logged as an error -- never silently.
+   * docs/admin/pd027-stripe-lifecycle.md §4.
+   */
+  private async refundFailedAfterRecord(meta: EventMeta, payment: Payment, refund: RefundFacts, refundRowId: string): Promise<WebhookOutcome> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const inserted = await tx.stripeEvent.createMany({
+          data: [{ ...meta, organizationId: payment.organizationId, outcome: 'refund_failed_after_record' }],
+          skipDuplicates: true,
+        });
+        if (inserted.count === 0) throw new DuplicateEvent();
+        await this.audit.audit(tx, {
+          action: 'payment.refund_failed_at_stripe',
+          entity: payment.familyId ? 'family' : 'lesson',
+          entityId: payment.familyId ?? (payment.trialLessonId as string),
+          after: { paymentId: payment.id, refundId: refundRowId, stripeRefundId: refund.id, amountMinor: refund.amountMinor, stripeStatus: refund.status },
+          reason: 'Stripe failed a refund Chat recorded as pending; the money was not given back -- correct by hand',
+        });
+      });
+    } catch (e) {
+      if (e instanceof DuplicateEvent) return 'duplicate';
+      throw e;
+    }
+    this.log.error(`stripe refund ${refund.id} failed at Stripe after Chat recorded it (payment ${payment.id}); audited, needs a person`);
+    return 'refund_failed_after_record';
   }
 
   private async markCheckout(meta: EventMeta, sessionId: string, status: 'expired' | 'failed', outcome: WebhookOutcome): Promise<WebhookOutcome> {

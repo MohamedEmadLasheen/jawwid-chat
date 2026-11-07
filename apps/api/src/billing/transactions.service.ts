@@ -376,7 +376,7 @@ export function parseTransactionFilters(query: Record<string, unknown>): Transac
     to,
     familyId,
     q,
-    cursor: parseCursor(query.cursor),
+    cursor: parseCursor(query.cursor, isUuid),
     limit: parseLimit(query.limit),
   };
 }
@@ -543,12 +543,13 @@ export function encodeCursor(at: Date, id: string): string {
   return Buffer.from(`${at.toISOString()}|${id}`, 'utf8').toString('base64url');
 }
 
-export function parseCursor(v: unknown): { at: string; id: string } | null {
+/** `validId`: the id column's own shape (a payment's uuid), so a crafted cursor is a 400, never a failed cast. */
+export function parseCursor(v: unknown, validId: (id: string) => boolean = (id) => /^[A-Za-z0-9_]{1,255}$/.test(id)): { at: string; id: string } | null {
   const s = str(v);
   if (s === null) return null;
   const raw = Buffer.from(s, 'base64url').toString('utf8');
   const [at, id, extra] = raw.split('|');
-  if (extra !== undefined || !at || !id || Number.isNaN(Date.parse(at)) || id.length > 255) throw invalid('cursor');
+  if (extra !== undefined || !at || !id || Number.isNaN(Date.parse(at)) || !validId(id)) throw invalid('cursor');
   return { at, id };
 }
 
