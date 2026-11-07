@@ -45,13 +45,16 @@ export function LegalGate({ staff }: { staff: Staff }) {
   // GET /me/legal is the freshest answer: write it into the session so the
   // guard decides from it (accepted in another tab -> the app; unavailable ->
   // the notice; a changed list -> the new rows). Same shape as /me's block.
-  const fresh = useQuery({ queryKey: ['me', 'legal'], queryFn: legalApi.state, retry: false, staleTime: 0 })
+  // Only an answer NEWER than the session's own is applied: a cached answer from
+  // an earlier visit must never override a fresher /me or 403 (fail closed).
+  // gcTime 0: nothing of this answer outlives the gate.
+  const fresh = useQuery({ queryKey: ['me', 'legal'], queryFn: legalApi.state, retry: false, staleTime: 0, gcTime: 0 })
   useEffect(() => {
     const next = fresh.data
-    if (!next) return
+    if (!next || fresh.dataUpdatedAt <= (queryClient.getQueryState(qk.me)?.dataUpdatedAt ?? 0)) return
     const { state, required, unavailable } = next
     queryClient.setQueryData<Staff | null>(qk.me, (me) => (me ? { ...me, legal: { state, required, unavailable } } : me))
-  }, [fresh.data, queryClient])
+  }, [fresh.data, fresh.dataUpdatedAt, queryClient])
   const documents: LegalDocument[] = staff.legal?.required ?? []
 
   const allTicked = documents.length > 0 && documents.every((d) => ticked[docKey(d)])

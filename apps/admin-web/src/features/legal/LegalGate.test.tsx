@@ -7,6 +7,7 @@ import { legalGateState, parseLegal } from './legal'
 import { api, setTermsRequiredHandler } from '@/core/api/client'
 import { tokenStore } from '@/core/auth/tokens'
 import { qk } from '@/core/api/queryKeys'
+import { createQueryClient } from '@/app/queryClient'
 import type { LegalBlock } from './legal'
 
 const DOCS = [
@@ -226,6 +227,22 @@ describe('the gate', () => {
     mount(REQUIRED)
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     await waitFor(() => expect(calls(/\/auth\/logout$/, 'POST')).toHaveLength(1))
+  })
+})
+
+describe('stale cache (review B-1, with the production query client)', () => {
+  it('a cached /me/legal answer older than the session never overrides it', async () => {
+    const queryClient = createQueryClient()
+    // An earlier visit of the gate cached "accepted" (the user accepted in another tab)...
+    queryClient.setQueryData(['me', 'legal'], ACCEPTED)
+    await new Promise((r) => setTimeout(r, 5))
+    // ...then a newer version is required. /me/legal's refetch has not answered yet.
+    routes['GET /me/legal'] = (() => new Promise(() => {})) as unknown as () => Response
+    routes['GET /me'] = () => json(ME_REQUIRED)
+    renderWithProviders(<LegalGuard><div>APP CONTENT</div></LegalGuard>, { staff: makeStaff({ legal: REQUIRED }), queryClient })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.queryByText('APP CONTENT')).toBeNull()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2)
   })
 })
 
