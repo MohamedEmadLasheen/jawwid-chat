@@ -490,7 +490,7 @@ void main() {
       // Each box is announced with its own label, unticked.
       expect(
         tester.getSemantics(find.bySemanticsLabel(ar.legalAgreeTerms)),
-        containsSemantics(label: ar.legalAgreeTerms, hasCheckedState: true, isChecked: false),
+        isSemantics(label: ar.legalAgreeTerms, hasCheckedState: true, isChecked: false),
       );
       expect(find.bySemanticsLabel(ar.legalGateOpenDocument(ar.legalDocTermsTitle)), findsOneWidget);
 
