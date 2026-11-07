@@ -28,7 +28,7 @@ function on(method: string, pattern: RegExp, handler: Handler) {
 const calls = (method: string, pattern: RegExp) =>
   fetchMock.mock.calls.filter(([u, i]) => pattern.test(String(u)) && ((i as RequestInit)?.method ?? 'GET') === method)
 
-function file(): TeacherFile {
+function file(over: Partial<TeacherFile> = {}): TeacherFile {
   return {
     access: { canEditPersonal: true, canWriteSupervision: true },
     signIn: { status: 'active', canSendCode: false, canGive: false },
@@ -37,6 +37,7 @@ function file(): TeacherFile {
     personal: { fullName: 'Teacher One', phone: null, email: null, joinedOn: null, updatedAt: null, updatedBy: null },
     assignedStudents: [],
     supervision: { complaints: [], monthlyComments: [], daysOff: [] },
+    ...over,
   } as TeacherFile
 }
 const pending = (over: Partial<TeacherDeletionRequest> = {}): TeacherDeletionRequest => ({
@@ -99,6 +100,15 @@ describe('Deletion requested', () => {
     await waitFor(() => expect(calls('POST', /\/deletion-request\/complete$/)).toHaveLength(1))
     expect(JSON.parse(String((calls('POST', /\/deletion-request\/complete$/)[0]![1] as RequestInit).body))).toEqual({ confirm: true })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('an offboarded teacher with a pending request still shows the banner and the action (review of 00ccd748, item 6)', async () => {
+    routes = routes.filter(([pattern]) => !pattern.test('/teacher-files/t-1'))
+    on('GET', /\/teacher-files\/t-1$/, () => json(file({ teacher: { id: 't-1', name: 'Teacher One', isActive: false, leftAt: '2026-11-08T10:00:00.000Z' } } as Partial<TeacherFile>)))
+    on('GET', /\/teacher-files\/t-1\/deletion-request$/, () => json(pending()))
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/teachers/files/t-1' })
+    const banner = await screen.findByRole('region', { name: 'Deletion requested' })
+    expect(within(banner).getByRole('button', { name: 'Close and delete account' })).toBeInTheDocument()
   })
 
   it('a reader who may not complete it sees the banner without the action', async () => {

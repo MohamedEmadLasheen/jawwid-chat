@@ -7,7 +7,7 @@
 -- Work tasks already raised stay (chat.work_task is never deleted).
 --
 -- A request row is the record that a deletion was asked for and when. This file
--- REFUSES while either table holds a row, unless the operator says, in the same
+-- REFUSES while any of its tables holds a row, unless the operator says, in the same
 -- transaction, that the rows were exported and may go:
 --
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107140000_chat_teacher_deletion_request.down.sql
@@ -27,7 +27,7 @@ begin
   if coalesce(current_setting('chat.rollback_discards_deletion_requests', true), '') = 'on' then
     return;
   end if;
-  foreach v_tbl in array array['account_deletion_request', 'account_deletion_reminder'] loop
+  foreach v_tbl in array array['account_deletion_request', 'account_deletion_reminder', 'erased_teacher_handover'] loop
     if to_regclass('chat.' || v_tbl) is not null then
       execute format('select exists (select 1 from chat.%I)', v_tbl) into v_rows;
       if v_rows then
@@ -204,6 +204,7 @@ comment on function chat.erase_account(uuid, text, text[]) is
   'PD-57: the person''s reports are kept, anonymous; their blocks, made and received, are deleted.';
 revoke all on function chat.erase_account(uuid, text, text[]) from public;
 
+drop function if exists chat.erased_teacher_sweep(integer);
 drop function if exists chat.complete_account_deletion_request(uuid, uuid, text);
 drop function if exists chat.account_deletion_request_close(uuid, text, uuid, jsonb);
 drop function if exists chat.cancel_account_deletion_request(uuid);
@@ -215,6 +216,9 @@ drop table if exists chat.account_deletion_request;
 drop function if exists chat.guard_account_deletion_request();
 drop function if exists chat.teacher_deletion_left_open(uuid);
 drop function if exists chat.teacher_deletion_open_items(uuid);
+drop function if exists chat.teacher_payroll_open(uuid);
+drop table if exists chat.erased_teacher_handover;
+drop function if exists chat.guard_erased_teacher_handover();
 delete from chat.notification_template
  where key in ('teacher_deletion_day21', 'teacher_deletion_day28', 'inbox.teacher_deletion_day21', 'inbox.teacher_deletion_day28');
 delete from chat.notification_rule r

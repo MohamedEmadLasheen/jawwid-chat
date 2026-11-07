@@ -94,8 +94,8 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                     ) : undefined
                   }
                 />
-                {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending). */}
-                {data.teacher.isActive && <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />}
+                {/* PD-56 O-3: the teacher asked to delete their account (shown only while pending), offboarded or not. */}
+                <DeletionRequestBanner teacherId={data.teacher.id} name={data.teacher.name} />
                 <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
                 {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
                 {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}

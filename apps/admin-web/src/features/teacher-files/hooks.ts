@@ -65,7 +65,6 @@ export function useReissueFirstLogin(teacherId: string) {
   return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })
 }
 
-/** PD-43: what offboarding would meet. Read fresh each time the dialog opens. */
 /** PD-56 O-3: the teacher's account deletion request (the banner shows a pending one). */
 export function useDeletionRequest(teacherId: string) {
   return useQuery({
@@ -85,6 +84,7 @@ export function useCompleteDeletionRequest(teacherId: string) {
   })
 }
 
+/** PD-43: what offboarding would meet. Read fresh each time the dialog opens. */
 export function useOffboardPreview(teacherId: string) {
   return useQuery({
     queryKey: [...teacherFileKeys.detail(teacherId), 'offboard-preview'],

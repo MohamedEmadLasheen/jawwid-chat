@@ -18,6 +18,12 @@
  *      user", flagged high for the Teachers manager; payroll rows kept
  *   8. fail closed: no request role reaches either table; the guards hold
  *   9. the public page: a teacher with work open gets a request and its date
+ *  10. review of 00ccd748 (lead, 2026-11-07): the payout account outlives a
+ *      forced erasure until the payroll is settled; the 30 days are 720 hours
+ *      in any session time zone; request/cancel cycles are rate-limited; a
+ *      forced erasure ends the weekly times, hands each learner to staff and
+ *      stops the family's reminders; the sweep always ends, and never erases
+ *      before the database's own deadline
  *
  * Fixed instants only (AGENTS.md): a lesson ahead is in 2099; a request made in
  * the past is a fixture at 2026-01-05T09:00Z, and the sweep runs at chosen
@@ -140,6 +146,22 @@ const reminders = (requestId: string, day: 21 | 28) =>
   g.prisma.$queryRaw<Array<{ recipient_id: string }>>`
     SELECT recipient_id::text FROM chat.notification WHERE dedupe_key LIKE ${`teacher_deletion_day${day}:${requestId}:%`} ORDER BY recipient_id`;
 
+/** Payroll of this month: a bonus recorded now. */
+async function openPayroll(teacherId: string) {
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.teacher_pay_adjustment (organization_id, teacher_id, kind, month, amount, currency, reason, created_by)
+     values ($1::uuid, $2::uuid, 'bonus', date_trunc('month', now())::date, 100, 'EGP', 'QA bonus', $3::uuid)`,
+    orgId, teacherId, m.superAdmin.id,
+  );
+}
+async function payoutAccount(teacherId: string) {
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.teacher_payout_account (teacher_id, organization_id, method, details_sealed, key_id, last4, updated_by)
+     values ($1::uuid, $2::uuid, 'bank_transfer', decode(repeat('ab', 40), 'hex'), 'k1', '1234', $3::uuid)`,
+    teacherId, orgId, m.superAdmin.id,
+  );
+}
+
 async function newOrg(tag: string): Promise<string> {
   const id = randomUUID();
   await g.prisma.$executeRawUnsafe(
@@ -260,7 +282,8 @@ describe('O-3: a teacher\'s account deletion request', () => {
     const cancelled = await call(token, 'POST', '/me/account/deletion-request/cancel');
     expect(cancelled).toMatchObject({ status: 200, json: { request: { id: made.id, state: 'cancelled' } } });
     expect(cancelled.json.request.cancelledAt).toEqual(expect.any(String));
-    expect(await tasksOf('teacher_deletion_request', made.id)).toEqual([expect.objectContaining({ state: 'open', source_state: 'withdrawn' })]);
+    // Closed, not left open: removed as withdrawn, by the teacher's cancellation.
+    expect(await tasksOf('teacher_deletion_request', made.id)).toEqual([expect.objectContaining({ state: 'removed', source_state: 'withdrawn', closed_by: t.id })]);
     expect((await audits(made.id)).map((a) => [a.action, a.actor_id])).toEqual([
       ['account_deletion_request.created', t.id],
       ['account_deletion_request.cancelled', t.id],
@@ -282,6 +305,8 @@ describe('O-3: a teacher\'s account deletion request', () => {
   it('5. only in-scope staff complete it: Teachers supervisor, Operations and another academy cannot; the Teachers manager can', async () => {
     const t = await newTeacher('staff');
     const lesson = await lessonAhead(t.id);
+    await openPayroll(t.id);
+    await payoutAccount(t.id);
     const { token: teacher } = await login(t.subject);
     const request = (await call(teacher, 'POST', '/me/account/delete', { password: PASSWORD })).json.request as { id: string };
     const path = `/teacher-files/${t.id}/deletion-request`;
@@ -290,7 +315,7 @@ describe('O-3: a teacher\'s account deletion request', () => {
     const { token: supervisor } = await login(m.teacherSupervisors[0]!.subject);
     expect(await call(supervisor, 'GET', path)).toMatchObject({
       status: 200,
-      json: { request: { id: request.id, state: 'pending' }, leftOpen: { futureLessons: 1, assignedLearners: 0, openPayroll: false }, canComplete: false },
+      json: { request: { id: request.id, state: 'pending' }, leftOpen: { futureLessons: 1, assignedLearners: 0, openPayroll: true }, canComplete: false },
     });
     expect((await call(supervisor, 'POST', `${path}/complete`, { confirm: true })).status).toBe(403);
     const { token: operations } = await login(m.operationsManager.subject);
@@ -320,6 +345,11 @@ describe('O-3: a teacher\'s account deletion request', () => {
     // The lesson ahead stays, on "Deleted user", flagged high for the Teachers manager.
     expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: lesson.id } })).toMatchObject({ teacherId: t.id, outcome: null });
     expect(await tasksOf('teacher_account_deleted', t.id)).toEqual([expect.objectContaining({ assignee_staff_id: m.teachersManager.id, priority: 'high' })]);
+    // Payroll still open: the payout account stays until it is settled, and staff are told.
+    expect(await g.prisma.teacherPayoutAccount.count({ where: { teacherId: t.id } })).toBe(1);
+    expect(await tasksOf('erased_teacher_payroll', t.id)).toEqual([
+      expect.objectContaining({ state: 'open', assignee_staff_id: m.teachersManager.id, priority: 'high' }),
+    ]);
     // Once only.
     expect(await call(manager, 'POST', `${path}/complete`, { confirm: true })).toMatchObject({ status: 409 });
   });
@@ -342,16 +372,8 @@ describe('O-3: a teacher\'s account deletion request', () => {
   it('7. day 21 and day 28 remind once per recipient; at the deadline the worker erases, flagging what is left', async () => {
     const t = await newTeacher('deadline');
     const lesson = await lessonAhead(t.id);
-    await g.prisma.$executeRawUnsafe(
-      `insert into chat.teacher_pay_adjustment (organization_id, teacher_id, kind, month, amount, currency, reason, created_by)
-       values ($1::uuid, $2::uuid, 'bonus', date_trunc('month', now())::date, 100, 'EGP', 'QA bonus', $3::uuid)`,
-      orgId, t.id, m.superAdmin.id,
-    );
-    await g.prisma.$executeRawUnsafe(
-      `insert into chat.teacher_payout_account (teacher_id, organization_id, method, details_sealed, key_id, last4, updated_by)
-       values ($1::uuid, $2::uuid, 'bank_transfer', decode(repeat('ab', 40), 'hex'), 'k1', '1234', $3::uuid)`,
-      t.id, orgId, m.superAdmin.id,
-    );
+    await openPayroll(t.id);
+    await payoutAccount(t.id);
     const id = await pastRequest(t);
 
     // Before day 21: nothing. At day 21: the Teachers manager, once -- a second sweep adds nothing.
@@ -380,15 +402,33 @@ describe('O-3: a teacher\'s account deletion request', () => {
     });
     expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ name: 'Deleted user', isActive: false });
     expect((await login(t.subject)).status).toBe(401);
-    // The lesson ahead stays on "Deleted user", flagged high; payroll rows kept, the payout account gone.
+    // The lesson ahead stays on "Deleted user", flagged high; payroll rows kept, and (payroll open) the payout account too.
     expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: lesson.id } })).toMatchObject({ teacherId: t.id, outcome: null });
     expect(await tasksOf('teacher_account_deleted', t.id)).toEqual([expect.objectContaining({ priority: 'high', assignee_staff_id: m.teachersManager.id })]);
     expect(await g.prisma.teacherPayAdjustment.count({ where: { teacherId: t.id } })).toBe(1);
-    expect(await g.prisma.teacherPayoutAccount.count({ where: { teacherId: t.id } })).toBe(0);
+    expect(await g.prisma.teacherPayoutAccount.count({ where: { teacherId: t.id } })).toBe(1);
+    expect(await tasksOf('erased_teacher_payroll', t.id)).toEqual([expect.objectContaining({ state: 'open', priority: 'high' })]);
     expect(await tasksOf('teacher_deletion_request', id)).toEqual([expect.objectContaining({ state: 'completed' })]);
     expect((await audits(id)).map((a) => [a.action, a.actor_id])).toEqual([['account_deletion_request.completed', null]]);
     // Nothing more, ever: the sweep finds nothing pending; no reminder after completion.
-    expect(await sweep(new Date(DEADLINE.getTime() + 86_400_000))).toEqual({ reminded: 0, erased: 0 });
+    expect(await sweep(new Date(DEADLINE.getTime() + 86_400_000))).toMatchObject({ reminded: 0, erased: 0 });
+
+    // The payroll is settled -- its month is past (time moved on: the row's month is set back, triggers off) --
+    // and the next sweep deletes the payout account and completes the staff task. Payroll rows stay.
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      await tx.$executeRawUnsafe(
+        `update chat.teacher_pay_adjustment set month = (date_trunc('month', now()) - interval '3 months')::date where teacher_id = $1::uuid`, t.id,
+      );
+    });
+    expect(await sweep(new Date(DEADLINE.getTime() + 2 * 86_400_000))).toMatchObject({ payrollSettled: 1 });
+    expect(await g.prisma.teacherPayoutAccount.count({ where: { teacherId: t.id } })).toBe(0);
+    expect(await g.prisma.teacherPayAdjustment.count({ where: { teacherId: t.id } })).toBe(1);
+    expect(await tasksOf('erased_teacher_payroll', t.id)).toEqual([expect.objectContaining({ state: 'completed', closed_by: m.teachersManager.id })]);
+    // The staff-completed teacher of case 5 still has payroll open: their account stays.
+    expect(await g.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM chat.teacher_payout_account p JOIN chat.teacher te ON te.id = p.teacher_id
+       WHERE te.organization_id = ${orgId}::uuid AND te.name = 'Deleted user'`).toEqual([{ n: 1 }]);
   });
 
   it('7b. a worker down over day 21 sends only day 28, never both at once', async () => {
@@ -468,4 +508,127 @@ describe('O-3: a teacher\'s account deletion request', () => {
     expect(html).not.toContain('contact the academy');
     expect((await login(t.subject)).status).toBe(200);
   });
+  it('10. the 30 days are 720 hours in any session time zone, across a daylight-saving change', async () => {
+    const t = await newTeacher('dst');
+    // 2026-03-10 to 2026-04-09 crosses Europe/London's change of 2026-03-29: 30 local days are 719 hours there.
+    const insert = (deadline: string) =>
+      g.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`set local timezone = 'Europe/London'`);
+        await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+        await tx.$executeRawUnsafe(
+          `insert into chat.account_deletion_request (organization_id, account_id, teacher_id, requested_at, deadline_at, state, cancelled_at)
+           values ($1::uuid, $2::uuid, $3::uuid, '2026-03-10T09:00:00Z'::timestamptz, ${deadline}, 'cancelled', '2026-03-11T09:00:00Z')`,
+          orgId, t.accountId, t.id,
+        );
+      });
+    await expect(insert(`'2026-03-10T09:00:00Z'::timestamptz + interval '30 days'`)).rejects.toThrow(/account_deletion_request_deadline|23514/);
+    await insert(`'2026-03-10T09:00:00Z'::timestamptz + interval '720 hours'`);
+    // And the guard stamps 720 hours whatever the session's zone.
+    await lessonAhead(t.id);
+    const [{ r }] = await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local timezone = 'America/New_York'`);
+      return tx.$queryRawUnsafe<Array<{ r: { requestedAt: string; deadlineAt: string } }>>(`select chat.request_account_deletion($1::uuid) as r`, t.accountId);
+    });
+    expect(Date.parse(r.deadlineAt) - Date.parse(r.requestedAt)).toBe(720 * 3_600_000);
+    await g.prisma.$queryRawUnsafe(`select chat.cancel_account_deletion_request($1::uuid)::text`, t.accountId);
+  });
+
+  it('11. request-then-cancel cycles are rate-limited, both ways (no clearing on success)', async () => {
+    const t = await newTeacher('cycle');
+    await lessonAhead(t.id);
+    const { token } = await login(t.subject);
+    // The per-account limit is 10 in 15 minutes for each route.
+    for (let i = 0; i < 10; i++) {
+      expect((await call(token, 'POST', '/me/account/delete', { password: PASSWORD })).status).toBe(200);
+      expect((await call(token, 'POST', '/me/account/deletion-request/cancel')).status).toBe(200);
+    }
+    expect(await call(token, 'POST', '/me/account/delete', { password: PASSWORD })).toMatchObject({ status: 429, code: 'COMMON.RATE_LIMITED' });
+    expect((await call(token, 'POST', '/me/account/deletion-request/cancel')).status).toBe(429);
+    expect((await requestsOf(t.accountId)).map((r) => r.state)).toEqual(Array(10).fill('cancelled'));
+  });
+
+  it('12. a forced erasure ends the weekly times, hands each learner to staff with their lessons, and stops the family\'s reminders', async () => {
+    const t = await newTeacher('handover');
+    const family = m.families[2]!;
+    const child = family.children[0]!;
+    await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${t.id}'::uuid where id = '${child.id}'::uuid`);
+    const [{ id: slotId }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.learner_schedule_slot (organization_id, learner_id, teacher_id, weekday, start_minute, duration_minutes, timezone, valid_from, created_by)
+       values ($1::uuid, $2::uuid, $3::uuid, 1, 600, 30, 'Africa/Cairo', '2026-01-05', $4::uuid) returning id::text as id`,
+      orgId, child.id, t.id, m.superAdmin.id,
+    );
+    const weekly = await g.prisma.lesson.create({
+      data: { organizationId: orgId, kind: 'regular', learnerId: child.id, teacherId: t.id, startsAt: AHEAD, endsAt: new Date(AHEAD.getTime() + 1_800_000), createdByKind: 'staff', createdBy: m.superAdmin.id },
+    });
+    // The family's 24-hour reminder, already queued.
+    const reminderKey = `lesson_parent_t24h:${weekly.id}:${family.parent.id}`;
+    await g.prisma.notification.create({
+      data: { organizationId: orgId, dedupeKey: reminderKey, ruleKey: null, templateKey: 'lesson_reminder_tomorrow', eventType: 'lesson_scheduled', recipientId: family.parent.id, scheduledAt: new Date(AHEAD.getTime() - 86_400_000) },
+    });
+    await pastRequest(t);
+
+    await sweep(DEADLINE);
+    expect((await requestsOf(t.accountId))[0]).toMatchObject({ state: 'completed', completed_via: 'deadline' });
+    // The weekly time is ended; the lesson is not cancelled, and its family is reminded of nothing.
+    const slot = await g.prisma.learnerScheduleSlot.findUniqueOrThrow({ where: { id: slotId } });
+    expect(slot.validTo).not.toBeNull();
+    const lesson = await g.prisma.lesson.findUniqueOrThrow({ where: { id: weekly.id } });
+    expect(lesson).toMatchObject({ teacherId: t.id, outcome: null });
+    expect(lesson.remindersScheduledAt).not.toBeNull();
+    expect(await g.prisma.notification.findUniqueOrThrow({ where: { dedupeKey: reminderKey } })).toMatchObject({ status: 'cancelled' });
+    // One task per learner: needs a new teacher, with the lesson to reassign or cancel.
+    const handovers = await g.prisma.$queryRaw<Array<{ id: string; learner_id: string; lesson_ids: string[]; slot_ids: string[] }>>`
+      SELECT id::text, learner_id::text, lesson_ids::text[] AS lesson_ids, slot_ids::text[] AS slot_ids
+        FROM chat.erased_teacher_handover WHERE teacher_id = ${t.id}::uuid`;
+    expect(handovers).toEqual([{ id: expect.any(String), learner_id: child.id, lesson_ids: [weekly.id], slot_ids: [slotId] }]);
+    expect(await tasksOf('learner_needs_teacher', handovers[0]!.id)).toEqual([
+      expect.objectContaining({ state: 'open', assignee_staff_id: m.teachersManager.id, priority: 'high', due_at: AHEAD }),
+    ]);
+    // Fail closed, like the request.
+    await expect(g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local role chat_app`);
+      await tx.$queryRawUnsafe(`select count(*) from chat.erased_teacher_handover`);
+    })).rejects.toThrow(/permission denied/);
+
+    // Staff give the learner a new teacher and the lesson leaves the erased teacher: the task completes itself.
+    const next = await newTeacher('next');
+    await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${next.id}'::uuid where id = '${child.id}'::uuid`);
+    await g.prisma.$executeRawUnsafe(`update chat.lesson set teacher_id = $1::uuid, reminders_scheduled_at = null where id = $2::uuid`, next.id, weekly.id);
+    expect(await sweep(new Date(DEADLINE.getTime() + 86_400_000))).toMatchObject({ handoversSettled: 1 });
+    expect(await tasksOf('learner_needs_teacher', handovers[0]!.id)).toEqual([expect.objectContaining({ state: 'completed', closed_by: m.teachersManager.id })]);
+  });
+
+  it('13. a fresh request swept by a worker whose clock is past its deadline stays pending (the database clock decides)', async () => {
+    const t = await newTeacher('clock');
+    await lessonAhead(t.id);
+    const { token } = await login(t.subject);
+    const request = (await call(token, 'POST', '/me/account/delete', { password: PASSWORD })).json.request as { id: string; deadlineAt: string };
+    expect(await sweep(new Date(Date.parse(request.deadlineAt) + 1_000))).toMatchObject({ erased: 0 });
+    expect((await requestsOf(t.accountId))[0]).toMatchObject({ id: request.id, state: 'pending' });
+    expect((await login(t.subject)).status).toBe(200);
+  });
+
+  it('14. the sweep always ends: 51 due-on-the-worker-clock requests that all fail', async () => {
+    // 51 fresh requests (more than one batch of 50); a worker clock in 2099 thinks every one is due,
+    // the database refuses each (not due yet). Before the fix the sweep re-queried the same batch forever.
+    await g.prisma.$executeRawUnsafe(`
+      with a as (
+        insert into chat.account (organization_id, subject, kind, status, is_active)
+        select $1::uuid, 'teacher.many' || i || '@${DOMAIN}', 'teacher', 'active', true from generate_series(1, 51) i
+        returning id, subject
+      ), t as (
+        insert into chat.teacher (organization_id, name, account_id, is_active)
+        select $1::uuid, 'teacher_many', a.id, true from a returning id, account_id
+      )
+      insert into chat.account_deletion_request (account_id, teacher_id, deadline_at)
+      select t.account_id, t.id, now() from t`, orgId);
+    const started = Date.now();
+    const out = await sweep(new Date('2099-06-01T00:00:00Z'));
+    expect(out).toMatchObject({ erased: 0 });
+    expect(Date.now() - started).toBeLessThan(60_000);
+    const [{ n }] = await g.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM chat.account_deletion_request q JOIN chat.teacher te ON te.id = q.teacher_id
+       WHERE te.name = 'teacher_many' AND q.state = 'pending'`;
+    expect(n).toBe(51);
+  }, 90_000);
 });

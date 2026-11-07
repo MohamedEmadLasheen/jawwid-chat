@@ -126,11 +126,20 @@ describe('PD-56: an erased account leaves work for staff', () => {
     expect(sourceLink(task('teacher_deletion_request', 'r1', {}))).toBeNull()
   })
 
+  it('a forced erasure hands each learner to staff, and keeps open payroll in front of them (PD-56 O-3 review)', () => {
+    const l = task('learner_needs_teacher', 'h1', { learnerName: 'child_x', learnerId: 'l7', count: 2 })
+    expect(titleOf(l, en, fmt)).toBe('Find a new teacher for child_x: their teacher’s account was deleted (2 lessons ahead to move or cancel)')
+    expect(sourceLink(l)).toBe('/students/l7')
+    const p = task('erased_teacher_payroll', 't9', { teacherId: 't9' })
+    expect(titleOf(p, en, fmt)).toBe('Payroll still open for a deleted teacher: pay what is owed (their bank details are deleted once it is settled)')
+    expect(sourceLink(p)).toBe('/teachers/files/t9')
+  })
+
   it('both have their label and title in both languages, with no placeholder left unfilled', () => {
-    for (const type of ['family_without_account', 'teacher_account_deleted', 'teacher_deletion_request'] as const) {
+    for (const type of ['family_without_account', 'teacher_account_deleted', 'teacher_deletion_request', 'learner_needs_teacher', 'erased_teacher_payroll'] as const) {
       expect(SOURCE_LABEL[type].en && SOURCE_LABEL[type].ar).toBeTruthy()
       expect(SOURCE_TITLE[type].ar.match(/\{\w+\}/g)?.sort()).toEqual(SOURCE_TITLE[type].en.match(/\{\w+\}/g)?.sort())
-      expect(titleOf(task(type, 's1', { familyName: 'F', teacherName: 'T', teacherId: 's1', learnerId: 'l1', count: 1 }), en, fmt)).not.toMatch(/[{}]/)
+      expect(titleOf(task(type, 's1', { familyName: 'F', teacherName: 'T', learnerName: 'L', teacherId: 's1', learnerId: 'l1', count: 1 }), en, fmt)).not.toMatch(/[{}]/)
     }
   })
 })

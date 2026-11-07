@@ -42,16 +42,24 @@
 -- WHAT A FORCED ERASURE (staff completion, or the deadline) DOES WITH WHAT IS OPEN
 --   Future lessons: chat.lesson.teacher_id is NOT NULL, so they cannot be left
 --       unassigned. They stay on the anonymised teacher ("Deleted user"),
---       untouched (never cancelled: cancelling tells families and loses the
---       booking). They are flagged: left_open counts them, and the Teachers
---       manager's teacher_account_deleted notice is raised high and shows the
---       students and lessons still on the teacher.
+--       never cancelled (cancelling tells families and loses the booking).
+--       The family is reminded of none of them any more (queued reminders
+--       cancelled, the lessons marked), and each learner's lessons are in that
+--       learner's learner_needs_teacher task (chat.erased_teacher_handover).
+--   Weekly times (chat.learner_schedule_slot): ended today, so no new lesson
+--       is made with the erased teacher.
 --   Assigned students: stay assigned to the anonymised teacher (moving a
---       student is a staff decision with its own rules); flagged the same way.
+--       student is a staff decision with its own rules); one
+--       learner_needs_teacher task each, high, for the Teachers manager. The
+--       teacher_account_deleted notice is raised high too.
 --   Payroll rows (held lessons, pay adjustments): KEPT, unchanged, attributed
---       to "Deleted user", as every financial record of the erasure is. The
---       payout account goes, as the erasure already defines: the staff were
---       told at the request and reminded at days 21 and 28 to settle first.
+--       to "Deleted user", as every financial record of the erasure is.
+--   Payout account: kept while chat.teacher_payroll_open, with an
+--       erased_teacher_payroll task for the Teachers manager; the worker
+--       (chat.erased_teacher_sweep) deletes it once the payroll is settled
+--       (lead's decision on review, 2026-11-07: bank details are kept only
+--       until the wages owed are paid). With no payroll open it goes at once,
+--       as before.
 --   Retention is unchanged: what the erasure keeps and deletes is 20261102210000's.
 --
 -- FAIL CLOSED: RLS on, no policy, no grant to any request role on either
@@ -83,7 +91,9 @@ create table if not exists chat.account_deletion_request (
   -- What was still open at completion: { futureLessons, assignedLearners, openPayroll }.
   left_open       jsonb,
   cancelled_at    timestamptz,
-  constraint account_deletion_request_deadline check (deadline_at = requested_at + interval '30 days'),
+  -- 30 days of 24 hours: never a calendar month of the session's zone, which a
+  -- daylight-saving change makes 719 or 721 hours (review of 00ccd748).
+  constraint account_deletion_request_deadline check (deadline_at - requested_at = interval '720 hours'),
   constraint account_deletion_request_completed_shape check (
     (state = 'completed') = (completed_at is not null and completed_via is not null)
     and (completed_by is null or completed_via = 'staff')
@@ -93,7 +103,7 @@ create table if not exists chat.account_deletion_request (
 
 comment on table chat.account_deletion_request is
   'PD-56 O-3: a teacher asked to delete their account while lessons, students or payroll were open. Deleted by '
-  'deadline_at (requested_at + 30 days) at the latest: by staff, by the worker, or by the holder once nothing is open. '
+  'deadline_at (requested_at + 720 hours) at the latest: by staff, by the worker, or by the holder once nothing is open. '
   'Never deleted. No request role reads it.';
 
 create unique index if not exists account_deletion_request_one_pending
@@ -129,7 +139,7 @@ begin
     new.state := 'pending';
     -- The database's clock, never the caller's.
     new.requested_at := now();
-    new.deadline_at := now() + interval '30 days';
+    new.deadline_at := now() + interval '720 hours';
     new.completed_at := null;
     new.completed_by := null;
     new.completed_via := null;
@@ -213,8 +223,83 @@ revoke all on chat.account_deletion_reminder from public, anon, authenticated, c
 revoke all on function chat.guard_account_deletion_reminder() from public;
 
 -- ---------------------------------------------------------------------------
+-- 2b. chat.erased_teacher_handover (review of 00ccd748, item 7)
+-- ---------------------------------------------------------------------------
+-- A forced erasure (staff, or the deadline) of a teacher with learners: one row
+-- per learner, made in the erasure's transaction -- the weekly times it ended
+-- and the lessons ahead it left on "Deleted user" (never cancelled). Each is the
+-- source of a PD-47 task, learner_needs_teacher, for the Teachers manager; the
+-- task completes itself (chat.erased_teacher_sweep) once the learner has another
+-- teacher and none of those lessons is still open on the erased one.
+-- Insert-only; ids only. Trial lessons (no learner) are not here: they remind
+-- only their teacher, and the teacher_account_deleted notice counts them.
+create table if not exists chat.erased_teacher_handover (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references chat.organization (id),
+  teacher_id      uuid not null references chat.teacher (id),
+  learner_id      uuid not null references chat.learner (id),
+  lesson_ids      uuid[] not null default '{}',
+  slot_ids        uuid[] not null default '{}',
+  created_at      timestamptz not null default now(),
+  constraint erased_teacher_handover_once unique (teacher_id, learner_id)
+);
+
+comment on table chat.erased_teacher_handover is
+  'PD-56 O-3: a learner whose teacher was erased by a deletion request with work still open: the weekly times '
+  'ended and the lessons ahead left for staff to move or cancel. Insert-only. No request role reads it.';
+
+create or replace function chat.guard_erased_teacher_handover()
+returns trigger
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+begin
+  if tg_op <> 'INSERT' then
+    raise exception 'a handover is never changed or deleted' using errcode = 'check_violation';
+  end if;
+  if not chat.caller_is_server_side() then
+    raise exception 'only the server records a handover' using errcode = 'insufficient_privilege';
+  end if;
+  new.created_at := now();
+  if not exists (select 1 from chat.teacher t join chat.learner l on l.organization_id = t.organization_id
+                  where t.id = new.teacher_id and l.id = new.learner_id and t.organization_id = new.organization_id) then
+    raise exception 'a handover is of a teacher and a learner of its organization' using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists erased_teacher_handover_is_coherent on chat.erased_teacher_handover;
+create trigger erased_teacher_handover_is_coherent
+  before insert or update or delete on chat.erased_teacher_handover
+  for each row execute function chat.guard_erased_teacher_handover();
+
+alter table chat.erased_teacher_handover enable row level security;
+revoke all on chat.erased_teacher_handover from public, anon, authenticated, chat_app;
+revoke all on function chat.guard_erased_teacher_handover() from public;
+
+-- ---------------------------------------------------------------------------
 -- 3. What blocks an immediate deletion (the gate 20261102210000 wrote inline)
 -- ---------------------------------------------------------------------------
+-- Payroll of this month or last is still open on a teacher: a held lesson since
+-- the start of last month, or a pay adjustment for last month or later. Nothing
+-- in the schema marks a month paid, so this is the one definition of "open"
+-- (the gate, a request's open items, and when an erased teacher's payout
+-- account may go).
+create or replace function chat.teacher_payroll_open(p_teacher uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select exists (select 1 from chat.lesson l
+                  where l.teacher_id = p_teacher and l.outcome is not null
+                    and l.starts_at >= date_trunc('month', now()) - interval '1 month')
+      or exists (select 1 from chat.teacher_pay_adjustment a
+                  where a.teacher_id = p_teacher and a.month >= (date_trunc('month', now()) - interval '1 month')::date);
+$$;
+revoke all on function chat.teacher_payroll_open(uuid) from public;
+
 create or replace function chat.teacher_deletion_open_items(p_account uuid)
 returns text[]
 language plpgsql
@@ -233,12 +318,7 @@ begin
     if exists (select 1 from chat.learner l where l.teacher_id = r.id) and not 'assigned_learners' = any (v_items) then
       v_items := v_items || 'assigned_learners'::text;
     end if;
-    if (exists (select 1 from chat.lesson l
-                 where l.teacher_id = r.id and l.outcome is not null
-                   and l.starts_at >= date_trunc('month', now()) - interval '1 month')
-        or exists (select 1 from chat.teacher_pay_adjustment a
-                    where a.teacher_id = r.id and a.month >= (date_trunc('month', now()) - interval '1 month')::date))
-       and not 'open_payroll' = any (v_items) then
+    if chat.teacher_payroll_open(r.id) and not 'open_payroll' = any (v_items) then
       v_items := v_items || 'open_payroll'::text;
     end if;
   end loop;
@@ -311,7 +391,7 @@ begin
   end if;
 
   insert into chat.account_deletion_request (account_id, teacher_id, deadline_at, open_items)
-  values (p_account, v_teacher.id, now() + interval '30 days', v_items)
+  values (p_account, v_teacher.id, now() + interval '720 hours', v_items)
   returning * into v_req;
 
   -- The Teachers manager (else the super admin) closes the lessons and payroll, by the deadline.
@@ -341,7 +421,9 @@ language plpgsql
 set search_path = chat, pg_temp
 as $$
 declare
-  v_req chat.account_deletion_request;
+  v_req   chat.account_deletion_request;
+  v_saved text[];
+  r       record;
 begin
   if not chat.caller_is_server_side() then
     raise exception 'only the server records a deletion request' using errcode = 'insufficient_privilege';
@@ -351,7 +433,20 @@ begin
     raise exception 'no pending deletion request' using errcode = 'no_data_found';
   end if;
   update chat.account_deletion_request set state = 'cancelled' where id = v_req.id returning * into v_req;
+  -- The task is closed, not left open (review of 00ccd748): withdrawn, then
+  -- removed with the reason, by the teacher who cancelled.
   perform chat.work_task_withdraw(v_req.organization_id, 'teacher_deletion_request:' || v_req.id);
+  v_saved := chat.work_task_begin_system(v_req.teacher_id);
+  perform set_config('chat.task_note', 'the teacher cancelled their account deletion request', true);
+  for r in
+    update chat.work_task set state = 'removed'
+     where organization_id = v_req.organization_id and source_key = 'teacher_deletion_request:' || v_req.id
+       and state in ('open', 'awaiting_decision')
+     returning id, revision
+  loop
+    perform chat.work_task_signal(r.id, r.revision, 'removed');
+  end loop;
+  perform chat.work_task_end_system(v_saved);
   insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
   values (v_req.teacher_id, 'account_deletion_request.cancelled', 'account_deletion_request', v_req.id,
           jsonb_build_object('state', 'pending'), jsonb_build_object('state', 'cancelled'),
@@ -452,6 +547,69 @@ end;
 $$;
 revoke all on function chat.complete_account_deletion_request(uuid, uuid, text) from public;
 
+-- What an erasure left for later, settled by the worker (TeacherDeletionRequestService.sweep):
+--   * an erased teacher's payout account, kept while payroll was open, goes
+--     once chat.teacher_payroll_open is false -- the gate's own definition, as
+--     nothing in the schema marks a month paid -- and the
+--     erased_teacher_payroll task is completed by its assignee;
+--   * a learner_needs_teacher task completes (by its assignee) once the learner
+--     has another teacher and no open lesson ahead is left on the erased one.
+create or replace function chat.erased_teacher_sweep(p_batch integer default 50)
+returns jsonb
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  v_left     integer := least(greatest(coalesce(p_batch, 50), 1), 200);
+  v_payroll  integer := 0;
+  v_handover integer := 0;
+  r          record;
+begin
+  if not chat.caller_is_server_side() then
+    raise exception 'only the server settles what an erasure left' using errcode = 'insufficient_privilege';
+  end if;
+  if not pg_try_advisory_xact_lock(hashtext('chat.erased_teacher_sweep')) then
+    return jsonb_build_object('skipped', true, 'payrollSettled', 0, 'handoversSettled', 0);
+  end if;
+  -- Erased teachers only (their account's identifier is gone), whatever became of the task.
+  for r in
+    select te.id as teacher_id, te.organization_id
+      from chat.teacher te
+      join chat.account a on a.id = te.account_id and a.subject like 'erased:%'
+     where exists (select 1 from chat.teacher_payout_account p where p.teacher_id = te.id)
+       and not chat.teacher_payroll_open(te.id)
+     order by te.id
+     limit v_left
+  loop
+    delete from chat.teacher_payout_account where teacher_id = r.teacher_id;
+    perform chat.work_task_settle(r.organization_id, 'erased_teacher_payroll:' || r.teacher_id,
+      (select coalesce(t.assignee_staff_id, t.assignee_teacher_id) from chat.work_task t
+        where t.organization_id = r.organization_id and t.source_key = 'erased_teacher_payroll:' || r.teacher_id));
+    insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
+    values (null, 'teacher_payout_account.deleted', 'teacher', r.teacher_id, null, null,
+            'an erased teacher''s payroll is settled: their payout account goes');
+    v_payroll := v_payroll + 1;
+  end loop;
+  for r in
+    select t.organization_id, t.source_key, coalesce(t.assignee_staff_id, t.assignee_teacher_id) as actor
+      from chat.work_task t
+      join chat.erased_teacher_handover h on h.id = t.source_id
+     where t.source_type = 'learner_needs_teacher' and t.state in ('open', 'awaiting_decision')
+       and exists (select 1 from chat.learner ln
+                    where ln.id = h.learner_id and ln.teacher_id is not null and ln.teacher_id <> h.teacher_id)
+       and not exists (select 1 from chat.lesson ls
+                        where ls.teacher_id = h.teacher_id and ls.learner_id = h.learner_id
+                          and ls.outcome is null and ls.starts_at >= now())
+     order by t.created_at, t.id
+     limit v_left
+  loop
+    v_handover := v_handover + chat.work_task_settle(r.organization_id, r.source_key, r.actor);
+  end loop;
+  return jsonb_build_object('payrollSettled', v_payroll, 'handoversSettled', v_handover);
+end;
+$$;
+revoke all on function chat.erased_teacher_sweep(integer) from public;
+
 -- ---------------------------------------------------------------------------
 -- 5. chat.erase_account (as 20261104100000, with the O-3 changes marked)
 -- ---------------------------------------------------------------------------
@@ -473,7 +631,13 @@ declare
   -- O-3: past the gate only through chat.complete_account_deletion_request.
   v_forced   boolean := false;
   v_left     jsonb;
+  v_owner    uuid;
+  v_lessons  uuid[];
+  v_slots    uuid[];
+  v_handover uuid;
   r          record;
+  -- Not `l`: the erasure's queries alias chat.learner as l.
+  v_learner  record;
 begin
   if not chat.caller_is_server_side() then
     raise exception 'only the server erases an account' using errcode = 'insufficient_privilege';
@@ -572,8 +736,68 @@ begin
                                      where pp.teacher_id = r.id), '{}'::text[]);
       delete from chat.teacher_professional_profile where teacher_id = r.id;
       delete from chat.teacher_supervisor_assignment where teacher_id = r.id;
-      -- How they were paid goes (the gate, or the request's 30 days, closed the payroll first).
-      delete from chat.teacher_payout_account where teacher_id = r.id;
+      v_owner := chat.work_task_teachers_manager(r.organization_id);
+      -- How they were paid goes -- unless a forced erasure leaves payroll open
+      -- (review of 00ccd748, lead's decision): then the payout account stays
+      -- until the payroll is settled (chat.erased_teacher_sweep deletes it), and
+      -- staff are told to pay what is owed.
+      if v_forced and chat.teacher_payroll_open(r.id) then
+        perform chat.work_task_raise(r.organization_id, 'erased_teacher_payroll', r.id, v_owner, null,
+                                     'high', 'operational', 'none', null);
+        v_tasks := v_tasks || ('erased_teacher_payroll:' || r.id::text);
+      else
+        delete from chat.teacher_payout_account where teacher_id = r.id;
+      end if;
+
+      -- A forced erasure never lets a learner's lessons stop silently (review of
+      -- 00ccd748, item 7): the weekly times end, each learner is handed to the
+      -- Teachers manager with the lessons ahead (never cancelled), and their
+      -- family is no longer reminded of lessons with a teacher who is gone.
+      if v_forced then
+        for v_learner in
+          select x.learner_id from (
+            select ln.id as learner_id from chat.learner ln where ln.teacher_id = r.id
+            union select s.learner_id from chat.learner_schedule_slot s where s.teacher_id = r.id and s.valid_to is null
+            union select ls.learner_id from chat.lesson ls
+                   where ls.teacher_id = r.id and ls.outcome is null and ls.starts_at >= now() and ls.learner_id is not null
+          ) x order by x.learner_id
+        loop
+          select coalesce(array_agg(ls.id order by ls.starts_at), '{}') into v_lessons
+            from chat.lesson ls
+           where ls.teacher_id = r.id and ls.learner_id = v_learner.learner_id and ls.outcome is null and ls.starts_at >= now();
+          select coalesce(array_agg(s.id order by s.id), '{}') into v_slots
+            from chat.learner_schedule_slot s
+           where s.teacher_id = r.id and s.learner_id = v_learner.learner_id and s.valid_to is null;
+          v_handover := null;
+          insert into chat.erased_teacher_handover (organization_id, teacher_id, learner_id, lesson_ids, slot_ids)
+          values (r.organization_id, r.id, v_learner.learner_id, v_lessons, v_slots)
+          on conflict (teacher_id, learner_id) do nothing
+          returning id into v_handover;
+          if v_handover is not null then
+            perform chat.work_task_raise(r.organization_id, 'learner_needs_teacher', v_handover, v_owner, null, 'high', 'operational', 'generic',
+                                         (select min(ls.starts_at) from chat.lesson ls where ls.id = any (v_lessons)));
+            v_tasks := v_tasks || ('learner_needs_teacher:' || v_handover::text);
+          end if;
+        end loop;
+        -- Their weekly times end today, in their own zone, as a change of teacher ends them.
+        update chat.learner_schedule_slot s
+           set valid_to = greatest(s.valid_from, (now() at time zone s.timezone)::date)
+         where s.teacher_id = r.id and s.valid_to is null;
+        -- The family is reminded of nothing with this teacher: queued reminders are
+        -- cancelled, and the lessons are marked so none is scheduled again (moving a
+        -- learner to a new teacher, chat.transfer_learner, clears the mark).
+        update chat.notification n set status = 'cancelled'
+         where n.status = 'scheduled'
+           and exists (select 1 from chat.lesson ls
+                        where ls.teacher_id = r.id and ls.outcome is null and ls.starts_at >= now()
+                          and n.dedupe_key like '%:' || ls.id::text || ':%');
+        update chat.notification_item i set cancelled_at = now(), cancel_reason = 'subject_gone'
+         where i.cancelled_at is null and i.visible_at > now()
+           and i.subject_id in (select ls.id::text from chat.lesson ls
+                                 where ls.teacher_id = r.id and ls.outcome is null and ls.starts_at >= now());
+        update chat.lesson set reminders_scheduled_at = coalesce(reminders_scheduled_at, now())
+         where teacher_id = r.id and outcome is null and starts_at >= now();
+      end if;
 
       -- The department records the departure: a notice to acknowledge. O-3: a
       -- forced erasure that left lessons or students on the teacher is high,
@@ -661,7 +885,7 @@ declare
   v_role text;
   v_table text;
 begin
-  foreach v_table in array array['chat.account_deletion_request', 'chat.account_deletion_reminder'] loop
+  foreach v_table in array array['chat.account_deletion_request', 'chat.account_deletion_reminder', 'chat.erased_teacher_handover'] loop
     if not (select c.relrowsecurity from pg_class c where c.oid = v_table::regclass) then
       raise exception 'O-3: % must have row-level security on', v_table;
     end if;

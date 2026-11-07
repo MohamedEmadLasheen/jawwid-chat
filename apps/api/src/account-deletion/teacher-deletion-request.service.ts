@@ -75,7 +75,7 @@ export class TeacherDeletionRequestService {
     if (account.kind !== 'family' && account.kind !== 'teacher') throw new AuthError(AuthErrorCode.FORBIDDEN);
     const [row] = await this.prisma.$queryRaw<Array<{ items: string[]; deadline: Date }>>`
       SELECT CASE WHEN ${account.kind} = 'teacher' THEN chat.teacher_deletion_open_items(${accountId}::uuid) ELSE '{}'::text[] END AS items,
-             now() + interval '30 days' AS deadline`;
+             now() + interval '720 hours' AS deadline`;
     const items = row?.items ?? [];
     return {
       kind: account.kind,
@@ -129,28 +129,46 @@ export class TeacherDeletionRequestService {
   // The worker
   // ------------------------------------------------------------------
 
-  /** Idempotent and safe on every replica at once. */
-  async sweep(now: Date = new Date()): Promise<{ reminded: number; erased: number }> {
+  /**
+   * Idempotent and safe on every replica at once. Always ends: a request that
+   * fails here (a database error, completed by staff in between, or a worker
+   * clock ahead of the database's -- the database refuses before its own
+   * deadline) is not taken again in this sweep, and a batch that completes
+   * nothing ends it. The next sweep tries them again.
+   */
+  async sweep(now: Date = new Date()): Promise<{ reminded: number; erased: number; failed: number; payrollSettled: number; handoversSettled: number }> {
     const reminded = await this.remind(now);
     let erased = 0;
+    const failed: string[] = [];
     for (;;) {
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id::text AS id FROM chat.account_deletion_request
          WHERE state = 'pending' AND deadline_at <= ${now}::timestamptz
+           AND NOT (id = ANY(${failed}::uuid[]))
          ORDER BY deadline_at, id LIMIT ${SWEEP_BATCH}`;
+      let done = 0;
       for (const { id } of due) {
         try {
           await this.deletion.completeRequest(id, null);
-          erased += 1;
+          done += 1;
         } catch (e) {
-          // Completed by staff in between (409), or a database error: the next sweep tries again.
+          failed.push(id);
           if (!(e instanceof CommError)) this.log.warn(`deletion request ${id} not completed at its deadline: ${(e as Error).name}`);
         }
       }
-      if (due.length < SWEEP_BATCH) break;
+      erased += done;
+      if (due.length < SWEEP_BATCH || done === 0) break;
     }
-    if (reminded || erased) this.log.log(`deletion requests: ${reminded} reminded, ${erased} erased at the deadline`);
-    return { reminded, erased };
+    // What erasures left for later: payout accounts once the payroll is settled, learners handed over.
+    const [settled] = await this.prisma.$queryRaw<Array<{ r: { payrollSettled?: number; handoversSettled?: number } }>>`
+      SELECT chat.erased_teacher_sweep(${SWEEP_BATCH}::int) AS r`;
+    const payrollSettled = settled?.r.payrollSettled ?? 0;
+    const handoversSettled = settled?.r.handoversSettled ?? 0;
+    if (reminded || erased || failed.length || payrollSettled || handoversSettled) {
+      this.log.log(`deletion requests: ${reminded} reminded, ${erased} erased at the deadline, ${failed.length} failed; ` +
+        `${payrollSettled} payout accounts deleted, ${handoversSettled} handovers settled`);
+    }
+    return { reminded, erased, failed: failed.length, payrollSettled, handoversSettled };
   }
 
   private async remind(now: Date): Promise<number> {
@@ -158,11 +176,11 @@ export class TeacherDeletionRequestService {
       SELECT r.id::text AS id, r.organization_id::text AS organization_id, r.teacher_id::text AS teacher_id, r.requested_at, r.deadline_at
         FROM chat.account_deletion_request r
        WHERE r.state = 'pending'
-         AND r.requested_at + interval '21 days' <= ${now}::timestamptz
+         AND r.requested_at + interval '504 hours' <= ${now}::timestamptz
          AND r.deadline_at > ${now}::timestamptz
          AND NOT EXISTS (SELECT 1 FROM chat.account_deletion_reminder m
                           WHERE m.request_id = r.id
-                            AND m.day = CASE WHEN r.requested_at + interval '28 days' <= ${now}::timestamptz THEN 28 ELSE 21 END)
+                            AND m.day = CASE WHEN r.requested_at + interval '672 hours' <= ${now}::timestamptz THEN 28 ELSE 21 END)
        ORDER BY r.requested_at, r.id
        LIMIT ${SWEEP_BATCH * 4}`;
     let sent = 0;

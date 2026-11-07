@@ -86,6 +86,10 @@ export const SOURCE_TYPES = [
   // PD-56 O-3: a teacher asked to delete their account with lessons, students or payroll open; the
   // Teachers manager closes them by the deadline. Completed when the request is; withdrawn when cancelled.
   'teacher_deletion_request',
+  // ...and what a forced erasure (staff, or the 30-day deadline) leaves: a learner who needs a new teacher,
+  // with the lessons ahead to move or cancel (chat.erased_teacher_handover), and payroll still open, whose
+  // payout account stays until it is settled. Both completed by chat.erased_teacher_sweep.
+  'learner_needs_teacher', 'erased_teacher_payroll',
   // AMB-9: a group left without a live admin (chat.work_task_sweep_group_admin).
   'group_admin_absent',
   // PD-57 (closure plan §4): a report resolved as reassigned, for each manager of its
@@ -1060,6 +1064,8 @@ export class TaskService {
                WHEN 'teacher_setup' THEN t.source_id::text
                WHEN 'teacher_account_deleted' THEN t.source_id::text
                WHEN 'teacher_deletion_request' THEN (SELECT q.teacher_id::text FROM chat.account_deletion_request q WHERE q.id = t.source_id)
+               WHEN 'learner_needs_teacher' THEN (SELECT h.teacher_id::text FROM chat.erased_teacher_handover h WHERE h.id = t.source_id)
+               WHEN 'erased_teacher_payroll' THEN t.source_id::text
                WHEN 'teacher_unsupervised' THEN (SELECT sp.teacher_id::text FROM chat.work_task_teacher_spell sp WHERE sp.id = t.source_id)
                WHEN 'trial_attendance' THEN (SELECT l.teacher_id::text FROM chat.lesson l WHERE l.id = t.source_id)
                WHEN 'complaint' THEN (SELECT e.teacher_id::text FROM chat.teacher_supervision_entry e WHERE e.id = t.source_id)
@@ -1120,6 +1126,14 @@ export class TaskService {
                WHEN 'teacher_deletion_request' THEN (SELECT jsonb_build_object('teacherName', te.name, 'teacherId', te.id, 'deadlineAt', q.deadline_at)
                                                        FROM chat.account_deletion_request q JOIN chat.teacher te ON te.id = q.teacher_id
                                                       WHERE q.id = t.source_id)
+               -- The learner by name, and the lessons still left on the erased teacher.
+               WHEN 'learner_needs_teacher' THEN (SELECT jsonb_build_object('learnerName', ln.name, 'learnerId', ln.id,
+                                                                            'count', (SELECT count(*)::int FROM chat.lesson ls
+                                                                                       WHERE ls.teacher_id = h.teacher_id AND ls.learner_id = h.learner_id
+                                                                                         AND ls.outcome IS NULL AND ls.starts_at >= now()))
+                                                    FROM chat.erased_teacher_handover h JOIN chat.learner ln ON ln.id = h.learner_id
+                                                   WHERE h.id = t.source_id)
+               WHEN 'erased_teacher_payroll' THEN jsonb_build_object('teacherId', t.source_id)
                WHEN 'new_student_assign' THEN (SELECT jsonb_build_object('prospectName', p.display_name, 'startsAt', l.starts_at)
                                                  FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id WHERE l.id = t.source_id)
                WHEN 'new_student_group' THEN (SELECT jsonb_build_object('familyName', f.display_name, 'familyId', f.id)

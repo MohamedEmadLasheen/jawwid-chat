@@ -47,7 +47,9 @@ export class AccountDeletionController {
     const key = `account-delete:${request.accountId}`;
     await this.rateLimit.reserve(key, sourceAddress(ip, this.addressPolicy));
     const outcome = await this.deletion.deleteOwn(request.accountId, password);
-    await this.rateLimit.clearIdentifier(key);
+    // A request (O-3) keeps its attempt counted: request-then-cancel cycles
+    // stay within the limit (review of 00ccd748). A deleted account has no use for it.
+    if (outcome.deleted) await this.rateLimit.clearIdentifier(key);
     return outcome;
   }
 
@@ -63,8 +65,10 @@ export class AccountDeletionController {
   @SelfService()
   @Post('deletion-request/cancel')
   @HttpCode(200)
-  async cancel(@Req() request: AuthenticatedRequest) {
+  async cancel(@Req() request: AuthenticatedRequest, @Ip() ip?: string) {
     if (!request.accountId) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+    // Limited as the request is, and never cleared on success.
+    await this.rateLimit.reserve(`account-deletion-cancel:${request.accountId}`, sourceAddress(ip, this.addressPolicy));
     return { request: await this.requests.cancel(request.accountId) };
   }
 }
@@ -112,7 +116,7 @@ export class AccountDeletionPageController {
     try {
       await this.rateLimit.reserve(key, sourceAddress(ip, this.addressPolicy));
       const outcome = await this.deletion.deleteBySignIn(username, password);
-      await this.rateLimit.clearIdentifier(key);
+      if (outcome.deleted) await this.rateLimit.clearIdentifier(key);
       // O-3: a teacher with work open -- a request, deleted by its deadline.
       if (!outcome.deleted) return send(res, 200, l, { kind: 'requested', deadlineAt: outcome.request.deadlineAt });
       return send(res, 200, l, { kind: 'done' });
