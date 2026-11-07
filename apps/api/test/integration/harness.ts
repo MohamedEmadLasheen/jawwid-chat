@@ -28,6 +28,7 @@ import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
 import { PrismaRelationshipService } from '@platform/relationship.service';
 import { SqlStaffScope } from '@platform/staff-scope';
+import { ContentFilterService, type ContentFilterWordList } from '@platform/content-filter/content-filter.service';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
@@ -51,6 +52,9 @@ export function buildGraph(
   // PD-44: a suite that counts statements passes a client built with query
   // events on; every service below then shares it, as they share this one.
   prisma: PrismaService = new PrismaService(),
+  // LD-12: a suite that tests the content filter injects its own neutral list;
+  // every other suite gets the draft list, as production does.
+  options: { contentWords?: ContentFilterWordList } = {},
 ) {
   const coverage = new PinnedCoverage();
   const identity = wrapIdentity(new PrismaIdentityService(prisma));
@@ -86,8 +90,9 @@ export function buildGraph(
   // PD-34: wired as production wires it (reminders, reads, message pushes).
   const pipeline = new NotificationPipeline(prisma, notifications, quietHours, config, identity, silentRealtime as never);
   const inbox = new NotificationInboxService(prisma, templates, config, pipeline, conversations);
+  const contentFilter = new ContentFilterService(config, options.contentWords);
   const messages = new MessageService(
-    prisma, authz, conversations, outbox, config, attachments, audit, identity,
+    prisma, authz, conversations, outbox, config, attachments, audit, identity, undefined, contentFilter,
   );
   const approvals = new ApprovalService(
     prisma, authz, conversations, attachments, outbox, audit, identity,
@@ -116,7 +121,7 @@ export function buildGraph(
     return createStory(actorId, input);
   };
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
-  const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit);
+  const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit, undefined, undefined, contentFilter);
 
   const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity, pipeline);
 
@@ -128,7 +133,7 @@ export function buildGraph(
     relationships,
     // Exposed so a suite can drive the outbox itself: config for a worker it
     // builds, outbox to enqueue inside its own transaction.
-    config, outbox,
+    config, outbox, contentFilter,
     // The same PrismaAuditService the services above were handed, so a suite can
     // assert the audit write's TRANSACTIONAL behaviour against the real writer
     // rather than against a stand-in that cannot roll back.

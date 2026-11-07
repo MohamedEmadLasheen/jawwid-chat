@@ -93,6 +93,11 @@ abstract final class WireErrors {
   static const replyTargetCrossConversation = 'COMM.REPLY_TARGET_CROSS_CONVERSATION';
   static const emptyMessage = 'COMM.EMPTY_MESSAGE';
 
+  /// LD-12 / MG-3: the text holds a word on the server's content filter list. A standing
+  /// refusal of THESE words: the person changes them, the client never re-sends them as
+  /// they are. The message never names the word.
+  static const contentNotAllowed = 'COMM.CONTENT_NOT_ALLOWED';
+
   // Stories. All four are final states or standing refusals, never transient, so the client
   // must not retry any of them -- it refetches the feed instead, which is a different
   // request answering a different question.
@@ -128,6 +133,7 @@ abstract final class WireErrors {
     messageNotFound,
     replyTargetCrossConversation,
     emptyMessage,
+    contentNotAllowed,
     storyNotFound,
     storyExpired,
     storyDeleted,

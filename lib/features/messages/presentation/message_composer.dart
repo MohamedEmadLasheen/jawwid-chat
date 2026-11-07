@@ -8,6 +8,7 @@ import '../../../shared/models/supervision.dart';
 import '../../../shared/models/trial.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
+import '../application/messages_controller.dart' show ContentRefusal;
 import '../application/voice_composer_controller.dart';
 import '../data/draft_store.dart';
 import '../data/mention_repository.dart';
@@ -42,7 +43,18 @@ class MessageComposer extends StatefulWidget {
     this.onDraftChanged,
     this.initialDraft,
     this.onDraft,
+    this.contentRefusal,
+    this.onContentRefusalShown,
   });
+
+  /// LD-12 / MG-3: a text the server's content filter refused. Its words go back in the
+  /// field -- unless the person has typed something else since -- with a notice that stays
+  /// until they change them. Each refusal is applied once.
+  final ContentRefusal? contentRefusal;
+
+  /// Called once [contentRefusal] has been applied, so the screen can let it go and a
+  /// chat opened later does not put the same words back again.
+  final VoidCallback? onContentRefusalShown;
 
   /// PD-37: the conversation's saved draft, put back in the field with its
   /// picked mentions. Adopted while the field is still untouched -- drafts
@@ -113,11 +125,36 @@ class _MessageComposerState extends State<MessageComposer> {
   /// field -- and that is not typing.
   String _reported = '';
 
+  /// LD-12: the field's text when the refusal notice went up. The notice stays while the
+  /// text is unchanged, and goes once the person edits it.
+  String? _refusedText;
+  int? _appliedRefusal;
+
   @override
   void initState() {
     super.initState();
     _restore(widget.initialDraft);
+    // Before the listener: putting the words back is not typing.
+    _applyRefusal(widget.contentRefusal);
     _controller.addListener(_onChanged);
+  }
+
+  void _applyRefusal(ContentRefusal? refusal) {
+    if (refusal == null || refusal.seq == _appliedRefusal) return;
+    _appliedRefusal = refusal.seq;
+    if (_controller.text.trim().isEmpty && refusal.text.isNotEmpty) {
+      final text = refusal.text;
+      // Not typing (no "typing…" for the others), but it is the draft again.
+      _reported = text;
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      widget.onDraft?.call(Draft(text));
+    }
+    _refusedText = _controller.text;
+    final shown = widget.onContentRefusalShown;
+    if (shown != null) WidgetsBinding.instance.addPostFrameCallback((_) => shown());
   }
 
   @override
@@ -126,6 +163,7 @@ class _MessageComposerState extends State<MessageComposer> {
     if (widget.initialDraft != oldWidget.initialDraft && !_edited && _controller.text.isEmpty) {
       _restore(widget.initialDraft);
     }
+    if (widget.contentRefusal != oldWidget.contentRefusal) _applyRefusal(widget.contentRefusal);
   }
 
   /// Puts a saved draft back, caret at the end, its mentions picked again.
@@ -155,7 +193,9 @@ class _MessageComposerState extends State<MessageComposer> {
   }
 
   void _onChanged() {
-    setState(() {});
+    setState(() {
+      if (_refusedText != null && _controller.text != _refusedText) _refusedText = null;
+    });
     if (_restoring) return;
     if (_controller.text != _reported) {
       _reported = _controller.text;
@@ -255,6 +295,13 @@ class _MessageComposerState extends State<MessageComposer> {
               reply: widget.replyingTo!,
               onCancel: widget.onCancelReply,
             ),
+          // LD-12: the words stay in the field below; this says why they were not sent.
+          if (_refusedText != null)
+            _Notice(
+              key: const ValueKey('composer-content-not-allowed'),
+              text: l10n.composerContentNotAllowed,
+              icon: Icons.error_outline,
+            ),
           // While a recording is live or under review it owns the input row.
           // Leaving the text field visible alongside it is how a user ends up
           // sending the wrong one.
@@ -343,7 +390,7 @@ class _MessageComposerState extends State<MessageComposer> {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.text, required this.icon});
+  const _Notice({super.key, required this.text, required this.icon});
 
   final String text;
   final IconData icon;

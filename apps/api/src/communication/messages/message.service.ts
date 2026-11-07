@@ -4,6 +4,7 @@ import { Conversation, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
+import { ContentFilterService } from '../../platform/content-filter/content-filter.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
@@ -126,6 +127,9 @@ export class MessageService {
     // PD-36. Optional so the positional constructions the harnesses share do
     // not shift; without it a send carries no mentions (and grants nothing).
     @Optional() private readonly mentions?: MentionService,
+    // LD-12 / MG-3. Optional for the same reason; absent, the filter is the
+    // real one with the draft list -- never no filter.
+    @Optional() private readonly contentFilter: ContentFilterService = new ContentFilterService(config),
   ) {}
 
   /**
@@ -282,6 +286,9 @@ export class MessageService {
     await this.attachments.assertUploaded(input.attachments ?? []);
 
     this.validateContent(type, input);
+    // LD-12 / MG-3: a text and a caption alike (a forward is a send, so its
+    // text too), after canSend: only someone who may post here learns of it.
+    await this.contentFilter.assertAllowed(actor.kind, input.body);
     await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
 
     // PD-36: resolved before the transaction; a mention of anyone this sender
@@ -1843,6 +1850,8 @@ export class MessageService {
 
     const decision = await this.mayWrite(actor, conv, message.visibility);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // LD-12 / MG-3: the new wording is checked as a send's would be.
+    await this.contentFilter.assertAllowed(actor.kind, body);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor); // RT-032

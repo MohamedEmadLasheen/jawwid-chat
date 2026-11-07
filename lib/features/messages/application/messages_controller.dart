@@ -2,19 +2,37 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show immutable, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/data/http/attachment_uploader.dart' show UploadCancel;
 import '../../../core/data/repositories.dart';
+import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/error_mapper.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/app_clock.dart';
 import '../domain/message_log.dart';
 import '../domain/outbox.dart';
+
+/// LD-12 / MG-3: a text the server's content filter refused, handed back for the
+/// composer to put in the box again. [seq] is new on every refusal, so the same words
+/// refused twice are restored twice.
+@immutable
+class ContentRefusal {
+  const ContentRefusal(this.seq, this.text);
+
+  final int seq;
+  final String text;
+
+  @override
+  bool operator ==(Object other) => other is ContentRefusal && other.seq == seq && other.text == text;
+
+  @override
+  int get hashCode => Object.hash(seq, text);
+}
 
 /// Everything the chat screen renders for one conversation.
 class MessagesState {
@@ -26,9 +44,13 @@ class MessagesState {
     this.olderError,
     this.isOffline = false,
     this.uploadProgress = const {},
+    this.contentRefusal,
   });
 
   final MessageLog log;
+
+  /// LD-12: the latest text the content filter refused, for the composer. Null if none.
+  final ContentRefusal? contentRefusal;
 
   /// PARENT-017: how far each uploading attachment has gone, 0..1, by client
   /// message id. Absent while it waits or once it is sent.
@@ -57,9 +79,12 @@ class MessagesState {
     bool clearOlderError = false,
     bool? isOffline,
     Map<String, double>? uploadProgress,
+    ContentRefusal? contentRefusal,
+    bool clearContentRefusal = false,
   }) {
     return MessagesState(
       uploadProgress: uploadProgress ?? this.uploadProgress,
+      contentRefusal: clearContentRefusal ? null : (contentRefusal ?? this.contentRefusal),
       log: log ?? this.log,
       isLoadingInitial: isLoadingInitial ?? this.isLoadingInitial,
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
@@ -113,6 +138,9 @@ class MessagesController extends Notifier<MessagesState> {
   final _uploadCancels = <String, UploadCancel>{};
 
   Timer? _drainTimer;
+
+  /// LD-12: numbers each [ContentRefusal].
+  int _refusals = 0;
 
   /// Captured at build rather than read through `ref` after an await, which would throw if
   /// the user left the conversation while a request was in flight.
@@ -464,6 +492,21 @@ class MessagesController extends Notifier<MessagesState> {
       // PARENT-017: a cancelled upload was discarded by cancelUpload; nothing failed.
       if (failure.code == AppError.uploadCancelled) return;
 
+      // LD-12 / MG-3: a text the content filter refused leaves the chat -- nobody saw it --
+      // and goes back to the composer to be changed. A caption stays on its photo as
+      // "Not sent" with the reason (below), to be discarded: the photo is not the composer's.
+      if (failure.code == WireErrors.contentNotAllowed && outgoing.kind == MessageKind.text) {
+        _outbox.discard(entry.clientMessageId);
+        _pendingBodies.remove(entry.clientMessageId);
+        state = state.copyWith(
+          log: state.log.removeLocal(entry.clientMessageId),
+          contentRefusal: ContentRefusal(++_refusals, outgoing.body),
+          isOffline: false,
+        );
+        unawaited(drain());
+        return;
+      }
+
       _outbox.markFailed(
         entry.clientMessageId,
         DateTime.now(),
@@ -505,6 +548,12 @@ class MessagesController extends Notifier<MessagesState> {
       delay.isNegative ? Duration.zero : delay,
       () => unawaited(drain()),
     );
+  }
+
+  /// LD-12: the composer has put the refused words back; a chat opened later must not.
+  void contentRefusalShown() {
+    if (!_alive || state.contentRefusal == null) return;
+    state = state.copyWith(clearContentRefusal: true);
   }
 
   /// User-initiated retry. Reuses the same entry and therefore the same client id.
