@@ -243,6 +243,61 @@ void main() {
     expect({for (final r in b.requests) r.id: r.payableInApp}, {'r-yes': true, 'r-text': false, 'r-silent': false});
   });
 
+  test('an older server sends neither lastCardFailure nor card: both read as null', () async {
+    server.on('GET', '/me/billing', [const Reply.ok(billingBody)]);
+    final b = await repository().myBilling();
+    expect(b.requests.map((r) => r.lastCardFailure), everyElement(isNull));
+    expect(b.invoices.single.card, isNull);
+  });
+
+  test('PD-27 completion: a request\'s last card failure and an invoice\'s card', () async {
+    server.on('GET', '/me/billing', [
+      const Reply.ok({
+        'requests': [
+          {
+            'id': 'r-declined', 'purpose': 'subscription', 'label': 'a', 'status': 'open', 'amountMinor': 1, 'currency': 'AED',
+            'lastCardFailure': {'code': 'insufficient_funds', 'at': '2026-11-02T09:30:00.000Z'},
+          },
+          {'id': 'r-null', 'purpose': 'subscription', 'label': 'b', 'status': 'open', 'amountMinor': 1, 'currency': 'AED', 'lastCardFailure': null},
+          {'id': 'r-no-code', 'purpose': 'subscription', 'label': 'c', 'status': 'open', 'amountMinor': 1, 'currency': 'AED',
+            'lastCardFailure': {'code': '  ', 'at': '2026-11-02T09:30:00.000Z'}},
+          {'id': 'r-no-at', 'purpose': 'subscription', 'label': 'd', 'status': 'open', 'amountMinor': 1, 'currency': 'AED',
+            'lastCardFailure': {'code': 'stolen_card'}},
+          {'id': 'r-junk', 'purpose': 'subscription', 'label': 'e', 'status': 'open', 'amountMinor': 1, 'currency': 'AED',
+            'lastCardFailure': 'insufficient_funds'},
+        ],
+        'invoices': [
+          {'id': 'v-card', 'number': 'JW-2026-000001', 'status': 'paid', 'amountMinor': 1, 'currency': 'AED', 'method': 'card',
+            'card': {'brand': 'visa', 'last4': '4242', 'wallet': 'apple_pay'}},
+          {'id': 'v-partial', 'number': 'JW-2026-000002', 'status': 'paid', 'amountMinor': 1, 'currency': 'AED', 'method': 'card',
+            'card': {'brand': 'mastercard', 'last4': null, 'wallet': null}},
+          {'id': 'v-bad-last4', 'number': 'JW-2026-000003', 'status': 'paid', 'amountMinor': 1, 'currency': 'AED', 'method': 'card',
+            'card': {'brand': null, 'last4': '4242 4242 4242 4242', 'wallet': null}},
+          {'id': 'v-null', 'number': 'JW-2026-000004', 'status': 'paid', 'amountMinor': 1, 'currency': 'AED', 'method': 'bank_transfer',
+            'card': null},
+        ],
+      }),
+    ]);
+    final b = await repository().myBilling();
+    final failures = {for (final r in b.requests) r.id: r.lastCardFailure};
+    expect(failures['r-declined']?.code, 'insufficient_funds');
+    expect(failures['r-declined']?.at?.toUtc(), DateTime.utc(2026, 11, 2, 9, 30));
+    expect(failures['r-null'], isNull);
+    expect(failures['r-no-code'], isNull, reason: 'no code, nothing to say');
+    expect(failures['r-no-at']?.code, 'stolen_card');
+    expect(failures['r-no-at']?.at, isNull);
+    expect(failures['r-junk'], isNull);
+
+    final cards = {for (final v in b.invoices) v.id: v.card};
+    expect(cards['v-card']?.brand, 'visa');
+    expect(cards['v-card']?.last4, '4242');
+    expect(cards['v-card']?.wallet, 'apple_pay');
+    expect(cards['v-partial']?.brand, 'mastercard');
+    expect(cards['v-partial']?.last4, isNull);
+    expect(cards['v-bad-last4'], isNull, reason: 'only exactly four digits are a last 4');
+    expect(cards['v-null'], isNull);
+  });
+
   test('a bank account without its one required field is no bank account', () async {
     server.on('GET', '/me/billing', [
       const Reply.ok({

@@ -3596,6 +3596,37 @@ class L10nAr extends L10n {
   String get billingBankTransferHint => 'حوّل المبلغ ثم ارفع إيصال التحويل';
 
   @override
+  String get billingCardFailureLead => 'لم تنجح آخر محاولة للدفع بالبطاقة:';
+
+  @override
+  String get billingCardFailureNext =>
+      'جرّبوا بطاقة أخرى أو ادفعوا بالتحويل البنكي.';
+
+  @override
+  String get billingCardFailureInsufficientFunds =>
+      'رفض البنك الدفع لعدم كفاية الرصيد.';
+
+  @override
+  String get billingCardFailureExpiredCard => 'البطاقة منتهية الصلاحية.';
+
+  @override
+  String get billingCardFailureIncorrectCvc => 'رمز التحقق (CVC) غير صحيح.';
+
+  @override
+  String get billingCardFailureIncorrectNumber => 'رقم البطاقة غير صحيح.';
+
+  @override
+  String get billingCardFailureAuthentication =>
+      'لم يكتمل تحقق البنك (3D Secure).';
+
+  @override
+  String get billingCardFailureProcessingError =>
+      'حدث خطأ أثناء معالجة البطاقة.';
+
+  @override
+  String get billingCardFailureDeclined => 'رفض البنك الدفع بالبطاقة.';
+
+  @override
   String get billingPaymentsUnavailable =>
       'الدفع بالبطاقة غير متاح حاليًا. يمكنك الدفع بالتحويل البنكي.';
 

@@ -20,6 +20,7 @@ class DueItem {
     this.periodEnd,
     this.requestId,
     this.instalmentId,
+    this.lastCardFailure,
   });
 
   /// Stable across reloads: `i:<instalmentId>` or `r:<requestId>`.
@@ -44,6 +45,9 @@ class DueItem {
   /// reuses its request -- so [requestId] is set only on a request of its own.
   final String? requestId;
   final String? instalmentId;
+
+  /// PD-27 completion: its request's latest card attempt failed, and why.
+  final CardFailure? lastCardFailure;
 
   bool get partial => paidMinor > 0 && remainingMinor > 0;
 }
@@ -84,6 +88,7 @@ List<DueItem> amountsDue(ParentBilling billing) {
       periodStart: r.periodStart,
       periodEnd: r.periodEnd,
       requestId: r.id,
+      lastCardFailure: r.lastCardFailure,
     ));
   }
 
@@ -107,6 +112,7 @@ List<DueItem> amountsDue(ParentBilling billing) {
       periodStart: r?.periodStart,
       periodEnd: r?.periodEnd,
       instalmentId: i.id,
+      lastCardFailure: r?.lastCardFailure,
     ));
   }
   return standalone;
