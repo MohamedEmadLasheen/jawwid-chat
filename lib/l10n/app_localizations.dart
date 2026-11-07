@@ -5641,10 +5641,10 @@ abstract class L10n {
   /// **'Renewal requested'**
   String get subscriptionRenewalRequested;
 
-  /// PD-30: the banner that replaces the composer in a group locked for payment.
+  /// PD-30 D-3 (owner, 2026-11-06): the informational banner above the composer when a child's new lesson bookings are paused. The chat stays open.
   ///
   /// In en, this message translates to:
-  /// **'Lessons are paused'**
+  /// **'New lessons are paused'**
   String get lockBannerTitle;
 
   /// PD-30: the locked banner, a parent's line: the child's lessons are used up.
@@ -5659,19 +5659,19 @@ abstract class L10n {
   /// **'{name}: instalment {label} overdue since {date}'**
   String lockBannerChildOverdue(String name, String label, String date);
 
-  /// PD-30: the locked banner, a teacher's line: no reason, nothing financial.
+  /// PD-30 D-3: a child's line when the server sent no reason (a parent or staff).
   ///
   /// In en, this message translates to:
-  /// **'{name}\'s lessons are paused'**
+  /// **'{name}: new lessons paused'**
   String lockBannerChildPaused(String name);
 
-  /// PD-30: the locked banner when the server refused a send but named no child.
+  /// PD-30 D-3: the banner's line everyone reads, the teacher included. Nothing financial.
   ///
   /// In en, this message translates to:
-  /// **'This group is paused for now.'**
+  /// **'The chat stays open, and lessons already booked go ahead.'**
   String get lockBannerGeneric;
 
-  /// PD-30: the locked banner's button for a parent.
+  /// PD-30: the banner's button, a parent only.
   ///
   /// In en, this message translates to:
   /// **'Go to Subscriptions'**
@@ -5701,28 +5701,34 @@ abstract class L10n {
   /// **'Suspended — payment'**
   String get outcomeSuspendedPayment;
 
-  /// PD-30: the group card when a child's lessons are paused (no reason).
+  /// PD-30 D-3: the group card when a child's new lessons pause (no reason: the teacher reads it).
   ///
   /// In en, this message translates to:
-  /// **'Lessons paused'**
+  /// **'New lessons paused'**
   String get cardLessonsPausedTitle;
+
+  /// PD-30 D-3: the group card's line under the child. Nothing financial: the teacher reads it.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons already booked go ahead, and this chat stays open.'**
+  String get cardLessonsPausedBody;
 
   /// PD-30: the family's direct-chat card when a child is locked.
   ///
   /// In en, this message translates to:
-  /// **'Lessons paused — payment'**
+  /// **'New lessons paused — payment'**
   String get cardSubscriptionLockedTitle;
 
-  /// PD-30: where to pay, on the locked card.
+  /// PD-30 D-3: the last line of the family's direct-chat card.
   ///
   /// In en, this message translates to:
-  /// **'Renew or pay in Subscriptions.'**
+  /// **'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'**
   String get cardSubscriptionLockedHint;
 
   /// PD-30: the group card when a locked child's lessons resume.
   ///
   /// In en, this message translates to:
-  /// **'Lessons are back on'**
+  /// **'New lessons are back on'**
   String get cardSubscriptionUnlockedTitle;
 
   /// No description provided for @roleSales.

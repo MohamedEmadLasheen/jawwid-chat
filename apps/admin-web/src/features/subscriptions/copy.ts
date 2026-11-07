@@ -79,9 +79,9 @@ export const S = {
   waiting: { en: 'Waiting', ar: 'بانتظار' },
   // The chat banner (staff view)
   lockedBanner: {
-    // PD-30 amendment (2026-11-06): factual until the owner's D-3 wording replaces it.
-    en: 'New lesson bookings are paused. The chat stays open for everyone.',
-    ar: 'حجز الحصص الجديدة متوقف مؤقتًا. المحادثة تبقى مفتوحة للجميع.',
+    // PD-30 amendment, D-3 wording (owner, 2026-11-06).
+    en: 'New lesson bookings are paused. Lessons already booked go ahead, and the chat stays open for everyone.',
+    ar: 'حجز الحصص الجديدة متوقف مؤقتًا. الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة للجميع.',
   },
 }
 

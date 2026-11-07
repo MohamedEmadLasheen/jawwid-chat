@@ -27,6 +27,8 @@
  * Synthetic people only (G-20).
  */
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
@@ -53,6 +55,7 @@ import { buildGraph, truncate } from './harness';
 import { addLesson } from './lesson-fixture';
 import { LessonService } from '../../src/lessons/lesson.service';
 import { FakeStripe } from './fake-stripe';
+import { TemplateService } from '@communication/notifications/template.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -823,6 +826,73 @@ describe('PD-30 over HTTP', () => {
     expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_locked', familyId: f.id, recipientId: m.families.find((x) => x.id === f.id)!.children.find((c) => c.id === child.id)!.supervisorId } })).toBe(1);
   });
 
+  it('while locked (D-1, D-3): booked lessons go ahead, both chats work, calls ring and are answered, the teacher learns nothing financial, the parent the reason', async () => {
+    const { f, child, teacher, supervisor, parent, groupId, directId } = family();
+    // Booked BEFORE the lock: one already held (to be reported), one ahead.
+    const held = await pastLesson(child.id);
+    const booked = await http(m.teachersManager.subject, 'POST', '/lessons', { learnerId: child.id, ...bookingAt(10) });
+    expect(booked.status).toBe(201);
+    const aheadBefore = await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.json.id } });
+
+    await setGoLive(addDays(today(), -60));
+    await packageInstalment(f.id, child.id, 'Term · 2/3', addDays(today(), -2));
+    await effects.sweep();
+    await effects.sweep(); // the second pass holds the materializer
+    expect(await access(child.id)).toMatchObject({ state: 'locked', reasons: ['overdue'], held: true });
+
+    // 1. Lessons already booked are unchanged and go ahead: the teacher reports the held one.
+    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.json.id } })).toMatchObject({
+      outcome: null, startsAt: aheadBefore.startsAt, endsAt: aheadBefore.endsAt, teacherId: aheadBefore.teacherId,
+    });
+    await report(teacher.subject, held);
+    expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: held } })).outcome).not.toBeNull();
+    // Only a NEW booking is refused.
+    expect((await book(child.id, 4)).code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
+
+    // 2. The parent-teacher group and the parent-supervisor chat work both ways.
+    for (const who of [parent, teacher, supervisor]) expect((await send(who.subject, groupId)).status).toBe(201);
+    expect((await send(parent.subject, directId)).status).toBe(201);
+    expect((await send(supervisor.subject, directId)).status).toBe(201);
+    for (const who of [parent, teacher]) {
+      expect((await http(who.subject, 'GET', `/conversations/${groupId}/messages`)).status).toBe(200);
+    }
+    expect((await http(parent.subject, 'GET', `/conversations/${directId}/messages`)).status).toBe(200);
+
+    // 3. Calls are started AND received: the callee is rung (call.incoming, a participant
+    //    row) and answers, and gets a media token -- each way round.
+    for (const [caller, callee] of [[parent, teacher], [teacher, parent]] as const) {
+      const started = await http(caller.subject, 'POST', '/calls', { conversationId: groupId });
+      expect(started.status).toBe(201);
+      const callId: string = started.json.callId;
+      expect(await g.prisma.callParticipant.findFirst({ where: { callId, actorId: callee.id } })).not.toBeNull();
+      const rung = await g.prisma.outboxEvent.findMany({ where: { type: 'call.incoming' } });
+      expect(rung.some((e) => (e.payload as { callId?: string }).callId === callId)).toBe(true);
+      expect((await http(callee.subject, 'POST', `/calls/${callId}/accept`)).status).toBeLessThan(300);
+      expect((await http(callee.subject, 'POST', `/calls/${callId}/token`)).status).toBeLessThan(300);
+      expect((await http(caller.subject, 'POST', `/calls/${callId}/token`)).status).toBeLessThan(300);
+      expect((await g.prisma.call.findUniqueOrThrow({ where: { id: callId } })).status).toBe('active');
+      expect((await http(caller.subject, 'POST', `/calls/${callId}/end`)).status).toBeLessThan(300);
+    }
+
+    // 4. The teacher: no reason, no amount, no pay flag, no financial card, no push.
+    const asTeacher = await http(teacher.subject, 'GET', `/conversations/${groupId}`);
+    expect(asTeacher.json.paymentLock).toEqual({ readOnly: false, canPay: false, children: [{ id: child.id, name: child.name }] });
+    const financial = /overdue|instalment|used up|Subscriptions|Term · 2\/3|5000|متأخر|القسط|انتهت|الاشتراكات/i;
+    const teacherThread = (await http(teacher.subject, 'GET', `/conversations/${groupId}/messages`)).json;
+    expect(JSON.stringify(teacherThread)).not.toMatch(financial);
+    expect((await http(teacher.subject, 'GET', `/conversations/${directId}`)).status).toBeGreaterThanOrEqual(400);
+    expect(await g.prisma.notification.count({ where: { recipientId: teacher.id, templateKey: { startsWith: 'subscription_' } } })).toBe(0);
+
+    // 5. The parent: the reason, the instalment, and the way to pay.
+    const asParent = await http(parent.subject, 'GET', `/conversations/${groupId}`);
+    expect(asParent.json.paymentLock).toMatchObject({
+      readOnly: false, canPay: true,
+      children: [{ id: child.id, name: child.name, reasons: ['overdue'], overdue: { label: 'Term · 2/3' } }],
+    });
+    const pushed = await g.prisma.notification.findFirstOrThrow({ where: { recipientId: parent.id, templateKey: 'subscription_locked', familyId: f.id } });
+    expect(String((pushed.variables as Record<string, unknown>).reason)).toMatch(/overdue|متأخر/);
+  });
+
   it('switching enforcement on: go-live recorded once, every child already in grace or locked is told, holds start on the next pass', async () => {
     const { child, teacher, groupId, directId } = family();
     process.env.SUBSCRIPTION_LOCK_ENFORCED = 'false';
@@ -858,5 +928,54 @@ describe('PD-30 over HTTP', () => {
     expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: futureId } })).toMatchObject({ outcome: null });
     await effects.sweep();
     expect(await cards(groupId, 'lessons_paused')).toHaveLength(1);
+  });
+  it('D-3 (owner, 2026-11-06): the pushes say only NEW lessons pause, in Arabic and English; rollback and re-apply', async () => {
+    const templates = new TemplateService(g.prisma);
+    const render = (key: string, locale: 'ar' | 'en', variables: Record<string, string>) =>
+      templates.render(key, locale, variables);
+    expect(await render('subscription_locked', 'en', { learner: 'Adam', reason: 'an instalment is overdue' })).toEqual({
+      title: 'Jawwid',
+      body: 'New lessons for Adam are paused: an instalment is overdue. Booked lessons go ahead. Renew in Subscriptions.',
+    });
+    expect(await render('subscription_locked', 'ar', { learner: 'آدم', reason: 'قسط متأخر' })).toEqual({
+      title: 'جَوِّد',
+      body: 'توقّف حجز حصص جديدة لـآدم: قسط متأخر. الحصص المحجوزة تُقام في موعدها. جدّدوا الاشتراك من «الاشتراكات».',
+    });
+    expect(await render('subscription_unlocked', 'en', { learner: 'Adam' }))
+      .toEqual({ title: 'Jawwid', body: 'New lessons for Adam are back on the schedule. Thank you.' });
+    expect(await render('subscription_unlocked', 'ar', { learner: 'آدم' }))
+      .toEqual({ title: 'جَوِّد', body: 'عادت الحصص الجديدة لـآدم إلى الجدول. شكرًا لكم.' });
+
+    // The rollback brings back version 1 (the PD-30 texts); applying the migration again
+    // restores version 2. Both run here from the files themselves, as an operator would.
+    const VERSION = '20261106170000_chat_pd030_d3_push_wording';
+    const root = join(__dirname, '../../../..');
+    const run = async (file: string) => {
+      const statements = readFileSync(join(root, file), 'utf8')
+        .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
+        .split(/;\s*(?:\n|$)/).map((x) => x.trim()).filter(Boolean);
+      await g.prisma.$transaction(async (tx) => {
+        for (const sql of statements) await tx.$executeRawUnsafe(sql);
+      });
+    };
+    const ledger = () => g.prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*)::bigint AS n FROM chat.schema_migrations WHERE version = ${VERSION}`;
+    expect(Number((await ledger())[0]!.n)).toBe(1);
+    try {
+      await run(`db/rollback/${VERSION}.down.sql`);
+      expect(Number((await ledger())[0]!.n)).toBe(0);
+      expect((await render('subscription_locked', 'en', { learner: 'Adam', reason: 'an instalment is overdue' }))!.body)
+        .toBe("Adam's lessons are paused: an instalment is overdue. Renew in Subscriptions.");
+      expect((await render('subscription_unlocked', 'ar', { learner: 'آدم' }))!.body).toBe('عادت حصص آدم. شكرًا لكم.');
+    } finally {
+      await run(`supabase/migrations/${VERSION}.sql`);
+      await g.prisma.$executeRawUnsafe(`INSERT INTO chat.schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, VERSION);
+    }
+    expect(Number((await ledger())[0]!.n)).toBe(1);
+    expect((await render('subscription_locked', 'ar', { learner: 'آدم', reason: 'قسط متأخر' }))!.body)
+      .toBe('توقّف حجز حصص جديدة لـآدم: قسط متأخر. الحصص المحجوزة تُقام في موعدها. جدّدوا الاشتراك من «الاشتراكات».');
+    expect((await render('subscription_unlocked', 'en', { learner: 'Adam' }))!.body).toBe('New lessons for Adam are back on the schedule. Thank you.');
+    // Applying it twice changes nothing (one row per key, locale and version).
+    await run(`supabase/migrations/${VERSION}.sql`);
+    expect(await g.prisma.notificationTemplate.count({ where: { key: { in: ['subscription_locked', 'subscription_unlocked'] }, version: 2 } })).toBe(4);
   });
 });

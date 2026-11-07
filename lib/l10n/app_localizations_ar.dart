@@ -3354,7 +3354,7 @@ class L10nAr extends L10n {
   String get subscriptionRenewalRequested => 'تم طلب التجديد';
 
   @override
-  String get lockBannerTitle => 'الحصص متوقفة مؤقتًا';
+  String get lockBannerTitle => 'حجز الحصص الجديدة متوقف مؤقتًا';
 
   @override
   String lockBannerChildBalance(String name) {
@@ -3368,14 +3368,15 @@ class L10nAr extends L10n {
 
   @override
   String lockBannerChildPaused(String name) {
-    return 'حصص $name متوقفة مؤقتًا';
+    return '$name: توقّف حجز الحصص الجديدة';
   }
 
   @override
-  String get lockBannerGeneric => 'هذه المجموعة متوقفة مؤقتًا.';
+  String get lockBannerGeneric =>
+      'المحادثة تبقى مفتوحة، والحصص المحجوزة مسبقًا تُقام في موعدها.';
 
   @override
-  String get lockBannerOpenSubscriptions => 'الذهاب إلى الاشتراكات';
+  String get lockBannerOpenSubscriptions => 'عرض الاشتراكات';
 
   @override
   String reportLessonOf(int number, int total) {
@@ -3394,17 +3395,21 @@ class L10nAr extends L10n {
   String get outcomeSuspendedPayment => 'موقوفة — الدفع';
 
   @override
-  String get cardLessonsPausedTitle => 'توقفت الحصص مؤقتًا';
+  String get cardLessonsPausedTitle => 'توقّف حجز الحصص الجديدة';
 
   @override
-  String get cardSubscriptionLockedTitle => 'توقفت الحصص — الدفع';
+  String get cardLessonsPausedBody =>
+      'الحصص المحجوزة مسبقًا تُقام في موعدها، والمحادثة تبقى مفتوحة.';
+
+  @override
+  String get cardSubscriptionLockedTitle => 'توقّف حجز الحصص الجديدة — الدفع';
 
   @override
   String get cardSubscriptionLockedHint =>
-      'جدّدوا الاشتراك أو ادفعوا من «الاشتراكات».';
+      'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».';
 
   @override
-  String get cardSubscriptionUnlockedTitle => 'عادت الحصص';
+  String get cardSubscriptionUnlockedTitle => 'عادت الحصص الجديدة';
 
   @override
   String get roleSales => 'المبيعات';
