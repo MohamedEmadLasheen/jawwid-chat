@@ -49,7 +49,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (parsed && parsed.state === 'required' && parsed.required.length > 0) {
         queryClient.setQueryData<Staff | null>(qk.me, (me) => (me ? { ...me, legal: parsed } : me))
       }
-      void queryClient.invalidateQueries({ queryKey: qk.me })
+      void queryClient.invalidateQueries({ queryKey: qk.me, exact: true })
     })
   }, [queryClient])
 

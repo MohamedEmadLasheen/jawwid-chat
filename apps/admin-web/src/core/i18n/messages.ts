@@ -89,7 +89,7 @@ export const messages = {
     'legal.agree.generic': 'I have read and agree to: {title}', // DRAFT: pending owner wording (N-3)
     'legal.open': 'Open',
     'legal.openLabel': 'Open {title} in a new tab',
-    'legal.agree': 'Agree',
+    'legal.agree': 'Agree', // DRAFT: pending owner wording (N-3)
     'legal.agreeing': 'Saving…',
     'legal.error.stale': 'The documents changed since you opened this page. They have been reloaded: please read and tick them again.',
     'legal.error.support': 'This is a support session. Only the account holder can accept the Terms of Use, by signing in as themselves.',
@@ -247,7 +247,7 @@ export const messages = {
     'legal.agree.generic': 'قرأتُ وأوافق على: {title}', // DRAFT: pending owner wording (N-3)
     'legal.open': 'فتح',
     'legal.openLabel': 'فتح {title} في تبويب جديد',
-    'legal.agree': 'أوافق',
+    'legal.agree': 'أوافق', // DRAFT: pending owner wording (N-3)
     'legal.agreeing': 'جارٍ الحفظ…',
     'legal.error.stale': 'تغيّرت المستندات منذ فتحت هذه الصفحة. أُعيد تحميلها: يرجى قراءتها وتحديد الموافقة عليها من جديد.',
     'legal.error.support': 'هذه جلسة دعم. لا يمكن لغير صاحب الحساب قبول شروط الاستخدام، وذلك بتسجيل دخوله بنفسه.',

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import type { MessageKey } from '@/core/i18n/messages'
@@ -42,24 +42,32 @@ export function LegalGate({ staff }: { staff: Staff }) {
   const [ticked, setTicked] = useState<Record<string, boolean>>({})
   const [problem, setProblem] = useState<Problem>(null)
 
-  // The freshest list from GET /me/legal; /me's own block is the fallback.
+  // GET /me/legal is the freshest answer: write it into the session so the
+  // guard decides from it (accepted in another tab -> the app; unavailable ->
+  // the notice; a changed list -> the new rows). Same shape as /me's block.
   const fresh = useQuery({ queryKey: ['me', 'legal'], queryFn: legalApi.state, retry: false, staleTime: 0 })
-  const documents: LegalDocument[] =
-    fresh.data && fresh.data.state === 'required' && fresh.data.required.length > 0
-      ? fresh.data.required
-      : staff.legal?.required ?? []
+  useEffect(() => {
+    const next = fresh.data
+    if (!next) return
+    const { state, required, unavailable } = next
+    queryClient.setQueryData<Staff | null>(qk.me, (me) => (me ? { ...me, legal: { state, required, unavailable } } : me))
+  }, [fresh.data, queryClient])
+  const documents: LegalDocument[] = staff.legal?.required ?? []
 
   const allTicked = documents.length > 0 && documents.every((d) => ticked[docKey(d)])
 
   const reload = async () => {
     setTicked({})
-    await Promise.allSettled([queryClient.invalidateQueries({ queryKey: qk.me }), fresh.refetch()])
+    await Promise.allSettled([queryClient.invalidateQueries({ queryKey: qk.me, exact: true }), fresh.refetch()])
   }
 
   const accept = useMutation({
     mutationFn: () => legalApi.accept(documents, locale),
-    onSuccess: (legal: LegalBlock) => {
+    onSuccess: async (legal: LegalBlock) => {
       setProblem(null)
+      // A /me answer already in flight predates this acceptance: drop it, or it
+      // would overwrite "accepted" and bring the gate back.
+      await queryClient.cancelQueries({ queryKey: qk.me, exact: true })
       queryClient.setQueryData<Staff | null>(qk.me, (me) => (me ? { ...me, legal } : me))
     },
     onError: (error) => {
@@ -151,13 +159,15 @@ export function LegalUnavailable() {
   const queryClient = useQueryClient()
   return (
     <main className="login legal-gate" dir={dir} lang={locale} aria-labelledby="legal-title">
-      <div className="login__card legal-gate__card" role="alert">
+      <div className="login__card legal-gate__card">
         <div className="login__brand">
           <BrandLogo />
         </div>
-        <h1 className="login__title" id="legal-title">{t('legal.unavailable.title')}</h1>
-        <p className="login__subtitle">{t('legal.unavailable.body')}</p>
-        <button type="button" className="btn btn--primary btn--block" onClick={() => void queryClient.invalidateQueries({ queryKey: qk.me })}>
+        <div role="alert">
+          <h1 className="login__title" id="legal-title">{t('legal.unavailable.title')}</h1>
+          <p className="login__subtitle">{t('legal.unavailable.body')}</p>
+        </div>
+        <button type="button" className="btn btn--primary btn--block" onClick={() => void queryClient.invalidateQueries({ queryKey: qk.me, exact: true })}>
           {t('common.retry')}
         </button>
         <button type="button" className="btn btn--ghost btn--block btn--sm" onClick={() => void signOut()}>

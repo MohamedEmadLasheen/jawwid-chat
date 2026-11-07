@@ -194,11 +194,47 @@ describe('the gate', () => {
     expect(screen.queryByText('APP CONTENT')).toBeNull()
   })
 
+  it('a /me answer already in flight cannot bring the gate back after Agree (review S-2)', async () => {
+    let release!: () => void
+    const held = new Promise<void>((r) => (release = r))
+    routes['GET /me'] = (() => held.then(() => json(ME_REQUIRED))) as unknown as () => Response
+    const { queryClient } = mount(REQUIRED)
+    void queryClient.refetchQueries({ queryKey: qk.me, exact: true })
+    await waitFor(() => expect(calls(/\/me$/).length).toBeGreaterThan(0))
+    await tickAndAgree()
+    await waitFor(() => expect(screen.getByText('APP CONTENT')).toBeInTheDocument())
+    release()
+    await new Promise((r) => setTimeout(r, 30))
+    expect(screen.getByText('APP CONTENT')).toBeInTheDocument()
+  })
+
+  it('GET /me/legal saying accepted (another tab) lets the app through (review S-3)', async () => {
+    routes['GET /me/legal'] = () => json({ ...ACCEPTED, documents: [] })
+    mount(REQUIRED)
+    await waitFor(() => expect(screen.getByText('APP CONTENT')).toBeInTheDocument())
+  })
+
+  it('GET /me/legal saying unavailable shows the notice, not checkboxes (review S-3)', async () => {
+    routes['GET /me/legal'] = () => json({ state: 'unavailable', required: [], unavailable: ['terms_staff'], documents: [] })
+    mount(REQUIRED)
+    expect(await screen.findByText('The Terms of Use are temporarily unavailable')).toBeInTheDocument()
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+  })
+
   it('Sign out is offered', async () => {
     routes['POST /auth/logout'] = () => json({})
     mount(REQUIRED)
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     await waitFor(() => expect(calls(/\/auth\/logout$/, 'POST')).toHaveLength(1))
+  })
+})
+
+describe('the unavailable page', () => {
+  it('Retry refetches /me and lets the app through once it is accepted', async () => {
+    mount({ state: 'unavailable', required: [], unavailable: ['terms_staff'] })
+    expect(screen.getByText('The Terms of Use are temporarily unavailable')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByText('APP CONTENT')).toBeInTheDocument())
   })
 })
 
