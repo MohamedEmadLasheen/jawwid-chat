@@ -15,6 +15,8 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { TeacherFileService, mapTimelineRefusal } from './teacher-file.service';
 import { feedbackKeyAllows } from '../platform/teacher-records-policy';
 import { tellParent } from './feedback-notice';
+import { AppConfigService } from '../platform/app-config.service';
+import { ContentFilterService } from '../platform/content-filter/content-filter.service';
 
 export const FEEDBACK_CATEGORIES = ['praise', 'suggestion', 'complaint'] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
@@ -58,6 +60,10 @@ export class ParentFeedbackService {
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     // PD-52 (plan §7): who follows a complaint or praise up is told.
     @Optional() private readonly outbox: OutboxService = new OutboxService(),
+    // LD-12 / MG-3: the parent's words reach the Teachers department and, as a
+    // complaint, the teacher's record. Absent, the real filter with the draft
+    // list -- never no filter.
+    @Optional() private readonly contentFilter: ContentFilterService = new ContentFilterService(new AppConfigService(prisma)),
   ) {}
 
   // ------------------------------------------------------------------
@@ -98,6 +104,7 @@ export class ParentFeedbackService {
     if (typeof body.body !== 'string' || body.body.trim().length === 0) throw invalid('body: is required');
     const text = body.body.trim();
     if (text.length > BODY_MAX) throw invalid(`body: must be at most ${BODY_MAX} characters`);
+    await this.contentFilter.assertAllowed(ActorKind.CONTACT, text);
 
     const learner = await this.prisma.learner.findFirst({
       where: { id: body.learnerId.toLowerCase(), familyId: contact.familyId, organizationId: contact.organizationId },

@@ -5,6 +5,7 @@ import { SqlCoverageService } from './coverage.service';
 import { PrismaAuditService } from './audit.service';
 import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
+import { ContentFilterService } from './content-filter/content-filter.service';
 import { PrismaRelationshipService } from './relationship.service';
 import { RealtimeRevocationHub } from './realtime-revocation';
 import { SqlStaffScope } from './staff-scope';
@@ -38,6 +39,8 @@ import {
     SalesScopeService,
     PrismaService,
     AppConfigService,
+    // LD-12 / MG-3: the pre-posting word filter (Apple 1.2), with the draft list.
+    ContentFilterService,
     AuthorizationService,
     // PD-22. Each person's zone; read by notifications, cards and Admin Web views.
     TimeZoneService,
@@ -63,6 +66,7 @@ import {
     SalesScopeService,
     PrismaService,
     AppConfigService,
+    ContentFilterService,
     AuthorizationService,
     TimeZoneService,
     IDENTITY_SERVICE,

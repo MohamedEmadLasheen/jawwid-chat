@@ -1,10 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService, Tx } from '../../platform/audit.service';
 import type { IdentityService } from '../../platform/identity.service';
 import { ActorKind } from '../contracts/vocab';
+import { AppConfigService } from '../../platform/app-config.service';
+import { ContentFilterService } from '../../platform/content-filter/content-filter.service';
 import { signAvatar } from './avatar-urls';
 
 /**
@@ -49,6 +51,9 @@ export class ParentProfileService {
     private readonly prisma: PrismaService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // LD-12 / MG-3: a name and an About are read by others. Absent, the real
+    // filter with the draft list -- never no filter.
+    @Optional() private readonly contentFilter: ContentFilterService = new ContentFilterService(new AppConfigService(prisma)),
   ) {}
 
   // ---------------------------------------------------------------- read
@@ -117,6 +122,7 @@ export class ParentProfileService {
     const name = input.name === undefined ? undefined : this.requireName(input.name);
     const about = input.about === undefined ? undefined : this.normaliseAbout(input.about);
     if (name === undefined && about === undefined) return this.me(actorId);
+    await this.contentFilter.assertAllowed(ActorKind.CONTACT, name, about);
 
     await this.prisma.$transaction(async (tx) => {
       if (name !== undefined && name !== contact.name) {
@@ -155,6 +161,7 @@ export class ParentProfileService {
     const name = input.name === undefined ? undefined : this.requireName(input.name);
     const about = input.about === undefined ? undefined : this.normaliseAbout(input.about);
     if (name === undefined && about === undefined) return this.me(actorId);
+    await this.contentFilter.assertAllowed(ActorKind.CONTACT, name, about);
 
     await this.prisma.$transaction(async (tx) => {
       if (name !== undefined && name !== learner.name) {

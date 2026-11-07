@@ -125,6 +125,25 @@ A handful of authenticated actions are rationed per ACTOR (the token's actor, ne
 
 The window is `abuse.throttle.window_seconds` (60). If the rate limit store is unreachable these routes are **served, not refused** (fail open, logged) — the opposite of login. WebSocket frames are bounded separately: a socket sending more than `abuse.realtime.frames_per_socket_per_minute` (600) frames in a minute has the excess frame dropped and is disconnected by the server (`io server disconnect`). Details: `docs/security/ABUSE-LIMITS.md`.
 
+### 1.1b Pre-posting content filter (LD-12 / MG-3, Apple 1.2)
+
+Text that a parent or a teacher writes for other people is checked against a word list (Arabic and English) before anything is stored. On a match the route answers **400 `COMM.CONTENT_NOT_ALLOWED`** with a fixed message that never names the word; nothing is written, and the word is not logged, audited or put in the outbox. Staff and the system are not filtered.
+
+| Route | Field(s) checked |
+|---|---|
+| `POST /conversations/:id/messages` | `body` (a text, or the caption of a photo, video, voice note or file) |
+| `POST /conversations/:id/messages/forward` | each forwarded body (a forward is a send) |
+| `PATCH /conversations/:id/messages/:messageId` | `body` |
+| `POST /me/feedback` | `body` |
+| `PATCH /me/profile`, `PATCH /me/children/:learnerId` | `name`, `about` |
+| `POST /me/teacher-profile` | `bio`, `specialization`, `qualifications`, `experience` |
+| `PATCH /me/teacher-profile/name` | `name` |
+
+- **Matching:** whole words and whole phrases only, never part of a word. Before comparing, Arabic loses diacritics, Quranic marks and tatweel, and alef, ya and ta marbuta variants are unified; English is case-folded and common look-alike digits and symbols (`0 1 3 4 5 7 @ $`) inside a word are read as letters; repeated letters collapse to one. `apps/api/src/platform/content-filter/`.
+- **The list** is data: `apps/api/src/platform/content-filter/word-list.draft.json`, a DRAFT pending owner approval (LD-12). A test runs it over the whole Quran (`data/quran`) and the lessons' Arabic and fails on any match.
+- **Switch:** chat.config `moderation.content_filter.enabled` (default `true`; only a JSON `false` turns it off, read with the usual 30 s cache). No deploy is needed.
+- **Images** are not scanned. A reported image reaches the moderation queue as part of the report (PD-57).
+
 ### 1.2 Permission keys
 
 Canonical list (decision 8). Server-side evaluation only; `GET /me` returns the actor's keys for UX.
@@ -570,7 +589,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Auth: required. Permission: `messages.send`. Scope: `AuthorizationService.canSend` (membership, BR-1, C-4 admin presence, on-duty / sticky / manager, silent, `can_message`, archived).
 - Request: `{ type?: 'text'|'image'|'video'|'voice'|'file' (default text; 'system' is downgraded to text for non-system actors), body?: string, visibility?: 'customer'|'internal' (default customer), clientMessageId?: string (strongly recommended), replyToMessageId?: string, requestedMode?: 'assist'|'escalation' (only these are honoured; owner/coverage are derived), attachments?: [{ kind, objectKey, mimeType, byteSize, checksumSha256?, originalName?, durationMs?, width?, height?, thumbnailObjectKey? }] }`.
 - Response: `200 MessageDto` (`moderation` is always `'published'` since PD-14 — nothing is held for approval; `onBehalfMode` derived).
-- Errors: `COMM.EMPTY_MESSAGE` 400 · `COMM.ATTACHMENT_*` 400 · `COMM.MESSAGE_NOT_FOUND` 404 (reply target) · `COMM.REPLY_TARGET_CROSS_CONVERSATION` 403 · `COMM.CONVERSATION_ARCHIVED` 403 · every matrix code in §1.1 · `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
+- Errors: `COMM.EMPTY_MESSAGE` 400 · `COMM.CONTENT_NOT_ALLOWED` 400 (parent or teacher, §1.1b) · `COMM.ATTACHMENT_*` 400 · `COMM.MESSAGE_NOT_FOUND` 404 (reply target) · `COMM.REPLY_TARGET_CROSS_CONVERSATION` 403 · `COMM.CONVERSATION_ARCHIVED` 403 · every matrix code in §1.1 · `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 - Idempotency: **`clientMessageId`** (fast-path lookup + unique-index P2002 re-read, scoped to `(conversationId, authorId, clientMessageId)` — the unique index is asserted by the service comment; not re-verified in the migrations here). `Idempotency-Key` is redundant for this route.
 - Side effects: `seq = last_seq + 1` under `FOR UPDATE`; `lastActivityAt`; for published customer-visible messages a contact author sets `lastCustomerMessageAt` and clears `resolvedAt`, a staff author sets `lastStaffMessageAt` and becomes sticky handler for `handoff.grace_minutes` (15); receipts `sent` created for live members other than the author (internal notes: staff only); pending messages create a `message_approval` and **no receipts**.
 - Audit: `event_log` `{type:'message_sent', payload:{conversationId, messageId, type, visibility, moderation}}` (never the body); `audit_log` `{action:'message.assist'|'message.escalation', entity:'conversation', after:{messageId}, reason}` when `onBehalfMode` is assist / escalation.
@@ -759,7 +778,7 @@ Every route below first requires that the caller can read the conversation (`can
 - **Only the author**, and only within `communication.edit_window_minutes` (config, default 15). Anyone else gets `COMM.NOT_MESSAGE_AUTHOR`; a late edit gets `COMM.EDIT_WINDOW_EXPIRED`.
 - **Only a published, never-moderated, undeleted TEXT message** (409 `COMM.MESSAGE_NOT_EDITABLE` otherwise). A message that went through approval stays exactly as it was approved. So does any message whose author's sends here would now be held: an edit is never a way round moderation.
 - **The author must still be able to write there:** the same `canSend` decision a send takes (an archived conversation refuses with `COMM.CONVERSATION_ARCHIVED`). A message of another conversation than `:cid` reads as absent (404).
-- An empty body is 400 `COMM.EMPTY_MESSAGE`. An unchanged body is a no-op: no revision, no event.
+- An empty body is 400 `COMM.EMPTY_MESSAGE`. A parent's or a teacher's new wording holding a listed word is 400 `COMM.CONTENT_NOT_ALLOWED` (§1.1b): the message keeps its wording and gains no revision. An unchanged body is a no-op: no revision, no event.
 - **The previous wording is kept** in `chat.message_revision`, in the same transaction. `chat.forbid_message_rewrite` (now amended) refuses any body change that is not such a recorded edit of a published, unmoderated text, whoever writes. Revisions are immutable. The audit row (`message.edit`) holds no text.
 - `MessageDto.editedAt` is the time of the last edit (null when never edited); `body` is the current wording, and the chat-list preview follows it.
 - Realtime: `message.updated` `{ conversationId, messageId, visibility, editedAt }`, with no body. An internal note's edit goes to staff rooms only.
@@ -834,7 +853,7 @@ A parent edits their own name and About, and each child's. Save is the publish. 
 | PATCH | `/me/profile` | `{ name?, about? }` | The profile. An absent field is left alone; `about: null` or blank clears it. |
 | PATCH | `/me/children/:learnerId` | `{ name?, about? }` | The profile, for a child of the caller's family. |
 
-**Errors:** `COMM.PROFILE_NOT_AVAILABLE` (403, not a family contact), `COMM.PROFILE_FIELD_INVALID` (400), `COMM.LEARNER_NOT_IN_FAMILY` (404, also for a learner that does not exist).
+**Errors:** `COMM.PROFILE_NOT_AVAILABLE` (403, not a family contact), `COMM.PROFILE_FIELD_INVALID` (400), `COMM.CONTENT_NOT_ALLOWED` (400, a name or About holding a listed word, §1.1b; nothing is saved), `COMM.LEARNER_NOT_IN_FAMILY` (404, also for a learner that does not exist).
 
 **Audit:** `profile.name.changed` and `profile.child.name.changed` (old and new name); `profile.about.saved` and `profile.child.about.saved` (the About's LENGTH, never its text). The actor is always the parent.
 
@@ -868,7 +887,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 |---|---|---|---|
 | GET | `/me/teacher-profile` | none | The profile: `{ name, role, photoUrl, bio, specialization, qualifications, experience, languages, certificates[], updatedAt }`. Creates nothing. |
 | POST | `/me/teacher-profile` | `{ bio?, specialization?, qualifications?, experience?, languages? }` | The profile, immediately current. |
-| PATCH | `/me/teacher-profile/name` | `{ name }` | `{ name, role }`, the name as stored (trimmed, whitespace collapsed). |
+| PATCH | `/me/teacher-profile/name` | `{ name }` | `{ name, role }`, the name as stored (trimmed, whitespace collapsed). The profile save and the name are refused with `COMM.CONTENT_NOT_ALLOWED` (400, §1.1b) when they hold a listed word. |
 | POST | `/me/teacher-profile/certificates/upload` | `{ mimeType, byteSize }` | `{ uploadUrl, uploadToken, expiresAt, headers }`. PDF/JPEG/PNG, at most 10 MiB. PUT the bytes with exactly `headers`. |
 | POST | `/me/teacher-profile/certificates` | `{ title, issuingOrganization?, issuedOn?, mimeType, byteSize, uploadToken }` | The profile; the new certificate is `pending`. The file must already be in storage, at the declared size, and sniff as the declared type: otherwise `COMM.TEACHER_CERTIFICATE_NOT_UPLOADED` (409) or `_INVALID_TYPE` (400, and the file is deleted). |
 | PATCH | `/me/teacher-profile/certificates/:id` | `{ title, issuingOrganization?, issuedOn? }` | The profile. A retitled claim returns to `pending`; the file never moves. |

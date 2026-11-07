@@ -313,6 +313,12 @@ abstract class L10n {
   /// **'You can no longer send messages here.'**
   String get composerReadOnly;
 
+  /// LD-12: COMM.CONTENT_NOT_ALLOWED on a text. Shown above the composer, which keeps the text.
+  ///
+  /// In en, this message translates to:
+  /// **'This message has words that are not allowed here. Please change them and send it again.'**
+  String get composerContentNotAllowed;
+
   /// No description provided for @voiceRecordingInProgress.
   ///
   /// In en, this message translates to:
@@ -456,6 +462,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Not sent'**
   String get messageStateFailed;
+
+  /// LD-12: COMM.CONTENT_NOT_ALLOWED on a photo, video, voice note or file; the bubble offers Discard, not Retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent: the caption has words that are not allowed'**
+  String get messageContentNotAllowed;
 
   /// No description provided for @messageStatePendingApproval.
   ///
@@ -7128,6 +7140,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Only a parent can send feedback about a teacher.'**
   String get feedbackDenied;
+
+  /// LD-12: COMM.CONTENT_NOT_ALLOWED. The form keeps the text.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback has words that are not allowed. Please change them and send it again.'**
+  String get feedbackContentNotAllowed;
 
   /// PD-32: any other failure.
   ///

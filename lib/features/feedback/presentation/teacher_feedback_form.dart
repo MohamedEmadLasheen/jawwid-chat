@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
+import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
@@ -55,6 +56,8 @@ class _TeacherFeedbackFormScreenState extends ConsumerState<TeacherFeedbackFormS
       FeedbackErrors.limit => l10n.feedbackLimit,
       FeedbackErrors.notFound => l10n.feedbackNotFound,
       FeedbackErrors.denied => l10n.feedbackDenied,
+      // LD-12: the words go back to the parent to change; the field keeps them.
+      WireErrors.contentNotAllowed => l10n.feedbackContentNotAllowed,
       _ => switch (appError.kind) {
           AppErrorKind.rateLimited => l10n.feedbackLimit,
           AppErrorKind.notFound => l10n.feedbackNotFound,
