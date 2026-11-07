@@ -165,3 +165,19 @@ describe('errorCategory: a log line names the kind of Stripe error, never its me
     expect(errorCategory(undefined)).toBe('error');
   });
 });
+
+describe('rate limiting', () => {
+  it('a parent opening Stripe Checkout is rate limited per actor; the webhook is not (Stripe bursts)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { RATE_LIMITED_ACTION, ActionScope } = require('../../../src/platform/auth/action-throttle.guard');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { PaymentsController } = require('../../../src/billing/payments.controller');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { StripeWebhookController } = require('../../../src/billing/stripe-webhook.controller');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { COMMUNICATION_CONFIG_DEFAULTS } = require('../../../src/platform/app-config.service');
+    expect(Reflect.getMetadata(RATE_LIMITED_ACTION, PaymentsController.prototype.checkout)).toBe(ActionScope.CHECKOUT_START);
+    expect(Reflect.getMetadata(RATE_LIMITED_ACTION, StripeWebhookController.prototype.webhook)).toBeUndefined();
+    expect(COMMUNICATION_CONFIG_DEFAULTS[`abuse.throttle.${ActionScope.CHECKOUT_START}`]).toBe(10);
+  });
+});

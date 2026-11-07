@@ -80,6 +80,8 @@ export interface InvoiceDto {
   planMonths: number | null;
   periodStart: string | null;
   periodEnd: string | null;
+  /** A card payment's brand, last 4 and wallet -- what the parent's history shows. */
+  card: { brand: string | null; last4: string | null; wallet: string | null } | null;
 }
 
 export interface ReceiptDto {
@@ -286,7 +288,7 @@ export class PaymentsReadService {
         child: childOf(p),
         reference: p.reference,
         invoice: inv ? { id: inv.id, number: inv.number } : null,
-        card: p.method === 'card' && (p.cardBrand || p.cardLast4) ? { brand: p.cardBrand, last4: p.cardLast4, wallet: p.cardWallet } : null,
+        card: cardOf(p),
       };
       if (viewer.staff) {
         dto.recordedBy = person(p.recordedBy);
@@ -377,5 +379,11 @@ export function presentInvoice(inv: Invoice, p: Payment, refundedMinor: number, 
     planMonths: s.planMonths,
     periodStart: s.periodStart,
     periodEnd: s.periodEnd,
+    card: cardOf(p),
   };
+}
+
+/** A card payment's brand, last 4 and wallet, when Stripe reported them. */
+export function cardOf(p: Payment): { brand: string | null; last4: string | null; wallet: string | null } | null {
+  return p.method === 'card' && (p.cardBrand || p.cardLast4) ? { brand: p.cardBrand, last4: p.cardLast4, wallet: p.cardWallet } : null;
 }
