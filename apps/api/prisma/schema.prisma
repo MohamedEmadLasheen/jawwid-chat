@@ -195,7 +195,11 @@ model AuditLog {
   before          Json?
   after           Json?
   reason          String
-  at              DateTime @default(now()) @db.Timestamptz
+  /// The database's now(), never the API host's clock: SQL functions (e.g. the
+  /// PD-43 teacher.created row) write this table too, and a Prisma-side now()
+  /// (millisecond, a different machine's clock) would order rows from the two
+  /// writers by clock skew instead of by time. One clock, one transaction time.
+  at              DateTime @default(dbgenerated("now()")) @db.Timestamptz
   /// PD-21: set when written during a support session (an administrator acting as someone).
   impersonationId String?  @map("impersonation_id") @db.Uuid
 
