@@ -137,12 +137,12 @@ meanwhile.
 | 8 | Staff deletion in the app | Closure request like teachers | LR-20 |
 | 9 | Accounts and credentials: Apple Distribution certificate, profile, App Store Connect record; Play Organization account (D-U-N-S), upload key, app; Firebase project; APNs key check; `backup` Environment; `DIGITALOCEAN_APP_ID` and DNS; app Sentry DSN | Required | LR-01, LR-06, LR-07, LR-12, LR-19 |
 | 10 | High-risk approvals: merge #498 and #497 after their reviews; **approve implementation** of ENG-11/12 (terms screens) and of the push port (LR-11: re-claims a migration slot, changes who receives pushes) | Approve | LR-02, LR-03, LR-11 |
+| 11 | Production deploy | After staging passes | LR-01 |
 | 12 | Review accounts: the e-mail domain and two passwords, then run the provisioning command (after #11) | Required | LR-05 |
 | 13 | An iPhone and an Android 14+ phone for the device test plan, and time to run it with QA | Required | LR-08 |
 | 14 | Who is on call for production alerts | Name a person | LR-29 |
-| 15 | Closed-account state (P-6): build it, or counsel softens the policy wording | Build it (engineering, Medium) | LR-31 |
+| 15 | Closed-account state (P-6): build it, or counsel softens the policy wording | Build it (High risk: schema and account security, so the owner approves implementation) | LR-31 |
 | 16 | A vector or high-resolution logo; read the five Arabic permission strings | Required / quick read | LR-36, LR-41 |
-| 11 | Production deploy | After staging passes | LR-01 |
 
 ## 7. Plan
 
