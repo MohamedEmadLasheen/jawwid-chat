@@ -3,7 +3,8 @@ import type { ReactNode } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { sessionApi } from '@/core/api/endpoints'
 import { qk } from '@/core/api/queryKeys'
-import { setUnauthenticatedHandler } from '@/core/api/client'
+import { setUnauthenticatedHandler, setTermsRequiredHandler } from '@/core/api/client'
+import { parseLegal } from '@/features/legal/legal'
 import { onSignedOutElsewhere, tokenStore } from './tokens'
 import type { Staff } from '@/shared/types/domain'
 import { accountLocale, rememberAccountLocale, useI18nIfAny } from '@/core/i18n/I18nProvider'
@@ -38,6 +39,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // A 401 from anywhere clears every cached page so a signed-out operator
     // cannot read another role's data out of the cache.
     setUnauthenticatedHandler(() => endSession(queryClient))
+  }, [queryClient])
+
+  // PD-58: a 403 COMM.TERMS_NOT_ACCEPTED from any request shows the gate at once
+  // (from the error's own list when it has one), then refetches /me for the truth.
+  useEffect(() => {
+    setTermsRequiredHandler((required) => {
+      const parsed = parseLegal({ state: 'required', required, unavailable: [] })
+      if (parsed && parsed.state === 'required' && parsed.required.length > 0) {
+        queryClient.setQueryData<Staff | null>(qk.me, (me) => (me ? { ...me, legal: parsed } : me))
+      }
+      void queryClient.invalidateQueries({ queryKey: qk.me })
+    })
   }, [queryClient])
 
   // PD-23: in "Keep me signed in" mode every tab shares one token; when another
