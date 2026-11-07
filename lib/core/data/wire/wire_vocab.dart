@@ -119,6 +119,29 @@ abstract final class WireErrors {
   static const callNotRinging = 'COMM.CALL_NOT_RINGING';
   static const callAlreadyDeclined = 'COMM.CALL_ALREADY_DECLINED';
 
+  // PD-58 Terms of Use (docs/communication/error-codes.md "Terms of Use (PD-58)"). None is
+  // in [terminal]: each has its own handling (the legal gate, a reload, a message), and
+  // a TERMS_NOT_ACCEPTED refusal stops being true once the person accepts.
+
+  /// 403 from any `@RequiresLegal()` route: something is still to accept. `ApiClient`
+  /// reports it centrally; the identity is refreshed and the legal gate shown.
+  static const termsNotAccepted = 'COMM.TERMS_NOT_ACCEPTED';
+
+  /// 400: the documents accepted are not exactly the required set. Reload; never re-send.
+  static const legalWrongDocuments = 'COMM.LEGAL_WRONG_DOCUMENTS';
+
+  /// 409: a version accepted is no longer the one in force. Reload and ask again.
+  static const legalVersionStale = 'COMM.LEGAL_VERSION_STALE';
+
+  /// 400 from sign-up verify without `acceptLegal`.
+  static const legalRequired = 'COMM.LEGAL_REQUIRED';
+
+  /// 503: the owner's configuration cannot be decided. A generic failure; never "no terms".
+  static const legalNotConfigured = 'COMM.LEGAL_NOT_CONFIGURED';
+
+  /// 403: a staff support session (PD-21) cannot accept for the person.
+  static const supportSessionForbidden = 'COMM.SUPPORT_SESSION_FORBIDDEN';
+
   /// Codes that mean "this will never succeed, stop asking".
   static const terminal = <String>{
     teacherParentNotAuthorized,

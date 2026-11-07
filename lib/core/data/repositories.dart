@@ -1,5 +1,6 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
+import '../../shared/models/legal.dart';
 import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/my_calendar.dart';
@@ -392,10 +393,27 @@ abstract interface class ParentSignupRepository {
   /// send the parent on WhatsApp. Succeeds the same way for any e-mail.
   Future<void> requestCode(String email);
 
+  /// PD-58: `GET /auth/signup/legal` -- the family Terms of Use and the Code of Conduct in
+  /// force, to accept on the sign-up screen. **Null when the server answers 404** (the API
+  /// before ENG-10): no legal step, and nothing legal is sent. An empty list is "nothing in
+  /// force" (outside production). A 503 `COMM.LEGAL_NOT_CONFIGURED`, or an answer this build
+  /// cannot read, is THROWN -- never read as "nothing to accept".
+  Future<List<LegalDocument>?> signupLegal();
+
   /// `POST /auth/signup/verify` -- sets the password. The caller then signs in normally.
   /// [lessonAudioNotice]: the version of the PD-48 lesson-audio notice the parent ticked,
   /// recorded as their acknowledgement so the next sign-in does not ask again.
-  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice});
+  /// PD-58: [acceptLegal] -- exactly what [signupLegal] listed and the parent ticked -- with
+  /// [client] and [locale]. Null sends none of the three.
+  Future<void> verify({
+    required String email,
+    required String code,
+    required String password,
+    int? lessonAudioNotice,
+    List<LegalDocument>? acceptLegal,
+    String? client,
+    String? locale,
+  });
 }
 
 /// The build with no sign-up server (fixtures, tests that do not override it).
@@ -405,9 +423,47 @@ class NoParentSignupRepository implements ParentSignupRepository {
   @override
   Future<void> requestCode(String email) => throw UnsupportedError('no sign-up server in this build');
 
+  /// No server, no documents: the same as the API before ENG-10.
   @override
-  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice}) =>
+  Future<List<LegalDocument>?> signupLegal() async => null;
+
+  @override
+  Future<void> verify({
+    required String email,
+    required String code,
+    required String password,
+    int? lessonAudioNotice,
+    List<LegalDocument>? acceptLegal,
+    String? client,
+    String? locale,
+  }) =>
       throw UnsupportedError('no sign-up server in this build');
+}
+
+/// PD-58 (API-CONTRACT §1.1c): the signed-in account's Terms of Use. On the AUTHENTICATED
+/// client; neither route is ever gated -- they are how an account gets through the gate.
+abstract interface class LegalRepository {
+  /// `GET /me/legal` -- the `legal` block now (its `documents` are not needed here).
+  Future<LegalStatus> current();
+
+  /// `POST /me/legal/accept {documents: [{documentKey, version}], client, locale}`, and the
+  /// answer's `legal` block. [documents] is exactly the required set. A refusal is an
+  /// AppError with the server's code (`COMM.LEGAL_WRONG_DOCUMENTS`, `COMM.LEGAL_VERSION_STALE`,
+  /// `COMM.SUPPORT_SESSION_FORBIDDEN`, `COMM.LEGAL_NOT_CONFIGURED`).
+  Future<LegalStatus> accept({required List<LegalDocument> documents, required String client, required String locale});
+}
+
+/// The build with no account server (fixtures, tests that do not override it). Its fixture
+/// identities carry no `legal` block, so no gate ever asks this.
+class NoLegalRepository implements LegalRepository {
+  const NoLegalRepository();
+
+  @override
+  Future<LegalStatus> current() => throw UnsupportedError('no account server in this build');
+
+  @override
+  Future<LegalStatus> accept({required List<LegalDocument> documents, required String client, required String locale}) =>
+      throw UnsupportedError('no account server in this build');
 }
 
 /// PD-21: a parent or teacher finishes a password reset the academy issued. The

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import '../data/wire/wire_vocab.dart';
 import '../errors/app_error.dart';
 import '../logging/redacting_logger.dart';
 import 'error_mapper.dart';
@@ -63,9 +64,11 @@ class ApiClient {
     required Dio dio,
     required TokenProvider tokens,
     RedactingLogger logger = const RedactingLogger(),
+    void Function(AppError error)? onTermsNotAccepted,
   })  : _dio = dio,
         _tokens = tokens,
-        _logger = logger {
+        _logger = logger,
+        _onTermsNotAccepted = onTermsNotAccepted {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: _onRequest,
@@ -83,6 +86,11 @@ class ApiClient {
   final Dio _dio;
   final TokenProvider _tokens;
   final RedactingLogger _logger;
+
+  /// PD-58: told of every 403 `COMM.TERMS_NOT_ACCEPTED`, from ANY route, so the identity is
+  /// refreshed and the legal gate shown in one place rather than by each screen. The request
+  /// still fails to its caller as before; this only reports it. Never awaited.
+  final void Function(AppError error)? _onTermsNotAccepted;
 
   Future<Renewal>? _inFlightRefresh;
 
@@ -134,6 +142,16 @@ class ApiClient {
     ErrorInterceptorHandler handler,
   ) async {
     final mapped = ErrorMapper.map(error);
+
+    // PD-58: the account has something to accept. Reported, then passed on untouched -- it is
+    // neither a session ending nor something a refresh could answer.
+    if (mapped.code == WireErrors.termsNotAccepted) {
+      try {
+        _onTermsNotAccepted?.call(mapped);
+      } catch (_) {
+        // An error path must never itself throw.
+      }
+    }
 
     // A disabled account, a locked account or a revoked session is terminal: refreshing
     // cannot help, and pretending otherwise would strand the user on a spinner. Worse, the

@@ -7,6 +7,8 @@ import '../../../core/errors/app_error.dart';
 import '../../../core/logging/redacting_logger.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../../../shared/models/auth.dart';
+import '../../../shared/models/legal.dart';
+import '../../legal/application/legal_wire.dart';
 import '../domain/auth_state.dart';
 import 'session_termination.dart';
 
@@ -24,8 +26,10 @@ class AuthController extends Notifier<AuthState> {
     void Function(AuthUser principal)? onPrincipal,
     Future<void> Function()? onSessionCleared,
     SessionTermination? termination,
+    LegalWire? legal,
     RedactingLogger logger = const RedactingLogger(),
   })  : _repository = repository,
+        _legalWire = legal,
         _tokens = tokens,
         _clearLocalData = clearLocalData,
         _onPrincipal = onPrincipal,
@@ -54,6 +58,13 @@ class AuthController extends Notifier<AuthState> {
   /// and leaving a revoked user looking at a protected screen until they restart.
   final SessionTermination? _termination;
 
+  /// PD-58: the wire from the transport for the Terms of Use -- a token pair's `legal` block
+  /// and every 403 `COMM.TERMS_NOT_ACCEPTED`. Bound in [build], like [_termination].
+  final LegalWire? _legalWire;
+
+  /// Single-flights the identity refresh a burst of TERMS_NOT_ACCEPTED refusals asks for.
+  Future<void>? _termsCheck;
+
   final RedactingLogger _logger;
 
   StreamSubscription<void>? _revocationWatch;
@@ -66,8 +77,10 @@ class AuthController extends Notifier<AuthState> {
   @override
   AuthState build() {
     _termination?.bind(onSessionEnded);
+    _legalWire?.bind(report: adoptLegal, refused: onTermsNotAccepted);
     ref.onDispose(() {
       _termination?.unbind(onSessionEnded);
+      _legalWire?.unbind(adoptLegal);
       _revocationWatch?.cancel();
     });
     return const AuthUnknown();
@@ -155,7 +168,10 @@ class AuthController extends Notifier<AuthState> {
       );
       await _tokens.write(session);
 
-      final principal = await _repository.currentUser();
+      final fetched = await _repository.currentUser();
+      // PD-58: `/me` and the token pair carry the same block; the pair's stands in only
+      // when `/me` has none.
+      final principal = fetched.legal == null && session.legal != null ? fetched.withLegal(session.legal) : fetched;
       _adopt(principal);
       state = AuthAuthenticated(principal);
     } catch (thrown) {
@@ -221,7 +237,13 @@ class AuthController extends Notifier<AuthState> {
     if (state is! AuthAuthenticated) return;
 
     try {
-      final principal = await _repository.currentUser();
+      final fetched = await _repository.currentUser();
+      // PD-58: an answer without a `legal` block says nothing new about the Terms of Use, so
+      // it never lifts a gate already standing (fail closed). It cannot raise one either.
+      final known = state.user?.legal;
+      final principal = fetched.legal == null && known != null ? fetched.withLegal(known) : fetched;
+      // A sign-out while this was in flight wins: the answer was about a session now over.
+      if (state is! AuthAuthenticated || state.user?.id != principal.id) return;
       state = AuthAuthenticated(principal);
       _onPrincipal?.call(principal);
     } on AppError catch (error) {
@@ -231,6 +253,27 @@ class AuthController extends Notifier<AuthState> {
         _logger.warn('identity refresh failed', data: {'kind': error.kind.name});
       }
     }
+  }
+
+  /// PD-58: what the server now says this account must accept -- from `GET /me/legal`, the
+  /// accept answer, or a token pair. Replaces the principal's block; nothing else changes.
+  /// Ignored when nobody is signed in.
+  void adoptLegal(LegalStatus legal) {
+    final current = state;
+    if (current is! AuthAuthenticated) return;
+    state = AuthAuthenticated(current.principal.withLegal(legal));
+  }
+
+  /// PD-58: a 403 `COMM.TERMS_NOT_ACCEPTED` from any route. The refusal's own
+  /// `detail.required` puts the gate up at once; then the identity is re-read, which is the
+  /// answer that stands. A burst of refusals asks `/me` once.
+  Future<void> onTermsNotAccepted(AppError error) {
+    if (state is! AuthAuthenticated) return Future.value();
+    final detail = LegalDocument.listFromWire(error.detail?['required']);
+    if (detail != null && detail.isNotEmpty) {
+      adoptLegal(LegalStatus(state: LegalState.required, required: List.unmodifiable(detail)));
+    }
+    return _termsCheck ??= refreshIdentity().whenComplete(() => _termsCheck = null);
   }
 
   /// `POST /auth/logout` for a session about to be dropped locally. Never throws and never

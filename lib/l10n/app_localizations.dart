@@ -9438,6 +9438,114 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'We couldn\'t load the people you blocked.'**
   String get blockedPeopleLoadError;
+
+  /// PD-58: title of the full-screen Terms of Use gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you continue'**
+  String get legalGateTitle;
+
+  /// PD-58: the line under the gate title.
+  ///
+  /// In en, this message translates to:
+  /// **'To keep using Jawwid, please read the documents below and agree to each one.'**
+  String get legalGateIntro;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: the title of the account kind's terms (family, teacher or staff) on the gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Use'**
+  String get legalDocTermsTitle;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: the title of the Code of Conduct on the gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Code of Conduct'**
+  String get legalDocCodeOfConductTitle;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: the title of a document this app version does not know by name.
+  ///
+  /// In en, this message translates to:
+  /// **'Legal document'**
+  String get legalDocOtherTitle;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: checkbox label for the terms (developer guide §1.5 suggestion). Never pre-ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to the Terms of Use'**
+  String get legalAgreeTerms;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: checkbox label for the Code of Conduct (developer guide §1.5 suggestion). Never pre-ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to the Code of Conduct'**
+  String get legalAgreeCodeOfConduct;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: checkbox label for a document this app version does not know by name.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to this document'**
+  String get legalAgreeOther;
+
+  /// PD-58: the link that opens a document in the browser, in the app's language.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get legalGateOpen;
+
+  /// PD-58: screen-reader label of the Open link; {document} is the document's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {document}'**
+  String legalGateOpenDocument(String document);
+
+  /// PD-58: the gate's button; enabled only once every box is ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Agree'**
+  String get legalGateAgree;
+
+  /// PD-58: COMM.LEGAL_VERSION_STALE (409) or COMM.LEGAL_WRONG_DOCUMENTS (400): the list was reloaded and the boxes cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'These documents have changed. Please read them and agree again.'**
+  String get legalGateChanged;
+
+  /// PD-58: COMM.SUPPORT_SESSION_FORBIDDEN (403) on accept: staff in a support session cannot accept for the person.
+  ///
+  /// In en, this message translates to:
+  /// **'A support session can\'t agree on the account holder\'s behalf. The account holder must agree themselves.'**
+  String get legalGateSupportSession;
+
+  /// PD-58: any other failure on accept (COMM.LEGAL_NOT_CONFIGURED 503, no network).
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t save your agreement. Please try again.'**
+  String get legalGateFailed;
+
+  /// PD-58: legal state "unavailable": the server cannot decide the terms. Never treated as accepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporarily unavailable'**
+  String get legalUnavailableTitle;
+
+  /// PD-58: body of the "temporarily unavailable" notice.
+  ///
+  /// In en, this message translates to:
+  /// **'We can\'t show the terms of use right now. Please try again in a little while.'**
+  String get legalUnavailableBody;
+
+  /// PD-58: sign-up when GET /auth/signup/legal fails (503 COMM.LEGAL_NOT_CONFIGURED): nothing is submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating an account is temporarily unavailable. Please try again in a little while.'**
+  String get signupLegalUnavailable;
+
+  /// PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'The terms have changed. Please read them and agree again.'**
+  String get signupLegalChanged;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

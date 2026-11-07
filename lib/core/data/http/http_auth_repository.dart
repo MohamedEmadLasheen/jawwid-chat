@@ -1,4 +1,5 @@
 import '../../../shared/models/auth.dart';
+import '../../../shared/models/legal.dart';
 import '../../../shared/models/user_role.dart';
 import '../../errors/app_error.dart';
 import '../../network/api_client.dart';
@@ -237,7 +238,17 @@ class HttpAuthRepository implements AuthRepository {
       // Read from a login only; a refresh never moves the session (see AuthSession.remembered).
       // Anything but a literal true is false: a missing field never buys a longer session.
       remembered: fromLogin ? _remembered(body) : null,
+      legal: legalOfPair(body),
     );
+  }
+
+  /// PD-58: the token pair's `legal` -- at the top level, else `actor.legal`; null when the
+  /// server sends neither (the API before ENG-10).
+  static LegalStatus? legalOfPair(Map<String, Object?>? body) {
+    final top = LegalStatus.fromBody(body);
+    if (top != null) return top;
+    final actor = body?['actor'];
+    return actor is Map ? LegalStatus.fromBody(actor) : null;
   }
 
   static bool _remembered(Map<String, Object?>? body) {
@@ -277,6 +288,8 @@ class HttpAuthRepository implements AuthRepository {
       role: role,
       locale: locale is String && locale.isNotEmpty ? locale : null,
       isSuperAdmin: role == UserRole.sales && actor['staffRole'] == superAdminStaffRole,
+      // PD-58: absent on the API before ENG-10 (null: no gate); otherwise read fail-closed.
+      legal: LegalStatus.fromBody(actor),
     );
   }
 

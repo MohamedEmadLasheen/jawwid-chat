@@ -94,6 +94,12 @@ final accountDeletionRepositoryProvider = Provider<AccountDeletionRepository>((r
   return const NoAccountDeletionRepository();
 });
 
+/// PD-58: the signed-in account's Terms of Use (`GET /me/legal`, `POST /me/legal/accept`).
+/// Overridden at startup with the HTTP implementation on the session's client.
+final legalRepositoryProvider = Provider<LegalRepository>((ref) {
+  return const NoLegalRepository();
+});
+
 /// PD-25: a parent recovers their own account (forgot password / forgot e-mail). Overridden
 /// at startup with the HTTP implementation; the default offers no self-service way in.
 final accountRecoveryRepositoryProvider = Provider<AccountRecoveryRepository>((ref) {

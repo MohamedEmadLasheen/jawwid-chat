@@ -5,10 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
+import 'package:jawwid_chat/core/legal/legal_links.dart';
 import 'package:jawwid_chat/features/auth/presentation/parent_signup_screen.dart';
 import 'package:jawwid_chat/features/settings/data/parent_notice_repository.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
+import 'package:jawwid_chat/shared/models/legal.dart';
 
 /// PD-16 on the client: a parent creates their account with the e-mail the academy has and
 /// the code their supervisor relays. The server's answers are stubbed; what is held here is
@@ -33,9 +36,18 @@ Future<void> tick(WidgetTester tester) async {
 }
 
 void main() {
+  final opened = <Uri>[];
+  setUp(opened.clear);
+
   Widget app(Widget home, _RecordingSignup repo, {Locale locale = const Locale('en')}) {
     return ProviderScope(
-      overrides: [parentSignupRepositoryProvider.overrideWithValue(repo)],
+      overrides: [
+        parentSignupRepositoryProvider.overrideWithValue(repo),
+        legalLinkOpenerProvider.overrideWithValue((uri) async {
+          opened.add(uri);
+          return true;
+        }),
+      ],
       child: MaterialApp(
         locale: locale,
         supportedLocales: JawwidApp.supportedLocales,
@@ -199,24 +211,209 @@ void main() {
     expect(find.textContaining('صوت', skipOffstage: false), findsNothing);
     expect(find.textContaining('الدروس', skipOffstage: false), findsNothing);
   });
+
+  // PD-58 (ENG-11, developer guide §1.4 A): the family Terms of Use and the Code of Conduct
+  // are accepted on this screen -- two required boxes, each opening its document -- and the
+  // PD-48 lesson-audio box stays exactly as it was, a separate one.
+  group('PD-58 Terms of Use at sign-up', () {
+    const terms = LegalDocument(
+      documentKey: 'terms_family',
+      version: '2026-12-01',
+      urlAr: 'https://legal.example.test/ar/terms',
+      urlEn: 'https://legal.example.test/en/terms',
+    );
+    const conduct = LegalDocument(
+      documentKey: 'code_of_conduct',
+      version: '2026-12-01',
+      urlAr: 'https://legal.example.test/ar/conduct',
+      urlEn: 'https://legal.example.test/en/conduct',
+    );
+
+    Future<void> toCodeStep(WidgetTester tester, _RecordingSignup repo, {Locale locale = const Locale('en')}) async {
+      await tester.pumpWidget(app(const ParentSignupScreen(), repo, locale: locale));
+      await tester.enterText(find.byKey(const ValueKey('signup-email')), 'parent@example.test');
+      await submit(tester);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('signup-code')), '482913');
+      await tester.enterText(find.byKey(const ValueKey('signup-password')), 'long-password-1');
+      await tester.enterText(find.byKey(const ValueKey('signup-confirm')), 'long-password-1');
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tickLegal(WidgetTester tester, String key) => tapVisible(tester, find.byKey(ValueKey('signup-legal-$key')));
+
+    bool ticked(WidgetTester tester, String key) =>
+        tester.widget<CheckboxListTile>(find.byKey(ValueKey('signup-legal-$key'))).value ?? false;
+
+    testWidgets('200: two unticked required boxes; finishing needs both; the set, client and language are sent',
+        (tester) async {
+      final repo = _RecordingSignup(legal: [terms, conduct]);
+      await toCodeStep(tester, repo);
+      final en = await L10n.delegate.load(const Locale('en'));
+
+      expect(find.text(en.legalAgreeTerms), findsOneWidget);
+      expect(find.text(en.legalAgreeCodeOfConduct), findsOneWidget);
+      expect(ticked(tester, 'terms_family'), isFalse);
+      expect(ticked(tester, 'code_of_conduct'), isFalse);
+      // PD-48 untouched: the lesson-audio box is its own thing (hidden in Phase 2, as before).
+      expect(find.byKey(const ValueKey('signup-lesson-audio'), skipOffstage: false), findsNothing);
+
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(repo.verified, isEmpty, reason: 'neither box ticked');
+      await tickLegal(tester, 'terms_family');
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(repo.verified, isEmpty, reason: 'one box is not enough');
+
+      await tickLegal(tester, 'code_of_conduct');
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(repo.verified, ['parent@example.test 482913 long-password-1']);
+      expect(repo.acceptLegal.single?.map((d) => d.toAcceptance()), [
+        {'documentKey': 'terms_family', 'version': '2026-12-01'},
+        {'documentKey': 'code_of_conduct', 'version': '2026-12-01'},
+      ]);
+      expect(repo.clients, ['android']);
+      expect(repo.locales, ['en']);
+      expect(repo.notices, [null], reason: 'the lesson-audio notice is not implied by the terms');
+    });
+
+    testWidgets("each box opens its document in the reader's language", (tester) async {
+      final repo = _RecordingSignup(legal: [terms, conduct]);
+      await toCodeStep(tester, repo);
+      await tapVisible(tester, find.byKey(const ValueKey('signup-legal-open-terms_family')));
+      await tapVisible(tester, find.byKey(const ValueKey('signup-legal-open-code_of_conduct')));
+      expect(opened, [Uri.parse(terms.urlEn), Uri.parse(conduct.urlEn)]);
+    });
+
+    testWidgets('404 (the API before ENG-10): no legal boxes, and nothing legal is sent', (tester) async {
+      final repo = _RecordingSignup();
+      await toCodeStep(tester, repo);
+      expect(find.byKey(const ValueKey('signup-legal-terms_family'), skipOffstage: false), findsNothing);
+      expect(find.byType(CheckboxListTile, skipOffstage: false), findsNothing);
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(repo.verified, hasLength(1));
+      expect(repo.acceptLegal, [null]);
+      expect(repo.clients, [null]);
+      expect(repo.locales, [null]);
+    });
+
+    testWidgets('503 LEGAL_NOT_CONFIGURED: "temporarily unavailable", and nothing is submitted', (tester) async {
+      final repo = _RecordingSignup(legalError: const AppError(AppErrorKind.server, code: WireErrors.legalNotConfigured));
+      await toCodeStep(tester, repo);
+      final en = await L10n.delegate.load(const Locale('en'));
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(find.text(en.signupLegalUnavailable), findsOneWidget);
+      expect(repo.verified, isEmpty);
+      expect(repo.legalCalls, 2, reason: 'asked once on opening, once more before giving up');
+    });
+
+    testWidgets('a stale version at verify: the documents are reloaded and asked again', (tester) async {
+      final repo = _RecordingSignup(
+        legal: [terms, conduct],
+        refuseVerifyWith: WireErrors.legalVersionStale,
+        refuseKind: AppErrorKind.unknown,
+      );
+      await toCodeStep(tester, repo);
+      final en = await L10n.delegate.load(const Locale('en'));
+      await tickLegal(tester, 'terms_family');
+      await tickLegal(tester, 'code_of_conduct');
+      repo.legal = [
+        terms,
+        const LegalDocument(
+          documentKey: 'code_of_conduct',
+          version: '2027-01-15',
+          urlAr: 'https://legal.example.test/ar/c2',
+          urlEn: 'https://legal.example.test/en/c2',
+        ),
+      ];
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(find.text(en.signupLegalChanged), findsOneWidget);
+      expect(repo.legalCalls, 2);
+      expect(ticked(tester, 'terms_family'), isFalse);
+      expect(ticked(tester, 'code_of_conduct'), isFalse);
+    });
+
+    testWidgets('Arabic: right-to-left, Arabic labels, the Arabic URL, locale ar', (tester) async {
+      final repo = _RecordingSignup(legal: [terms, conduct]);
+      await toCodeStep(tester, repo, locale: const Locale('ar'));
+      final ar = await L10n.delegate.load(const Locale('ar'));
+      expect(find.text(ar.legalAgreeTerms), findsOneWidget);
+      expect(find.text(ar.legalAgreeCodeOfConduct), findsOneWidget);
+      expect(Directionality.of(tester.element(find.byKey(const ValueKey('signup-legal-terms_family')))), TextDirection.rtl);
+      await tapVisible(tester, find.byKey(const ValueKey('signup-legal-open-terms_family')));
+      expect(opened, [Uri.parse(terms.urlAr)]);
+      await tickLegal(tester, 'terms_family');
+      await tickLegal(tester, 'code_of_conduct');
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(repo.locales, ['ar']);
+    });
+  });
 }
 
 class _RecordingSignup implements ParentSignupRepository {
-  _RecordingSignup({this.refuseVerifyWith, this.refuseKind = AppErrorKind.unauthenticated});
+  _RecordingSignup({
+    this.refuseVerifyWith,
+    this.refuseKind = AppErrorKind.unauthenticated,
+    this.legal,
+    this.legalError,
+  });
 
   final String? refuseVerifyWith;
   final AppErrorKind refuseKind;
+
+  /// `GET /auth/signup/legal`: null is its 404 (the API before ENG-10).
+  List<LegalDocument>? legal;
+
+  /// Thrown by `GET /auth/signup/legal` instead (503 COMM.LEGAL_NOT_CONFIGURED).
+  AppError? legalError;
+  int legalCalls = 0;
+
   final requested = <String>[];
   final verified = <String>[];
   final notices = <int?>[];
+  final acceptLegal = <List<LegalDocument>?>[];
+  final clients = <String?>[];
+  final locales = <String?>[];
 
   @override
   Future<void> requestCode(String email) async => requested.add(email.trim());
 
   @override
-  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice}) async {
+  Future<List<LegalDocument>?> signupLegal() async {
+    legalCalls++;
+    final error = legalError;
+    if (error != null) throw error;
+    return legal;
+  }
+
+  @override
+  Future<void> verify({
+    required String email,
+    required String code,
+    required String password,
+    int? lessonAudioNotice,
+    List<LegalDocument>? acceptLegal,
+    String? client,
+    String? locale,
+  }) async {
     if (refuseVerifyWith != null) throw AppError(refuseKind, code: refuseVerifyWith);
     verified.add('$email $code $password');
     notices.add(lessonAudioNotice);
+    this.acceptLegal.add(acceptLegal);
+    clients.add(client);
+    locales.add(locale);
   }
 }

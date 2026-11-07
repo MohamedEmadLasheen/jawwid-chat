@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../legal/application/legal_gate_state.dart';
 import '../../settings/data/parent_notice_repository.dart';
 import '../application/app_lock_call_bypass.dart';
 import '../application/app_lock_controller.dart';
@@ -59,6 +60,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingOb
     final covered = lock.covered && !callOnScreen;
     // PARENT-001: one first-run dialog at a time -- the lesson-audio notice first.
     final noticeBusy = ref.watch(lessonAudioNoticeBusyProvider);
+    // PD-58: nor over the Terms of Use gate -- the offer comes once the terms are accepted.
+    final legalGateShown = ref.watch(legalGateShownProvider);
 
     return Stack(
       fit: StackFit.expand,
@@ -78,7 +81,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingOb
                   ),
                 )
               : const AppLockPrivacyCover(),
-        if (lock.offerVisible && !covered && !noticeBusy) const AppLockOffer(),
+        if (lock.offerVisible && !covered && !noticeBusy && !legalGateShown) const AppLockOffer(),
         if (lock.obscured) const AppLockPrivacyCover(),
       ],
     );

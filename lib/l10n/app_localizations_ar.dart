@@ -5584,4 +5584,66 @@ class L10nAr extends L10n {
 
   @override
   String get blockedPeopleLoadError => 'تعذّر تحميل قائمة المحظورين.';
+
+  @override
+  String get legalGateTitle => 'قبل المتابعة';
+
+  @override
+  String get legalGateIntro =>
+      'لمتابعة استخدام جَوِّد، يُرجى قراءة الوثائق التالية والموافقة على كلٍّ منها.';
+
+  @override
+  String get legalDocTermsTitle => 'شروط الاستخدام';
+
+  @override
+  String get legalDocCodeOfConductTitle => 'ميثاق السلوك';
+
+  @override
+  String get legalDocOtherTitle => 'وثيقة قانونية';
+
+  @override
+  String get legalAgreeTerms => 'قرأتُ شروط الاستخدام وأوافق عليها';
+
+  @override
+  String get legalAgreeCodeOfConduct => 'قرأتُ ميثاق السلوك وأوافق عليه';
+
+  @override
+  String get legalAgreeOther => 'قرأتُ هذه الوثيقة وأوافق عليها';
+
+  @override
+  String get legalGateOpen => 'فتح';
+
+  @override
+  String legalGateOpenDocument(String document) {
+    return 'فتح $document';
+  }
+
+  @override
+  String get legalGateAgree => 'أوافق';
+
+  @override
+  String get legalGateChanged =>
+      'تغيّرت هذه الوثائق. يُرجى قراءتها والموافقة عليها من جديد.';
+
+  @override
+  String get legalGateSupportSession =>
+      'لا يمكن لجلسة الدعم الموافقة نيابةً عن صاحب الحساب. يجب أن يوافق صاحب الحساب بنفسه.';
+
+  @override
+  String get legalGateFailed => 'تعذّر حفظ موافقتك. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get legalUnavailableTitle => 'غير متاح مؤقتًا';
+
+  @override
+  String get legalUnavailableBody =>
+      'لا يمكننا عرض شروط الاستخدام الآن. يُرجى المحاولة بعد قليل.';
+
+  @override
+  String get signupLegalUnavailable =>
+      'إنشاء الحساب غير متاح مؤقتًا. يُرجى المحاولة بعد قليل.';
+
+  @override
+  String get signupLegalChanged =>
+      'تغيّرت الشروط. يُرجى قراءتها والموافقة عليها من جديد.';
 }
