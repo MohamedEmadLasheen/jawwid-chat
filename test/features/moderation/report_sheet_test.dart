@@ -209,10 +209,10 @@ void main() {
     });
 
     group('errors are calm [$tag]', () {
-      Future<void> failWith(WidgetTester tester, String code, String Function(L10n) expected, {AppError? thrown}) async {
+      Future<void> failWith(WidgetTester tester, String code, String Function(L10n) expected, {AppError? thrown, ReportTarget target = const MessageReportTarget('m1')}) async {
         final l10n = await l10nFor(locale);
         final repo = FakeModerationRepository(refuseWith: code);
-        await openSheet(tester, repo, const MessageReportTarget('m1'), locale);
+        await openSheet(tester, repo, target, locale);
         await pick(tester, ReportReason.spam);
         await send(tester);
 
@@ -230,6 +230,22 @@ void main() {
       testWidgets('404 not visible', (tester) => failWith(tester, ModerationErrors.targetNotVisible, (l) => l.reportErrorNotVisible));
       testWidgets('400 self', (tester) => failWith(tester, ModerationErrors.self, (l) => l.reportErrorSelf));
       testWidgets('400 not reportable', (tester) => failWith(tester, ModerationErrors.notReportable, (l) => l.reportErrorNotReportable));
+      // LR-25: a PERSON (official account, manager, Super Admin) is not "a kind of message".
+      testWidgets(
+        '400 not reportable, person target, points to support',
+        (tester) => failWith(
+          tester,
+          ModerationErrors.notReportable,
+          (l) => l.reportErrorNotReportablePerson,
+          target: const PersonReportTarget(kind: 'staff', id: 'p1'),
+        ),
+      );
+      test('person refusal text is honest', () async {
+        final l10n = await l10nFor(locale);
+        expect(l10n.reportErrorNotReportablePerson, isNot(l10n.reportErrorNotReportable));
+        expect(l10n.reportErrorNotReportablePerson, contains(l10n.supportContactAction));
+        expect(l10n.blockErrorNotAllowed, contains(l10n.supportContactAction));
+      });
       testWidgets('403 terms not accepted', (tester) => failWith(tester, ModerationErrors.termsNotAccepted, (l) => l.reportErrorTerms));
       testWidgets('anything else', (tester) => failWith(tester, 'COMMON.SOMETHING_NEW', (l) => l.reportErrorGeneric));
 
