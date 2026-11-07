@@ -254,7 +254,7 @@ export function toSession(s: Stripe.Checkout.Session): CheckoutSession {
 }
 
 /**
- * The database's patterns (20261107100000), applied before a write: a value
+ * The database's patterns (20261107120000), applied before a write: a value
  * that does not fit is dropped (null), never sent to an insert that would fail.
  */
 const pattern = (re: RegExp) => (v: string | null | undefined): string | null => (typeof v === 'string' && re.test(v) ? v : null);

@@ -115,7 +115,7 @@ can also run it now from Admin > Payments.
   currency and status, set beside Chat's. Missing refunds are recorded, and the answer says whether the
   two agree.
 
-### 3.4 Database (migration `20261107100000_chat_pd027_stripe_lifecycle.sql`, additive only)
+### 3.4 Database (migration `20261107120000_chat_pd027_stripe_lifecycle.sql`, additive only)
 
 | Change | Why |
 |---|---|
@@ -126,7 +126,7 @@ can also run it now from Admin > Payments.
 | `chat.config` `abuse.throttle.checkout_start_actor` = 20 a minute | Per-parent rate limit on `POST /me/billing/checkout`. |
 
 Every new column is nullable or has a default. No existing row, constraint or column is changed or removed.
-Rollback: `db/rollback/20261107100000_chat_pd027_stripe_lifecycle.down.sql` (it refuses to run once a
+Rollback: `db/rollback/20261107120000_chat_pd027_stripe_lifecycle.down.sql` (it refuses to run once a
 payment holds the new data, unless exported first).
 
 ### 3.5 API
@@ -220,7 +220,7 @@ store (`infra/env/manifest.tsv` lists them).
 
 ### 5.3 Database migration
 
-`supabase/migrations/20261107100000_chat_pd027_stripe_lifecycle.sql` is additive. It adds one table, adds
+`supabase/migrations/20261107120000_chat_pd027_stripe_lifecycle.sql` is additive. It adds one table, adds
 nullable or defaulted columns, adds indexes, and replaces `chat.guard_payment` with a superset.
 - Apply through the normal pipeline (`scripts/db/apply.sh` via the deploy workflow), never by hand in
   production. It takes `lock_timeout = 5s`. The `ALTER TABLE`s on `chat.payment`, `chat.payment_checkout`
@@ -263,7 +263,7 @@ Then in production, with one small real payment by the owner, refunded afterward
   events the old code does not handle (`payment_intent.*`, `charge.refunded`) are answered 200 and
   `ignored`. Nothing is lost: refunds still arrive as `refund.created`.
 - **Database:** usually unnecessary (additive). If required:
-  `psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107100000_chat_pd027_stripe_lifecycle.down.sql`,
+  `psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107120000_chat_pd027_stripe_lifecycle.down.sql`,
   **after** the code rollback. It refuses while the new columns hold data, unless that data was exported
   and `chat.allow_pd027_lifecycle_rollback` is set (see the file). It restores `chat.guard_payment` to
   20261022170000's body verbatim. Existing payments, refunds and invoices are never touched.

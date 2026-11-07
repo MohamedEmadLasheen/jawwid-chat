@@ -41,7 +41,7 @@ export interface RecordPaymentInput {
   reference: string | null;
   stripeCheckoutSessionId?: string | null;
   stripePaymentIntentId?: string | null;
-  /** 20261107100000: a card payment's Stripe references and payment method (checked by `safe`). */
+  /** 20261107120000: a card payment's Stripe references and payment method (checked by `safe`). */
   stripe?: {
     customerId: string | null;
     chargeId: string | null;

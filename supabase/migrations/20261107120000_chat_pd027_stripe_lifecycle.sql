@@ -19,7 +19,7 @@
 --                           and Stripe's own time: the audit trail, and how a
 --                           refund that arrived before its payment is found again.
 --
--- Down: db/rollback/20261107100000_chat_pd027_stripe_lifecycle.down.sql
+-- Down: db/rollback/20261107120000_chat_pd027_stripe_lifecycle.down.sql
 
 set local lock_timeout = '5s';
 
@@ -124,7 +124,7 @@ begin
     if new.voided_at is not null then
       raise exception 'a payment is recorded standing; void it afterwards' using errcode = 'check_violation';
     end if;
-    -- 20261107100000: Stripe's references and the payment method are a card payment's only.
+    -- 20261107120000: Stripe's references and the payment method are a card payment's only.
     if new.method <> 'card' and (
          new.stripe_customer_id is not null or new.stripe_charge_id is not null
       or new.payment_method_type is not null or new.card_brand is not null
@@ -150,7 +150,7 @@ begin
      or new.stripe_checkout_session_id is distinct from old.stripe_checkout_session_id
      or new.stripe_payment_intent_id is distinct from old.stripe_payment_intent_id
      or new.receipt_id is distinct from old.receipt_id
-     -- 20261107100000
+     -- 20261107120000
      or new.stripe_customer_id is distinct from old.stripe_customer_id
      or new.stripe_charge_id is distinct from old.stripe_charge_id
      or new.payment_method_type is distinct from old.payment_method_type

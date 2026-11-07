@@ -1,6 +1,6 @@
--- Roll back 20261107100000_chat_pd027_stripe_lifecycle.
+-- Roll back 20261107120000_chat_pd027_stripe_lifecycle.
 --
---   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107100000_chat_pd027_stripe_lifecycle.down.sql
+--   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107120000_chat_pd027_stripe_lifecycle.down.sql
 --
 -- REFUSES to run while any payment, attempt or event holds the new data: those
 -- are records of real money (Stripe references, card brand and last 4, declines)
@@ -144,4 +144,4 @@ drop trigger if exists stripe_customer_never_deleted on chat.stripe_customer;
 drop table if exists chat.stripe_customer;
 drop function if exists chat.guard_stripe_customer();
 
-delete from chat.schema_migrations where version = '20261107100000_chat_pd027_stripe_lifecycle';
+delete from chat.schema_migrations where version = '20261107120000_chat_pd027_stripe_lifecycle';
