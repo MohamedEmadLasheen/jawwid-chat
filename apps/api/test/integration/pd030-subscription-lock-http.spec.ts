@@ -100,6 +100,18 @@ function addDays(date: string, n: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 }
 const at = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+/**
+ * A future booking `inDays` from today, at 08:00 UTC (10:00 or 11:00 in Cairo): a
+ * fixed time of day, never "now + n days". The weekly-slot test below materializes a
+ * lesson every evening at 23:15 Cairo (and Mondays at 21:00) for a teacher that other
+ * families share, so a booking at "now + n days" hit the teacher's no-double-booking
+ * rule (409 LESSON_TEACHER_BUSY) whenever the suite ran between about 22:45 and 23:45
+ * Cairo time -- seen in CI on 2026-11-06 at 20:53 UTC.
+ */
+function bookingAt(inDays: number): { startsAt: string; endsAt: string } {
+  const start = Date.parse(`${addDays(new Date().toISOString().slice(0, 10), inDays)}T08:00:00Z`);
+  return { startsAt: new Date(start).toISOString(), endsAt: new Date(start + HOUR / 2).toISOString() };
+}
 
 /** Enforcement as if it had been switched on before the test (go-live recorded, announcements done). */
 async function switchedOnBefore() {
@@ -198,7 +210,7 @@ async function packageInstalment(familyId: string, childId: string, label: strin
 /** A lesson the Teachers department books: the one thing a lock still refuses. */
 async function book(childId: string, inDays: number) {
   return http(m.teachersManager.subject, 'POST', '/lessons', {
-    learnerId: childId, startsAt: at(inDays * 24 * HOUR), endsAt: at(inDays * 24 * HOUR + HOUR / 2),
+    learnerId: childId, ...bookingAt(inDays),
   });
 }
 
@@ -267,6 +279,18 @@ afterAll(async () => {
 });
 
 describe('PD-30 over HTTP', () => {
+  it('future bookings are at a fixed time of day, clear of the weekly-slot lessons, whenever the suite runs', () => {
+    const cairo = (iso: string) =>
+      new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+    for (const n of [3, 4, 5, 6, 9, 11, 12]) {
+      const { startsAt, endsAt } = bookingAt(n);
+      expect(Date.parse(startsAt)).toBeGreaterThan(Date.now() + (n - 1) * 24 * HOUR); // still days ahead
+      expect(Date.parse(endsAt) - Date.parse(startsAt)).toBe(HOUR / 2);
+      // Far from the slots the weekly-slot test materializes (21:00 and 23:15 Cairo).
+      expect(cairo(startsAt) >= '09:00' && cairo(endsAt) <= '12:00').toBe(true);
+    }
+  });
+
   it('the ledger: billing readers read it, recorders add and void, only three roles grant exceptions', async () => {
     const { child, teacher, parent, supervisor } = family();
     expect((await http(null, 'GET', `/learners/${child.id}/subscription`)).status).toBe(401);
@@ -339,7 +363,7 @@ describe('PD-30 over HTTP', () => {
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) ids.push(await pastLesson(child.id));
     const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: at(5 * 24 * HOUR), endsAt: at(5 * 24 * HOUR + HOUR / 2),
+      learnerId: child.id, ...bookingAt(5),
     });
     expect(future.status).toBe(201);
 
@@ -404,7 +428,7 @@ describe('PD-30 over HTTP', () => {
 
     // No new lesson for a locked child -- not even from the Teachers department.
     const refused = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: at(6 * 24 * HOUR), endsAt: at(6 * 24 * HOUR + HOUR / 2),
+      learnerId: child.id, ...bookingAt(6),
     });
     expect(refused.code).toBe(CommErrorCode.SUBSCRIPTION_LOCKED);
 
@@ -741,7 +765,7 @@ describe('PD-30 over HTTP', () => {
     const { child, parent, groupId, f } = family();
     await setGoLive(addDays(today(), -60));
     const lesson = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: at(11 * 24 * HOUR), endsAt: at(11 * 24 * HOUR + HOUR / 2),
+      learnerId: child.id, ...bookingAt(11),
     });
     expect(lesson.status).toBe(201);
     await packageInstalment(f.id, child.id, 'Stale', addDays(today(), -1));
@@ -806,11 +830,7 @@ describe('PD-30 over HTTP', () => {
     const { f, child, teacher, supervisor, parent, groupId, directId } = family();
     // Booked BEFORE the lock: one already held (to be reported), one ahead.
     const held = await pastLesson(child.id);
-    const d = new Date();
-    const ahead = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 10, 9, 0));
-    const booked = await http(m.teachersManager.subject, 'POST', '/lessons', {
-      learnerId: child.id, startsAt: ahead.toISOString(), endsAt: new Date(ahead.getTime() + HOUR / 2).toISOString(),
-    });
+    const booked = await http(m.teachersManager.subject, 'POST', '/lessons', { learnerId: child.id, ...bookingAt(10) });
     expect(booked.status).toBe(201);
     const aheadBefore = await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.json.id } });
 
@@ -880,13 +900,8 @@ describe('PD-30 over HTTP', () => {
     try {
       await g.prisma.$executeRawUnsafe(`delete from chat.config where key in ('subscription.enforced_since', 'subscription.announced_at', 'subscription.overdue_from')`);
       await addSubscription(child.id, 1);
-      // A fixed 08:00 UTC, nine days ahead -- never "now + 9 days": the holds test gives
-      // this seed's teacher a lesson at 23:15 Cairo every day, so a booking made around
-      // 23:00 Cairo clashed with it (409).
-      const d = new Date();
-      const nine = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 9, 8, 0));
       const future = await http(m.teachersManager.subject, 'POST', '/lessons', {
-        learnerId: child.id, startsAt: nine.toISOString(), endsAt: new Date(nine.getTime() + HOUR / 2).toISOString(),
+        learnerId: child.id, ...bookingAt(9),
       });
       expect(future.status).toBe(201);
       futureId = future.json.id;
