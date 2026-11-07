@@ -1,3 +1,5 @@
+> **STATUS: Historical (2026-11-08).** Superseded by `launch-readiness-checklist.md`, re-audited against `main` @ `cebbcd99`. Its verdicts and statuses are out of date; do not build from them.
+
 # Store readiness review: Google Play and App Store (final, 2026-11-03)
 
 PR #447, branch `claude/store-release-readiness`, originally based on `main` @ `c7ca895c`, with
