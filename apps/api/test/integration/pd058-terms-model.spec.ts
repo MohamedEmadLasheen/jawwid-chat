@@ -295,14 +295,15 @@ describe('PD-58: publishing a version', () => {
 
   it('P-1: a fingerprint is required and is exactly 64 lowercase hex characters', async () => {
     const good = sha('x');
+    // A null is refused by NOT NULL (23502; Prisma's message shows the failing row, not the column).
     for (const [label, bad] of [
       ['null', null], ['empty', ''], ['short', good.slice(1)], ['long', `${good}0`],
       ['uppercase', good.toUpperCase()], ['not hex', `${good.slice(1)}g`], ['padded', ` ${good.slice(1)}`],
     ] as const) {
       expect({ label, side: 'ar', out: await sqlError(publish('terms_staff', v('sha'), { shaAr: bad })) })
-        .toEqual({ label, side: 'ar', out: expect.stringMatching(/check constraint|content_sha256_ar|null value/) });
+        .toEqual({ label, side: 'ar', out: expect.stringMatching(/check constraint|content_sha256_ar|Code: `23502`/) });
       expect({ label, side: 'en', out: await sqlError(publish('terms_staff', v('sha'), { shaEn: bad })) })
-        .toEqual({ label, side: 'en', out: expect.stringMatching(/check constraint|content_sha256_en|null value/) });
+        .toEqual({ label, side: 'en', out: expect.stringMatching(/check constraint|content_sha256_en|Code: `23502`/) });
     }
   });
   it('a published version is never updated, deleted or truncated', async () => {
@@ -388,7 +389,7 @@ describe('PD-58: accepting', () => {
 
     for (const method of ['support', 'admin', 'SIGNUP', '', null]) {
       expect({ method, out: await sqlError(accept(bad, [['code_of_conduct', coc]], 'android', 'ar', method)) })
-        .toEqual({ method, out: expect.stringMatching(/check constraint|method|null value/) });
+        .toEqual({ method, out: expect.stringMatching(/check constraint|method|Code: `23502`/) });
     }
     expect(await rowsOf(bad)).toEqual([]);
   });
