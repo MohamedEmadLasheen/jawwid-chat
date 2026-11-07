@@ -5,6 +5,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -453,6 +454,44 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BoardEditorScreen), findsNothing);
       expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
+    });
+
+    // TEACHER-020 (store review, 2026-11-03): board header taps do nothing on iOS. In full
+    // screen the header floats at the very top and the status bar is hidden
+    // (immersiveSticky), so on an iPhone or iPad with no notch the safe area is 0 and the
+    // header's buttons sat 8 pt from the edge -- inside the strip where iOS keeps the
+    // touch for its own gestures (a tap there only brings the status bar back). The header
+    // keeps clear of that strip on iOS. Only a device can confirm the touch itself.
+    testWidgets('TEACHER-020: on iOS the full-screen header keeps clear of the top edge even when the safe area is 0',
+        variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS, TargetPlatform.android}), (tester) async {
+      tester.view.padding = FakeViewPadding.zero; // no notch, status bar hidden: the safe area is 0
+      final l10n = await pump(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        size: const Size(820, 1180),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+
+      final back = tester.getRect(find.byKey(const ValueKey('board-full-screen-back')));
+      final exit = tester.getRect(find.byKey(const ValueKey('board-exit-full-screen')));
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        expect(back.top, greaterThanOrEqualTo(20), reason: 'clear of the status-bar strip where iOS takes the touch');
+        expect(exit.top, greaterThanOrEqualTo(20));
+      }
+      // Whatever the platform, a tap in the middle of the header's button lands.
+      await tester.tapAt(exit.center);
+      await tester.pumpAndSettle();
+      expect(find.byType(AppBar), findsOneWidget, reason: 'the header button left full screen');
     });
 
     testWidgets('on a wide screen the tools float along the side; the page bar is replaced by previous / next', (tester) async {

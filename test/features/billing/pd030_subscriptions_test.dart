@@ -256,6 +256,32 @@ void main() {
       expect(within('subscription-card-k1', find.byType(OutlinedButton)), findsNothing);
     });
 
+    // PARENT-009 (store review, 2026-11-03): a child with nothing on record read "No
+    // subscription yet" with a green "Active" beside it. The server's state defaults to
+    // open when there is nothing to lock, and the card drew that default as a status.
+    testWidgets('PARENT-009: no subscription on record: no "Active" beside "No subscription yet"', (tester) async {
+      tall(tester);
+      const none = ChildSubscription(childId: 'k9', childName: 'Sara');
+      await tester.pumpWidget(app(_Billing(ParentBilling(today: DateTime(2026, 10, 26), planMonths: 3, subscriptions: const [none]))));
+      await tester.pumpAndSettle();
+
+      expect(within('subscription-plan-k9', find.text('No subscription yet')), findsOneWidget);
+      expect(find.byKey(const ValueKey('subscription-state-k9')), findsNothing);
+      expect(within('subscription-card-k9', find.text('Active')), findsNothing);
+      expect(within('subscription-card-k9', find.text('فعّال')), findsNothing);
+    });
+
+    testWidgets('PARENT-009: in Arabic too, and a child with a subscription still reads Active', (tester) async {
+      tall(tester);
+      const none = ChildSubscription(childId: 'k9', childName: 'Sara');
+      await tester.pumpWidget(app(_Billing(ParentBilling(today: DateTime(2026, 10, 26), planMonths: 3, subscriptions: [none, billing.subscriptions.first])), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      expect(within('subscription-plan-k9', find.text('لا يوجد اشتراك بعد')), findsOneWidget);
+      expect(find.byKey(const ValueKey('subscription-state-k9')), findsNothing);
+      expect(within('subscription-state-k1', find.text('فعّال')), findsOneWidget);
+    });
+
     testWidgets('grace: 2 grace lessons left, then 1 grace lesson left', (tester) async {
       tall(tester);
       await tester.pumpWidget(app(_Billing(billing)));
