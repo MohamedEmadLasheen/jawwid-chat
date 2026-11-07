@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/media/local_image.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
@@ -536,16 +537,21 @@ class _StatusLine extends StatelessWidget {
     }
 
     if (message.deliveryState == DeliveryState.failed) {
+      // LD-12: a caption the content filter refused fails identically on a retry, so the
+      // bubble says why and offers only Discard.
+      final refused = message.failureCode == WireErrors.contentNotAllowed;
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.error_outline, size: 14, color: theme.colorScheme.error),
           const SizedBox(width: Spacing.spacing2),
-          Text(
-            l10n.messageStateFailed,
-            style: muted?.copyWith(color: theme.colorScheme.error),
+          Flexible(
+            child: Text(
+              refused ? l10n.messageContentNotAllowed : l10n.messageStateFailed,
+              style: muted?.copyWith(color: theme.colorScheme.error),
+            ),
           ),
-          if (onRetry != null) ...[
+          if (onRetry != null && !refused) ...[
             const SizedBox(width: Spacing.spacing3),
             _InlineAction(label: l10n.messageRetry, onPressed: onRetry!),
           ],

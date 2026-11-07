@@ -56,7 +56,7 @@ class MyProfileScreen extends ConsumerWidget {
                 vertical: Spacing.spacing5,
               ),
               children: [
-                _SubjectCard(subject: _Subject.parent(value)),
+                _SubjectCard(subject: _Subject.parent(value, l10n)),
                 if (value.children.isNotEmpty) ...[
                   const SizedBox(height: Spacing.spacing6),
                   Text(
@@ -104,14 +104,14 @@ class _Subject {
     this.secondaryLine,
   });
 
-  factory _Subject.parent(ParentProfile profile) => _Subject(
+  factory _Subject.parent(ParentProfile profile, L10n l10n) => _Subject(
         // The parent's own edits take no id: the server reads them from the token.
         id: null,
         displayName: profile.displayName,
         about: profile.about,
         avatarUrl: profile.avatarUrl,
         isParent: true,
-        secondaryLine: profile.relationship,
+        secondaryLine: relationshipLabel(profile.relationship, l10n),
       );
 
   factory _Subject.child(ChildProfile child) => _Subject(
@@ -551,3 +551,12 @@ class _LoadFailed extends StatelessWidget {
 /// Matches the server's bounds, and the column check constraint behind them.
 const int _nameMax = 120;
 const int _aboutMax = 1000;
+
+/// PARENT-010: the line under the parent's name. The API records `parent` for a guardian
+/// it created itself -- a code, not wording -- so it is worded here; anything a person
+/// wrote ("Mother", "والدة") is shown as written. Null for nothing.
+String? relationshipLabel(String? relationship, L10n l10n) {
+  final text = relationship?.trim();
+  if (text == null || text.isEmpty) return null;
+  return text.toLowerCase() == 'parent' ? l10n.groupMemberRoleParent : text;
+}

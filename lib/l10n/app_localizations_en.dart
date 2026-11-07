@@ -136,6 +136,10 @@ class L10nEn extends L10n {
   String get composerReadOnly => 'You can no longer send messages here.';
 
   @override
+  String get composerContentNotAllowed =>
+      'This message has words that are not allowed here. Please change them and send it again.';
+
+  @override
   String get voiceRecordingInProgress => 'Recording a voice message';
 
   @override
@@ -212,6 +216,10 @@ class L10nEn extends L10n {
 
   @override
   String get messageStateFailed => 'Not sent';
+
+  @override
+  String get messageContentNotAllowed =>
+      'Not sent: the caption has words that are not allowed';
 
   @override
   String get messageStatePendingApproval => 'Pending approval';
@@ -4202,6 +4210,10 @@ class L10nEn extends L10n {
       'Only a parent can send feedback about a teacher.';
 
   @override
+  String get feedbackContentNotAllowed =>
+      'Your feedback has words that are not allowed. Please change them and send it again.';
+
+  @override
   String get feedbackFailed =>
       'Your feedback could not be sent. Please try again.';
 
@@ -5136,6 +5148,12 @@ class L10nEn extends L10n {
   String get legalTerms => 'Terms of use';
 
   @override
+  String get supportHelpAction => 'Help and support';
+
+  @override
+  String get supportContactAction => 'Contact support';
+
+  @override
   String get deleteAccountTitle => 'Delete account';
 
   @override
@@ -5419,7 +5437,12 @@ class L10nEn extends L10n {
 
   @override
   String get blockErrorNotAllowed =>
-      'This person can\'t be blocked. You can report them instead.';
+      'This person can\'t be blocked. If you have a concern, please contact support.';
+
+  @override
+  String blockErrorNotAllowedWithEmail(String email) {
+    return 'This person can\'t be blocked. If you have a concern, please contact support at $email.';
+  }
 
   @override
   String get blockErrorNoSharedConversation =>

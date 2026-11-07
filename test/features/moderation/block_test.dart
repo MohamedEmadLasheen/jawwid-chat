@@ -7,6 +7,7 @@ import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
+import 'package:jawwid_chat/core/legal/legal_links.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_actions.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
@@ -317,6 +318,27 @@ void main() {
         '403 not allowed (a protected target the client could not tell)',
         (tester) => failWith(tester, BlockErrors.notAllowed, (l) => l.blockErrorNotAllowed),
       );
+      testWidgets('403 not allowed names the support e-mail when the build has one', (tester) async {
+        final l10n = await l10nFor(locale);
+        await tester.pumpWidget(
+          wrap(
+            const BlockPersonTile(person: teacher),
+            locale: locale,
+            overrides: [
+              blockRepositoryProvider.overrideWithValue(FakeBlockRepository(refuseWith: BlockErrors.notAllowed)),
+              supportContactProvider.overrideWithValue(
+                const SupportContact(url: '', email: 'support@jawwid.example.org'),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('profile-block-person')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('block-confirm')));
+        await tester.pumpAndSettle();
+        expect(find.text(l10n.blockErrorNotAllowedWithEmail('support@jawwid.example.org')), findsOneWidget);
+      });
       testWidgets(
         '404 no shared conversation',
         (tester) => failWith(tester, BlockErrors.noSharedConversation, (l) => l.blockErrorNoSharedConversation),
@@ -337,6 +359,17 @@ void main() {
           blockErrorText(const AppError(AppErrorKind.forbidden, code: BlockErrors.notAllowed), l10n),
           l10n.blockErrorNotAllowed,
         );
+        // DEV-CONFIRM #26: protected people (the official account, managers, the Super Admin)
+        // cannot be blocked OR reported, so the sentence points to support, never to Report.
+        const notAllowed = AppError(AppErrorKind.forbidden, code: BlockErrors.notAllowed);
+        final withEmail = blockErrorText(notAllowed, l10n, supportEmail: 'support@jawwid.example.org');
+        expect(withEmail, l10n.blockErrorNotAllowedWithEmail('support@jawwid.example.org'));
+        expect(withEmail, contains('support@jawwid.example.org'));
+        for (final text in [withEmail, l10n.blockErrorNotAllowed]) {
+          expect(text.toLowerCase(), isNot(contains('report')));
+          expect(text, isNot(contains('الإبلاغ')));
+        }
+        expect(blockErrorText(notAllowed, l10n, supportEmail: ''), l10n.blockErrorNotAllowed);
         expect(
           blockErrorText(const AppError(AppErrorKind.notFound, code: BlockErrors.noSharedConversation), l10n),
           l10n.blockErrorNoSharedConversation,

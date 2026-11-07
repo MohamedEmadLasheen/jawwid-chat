@@ -94,6 +94,15 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** PD-34: delivery rows are kept this long; Center entries this long. */
   'notification.delivery_retention_days': 90,
   'notification.item_retention_days': 365,
+  /**
+   * LD-12 / MG-3: the pre-posting word filter on what parents and teachers
+   * write (ContentFilterService). ON by default. An operator turns it off
+   * without a deploy, should the list refuse ordinary text:
+   *   insert into chat.config (key, value, scope) values
+   *   ('moderation.content_filter.enabled', 'false'::jsonb, 'moderation')
+   *   on conflict (key) do update set value = excluded.value;
+   */
+  'moderation.content_filter.enabled': true as boolean,
   /** initial hypothesis - how long a published story stays readable */
   'story.default_lifetime_hours': 24,
   /** initial hypothesis - longest story body accepted */

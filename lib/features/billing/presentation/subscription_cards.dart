@@ -63,6 +63,11 @@ class ChildSubscriptionCard extends StatelessWidget {
       SubscriptionState.locked => (l10n.subscriptionStateLocked, tokens.colorStatusDangerFg, tokens.colorStatusDangerBg),
     };
 
+    // PARENT-009: a child with nothing on record has no status to show. "Open" is the
+    // state's default when there is nothing to lock, not a statement that a plan is active.
+    final hasSubscription = current != null || s.lessonsIncluded != null;
+    final showChip = hasSubscription || s.state != SubscriptionState.open;
+
     final locked = s.state == SubscriptionState.locked;
     final reasons = locked ? lockReasonLines(s, l10n, locale) : const <String>[];
 
@@ -89,13 +94,15 @@ class ChildSubscriptionCard extends StatelessWidget {
                     style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
-                const SizedBox(width: Spacing.spacing3),
-                BillingChip(
-                  key: ValueKey('subscription-state-$id'),
-                  label: chip.$1,
-                  foreground: chip.$2,
-                  background: chip.$3,
-                ),
+                if (showChip) ...[
+                  const SizedBox(width: Spacing.spacing3),
+                  BillingChip(
+                    key: ValueKey('subscription-state-$id'),
+                    label: chip.$1,
+                    foreground: chip.$2,
+                    background: chip.$3,
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: Spacing.spacing2),

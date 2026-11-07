@@ -85,6 +85,8 @@ becomes `ar` or `en` for the reader's language; only an https URL is shown.
 |---|---|---|---|
 | `PRIVACY_POLICY_URL` | the Flutter app and the teacher web portal (`--dart-define`) | e.g. `https://jawwid.example.org/{lang}/privacy` | the phone build's `--dart-define`; `PRIVACY_POLICY_URL` for `scripts/mobile/build-teacher-web.sh` |
 | `TERMS_URL` | the same | e.g. `https://jawwid.example.org/{lang}/terms` | the same, `TERMS_URL` |
+| `SUPPORT_URL` | the same (P-5: "Help and support") | e.g. `https://jawwid.example.org/{lang}/help` | the same, `SUPPORT_URL`; required by `build-store.sh` |
+| `SUPPORT_EMAIL` | the same (P-5: "Contact support") | e.g. `support@jawwid.example.org` | the same, `SUPPORT_EMAIL`; required by `build-store.sh` |
 
 ### Crash reporting (PD-56, S-07): build-time, unset = nothing sent
 

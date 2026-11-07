@@ -55,6 +55,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.REPLY_TARGET_CROSS_CONVERSATION` | 403 | A reply must target the same conversation. |
 | `COMM.EMPTY_MESSAGE` | 400 | Text needs a body; media needs an attachment. |
 | `COMM.MESSAGE_TOO_LONG` | 400 | PARENT-003. A body (a text, a caption, an edit) is over 4000 characters, counted as a person sees them (grapheme clusters), or over 16000 UTF-16 code units. The clients count the same way and stop at the limit. |
+| `COMM.CONTENT_NOT_ALLOWED` | 400 | LD-12 / MG-3 (Apple 1.2). The text a parent or a teacher wrote holds a word on the content filter's list: a message (a text, a caption, an edit, a forward), parent feedback, a name, a parent's or a child's About, or a teacher's profile text. Nothing was stored. The message never names the word. The client keeps the text so it can be rephrased, and never retries it as it is. Staff are not filtered. Off when chat.config `moderation.content_filter.enabled` = false. API-CONTRACT §1.1b. |
 | `COMM.ATTACHMENT_TOO_LARGE` | 400 | Over the configured per-kind limit. |
 | `COMM.ATTACHMENT_NOT_UPLOADED` | 409 | PARENT-023. The attachment's object is not in storage, or is another size or type than declared (the ones its upload was authorized for). Upload it again, then send with the same `clientMessageId`. |
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |

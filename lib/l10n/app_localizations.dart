@@ -313,6 +313,12 @@ abstract class L10n {
   /// **'You can no longer send messages here.'**
   String get composerReadOnly;
 
+  /// LD-12: COMM.CONTENT_NOT_ALLOWED on a text. Shown above the composer, which keeps the text.
+  ///
+  /// In en, this message translates to:
+  /// **'This message has words that are not allowed here. Please change them and send it again.'**
+  String get composerContentNotAllowed;
+
   /// No description provided for @voiceRecordingInProgress.
   ///
   /// In en, this message translates to:
@@ -456,6 +462,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Not sent'**
   String get messageStateFailed;
+
+  /// LD-12: COMM.CONTENT_NOT_ALLOWED on a photo, video, voice note or file; the bubble offers Discard, not Retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent: the caption has words that are not allowed'**
+  String get messageContentNotAllowed;
 
   /// No description provided for @messageStatePendingApproval.
   ///
@@ -7165,6 +7177,12 @@ abstract class L10n {
   /// **'Only a parent can send feedback about a teacher.'**
   String get feedbackDenied;
 
+  /// LD-12: COMM.CONTENT_NOT_ALLOWED. The form keeps the text.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback has words that are not allowed. Please change them and send it again.'**
+  String get feedbackContentNotAllowed;
+
   /// PD-32: any other failure.
   ///
   /// In en, this message translates to:
@@ -8839,6 +8857,18 @@ abstract class L10n {
   /// **'Terms of use'**
   String get legalTerms;
 
+  /// P-5 (Apple 1.2 / 1.5): opens the support page (SUPPORT_URL); in Settings and under the sign-in form.
+  ///
+  /// In en, this message translates to:
+  /// **'Help and support'**
+  String get supportHelpAction;
+
+  /// P-5 (Apple 1.2 / 1.5): opens an e-mail to the support address (SUPPORT_EMAIL); in Settings and under the sign-in form.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support'**
+  String get supportContactAction;
+
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
@@ -9319,11 +9349,17 @@ abstract class L10n {
   /// **'{name} is unblocked.'**
   String unblockedSnack(String name);
 
-  /// PD-57: COMM.BLOCK_NOT_ALLOWED (403): staff, a protected account, or yourself.
+  /// PD-57: COMM.BLOCK_NOT_ALLOWED (403): staff, a protected account, or yourself. DEV-CONFIRM #26: a protected person can be neither blocked nor reported, so this points to support, never to Report.
   ///
   /// In en, this message translates to:
-  /// **'This person can\'t be blocked. You can report them instead.'**
+  /// **'This person can\'t be blocked. If you have a concern, please contact support.'**
   String get blockErrorNotAllowed;
+
+  /// DEV-CONFIRM #26: COMM.BLOCK_NOT_ALLOWED when the build has a support e-mail. A protected person (the official account, a manager, the Super Admin) can be neither blocked nor reported, so this points to support.
+  ///
+  /// In en, this message translates to:
+  /// **'This person can\'t be blocked. If you have a concern, please contact support at {email}.'**
+  String blockErrorNotAllowedWithEmail(String email);
 
   /// PD-57: COMM.BLOCK_NO_SHARED_CONVERSATION (404).
   ///

@@ -134,6 +134,7 @@ abstract final class ErrorMapper {
           WireErrors.storyExpired ||
           WireErrors.storyDeleted => AppErrorKind.notFound,
           WireErrors.emptyMessage ||
+          WireErrors.contentNotAllowed ||
           WireErrors.replyTargetCrossConversation => AppErrorKind.validation,
           WireErrors.actorInactive => AppErrorKind.accountDisabled,
           _ => AppErrorKind.forbidden,

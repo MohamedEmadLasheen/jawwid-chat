@@ -140,6 +140,10 @@ class L10nAr extends L10n {
   String get composerReadOnly => 'لم يعد بإمكانك إرسال رسائل هنا.';
 
   @override
+  String get composerContentNotAllowed =>
+      'في هذه الرسالة كلمات غير مسموح بها هنا. عدّلها ثم أرسلها مرة أخرى.';
+
+  @override
   String get voiceRecordingInProgress => 'جارٍ تسجيل رسالة صوتية';
 
   @override
@@ -216,6 +220,10 @@ class L10nAr extends L10n {
 
   @override
   String get messageStateFailed => 'لم تُرسَل';
+
+  @override
+  String get messageContentNotAllowed =>
+      'لم تُرسَل: في التعليق كلمات غير مسموح بها';
 
   @override
   String get messageStatePendingApproval => 'في انتظار المراجعة';
@@ -4274,6 +4282,10 @@ class L10nAr extends L10n {
       'إرسال الملاحظات عن المعلّمين متاح لأولياء الأمور فقط.';
 
   @override
+  String get feedbackContentNotAllowed =>
+      'في ملاحظتك كلمات غير مسموح بها. عدّلها ثم أرسلها مرة أخرى.';
+
+  @override
   String get feedbackFailed => 'تعذّر إرسال ملاحظتك. حاول مرة أخرى.';
 
   @override
@@ -5236,6 +5248,12 @@ class L10nAr extends L10n {
   String get legalTerms => 'شروط الاستخدام';
 
   @override
+  String get supportHelpAction => 'المساعدة والدعم';
+
+  @override
+  String get supportContactAction => 'تواصل مع الدعم';
+
+  @override
   String get deleteAccountTitle => 'حذف الحساب';
 
   @override
@@ -5512,7 +5530,12 @@ class L10nAr extends L10n {
 
   @override
   String get blockErrorNotAllowed =>
-      'لا يمكن حظر هذا الشخص. يمكنك الإبلاغ عنه بدلًا من ذلك.';
+      'لا يمكن حظر هذا الشخص. إن كانت لديك ملاحظة أو مشكلة، فيرجى التواصل مع الدعم.';
+
+  @override
+  String blockErrorNotAllowedWithEmail(String email) {
+    return 'لا يمكن حظر هذا الشخص. إن كانت لديك ملاحظة أو مشكلة، فيرجى التواصل مع الدعم عبر $email.';
+  }
 
   @override
   String get blockErrorNoSharedConversation =>
