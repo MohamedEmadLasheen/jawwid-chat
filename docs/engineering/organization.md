@@ -17,7 +17,8 @@ routing). Where they differ, those two files win.
   calls for one.
 - **Isolation.** Each implementer works in its own worktree and branch: the lead starts every builder
   with `isolation: "worktree"`. Two agents never share a tree. The architect, the reviewers and the
-  compliance specialist cannot edit files (`disallowedTools` in their definitions).
+  compliance specialist must not change files: Edit and Write are disabled in their definitions
+  (`disallowedTools`), and their briefs forbid writing through the shell.
 - **Ten roles, no more.** A new role is added only when a recurring kind of work fits none of these.
 
 ## 2. Roles
@@ -52,7 +53,7 @@ steps. On the Max plan the cost is usage allowance, not money, but the proportio
 | Backend Engineer | Sonnet 5.5 | high | Opus 5.5, high | anything High-risk: auth, money, migrations, RLS, realtime, calls |
 | Frontend Engineer | Sonnet 5.5 | medium | Sonnet 5.5, high | a new screen or flow, not a copy change |
 | Mobile Engineer | Sonnet 5.5 | high | Opus 5.5, high | native push, calls, CallKit/PushKit, signing |
-| QA Engineer | Sonnet 5.5 | medium | Haiku 5.5, low | mechanical runs: execute a suite, summarize the log |
+| QA Engineer | Sonnet 5.5 | medium | lowered to Haiku 5.5, low | mechanical runs: execute a suite, summarize the log |
 | Security Reviewer | Opus 5.5 | high | **Fable 5.1**, high | High-risk diffs and the pre-submission security sign-off |
 | Independent Code Reviewer | Opus 5.5 | high | — | Codex review in addition for High-risk |
 | Release and Integration Manager | Sonnet 5.5 | medium | — | |
@@ -63,7 +64,8 @@ steps. On the Max plan the cost is usage allowance, not money, but the proportio
 1. The definition holds the default. The lead raises a single task by passing `model` on that call and
    records why in the ticket. It never lowers below the default for High-risk work.
 2. A reviewer is never a weaker model than the author of the same change.
-3. Fable 5.1 is reserved for the four cases marked in bold. Everything else runs on Opus or below.
+3. Fable 5.1 is reserved for the three roles marked in bold (the architect by default; the security reviewer
+   and the compliance specialist for High-risk and pre-submission work). Everything else runs on Opus or below.
 4. A task that fails twice on Sonnet goes to Opus. One that fails three times goes back to the lead
    (`ai-delegation.md` §1 step 11).
 
