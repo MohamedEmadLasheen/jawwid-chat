@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,6 +40,10 @@ import 'verse_picker.dart';
 /// decide and blocks nothing, until QA's device and browser matrix
 /// (docs/mobile/evidence/pd39/compatibility.md) is signed off.
 const bool kBoardEditGateEnforced = false;
+
+/// TEACHER-020: the height of iOS's status-bar strip (points), which takes a touch of its own
+/// when the status bar is hidden. The full-screen header stays below it.
+const double kIosStatusBarStrip = 20;
 const double kBoardEditMinShortestSide = 600;
 
 enum EditGate { allowed, screenTooSmall }
@@ -406,6 +410,10 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
         children: [
           Positioned.fill(child: ColoredBox(color: tokens.colorSurfaceMuted, child: canvas)),
           SafeArea(
+            // TEACHER-020: with the status bar hidden (immersive), a device with no notch
+            // reports a safe area of 0, and the header's buttons would sit in the top
+            // strip where iOS keeps the touch for its own gestures. Keep them below it.
+            minimum: EdgeInsets.only(top: defaultTargetPlatform == TargetPlatform.iOS ? kIosStatusBarStrip : 0),
             child: Stack(
               children: [
                 PositionedDirectional(
