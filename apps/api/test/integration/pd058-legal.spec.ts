@@ -54,6 +54,7 @@ import { LessonAudioModule } from '../../src/lesson-audio/lesson-audio.module';
 import { ModerationModule } from '../../src/moderation/moderation.module';
 import { RewardModule } from '../../src/rewards/reward.module';
 import { CertificateModule } from '../../src/certificates/certificate.module';
+import { StaffProfileModule } from '../../src/staff-profile/staff-profile.module';
 import { PARENT_NOTICES } from '../../src/lesson-audio/parent-notices';
 import { FIRST_LOGIN_MAILER, type MailSender } from '../../src/account-recovery/recovery-delivery';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
@@ -113,6 +114,27 @@ async function setCurrent(key: LegalDocumentKey, label: string, requiresReaccept
   current.set(key, version);
   return version;
 }
+
+/** The `legal` block once everything is accepted (ENG-10 review: an explicit state). */
+const ACCEPTED = { state: 'accepted', required: [], unavailable: [] };
+/** The `legal` block while documents are outstanding. */
+const pending = (required: unknown[]) => ({ state: 'required', required, unavailable: [] });
+
+/** Publishes a fixture version WITHOUT naming it in force; `effectiveAt` is SQL (e.g. a backdated time). */
+const publishSql = (key: LegalDocumentKey, version: string, requiresReacceptance = true, effectiveAt = 'null') =>
+  g.prisma.$queryRawUnsafe(
+    `select chat.publish_legal_version($1, $2, $3, $4, $5, $6, $7, ${effectiveAt})`,
+    key, version, fixtureUrl('ar', key, version), fixtureUrl('en', key, version),
+    sha(`ar:${version}`), sha(`en:${version}`), requiresReacceptance,
+  );
+const nameInForce = async (key: LegalDocumentKey, version: string) => {
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.config (key, value, scope, description) values ($1, to_jsonb($2::text), 'legal', 'PD-58 spec fixture')
+     on conflict (key) do update set value = excluded.value, updated_at = now()`,
+    `legal.current.${key}`, version,
+  );
+  current.set(key, version);
+};
 
 /** What a kind must accept when it has accepted nothing in force. */
 const expectedFor = (kind: AccountKind) =>
@@ -202,7 +224,7 @@ beforeAll(async () => {
     imports: [
       PlatformModule, AuthModule, CommunicationModule, TeacherFileModule, LessonModule, StaffAccountsModule,
       WhiteboardModule, BillingModule, ScheduledCallModule, AccountDeletionModule, AccountAdminModule, LessonAudioModule,
-      ModerationModule, RewardModule, CertificateModule,
+      ModerationModule, RewardModule, CertificateModule, StaffProfileModule,
     ],
   })
     .overrideProvider(FIRST_LOGIN_MAILER)
@@ -246,11 +268,11 @@ afterAll(async () => {
 describe('1. every way an account is created asks for its own kind\'s terms plus the Code of Conduct', () => {
   async function firstSight(subject: string, kind: AccountKind, password = PASSWORD) {
     const signedIn = await login(subject, password);
-    expect({ subject, legal: signedIn.json.legal }).toEqual({ subject, legal: { required: expectedFor(kind) } });
-    expect(signedIn.json.actor.legal).toEqual({ required: expectedFor(kind) });
+    expect({ subject, legal: signedIn.json.legal }).toEqual({ subject, legal: pending(expectedFor(kind)) });
+    expect(signedIn.json.actor.legal).toEqual(pending(expectedFor(kind)));
     const me = await call(signedIn.token, 'GET', '/me');
     expect(me.status).toBe(200);
-    expect({ subject, legal: me.json.legal }).toEqual({ subject, legal: { required: expectedFor(kind) } });
+    expect({ subject, legal: me.json.legal }).toEqual({ subject, legal: pending(expectedFor(kind)) });
   }
 
   it('a PD-42 intake family', async () => {
@@ -357,7 +379,7 @@ describe('2. before acceptance every gated route is refused; after it, none is',
     const parent = await login(family.parent.subject);
     const accepted = await accept(parent.token, docsOf('family'));
     expect(accepted.status).toBe(200);
-    expect(accepted.json).toEqual({ legal: { required: [] } });
+    expect(accepted.json).toEqual({ legal: ACCEPTED });
     expect(await requiredOf(parent.token)).toEqual([]);
 
     const sent = await call(parent.token, 'POST', `/conversations/${family.groups[0]!.conversationId}/messages`, { body: 'PD-58 accepted', clientMessageId: randomUUID() });
@@ -390,12 +412,12 @@ describe('2b. GET /me/legal: the documents in force, their URLs and the account\
     const before = await call(parent.token, 'GET', '/me/legal');
     expect(before.status).toBe(200);
     expect(before.json).toEqual({
-      required: expectedFor('family'),
+      ...pending(expectedFor('family')),
       documents: expectedFor('family').map((d) => ({ ...d, accepted: false, acceptedVersion: null, acceptedAt: null })),
     });
     expect((await accept(parent.token, docsOf('family'))).status).toBe(200);
     const after = await call(parent.token, 'GET', '/me/legal');
-    expect(after.json.required).toEqual([]);
+    expect(after.json).toMatchObject(ACCEPTED);
     expect(after.json.documents).toHaveLength(2);
     for (const d of after.json.documents as Array<Record<string, unknown>>) {
       expect(d).toMatchObject({ accepted: true, acceptedVersion: d.version });
@@ -423,7 +445,7 @@ describe('2c. the account is the token\'s, never the body\'s', () => {
   it('an acceptance is recorded for the token\'s account only', async () => {
     const caller = await login(m.families[8]!.parent.subject);
     const other = await login(m.families[9]!.parent.subject);
-    expect((await accept(caller.token, docsOf('family'))).json).toEqual({ legal: { required: [] } });
+    expect((await accept(caller.token, docsOf('family'))).json).toEqual({ legal: ACCEPTED });
     expect(await rowsOf(await idOf(m.families[8]!.parent.subject))).toBe(2);
     expect(await rowsOf(await idOf(m.families[9]!.parent.subject))).toBe(0);
     expect(await requiredOf(other.token)).toEqual(expectedFor('family'));
@@ -453,10 +475,39 @@ describe('2d. LD-11: a child-safety report is always accepted; every other repor
     const malformed = await call(parent.token, 'POST', '/reports', { reason: 'child_safety' });
     expect({ status: malformed.status, code: malformed.code }).toEqual({ status: 400, code: CommErrorCode.VALIDATION });
 
-    expect((await accept(parent.token, docsOf('family'))).json).toEqual({ legal: { required: [] } });
+    expect((await accept(parent.token, docsOf('family'))).json).toEqual({ legal: ACCEPTED });
     // 200: the child-safety report about this person is still open, so the service answers with it (§5.4).
     expect((await call(parent.token, 'POST', '/reports', person('spam'))).status).toBe(200);
     expect((await call(parent.token, 'POST', '/me/blocks', { subject: { kind: 'teacher', id: teacherId } })).status).toBe(201);
+  });
+});
+
+describe('2e. ENG-10 review: a call card, joining a call and a staff profile are gated too', () => {
+  it('a parent who has not accepted cannot post a scheduled-call card, accept a call or take a call token', async () => {
+    const f = m.families[13]!;
+    const parent = await login(f.parent.subject);
+    expect(await requiredOf(parent.token)).toEqual(expectedFor('family'));
+    for (const [method, path, body] of [
+      ['POST', '/scheduled-calls', { conversationId: f.groups[0]!.conversationId, kind: 'link', title: 'PD-58 spec call' }],
+      ['POST', `/calls/${randomUUID()}/accept`, {}],
+      ['POST', `/calls/${randomUUID()}/token`, {}],
+    ] as const) {
+      const r = await call(parent.token, method, path, body);
+      expect({ path, status: r.status, code: r.code }).toEqual({ path, status: 403, code: CommErrorCode.TERMS_NOT_ACCEPTED });
+    }
+  });
+
+  it('a staff member who has not accepted cannot change their profile text or photo', async () => {
+    const staff = await login(m.teachersManager.subject);
+    for (const [method, path, body] of [
+      ['PATCH', '/staff-profiles/me', { bio: 'PD-58 spec' }],
+      ['POST', '/staff-profiles/me/avatar/upload', { mimeType: 'image/jpeg', byteSize: 1000 }],
+      ['POST', '/staff-profiles/me/avatar', { objectKey: 'x' }],
+      ['DELETE', '/staff-profiles/me/avatar', undefined],
+    ] as const) {
+      const r = await call(staff.token, method, path, body);
+      expect({ path: `${method} ${path}`, status: r.status, code: r.code }).toEqual({ path: `${method} ${path}`, status: 403, code: CommErrorCode.TERMS_NOT_ACCEPTED });
+    }
   });
 });
 
@@ -507,7 +558,7 @@ describe('4. a new version asks exactly the affected accounts again', () => {
     const tokens: Record<AccountKind, string> = { family: '', teacher: '', staff: '' };
     for (const [kind, subject] of Object.entries(people()) as Array<[AccountKind, string]>) {
       tokens[kind] = (await login(subject)).token;
-      expect((await accept(tokens[kind], docsOf(kind))).json).toEqual({ legal: { required: [] } });
+      expect((await accept(tokens[kind], docsOf(kind))).json).toEqual({ legal: ACCEPTED });
     }
     const teacherId = (await g.prisma.account.findUniqueOrThrow({ where: { subject: people().teacher } })).id;
     const before = await g.prisma.$queryRawUnsafe<Array<{ document_key: string; version: string; accepted_at: Date }>>(
@@ -521,7 +572,7 @@ describe('4. a new version asks exactly the affected accounts again', () => {
         required: expectedFor(kind).filter((d) => d.documentKey === 'code_of_conduct'),
       });
       // Sending only the outstanding document is enough.
-      expect((await accept(tokens[kind], docsOf(kind, ['code_of_conduct']))).json).toEqual({ legal: { required: [] } });
+      expect((await accept(tokens[kind], docsOf(kind, ['code_of_conduct']))).json).toEqual({ legal: ACCEPTED });
     }
 
     await setCurrent('terms_teacher', 'v2');
@@ -529,7 +580,7 @@ describe('4. a new version asks exactly the affected accounts again', () => {
     expect(await requiredOf(tokens.family)).toEqual([]);
     expect(await requiredOf(tokens.staff)).toEqual([]);
     // The full set again is accepted too (the Code of Conduct is already done: a no-op).
-    expect((await accept(tokens.teacher, docsOf('teacher'))).json).toEqual({ legal: { required: [] } });
+    expect((await accept(tokens.teacher, docsOf('teacher'))).json).toEqual({ legal: ACCEPTED });
 
     const after = await g.prisma.$queryRawUnsafe<Array<{ document_key: string; version: string; accepted_at: Date }>>(
       `select document_key, version, accepted_at from chat.terms_acceptance where account_id = $1::uuid order by document_key, accepted_at`, teacherId,
@@ -548,7 +599,7 @@ describe('4b. P-3: a version that does not require re-acceptance asks nobody aga
     const parent = await login(f.parent.subject);
     const conversation = f.groups[0]!.conversationId;
     const send = () => call(parent.token, 'POST', `/conversations/${conversation}/messages`, { body: 'PD-58 P-3', clientMessageId: randomUUID() });
-    expect((await accept(parent.token, docsOf('family'))).json).toEqual({ legal: { required: [] } });
+    expect((await accept(parent.token, docsOf('family'))).json).toEqual({ legal: ACCEPTED });
     expect((await send()).status).toBe(201);
 
     const typoFix = await setCurrent('terms_family', 'typo-fix', false);
@@ -557,7 +608,7 @@ describe('4b. P-3: a version that does not require re-acceptance asks nobody aga
     // An account that accepted nothing is asked for the version in force; accepting it is enough.
     const newcomer = await login(m.families[12]!.parent.subject);
     expect(await requiredOf(newcomer.token)).toEqual(expectedFor('family'));
-    expect((await accept(newcomer.token, docsOf('family'))).json).toEqual({ legal: { required: [] } });
+    expect((await accept(newcomer.token, docsOf('family'))).json).toEqual({ legal: ACCEPTED });
     // A second non-material version: still nobody.
     await setCurrent('terms_family', 'typo-fix-2', false);
     expect(await requiredOf(parent.token)).toEqual([]);
@@ -572,8 +623,48 @@ describe('4b. P-3: a version that does not require re-acceptance asks nobody aga
     // Only the version in force is accepted: an older one is stale.
     const stale = await accept(parent.token, [{ documentKey: 'terms_family', version: typoFix }]);
     expect({ status: stale.status, code: stale.code }).toEqual({ status: 409, code: CommErrorCode.LEGAL_VERSION_STALE });
-    expect((await accept(parent.token, docsOf('family', ['terms_family']))).json).toEqual({ legal: { required: [] } });
+    expect((await accept(parent.token, docsOf('family', ['terms_family']))).json).toEqual({ legal: ACCEPTED });
     expect((await send()).status).toBe(201);
+  });
+});
+
+describe('4c. ENG-10 review: versions are ordered by publication, never by a supplied time or by name', () => {
+  it('a version backdated before the latest of its document is refused by the database', async () => {
+    const key = 'terms_staff' as const;
+    const latest = current.get(key)!;
+    await expect(
+      publishSql(key, `qa-${key}-backdated-${RUN}`, true,
+        `(select effective_at - interval '1 day' from chat.legal_document_version where document_key = 'terms_staff' and version = '${latest}')`),
+    ).rejects.toThrow(/effective_at/);
+    // The same time is allowed (two versions published together share it).
+    await expect(
+      publishSql(key, `qa-${key}-same-time-${RUN}`, true,
+        `(select effective_at from chat.legal_document_version where document_key = 'terms_staff' and version = '${latest}')`),
+    ).resolves.toBeDefined();
+    await nameInForce(key, latest);
+  });
+
+  it('two versions published in one transaction keep their order: v10 after v9, whatever the names sort as', async () => {
+    const key = 'code_of_conduct' as const;
+    const v9 = `qa-${key}-v9-${RUN}`;
+    const v10 = `qa-${key}-v10-${RUN}`;
+    expect(v10 < v9).toBe(true); // by text, v10 sorts first: the trap
+    await g.prisma.$transaction([publishSql(key, v9), publishSql(key, v10)]);
+    const seq = await g.prisma.$queryRawUnsafe<Array<{ version: string }>>(
+      `select version from chat.legal_document_version where document_key = $1 and version in ($2, $3) order by publish_seq`, key, v9, v10,
+    );
+    expect(seq.map((r) => r.version)).toEqual([v9, v10]);
+
+    await nameInForce(key, v9);
+    const parent = await login(m.families[14]!.parent.subject);
+    expect((await accept(parent.token, docsOf('family'))).json).toEqual({ legal: ACCEPTED });
+
+    // v10 requires acceptance and was published after v9: accepting v9 is not enough.
+    await nameInForce(key, v10);
+    expect(await requiredOf(parent.token)).toEqual(expectedFor('family').filter((d) => d.documentKey === key));
+    const refused = await call(parent.token, 'POST', `/conversations/${m.families[14]!.groups[0]!.conversationId}/messages`, { body: 'PD-58 order', clientMessageId: randomUUID() });
+    expect({ status: refused.status, code: refused.code }).toEqual({ status: 403, code: CommErrorCode.TERMS_NOT_ACCEPTED });
+    expect((await accept(parent.token, docsOf('family', [key]))).json).toEqual({ legal: ACCEPTED });
   });
 });
 
@@ -612,7 +703,7 @@ describe('5. PD-16 sign-up records the acceptance, and the lesson-audio notice s
     expect({ status: r.status, json: r.json }).toEqual({ status: 200, json: { ok: true } });
 
     const signedIn = await login(family.subject);
-    expect(signedIn.json.legal).toEqual({ required: [] });
+    expect(signedIn.json.legal).toEqual(ACCEPTED);
     const rows = await g.prisma.$queryRawUnsafe<Array<{ document_key: string; client: string; locale: string; method: string }>>(
       `select document_key, client, locale, method from chat.terms_acceptance where account_id = $1::uuid order by document_key`, family.accountId,
     );
@@ -704,7 +795,17 @@ describe('9. production fails closed', () => {
     const path = `/conversations/${group?.conversationId ?? randomUUID()}/messages`;
     const r = await call(staff.token, 'POST', path, { body: 'hello', clientMessageId: randomUUID() });
     expect({ status: r.status, code: r.code }).toEqual({ status: 503, code: CommErrorCode.LEGAL_NOT_CONFIGURED });
-    expect((await call(staff.token, 'GET', '/me')).status).toBe(200);
+    // ENG-10 review: never "nothing required" -- an explicit state the client tells apart from "all accepted".
+    const unavailable = { state: 'unavailable', unavailable: ['terms_staff'] };
+    const me = await call(staff.token, 'GET', '/me');
+    expect(me.status).toBe(200);
+    expect(me.json.legal).toMatchObject(unavailable);
+    const state = await call(staff.token, 'GET', '/me/legal');
+    expect(state.status).toBe(200);
+    expect(state.json).toMatchObject(unavailable);
+    const again = await login(m.supervisors[2]!.subject);
+    expect(again.json.legal).toMatchObject(unavailable);
+    expect(again.json.actor.legal).toMatchObject(unavailable);
   });
 
   it('a row naming a version that was never published is refused everywhere', async () => {
@@ -714,6 +815,7 @@ describe('9. production fails closed', () => {
     );
     const r = await call(staff.token, 'POST', `/conversations/${randomUUID()}/messages`, { body: 'hello', clientMessageId: randomUUID() });
     expect({ status: r.status, code: r.code }).toEqual({ status: 503, code: CommErrorCode.LEGAL_NOT_CONFIGURED });
+    expect((await call(staff.token, 'GET', '/me')).json.legal).toMatchObject({ state: 'unavailable', unavailable: ['terms_staff'] });
     process.env.APP_ENV = 'production';
     await expect(app.get(LegalService).onModuleInit()).rejects.toThrow(/legal\.current\.terms_staff names a version that was never published/);
   });

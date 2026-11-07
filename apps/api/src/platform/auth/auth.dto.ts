@@ -109,8 +109,12 @@ export function toActorDto(actor: Actor, legal: LegalDto, permissions: readonly 
     canMessage: actor.canMessage ?? null,
     organizationId: actor.organizationId ?? null,
     permissions,
-    // Rebuilt, never passed through: only the four named fields reach a client.
-    legal: { required: legal.required.map((d) => ({ documentKey: d.documentKey, version: d.version, urlAr: d.urlAr, urlEn: d.urlEn })) },
+    // Rebuilt, never passed through: only the named fields reach a client.
+    legal: {
+      state: legal.state,
+      required: legal.required.map((d) => ({ documentKey: d.documentKey, version: d.version, urlAr: d.urlAr, urlEn: d.urlEn })),
+      unavailable: [...legal.unavailable],
+    },
   };
 }
 

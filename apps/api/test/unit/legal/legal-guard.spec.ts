@@ -114,3 +114,16 @@ describe('PD-58: LegalGuard', () => {
     ).rejects.toMatchObject({ code: CommErrorCode.LEGAL_NOT_CONFIGURED, status: 503 });
   });
 });
+
+describe('PD-58: the legal block a client reads (ENG-10 review: an explicit state)', () => {
+  const svc = Object.create(LegalService.prototype) as LegalService;
+  const required = [{ documentKey: 'terms_family' as const, version: 'qa-v1', urlAr: 'x', urlEn: 'y' }];
+
+  it('accepted, required, or unavailable -- and unavailable is never reported as accepted', () => {
+    expect(svc.toDto(status({}))).toEqual({ state: 'accepted', required: [], unavailable: [] });
+    expect(svc.toDto(status({ required }))).toEqual({ state: 'required', required, unavailable: [] });
+    expect(svc.toDto(status({ misconfigured: ['code_of_conduct'] }))).toEqual({ state: 'unavailable', required: [], unavailable: ['code_of_conduct'] });
+    expect(svc.toDto(status({ required, misconfigured: ['code_of_conduct'] })).state).toBe('unavailable');
+    expect(svc.toDto(null)).toEqual({ state: 'unavailable', required: [], unavailable: [] });
+  });
+});

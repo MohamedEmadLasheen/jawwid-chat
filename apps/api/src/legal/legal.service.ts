@@ -143,15 +143,14 @@ export class LegalService implements OnModuleInit {
 
   /**
    * GET /me/legal: the kind's documents in force, their URLs, whether the
-   * account's acceptance satisfies each, and what is still required. 503 when
-   * the configuration cannot be decided (an operator must fix it).
+   * account's acceptance satisfies each, and what is still required. A broken
+   * configuration is state 'unavailable' (never "nothing required").
    */
   async stateFor(accountId: string): Promise<LegalStateDto> {
     const status = await this.statusOf(accountId);
     if (!status) throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'no such account', 403);
-    this.assertConfigured(status);
     return {
-      required: status.required.map((d) => ({ ...d })),
+      ...this.toDto(status),
       documents: status.documents
         .filter((d) => d.published && d.version !== null && d.urlAr !== null && d.urlEn !== null)
         .map((d) => ({
@@ -170,8 +169,9 @@ export class LegalService implements OnModuleInit {
    * The one read behind every decision. Per document key:
    *   - the `legal.current.<key>` row and the version it names (V);
    *   - the FLOOR (P-3): the latest version that requires acceptance at or
-   *     before V. Versions are ordered by (effective_at, created_at, version):
-   *     a version name is the owner's free text and carries no order. When no
+   *     before V. Versions are ordered by publish_seq, the database's own
+   *     publication order (20261107130000) -- never by effective_at, which the
+   *     publisher supplies, nor by the name, which is free text. When no
    *     requiring version is found (the ENG-09 guard makes that impossible),
    *     the floor is V itself -- fail closed;
    *   - the account's latest acceptance at or after the floor (or none).
@@ -194,12 +194,12 @@ export class LegalService implements OnModuleInit {
         LEFT JOIN chat.legal_document_version l
                ON l.document_key = d.key AND jsonb_typeof(c.value) = 'string' AND l.version = c.value #>> '{}'
         LEFT JOIN LATERAL (
-              SELECT r.effective_at, r.created_at, r.version
+              SELECT r.publish_seq
                 FROM chat.legal_document_version r
                WHERE r.document_key = d.key
                  AND r.requires_reacceptance
-                 AND (r.effective_at, r.created_at, r.version) <= (l.effective_at, l.created_at, l.version)
-               ORDER BY r.effective_at DESC, r.created_at DESC, r.version DESC
+                 AND r.publish_seq <= l.publish_seq
+               ORDER BY r.publish_seq DESC
                LIMIT 1) f ON l.version IS NOT NULL
         LEFT JOIN LATERAL (
               SELECT t.version, t.accepted_at
@@ -207,15 +207,22 @@ export class LegalService implements OnModuleInit {
                 JOIN chat.legal_document_version v ON v.document_key = t.document_key AND v.version = t.version
                WHERE t.account_id = a.id
                  AND t.document_key = d.key
-                 AND (v.effective_at, v.created_at, v.version)
-                     >= (coalesce(f.effective_at, l.effective_at), coalesce(f.created_at, l.created_at), coalesce(f.version, l.version))
-               ORDER BY v.effective_at DESC, v.created_at DESC, v.version DESC
+                 AND v.publish_seq >= coalesce(f.publish_seq, l.publish_seq)
+               ORDER BY v.publish_seq DESC
                LIMIT 1) acc ON l.version IS NOT NULL AND a.id IS NOT NULL`;
   }
 
-  /** The client-facing block: what to accept, an empty list when nothing is outstanding. */
+  /**
+   * The client-facing block. 'unavailable' wins over everything: a document the
+   * server cannot decide is never reported as accepted. An unknown account
+   * (null) is 'unavailable' too -- fail closed.
+   */
   toDto(status: LegalStatus | null): LegalDto {
-    return { required: status ? status.required.map((d) => ({ ...d })) : [] };
+    if (!status) return { state: 'unavailable', required: [], unavailable: [] };
+    const required = status.required.map((d) => ({ ...d }));
+    const unavailable = [...status.misconfigured];
+    const state = unavailable.length > 0 ? 'unavailable' : required.length > 0 ? 'required' : 'accepted';
+    return { state, required, unavailable };
   }
 
   /** The DTO for an account, for GET /me, login, refresh and a password change. Never throws on configuration. */

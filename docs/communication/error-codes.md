@@ -235,9 +235,11 @@ field beyond `documents`, `client`, `locale`) is `COMMON.VALIDATION` (400): the
 account is always the token's.
 
 LD-11: `POST /reports` with `reason: 'child_safety'` never answers
-`COMM.TERMS_NOT_ACCEPTED`. `GET /me/legal` answers `COMM.LEGAL_NOT_CONFIGURED`
-(503) when the configuration cannot be decided. The gated routes and the payloads
-are in `docs/contracts/API-CONTRACT.md` §1.1c.
+`COMM.TERMS_NOT_ACCEPTED`. When the configuration cannot be decided, `GET /me`,
+the token pair and `GET /me/legal` answer 200 with `legal.state: 'unavailable'`
+(and `unavailable` naming the documents), never `required: []`; gated routes answer
+`COMM.LEGAL_NOT_CONFIGURED` (503). The gated routes and the payloads are in
+`docs/contracts/API-CONTRACT.md` §1.1c.
 
 ## Client guidance
 

@@ -150,7 +150,7 @@ describe('super admin bootstrap against Postgres', () => {
       await bootstrapSuperAdmin(prisma, { email, password: PASSWORD, displayName: 'owner_o' });
 
       const pair = await auth.login(email, PASSWORD);
-      const me = toActorDto(pair.actor, { required: [] });
+      const me = toActorDto(pair.actor, { state: 'accepted', required: [], unavailable: [] });
       expect(me.kind).toBe('staff');
       expect(me.staffRole).toBe('super_admin');
       expect(me.organizationId).toBe('00000000-0000-0000-0000-000000000001');

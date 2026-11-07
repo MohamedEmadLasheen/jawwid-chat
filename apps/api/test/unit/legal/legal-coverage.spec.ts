@@ -12,6 +12,11 @@
  *   - a route that must NEVER be gated (reading, /auth/*, GET /me, accepting,
  *     account deletion, the parent notices, logout) carries it.
  *
+ *   - an authenticated write (any verb but GET, not @Public()) is neither gated
+ *     nor on UNGATED_WRITES (./ungated-writes.ts, one reason per route), or an
+ *     UNGATED_WRITES entry is stale. A parent or teacher reaches every such
+ *     route at the guard level, so nothing is left to a rate-limit scope.
+ *
  * `POST /reports` and `POST /me/blocks` (MG-1) are on the fixed list. The one
  * exemption there is (LD-11: a child-safety report) is on `POST /reports`
  * only; any other route carrying an exemption fails here.
@@ -19,6 +24,7 @@
 import { RATE_LIMITED_ACTION, ActionScope } from '@platform/auth/action-throttle.guard';
 import { REQUIRES_LEGAL, REQUIRES_LEGAL_EXCEPT } from '../../../src/legal/requires-legal.decorator';
 import { collectRoutes, type Route } from '../../support/route-inventory';
+import { UNGATED_WRITES } from './ungated-writes';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
@@ -62,6 +68,15 @@ const FIXED = [
   'POST /lessons/:id/report/edit',
   'POST /learners/:learnerId/rewards',
   'POST /certificates/:id/story',
+  // ENG-10 review (2026-11-07): a call card's free-text title; joining a call.
+  'POST /scheduled-calls',
+  'POST /calls/:id/accept',
+  'POST /calls/:id/token',
+  // ENG-10 review: a staff member's profile text and photo, as /me/avatar.
+  'PATCH /staff-profiles/:staffId',
+  'POST /staff-profiles/:staffId/avatar/upload',
+  'POST /staff-profiles/:staffId/avatar',
+  'DELETE /staff-profiles/:staffId/avatar',
   // MG-1 (developer-implementation-guide §3.3): reporting and blocking.
   'POST /reports',
   'POST /me/blocks',
@@ -137,6 +152,17 @@ describe('PD-58: every content route is behind the Terms of Use gate', () => {
     // counts against WHITEBOARD_WRITE): reading is never gated (§7.4).
     const missing = routes.filter((r) => r.method !== 'GET' && contentScopes.has(scopeOf(r) ?? '') && !gated(r)).map(key);
     expect(missing).toEqual([]);
+  });
+
+  it('every authenticated write is either gated or on UNGATED_WRITES with a reason; no entry is stale', () => {
+    const writes = routes.filter((r) => r.method !== 'GET' && !r.isPublic);
+    expect(writes.length).toBeGreaterThan(250);
+    const unlisted = writes.filter((r) => !gated(r) && !(key(r) in UNGATED_WRITES)).map(key);
+    expect(unlisted).toEqual([]);
+    const byKey = new Map(writes.map((r) => [key(r), r]));
+    const stale = Object.keys(UNGATED_WRITES).filter((k) => !byKey.has(k) || gated(byKey.get(k)!));
+    expect(stale).toEqual([]);
+    expect(Object.entries(UNGATED_WRITES).filter(([, why]) => why.trim().length < 10).map(([k]) => k)).toEqual([]);
   });
 
   it('every route on the fixed list exists and carries @RequiresLegal()', () => {

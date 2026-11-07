@@ -78,7 +78,7 @@ export class SignupLegalController {
 
   @Public()
   @Get('legal')
-  async current(): Promise<LegalDto> {
+  async current(): Promise<Pick<LegalDto, 'required'>> {
     return { required: await this.legal.currentFor('family') };
   }
 }

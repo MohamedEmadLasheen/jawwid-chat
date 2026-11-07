@@ -12,8 +12,12 @@ import { RequiresLegal } from '../legal/requires-legal.decorator';
 export class ScheduledCallController {
   constructor(private readonly scheduled: ScheduledCallService) {}
 
-  /** `{ conversationId, kind?: 'scheduled' | 'link', startsAt?, title? }` -- posts its card. */
+  /**
+   * `{ conversationId, kind?: 'scheduled' | 'link', startsAt?, title? }` -- posts its card.
+   * PD-58: the card and its free-text title are seen by every member.
+   */
   @Requires('calls.use')
+  @RequiresLegal()
   @Post()
   create(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.scheduled.create(actorId, body ?? {});

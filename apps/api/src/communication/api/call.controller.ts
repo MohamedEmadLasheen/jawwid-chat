@@ -30,12 +30,14 @@ export class CallController {
    * revoked permission takes effect on the next join even mid-call.
    */
   @Requires('calls.use')
+  @RequiresLegal() // PD-58: joining a call is taking part in it, as POST /calls and scheduled-call join.
   @Post(':id/token')
   async token(@ActorId() actorId: string, @Param('id') id: string) {
     return this.calls.issueToken(id, actorId);
   }
 
   @Requires('calls.use')
+  @RequiresLegal() // PD-58: answering a call is taking part in it.
   @Post(':id/accept')
   async accept(@ActorId() actorId: string, @Param('id') id: string) {
     await this.calls.accept(id, actorId);

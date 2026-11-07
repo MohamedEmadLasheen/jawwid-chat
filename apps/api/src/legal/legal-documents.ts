@@ -58,9 +58,22 @@ export interface RequiredLegalDocument {
   readonly urlEn: string;
 }
 
-/** The `legal` block of GET /me, POST /auth/login and POST /auth/refresh. */
+/**
+ * Where the account stands:
+ *   accepted     nothing outstanding; gated routes are open;
+ *   required     `required` lists what to accept (gated routes answer 403 TERMS_NOT_ACCEPTED);
+ *   unavailable  the server cannot decide (`unavailable` names the documents whose
+ *                configuration is missing or broken); gated routes answer 503
+ *                LEGAL_NOT_CONFIGURED. Never to be read as "all accepted".
+ */
+export type LegalState = 'accepted' | 'required' | 'unavailable';
+
+/** The `legal` block of GET /me, POST /auth/login, POST /auth/refresh and POST /me/legal/accept. */
 export interface LegalDto {
+  readonly state: LegalState;
   readonly required: readonly RequiredLegalDocument[];
+  /** Document keys the server cannot decide (state 'unavailable'); empty otherwise. */
+  readonly unavailable: readonly LegalDocumentKey[];
 }
 
 /** One document named in a request: {documentKey, version}. */
@@ -82,10 +95,8 @@ export interface LegalDocumentStateDto extends RequiredLegalDocument {
   readonly acceptedAt: string | null;
 }
 
-/** GET /me/legal. */
-export interface LegalStateDto {
-  /** The same list as GET /me `legal.required`: what to accept, empty when nothing is outstanding. */
-  readonly required: readonly RequiredLegalDocument[];
-  /** The kind's documents in force (its terms first, then the Code of Conduct). */
+/** GET /me/legal: the `legal` block of GET /me, plus each document in force. */
+export interface LegalStateDto extends LegalDto {
+  /** The kind's documents in force (its terms first, then the Code of Conduct); a document in `unavailable` is absent. */
   readonly documents: readonly LegalDocumentStateDto[];
 }

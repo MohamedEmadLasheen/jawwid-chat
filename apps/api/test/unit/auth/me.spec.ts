@@ -44,8 +44,10 @@ const EXPECTED_KEYS = [
   'legal',
 ].sort();
 
-const NONE = { required: [] };
+const NONE = { state: 'accepted' as const, required: [], unavailable: [] };
 const REQUIRED = {
+  state: 'required' as const,
+  unavailable: [],
   required: [{ documentKey: 'terms_family' as const, version: 'qa-fixture-v1', urlAr: 'https://jawwid.test/ar', urlEn: 'https://jawwid.test/en' }],
 };
 
