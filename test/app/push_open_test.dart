@@ -353,6 +353,21 @@ void main() {
       expect(taps.clears, 1);
     });
 
+    testWidgets('a session found ended at launch (it expired or was revoked while the app was closed) clears the tray too; a failed sign-in does not', (tester) async {
+      final coordinator = startPushOpens(container);
+      addTearDown(coordinator.dispose);
+      await pumpApp(tester);
+      expect(taps.clears, 0);
+      await container.read(authControllerProvider.notifier).restore();
+      await settle(tester);
+      expect(taps.clears, 1);
+
+      await container.read(authControllerProvider.notifier).signIn(username: 'parent', password: '');
+      await settle(tester);
+      expect(container.read(authControllerProvider), isA<AuthSignedOut>());
+      expect(taps.clears, 1);
+    });
+
     testWidgets('a tab is gone to, not pushed (a payment reminder opens the Center\'s own target)', (tester) async {
       final coordinator = startPushOpens(container);
       addTearDown(coordinator.dispose);

@@ -74,7 +74,11 @@ class PushOpenCoordinator {
     _sub = opens.opens().listen(_onOpen);
     _auth = _container.listen<AuthState>(authControllerProvider, (previous, next) {
       // A session ended: its notifications leave the tray, for whoever uses the phone next.
-      if (previous is AuthAuthenticated && next is AuthSignedOut) unawaited(_clear());
+      // Also one found ended at launch (it expired or was revoked while the app was
+      // closed): the stored session was being restored, and it did not come back. A failed
+      // sign-in by hand (from AuthSigningIn) ended no session and clears nothing.
+      final hadSession = previous is AuthAuthenticated || previous is AuthUnknown || previous is AuthUnreachable;
+      if (hadSession && next is AuthSignedOut) unawaited(_clear());
       _flush(next);
     });
     unawaited(opens.start());
