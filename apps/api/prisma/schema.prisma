@@ -3084,13 +3084,19 @@ model LessonChangeUnannounced {
 
 /// A legal document version as the owner published it. Append-only.
 model LegalDocumentVersion {
-  documentKey String   @map("document_key")
-  version     String
-  urlAr       String   @map("url_ar")
-  urlEn       String   @map("url_en")
-  effectiveAt DateTime @default(now()) @map("effective_at") @db.Timestamptz
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  createdBy   String?  @map("created_by") @db.Uuid
+  documentKey          String   @map("document_key")
+  version              String
+  urlAr                String   @map("url_ar")
+  urlEn                String   @map("url_en")
+  /// P-1: SHA-256 (lowercase hex) of the exact text served at urlAr / urlEn.
+  contentSha256Ar      String   @map("content_sha256_ar")
+  contentSha256En      String   @map("content_sha256_en")
+  /// P-3: false for a non-material change; accounts that accepted an earlier
+  /// version that required acceptance need not accept again.
+  requiresReacceptance Boolean  @default(true) @map("requires_reacceptance")
+  effectiveAt          DateTime @default(now()) @map("effective_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy            String?  @map("created_by") @db.Uuid
 
   acceptances TermsAcceptance[]
 
@@ -3106,6 +3112,8 @@ model TermsAcceptance {
   version     String
   /// The database's clock; the guard trigger stamps it.
   acceptedAt  DateTime @default(now()) @map("accepted_at") @db.Timestamptz
+  /// P-2: signup | gate. P-4: no IP address or user agent is stored here.
+  method      String
   /// android | ios | web_portal | admin_web
   client      String
   locale      String

@@ -12,15 +12,26 @@
 --
 --   chat.legal_document_version  one row per (document, version) the owner
 --                                publishes: the version's name as the owner
---                                gives it, its Arabic and English URLs, when it
+--                                gives it, its Arabic and English URLs, the
+--                                SHA-256 of the text at each (P-1), whether
+--                                accounts must accept it again (P-3), when it
 --                                takes effect. Append-only; written only by
 --                                chat.publish_legal_version, which the owner's
 --                                release process runs.
 --   chat.terms_acceptance        one row per (account, document, version):
 --                                when it was accepted (the database's clock),
---                                from which client and in which locale.
---                                Immutable; written only by
+--                                how (signup | gate, P-2), from which client
+--                                and in which locale. No IP address or user
+--                                agent (P-4). Immutable; written only by
 --                                chat.accept_legal_documents.
+--
+-- P-1..P-4 are docs/legal/developer-implementation-guide.md §1.3 (L-ENG-1).
+--
+-- P-3 and the required set (ENG-10 computes it; this file only stores the flag):
+-- for each of an account's two documents, the latest version that requires
+-- acceptance, at or before the version in force (legal.current.<key>); the
+-- account must have accepted that version or a later one. A document's first
+-- version always requires acceptance, so the set is never empty.
 --
 -- NOTHING LEGAL SHIPS HERE (N-3 is pending). The code holds the four document
 -- KEYS only. No wording, no URL and no version name is in this file: no version
@@ -36,7 +47,8 @@
 --   * TRUNCATE is refused unless a test's cleanup says so in its own
 --     transaction (chat.test_truncate), as for PD-47/48/49/55's tables.
 --   * INSERT stamps the time from the database (a caller cannot backdate), and
---     an acceptance must be of a document the account's kind accepts.
+--     an acceptance must be of a document the account's kind accepts; a
+--     version may skip re-acceptance only once its document has one that did.
 --   * The account foreign key is ON DELETE RESTRICT: an account that accepted
 --     terms is never hard-deleted out from under its record.
 --
@@ -74,6 +86,22 @@ create table if not exists chat.legal_document_version (
   url_en        text not null
     constraint legal_document_version_url_en_check
     check (length(url_en) <= 2048 and url_en ~ '^https://[^[:space:]]+$'),
+  -- P-1 (developer-implementation-guide §1.3): the SHA-256, lowercase hex, of
+  -- the exact bytes served at url_ar / url_en. A URL can be edited after
+  -- publication; the fingerprint proves which text a person accepted, and the
+  -- release process checks the live page against it (guide §6.3).
+  content_sha256_ar  text not null
+    constraint legal_document_version_content_sha256_ar_check
+    check (content_sha256_ar ~ '^[0-9a-f]{64}$'),
+  content_sha256_en  text not null
+    constraint legal_document_version_content_sha256_en_check
+    check (content_sha256_en ~ '^[0-9a-f]{64}$'),
+  -- P-3: whether accounts must accept this version again. False is for a change
+  -- the owner judges non-material (guide §2.3), for example a typo fix: it is
+  -- still a new version with a new fingerprint, but an account that accepted an
+  -- earlier version that required acceptance need not accept again. A
+  -- document's first version always requires acceptance (the guard).
+  requires_reacceptance  boolean not null default true,
   effective_at  timestamptz not null default now(),
   created_at    timestamptz not null default now(),
   -- The account that ran the release, when it ran as one. Not a foreign key:
@@ -83,7 +111,7 @@ create table if not exists chat.legal_document_version (
 );
 
 comment on table chat.legal_document_version is
-  'PD-58: a version of a legal document (terms_family, terms_teacher, terms_staff, code_of_conduct) as the owner published it, with its Arabic and English URLs. Append-only; written only by chat.publish_legal_version. No row ships in a migration.';
+  'PD-58: a version of a legal document (terms_family, terms_teacher, terms_staff, code_of_conduct) as the owner published it, with its Arabic and English URLs, the SHA-256 of the text at each (P-1) and whether accounts must accept it again (P-3). Append-only; written only by chat.publish_legal_version. No row ships in a migration.';
 
 create or replace function chat.guard_legal_document_version()
 returns trigger
@@ -102,6 +130,14 @@ begin
   end if;
   if tg_op = 'DELETE' then
     raise exception 'a published legal document version is never removed' using errcode = 'check_violation';
+  end if;
+  -- P-3: a version that asks nobody to accept again needs an earlier one that
+  -- did, or the document would have no version anybody must accept.
+  if not new.requires_reacceptance
+     and not exists (select 1 from chat.legal_document_version l
+                      where l.document_key = new.document_key and l.requires_reacceptance) then
+    raise exception 'the first version of % requires acceptance; publish it with requires_reacceptance true', new.document_key
+      using errcode = 'check_violation';
   end if;
   new.created_at := now();
   return new;
@@ -128,6 +164,15 @@ create table if not exists chat.terms_acceptance (
     check (document_key in ('terms_family', 'terms_teacher', 'terms_staff', 'code_of_conduct')),
   version       text not null,
   accepted_at   timestamptz not null default now(),
+  -- P-2: how the account accepted. 'signup': the sign-up form, in the same
+  -- transaction as the account (guide §1.4 A). 'gate': the legal gate shown to
+  -- every other account, and to any account when a new version is published.
+  method        text not null
+    constraint terms_acceptance_method_check
+    check (method in ('signup', 'gate')),
+  -- P-4: no IP address, user agent or device identifier is stored here. The
+  -- session row already holds ip_hash and user_agent for the same request, and
+  -- a copy would add personal data without adding evidence (a test checks it).
   client        text not null
     constraint terms_acceptance_client_check
     check (client in ('android', 'ios', 'web_portal', 'admin_web')),
@@ -146,7 +191,7 @@ create index if not exists terms_acceptance_document_idx
   on chat.terms_acceptance (document_key, version);
 
 comment on table chat.terms_acceptance is
-  'PD-58: an account accepted a version of its terms or of the Code of Conduct, at accepted_at (the database clock), from client, in locale. Immutable: never updated, deleted or truncated; kept through an account erasure as the consent record. Written only by chat.accept_legal_documents.';
+  'PD-58: an account accepted a version of its terms or of the Code of Conduct, at accepted_at (the database clock), by method (signup | gate), from client, in locale. No IP address or user agent. Immutable: never updated, deleted or truncated; kept through an account erasure as the consent record. Written only by chat.accept_legal_documents.';
 
 create or replace function chat.guard_terms_acceptance()
 returns trigger
@@ -202,16 +247,20 @@ create trigger terms_acceptance_no_truncate
 -- ---------------------------------------------------------------------------
 
 -- The owner's release process publishes a version. Idempotent for a retry: the
--- same version with the same URLs again returns false and changes nothing; the
--- same version with anything different is refused (publish a new version).
--- p_effective_at null means now for a new version, and is not compared on a retry.
+-- same version with the same URLs, fingerprints and re-acceptance flag again
+-- returns false and changes nothing; the same version with anything different
+-- is refused (publish a new version). p_effective_at null means now for a new
+-- version, and is not compared on a retry.
 create or replace function chat.publish_legal_version(
-  p_document_key  text,
-  p_version       text,
-  p_url_ar        text,
-  p_url_en        text,
-  p_effective_at  timestamptz default null,
-  p_created_by    uuid default null
+  p_document_key           text,
+  p_version                text,
+  p_url_ar                 text,
+  p_url_en                 text,
+  p_content_sha256_ar      text,
+  p_content_sha256_en      text,
+  p_requires_reacceptance  boolean default true,
+  p_effective_at           timestamptz default null,
+  p_created_by             uuid default null
 ) returns boolean
 language plpgsql
 security definer
@@ -224,8 +273,10 @@ begin
   if p_created_by is not null and not exists (select 1 from chat.account a where a.id = p_created_by) then
     raise exception 'no such account' using errcode = 'no_data_found';
   end if;
-  insert into chat.legal_document_version (document_key, version, url_ar, url_en, effective_at, created_by)
-  values (p_document_key, p_version, p_url_ar, p_url_en, coalesce(p_effective_at, now()), p_created_by)
+  insert into chat.legal_document_version (document_key, version, url_ar, url_en, content_sha256_ar, content_sha256_en,
+                                           requires_reacceptance, effective_at, created_by)
+  values (p_document_key, p_version, p_url_ar, p_url_en, p_content_sha256_ar, p_content_sha256_en,
+          p_requires_reacceptance, coalesce(p_effective_at, now()), p_created_by)
   on conflict (document_key, version) do nothing;
   get diagnostics v_added = row_count;
   if v_added = 1 then
@@ -236,6 +287,9 @@ begin
    where document_key = p_document_key and version = p_version;
   if v_row.url_ar is distinct from p_url_ar
      or v_row.url_en is distinct from p_url_en
+     or v_row.content_sha256_ar is distinct from p_content_sha256_ar
+     or v_row.content_sha256_en is distinct from p_content_sha256_en
+     or v_row.requires_reacceptance is distinct from p_requires_reacceptance
      or (p_effective_at is not null and v_row.effective_at is distinct from p_effective_at) then
     raise exception '% version % is already published, and a published version never changes', p_document_key, p_version
       using errcode = 'check_violation';
@@ -244,19 +298,21 @@ begin
 end;
 $$;
 
-comment on function chat.publish_legal_version(text, text, text, text, timestamptz, uuid) is
-  'PD-58: the owner''s release process publishes a legal document version. Idempotent for an identical retry; a changed version is refused. Server-side only.';
+comment on function chat.publish_legal_version(text, text, text, text, text, text, boolean, timestamptz, uuid) is
+  'PD-58: the owner''s release process publishes a legal document version with the SHA-256 of its Arabic and English text (P-1) and whether accounts must accept it again (P-3). Idempotent for an identical retry; a changed version is refused. Server-side only.';
 
 -- The API records an acceptance. It passes the AUTHENTICATED account (the
--- token's), never an id from a request body, and the documents the account
--- accepted: [{"document_key": ..., "version": ...}, ...]. Idempotent: an
--- acceptance already recorded keeps its first time; returns the rows added.
--- One refusal records nothing (the whole call is one statement).
+-- token's), never an id from a request body, the documents the account
+-- accepted: [{"document_key": ..., "version": ...}, ...], and how (P-2:
+-- 'signup' | 'gate'). Idempotent: an acceptance already recorded keeps its
+-- first time and method; returns the rows added. One refusal records nothing
+-- (the whole call is one statement).
 create or replace function chat.accept_legal_documents(
   p_account_id  uuid,
   p_documents   jsonb,
   p_client      text,
-  p_locale      text
+  p_locale      text,
+  p_method      text
 ) returns integer
 language plpgsql
 security definer
@@ -286,8 +342,8 @@ begin
                     where l.document_key = r.document_key and l.version = r.version) then
       raise exception '% version % is not published', r.document_key, r.version using errcode = 'foreign_key_violation';
     end if;
-    insert into chat.terms_acceptance (account_id, document_key, version, client, locale)
-    values (p_account_id, r.document_key, r.version, p_client, p_locale)
+    insert into chat.terms_acceptance (account_id, document_key, version, method, client, locale)
+    values (p_account_id, r.document_key, r.version, p_method, p_client, p_locale)
     on conflict (account_id, document_key, version) do nothing;
     get diagnostics v_added = row_count;
     v_total := v_total + v_added;
@@ -296,8 +352,8 @@ begin
 end;
 $$;
 
-comment on function chat.accept_legal_documents(uuid, jsonb, text, text) is
-  'PD-58: records that an account accepted legal document versions, from a client, in a locale. Idempotent; the first acceptance keeps its time. Server-side only.';
+comment on function chat.accept_legal_documents(uuid, jsonb, text, text, text) is
+  'PD-58: records that an account accepted legal document versions, how (signup | gate, P-2), from a client, in a locale. Idempotent; the first acceptance keeps its time and method. Server-side only.';
 
 -- ---------------------------------------------------------------------------
 -- 4. RLS and privileges: fail-closed
@@ -318,5 +374,5 @@ create policy terms_acceptance_own on chat.terms_acceptance
 
 revoke all on function chat.guard_legal_document_version() from public, anon, authenticated, chat_app;
 revoke all on function chat.guard_terms_acceptance() from public, anon, authenticated, chat_app;
-revoke all on function chat.publish_legal_version(text, text, text, text, timestamptz, uuid) from public, anon, authenticated, chat_app;
-revoke all on function chat.accept_legal_documents(uuid, jsonb, text, text) from public, anon, authenticated, chat_app;
+revoke all on function chat.publish_legal_version(text, text, text, text, text, text, boolean, timestamptz, uuid) from public, anon, authenticated, chat_app;
+revoke all on function chat.accept_legal_documents(uuid, jsonb, text, text, text) from public, anon, authenticated, chat_app;

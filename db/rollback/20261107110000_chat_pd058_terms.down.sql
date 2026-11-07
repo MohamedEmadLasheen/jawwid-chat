@@ -39,6 +39,10 @@ begin
 end;
 $$;
 
+drop function if exists chat.accept_legal_documents(uuid, jsonb, text, text, text);
+drop function if exists chat.publish_legal_version(text, text, text, text, text, text, boolean, timestamptz, uuid);
+-- The draft's signatures, before P-1..P-3 (2026-11-07): a local database that
+-- applied the draft of #462 rolls back cleanly too, then applies this version.
 drop function if exists chat.accept_legal_documents(uuid, jsonb, text, text);
 drop function if exists chat.publish_legal_version(text, text, text, text, timestamptz, uuid);
 -- DROP TABLE fires no row or truncate trigger; the guards go with their tables.

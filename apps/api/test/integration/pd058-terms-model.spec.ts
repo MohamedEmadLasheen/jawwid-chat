@@ -12,6 +12,11 @@
  *   - the constraints: the four document keys, a version must exist before it is
  *     accepted, a kind accepts only its own terms plus the Code of Conduct, the
  *     client and the locale are checked, the timestamps are the database's;
+ *   - the developer guide's §1.3 proposals: P-1 each version carries the SHA-256
+ *     of its Arabic and English text; P-2 each acceptance says how it was given
+ *     (signup | gate); P-3 each version says whether it asks for acceptance
+ *     again, and a document's first version always does; P-4 the record holds
+ *     no IP address, user agent or device identifier;
  *   - immutability: an UPDATE, a DELETE or a TRUNCATE of either table is refused
  *     by its guard trigger (one function per table), an account that accepted
  *     cannot be hard-deleted, and an erasure keeps the record;
@@ -24,7 +29,7 @@
  * The version names below are synthetic fixtures, never the owner's versions.
  * Synthetic people only (G-20).
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaService } from '@platform/prisma.service';
@@ -49,12 +54,15 @@ async function sqlError(p: Promise<unknown>): Promise<string> {
   }
 }
 
-async function cleanUp(): Promise<void> {
-  // The harness's own escape hatch: a test's cleanup says it is a test's cleanup.
-  await prisma.$transaction([
+/** The harness's own escape hatch: a test's cleanup says it is a test's cleanup. */
+const truncateLegal = () =>
+  prisma.$transaction([
     prisma.$executeRawUnsafe(`select set_config('chat.test_truncate', 'on', true)`),
     prisma.$executeRawUnsafe(`truncate chat.terms_acceptance, chat.legal_document_version`),
   ]);
+
+async function cleanUp(): Promise<void> {
+  await truncateLegal();
   // By id as well: an erased account's subject no longer names this suite's domain.
   await prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}' or id = any($1::uuid[])`, created);
   created.length = 0;
@@ -72,27 +80,53 @@ async function account(kind: 'family' | 'teacher' | 'staff', active = true): Pro
   return id;
 }
 
-const publish = (key: string, version: string, urlAr = `https://jawwid.test/ar/${key}/${version}`, urlEn = `https://jawwid.test/en/${key}/${version}`) =>
+/** SHA-256 (lowercase hex) of a synthetic page body: P-1's fingerprint of the text served at a URL. */
+const sha = (body: string) => createHash('sha256').update(body, 'utf8').digest('hex');
+
+interface PublishOptions {
+  urlAr?: string;
+  urlEn?: string;
+  /** null sends SQL null; omitted sends the fingerprint of a synthetic body. */
+  shaAr?: string | null;
+  shaEn?: string | null;
+  requiresReacceptance?: boolean;
+}
+
+const publish = (key: string, version: string, o: PublishOptions = {}) =>
   prisma
     .$queryRawUnsafe<Array<{ added: boolean }>>(
-      `select chat.publish_legal_version($1, $2, $3, $4, null, null) as added`, key, version, urlAr, urlEn,
+      `select chat.publish_legal_version($1, $2, $3, $4, $5, $6, $7::boolean, null, null) as added`,
+      key,
+      version,
+      o.urlAr ?? `https://jawwid.test/ar/${key}/${version}`,
+      o.urlEn ?? `https://jawwid.test/en/${key}/${version}`,
+      o.shaAr === undefined ? sha(`ar ${key} ${version}`) : o.shaAr,
+      o.shaEn === undefined ? sha(`en ${key} ${version}`) : o.shaEn,
+      o.requiresReacceptance ?? true,
     )
     .then((r) => r[0]!.added);
 
-const accept = (accountId: string, docs: Array<[string, string]>, client = 'android', locale = 'ar') =>
+const accept = (accountId: string, docs: Array<[string, string]>, client = 'android', locale = 'ar', method: string | null = 'gate') =>
   prisma
     .$queryRawUnsafe<Array<{ added: number }>>(
-      `select chat.accept_legal_documents($1::uuid, $2::jsonb, $3, $4) as added`,
-      accountId, JSON.stringify(docs.map(([document_key, version]) => ({ document_key, version }))), client, locale,
+      `select chat.accept_legal_documents($1::uuid, $2::jsonb, $3, $4, $5) as added`,
+      accountId, JSON.stringify(docs.map(([document_key, version]) => ({ document_key, version }))), client, locale, method,
     )
     .then((r) => Number(r[0]!.added));
 
-interface Row { document_key: string; version: string; accepted_at: Date; client: string; locale: string }
+interface Row { document_key: string; version: string; accepted_at: Date; method: string; client: string; locale: string }
 const rowsOf = (accountId: string) =>
   prisma.$queryRawUnsafe<Row[]>(
-    `select document_key, version, accepted_at, client, locale from chat.terms_acceptance where account_id = $1::uuid order by accepted_at, document_key, version`,
+    `select document_key, version, accepted_at, method, client, locale from chat.terms_acceptance where account_id = $1::uuid order by accepted_at, document_key, version`,
     accountId,
   );
+
+interface VersionRow { content_sha256_ar: string; content_sha256_en: string; requires_reacceptance: boolean }
+const versionOf = async (key: string, version: string) =>
+  (await prisma.$queryRawUnsafe<VersionRow[]>(
+    `select content_sha256_ar, content_sha256_en, requires_reacceptance from chat.legal_document_version where document_key = $1 and version = $2`,
+    key, version,
+  ))[0];
 
 /** Runs `fn` as the request role `role`, signed in as `subject`, and rolls back. */
 async function asRole<T>(role: 'chat_app' | 'authenticated' | 'anon', subject: string | null, fn: (tx: PrismaService) => Promise<T>): Promise<T> {
@@ -143,6 +177,9 @@ describe('PD-58: the structure', () => {
       'legal_document_version.version:text:NO',
       'legal_document_version.url_ar:text:NO',
       'legal_document_version.url_en:text:NO',
+      'legal_document_version.content_sha256_ar:text:NO', // P-1
+      'legal_document_version.content_sha256_en:text:NO', // P-1
+      'legal_document_version.requires_reacceptance:boolean:NO', // P-3
       'legal_document_version.effective_at:timestamp with time zone:NO',
       'legal_document_version.created_at:timestamp with time zone:NO',
       'legal_document_version.created_by:uuid:YES',
@@ -150,6 +187,7 @@ describe('PD-58: the structure', () => {
       'terms_acceptance.document_key:text:NO',
       'terms_acceptance.version:text:NO',
       'terms_acceptance.accepted_at:timestamp with time zone:NO',
+      'terms_acceptance.method:text:NO', // P-2
       'terms_acceptance.client:text:NO',
       'terms_acceptance.locale:text:NO',
     ]);
@@ -199,6 +237,27 @@ describe('PD-58: the structure', () => {
     expect(sql).not.toMatch(/legal\.current\./i);
     // No URL is written into the migration either: every URL is the owner's to publish.
     expect(sql).not.toMatch(/https:\/\/[a-z0-9]/i);
+    // Nor a fingerprint (P-1): the hashes are of the owner's published text.
+    expect(sql).not.toMatch(/\b[0-9a-f]{64}\b/i);
+  });
+
+  it('P-4: the acceptance record stores no IP address, user agent or device identifier', async () => {
+    // session.ip_hash and session.user_agent already hold these for the same
+    // request; copying them here would add personal data and no evidence
+    // (developer-implementation-guide §1.3 P-4). The columns are exactly these.
+    const cols = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
+      select column_name::text from information_schema.columns
+       where table_schema = 'chat' and table_name = 'terms_acceptance' order by ordinal_position`);
+    const names = cols.map((c) => c.column_name);
+    expect(names).toEqual(['account_id', 'document_key', 'version', 'accepted_at', 'method', 'client', 'locale']);
+    for (const n of names) {
+      expect({ n, personal: /(^|_)(ip|inet|addr|address|user_?agent|ua|device|fingerprint|session)(_|$)/i.test(n) }).toEqual({ n, personal: false });
+    }
+    // No column of a network-address type either, whatever it is called.
+    const typed = await prisma.$queryRawUnsafe<Array<{ n: number }>>(`
+      select count(*)::int as n from information_schema.columns
+       where table_schema = 'chat' and table_name = 'terms_acceptance' and data_type in ('inet', 'cidr', 'macaddr', 'macaddr8')`);
+    expect(typed).toEqual([{ n: 0 }]);
   });
 });
 
@@ -207,7 +266,7 @@ describe('PD-58: publishing a version', () => {
     const ver = v('coc');
     expect(await publish('code_of_conduct', ver)).toBe(true);
     expect(await publish('code_of_conduct', ver)).toBe(false);
-    expect(await sqlError(publish('code_of_conduct', ver, 'https://jawwid.test/ar/other'))).toMatch(/already published.*never changes/);
+    expect(await sqlError(publish('code_of_conduct', ver, { urlAr: 'https://jawwid.test/ar/other' }))).toMatch(/already published.*never changes/);
     const row = await prisma.$queryRawUnsafe<Array<{ fresh: boolean }>>(
       `select created_at > now() - interval '1 minute' and created_at <= clock_timestamp() as fresh from chat.legal_document_version where document_key = 'code_of_conduct' and version = $1`, ver);
     expect(row).toEqual([{ fresh: true }]);
@@ -217,10 +276,35 @@ describe('PD-58: publishing a version', () => {
     expect(await sqlError(publish('privacy_policy', v('x')))).toMatch(/check constraint|document_key/);
     expect(await sqlError(publish('terms_family', ''))).toMatch(/check constraint|version/);
     expect(await sqlError(publish('terms_family', ' 1.0'))).toMatch(/check constraint|version/);
-    expect(await sqlError(publish('terms_family', v('x'), 'http://jawwid.test/ar'))).toMatch(/check constraint|url_ar/);
-    expect(await sqlError(publish('terms_family', v('x'), undefined, 'javascript:alert(1)'))).toMatch(/check constraint|url_en/);
+    expect(await sqlError(publish('terms_family', v('x'), { urlAr: 'http://jawwid.test/ar' }))).toMatch(/check constraint|url_ar/);
+    expect(await sqlError(publish('terms_family', v('x'), { urlEn: 'javascript:alert(1)' }))).toMatch(/check constraint|url_en/);
   });
 
+  it('P-1: records the SHA-256 of the Arabic and the English text; a retry with a different fingerprint is refused', async () => {
+    const ver = v('coc-sha');
+    const [ar, en] = [sha(`ar page ${ver}`), sha(`en page ${ver}`)];
+    expect(await publish('code_of_conduct', ver, { shaAr: ar, shaEn: en })).toBe(true);
+    expect(await versionOf('code_of_conduct', ver)).toEqual(expect.objectContaining({ content_sha256_ar: ar, content_sha256_en: en }));
+    // The identical retry is still a no-op ...
+    expect(await publish('code_of_conduct', ver, { shaAr: ar, shaEn: en })).toBe(false);
+    // ... but the same URLs over different text are a changed version: publish a new one.
+    expect(await sqlError(publish('code_of_conduct', ver, { shaAr: sha('edited'), shaEn: en }))).toMatch(/already published.*never changes/);
+    expect(await sqlError(publish('code_of_conduct', ver, { shaAr: ar, shaEn: sha('edited') }))).toMatch(/already published.*never changes/);
+    expect(await versionOf('code_of_conduct', ver)).toEqual(expect.objectContaining({ content_sha256_ar: ar, content_sha256_en: en }));
+  });
+
+  it('P-1: a fingerprint is required and is exactly 64 lowercase hex characters', async () => {
+    const good = sha('x');
+    for (const [label, bad] of [
+      ['null', null], ['empty', ''], ['short', good.slice(1)], ['long', `${good}0`],
+      ['uppercase', good.toUpperCase()], ['not hex', `${good.slice(1)}g`], ['padded', ` ${good.slice(1)}`],
+    ] as const) {
+      expect({ label, side: 'ar', out: await sqlError(publish('terms_staff', v('sha'), { shaAr: bad })) })
+        .toEqual({ label, side: 'ar', out: expect.stringMatching(/check constraint|content_sha256_ar|null value/) });
+      expect({ label, side: 'en', out: await sqlError(publish('terms_staff', v('sha'), { shaEn: bad })) })
+        .toEqual({ label, side: 'en', out: expect.stringMatching(/check constraint|content_sha256_en|null value/) });
+    }
+  });
   it('a published version is never updated, deleted or truncated', async () => {
     const ver = v('tf');
     await publish('terms_family', ver);
@@ -232,6 +316,47 @@ describe('PD-58: publishing a version', () => {
   });
 });
 
+describe('PD-58 P-3: a version says whether it asks for acceptance again', () => {
+  // The rule below is per document, so this block starts from no versions at all.
+  beforeAll(truncateLegal);
+
+  it('a document\'s first version always requires acceptance; after that a version may be published without it', async () => {
+    const [first, typo, material] = [v('tt1'), v('tt1-typo'), v('tt2')];
+    // A first version that asked nobody to accept would leave the gate with nothing to require.
+    expect(await sqlError(publish('terms_teacher', first, { requiresReacceptance: false }))).toMatch(/first version .* requires acceptance/);
+    expect(await versionOf('terms_teacher', first)).toBeUndefined();
+
+    expect(await publish('terms_teacher', first)).toBe(true);
+    expect(await publish('terms_teacher', typo, { requiresReacceptance: false })).toBe(true);
+    expect(await publish('terms_teacher', material)).toBe(true);
+    expect((await versionOf('terms_teacher', first))!.requires_reacceptance).toBe(true);
+    expect((await versionOf('terms_teacher', typo))!.requires_reacceptance).toBe(false);
+    expect((await versionOf('terms_teacher', material))!.requires_reacceptance).toBe(true);
+
+    // The rule is per document: another document's first version is held to it too.
+    expect(await sqlError(publish('terms_family', v('tf1'), { requiresReacceptance: false }))).toMatch(/first version .* requires acceptance/);
+  });
+
+  it('defaults to true, and a retry that changes it is refused', async () => {
+    const ver = v('coc-default');
+    await prisma.$queryRawUnsafe(
+      `select chat.publish_legal_version('code_of_conduct', $1, 'https://jawwid.test/ar/d', 'https://jawwid.test/en/d', $2, $3)`,
+      ver, sha('ar d'), sha('en d'),
+    );
+    expect((await versionOf('code_of_conduct', ver))!.requires_reacceptance).toBe(true);
+    expect(await sqlError(publish('code_of_conduct', ver, {
+      urlAr: 'https://jawwid.test/ar/d', urlEn: 'https://jawwid.test/en/d', shaAr: sha('ar d'), shaEn: sha('en d'), requiresReacceptance: false,
+    }))).toMatch(/already published.*never changes/);
+  });
+
+  it('is never changed after publication', async () => {
+    const ver = v('coc-fixed');
+    await publish('code_of_conduct', ver);
+    expect(await sqlError(prisma.$executeRawUnsafe(`update chat.legal_document_version set requires_reacceptance = false where version = $1`, ver))).toMatch(/never changed/);
+    expect(await sqlError(prisma.$executeRawUnsafe(`update chat.legal_document_version set content_sha256_en = $2 where version = $1`, ver, sha('swap')))).toMatch(/never changed/);
+  });
+});
+
 describe('PD-58: accepting', () => {
   it('records the account, the document, the version, the time, the client and the locale; once', async () => {
     const [tf, coc] = [v('tf'), v('coc')];
@@ -239,16 +364,33 @@ describe('PD-58: accepting', () => {
     await publish('code_of_conduct', coc);
     const fam = await account('family');
 
-    expect(await accept(fam, [['terms_family', tf], ['code_of_conduct', coc]], 'ios', 'en')).toBe(2);
+    expect(await accept(fam, [['terms_family', tf], ['code_of_conduct', coc]], 'ios', 'en', 'signup')).toBe(2);
     const first = await rowsOf(fam);
-    expect(first.map((r) => [r.document_key, r.version, r.client, r.locale])).toEqual([
-      ['code_of_conduct', coc, 'ios', 'en'],
-      ['terms_family', tf, 'ios', 'en'],
+    expect(first.map((r) => [r.document_key, r.version, r.method, r.client, r.locale])).toEqual([
+      ['code_of_conduct', coc, 'signup', 'ios', 'en'],
+      ['terms_family', tf, 'signup', 'ios', 'en'],
     ]);
 
-    // Accepting again records nothing new: the first acceptance, and its time, stand.
-    expect(await accept(fam, [['terms_family', tf], ['code_of_conduct', coc]], 'web_portal', 'ar')).toBe(0);
+    // Accepting again records nothing new: the first acceptance, its time and its method, stand.
+    expect(await accept(fam, [['terms_family', tf], ['code_of_conduct', coc]], 'web_portal', 'ar', 'gate')).toBe(0);
     expect(await rowsOf(fam)).toEqual(first);
+  });
+
+  it('P-2: records how the account accepted, sign-up or the gate, and refuses anything else', async () => {
+    const [tf, coc] = [v('tf'), v('coc')];
+    await publish('terms_family', tf);
+    await publish('code_of_conduct', coc);
+    const [atSignup, atGate, bad] = [await account('family'), await account('family'), await account('family')];
+    expect(await accept(atSignup, [['terms_family', tf]], 'android', 'ar', 'signup')).toBe(1);
+    expect(await accept(atGate, [['terms_family', tf]], 'android', 'ar', 'gate')).toBe(1);
+    expect((await rowsOf(atSignup)).map((r) => r.method)).toEqual(['signup']);
+    expect((await rowsOf(atGate)).map((r) => r.method)).toEqual(['gate']);
+
+    for (const method of ['support', 'admin', 'SIGNUP', '', null]) {
+      expect({ method, out: await sqlError(accept(bad, [['code_of_conduct', coc]], 'android', 'ar', method)) })
+        .toEqual({ method, out: expect.stringMatching(/check constraint|method|null value/) });
+    }
+    expect(await rowsOf(bad)).toEqual([]);
   });
 
   it('a new version is a new row; the older acceptance is kept with its timestamp', async () => {
@@ -268,8 +410,8 @@ describe('PD-58: accepting', () => {
     await publish('terms_staff', ver);
     const staff = await account('staff');
     await prisma.$executeRawUnsafe(
-      `insert into chat.terms_acceptance (account_id, document_key, version, accepted_at, client, locale)
-       values ($1::uuid, 'terms_staff', $2, '2020-01-01T00:00:00Z', 'admin_web', 'ar')`, staff, ver);
+      `insert into chat.terms_acceptance (account_id, document_key, version, accepted_at, method, client, locale)
+       values ($1::uuid, 'terms_staff', $2, '2020-01-01T00:00:00Z', 'gate', 'admin_web', 'ar')`, staff, ver);
     const r = await prisma.$queryRawUnsafe<Array<{ fresh: boolean }>>(
       `select accepted_at > now() - interval '1 minute' as fresh from chat.terms_acceptance where account_id = $1::uuid`, staff);
     expect(r).toEqual([{ fresh: true }]);
@@ -324,7 +466,7 @@ describe('PD-58: the acceptance record is immutable', () => {
 
   it('no UPDATE of any column, no DELETE, no TRUNCATE', async () => {
     for (const set of [
-      `accepted_at = now() - interval '1 day'`, `client = 'ios'`, `locale = 'en'`, `version = version`,
+      `accepted_at = now() - interval '1 day'`, `client = 'ios'`, `locale = 'en'`, `method = 'signup'`, `version = version`,
       `account_id = account_id`, `document_key = document_key`,
     ]) {
       expect({ set, out: await sqlError(prisma.$executeRawUnsafe(`update chat.terms_acceptance set ${set} where account_id = $1::uuid`, fam)) })
@@ -361,11 +503,11 @@ describe('PD-58: RLS and privileges (fail-closed)', () => {
       const out = await asRole(role, await subjectOf(a), async (tx) => ({
         mine: await tx.$queryRawUnsafe<Array<{ account_id: string }>>(`select account_id::text from chat.terms_acceptance`),
         versions: await attempt(tx, `select * from chat.legal_document_version`),
-        insert: await attempt(tx, `insert into chat.terms_acceptance (account_id, document_key, version, client, locale) values ('${a}'::uuid, 'code_of_conduct', '${ver}', 'ios', 'ar')`),
+        insert: await attempt(tx, `insert into chat.terms_acceptance (account_id, document_key, version, method, client, locale) values ('${a}'::uuid, 'code_of_conduct', '${ver}', 'gate', 'ios', 'ar')`),
         update: await attempt(tx, `update chat.terms_acceptance set locale = 'en' where account_id = '${a}'::uuid`),
         delete: await attempt(tx, `delete from chat.terms_acceptance where account_id = '${a}'::uuid`),
-        publish: await attempt(tx, `select chat.publish_legal_version('code_of_conduct', 'x', 'https://a.test', 'https://b.test', now(), null)`),
-        acceptFn: await attempt(tx, `select chat.accept_legal_documents('${a}'::uuid, '[]'::jsonb, 'ios', 'ar')`),
+        publish: await attempt(tx, `select chat.publish_legal_version('code_of_conduct', 'x', 'https://a.test', 'https://b.test', repeat('a', 64), repeat('b', 64), true, now(), null)`),
+        acceptFn: await attempt(tx, `select chat.accept_legal_documents('${a}'::uuid, '[]'::jsonb, 'ios', 'ar', 'gate')`),
       }));
       expect({ role, ...out }).toEqual({
         role,
@@ -402,8 +544,8 @@ describe('PD-58: RLS and privileges (fail-closed)', () => {
         }
       }
       for (const fn of [
-        'chat.publish_legal_version(text, text, text, text, timestamp with time zone, uuid)',
-        'chat.accept_legal_documents(uuid, jsonb, text, text)',
+        'chat.publish_legal_version(text, text, text, text, text, text, boolean, timestamp with time zone, uuid)',
+        'chat.accept_legal_documents(uuid, jsonb, text, text, text)',
         'chat.guard_legal_document_version()',
         'chat.guard_terms_acceptance()',
       ]) {
