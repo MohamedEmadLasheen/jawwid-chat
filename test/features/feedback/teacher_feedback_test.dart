@@ -7,6 +7,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/core/data/http/http_feedback_repository.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/feedback/presentation/teacher_feedback_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/my_profile_screen.dart';
@@ -140,6 +141,30 @@ void main() {
     expect(find.text('You have sent a lot of feedback today. Please try again tomorrow.'), findsOneWidget);
     expect(find.text('Lessons start late.'), findsOneWidget);
     expect(find.byKey(const ValueKey('feedback-submit')), findsOneWidget);
+  });
+
+  // LD-12 / MG-3: the server's word filter refused the text.
+  testWidgets('words that are not allowed: says so plainly and keeps what was written', (tester) async {
+    final repo = FakeFeedbackRepository(children: const [child], refuseWith: WireErrors.contentNotAllowed);
+    await tester.pumpWidget(app(repo));
+    await tester.pumpAndSettle();
+
+    await fillAndSend(tester, category: 'complaint', body: 'Some words.');
+
+    expect(find.byKey(const ValueKey('feedback-error')), findsOneWidget);
+    expect(find.text('Your feedback has words that are not allowed. Please change them and send it again.'), findsOneWidget);
+    expect(find.text('Some words.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('feedback-submit')), findsOneWidget);
+  });
+
+  testWidgets('in Arabic, words that are not allowed read in Arabic', (tester) async {
+    final repo = FakeFeedbackRepository(children: const [child], refuseWith: WireErrors.contentNotAllowed);
+    await tester.pumpWidget(app(repo, locale: const Locale('ar')));
+    await tester.pumpAndSettle();
+
+    await fillAndSend(tester);
+
+    expect(find.text('في ملاحظتك كلمات غير مسموح بها. عدّلها ثم أرسلها مرة أخرى.'), findsOneWidget);
   });
 
   testWidgets('in Arabic, the limit and the privacy note read in Arabic', (tester) async {

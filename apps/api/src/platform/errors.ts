@@ -642,6 +642,14 @@ export enum CommErrorCode {
    * -- the report (in the caller's scope) has no attachment at that index. 404.
    */
   REPORT_ATTACHMENT_NOT_FOUND = 'COMM.REPORT_ATTACHMENT_NOT_FOUND',
+  // --- LD-12 / MG-3: the pre-posting content filter (Apple 1.2) ---
+  /**
+   * The text (a message, a caption, an edit, feedback, a name or a profile
+   * text) holds a word on the content filter's list. Nothing was stored. The
+   * message never names the word. 400; the client keeps the text so it can be
+   * rephrased. Off when chat.config `moderation.content_filter.enabled` = false.
+   */
+  CONTENT_NOT_ALLOWED = 'COMM.CONTENT_NOT_ALLOWED',
   // --- PD-57 WP-2: Block (closure plan 2026-11-06 §5, roadmap §6.2) ---
   /**
    * The caller may not block, or nobody may block this person. `detail.reason`:

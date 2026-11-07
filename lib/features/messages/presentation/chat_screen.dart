@@ -1300,6 +1300,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             initialDraft: _savedDraft(),
             onDraftChanged: _typingSender?.typed,
             onDraft: (draft) => ref.read(draftsProvider.notifier).set(widget.conversationId, draft),
+            // LD-12: a text the content filter refused comes back to the field.
+            contentRefusal: state.contentRefusal,
+            onContentRefusalShown: controller.contentRefusalShown,
             conversationId: widget.conversationId,
             voice: voice,
             onStartRecording: voiceController.start,

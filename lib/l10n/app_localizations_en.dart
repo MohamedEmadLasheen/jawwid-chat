@@ -136,6 +136,10 @@ class L10nEn extends L10n {
   String get composerReadOnly => 'You can no longer send messages here.';
 
   @override
+  String get composerContentNotAllowed =>
+      'This message has words that are not allowed here. Please change them and send it again.';
+
+  @override
   String get voiceRecordingInProgress => 'Recording a voice message';
 
   @override
@@ -212,6 +216,10 @@ class L10nEn extends L10n {
 
   @override
   String get messageStateFailed => 'Not sent';
+
+  @override
+  String get messageContentNotAllowed =>
+      'Not sent: the caption has words that are not allowed';
 
   @override
   String get messageStatePendingApproval => 'Pending approval';
@@ -4166,6 +4174,10 @@ class L10nEn extends L10n {
   @override
   String get feedbackDenied =>
       'Only a parent can send feedback about a teacher.';
+
+  @override
+  String get feedbackContentNotAllowed =>
+      'Your feedback has words that are not allowed. Please change them and send it again.';
 
   @override
   String get feedbackFailed =>

@@ -1,0 +1,51 @@
+{
+  "status": "DRAFT, pending owner approval (LD-12). Not approved. A small, conservative starting list; the owner and the Teachers department review and replace it.",
+  "approvedBy": null,
+  "approvedOn": null,
+  "rules": [
+    "Whole words and whole phrases only, never part of a word. Matching ignores case, Arabic diacritics and tatweel, alef, ya and ta marbuta variants, and repeated letters, so list each word once in its plain form.",
+    "Never list a word that occurs in the Quran, in hadith or in ordinary religious or lesson vocabulary (for example: zina, a shadh hadith, the people of Lut, dog, donkey, pig, Hell). The false-positive guard test (apps/api/test/unit/content-filter/false-positive-guard.spec.ts) runs the list over the whole Quran and the lesson text and fails on any match.",
+    "Never list a common personal name, or a word that is a name in transliteration."
+  ],
+  "ar": [
+    "شرموطة",
+    "شرموط",
+    "شراميط",
+    "قحبة",
+    "قحاب",
+    "منيوك",
+    "منيوكة",
+    "متناك",
+    "متناكة",
+    "معرص",
+    "طيز",
+    "انيكك",
+    "كسمك",
+    "كس امك",
+    "كس اختك",
+    "يلعن امك",
+    "يلعن ابوك",
+    "سكس"
+  ],
+  "en": [
+    "fuck",
+    "fucking",
+    "fucked",
+    "fucker",
+    "motherfucker",
+    "shit",
+    "bullshit",
+    "cunt",
+    "bitch",
+    "bitches",
+    "whore",
+    "slut",
+    "asshole",
+    "dickhead",
+    "nigger",
+    "nigga",
+    "faggot",
+    "porn",
+    "porno"
+  ]
+}

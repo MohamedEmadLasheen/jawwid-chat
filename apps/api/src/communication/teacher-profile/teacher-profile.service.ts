@@ -12,6 +12,8 @@ import { isUuid } from '../conversations/conversation.service';
 import { signAvatar } from '../profile/avatar-urls';
 import { sniffCertificateFile } from '../../certificates/certificate-file';
 import { ActorKind } from '../contracts/vocab';
+import { AppConfigService } from '../../platform/app-config.service';
+import { ContentFilterService } from '../../platform/content-filter/content-filter.service';
 import { dashboardTile, type DashboardTile } from '../../dashboard/dashboard-tile';
 import { TeacherScopeService, scopeCovers, type TeacherScope } from '../../platform/teacher-scope';
 
@@ -87,6 +89,9 @@ export class TeacherProfileService {
     @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
     // TEACHER-001: credential review honours the PD-35 teacher scope.
     @Optional() private readonly teacherScope: TeacherScopeService = new TeacherScopeService(prisma),
+    // LD-12 / MG-3: parents read the profile and the name. Absent, the real
+    // filter with the draft list -- never no filter.
+    @Optional() private readonly contentFilter: ContentFilterService = new ContentFilterService(new AppConfigService(prisma)),
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -118,6 +123,13 @@ export class TeacherProfileService {
   async saveProfile(actorId: string, input: ProfileContentInput): Promise<TeacherProfileView> {
     const actor = await this.requireTeacher(actorId);
     const content = this.validateContent(input);
+    await this.contentFilter.assertAllowed(
+      actor.kind,
+      content.bio,
+      content.specialization,
+      content.qualifications,
+      content.experience,
+    );
 
     const profile = await this.prisma.$transaction(async (tx) => {
       const before = await tx.teacherProfessionalProfile.findUnique({
@@ -166,6 +178,7 @@ export class TeacherProfileService {
   async updateName(actorId: string, rawName: string): Promise<TeacherIdentityView> {
     const actor = await this.requireTeacher(actorId);
     const name = this.validateName(rawName);
+    await this.contentFilter.assertAllowed(actor.kind, name);
 
     const teacher = await this.prisma.$transaction(async (tx) => {
       const before = await tx.teacher.findUnique({ where: { id: actor.actorId } });

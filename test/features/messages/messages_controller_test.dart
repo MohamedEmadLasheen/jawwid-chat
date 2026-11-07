@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/http/attachment_uploader.dart' show UploadCancel;
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/features/messages/application/messages_controller.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
@@ -439,6 +440,62 @@ void main() {
       );
 
       expect(read().log.isEmpty, isTrue);
+    });
+  });
+
+  // LD-12 / MG-3: the server refuses a text holding a word on its list
+  // (COMM.CONTENT_NOT_ALLOWED). The words go back to the person to change.
+  group('a text the content filter refuses', () {
+    const refused = AppError(AppErrorKind.validation, code: WireErrors.contentNotAllowed);
+
+    test('leaves the chat and comes back as the composer\'s text, never retried', () async {
+      final c = controller();
+      await settle();
+
+      repository
+        ..failWith = refused
+        ..failuresRemaining = 1;
+      c.send('please change this');
+      await settle();
+
+      expect(read().log.isEmpty, isTrue, reason: 'nobody else saw it; no "Not sent" ghost');
+      expect(read().contentRefusal?.text, 'please change this');
+      await Future<void>.delayed(const Duration(seconds: 3));
+      expect(repository.sent, hasLength(1), reason: 'a refusal fails identically on every attempt');
+    });
+
+    test('each refusal is new, so the same words refused twice are restored twice', () async {
+      final c = controller();
+      await settle();
+
+      repository
+        ..failWith = refused
+        ..failuresRemaining = 2;
+      c.send('again');
+      await settle();
+      final first = read().contentRefusal!;
+      c.send('again');
+      await settle();
+      final second = read().contentRefusal!;
+      expect(second.text, 'again');
+      expect(second.seq, isNot(first.seq));
+    });
+
+    test('a photo whose caption is refused stays as "Not sent" with the reason, to discard', () async {
+      const photo = PendingAttachment(filePath: '/tmp/p.jpg', kind: MessageKind.image, mimeType: 'image/jpeg', byteSize: 1200);
+      final c = controller();
+      await settle();
+
+      repository
+        ..failWith = refused
+        ..failuresRemaining = 1;
+      c.sendAttachment(photo, body: 'a caption');
+      await settle();
+
+      final bubble = read().log.messages.single;
+      expect(bubble.deliveryState, DeliveryState.failed);
+      expect(bubble.failureCode, WireErrors.contentNotAllowed);
+      expect(read().contentRefusal, isNull);
     });
   });
 }
