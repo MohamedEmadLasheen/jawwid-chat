@@ -3526,6 +3526,40 @@ class L10nEn extends L10n {
       'Transfer the amount, then upload the receipt';
 
   @override
+  String get billingCardFailureLead =>
+      'Your last card payment did not go through:';
+
+  @override
+  String get billingCardFailureNext =>
+      'Try another card, or pay by bank transfer.';
+
+  @override
+  String get billingCardFailureInsufficientFunds =>
+      'your bank declined it for insufficient funds.';
+
+  @override
+  String get billingCardFailureExpiredCard => 'the card has expired.';
+
+  @override
+  String get billingCardFailureIncorrectCvc =>
+      'the security code (CVC) was incorrect.';
+
+  @override
+  String get billingCardFailureIncorrectNumber =>
+      'the card number was incorrect.';
+
+  @override
+  String get billingCardFailureAuthentication =>
+      'your bank\'s verification (3D Secure) was not completed.';
+
+  @override
+  String get billingCardFailureProcessingError =>
+      'there was an error processing the card.';
+
+  @override
+  String get billingCardFailureDeclined => 'your bank declined the card.';
+
+  @override
   String get billingPaymentsUnavailable =>
       'Card payment isn\'t available right now. You can pay by bank transfer.';
 

@@ -6031,6 +6031,60 @@ abstract class L10n {
   /// **'Transfer the amount, then upload the receipt'**
   String get billingBankTransferHint;
 
+  /// PD-27: banner on an open payment whose last card attempt failed. Followed by the reason and the next step (apps/api card-failure.ts).
+  ///
+  /// In en, this message translates to:
+  /// **'Your last card payment did not go through:'**
+  String get billingCardFailureLead;
+
+  /// PD-27: the card-failure banner's next step.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another card, or pay by bank transfer.'**
+  String get billingCardFailureNext;
+
+  /// PD-27: card-failure reason (insufficient_funds).
+  ///
+  /// In en, this message translates to:
+  /// **'your bank declined it for insufficient funds.'**
+  String get billingCardFailureInsufficientFunds;
+
+  /// PD-27: card-failure reason (expired_card).
+  ///
+  /// In en, this message translates to:
+  /// **'the card has expired.'**
+  String get billingCardFailureExpiredCard;
+
+  /// PD-27: card-failure reason (incorrect_cvc, invalid_cvc).
+  ///
+  /// In en, this message translates to:
+  /// **'the security code (CVC) was incorrect.'**
+  String get billingCardFailureIncorrectCvc;
+
+  /// PD-27: card-failure reason (incorrect_number, invalid_number).
+  ///
+  /// In en, this message translates to:
+  /// **'the card number was incorrect.'**
+  String get billingCardFailureIncorrectNumber;
+
+  /// PD-27: card-failure reason (authentication_required, payment_intent_authentication_failure).
+  ///
+  /// In en, this message translates to:
+  /// **'your bank\'s verification (3D Secure) was not completed.'**
+  String get billingCardFailureAuthentication;
+
+  /// PD-27: card-failure reason (processing_error).
+  ///
+  /// In en, this message translates to:
+  /// **'there was an error processing the card.'**
+  String get billingCardFailureProcessingError;
+
+  /// PD-27: card-failure reason for every other code. Never says stolen, lost or fraud.
+  ///
+  /// In en, this message translates to:
+  /// **'your bank declined the card.'**
+  String get billingCardFailureDeclined;
+
   /// PD-27: Settings -> Payments.
   ///
   /// In en, this message translates to:
