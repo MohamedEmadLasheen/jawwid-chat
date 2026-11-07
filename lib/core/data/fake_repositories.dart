@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../features/moderation/data/block_repository.dart';
+import '../../features/moderation/data/moderation_repository.dart';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
@@ -492,5 +494,146 @@ class FakeFeedbackRepository implements FeedbackRepository {
     seenReplies.add(feedbackId);
     final i = _items.indexWhere((f) => f.id == feedbackId);
     if (i >= 0 && _items[i].response != null) _items[i] = _items[i].asReplySeen();
+  }
+}
+
+/// PD-57, in memory: the fixture user's own reports.
+///
+/// Behaves like the contract where a screen depends on it: `other` needs a note, a note is
+/// at most 500 characters, a second report on the same target answers `alreadyOpen`, and
+/// the newest report comes first. [refuseWith] makes every submission fail with that code.
+class FakeModerationRepository implements ModerationRepository {
+  FakeModerationRepository({List<MyReport> reports = const [], this.refuseWith}) : _reports = [...reports];
+
+  final List<MyReport> _reports;
+
+  /// Every submission is refused with this code (and the matching kind), when set.
+  String? refuseWith;
+
+  /// What was submitted, oldest first.
+  final submitted = <ReportDraft>[];
+
+  /// The exact bodies that would have been sent, oldest first.
+  final bodies = <Map<String, Object?>>[];
+
+  int _next = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<ReportReceipt> submit(ReportDraft draft) async {
+    final code = refuseWith;
+    if (code != null) {
+      throw AppError(
+        switch (code) {
+          ModerationErrors.targetNotVisible => AppErrorKind.notFound,
+          ModerationErrors.rateLimited => AppErrorKind.rateLimited,
+          ModerationErrors.termsNotAccepted => AppErrorKind.forbidden,
+          _ => AppErrorKind.validation,
+        },
+        code: code,
+      );
+    }
+    final note = draft.note?.trim() ?? '';
+    if (draft.reason == ReportReason.other && note.isEmpty) {
+      throw const AppError(AppErrorKind.validation, code: ModerationErrors.noteRequired);
+    }
+    if (note.length > ModerationErrors.noteMaxLength) {
+      throw const AppError(AppErrorKind.validation, code: 'COMMON.VALIDATION');
+    }
+    final body = draft.toJson();
+    final duplicate = bodies.any((b) => b['messageId'] == body['messageId'] && '${b['subject']}' == '${body['subject']}');
+    submitted.add(draft);
+    bodies.add(body);
+    final id = 'report_${_next++}';
+    if (!duplicate) {
+      _reports.insert(
+        0,
+        MyReport(
+          id: id,
+          targetKind: body['targetKind']! as String,
+          reason: draft.reason,
+          status: ReportStatus.open,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+    return ReportReceipt(id: id, status: 'open', dueAt: DateTime.now().add(const Duration(hours: 48)), alreadyOpen: duplicate);
+  }
+
+  @override
+  Future<List<MyReport>> mine() async => List.unmodifiable(_reports);
+}
+
+/// PD-57 (WP-2B), in memory: the fixture user's own blocks.
+///
+/// Behaves like the contract where a screen depends on it: blocking someone already blocked
+/// answers the existing block (the 200), the newest block comes first, and unblocking an
+/// unknown id is a 404. [refuseWith] makes every block fail with that code;
+/// [refuseUnblockWith] does the same for unblocking; [failListWith] fails the list.
+class FakeBlockRepository implements BlockRepository {
+  FakeBlockRepository({
+    List<PersonBlock> blocks = const [],
+    this.refuseWith,
+    this.refuseUnblockWith,
+    this.failListWith,
+  }) : _blocks = [...blocks];
+
+  final List<PersonBlock> _blocks;
+
+  String? refuseWith;
+  String? refuseUnblockWith;
+  AppError? failListWith;
+
+  /// What was blocked, oldest first.
+  final blocked = <BlockSubject>[];
+
+  /// The block ids that were unblocked, oldest first.
+  final unblocked = <String>[];
+
+  int _next = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  static AppError _refusal(String code) => AppError(
+        switch (code) {
+          BlockErrors.notAllowed || BlockErrors.termsNotAccepted => AppErrorKind.forbidden,
+          BlockErrors.noSharedConversation => AppErrorKind.notFound,
+          BlockErrors.rateLimited => AppErrorKind.rateLimited,
+          _ => AppErrorKind.server,
+        },
+        code: code,
+      );
+
+  @override
+  Future<PersonBlock> block(BlockSubject subject) async {
+    final code = refuseWith;
+    if (code != null) throw _refusal(code);
+    blocked.add(subject);
+    for (final existing in _blocks) {
+      if (existing.subject == subject) return existing;
+    }
+    final created = PersonBlock(id: 'block_${_next++}', subject: subject, createdAt: DateTime.now());
+    _blocks.insert(0, created);
+    return created;
+  }
+
+  @override
+  Future<List<PersonBlock>> mine() async {
+    final failure = failListWith;
+    if (failure != null) throw failure;
+    return List.unmodifiable(_blocks);
+  }
+
+  @override
+  Future<void> unblock(String blockId) async {
+    final code = refuseUnblockWith;
+    if (code != null) throw _refusal(code);
+    final before = _blocks.length;
+    _blocks.removeWhere((b) => b.id == blockId);
+    if (_blocks.length == before) throw const AppError(AppErrorKind.notFound, code: 'COMMON.NOT_FOUND');
+    unblocked.add(blockId);
   }
 }

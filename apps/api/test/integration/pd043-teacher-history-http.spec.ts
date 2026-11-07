@@ -242,6 +242,22 @@ describe('1. the lifecycle, newest first', () => {
   });
 });
 
+describe('1b. one clock for the history', () => {
+  it('a Prisma-written audit row carries the database transaction time, as the SQL-written rows do', async () => {
+    // teacher.created is written by a SQL function (now()); the rest through
+    // Prisma. If Prisma stamped `at` from the API host's clock, the two writers
+    // would be ordered by clock skew, not by time (the newest-first cases above).
+    const same = await g.prisma.$transaction(async (tx) => {
+      const created = await tx.auditLog.create({
+        data: { actorId: m.teachersManager.id, action: 'teacher_supervisor.assigned', entity: 'teacher', entityId: randomUUID(), reason: 'clock probe' },
+      });
+      const [r] = await tx.$queryRaw<Array<{ same: boolean }>>`select at = now() as same from chat.audit_log where id = ${created.id}`;
+      return r?.same;
+    });
+    expect(same).toBe(true);
+  });
+});
+
 describe('2. never a raw audit value', () => {
   it('no e-mail, no phone, no code id in the answer', async () => {
     const r = await add(m.teachersManager.subject, { email: email('h'), phone: '+20 100 555 0199' });

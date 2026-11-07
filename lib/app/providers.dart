@@ -23,6 +23,8 @@ import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/messages/data/receipt_repository.dart';
 import '../features/messages/data/typing_repository.dart';
+import '../features/moderation/data/block_repository.dart';
+import '../features/moderation/data/moderation_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/tasks/application/task_signal_channel.dart';
 import '../shared/models/user_role.dart';
@@ -179,6 +181,18 @@ final billingRepositoryProvider = Provider<BillingRepository>((ref) {
 /// routes offers no entry.
 final feedbackRepositoryProvider = Provider<FeedbackRepository>((ref) {
   return const NoFeedbackRepository();
+});
+
+/// PD-57: reporting a message or a person. A harmless default: a build without the routes
+/// offers no Report entry.
+final moderationRepositoryProvider = Provider<ModerationRepository>((ref) {
+  return const NoModerationRepository();
+});
+
+/// PD-57 (WP-2B): blocking a person. A harmless default: a build without the routes offers
+/// no Block entry, no Unblock on a hidden message and no Blocked people row.
+final blockRepositoryProvider = Provider<BlockRepository>((ref) {
+  return const NoBlockRepository();
 });
 
 /// PD-11 T4. A harmless default too: a build without a trial server offers no trial report.

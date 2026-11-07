@@ -36,6 +36,10 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/domain/lesson_menu.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../lessons/presentation/teacher_schedule_screen.dart';
+import '../../moderation/application/blocks_controller.dart';
+import '../../moderation/data/moderation_repository.dart';
+import '../../moderation/presentation/block_actions.dart';
+import '../../moderation/presentation/report_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
 import '../application/drafts_controller.dart';
@@ -198,35 +202,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
   int _hitIndex = 0;
   bool _focusDone = false;
 
-  /// PD-30: the lock as learned from a refused send (`COMM.SUBSCRIPTION_LOCKED`) --
-  /// the group locked after the screen opened. Wins over the conversation's own.
-  PaymentLock? _lockFromRefusal;
-  bool _lockLookup = false;
-
-  /// What the screen draws for a payment lock: the newest word on it.
-  PaymentLock? get _paymentLock => _lockFromRefusal ?? widget.conversation?.paymentLock;
-  bool get _lockedForMe => _paymentLock?.readOnly ?? false;
-
-  /// A send was refused because the group is locked: ask the server which child and
-  /// why (the conversation says), and draw the banner instead of a failure to retry.
-  /// Without an answer the banner still stands, naming no one.
-  Future<void> _onLockedRefusal() async {
-    if (_lockLookup || _lockFromRefusal != null) return;
-    _lockLookup = true;
-    final role = ref.read(currentRoleProvider);
-    var lock = PaymentLock(readOnly: true, canPay: role == UserRole.parent);
-    try {
-      final fresh = await ref.read(conversationRepositoryProvider).byId(widget.conversationId);
-      final described = fresh.paymentLock;
-      if (described != null && described.readOnly) lock = described;
-    } catch (_) {
-      // The refusal already said enough: the group is locked for this viewer.
-    }
-    if (!mounted) return;
-    // The call capability changed with the lock; ask again.
-    ref.invalidate(callCapabilityProvider(widget.conversationId));
-    setState(() => _lockFromRefusal = lock);
-  }
+  /// PD-30 (D-3, owner 2026-11-06): a child of this group whose new lesson bookings are
+  /// paused. Informational only: the chat stays open, so nothing here hides the composer
+  /// or the call button, whatever `readOnly` says.
+  PaymentLock? get _paymentLock => widget.conversation?.paymentLock;
 
   /// The term to mark in bubbles while searching.
   String? get _highlightTerm => _searching && isSearchable(_searchedFor) ? _searchedFor : null;
@@ -536,6 +515,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       message: message,
       withMarks: marks.isAvailable,
       withInfo: info.isAvailable,
+      withReport: ref.read(moderationRepositoryProvider).isAvailable,
     );
     if (result == null || !mounted) return;
 
@@ -563,6 +543,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
         _openFirstAttachment(message);
       case MessageAction.info:
         await _showInfo(message);
+      case MessageAction.report:
+        // PD-57: the sheet says what happened itself; nothing more to do here.
+        final id = message.id;
+        if (id != null) await showReportSheet(context, target: MessageReportTarget(id));
       case MessageAction.deleteForMe:
         await _guard(() => controller.deleteForMe(message));
       case MessageAction.deleteForEveryone:
@@ -1088,6 +1072,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     return ref.read(draftsProvider).value?[widget.conversationId];
   }
 
+  /// PD-57: after a block or an unblock, the newest page, then each still-hidden message of
+  /// someone no longer blocked (older than that page), so "Unblocking restores the history
+  /// at once" holds for what is on screen. Bounded: a long history is restored as it pages.
+  Future<void> _rereadAfterBlockChange(Set<String> blockedIds) async {
+    final controller = ref.read(messagesControllerProvider(widget.conversationId).notifier);
+    await controller.refreshLatest();
+    if (!mounted) return;
+    final stale = ref
+        .read(messagesControllerProvider(widget.conversationId))
+        .log
+        .messages
+        .where((m) => m.isHiddenByBlock && m.sequence != null && !blockedIds.contains(m.authorId))
+        .take(30)
+        .toList();
+    for (final m in stale) {
+      if (!mounted) return;
+      await controller.refreshMessage(m.sequence!);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -1095,6 +1099,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     final controller =
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
     final state = ref.watch(messagesControllerProvider(widget.conversationId));
+
+    // PD-57: a block or an unblock made anywhere (the profile, a placeholder, Settings)
+    // re-reads this thread, so the placeholders appear, or the history comes back, at once.
+    ref.listen(blocksProvider, (previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (before == null || after == null) return;
+      final was = {for (final b in before) b.subject.id};
+      final now = {for (final b in after) b.subject.id};
+      if (was.length == now.length && was.containsAll(now)) return;
+      unawaited(_rereadAfterBlockChange(now));
+    });
 
     // PD-11: prefetch the lesson tickets so "+" opens without a round trip.
     ref.watch(lessonTicketsProvider(widget.conversationId));
@@ -1105,14 +1121,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
     final voiceController =
         ref.read(voiceComposerProvider(widget.conversationId).notifier);
 
-    // PD-30: a send refused because the group is locked shows the lock, not an error.
-    if (!_lockedForMe &&
-        state.log.messages.any((m) =>
-            m.deliveryState == DeliveryState.failed && m.failureCode == BillingErrors.subscriptionLocked)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_onLockedRefusal());
-      });
-    }
     final paymentLock = _paymentLock;
 
     // Count arrivals while the user is reading history, so the pill can say there is
@@ -1206,14 +1214,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
           // W7: the call affordance. ABSENT unless the server authorizes a call
           // for this conversation, never disabled — `screens/call.md` §4. The
           // answer is advisory and uncached; `POST /calls` decides again.
-          // PD-30: a group locked for this viewer offers no call (the server
-          // answers canCall:false with COMM.SUBSCRIPTION_LOCKED as well).
-          if (!_lockedForMe)
-            _CallAction(
-              conversationId: widget.conversationId,
-              title: widget.title,
-              kind: widget.kind,
-            ),
+          _CallAction(
+            conversationId: widget.conversationId,
+            title: widget.title,
+            kind: widget.kind,
+          ),
           if (ref.watch(messageSearchRepositoryProvider).isAvailable)
             IconButton(
               onPressed: () => setState(() => _searching = true),
@@ -1257,11 +1262,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
           ),
           // PD-37: who else is typing here, just above where this person types.
           if (_typers.isNotEmpty) TypingRow(text: _typingLine(L10n.of(context))),
-          // PD-30: locked for payment -- the banner stands where the composer was.
-          if (paymentLock != null && paymentLock.readOnly)
-            PaymentLockBanner(lock: paymentLock, onOpenSubscriptions: widget.onOpenSubscriptions)
-          else
-          MessageComposer(
+          // PD-30 (D-3): new lessons paused -- an informational strip above the composer,
+          // never in its place. A teacher reads nothing financial.
+          if (paymentLock != null)
+            PaymentLockBanner(
+              lock: paymentLock,
+              financial: ref.watch(currentRoleProvider) != UserRole.teacher,
+              onOpenSubscriptions: widget.onOpenSubscriptions,
+            ),
+          // PD-57: a direct chat with someone the user blocked says so where the composer was.
+          BlockedComposerGate(
+            conversationId: widget.conversationId,
+            kind: widget.conversation?.kind,
+            child: MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,
             onSend: (body) {
               controller.send(body, replyTo: _replyingTo);
@@ -1304,6 +1317,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
             },
             isReadOnly: widget.isReadOnly,
             requiresApproval: widget.requiresApproval,
+          ),
           ),
         ],
       ),

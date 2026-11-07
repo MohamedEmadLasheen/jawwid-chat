@@ -304,6 +304,8 @@ class _LessonCard extends ConsumerWidget {
         (l10n.cardHandoverNote, card.text('handoverNote')!),
       if (card.kind == 'learner_suspended' && day('returnOn') != null) ('', l10n.cardPausedUntil(day('returnOn')!)),
       if (card.kind == 'learner_return_soon' && day('returnOn') != null) ('', l10n.cardReturnOn(day('returnOn')!)),
+      // PD-30 D-3: the group card -- nothing financial, the teacher reads it.
+      if (card.kind == 'lessons_paused') ('', l10n.cardLessonsPausedBody),
       if (card.kind == 'subscription_locked') ...[
         if (lockReasons.contains('balance')) ('', l10n.subscriptionLessonsUsedUp),
         if (lockReasons.contains('overdue') && day('overdueSince') != null)

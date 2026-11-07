@@ -56,6 +56,131 @@ updated. Presence (PD-37) needs Redis 6.2 or later (`ZADD … GT/XX`). The app s
 40 per window); a spike of 429s there means a client pinging too often, not
 an outage — typing simply lapses on the other screens.
 
+### 1b. When to raise a size (ADR-013)
+
+Production launches on the sizes staging runs (`scripts/infra/app-spec.py`
+`SIZES`): API `apps-s-1vcpu-1gb`, worker `apps-s-1vcpu-0.5gb`, Admin Web
+`apps-s-1vcpu-0.5gb`, Postgres 1 GiB single node, Valkey 1 GiB. Raise one only on
+a measured threshold, through `SIZES` and a regenerated spec, never in the console
+(the next deploy would undo it, ADR-012):
+
+| Component | Raise when | To |
+|---|---|---|
+| API | memory above 70% sustained, any out-of-memory restart, or p95 above 500 ms | `apps-s-1vcpu-2gb` |
+| API, second instance | only after RISK-4 is closed on staging, and CPU above 70% sustained | `instance_count: 2`, together with the Postgres row below |
+| Worker | memory above 70% sustained, or outbox lag above a few seconds | `apps-s-1vcpu-1gb` |
+| Postgres | any second API instance (the pool budget in `database-pool.ts` is 20 of 22 during a deploy), storage above 70%, or CPU above 70% | the 2 GiB plan, then raise `DATABASE_POOL_MAX` |
+| Postgres standby | when a recovery of up to the 2 h RTO (`backup-recovery.md` §6) is no longer acceptable | one standby node |
+| Valkey | memory above 70%, or any evicted key | the 2 GiB plan |
+
+### 1c. Launch cutover: from the review period to managed Valkey (ADR-015)
+
+During the store-review period production runs with `LAUNCH_PHASE=review`: a
+private in-app Redis (`redis`, Valkey 8.1, `REDIS_URL=redis://redis:6379`). **No
+real customer may sign in while it does.** The public launch, meaning the store
+release switched from manual to public, comes **only after** a successful
+`LAUNCH_PHASE=launch` deploy. The database cutover (ADR-014) happens in the same
+window.
+
+**Before the window (any day, no downtime):**
+
+0. `TRUSTED_PROXY_HOPS` is measured and set (§1d), and the `PROXY_HOPS_PROBE` secret is deleted.
+   The launch deploy refuses otherwise.
+1. Create the cluster: `doctl databases create jawwid-chat-prod-valkey --engine
+   valkey --version 8 --region fra1 --size db-s-1vcpu-1gb --num-nodes 1 --wait`,
+   and assign it to the "Jawwid Chat" project.
+2. Eviction: `doctl databases configuration get <id> --engine valkey`, then set the
+   `…maxmemory_policy` field to `noeviction` with `configuration update`.
+3. Trusted Sources: add **only** the App Platform app
+   (`doctl databases firewalls append <id> --rule app:<DIGITALOCEAN_APP_ID>`), and
+   no IP address. The runner cannot reach it then, which is intended; the deploy
+   checks it through DigitalOcean's API instead.
+4. The `production` token needs **read access to databases** (as well as apps).
+
+**In the window:**
+
+5. Set the `production` secret `REDIS_URL` to the cluster's **TLS** connection
+   string (`rediss://…`, port 25061), and the variable `LAUNCH_PHASE=launch`.
+6. Run **Deploy production**. Before anything changes it now:
+   - resolves the spec, which **drops the in-app `redis` component** and refuses a
+     `REDIS_URL` that is not `rediss://` to a non-in-app host;
+   - runs `scripts/infra/verify-managed-redis.sh`: the cluster is the one
+     `REDIS_URL` names, online, in `fra1`, `noeviction`, and its Trusted Sources
+     are this app only.
+   Any refusal stops the run before the backup and the migrations.
+7. **Connection test:** the smoke test's `GET /health/ready -> 200` proves the API
+   reaches the cluster (readiness fails while Redis is unreachable). Then sign in
+   on a phone, send a message between two accounts, and watch the live tick and
+   the typing indicator arrive: that exercises the worker → API relay and presence.
+
+**What to expect (persistence):** nothing durable lives in Redis. The switch
+clears presence, typing and the source-based login limiter's windows, once. The
+account lockout and the outbox live in Postgres and are untouched. No data is
+copied from the in-app Redis, and none needs to be.
+
+**Rollback:** the previous deploy is still active if the run refuses (ADR-012).
+After a launch deploy, roll back by setting `LAUNCH_PHASE=review` and
+`REDIS_URL=redis://redis:6379` and redeploying the same `image_tag`: the resolver
+re-adds the in-app component. **Only before the store release is public.** Once
+real customers can sign in, fix the managed cluster instead: rolling back would
+put them on the review-period Redis this section exists to keep them off.
+
+**After launch:** delete nothing until a week of normal running. The in-app
+component is already gone from the app. `LAUNCH_PHASE` stays `launch`.
+
+### 1d. Measure TRUSTED_PROXY_HOPS (once, after the first deploy)
+
+`TRUSTED_PROXY_HOPS` is the number of proxies in front of the API that append to
+`X-Forwarded-For`; the login, reset, signup and recovery limiters' per-address
+budget keys on the address it yields (`apps/api/src/platform/auth/client-address.ts`).
+DigitalOcean does not document it, so it is **measured, never guessed**:
+
+- **Unset** (the first deploy): no forwarded header is read, nothing can be
+  spoofed, and the per-address budget is OFF. Per-account lockout is unaffected.
+  Acceptable only while no real user can sign in (the review period).
+- **0 is wrong on App Platform**: the TCP peer is DigitalOcean's router, the same
+  for every client, so every client would share ONE budget and about thirty failed
+  sign-ins from anyone would lock everybody out.
+- **One too many** lets a client choose its own address by forging an entry.
+
+Media and payment links do not depend on it: the deploys set
+`MEDIA_PUBLIC_BASE_URL` and `PAYMENT_LINK_BASE_URL` to the public HTTPS origin
+unless those variables say otherwise (the deploy refuses a base that is not
+`https://<host>[/<path>]/api/v1`, or an API origin with a trailing slash), and the API never reads `X-Forwarded-Host`
+(App Platform passes a forged one through).
+
+**Steps** (the owner sets the values; the token is a secret and is never printed):
+
+1. Create a probe token (`openssl rand -hex 32`), keep it in your password manager,
+   set it as the `production` **secret** `PROXY_HOPS_PROBE`, and run **Deploy
+   production** with the same `image_tag`. The API logs a warning that the probe is
+   on. Only requests carrying that token are measured, so nobody else can add a
+   reading to the log or use up its 50 lines (per process start).
+2. From a machine whose public IPv4 address you know:
+   `PROXY_HOPS_PROBE_TOKEN=<token> scripts/infra/measure-proxy-hops.sh send https://api.chat.jawwid.com --my-ip <that address>`.
+   It prints a fresh **run id** and makes three requests to `/health/live`: one
+   plain, one with a forged `X-Forwarded-For`, one with a forged `do-connecting-ip`.
+   Your address is sent only as a SHA-256 hash, compared and dropped; the probe
+   logs positions and counts, never an address, a header value or the token.
+3. `doctl apps logs "$DIGITALOCEAN_APP_ID" api --type run | scripts/infra/measure-proxy-hops.sh interpret --run <run id>`.
+   It reads ONLY that run and prints `TRUSTED_PROXY_HOPS = N`, or **STOP** with the
+   reason: a line missing or duplicated, your address not found or at different
+   hops, a public TCP peer (the API reachable directly), or a forged entry inside
+   the trusted hops. On STOP, fix the cause and `send` again (a new run id).
+4. On `TRUSTED_PROXY_HOPS = N`: set that variable, **delete** the `PROXY_HOPS_PROBE`
+   secret, and redeploy. The boot log then says
+   `trust proxy = N; login source-IP rate limit enabled`.
+5. Make it required again: in `infra/env/manifest.tsv` change the `TRUSTED_PROXY_HOPS`
+   row's STAGING and PROD columns back to `req`, regenerate the specs and templates,
+   in a PR. A later deploy then cannot lose it.
+
+Evidence so far (2026-11-06, not yet measured on this app): a third-party measurement
+on App Platform saw `X-Forwarded-For: <client>,<Cloudflare edge>` with a private TCP
+peer, which would mean **N = 2**. Express 5 with `trust proxy = 2` returns the client
+for that chain even when the client forges an entry in front (unit test
+`proxy-hop-probe.spec.ts`). That is the expected answer, and the reason to measure
+rather than assume it.
+
 ## 2. What exactly is running?
 
 ```bash

@@ -20,7 +20,7 @@ import { useCertificateAccess } from '@/features/certificates/hooks'
 import { useLessonAudioAccess } from '@/features/lesson-audio/hooks'
 import { useTeacherRecordsAccess } from '@/features/teacher-records/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
-import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { holdsAny, isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
 import { NotificationBell } from '@/features/notification-center/NotificationBell'
 import { Avatar } from '@/shared/components/Avatar'
@@ -69,12 +69,14 @@ function useDestinations(): Destination[] {
   const recordsAccess = useTeacherRecordsAccess(operator)
   const teacherAttendance = recordsAccess.data?.attendance.view === true
   const teacherGrants = recordsAccess.data?.grants.view === true
+  // PD-57: the moderation queue, on GET /me's permission keys (the super admin holds all).
+  const moderation = holdsAny(staff, ['moderation.view'])
   return useMemo(
     () =>
       staff
-        ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants })
+        ? destinationsFor(staff.role, { moderation, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants })
         : [],
-    [staff, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants],
+    [staff, moderation, lessonManager, sales, operations, billingReader, materialsManager, calendar, supervisionPage, certificates, lessonAudio, teacherAttendance, teacherGrants],
   )
 }
 

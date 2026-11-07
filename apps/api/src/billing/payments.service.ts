@@ -11,7 +11,7 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { NotificationService } from '../communication/notifications/notification.service';
 import { SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
 import { todayIn } from '../leave/leave.service';
-import { BillingService, mapPaymentRefusal, parseBankAccount, type BankAccount } from './billing.service';
+import { BillingService, mapPaymentRefusal, parseBankAccount, requireLessonPackage, type BankAccount } from './billing.service';
 import { BANK_ACCOUNT_KEY, INVOICE_ISSUER_KEY, PaymentLedger, REQUEST_PURPOSES, parseIssuer, type RequestPurpose } from './payment-ledger.service';
 import { PaymentsReadService } from './payments-read.service';
 import { familyInScopeSql } from './billing-access';
@@ -118,6 +118,20 @@ export class PaymentsService {
       const currency = body.currency === undefined || body.currency === null ? familyCurrency : requireCurrency(body.currency);
       if (!currency) throw invalid('currency: set the family\'s currency, or send one');
       const amountMinor = requireAmount('amountMinor', body.amountMinor);
+      // Store payments policy: a balance names the lesson package it is owed for, or it is
+      // collected outside the app only.
+      let lessonSubscriptionId: string | null = null;
+      let packageLearner = learnerId;
+      if (body.lessonSubscriptionId !== undefined && body.lessonSubscriptionId !== null) {
+        if (terms.purpose !== 'balance') throw invalid('lessonSubscriptionId: only a balance names a lesson package');
+        const pkg = await requireLessonPackage(this.prisma, family.id, body.lessonSubscriptionId, learnerId);
+        lessonSubscriptionId = pkg.id;
+        packageLearner = pkg.learnerId;
+      }
+      if (packageLearner !== learnerId) {
+        const child = await this.prisma.learner.findFirst({ where: { id: packageLearner as string, familyId: family.id }, select: { name: true } });
+        childName = child?.name ?? null;
+      }
       request = await this.prisma.$transaction(async (tx) => {
         await this.conversations.assertActorLive(tx, actor);
         const created = await tx.paymentRequest.create({
@@ -125,9 +139,10 @@ export class PaymentsService {
             organizationId: actor.organizationId as string,
             token: PaymentLedger.newToken(),
             familyId: family.id,
-            learnerId,
+            learnerId: packageLearner,
             childName,
             ...terms,
+            lessonSubscriptionId,
             amountMinor: BigInt(amountMinor),
             currency,
             expiresAt: new Date(Date.now() + expiresInDays * 86_400_000),

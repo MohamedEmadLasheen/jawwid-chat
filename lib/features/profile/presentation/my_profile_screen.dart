@@ -12,6 +12,7 @@ import '../../feedback/presentation/teacher_feedback_screen.dart';
 import '../../lessons/presentation/child_schedule_screen.dart';
 import '../../materials/presentation/child_materials_entry.dart';
 import '../application/parent_profile_controller.dart';
+import 'location_row.dart';
 
 /// The parent's own editable profile, and their children's.
 ///
@@ -193,6 +194,8 @@ class _SubjectCardState extends ConsumerState<_SubjectCard> {
                   ),
               ],
             ),
+            // PD-45: the parent's own Location row (parents only; the row hides itself otherwise).
+            if (subject.isParent && !_editing) const ProfileLocationRow(),
             // PD-29: each child's Materials, and PD-31: their Schedule, from the parent's
             // own profile.
             if (!subject.isParent && subject.id != null) ...[

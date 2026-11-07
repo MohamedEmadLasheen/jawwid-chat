@@ -3284,7 +3284,7 @@ class L10nEn extends L10n {
   String get subscriptionRenewalRequested => 'Renewal requested';
 
   @override
-  String get lockBannerTitle => 'Lessons are paused';
+  String get lockBannerTitle => 'New lessons are paused';
 
   @override
   String lockBannerChildBalance(String name) {
@@ -3298,11 +3298,12 @@ class L10nEn extends L10n {
 
   @override
   String lockBannerChildPaused(String name) {
-    return '$name\'s lessons are paused';
+    return '$name: new lessons paused';
   }
 
   @override
-  String get lockBannerGeneric => 'This group is paused for now.';
+  String get lockBannerGeneric =>
+      'The chat stays open, and lessons already booked go ahead.';
 
   @override
   String get lockBannerOpenSubscriptions => 'Go to Subscriptions';
@@ -3324,16 +3325,21 @@ class L10nEn extends L10n {
   String get outcomeSuspendedPayment => 'Suspended — payment';
 
   @override
-  String get cardLessonsPausedTitle => 'Lessons paused';
+  String get cardLessonsPausedTitle => 'New lessons paused';
 
   @override
-  String get cardSubscriptionLockedTitle => 'Lessons paused — payment';
+  String get cardLessonsPausedBody =>
+      'Lessons already booked go ahead, and this chat stays open.';
 
   @override
-  String get cardSubscriptionLockedHint => 'Renew or pay in Subscriptions.';
+  String get cardSubscriptionLockedTitle => 'New lessons paused — payment';
 
   @override
-  String get cardSubscriptionUnlockedTitle => 'Lessons are back on';
+  String get cardSubscriptionLockedHint =>
+      'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.';
+
+  @override
+  String get cardSubscriptionUnlockedTitle => 'New lessons are back on';
 
   @override
   String get roleSales => 'Sales';
@@ -3501,6 +3507,10 @@ class L10nEn extends L10n {
   @override
   String get billingConfirmingPayment =>
       'We\'re confirming your payment. This can take a minute.';
+
+  @override
+  String get billingLiveOneToOneService =>
+      'Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.';
 
   @override
   String get billingPaySheetTitle => 'How would you like to pay?';
@@ -5151,6 +5161,46 @@ class L10nEn extends L10n {
       'Please contact the academy to close your lessons and payroll before deleting your account.';
 
   @override
+  String get locationRowTitle => 'Location';
+
+  @override
+  String get locationRowEmpty => 'Not set';
+
+  @override
+  String get locationSheetTitle => 'Where does the family live?';
+
+  @override
+  String get locationCountryLabel => 'Country';
+
+  @override
+  String locationSubdivisionError(String label) {
+    return 'Choose a $label from the list';
+  }
+
+  @override
+  String get locationCountryError => 'Choose a country from the list';
+
+  @override
+  String locationSuggestion(String country) {
+    return 'Suggested: $country';
+  }
+
+  @override
+  String get locationPromptBody =>
+      'Tell us where you live. You can change it any time from your profile.';
+
+  @override
+  String get locationLater => 'Later';
+
+  @override
+  String get locationLoadFailed =>
+      'The list could not be loaded. Please try again.';
+
+  @override
+  String get locationSaveConflict =>
+      'We couldn\'t save this. Please contact the academy.';
+
+  @override
   String get cardScheduledTitle => 'Lesson added';
 
   @override
@@ -5168,4 +5218,236 @@ class L10nEn extends L10n {
 
   @override
   String get cardNowMissed => 'This lesson did not take place';
+
+  @override
+  String get reportAction => 'Report';
+
+  @override
+  String get reportPersonAction => 'Report this person';
+
+  @override
+  String get reportMemberAction => 'Report';
+
+  @override
+  String get reportSheetTitle => 'Report';
+
+  @override
+  String get reportSheetMessageIntro =>
+      'What is wrong with this message? Only our team sees your report. The person is not told.';
+
+  @override
+  String get reportSheetPersonIntro =>
+      'Why are you reporting this person? Only our team sees your report. The person is not told.';
+
+  @override
+  String get reportReasonHarassment => 'Harassment or bullying';
+
+  @override
+  String get reportReasonInappropriate => 'Inappropriate or sexual content';
+
+  @override
+  String get reportReasonSpam => 'Spam or scam';
+
+  @override
+  String get reportReasonChildSafety => 'A child\'s safety';
+
+  @override
+  String get reportReasonOther => 'Something else (a note is required)';
+
+  @override
+  String get reportSheetNoteLabel => 'Note';
+
+  @override
+  String get reportNoteLabelOptional => 'Note (optional)';
+
+  @override
+  String get reportNoteHint => 'Tell us what happened, in a few words';
+
+  @override
+  String get reportNoteRequired => 'Please add a short note so we understand.';
+
+  @override
+  String get reportSubmit => 'Send report';
+
+  @override
+  String get reportSentTitle => 'Thank you';
+
+  @override
+  String get reportSentBody =>
+      'We received your report and our team will look at it. You can follow it, and read our answer, in My reports.';
+
+  @override
+  String get reportAlreadyBody =>
+      'You already reported this and we are still looking into it. You will see our answer in My reports.';
+
+  @override
+  String get reportDone => 'Done';
+
+  @override
+  String get reportErrorNotVisible =>
+      'We can no longer find this, so it cannot be reported.';
+
+  @override
+  String get reportErrorSelf =>
+      'You cannot report yourself or your own messages.';
+
+  @override
+  String get reportErrorNotReportable =>
+      'This kind of message cannot be reported.';
+
+  @override
+  String get reportErrorRateLimited =>
+      'You have sent several reports recently. Please try again a little later.';
+
+  @override
+  String get reportErrorTerms =>
+      'Please accept the terms of use first, then you can report.';
+
+  @override
+  String get reportErrorGeneric =>
+      'We could not send your report. Please try again.';
+
+  @override
+  String get myReportsTitle => 'My reports';
+
+  @override
+  String get myReportsSubtitle => 'What you reported, and our answers';
+
+  @override
+  String get myReportsEmptyTitle => 'No reports';
+
+  @override
+  String get myReportsEmptyBody =>
+      'When you report a message or a person, you can follow it here.';
+
+  @override
+  String get myReportsTargetMessage => 'A message';
+
+  @override
+  String get myReportsTargetPerson => 'A person';
+
+  @override
+  String get myReportsReasonUnknown => 'Other';
+
+  @override
+  String get myReportsStatusOpen => 'Received';
+
+  @override
+  String get myReportsStatusInReview => 'Being reviewed';
+
+  @override
+  String get myReportsStatusActioned => 'Resolved';
+
+  @override
+  String get myReportsStatusDismissed => 'Closed';
+
+  @override
+  String get myReportsAnswerLabel => 'Our answer';
+
+  @override
+  String get blockAction => 'Block';
+
+  @override
+  String get unblockAction => 'Unblock';
+
+  @override
+  String get blockPersonAction => 'Block this person';
+
+  @override
+  String get unblockPersonAction => 'Unblock this person';
+
+  @override
+  String get blockPersonFallbackName => 'this person';
+
+  @override
+  String blockConfirmTitle(String name) {
+    return 'Block $name?';
+  }
+
+  @override
+  String get blockConfirmBody =>
+      'They won\'t be able to message or call you, and you won\'t see their messages.';
+
+  @override
+  String get blockConfirmLessons =>
+      'Lessons continue as usual: lesson calls, lesson cards and messages from the academy still reach you.';
+
+  @override
+  String get blockConfirmAcademy =>
+      'The academy is told, so they can follow up.';
+
+  @override
+  String blockedSnack(String name) {
+    return '$name is blocked.';
+  }
+
+  @override
+  String unblockConfirmTitle(String name) {
+    return 'Unblock $name?';
+  }
+
+  @override
+  String get unblockConfirmBody =>
+      'You\'ll see their messages again, and they can message and call you.';
+
+  @override
+  String unblockedSnack(String name) {
+    return '$name is unblocked.';
+  }
+
+  @override
+  String get blockErrorNotAllowed =>
+      'This person can\'t be blocked. You can report them instead.';
+
+  @override
+  String get blockErrorNoSharedConversation =>
+      'You can only block someone you share a conversation with.';
+
+  @override
+  String get blockErrorRateLimited =>
+      'You\'ve blocked many people today. Please try again later.';
+
+  @override
+  String get blockErrorTerms =>
+      'Please accept the terms of use first, then you can block.';
+
+  @override
+  String get blockErrorGeneric =>
+      'We couldn\'t block them right now. Please try again.';
+
+  @override
+  String get unblockErrorGeneric =>
+      'We couldn\'t unblock them right now. Please try again.';
+
+  @override
+  String get hiddenByBlockPlaceholder =>
+      'Message hidden: you blocked this person';
+
+  @override
+  String blockedComposerNotice(String name) {
+    return 'You blocked $name. Unblock to write.';
+  }
+
+  @override
+  String get blockedPeopleTitle => 'Blocked people';
+
+  @override
+  String get blockedPeopleSubtitle =>
+      'People you blocked; unblock them any time';
+
+  @override
+  String get blockedPeopleEmptyTitle => 'No one is blocked';
+
+  @override
+  String get blockedPeopleEmptyBody =>
+      'When you block someone, they appear here and you can unblock them.';
+
+  @override
+  String blockedPeopleSince(String date) {
+    return 'Blocked $date';
+  }
+
+  @override
+  String get blockedPeopleLoadError =>
+      'We couldn\'t load the people you blocked.';
 }

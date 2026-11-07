@@ -1832,9 +1832,9 @@
   "@subscriptionRenewalRequested": {
     "description": "PD-30: the renewal was asked for today."
   },
-  "lockBannerTitle": "Lessons are paused",
+  "lockBannerTitle": "New lessons are paused",
   "@lockBannerTitle": {
-    "description": "PD-30: the banner that replaces the composer in a group locked for payment."
+    "description": "PD-30 D-3 (owner, 2026-11-06): the informational banner above the composer when a child's new lesson bookings are paused. The chat stays open."
   },
   "lockBannerChildBalance": "{name}: lessons used up",
   "@lockBannerChildBalance": {
@@ -1860,22 +1860,22 @@
       }
     }
   },
-  "lockBannerChildPaused": "{name}'s lessons are paused",
+  "lockBannerChildPaused": "{name}: new lessons paused",
   "@lockBannerChildPaused": {
-    "description": "PD-30: the locked banner, a teacher's line: no reason, nothing financial.",
+    "description": "PD-30 D-3: a child's line when the server sent no reason (a parent or staff).",
     "placeholders": {
       "name": {
         "type": "String"
       }
     }
   },
-  "lockBannerGeneric": "This group is paused for now.",
+  "lockBannerGeneric": "The chat stays open, and lessons already booked go ahead.",
   "@lockBannerGeneric": {
-    "description": "PD-30: the locked banner when the server refused a send but named no child."
+    "description": "PD-30 D-3: the banner's line everyone reads, the teacher included. Nothing financial."
   },
   "lockBannerOpenSubscriptions": "Go to Subscriptions",
   "@lockBannerOpenSubscriptions": {
-    "description": "PD-30: the locked banner's button for a parent."
+    "description": "PD-30: the banner's button, a parent only."
   },
   "reportLessonOf": "Lesson {number} of {total}",
   "@reportLessonOf": {
@@ -1909,19 +1909,23 @@
   "@outcomeSuspendedPayment": {
     "description": "PD-30: a Schedule lesson the system suspended while the child's group is locked for payment. No amount, no reason."
   },
-  "cardLessonsPausedTitle": "Lessons paused",
+  "cardLessonsPausedTitle": "New lessons paused",
   "@cardLessonsPausedTitle": {
-    "description": "PD-30: the group card when a child's lessons are paused (no reason)."
+    "description": "PD-30 D-3: the group card when a child's new lessons pause (no reason: the teacher reads it)."
   },
-  "cardSubscriptionLockedTitle": "Lessons paused — payment",
+  "cardLessonsPausedBody": "Lessons already booked go ahead, and this chat stays open.",
+  "@cardLessonsPausedBody": {
+    "description": "PD-30 D-3: the group card's line under the child. Nothing financial: the teacher reads it."
+  },
+  "cardSubscriptionLockedTitle": "New lessons paused — payment",
   "@cardSubscriptionLockedTitle": {
     "description": "PD-30: the family's direct-chat card when a child is locked."
   },
-  "cardSubscriptionLockedHint": "Renew or pay in Subscriptions.",
+  "cardSubscriptionLockedHint": "Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.",
   "@cardSubscriptionLockedHint": {
-    "description": "PD-30: where to pay, on the locked card."
+    "description": "PD-30 D-3: the last line of the family's direct-chat card."
   },
-  "cardSubscriptionUnlockedTitle": "Lessons are back on",
+  "cardSubscriptionUnlockedTitle": "New lessons are back on",
   "@cardSubscriptionUnlockedTitle": {
     "description": "PD-30: the group card when a locked child's lessons resume."
   },
@@ -2088,6 +2092,10 @@
   "billingConfirmingPayment": "We're confirming your payment. This can take a minute.",
   "@billingConfirmingPayment": {
     "description": "PD-27: Settings -> Payments."
+  },
+  "billingLiveOneToOneService": "Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.",
+  "@billingLiveOneToOneService": {
+    "description": "Pay sheet: what the payment buys. Store payments policy (App Store 3.1.3(d), Google Play 1:1 services): must say live, one-to-one, not recorded."
   },
   "billingPaySheetTitle": "How would you like to pay?",
   "@billingPaySheetTitle": {
@@ -3435,6 +3443,20 @@
   "@deleteAccountDone": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountTeacherBlocked": "Please contact the academy to close your lessons and payroll before deleting your account.",
   "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."},
+  "locationRowTitle": "Location",
+  "@locationRowTitle": {"description": "PD-45 PR-4: the Location row of the parent's own profile."},
+  "locationRowEmpty": "Not set",
+  "locationSheetTitle": "Where does the family live?",
+  "locationCountryLabel": "Country",
+  "locationSubdivisionError": "Choose a {label} from the list",
+  "@locationSubdivisionError": {"description": "PD-45 plan 5.3: the country's own field label (Governorate / Emirate / ...) in the sentence.", "placeholders": {"label": {"type": "String"}}},
+  "locationCountryError": "Choose a country from the list",
+  "locationSuggestion": "Suggested: {country}",
+  "@locationSuggestion": {"description": "PD-45: the country the server suggests from the number; tapping it only fills the picker, nothing is saved.", "placeholders": {"country": {"type": "String"}}},
+  "locationPromptBody": "Tell us where you live. You can change it any time from your profile.",
+  "locationLater": "Later",
+  "locationLoadFailed": "The list could not be loaded. Please try again.",
+  "locationSaveConflict": "We couldn't save this. Please contact the academy.",
   "cardScheduledTitle": "Lesson added",
   "@cardScheduledTitle": {
     "description": "Title of the card posted when a lesson is added outside the weekly times (CHATSCHED-001)."
@@ -3464,5 +3486,135 @@
   "cardNowMissed": "This lesson did not take place",
   "@cardNowMissed": {
     "description": "CHATSCHED-002: footer of an old lesson card whose lesson was missed (no one is named)."
-  }
+  },
+  "reportAction": "Report",
+  "@reportAction": {"description": "Long-press menu entry on someone else's message, and the Report button on a person."},
+  "reportPersonAction": "Report this person",
+  "@reportPersonAction": {"description": "PD-57: row on a person's profile."},
+  "reportMemberAction": "Report",
+  "@reportMemberAction": {"description": "PD-57: tooltip prefix on a member row, followed by the name."},
+  "reportSheetTitle": "Report",
+  "@reportSheetTitle": {"description": "PD-57: title of the Report sheet."},
+  "reportSheetMessageIntro": "What is wrong with this message? Only our team sees your report. The person is not told.",
+  "@reportSheetMessageIntro": {"description": "PD-57: under the title when reporting a message. Matches §5.5(1): the reported person is never told."},
+  "reportSheetPersonIntro": "Why are you reporting this person? Only our team sees your report. The person is not told.",
+  "@reportSheetPersonIntro": {"description": "PD-57: under the title when reporting a person."},
+  "reportReasonHarassment": "Harassment or bullying",
+  "@reportReasonHarassment": {"description": "PD-57 §5.1: DRAFT label, pending owner approval N-4."},
+  "reportReasonInappropriate": "Inappropriate or sexual content",
+  "@reportReasonInappropriate": {"description": "PD-57 §5.1: DRAFT label, pending owner approval N-4."},
+  "reportReasonSpam": "Spam or scam",
+  "@reportReasonSpam": {"description": "PD-57 §5.1: DRAFT label, pending owner approval N-4."},
+  "reportReasonChildSafety": "A child's safety",
+  "@reportReasonChildSafety": {"description": "PD-57 §5.1: DRAFT label, pending owner approval N-4."},
+  "reportReasonOther": "Something else (a note is required)",
+  "@reportReasonOther": {"description": "PD-57 §5.1: DRAFT label, pending owner approval N-4."},
+  "reportSheetNoteLabel": "Note",
+  "@reportSheetNoteLabel": {"description": "PD-57: label of the note field."},
+  "reportNoteLabelOptional": "Note (optional)",
+  "@reportNoteLabelOptional": {"description": "PD-57: label of the note field for the four reasons where it is optional."},
+  "reportNoteHint": "Tell us what happened, in a few words",
+  "@reportNoteHint": {"description": "PD-57: hint in the note field."},
+  "reportNoteRequired": "Please add a short note so we understand.",
+  "@reportNoteRequired": {"description": "PD-57: shown when the reason is Something else and the note is empty (COMM.REPORT_NOTE_REQUIRED)."},
+  "reportSubmit": "Send report",
+  "@reportSubmit": {"description": "PD-57: the send button."},
+  "reportSentTitle": "Thank you",
+  "@reportSentTitle": {"description": "PD-57: confirmation title."},
+  "reportSentBody": "We received your report and our team will look at it. You can follow it, and read our answer, in My reports.",
+  "@reportSentBody": {"description": "PD-57: calm confirmation after sending (201)."},
+  "reportAlreadyBody": "You already reported this and we are still looking into it. You will see our answer in My reports.",
+  "@reportAlreadyBody": {"description": "PD-57: confirmation when the same report is already open (200)."},
+  "reportDone": "Done",
+  "@reportDone": {"description": "PD-57: closes the confirmation."},
+  "reportErrorNotVisible": "We can no longer find this, so it cannot be reported.",
+  "@reportErrorNotVisible": {"description": "PD-57: COMM.REPORT_TARGET_NOT_VISIBLE (404)."},
+  "reportErrorSelf": "You cannot report yourself or your own messages.",
+  "@reportErrorSelf": {"description": "PD-57: COMM.REPORT_SELF (400)."},
+  "reportErrorNotReportable": "This kind of message cannot be reported.",
+  "@reportErrorNotReportable": {"description": "PD-57: COMM.REPORT_NOT_REPORTABLE (400)."},
+  "reportErrorRateLimited": "You have sent several reports recently. Please try again a little later.",
+  "@reportErrorRateLimited": {"description": "PD-57: COMMON.RATE_LIMITED (429)."},
+  "reportErrorTerms": "Please accept the terms of use first, then you can report.",
+  "@reportErrorTerms": {"description": "PD-57: COMM.TERMS_NOT_ACCEPTED (403)."},
+  "reportErrorGeneric": "We could not send your report. Please try again.",
+  "@reportErrorGeneric": {"description": "PD-57: any other failure; the sheet stays open so nothing typed is lost."},
+  "myReportsTitle": "My reports",
+  "@myReportsTitle": {"description": "PD-57: Settings row and screen title."},
+  "myReportsSubtitle": "What you reported, and our answers",
+  "@myReportsSubtitle": {"description": "PD-57: under the Settings row."},
+  "myReportsEmptyTitle": "No reports",
+  "@myReportsEmptyTitle": {"description": "PD-57: empty state title."},
+  "myReportsEmptyBody": "When you report a message or a person, you can follow it here.",
+  "@myReportsEmptyBody": {"description": "PD-57: empty state body."},
+  "myReportsTargetMessage": "A message",
+  "@myReportsTargetMessage": {"description": "PD-57: what the report was about."},
+  "myReportsTargetPerson": "A person",
+  "@myReportsTargetPerson": {"description": "PD-57: what the report was about."},
+  "myReportsReasonUnknown": "Other",
+  "@myReportsReasonUnknown": {"description": "PD-57: a reason this build does not know."},
+  "myReportsStatusOpen": "Received",
+  "@myReportsStatusOpen": {"description": "PD-57: report status open."},
+  "myReportsStatusInReview": "Being reviewed",
+  "@myReportsStatusInReview": {"description": "PD-57: report status in_review."},
+  "myReportsStatusActioned": "Resolved",
+  "@myReportsStatusActioned": {"description": "PD-57: report status actioned."},
+  "myReportsStatusDismissed": "Closed",
+  "@myReportsStatusDismissed": {"description": "PD-57: report status dismissed."},
+  "myReportsAnswerLabel": "Our answer",
+  "@myReportsAnswerLabel": {"description": "PD-57: heading of the answer block."},
+  "blockAction": "Block",
+  "@blockAction": {"description": "PD-57: the Block button and the confirm button of the dialog."},
+  "unblockAction": "Unblock",
+  "@unblockAction": {"description": "PD-57: the Unblock button (placeholder, composer bar, Blocked people, profile)."},
+  "blockPersonAction": "Block this person",
+  "@blockPersonAction": {"description": "PD-57: row on a one-to-one profile."},
+  "unblockPersonAction": "Unblock this person",
+  "@unblockPersonAction": {"description": "PD-57: row on a one-to-one profile, when the person is blocked."},
+  "blockPersonFallbackName": "this person",
+  "@blockPersonFallbackName": {"description": "PD-57: used in place of a name the server did not send."},
+  "blockConfirmTitle": "Block {name}?",
+  "@blockConfirmTitle": {"description": "PD-57: title of the confirmation before blocking.", "placeholders": {"name": {"type": "String"}}},
+  "blockConfirmBody": "They won't be able to message or call you, and you won't see their messages.",
+  "@blockConfirmBody": {"description": "PD-57: what a block does."},
+  "blockConfirmLessons": "Lessons continue as usual: lesson calls, lesson cards and messages from the academy still reach you.",
+  "@blockConfirmLessons": {"description": "PD-57 D-6: the educational exceptions, said plainly."},
+  "blockConfirmAcademy": "The academy is told, so they can follow up.",
+  "@blockConfirmAcademy": {"description": "PD-57: every block notifies the responsible managers."},
+  "blockedSnack": "{name} is blocked.",
+  "@blockedSnack": {"description": "PD-57: calm confirmation after blocking.", "placeholders": {"name": {"type": "String"}}},
+  "unblockConfirmTitle": "Unblock {name}?",
+  "@unblockConfirmTitle": {"description": "PD-57: title of the confirmation before unblocking.", "placeholders": {"name": {"type": "String"}}},
+  "unblockConfirmBody": "You'll see their messages again, and they can message and call you.",
+  "@unblockConfirmBody": {"description": "PD-57: what an unblock does."},
+  "unblockedSnack": "{name} is unblocked.",
+  "@unblockedSnack": {"description": "PD-57: calm confirmation after unblocking.", "placeholders": {"name": {"type": "String"}}},
+  "blockErrorNotAllowed": "This person can't be blocked. You can report them instead.",
+  "@blockErrorNotAllowed": {"description": "PD-57: COMM.BLOCK_NOT_ALLOWED (403): staff, a protected account, or yourself."},
+  "blockErrorNoSharedConversation": "You can only block someone you share a conversation with.",
+  "@blockErrorNoSharedConversation": {"description": "PD-57: COMM.BLOCK_NO_SHARED_CONVERSATION (404)."},
+  "blockErrorRateLimited": "You've blocked many people today. Please try again later.",
+  "@blockErrorRateLimited": {"description": "PD-57: COMMON.RATE_LIMITED (429)."},
+  "blockErrorTerms": "Please accept the terms of use first, then you can block.",
+  "@blockErrorTerms": {"description": "PD-57: COMM.TERMS_NOT_ACCEPTED (403)."},
+  "blockErrorGeneric": "We couldn't block them right now. Please try again.",
+  "@blockErrorGeneric": {"description": "PD-57: any other failure while blocking."},
+  "unblockErrorGeneric": "We couldn't unblock them right now. Please try again.",
+  "@unblockErrorGeneric": {"description": "PD-57: any failure while unblocking."},
+  "hiddenByBlockPlaceholder": "Message hidden: you blocked this person",
+  "@hiddenByBlockPlaceholder": {"description": "PD-57: one line in place of a blocked person's message."},
+  "blockedComposerNotice": "You blocked {name}. Unblock to write.",
+  "@blockedComposerNotice": {"description": "PD-57: stands where the composer was, in a direct chat with someone you blocked.", "placeholders": {"name": {"type": "String"}}},
+  "blockedPeopleTitle": "Blocked people",
+  "@blockedPeopleTitle": {"description": "PD-57: Settings row and screen title."},
+  "blockedPeopleSubtitle": "People you blocked; unblock them any time",
+  "@blockedPeopleSubtitle": {"description": "PD-57: under the Settings row."},
+  "blockedPeopleEmptyTitle": "No one is blocked",
+  "@blockedPeopleEmptyTitle": {"description": "PD-57: empty state title."},
+  "blockedPeopleEmptyBody": "When you block someone, they appear here and you can unblock them.",
+  "@blockedPeopleEmptyBody": {"description": "PD-57: empty state body."},
+  "blockedPeopleSince": "Blocked {date}",
+  "@blockedPeopleSince": {"description": "PD-57: when the block was made.", "placeholders": {"date": {"type": "String"}}},
+  "blockedPeopleLoadError": "We couldn't load the people you blocked.",
+  "@blockedPeopleLoadError": {"description": "PD-57: error state of Blocked people."}
 }

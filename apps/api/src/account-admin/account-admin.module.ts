@@ -17,8 +17,9 @@ import { FamilyAccessService } from './family-access.service';
 @Module({
   imports: [AuthModule],
   controllers: [AccountAdminController, ImpersonationController, FamilyAccessController],
-  // ADMIN-002: the worker's expiry sweep.
-  exports: [FamilyAccessService],
+  // ADMIN-002: the worker's expiry sweep. PD-57: a report resolved as
+  // account_suspended suspends through AccountAdminService's own rules.
+  exports: [FamilyAccessService, AccountAdminService],
   providers: [AccountAdminService, ImpersonationService, FamilyAccessService, { provide: FIRST_LOGIN_MAILER, useFactory: () => selectMailSender() }],
 })
 export class AccountAdminModule {}

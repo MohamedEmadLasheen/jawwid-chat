@@ -37,6 +37,7 @@ void main() {
         remainingMinor: status == InstalmentStatus.paid ? 0 : 125050 - paid,
         partial: paid > 0 && status != InstalmentStatus.paid,
         requestId: requestId,
+        payableInApp: true,
         payment: status == InstalmentStatus.paid ? BillingPayment(paidOn: DateTime(2026, 9, 2), method: BillingMethod.card) : null,
       );
 
@@ -70,6 +71,7 @@ void main() {
           PaymentRequest(
             id: 'r1',
             purpose: RequestPurpose.subscription,
+            payableInApp: true,
             status: RequestStatus.open,
             label: 'Subscription · 3 months',
             amountMinor: 300000,
@@ -84,6 +86,7 @@ void main() {
           PaymentRequest(
             id: 'r2',
             purpose: RequestPurpose.instalment,
+            payableInApp: true,
             status: i2Paid ? RequestStatus.paid : RequestStatus.open,
             label: 'Autumn · i2',
             amountMinor: 75050,
@@ -282,6 +285,19 @@ void main() {
       expect(find.byKey(const ValueKey('pay-by-card')), findsNothing);
       expect(find.text('Pay by card'), findsNothing);
       expect(find.byKey(const ValueKey('pay-by-bank-transfer')), findsOneWidget);
+    });
+
+    testWidgets('says what is bought: live one-to-one lessons, not recorded', (tester) async {
+      await open(tester);
+      await tapPay(tester, 'r:r1');
+      expect(find.byKey(const ValueKey('pay-sheet-service')), findsOneWidget);
+      expect(find.text('Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.'), findsOneWidget);
+    });
+
+    testWidgets('the purchase description in Arabic, exactly as approved', (tester) async {
+      await open(tester, locale: const Locale('ar'));
+      await tapPay(tester, 'r:r1');
+      expect(find.text('دروس قرآن فردية مباشرة، تجمع بين معلّم واحد وطالب واحد عبر اتصال مباشر. لا يتم تسجيل الدروس.'), findsOneWidget);
     });
 
     testWidgets('card: checkout for the request, opened in the browser, then "confirming" until paid', (tester) async {
@@ -648,6 +664,58 @@ void main() {
       expect(plainAmount(5, 'AED'), '0.05');
       expect(plainAmount(12345, 'KWD'), '12.345');
       expect(plainAmount(500, 'JPY'), '500');
+    });
+
+    test('store payments policy: a request that is not for live one-to-one lessons is never offered for payment', () {
+      final base = billing();
+      final withOther = ParentBilling(
+        today: base.today,
+        paymentMethod: base.paymentMethod,
+        currency: base.currency,
+        planMonths: base.planMonths,
+        cardAvailable: base.cardAvailable,
+        bankAccount: base.bankAccount,
+        instalments: base.instalments,
+        totals: base.totals,
+        requests: [
+          ...base.requests,
+          const PaymentRequest(
+            id: 'r-other', purpose: RequestPurpose.other, payableInApp: true, status: RequestStatus.open, label: 'Books',
+            amountMinor: 5000, paidMinor: 0, remainingMinor: 5000, currency: 'AED',
+          ),
+          // The server said nothing: fails closed, whatever the purpose.
+          const PaymentRequest(
+            id: 'r-unknown', purpose: RequestPurpose.subscription, status: RequestStatus.open, label: 'Something new',
+            amountMinor: 5000, paidMinor: 0, remainingMinor: 5000, currency: 'AED',
+          ),
+          // The server's word wins over the purpose.
+          const PaymentRequest(
+            id: 'r-refused', purpose: RequestPurpose.balance, payableInApp: false, status: RequestStatus.open, label: 'Held',
+            amountMinor: 5000, paidMinor: 0, remainingMinor: 5000, currency: 'AED',
+          ),
+        ],
+        receipts: base.receipts,
+        invoices: base.invoices,
+        subscriptions: base.subscriptions,
+      );
+      // `other` is never offered, even if a server bug says it may be.
+      expect(amountsDue(withOther).map((d) => d.key), ['r:r1', 'i:i2', 'i:i3']);
+    });
+
+    test('R-4: an instalment the server did not verify as a lesson package is never offered', () {
+      final base = billing();
+      final unverified = BillingInstalment(
+        id: 'i-loose', label: 'Uniform', amountMinor: 4000, currency: 'AED', dueDate: DateTime(2026, 11, 1),
+        status: InstalmentStatus.overdue, remainingMinor: 4000,
+      );
+      final b = ParentBilling(
+        today: base.today, paymentMethod: base.paymentMethod, currency: base.currency, planMonths: base.planMonths,
+        cardAvailable: base.cardAvailable, bankAccount: base.bankAccount,
+        instalments: [...base.instalments, unverified],
+        totals: base.totals, requests: base.requests, receipts: base.receipts, invoices: base.invoices, subscriptions: base.subscriptions,
+      );
+      expect(amountsDue(b).map((d) => d.key), isNot(contains('i:i-loose')));
+      expect(amountsDue(b).map((d) => d.key), ['r:r1', 'i:i2', 'i:i3']);
     });
 
     test('an instalment with its own open request is one due item, paid by instalment id', () {

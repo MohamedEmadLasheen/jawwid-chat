@@ -12,6 +12,7 @@ import { ActorKind, SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/
 import { mapStructureRefusal } from '../org/org-structure.service';
 import { todayIn } from '../leave/leave.service';
 import { billingAccessOf, familyInScopeSql } from './billing-access';
+import { isInstalmentPayableInApp, loadPackageFacts, type PackageFacts } from './in-app-payability';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
 import { day, invalid, optionalUuid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
@@ -93,6 +94,9 @@ export interface TimelineInstalment {
   partial: boolean;
   /** PD-27: its live payment link, if any. */
   requestId: string | null;
+  /** Store payments policy: the lesson package it pays for; payable in the app only when that package stands. */
+  lessonSubscriptionId: string | null;
+  payableInApp: boolean;
   createdAt: string;
   createdBy: { id: string; name: string };
   /** recordedBy null: a card payment completed it (Stripe confirmed it, no one typed it). */
@@ -399,6 +403,18 @@ export class BillingService {
         : requireDate('startsOn', body.startsOn);
       lessons = { lessonsIncluded: n, planMonths: (pm as number | null | undefined) ?? null, startsOn };
     }
+    // Store payments policy: a plan pays for a lesson package -- the one it creates
+    // (lessonsIncluded), or one the child already has (lessonSubscriptionId). A plan
+    // with neither is collected outside the app only.
+    let existingPackage: string | null = null;
+    if (body.lessonSubscriptionId !== undefined && body.lessonSubscriptionId !== null) {
+      if (lessons) throw invalid('lessonSubscriptionId: a plan with lessonsIncluded makes its own package');
+      const pkg = await requireLessonPackage(this.prisma, family.id, body.lessonSubscriptionId, learnerId);
+      existingPackage = pkg.id;
+      learnerId = pkg.learnerId;
+    }
+    const newPackageId = lessons ? randomUUID() : null;
+    const lessonSubscriptionId = newPackageId ?? existingPackage;
 
     const count = schedule.length;
     const planId = count > 1 ? randomUUID() : null;
@@ -412,13 +428,15 @@ export class BillingService {
       currency,
       dueDate: new Date(`${item.dueDate}T00:00:00Z`),
       createdBy: actor.actorId,
+      lessonSubscriptionId,
     }));
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
-      await tx.familyInstalment.createMany({ data: rows });
-      if (lessons && learnerId) {
+      // The package first: each instalment names it.
+      if (lessons && learnerId && newPackageId) {
         await tx.learnerSubscription.create({
           data: {
+            id: newPackageId,
             organizationId: actor.organizationId as string,
             learnerId,
             familyId: family.id,
@@ -431,6 +449,7 @@ export class BillingService {
           },
         });
       }
+      await tx.familyInstalment.createMany({ data: rows });
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'instalment.created',
@@ -444,6 +463,7 @@ export class BillingService {
           currency,
           learnerId,
           label,
+          lessonSubscriptionId,
           ...(lessons ? { lessons } : {}),
         },
         reason: count > 1 ? 'instalment plan created' : 'instalment created',
@@ -591,7 +611,8 @@ export class BillingService {
     );
     const person = (id: string) => ({ id, name: staffName.get(id) ?? '' });
 
-    const timeline: TimelineInstalment[] = instalments.map((i) => present(i, today, learnerName, person, money));
+    const packages = await loadPackageFacts(this.prisma, { instalments });
+    const timeline: TimelineInstalment[] = instalments.map((i) => present(i, today, learnerName, person, money, packages));
     return {
       familyId: family.id,
       today,
@@ -640,7 +661,9 @@ export class BillingService {
       this.reads.forFamily(contact.familyId, contact.organizationId, { actorId, staff: false }),
       this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
     ]);
-    const subscriptions = await this.subscriptionsForParent(contact.familyId, rows, money.requests);
+    const packages = await loadPackageFacts(this.prisma, { instalments: rows });
+    const payable = (i: FamilyInstalment) => isInstalmentPayableInApp(i, packages);
+    const subscriptions = await this.subscriptionsForParent(contact.familyId, rows.filter(payable), money.requests);
     const learnerIds = [...new Set(rows.flatMap((i) => (i.learnerId ? [i.learnerId] : [])))];
     const learners = await this.prisma.learner.findMany({
       where: { id: { in: learnerIds }, familyId: contact.familyId },
@@ -665,6 +688,8 @@ export class BillingService {
         remainingMinor: i.paidOn ? 0 : Math.max(0, Number(i.amountMinor) - paidMinor),
         partial: !i.paidOn && paidMinor > 0,
         requestId: i.paidOn ? null : m?.requestId ?? null,
+        // Store payments policy: the app offers Pay only for an instalment of a lesson package.
+        payableInApp: payable(i),
         payment:
           i.paidOn && i.paidMethod
             ? { paidOn: day(i.paidOn), method: i.paidMethod as PaymentMethod, reference: i.paidReference }
@@ -697,7 +722,7 @@ export class BillingService {
   private async subscriptionsForParent(
     familyId: string,
     instalments: FamilyInstalment[],
-    requests: Array<{ status: string; child: { id: string | null } | null }>,
+    requests: Array<{ status: string; payableInApp: boolean; child: { id: string | null } | null }>,
   ) {
     const children = await childSubscriptions(this.prisma, familyId);
     const renewed = await this.prisma.$queryRaw<{ learner_id: string }[]>`
@@ -708,7 +733,9 @@ export class BillingService {
       const open = (id: string | null) => id === null || id === c.child.id;
       const hasOpenPayment =
         instalments.some((i) => !i.paidOn && !i.voidedAt && open(i.learnerId)) ||
-        requests.some((r) => r.status === 'open' && open(r.child?.id ?? null));
+        // Store payments policy: a request the app may not take (not for live
+        // one-to-one lessons) is not something to pay here.
+        requests.some((r) => r.status === 'open' && r.payableInApp && open(r.child?.id ?? null));
       return { ...forParent(c), hasOpenPayment, renewalRequestedToday: askedToday.has(c.child.id) };
     });
   }
@@ -952,6 +979,7 @@ function present(
   learnerName: Map<string, string>,
   person: (id: string) => { id: string; name: string },
   money: MoneyView,
+  packages: PackageFacts,
 ): TimelineInstalment {
   const dueDate = day(i.dueDate);
   const status = i.voidedAt ? 'voided' : statusOf({ status: i.paidOn ? 'paid' : 'open', dueDate }, today);
@@ -973,6 +1001,8 @@ function present(
     remainingMinor: i.paidOn || i.voidedAt ? 0 : Math.max(0, amount - paidMinor),
     partial: !i.paidOn && !i.voidedAt && paidMinor > 0,
     requestId: i.paidOn || i.voidedAt ? null : m?.requestId ?? null,
+    lessonSubscriptionId: i.lessonSubscriptionId,
+    payableInApp: isInstalmentPayableInApp(i, packages),
     createdAt: i.createdAt.toISOString(),
     createdBy: person(i.createdBy),
     payment:
@@ -1054,4 +1084,23 @@ export function mapPaymentRefusal(e: unknown): unknown {
   const line = GUARD_PHRASES.map((k) => text.split('\n').find((l) => l.includes(k))).find(Boolean) ?? '';
   const sentence = line.replace(/^.*?(?:ERROR:|message:|`)\s*/, '').replace(/[`"].*$/, '').trim();
   return new CommError(CommErrorCode.BILLING_STATE, sentence || 'that payment record cannot change that way', 409);
+}
+
+/**
+ * Store payments policy: a lesson package (chat.learner_subscription) of this
+ * family that stands, and of this child when one is named. The database checks
+ * the same on insert (20261106100000_chat_pd027_lesson_package_link).
+ */
+export async function requireLessonPackage(
+  db: Pick<PrismaService, 'learnerSubscription'>,
+  familyId: string,
+  raw: unknown,
+  learnerId: string | null,
+): Promise<{ id: string; learnerId: string }> {
+  const id = requireUuid('lessonSubscriptionId', raw);
+  const pkg = await db.learnerSubscription.findFirst({ where: { id, familyId }, select: { id: true, learnerId: true, voidedAt: true } });
+  if (!pkg) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'that lesson package is not in this family');
+  if (pkg.voidedAt) throw new CommError(CommErrorCode.BILLING_STATE, 'that lesson package was voided', 409);
+  if (learnerId && pkg.learnerId !== learnerId) throw invalid('lessonSubscriptionId: a package of the child named by learnerId');
+  return { id: pkg.id, learnerId: pkg.learnerId };
 }

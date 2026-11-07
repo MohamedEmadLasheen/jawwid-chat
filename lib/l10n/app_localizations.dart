@@ -5641,10 +5641,10 @@ abstract class L10n {
   /// **'Renewal requested'**
   String get subscriptionRenewalRequested;
 
-  /// PD-30: the banner that replaces the composer in a group locked for payment.
+  /// PD-30 D-3 (owner, 2026-11-06): the informational banner above the composer when a child's new lesson bookings are paused. The chat stays open.
   ///
   /// In en, this message translates to:
-  /// **'Lessons are paused'**
+  /// **'New lessons are paused'**
   String get lockBannerTitle;
 
   /// PD-30: the locked banner, a parent's line: the child's lessons are used up.
@@ -5659,19 +5659,19 @@ abstract class L10n {
   /// **'{name}: instalment {label} overdue since {date}'**
   String lockBannerChildOverdue(String name, String label, String date);
 
-  /// PD-30: the locked banner, a teacher's line: no reason, nothing financial.
+  /// PD-30 D-3: a child's line when the server sent no reason (a parent or staff).
   ///
   /// In en, this message translates to:
-  /// **'{name}\'s lessons are paused'**
+  /// **'{name}: new lessons paused'**
   String lockBannerChildPaused(String name);
 
-  /// PD-30: the locked banner when the server refused a send but named no child.
+  /// PD-30 D-3: the banner's line everyone reads, the teacher included. Nothing financial.
   ///
   /// In en, this message translates to:
-  /// **'This group is paused for now.'**
+  /// **'The chat stays open, and lessons already booked go ahead.'**
   String get lockBannerGeneric;
 
-  /// PD-30: the locked banner's button for a parent.
+  /// PD-30: the banner's button, a parent only.
   ///
   /// In en, this message translates to:
   /// **'Go to Subscriptions'**
@@ -5701,28 +5701,34 @@ abstract class L10n {
   /// **'Suspended — payment'**
   String get outcomeSuspendedPayment;
 
-  /// PD-30: the group card when a child's lessons are paused (no reason).
+  /// PD-30 D-3: the group card when a child's new lessons pause (no reason: the teacher reads it).
   ///
   /// In en, this message translates to:
-  /// **'Lessons paused'**
+  /// **'New lessons paused'**
   String get cardLessonsPausedTitle;
+
+  /// PD-30 D-3: the group card's line under the child. Nothing financial: the teacher reads it.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons already booked go ahead, and this chat stays open.'**
+  String get cardLessonsPausedBody;
 
   /// PD-30: the family's direct-chat card when a child is locked.
   ///
   /// In en, this message translates to:
-  /// **'Lessons paused — payment'**
+  /// **'New lessons paused — payment'**
   String get cardSubscriptionLockedTitle;
 
-  /// PD-30: where to pay, on the locked card.
+  /// PD-30 D-3: the last line of the family's direct-chat card.
   ///
   /// In en, this message translates to:
-  /// **'Renew or pay in Subscriptions.'**
+  /// **'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'**
   String get cardSubscriptionLockedHint;
 
   /// PD-30: the group card when a locked child's lessons resume.
   ///
   /// In en, this message translates to:
-  /// **'Lessons are back on'**
+  /// **'New lessons are back on'**
   String get cardSubscriptionUnlockedTitle;
 
   /// No description provided for @roleSales.
@@ -5994,6 +6000,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'We\'re confirming your payment. This can take a minute.'**
   String get billingConfirmingPayment;
+
+  /// Pay sheet: what the payment buys. Store payments policy (App Store 3.1.3(d), Google Play 1:1 services): must say live, one-to-one, not recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded.'**
+  String get billingLiveOneToOneService;
 
   /// PD-27: Settings -> Payments.
   ///
@@ -8875,6 +8887,72 @@ abstract class L10n {
   /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
   String get deleteAccountTeacherBlocked;
 
+  /// PD-45 PR-4: the Location row of the parent's own profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get locationRowTitle;
+
+  /// No description provided for @locationRowEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get locationRowEmpty;
+
+  /// No description provided for @locationSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Where does the family live?'**
+  String get locationSheetTitle;
+
+  /// No description provided for @locationCountryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get locationCountryLabel;
+
+  /// PD-45 plan 5.3: the country's own field label (Governorate / Emirate / ...) in the sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} from the list'**
+  String locationSubdivisionError(String label);
+
+  /// No description provided for @locationCountryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a country from the list'**
+  String get locationCountryError;
+
+  /// PD-45: the country the server suggests from the number; tapping it only fills the picker, nothing is saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested: {country}'**
+  String locationSuggestion(String country);
+
+  /// No description provided for @locationPromptBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us where you live. You can change it any time from your profile.'**
+  String get locationPromptBody;
+
+  /// No description provided for @locationLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get locationLater;
+
+  /// No description provided for @locationLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The list could not be loaded. Please try again.'**
+  String get locationLoadFailed;
+
+  /// No description provided for @locationSaveConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t save this. Please contact the academy.'**
+  String get locationSaveConflict;
+
   /// Title of the card posted when a lesson is added outside the weekly times (CHATSCHED-001).
   ///
   /// In en, this message translates to:
@@ -8904,6 +8982,396 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'This lesson did not take place'**
   String get cardNowMissed;
+
+  /// Long-press menu entry on someone else's message, and the Report button on a person.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportAction;
+
+  /// PD-57: row on a person's profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this person'**
+  String get reportPersonAction;
+
+  /// PD-57: tooltip prefix on a member row, followed by the name.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportMemberAction;
+
+  /// PD-57: title of the Report sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportSheetTitle;
+
+  /// PD-57: under the title when reporting a message. Matches §5.5(1): the reported person is never told.
+  ///
+  /// In en, this message translates to:
+  /// **'What is wrong with this message? Only our team sees your report. The person is not told.'**
+  String get reportSheetMessageIntro;
+
+  /// PD-57: under the title when reporting a person.
+  ///
+  /// In en, this message translates to:
+  /// **'Why are you reporting this person? Only our team sees your report. The person is not told.'**
+  String get reportSheetPersonIntro;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Harassment or bullying'**
+  String get reportReasonHarassment;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Inappropriate or sexual content'**
+  String get reportReasonInappropriate;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Spam or scam'**
+  String get reportReasonSpam;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'A child\'s safety'**
+  String get reportReasonChildSafety;
+
+  /// PD-57 §5.1: DRAFT label, pending owner approval N-4.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else (a note is required)'**
+  String get reportReasonOther;
+
+  /// PD-57: label of the note field.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get reportSheetNoteLabel;
+
+  /// PD-57: label of the note field for the four reasons where it is optional.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get reportNoteLabelOptional;
+
+  /// PD-57: hint in the note field.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what happened, in a few words'**
+  String get reportNoteHint;
+
+  /// PD-57: shown when the reason is Something else and the note is empty (COMM.REPORT_NOTE_REQUIRED).
+  ///
+  /// In en, this message translates to:
+  /// **'Please add a short note so we understand.'**
+  String get reportNoteRequired;
+
+  /// PD-57: the send button.
+  ///
+  /// In en, this message translates to:
+  /// **'Send report'**
+  String get reportSubmit;
+
+  /// PD-57: confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you'**
+  String get reportSentTitle;
+
+  /// PD-57: calm confirmation after sending (201).
+  ///
+  /// In en, this message translates to:
+  /// **'We received your report and our team will look at it. You can follow it, and read our answer, in My reports.'**
+  String get reportSentBody;
+
+  /// PD-57: confirmation when the same report is already open (200).
+  ///
+  /// In en, this message translates to:
+  /// **'You already reported this and we are still looking into it. You will see our answer in My reports.'**
+  String get reportAlreadyBody;
+
+  /// PD-57: closes the confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get reportDone;
+
+  /// PD-57: COMM.REPORT_TARGET_NOT_VISIBLE (404).
+  ///
+  /// In en, this message translates to:
+  /// **'We can no longer find this, so it cannot be reported.'**
+  String get reportErrorNotVisible;
+
+  /// PD-57: COMM.REPORT_SELF (400).
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot report yourself or your own messages.'**
+  String get reportErrorSelf;
+
+  /// PD-57: COMM.REPORT_NOT_REPORTABLE (400).
+  ///
+  /// In en, this message translates to:
+  /// **'This kind of message cannot be reported.'**
+  String get reportErrorNotReportable;
+
+  /// PD-57: COMMON.RATE_LIMITED (429).
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent several reports recently. Please try again a little later.'**
+  String get reportErrorRateLimited;
+
+  /// PD-57: COMM.TERMS_NOT_ACCEPTED (403).
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the terms of use first, then you can report.'**
+  String get reportErrorTerms;
+
+  /// PD-57: any other failure; the sheet stays open so nothing typed is lost.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not send your report. Please try again.'**
+  String get reportErrorGeneric;
+
+  /// PD-57: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'My reports'**
+  String get myReportsTitle;
+
+  /// PD-57: under the Settings row.
+  ///
+  /// In en, this message translates to:
+  /// **'What you reported, and our answers'**
+  String get myReportsSubtitle;
+
+  /// PD-57: empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No reports'**
+  String get myReportsEmptyTitle;
+
+  /// PD-57: empty state body.
+  ///
+  /// In en, this message translates to:
+  /// **'When you report a message or a person, you can follow it here.'**
+  String get myReportsEmptyBody;
+
+  /// PD-57: what the report was about.
+  ///
+  /// In en, this message translates to:
+  /// **'A message'**
+  String get myReportsTargetMessage;
+
+  /// PD-57: what the report was about.
+  ///
+  /// In en, this message translates to:
+  /// **'A person'**
+  String get myReportsTargetPerson;
+
+  /// PD-57: a reason this build does not know.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get myReportsReasonUnknown;
+
+  /// PD-57: report status open.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get myReportsStatusOpen;
+
+  /// PD-57: report status in_review.
+  ///
+  /// In en, this message translates to:
+  /// **'Being reviewed'**
+  String get myReportsStatusInReview;
+
+  /// PD-57: report status actioned.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get myReportsStatusActioned;
+
+  /// PD-57: report status dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get myReportsStatusDismissed;
+
+  /// PD-57: heading of the answer block.
+  ///
+  /// In en, this message translates to:
+  /// **'Our answer'**
+  String get myReportsAnswerLabel;
+
+  /// PD-57: the Block button and the confirm button of the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get blockAction;
+
+  /// PD-57: the Unblock button (placeholder, composer bar, Blocked people, profile).
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock'**
+  String get unblockAction;
+
+  /// PD-57: row on a one-to-one profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Block this person'**
+  String get blockPersonAction;
+
+  /// PD-57: row on a one-to-one profile, when the person is blocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock this person'**
+  String get unblockPersonAction;
+
+  /// PD-57: used in place of a name the server did not send.
+  ///
+  /// In en, this message translates to:
+  /// **'this person'**
+  String get blockPersonFallbackName;
+
+  /// PD-57: title of the confirmation before blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Block {name}?'**
+  String blockConfirmTitle(String name);
+
+  /// PD-57: what a block does.
+  ///
+  /// In en, this message translates to:
+  /// **'They won\'t be able to message or call you, and you won\'t see their messages.'**
+  String get blockConfirmBody;
+
+  /// PD-57 D-6: the educational exceptions, said plainly.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons continue as usual: lesson calls, lesson cards and messages from the academy still reach you.'**
+  String get blockConfirmLessons;
+
+  /// PD-57: every block notifies the responsible managers.
+  ///
+  /// In en, this message translates to:
+  /// **'The academy is told, so they can follow up.'**
+  String get blockConfirmAcademy;
+
+  /// PD-57: calm confirmation after blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is blocked.'**
+  String blockedSnack(String name);
+
+  /// PD-57: title of the confirmation before unblocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock {name}?'**
+  String unblockConfirmTitle(String name);
+
+  /// PD-57: what an unblock does.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll see their messages again, and they can message and call you.'**
+  String get unblockConfirmBody;
+
+  /// PD-57: calm confirmation after unblocking.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is unblocked.'**
+  String unblockedSnack(String name);
+
+  /// PD-57: COMM.BLOCK_NOT_ALLOWED (403): staff, a protected account, or yourself.
+  ///
+  /// In en, this message translates to:
+  /// **'This person can\'t be blocked. You can report them instead.'**
+  String get blockErrorNotAllowed;
+
+  /// PD-57: COMM.BLOCK_NO_SHARED_CONVERSATION (404).
+  ///
+  /// In en, this message translates to:
+  /// **'You can only block someone you share a conversation with.'**
+  String get blockErrorNoSharedConversation;
+
+  /// PD-57: COMMON.RATE_LIMITED (429).
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve blocked many people today. Please try again later.'**
+  String get blockErrorRateLimited;
+
+  /// PD-57: COMM.TERMS_NOT_ACCEPTED (403).
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the terms of use first, then you can block.'**
+  String get blockErrorTerms;
+
+  /// PD-57: any other failure while blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t block them right now. Please try again.'**
+  String get blockErrorGeneric;
+
+  /// PD-57: any failure while unblocking.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t unblock them right now. Please try again.'**
+  String get unblockErrorGeneric;
+
+  /// PD-57: one line in place of a blocked person's message.
+  ///
+  /// In en, this message translates to:
+  /// **'Message hidden: you blocked this person'**
+  String get hiddenByBlockPlaceholder;
+
+  /// PD-57: stands where the composer was, in a direct chat with someone you blocked.
+  ///
+  /// In en, this message translates to:
+  /// **'You blocked {name}. Unblock to write.'**
+  String blockedComposerNotice(String name);
+
+  /// PD-57: Settings row and screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked people'**
+  String get blockedPeopleTitle;
+
+  /// PD-57: under the Settings row.
+  ///
+  /// In en, this message translates to:
+  /// **'People you blocked; unblock them any time'**
+  String get blockedPeopleSubtitle;
+
+  /// PD-57: empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No one is blocked'**
+  String get blockedPeopleEmptyTitle;
+
+  /// PD-57: empty state body.
+  ///
+  /// In en, this message translates to:
+  /// **'When you block someone, they appear here and you can unblock them.'**
+  String get blockedPeopleEmptyBody;
+
+  /// PD-57: when the block was made.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked {date}'**
+  String blockedPeopleSince(String date);
+
+  /// PD-57: error state of Blocked people.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t load the people you blocked.'**
+  String get blockedPeopleLoadError;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

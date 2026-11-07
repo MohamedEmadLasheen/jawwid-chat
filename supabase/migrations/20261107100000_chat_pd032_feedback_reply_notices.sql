@@ -27,6 +27,10 @@
 --
 -- The complaint lifecycle and its resolution rules are unchanged.
 -- Idempotent (G-19).
+--
+-- Renumbered 2026-11-07: was 20261103120000. Seven later migrations
+-- (20261104100000, 20261106100000 to 20261106170000) landed on main first.
+-- No dependency on them; the content is unchanged.
 -- =============================================================================
 
 create table if not exists chat.parent_feedback_reply_seen (

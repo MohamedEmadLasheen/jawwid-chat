@@ -411,3 +411,237 @@ deploy, which is intended, but surprises anyone who makes one. The guard needs
 chosen before the first deploy, because the Admin Web bundle compiles the API
 URL in.
 
+---
+
+## ADR-013 · Launch on the smallest sizes that hold, with staging's Redis in-app
+
+*2026-11-05. The owner chose DigitalOcean (ADR-010) and asked for the lowest
+cost that keeps backups, recovery, security and isolation intact.*
+
+**Decision.**
+
+1. Production launches on the sizes staging already runs: API
+   `apps-s-1vcpu-1gb` (was 2 GB), worker `apps-s-1vcpu-0.5gb` (was 1 GB), Admin
+   Web `apps-s-1vcpu-0.5gb`. Managed Postgres 17 (1 GiB, single node, daily
+   backups and 7-day PITR) and managed Valkey (1 GiB) stay managed. Sizes rise
+   only on the thresholds in `production-runbook.md` §1b.
+2. Staging's Redis is a private component of the staging app (`redis`, Valkey
+   8.1, `internal_ports` only, no ingress rule, no environment), not a managed
+   cluster. Staging's `REDIS_URL` is `redis://redis:6379`. Production never
+   gets one; the `app-spec` guard refuses it.
+3. `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`, `CORE_TIMEOUT_MS`
+   and `CORE_RETRY_MAX` are optional in production, as they already were in
+   staging.
+
+**Alternatives.** Keep the 2 GB API and 1 GB worker. Use the `-fixed` 1 GB API
+plan ($2 cheaper). Merge the API and the worker into one container. Put
+staging's database or Redis inside production's clusters. Fill the Core
+variables with invented values. Serve Admin Web as a free static site.
+
+**Why.**
+
+- *Sizes.* The connection budget in `database-pool.ts` was already written for
+  the 1 GiB Postgres plan, and the workload (about 800 students, 75 teachers,
+  2,600 classes a month, one API instance until RISK-4 closes) is small.
+  Staging's sizes are the ones the code has been run on. The `-fixed` plan
+  cannot run a second instance, which RISK-4's closure will need.
+- *Redis.* Nothing durable lives in Redis: the outbox is in Postgres
+  (`architecture.md`, Redis table). A staging restart clears presence, typing
+  and rate-limit keys, which staging can afford. In production the same restart,
+  on every deploy, would reset the login rate limiter's windows, a security
+  weakening, so production keeps managed Valkey. The component has no password,
+  so its privacy rests on having no route and no public port; the guard holds
+  both.
+- *Not shared clusters.* Postgres roles, including the migration's BYPASSRLS
+  grant, belong to the whole cluster, so a staging database inside production's
+  cluster is not isolated. A staging prefix in production's Valkey would let a
+  staging bug evict or read production keys.
+- *Not merged processes.* A combined entrypoint is an application change that
+  ADR-004 rules out, it saves $5, and one crash would then take both down.
+- *Core.* No Chat code calls Core; the only Core code is the inbound signed
+  webhook, which answers 503 with no secret set. A required variable with no
+  reader can only be filled with an invented value, which is worse than
+  optional. Connecting Core is a deliberate later step, coordinated with the
+  Core team (`secrets.md`).
+- *Not a static site.* ADR-011 stands.
+
+**Trade-offs.** Production starts with a single Postgres node and a single
+Valkey node: a node failure is an outage until DigitalOcean replaces it, with
+PITR and the encrypted pre-deploy and weekly dumps as the data's protection
+(within the proposed 2 h RTO, `backup-recovery.md` §6). The 1 GB API and 0.5 GB
+worker are an estimate until staging measures them; the runbook's thresholds
+say when they are wrong. Staging's Redis is not the production engine's
+managed configuration, so a managed-Valkey quirk would first show in
+production. The planned cost falls from about $129 to about $98 a month for
+production and staging together (estimate, before tax; confirm in the
+DigitalOcean console).
+
+---
+
+## ADR-014 · Supabase Free hosts the database during the store-review period
+
+*2026-11-05. Owner's decision: do not pay for a production database while the
+apps wait two months or more for testing and store approval.*
+
+**Decision.** Until launch, Jawwid Chat's PostgreSQL is a dedicated Supabase Free
+project (its own organisation, region Central EU / Frankfurt; never Core's).
+Only the database moves: the NestJS API, the worker, Admin Web, Redis/Valkey and
+object storage stay on DigitalOcean App Platform as ADR-010..013 describe, and
+nothing of Supabase's own (Auth, Storage, Realtime, the Data API, GraphQL) is
+used. At launch the database moves to DigitalOcean Managed PostgreSQL with
+`backup-db.sh` → `restore-db.sh` and a new `DATABASE_URL`; no application code
+changes.
+
+**Evidence.** Against Supabase's own image (`supabase/postgres:17.6.1.140`,
+whose `postgres` role matches the hosted one: not a superuser, CREATEROLE,
+BYPASSRLS), connected as `postgres`: the BYPASSRLS preflight passes, all 168
+migrations apply and re-apply as a no-op, the Quran loader loads 6,236 verses,
+and `invariants`, `tenant_isolation` and `story_rls` pass. `schema_acceptance`
+fails there by design: it refuses any table outside `chat`, and Supabase ships
+`auth` and `vault`; no migration references them. An encrypted dump from it
+restored into stock `postgres:17` with the ledger, data, RLS and role
+attributes intact, and `invariants` passed there. On the hosted project, the
+preflight passed through the session pooler (2026-11-05, run by the owner).
+
+**Conditions.** These are what make it acceptable; each is required.
+
+- *Hardening.* The Data API and `pg_graphql` are off, Auth sign-ups are off, SSL
+  is enforced, and `chat` is never an exposed schema. The migrations grant
+  Supabase's own `authenticated` role USAGE on `chat` and privileges on 70
+  tables; Supabase's REST and GraphQL endpoints act as that role, so leaving them
+  on would expose the schema to any Supabase-issued session.
+- *Session pooler only.* The direct host is IPv6-only and GitHub's runners and
+  App Platform are IPv4: every connection uses the session pooler (port 5432,
+  user `<role>.<project-ref>`), never the transaction pooler (6543).
+- *Statement timeout on the role.* Supabase's pooler drops the connection's
+  startup `options` (measured 2026-11-05: `PGOPTIONS='-c statement_timeout=15000'`
+  through the session pooler still showed `2min`), so `database-pool.ts`'s 15 s
+  limit never reaches the server there. It is set on the connecting role
+  instead: `alter role postgres set statement_timeout = '15s';`. `apply.sh` runs
+  each migration with `set local statement_timeout = 0`, so the role setting
+  cannot cancel a migration (with a 50 ms role timeout, the old script stopped
+  at migration 22 of 168; the new one applied all 168). `pg_dump` sets its own
+  timeout to 0. A one-off CLI run that needs longer sets it in its session.
+  Remove the role setting at the cutover; on DigitalOcean the `options`
+  parameter reaches the server again.
+- *Frankfurt.* The project's region is Central EU (Frankfurt), next to the App
+  Platform app in `fra`. Realtime delivery makes a dozen database round trips per
+  transaction; another region multiplies its latency.
+- *Smaller pools.* The `production` Environment sets `DATABASE_POOL_MAX=5` and
+  `DATABASE_WORKER_POOL_MAX=2` (the deploy workflows default to 7 and 3), so a
+  deploy's overlap stays inside the Free pooler. Remove both at the cutover.
+- *Backups.* Supabase Free takes none. `backup-daily.yml` keeps a 30-day encrypted
+  dump as a GitHub artifact, and doubles as the daily activity that stops the
+  Free project pausing. A weekly copy is kept outside GitHub, and a restore drill
+  is run monthly (`backup-recovery.md` §3c).
+- *No real users on it.* Approval is not release: the store builds use manual
+  release (App Store Connect) and managed publishing (Google Play) until the
+  cutover is done.
+
+**Alternatives.** DigitalOcean Managed PostgreSQL from day one (about $15 a month
+more, no cutover, BYPASSRLS settled now). Supabase for staging only (the review
+builds need production push, which the staging pipeline cannot send:
+`deploy-staging.yml` sets `APNS_PRODUCTION=false`). Supabase's paid plan (more
+than DigitalOcean's 1 GiB plan).
+
+**Why.** The owner's call on cost: about $15 a month for the waiting period,
+with the risks below accepted knowingly.
+
+**Trade-offs.** No provider backup or PITR: the recovery point is up to a day.
+The Free project can pause, and a paused database during App Review is a
+rejection. 5 GB of monthly egress is shared with the app's own queries. The
+statement timeout lives on the role rather than the connection while on
+Supabase, so it also applies to anything else connecting as `postgres`. DigitalOcean's
+BYPASSRLS question is postponed to launch, not removed. The cutover is a
+planned outage of about 15–30 minutes, rehearsed once beforehand.
+
+---
+
+## ADR-015 · Production's Redis is in-app during the review period, and the launch is guarded
+
+*2026-11-05. Owner's approval: postpone the managed Valkey cluster (about
+$15/month) until launch. Amends ADR-013, which kept production on managed
+Valkey from the start.*
+
+**Decision.** Production carries a production Environment variable
+`LAUNCH_PHASE`, with no default:
+
+- `review`, the store-review period, with no real customer. Production runs the
+  same private in-app Valkey as staging (`redis`, `internal_ports` only, no
+  ingress rule, no environment), marked *REVIEW PERIOD ONLY* in the committed
+  spec. `REDIS_URL` must be exactly `redis://redis:6379`.
+- `launch`. `app-spec.py resolve` drops the in-app component and refuses any
+  `REDIS_URL` that is not `rediss://` to a managed host. Before the backup and
+  the migrations, `scripts/infra/verify-managed-redis.sh` then asks
+  DigitalOcean that the cluster exists, is online, is in `fra1`, evicts nothing,
+  and admits only this app (Trusted Sources).
+
+Any other value, or none, is refused. Staging must use its in-app Redis, so it
+can never name production's. The public launch, meaning the store release made
+public, follows a successful `launch` deploy (`production-runbook.md` §1c).
+
+**Why.** No Chat data is durable in Redis: the outbox and the account lockout
+are in Postgres. What a Redis restart (every deploy) costs is presence, typing,
+an outbox wake hint, and the source-based login limiter's windows. The last is
+a security property (password spraying), acceptable only while no real customer
+signs in. The guard makes "launch on the review Redis" impossible without
+changing this ADR. The health check and every API/worker connection requirement
+are unchanged: `/health/ready` still fails without a reachable Redis.
+
+**Alternatives.** Create managed Valkey now (rejected by the owner on cost). A
+committed per-phase spec flipped by PR (a launch would then depend on someone
+remembering the PR; a variable read by the resolver cannot be skipped). An
+`if:` in the workflow alone (the spec would still carry the component).
+
+**What it cannot do.** It cannot reach the App Store Connect or Google Play
+"release" button. That switch remains a human step, and the runbook makes a
+successful `launch` deploy its precondition. The verifier cannot open a
+connection from the runner (the Trusted Sources keep it out by design);
+connectivity is proven after the release by `/health/ready` in the smoke test.
+
+**Trade-offs.** Until launch: no TLS or password on the in-app Redis (privacy
+rests on its having no route, held by the `app-spec` guard). Limiter windows
+reset on every deploy. A 256 MB cap. No managed monitoring. It saves about $10 a
+month: $15 for the cluster, less the $5 container. The `launch-redis` CI gate
+holds the verifier (doctl stubbed); the resolver's half is in the `app-spec`
+selftest.
+
+## ADR-016 · Two Spaces keys: the application's stays bucket-limited, an admin key checks the bucket
+
+**Status.** Accepted, 2026-11-05.
+
+**Context.** The production bucket (`jawwid-chat-prod-media`, `fra1`) has
+versioning Enabled and the 30-day / 1-day / probe lifecycle rules. The deploy
+re-checks them on every release. On DigitalOcean Spaces, the application's
+bucket-limited key (Read/Write/Delete) can read versioning but is refused
+`GetBucketLifecycleConfiguration` and every `Put…` configuration call. So the
+deploy's check could not pass on the application key without widening it.
+
+**Decision.** Two keys, never one.
+- `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` are the application's and only
+  the application's. They stay bucket-limited and reach the API and worker
+  through the app spec.
+- `STORAGE_ADMIN_ACCESS_KEY` / `STORAGE_ADMIN_SECRET_KEY` (Full Access) are
+  production GitHub Environment secrets used ONLY by `storage-versioning.sh`:
+  in Deploy production's "Object storage keeps deleted objects" step and in the
+  "Object storage versioning" workflow. They are never in the manifest, the app
+  spec, or app code.
+- `storage-versioning.sh` reads only `STORAGE_ADMIN_*`. Without them it refuses
+  before any call, never falling back to the application key. It refuses an
+  admin key equal to the application key, and unsets the application key before
+  running the AWS CLI. The deploy's credentials step fails early on both cases.
+- `scripts/qa/guards.sh storage-admin-keys` (CI) holds all of it, with the AWS
+  CLI stubbed and a static read of the workflows and app configuration.
+
+**Why.** Widening the application key would let any API process, or anyone who
+obtains its key, turn off the 30-day recovery and delete every version. The
+admin key's power is confined to a step the owner approves (the `production`
+Environment requires the owner's approval for every run).
+
+**Alternatives.** Widen the application key (rejected: it removes the bound on
+what a compromised API can destroy). Skip the lifecycle read in the deploy
+(rejected: the check would no longer prove the 30-day recovery).
+
+**Trade-offs.** One more secret pair to rotate. A Full Access key can reach
+every bucket on the account. Today this is the only one; if more buckets are
+added, revisit whether Spaces offers a narrower admin scope.

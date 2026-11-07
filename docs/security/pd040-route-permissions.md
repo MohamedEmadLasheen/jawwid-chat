@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-577 routes.
+588 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -309,6 +309,9 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/billing/invoices/:id/link` | not for staff | `billing/payments.controller.ts#PaymentsController.myInvoiceLink` |
 | POST | `/api/v1/me/billing/receipts` | not for staff | `billing/payments.controller.ts#PaymentsController.submitReceipt` |
 | POST | `/api/v1/me/billing/receipts/upload` | not for staff | `billing/payments.controller.ts#PaymentsController.authorizeReceiptUpload` |
+| GET | `/api/v1/me/blocks` | self-service | `moderation/blocks.controller.ts#BlocksController.mine` |
+| POST | `/api/v1/me/blocks` | self-service | `moderation/blocks.controller.ts#BlocksController.block` |
+| DELETE | `/api/v1/me/blocks/:id` | self-service | `moderation/blocks.controller.ts#BlocksController.unblock` |
 | GET | `/api/v1/me/calendar` | self-service | `calendar/calendar.controller.ts#CalendarController.mine` |
 | PATCH | `/api/v1/me/children/:learnerId` | not for staff | `communication/api/parent-profile.controller.ts#ParentProfileController.updateChild` |
 | DELETE | `/api/v1/me/children/:learnerId/avatar` | not for staff | `communication/api/profile-photo.controller.ts#ProfilePhotoController.childRemove` |
@@ -342,6 +345,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | PATCH | `/api/v1/me/presence` | self-service | `communication/api/presence.controller.ts#PresenceController.update` |
 | GET | `/api/v1/me/profile` | not for staff | `communication/api/parent-profile.controller.ts#ParentProfileController.profileOf` |
 | PATCH | `/api/v1/me/profile` | not for staff | `communication/api/parent-profile.controller.ts#ParentProfileController.updateProfile` |
+| GET | `/api/v1/me/reports` | self-service | `moderation/reports.controller.ts#ReportsController.mine` |
 | GET | `/api/v1/me/search` | chat.use | `communication/api/starred.controller.ts#StarredController.search` |
 | GET | `/api/v1/me/seats` | chat.use | `communication/seats/seat.controller.ts#SeatController.mine` |
 | GET | `/api/v1/me/sessions` | self-service | `platform/auth/auth.controller.ts#MeSessionsController.list` |
@@ -365,11 +369,17 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/media/avatars/:id` | public | `communication/api/media.controller.ts#MediaController.avatar` |
 | GET | `/api/v1/media/invoices/:invoiceId` | public | `billing/billing-media.controller.ts#BillingMediaController.invoice` |
 | GET | `/api/v1/media/payment-receipts/:receiptId` | public | `billing/billing-media.controller.ts#BillingMediaController.receipt` |
+| GET | `/api/v1/media/report-evidence/:id` | public | `moderation/moderation-media.controller.ts#ModerationMediaController.evidence` |
 | GET | `/api/v1/media/staff/:staffId` | public | `staff-profile/staff-photo.controller.ts#StaffPhotoController.photo` |
 | GET | `/api/v1/media/stories/:storyId` | public | `communication/api/media.controller.ts#MediaController.story` |
 | GET | `/api/v1/media/teacher-certificates/:certificateId` | public | `communication/api/teacher-media.controller.ts#TeacherMediaController.certificate` |
 | GET | `/api/v1/media/wallpapers/:id` | public | `communication/api/media.controller.ts#MediaController.wallpaper` |
 | POST | `/api/v1/mentions/:id/dismiss` | chat.use | `communication/api/mention.controller.ts#MentionController.dismiss` |
+| GET | `/api/v1/moderation/reports` | moderation.view | `moderation/moderation.controller.ts#ModerationController.list` |
+| GET | `/api/v1/moderation/reports/:id` | moderation.view | `moderation/moderation.controller.ts#ModerationController.detail` |
+| POST | `/api/v1/moderation/reports/:id/attachments/:index/url` | moderation.view | `moderation/moderation.controller.ts#ModerationController.attachmentUrl` |
+| POST | `/api/v1/moderation/reports/:id/resolve` | moderation.act | `moderation/moderation.controller.ts#ModerationController.resolve` |
+| POST | `/api/v1/moderation/reports/:id/take` | moderation.act | `moderation/moderation.controller.ts#ModerationController.take` |
 | POST | `/api/v1/notifications/:id/delivered` | self-service | `communication/api/notification.controller.ts#NotificationController.delivered` |
 | POST | `/api/v1/notifications/:id/opened` | self-service | `communication/api/notification.controller.ts#NotificationController.opened` |
 | POST | `/api/v1/notifications/devices` | self-service | `communication/api/notification.controller.ts#NotificationController.register` |
@@ -420,6 +430,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | PATCH | `/api/v1/quick-replies/:id` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.updateQuickReply` |
 | GET | `/api/v1/quran/ayahs` | self-service | `quran/quran.controller.ts#QuranController.ayahs` |
 | GET | `/api/v1/quran/tajweed` | self-service | `quran/quran.controller.ts#QuranController.tajweed` |
+| POST | `/api/v1/reports` | self-service | `moderation/reports.controller.ts#ReportsController.file` |
 | POST | `/api/v1/schedule-change-requests/:id/decide` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.decideChange` |
 | GET | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.upcoming` |
 | POST | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.create` |

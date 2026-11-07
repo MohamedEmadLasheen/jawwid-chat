@@ -57,7 +57,8 @@ export const CLIENT_CLOSED = 499;
  * record of who did what. chat.audit_log answers that, behind access controls.
  *
  * 5xx -> the error tracker, with the exception the handler threw when
- * RequestErrorCaptureInterceptor saw one. 4xx are NOT reported: a 403 is the
+ * RequestErrorCaptureInterceptor saw one -- except a health probe's 503, which
+ * is readiness doing its job (isExpectedProbeFailure). 4xx are NOT reported: a 403 is the
  * authorization service working, and on several routes refusal is the most
  * common outcome.
  */
@@ -94,7 +95,7 @@ export function requestLogMiddleware(
         ...(serverError && thrown !== undefined ? { error_code: causeOf(thrown) } : {}),
       });
 
-      if (serverError) {
+      if (serverError && !isExpectedProbeFailure(status, template)) {
         errors.captureException(thrown ?? new HttpServerError(status), {
           route,
           requestId,
@@ -173,6 +174,19 @@ export function routeTemplate(req: LoggableRequest): string {
 }
 
 const HEALTH_ROUTES = new Set(['/health', '/health/live', '/health/ready']);
+
+/**
+ * A health probe answering 503 is the probe WORKING: it is how readiness tells
+ * the load balancer to drain this instance while Postgres or Redis is
+ * unreachable (health.controller.ts). It is logged at error like any 5xx, but
+ * not reported -- the platform probes every 10 seconds, so an outage would
+ * otherwise be one event per probe, and the failure behind it is reported by
+ * whatever actually hit it. Any OTHER 5xx from a health route (a 500: a bug in
+ * the probe itself) is still reported.
+ */
+export function isExpectedProbeFailure(status: number, template: string): boolean {
+  return status === 503 && HEALTH_ROUTES.has(template);
+}
 
 /**
  * 5xx error, 4xx warn -- monitoring.md §2 wants them as distinct signals: a 4xx

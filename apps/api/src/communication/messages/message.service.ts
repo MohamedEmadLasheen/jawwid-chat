@@ -29,6 +29,7 @@ import {
   messageAuthorRef,
   messageStatus,
   toMessageDto,
+  hideForBlock,
   needsReply,
   conversationState,
 } from '../contracts/dto';
@@ -48,6 +49,7 @@ import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 import { withOwedMakeups } from './owed-makeup';
 import { MESSAGE_MAX_CHARACTERS, messageTooLong } from './message-length';
+import { blockedBy, hasBlocked, hideableByBlock, notHiddenByBlock } from '../../platform/blocks';
 
 export interface AttachmentInput {
   kind: string;
@@ -567,9 +569,12 @@ export class MessageService {
       take: limit,
     }));
 
+    // PD-57: the viewer's blocks hide their authors' messages (placeholder only);
+    // a hidden message's media are never signed.
+    const hidden = await this.hiddenByBlock(actor.actorId, rows);
     // Signed URLs are minted per read, scoped to messages this actor is already
     // permitted to see, and they expire.
-    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
+    const signed = await this.attachments.signUrlsForMessages(rows.filter((m) => !hidden.has(m.id)).map((m) => m.id), actor.actorId);
     // ONE identity batch for the whole page, before the map. Resolving inside the
     // map would be one round trip per message -- the shape this whole change exists
     // to remove.
@@ -585,11 +590,10 @@ export class MessageService {
     const pinnedIds = new Set(pinRows.map((r) => r.messageId));
     const receiptView = await this.receiptViewFor(actor.actorId, rows);
     // Photos are signed for this viewer in THIS conversation: pure HMAC, no I/O.
-    const messages = rows.map((m) => ({
-      ...toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId), receiptView),
-      starred: starredIds.has(m.id),
-      pinned: pinnedIds.has(m.id),
-    }));
+    const messages = rows.map((m) => {
+      const dto = toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId), receiptView);
+      return { ...(hidden.has(m.id) ? hideForBlock(dto) : dto), starred: starredIds.has(m.id), pinned: pinnedIds.has(m.id) };
+    });
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 
@@ -654,7 +658,25 @@ export class MessageService {
         }),
       ),
     );
-    for (const m of found) if (m?.conversationId) out.set(m.conversationId, m);
+    // PD-57: a list row never previews what the viewer's block hides.
+    const hidden = await this.hiddenByBlock(actor.actorId, found.filter((m): m is NonNullable<typeof m> => !!m));
+    for (const m of found) {
+      if (m?.conversationId) out.set(m.conversationId, hidden.has(m.id) ? { ...m, body: null, hiddenByBlock: true } as typeof m : m);
+    }
+    return out;
+  }
+
+  /**
+   * PD-57 (closure plan §5): which of these messages the viewer's blocks hide --
+   * a blocked author's text, image, video, voice or file message. Never a
+   * system or card message (D-6 exception 2). One cached read per request.
+   */
+  private async hiddenByBlock(viewerId: string, rows: ReadonlyArray<Pick<Message, 'id' | 'authorId' | 'type'>>): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (rows.length === 0) return out;
+    const blocked = await blockedBy(this.prisma, viewerId);
+    if (blocked.size === 0) return out;
+    for (const m of rows) if (m.authorId && blocked.has(m.authorId) && hideableByBlock(m.type)) out.add(m.id);
     return out;
   }
 
@@ -920,8 +942,10 @@ export class MessageService {
    * below, so the number on the chat list and the number from
    * `GET /conversations/:id/messages/unread` cannot disagree.
    */
-  private unreadWhere(actorId: string): Prisma.MessageWhereInput {
+  private async unreadWhere(actorId: string): Promise<Prisma.MessageWhereInput> {
     return {
+      // PD-57: what the viewer's block hides is never counted -- a badge is a signal of contact.
+      ...notHiddenByBlock(await blockedBy(this.prisma, actorId)),
       deletedForAll: false,
       hiddenFor: { none: { actorId } },
       receipts: {
@@ -935,7 +959,7 @@ export class MessageService {
 
   async unreadCount(conversationId: string, actorId: string): Promise<number> {
     return this.prisma.message.count({
-      where: { conversationId, ...this.unreadWhere(actorId) },
+      where: { conversationId, ...(await this.unreadWhere(actorId)) },
     });
   }
 
@@ -967,7 +991,7 @@ export class MessageService {
       by: ['conversationId'],
       where: {
         conversationId: { in: conversationIds },
-        ...this.unreadWhere(actorId),
+        ...(await this.unreadWhere(actorId)),
       },
       _count: { _all: true },
     });
@@ -993,14 +1017,6 @@ export class MessageService {
         'BR-1: a teacher and a parent communicate only inside the Student Group, never directly',
       );
     }
-    // PD-30: a group locked for payment is read-only for the parent and the
-    // teacher; a reaction is a write.
-    const conv = await this.prisma.conversation.findUnique({
-      where: { id: message.conversationId! },
-      select: { id: true, type: true },
-    });
-    const locked = conv ? await this.authz.refusePaymentLockFor(actor, conv) : null;
-    if (locked && !locked.allowed) throw new CommError(locked.code, locked.reason);
     await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor); // RT-032
       await tx.messageReaction.upsert({
@@ -1229,12 +1245,14 @@ export class MessageService {
   /** Message rows to DTOs for one viewer in one conversation: signed media, names, photos. */
   private async dtosFor(page: MessageWithRelations[], conversationId: string, actor: Actor): Promise<MessageDto[]> {
     const rows = await withOwedMakeups(this.prisma, page);
-    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
+    const hidden = await this.hiddenByBlock(actor.actorId, rows);
+    const signed = await this.attachments.signUrlsForMessages(rows.filter((m) => !hidden.has(m.id)).map((m) => m.id), actor.actorId);
     const authors = await this.authorsFor(rows);
     const receiptView = await this.receiptViewFor(actor.actorId, rows);
-    return rows.map((m) =>
-      toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId), receiptView),
-    );
+    return rows.map((m) => {
+      const dto = toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId), receiptView);
+      return hidden.has(m.id) ? hideForBlock(dto) : dto;
+    });
   }
 
   // -------------------------------------------------------------------
@@ -1297,7 +1315,9 @@ export class MessageService {
           orderBy: { seq: 'desc' },
           take: page - hits.length,
         });
-        hits.push(...visible);
+        // PD-57: a hidden message is never a match -- a hit would tell its words.
+        const hidden = await this.hiddenByBlock(actor.actorId, visible);
+        hits.push(...visible.filter((v) => !hidden.has(v.id)));
       }
       const last = candidates[candidates.length - 1]?.seq;
       if (candidates.length < window || last == null) {
@@ -1361,6 +1381,9 @@ export class MessageService {
       cursor = { at: last.created_at, id: last.id };
     }
 
+    // PD-57: a hidden message is never a match.
+    const hiddenHits = await this.hiddenByBlock(actor.actorId, rows);
+    if (hiddenHits.size > 0) rows.splice(0, rows.length, ...rows.filter((r) => !hiddenHits.has(r.id)));
     // Photos and names are signed per conversation, so map each chat's rows together.
     const byConv = new Map<string, MessageWithRelations[]>();
     for (const r of rows) if (r.conversationId) byConv.set(r.conversationId, [...(byConv.get(r.conversationId) ?? []), r]);
@@ -1470,6 +1493,10 @@ export class MessageService {
       if (m.deletedForAll || m.moderation !== Moderation.PUBLISHED || m.type === MessageType.SYSTEM || m.type === MessageType.CARD) {
         throw new CommError(CommErrorCode.MESSAGE_NOT_FORWARDABLE, 'that message cannot be forwarded', 403);
       }
+      // PD-57: what the forwarder's block hides is not theirs to pass on (read as absent).
+      if (hideableByBlock(m.type) && (await hasBlocked(this.prisma, loaded.actor.actorId, m.authorId))) {
+        throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+      }
       sources.push(m);
     }
     sources.sort((a, b) => (a.seq ?? 0n) < (b.seq ?? 0n) ? -1 : 1);
@@ -1577,10 +1604,6 @@ export class MessageService {
     if (!isAuthor && !isManager && !moderating) {
       throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'not the author of this message');
     }
-    // PD-30: a group locked for payment is read-only for the parent and the
-    // teacher -- deleting for everyone is a write too (staff are not asked).
-    const locked = await this.authz.refusePaymentLockFor(actor, conv);
-    if (locked && !locked.allowed) throw new CommError(locked.code, locked.reason);
     if (isAuthor && !isManager) {
       const ageMs = Date.now() - message.createdAt.getTime();
       if (ageMs > windowMinutes * 60_000) {
@@ -1591,32 +1614,98 @@ export class MessageService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.message.update({
-        where: { id: messageId },
-        data: {
-          deletedAt: new Date(),
-          deletedBy: actor.actorId,
-          deletedForAll: true,
-          redactedReason: reason,
-        },
-      });
-      // PD-36: a deleted message mentions nobody; its open summonses close.
-      await this.mentions?.onDeletedForAll(tx, messageId, new Date());
-      await this.audit.audit(tx, {
-        actorId: actor.actorId,
-        action: 'message.delete_for_everyone',
-        entity: 'message',
-        entityId: messageId,
-        reason,
-        after: moderating ? { moderatedAuthorKind: message.authorType } : undefined,
-      });
-      await this.outbox.enqueue(tx, CommEvent.MESSAGE_DELETED, {
-        conversationId: message.conversationId!,
-        messageId,
-        deletedForAll: true,
-      });
+    await this.prisma.$transaction((tx) =>
+      this.writeDeletedForAll(tx, message, actor.actorId, reason, moderating ? { moderatedAuthorKind: message.authorType } : undefined),
+    );
+  }
+
+  /**
+   * PD-57 (roadmap §5.4, `message_removed`): a report's resolution deletes the
+   * reported message for everyone, through the same writes as
+   * `deleteForEveryone` -- the row, the mentions, the `message.delete_for_everyone`
+   * audit row and the `message.deleted` event -- so it looks to every reader
+   * like any moderated deletion and names neither the report nor the reporter
+   * (§5.5 rule 1). The audit row names the report.
+   *
+   * WHO MAY is the caller's to decide: ModerationService calls this only for
+   * staff holding `moderation.act`, on a report of their own organization, in
+   * the transaction that closes the report. Here: the message must be that
+   * organization's, and a lesson report card is never deleted this way (its
+   * lesson record owns it, as in `deleteForEveryone`). An already deleted
+   * message is left as it is.
+   */
+  async removeForModeration(
+    tx: Prisma.TransactionClient,
+    input: { messageId: string; organizationId: string; moderatorId: string; reportId: string },
+  ): Promise<void> {
+    const message = await tx.message.findUnique({ where: { id: input.messageId }, include: { card: { select: { kind: true } } } });
+    if (!message || message.organizationId !== input.organizationId || !message.conversationId) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    }
+    if (message.card?.kind === 'lesson_report') {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_EDITABLE, 'a lesson report card is deleted from the lesson record', 409);
+    }
+    if (message.deletedForAll) return;
+    await this.writeDeletedForAll(tx, message, input.moderatorId, `removed after report ${input.reportId}`, {
+      moderatedAuthorKind: message.authorType,
+      reportId: input.reportId,
     });
+  }
+
+  private async writeDeletedForAll(
+    tx: Prisma.TransactionClient,
+    message: { id: string; conversationId: string | null },
+    actorId: string,
+    reason: string,
+    after: Record<string, unknown> | undefined,
+  ): Promise<void> {
+    await tx.message.update({
+      where: { id: message.id },
+      data: {
+        deletedAt: new Date(),
+        deletedBy: actorId,
+        deletedForAll: true,
+        redactedReason: reason,
+      },
+    });
+    // PD-36: a deleted message mentions nobody; its open summonses close.
+    await this.mentions?.onDeletedForAll(tx, message.id, new Date());
+    await this.audit.audit(tx, {
+      actorId,
+      action: 'message.delete_for_everyone',
+      entity: 'message',
+      entityId: message.id,
+      reason,
+      after,
+    });
+    await this.outbox.enqueue(tx, CommEvent.MESSAGE_DELETED, {
+      conversationId: message.conversationId!,
+      messageId: message.id,
+      deletedForAll: true,
+    });
+  }
+
+  /**
+   * PD-57 (roadmap §5.5 rule 5): may this actor read this message NOW, by the
+   * rules every read path uses -- the conversation (tenant, staff scope,
+   * membership, activity: `canReadResolved`) and the message
+   * (`visibilityFilter`: internal, pending, rejected, "deleted for me"), and not
+   * deleted for everyone? The message with its attachments when so, null on any
+   * refusal: a report must not tell an unreadable message from a missing one.
+   */
+  async readableNow(messageId: string, actorId: string) {
+    if (!isUuid(messageId)) return null;
+    const loaded = await this.loadForActor(messageId.toLowerCase(), actorId).catch((e: unknown) => {
+      if (e instanceof CommError) return null;
+      throw e;
+    });
+    if (!loaded) return null;
+    const { actor, conv } = loaded;
+    const message = await this.prisma.message.findFirst({
+      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: loaded.message.id, deletedForAll: false }] },
+      include: { attachments: { orderBy: { createdAt: 'asc' } } },
+    });
+    return message ? { actor, conv, message } : null;
   }
 
   /**
@@ -1641,11 +1730,13 @@ export class MessageService {
     });
     if (!attachment?.message?.conversationId || attachment.message.deletedForAll) throw absent();
 
-    const { actor, conv } = await this.loadForActor(attachment.message.id, actorId);
+    const { actor, conv, message } = await this.loadForActor(attachment.message.id, actorId);
     const visible = await this.prisma.message.count({
       where: { ...this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), id: attachment.message.id },
     });
     if (visible === 0) throw absent();
+    // PD-57: the bytes of a message the viewer's block hides are not served to them.
+    if (hideableByBlock(message.type) && (await hasBlocked(this.prisma, actor.actorId, message.authorId))) throw absent();
 
     const objectKey = variant === 't' ? attachment.thumbnailObjectKey : attachment.objectKey;
     // The same namespace rule that decides signing: a key outside its own

@@ -135,7 +135,7 @@ typecheck clean, production build ok · `migtest32` on the target history 25/25 
 - **Push privacy:** migration `20261014160000_chat_push_privacy_templates` (new generic template versions, older ones
   kept) + rollback; worker no longer stores sender / caller names.
 - **RT-039:** local reference storage refused outside `local/test/ci`; media links are proxy-aware
-  (`X-Forwarded-Host` only behind `TRUSTED_PROXY_HOPS`), `MEDIA_PUBLIC_BASE_URL` overrides.
+  (the request's own `Host`; `X-Forwarded-Host` is never read), `MEDIA_PUBLIC_BASE_URL` overrides.
 - Migration order on the target: `…130000` (target) · `120000` (PD-7, applied out of order) · `140000` · `150000` · `160000`.
 
 ## 8. Not integrated, deliberately

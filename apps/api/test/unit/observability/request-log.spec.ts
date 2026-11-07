@@ -385,3 +385,61 @@ describe('5xx and the error tracker', () => {
     await expect(firstValueFrom(interceptor.intercept(ws, { handle: () => of('ok') }))).resolves.toBe('ok');
   });
 });
+
+describe('health probes and the error tracker', () => {
+  it('does NOT report a readiness 503 — that is the probe draining traffic during an outage', () => {
+    const h = harness();
+    for (const path of ['/health/ready', '/health', '/health/live']) {
+      h.run({ originalUrl: path }, (req, res) => {
+        req.route = { path };
+        res.end(503);
+      });
+    }
+    expect(h.captured).toHaveLength(0);
+    // Still logged, at error, exactly as before: the log is the record.
+    expect(h.lines).toHaveLength(3);
+    for (const line of h.lines) {
+      expect(line.level).toBe('error');
+      expect(line.status).toBe(503);
+    }
+  });
+
+  it('a probe answering 503 every 10 seconds for an hour reports nothing', () => {
+    const h = harness();
+    for (let i = 0; i < 360; i++) {
+      h.run({}, (req, res) => {
+        req.route = { path: '/health/ready' };
+        res.end(503);
+      });
+    }
+    expect(h.captured).toHaveLength(0);
+  });
+
+  it('still reports any OTHER 5xx from a health route — a 500 is a bug in the probe itself', () => {
+    const h = harness();
+    h.run({}, (req, res) => {
+      req.route = { path: '/health/ready' };
+      res.end(500);
+    });
+    expect(h.captured).toHaveLength(1);
+    expect(h.captured[0].context?.route).toBe('GET /health/ready');
+  });
+
+  it('still reports a 503 from any route that is not a health probe', () => {
+    const h = harness();
+    for (const path of ['/api/v1/health/ready', '/api/v1/me', '/healthz']) {
+      h.run({}, (req, res) => {
+        req.route = { path };
+        res.end(503);
+      });
+    }
+    expect(h.captured).toHaveLength(3);
+  });
+
+  it('an unmatched request is never treated as a probe, whatever its URL', () => {
+    const h = harness();
+    h.run({ originalUrl: '/health/ready' }, (_req, res) => res.end(503));
+    expect(h.captured).toHaveLength(1);
+    expect(h.captured[0].context?.route).toBe(`GET ${UNMATCHED_ROUTE}`);
+  });
+});

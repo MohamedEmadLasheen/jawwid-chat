@@ -79,6 +79,10 @@ const DEPARTMENT_MANAGER = k(
   'tasks.team',
   'tasks.create',
   'tasks.manage',
+  // PD-57 (roadmap §5.4): the moderation queue is the department managers' and
+  // the super admin's -- the narrowest roles; never a supervisor's or a member's.
+  'moderation.view',
+  'moderation.act',
 );
 
 /**
