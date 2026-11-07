@@ -249,11 +249,21 @@ export class NotificationService {
       return false;
     }
 
+    // What a tap opens: the button of this delivery's own Center entry -- the
+    // recipient's, never anyone else's (a call carries none).
+    const entry =
+      !isCall && n.itemId
+        ? await this.prisma.notificationItem.findFirst({
+            where: { id: n.itemId, recipientId: n.recipientId },
+            select: { action: true },
+          })
+        : null;
     const data = buildPushData({
       eventType: n.eventType,
       notificationId: n.id,
       conversationId: n.conversationId,
       dedupeKey: n.dedupeKey,
+      action: entry?.action,
     });
 
     let anyOk = false;

@@ -12,6 +12,7 @@ import 'app/retry_policy.dart';
 import 'core/crash/crash_reporting.dart';
 import 'core/push/push_registration.dart';
 import 'core/time/time_zone_controller.dart';
+import 'features/notifications/application/push_open_coordinator.dart';
 import 'shared/utils/western_digits.dart';
 
 Future<void> main() async {
@@ -62,6 +63,10 @@ Future<void> main() async {
   // the phone's native code), so there is nothing to register; it is told about new messages
   // over the realtime connection while the tab is open, as the app is while it is in front.
   if (!kIsWeb) startPushRegistration(container);
+
+  // PD-32 amendment: a tap on a push notification opens what it is about -- also the tap
+  // that launched a closed app, held natively until this listens.
+  if (!kIsWeb) startPushOpens(container);
 
   // PD-22. The account's time zone follows the phone (or the zone picked in Settings) for as
   // long as the app runs; started here for the same reasons as push registration.

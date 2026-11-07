@@ -3198,6 +3198,55 @@ has no complaint form" (PD-26 item 7); the Settings > Starred messages row.
 
 **Closed.** 2026-10-26.
 
+**Amendment (owner, 2026-11-03): the parent is told when the administration
+answers.** So parents feel their feedback is acknowledged.
+
+```
+first reply          staff write the FIRST reply to praise, a suggestion or a
+                     complaint -> the parent who filed it gets a push and a
+                     Center entry: "The administration has replied to your
+                     feedback." / «ردّت الإدارة على ملاحظتك.» Changing a reply
+                     already sent tells no one.
+complaint in review  an app complaint moves received -> in_review (taken,
+                     replied to, or followed up) -> "Your complaint has been
+                     received and is being reviewed." / «تم استلام شكواك، ويجري
+                     العمل على مراجعتها.»
+complaint resolved   its PD-26 resolution, with a reply to the parent -> "Your
+                     complaint has been resolved. You can view the administration's
+                     reply." / «تم التعامل مع شكواك، يمكنك الاطلاع على رد الإدارة.»
+                     Without a reply -> "Your complaint has been addressed and
+                     closed." / «تم التعامل مع شكواك وإغلاق الشكوى.»
+who is told          the filing parent only (not the family's other parent, never
+                     the teacher); once per item and kind (dedupe key)
+how                  outbox event family_feedback.notice, written in the same
+                     transaction -> OutboxWorker -> PD-34 pipeline. Category
+                     'conversation' (the parent's own push switch for it applies),
+                     quiet hours kept, the family's language. Generic texts: never
+                     the words, the reply, the teacher or the child. A push that
+                     fails is retried; the reply is never undone.
+opens                Center action open_feedback (feedbackId) -> the app's
+                     /feedback/:id, that one item with its reply. The push
+                     carries the same action (kind + allowlisted ids only), so a
+                     tap on the push opens the same item.
+push on the phone    iOS: alert pushes shown by iOS when closed or in the
+                     background; while open, a banner (chat excepted, which the
+                     app shows itself). Android: data-only FCM, drawn by the app
+                     in every state (chat quiet while open), and only in a build
+                     with the Firebase project's google-services.json. A tap is
+                     held natively until Dart listens, waits for the stored
+                     session, and is dropped if none comes back (never carried
+                     into the next sign-in). Android taps carry an install nonce
+                     (the launcher activity is exported). Permission to notify
+                     is asked when a session starts. Calls are untouched.
+unread dot           per item, per parent account: a reply with no row in
+                     chat.parent_feedback_reply_seen for that account. Cleared by
+                     opening that reply (POST /me/feedback/:id/reply-seen); an
+                     edited reply does not bring it back.
+unchanged            the complaint lifecycle and its resolution rules
+```
+
+Migration `20261107120000_chat_pd032_feedback_reply_notices` (was `20261103120000`, then `20261107100000`; renumbered 2026-11-07).
+
 ---
 
 ### PD-33 · Hand over to backup: a temporary cover with automatic return
