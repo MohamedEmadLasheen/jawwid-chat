@@ -170,7 +170,7 @@ describe('Payments > Transactions', () => {
     serve({ canReconcile: false })
     renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Payments' })).toBeInTheDocument()
-    await waitFor(() => expect(calls('GET', /\/payments\?limit=1$/)).toHaveLength(1))
+    await waitFor(() => expect(calls('GET', /\/instalments\/access$/).length).toBeGreaterThan(0))
     const names = within(tabs()).getAllByRole('button').map((b) => b.textContent)
     expect(names).toEqual(['Receipts', 'Transactions', 'Card attempts', 'Renewal requests', 'Settings'])
     expect(within(tabs()).queryByRole('button', { name: 'Stripe events' })).not.toBeInTheDocument()
@@ -425,7 +425,7 @@ describe('Payments > Stripe events', () => {
   it('is not offered without canReconcile, even by link', async () => {
     serve({ canReconcile: false })
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/payments?tab=events' })
-    await waitFor(() => expect(calls('GET', /\/payments\?limit=1$/)).toHaveLength(1))
+    await waitFor(() => expect(calls('GET', /\/instalments\/access$/).length).toBeGreaterThan(0))
     expect(await screen.findByText('No receipts here.')).toBeInTheDocument()
     expect(within(tabs()).queryByRole('button', { name: 'Stripe events' })).not.toBeInTheDocument()
     expect(within(tabs()).getByRole('button', { name: 'Receipts' })).toHaveAttribute('aria-pressed', 'true')

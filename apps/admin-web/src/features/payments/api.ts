@@ -415,7 +415,6 @@ export const paymentKeys = {
   trial: (trialId: string) => ['pd27-payments', 'trial', trialId] as const,
   transactions: (f: TransactionFilters) => ['pd27-payments', 'transactions', f] as const,
   /** Whether this viewer reconciles (the Stripe events tab): one row of the list. */
-  ledgerAccess: ['pd27-payments', 'ledger-access'] as const,
   transaction: (paymentId: string) => ['pd27-payments', 'transaction', paymentId] as const,
   attempts: (status: AttemptFilter) => ['pd27-payments', 'attempts', status] as const,
   stripeEvents: (f: StripeEventFilters) => ['pd27-payments', 'stripe-events', f] as const,

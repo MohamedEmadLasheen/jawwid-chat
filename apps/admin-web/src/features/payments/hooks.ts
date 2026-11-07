@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { instalmentKeys } from '@/features/instalments/api'
+import { instalmentKeys, instalmentsApi } from '@/features/instalments/api'
 import { profileKeys } from '@/features/profiles/api'
 import {
   paymentKeys,
@@ -92,13 +92,15 @@ export function useTransactions(filters: TransactionFilters, enabled = true) {
 
 /**
  * Whether this viewer reconciles with Stripe (and so has the Stripe events
- * tab): the list's own `canReconcile`, read from a one-row page.
+ * tab): GET /instalments/access's `canVerifyPayments` -- the same canVerify the
+ * server's `canReconcile` answers, from the access query the app already
+ * caches, so the page computes no transaction totals just to draw a tab.
  */
 export function useLedgerAccess() {
   return useQuery({
-    queryKey: paymentKeys.ledgerAccess,
-    queryFn: () => paymentsApi.transactions({}, null, 1),
-    select: (d) => d.canReconcile === true,
+    queryKey: instalmentKeys.access,
+    queryFn: instalmentsApi.access,
+    select: (d) => d.canVerifyPayments === true,
     staleTime: 5 * 60_000,
   })
 }
