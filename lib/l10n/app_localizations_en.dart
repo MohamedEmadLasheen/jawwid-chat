@@ -5559,4 +5559,8 @@ class L10nEn extends L10n {
   @override
   String get signupLegalChanged =>
       'The terms have changed. Please read them and agree again.';
+
+  @override
+  String get legalLoadFailed =>
+      'We couldn\'t load the terms of use. Please try again.';
 }

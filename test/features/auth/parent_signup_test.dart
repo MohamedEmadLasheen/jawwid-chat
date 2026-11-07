@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -345,6 +347,22 @@ void main() {
       expect(ticked(tester, 'code_of_conduct'), isFalse);
     });
 
+    testWidgets('N3: a double tap on Finish while the documents are still loading submits once', (tester) async {
+      final load = Completer<List<LegalDocument>?>();
+      final repo = _RecordingSignup()..pendingLegal = load;
+      await toCodeStep(tester, repo);
+      final finish = find.byKey(const ValueKey('signup-submit'));
+      await tester.ensureVisible(finish);
+      await tester.pumpAndSettle();
+      await tester.tap(finish);
+      await tester.pump();
+      await tester.tap(finish, warnIfMissed: false);
+      await tester.pump();
+      load.complete(null); // 404: nothing to accept
+      await tester.pumpAndSettle();
+      expect(repo.verified, hasLength(1));
+    });
+
     testWidgets('Arabic: right-to-left, Arabic labels, the Arabic URL, locale ar', (tester) async {
       final repo = _RecordingSignup(legal: [terms, conduct]);
       await toCodeStep(tester, repo, locale: const Locale('ar'));
@@ -381,6 +399,9 @@ class _RecordingSignup implements ParentSignupRepository {
   AppError? legalError;
   int legalCalls = 0;
 
+  /// When set, the next `GET /auth/signup/legal` waits for it.
+  Completer<List<LegalDocument>?>? pendingLegal;
+
   final requested = <String>[];
   final verified = <String>[];
   final notices = <int?>[];
@@ -394,6 +415,11 @@ class _RecordingSignup implements ParentSignupRepository {
   @override
   Future<List<LegalDocument>?> signupLegal() async {
     legalCalls++;
+    final pending = pendingLegal;
+    if (pending != null) {
+      pendingLegal = null;
+      return pending.future;
+    }
     final error = legalError;
     if (error != null) throw error;
     return legal;

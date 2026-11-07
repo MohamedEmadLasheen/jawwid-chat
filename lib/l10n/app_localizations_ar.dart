@@ -5646,4 +5646,8 @@ class L10nAr extends L10n {
   @override
   String get signupLegalChanged =>
       'تغيّرت الشروط. يُرجى قراءتها والموافقة عليها من جديد.';
+
+  @override
+  String get legalLoadFailed =>
+      'تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.';
 }

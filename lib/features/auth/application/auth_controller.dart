@@ -62,8 +62,17 @@ class AuthController extends Notifier<AuthState> {
   /// and every 403 `COMM.TERMS_NOT_ACCEPTED`. Bound in [build], like [_termination].
   final LegalWire? _legalWire;
 
-  /// Single-flights the identity refresh a burst of TERMS_NOT_ACCEPTED refusals asks for.
+  /// The identity refresh a TERMS_NOT_ACCEPTED refusal asked for, while it is out.
   Future<void>? _termsCheck;
+
+  /// At most ONE more refresh, queued behind [_termsCheck] by a refusal that arrived while it
+  /// was out: that refusal may be newer than the answer already on its way.
+  Future<void>? _termsQueued;
+
+  /// PD-58: bumped by every [adoptLegal]. A `/me` that was sent before the latest adopted
+  /// block answers about an older moment, so its `legal` is not taken (B1): it can neither
+  /// bring back a gate an acceptance just lifted, nor lift one a newer answer raised.
+  int _legalSeq = 0;
 
   final RedactingLogger _logger;
 
@@ -235,13 +244,16 @@ class AuthController extends Notifier<AuthState> {
   /// refusal, which is a session ending and goes down the one path for that.
   Future<void> refreshIdentity() async {
     if (state is! AuthAuthenticated) return;
+    final seq = _legalSeq;
 
     try {
       final fetched = await _repository.currentUser();
-      // PD-58: an answer without a `legal` block says nothing new about the Terms of Use, so
-      // it never lifts a gate already standing (fail closed). It cannot raise one either.
+      // PD-58: the block now held stands when this answer has none (it says nothing new, so
+      // it never lifts a gate already standing) and when a newer block was adopted while this
+      // request was out (the answer is stale, B1). Fail closed both ways.
       final known = state.user?.legal;
-      final principal = fetched.legal == null && known != null ? fetched.withLegal(known) : fetched;
+      final stale = _legalSeq != seq;
+      final principal = (fetched.legal == null || stale) && known != null ? fetched.withLegal(known) : fetched;
       // A sign-out while this was in flight wins: the answer was about a session now over.
       if (state is! AuthAuthenticated || state.user?.id != principal.id) return;
       state = AuthAuthenticated(principal);
@@ -257,24 +269,37 @@ class AuthController extends Notifier<AuthState> {
 
   /// PD-58: what the server now says this account must accept -- from `GET /me/legal`, the
   /// accept answer, or a token pair. Replaces the principal's block; nothing else changes.
-  /// Ignored when nobody is signed in.
+  /// Ignored when nobody is signed in. An unchanged block (every token refresh carries one)
+  /// leaves the state alone, so nothing that watches the session rebuilds -- but it still
+  /// counts as the newest answer for [refreshIdentity].
   void adoptLegal(LegalStatus legal) {
     final current = state;
     if (current is! AuthAuthenticated) return;
+    _legalSeq++;
+    if (current.principal.legal == legal) return;
     state = AuthAuthenticated(current.principal.withLegal(legal));
   }
 
   /// PD-58: a 403 `COMM.TERMS_NOT_ACCEPTED` from any route. The refusal's own
-  /// `detail.required` puts the gate up at once; then the identity is re-read, which is the
-  /// answer that stands. A burst of refusals asks `/me` once.
+  /// `detail.required` puts the gate up at once (fail closed, even if that refusal is old);
+  /// then the identity is re-read, which is the answer that stands. A refusal arriving while
+  /// a re-read is out queues one more after it -- at most one -- so a fresh `/me` always has
+  /// the last word: a burst asks `/me` at most twice.
   Future<void> onTermsNotAccepted(AppError error) {
     if (state is! AuthAuthenticated) return Future.value();
     final detail = LegalDocument.listFromWire(error.detail?['required']);
     if (detail != null && detail.isNotEmpty) {
       adoptLegal(LegalStatus(state: LegalState.required, required: List.unmodifiable(detail)));
     }
-    return _termsCheck ??= refreshIdentity().whenComplete(() => _termsCheck = null);
+    final inFlight = _termsCheck;
+    if (inFlight == null) return _startTermsCheck();
+    return _termsQueued ??= inFlight.then((_) {
+      _termsQueued = null;
+      return _startTermsCheck();
+    });
   }
+
+  Future<void> _startTermsCheck() => _termsCheck = refreshIdentity().whenComplete(() => _termsCheck = null);
 
   /// `POST /auth/logout` for a session about to be dropped locally. Never throws and never
   /// blocks the sign-out: a session the client can no longer name expires on its own.

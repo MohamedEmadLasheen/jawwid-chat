@@ -9546,6 +9546,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'The terms have changed. Please read them and agree again.'**
   String get signupLegalChanged;
+
+  /// PD-58: Try again on the "temporarily unavailable" notice (GET /me/legal) failed (no network, server error).
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t load the terms of use. Please try again.'**
+  String get legalLoadFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

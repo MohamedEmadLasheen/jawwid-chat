@@ -2143,5 +2143,7 @@
   "signupLegalUnavailable": "إنشاء الحساب غير متاح مؤقتًا. يُرجى المحاولة بعد قليل.",
   "@signupLegalUnavailable": {"description": "PD-58: sign-up when GET /auth/signup/legal fails (503 COMM.LEGAL_NOT_CONFIGURED): nothing is submitted."},
   "signupLegalChanged": "تغيّرت الشروط. يُرجى قراءتها والموافقة عليها من جديد.",
-  "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."}
+  "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."},
+  "legalLoadFailed": "تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.",
+  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."}
 }

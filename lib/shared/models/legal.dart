@@ -52,8 +52,11 @@ class LegalDocument {
     final urlAr = raw['urlAr'];
     final urlEn = raw['urlEn'];
     if (key is! String || key.isEmpty || version is! String || version.isEmpty) return null;
-    if (!_isHttps(urlAr) || !_isHttps(urlEn)) return null;
-    return LegalDocument(documentKey: key, version: version, urlAr: urlAr as String, urlEn: urlEn as String);
+    final ar = _https(urlAr);
+    final en = _https(urlEn);
+    if (ar == null || en == null) return null;
+    // Stored trimmed: what was checked is exactly what is opened.
+    return LegalDocument(documentKey: key, version: version, urlAr: ar, urlEn: en);
   }
 
   /// A list of documents, or null when any one of them cannot be used: the accepted set must
@@ -69,10 +72,12 @@ class LegalDocument {
     return out;
   }
 
-  static bool _isHttps(Object? raw) {
-    if (raw is! String) return false;
-    final uri = Uri.tryParse(raw.trim());
-    return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+  /// The trimmed URL when it is an https one; null otherwise.
+  static String? _https(Object? raw) {
+    if (raw is! String) return null;
+    final trimmed = raw.trim();
+    final uri = Uri.tryParse(trimmed);
+    return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty ? trimmed : null;
   }
 
   @override
@@ -136,6 +141,26 @@ class LegalStatus {
     final required = LegalDocument.listFromWire(requiredRaw);
     if (required == null || required.isEmpty) return unreadable;
     return LegalStatus(state: LegalState.required, required: List.unmodifiable(required));
+  }
+
+  /// Value equality, so an unchanged block (every token refresh carries one) is recognised
+  /// and changes nothing downstream.
+  @override
+  bool operator ==(Object other) =>
+      other is LegalStatus &&
+      other.state == state &&
+      _sameList(other.required, required) &&
+      _sameList(other.unavailable, unavailable);
+
+  @override
+  int get hashCode => Object.hash(state, Object.hashAll(required), Object.hashAll(unavailable));
+
+  static bool _sameList<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   @override

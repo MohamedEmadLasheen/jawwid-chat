@@ -3693,5 +3693,7 @@
   "signupLegalUnavailable": "Creating an account is temporarily unavailable. Please try again in a little while.",
   "@signupLegalUnavailable": {"description": "PD-58: sign-up when GET /auth/signup/legal fails (503 COMM.LEGAL_NOT_CONFIGURED): nothing is submitted."},
   "signupLegalChanged": "The terms have changed. Please read them and agree again.",
-  "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."}
+  "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."},
+  "legalLoadFailed": "We couldn't load the terms of use. Please try again.",
+  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."}
 }

@@ -140,6 +140,38 @@ void main() {
     });
   });
 
+  group('values', () {
+    test('N1: a URL with spaces around it is accepted trimmed, and opened trimmed', () {
+      final doc = LegalDocument.fromWire({...terms, 'urlEn': '  ${terms['urlEn']}  ', 'urlAr': ' ${terms['urlAr']}'})!;
+      expect(doc.urlEn, terms['urlEn']);
+      expect(doc.urlFor('en'), Uri.parse(terms['urlEn']!));
+      expect(doc.urlFor('ar'), Uri.parse(terms['urlAr']!));
+    });
+
+    test('N4: two blocks with the same content are equal; any difference is not', () {
+      LegalStatus read() => LegalStatus.fromWire({
+            'state': 'required',
+            'required': [terms, conduct],
+            'unavailable': [],
+          });
+      expect(read(), read());
+      expect(read().hashCode, read().hashCode);
+      expect(LegalStatus.fromWire({'state': 'accepted', 'required': [], 'unavailable': []}), LegalStatus.acceptedStatus);
+      expect(
+        read(),
+        isNot(LegalStatus.fromWire({
+          'state': 'required',
+          'required': [terms, {...conduct, 'version': '2027-01-15'}],
+          'unavailable': [],
+        })),
+      );
+      expect(
+        LegalStatus.fromWire({'state': 'unavailable', 'required': [], 'unavailable': ['terms_family']}),
+        isNot(LegalStatus.fromWire({'state': 'unavailable', 'required': [], 'unavailable': ['code_of_conduct']})),
+      );
+    });
+  });
+
   group('the identity and the token pair carry it', () {
     Map<String, Object?> actor({Object? legal, bool withLegal = true}) => {
           'actorId': 'contact-1',

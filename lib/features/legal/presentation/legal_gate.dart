@@ -42,54 +42,119 @@ import '../application/legal_client.dart';
 /// server still refuses every gated action (accepting a new call included).
 ///
 /// This is a UX gate. The server enforces the Terms on every content route regardless.
-class LegalGate extends ConsumerWidget {
+///
+/// ## What the covered app cannot reach while it is up
+///
+///  * **System back (S1).** The router's back-button dispatcher would pop the covered route
+///    (and the draft with it), or close the app at its root. This gate is a
+///    [WidgetsBindingObserver] registered when it is first built -- BEFORE the router below it
+///    registers its dispatcher, since a parent's state is created before its child mounts --
+///    so it is asked first: while covered it pops the gate's own navigator (the Delete account
+///    screen) or else does nothing, and always says "handled". A predictive back GESTURE
+///    (Android 14+) is claimed by every route whose gesture detector says yes, not by the
+///    first observer, so while covered the router's routes are given a theme without the
+///    predictive-back transition: they claim nothing, and the gesture ends as an ordinary
+///    back, handled above. The gate's own routes keep it.
+///  * **Snack bars (S2).** The gate has its own [ScaffoldMessenger]: a snack bar raised by a
+///    covered screen shows only on that (covered, untappable) screen, never on the gate.
+class LegalGate extends ConsumerStatefulWidget {
   const LegalGate({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LegalGate> createState() => _LegalGateState();
+}
+
+class _LegalGateState extends ConsumerState<LegalGate> with WidgetsBindingObserver {
+  final _navigator = GlobalKey<NavigatorState>();
+  bool _covered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Future<bool> didPopRoute() async {
+    if (!_covered) return false;
+    // The gate's own screens (Delete account, a dialog) close; the app beneath never moves,
+    // and the app is not closed from under the gate.
+    await _navigator.currentState?.maybePop();
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider.select((state) => state.user));
     final legal = user?.legal;
     final callOnScreen = ref.watch(appLockCallBypassProvider);
     final covered = user != null && legal != null && legal.holdsApp && !callOnScreen;
+    _covered = covered;
 
+    final theme = Theme.of(context);
     // The same tree whether covered or not, so the router below is never remounted.
     return Stack(
       fit: StackFit.expand,
       children: [
-        IgnorePointer(
-          ignoring: covered,
-          child: ExcludeSemantics(
-            excluding: covered,
-            child: ExcludeFocus(excluding: covered, child: child),
+        Theme(
+          data: covered ? theme.copyWith(pageTransitionsTheme: _withoutPredictiveBack(theme.pageTransitionsTheme)) : theme,
+          child: IgnorePointer(
+            ignoring: covered,
+            child: ExcludeSemantics(
+              excluding: covered,
+              child: ExcludeFocus(excluding: covered, child: widget.child),
+            ),
           ),
         ),
         if (covered)
-          // Its own navigator: the gate sits above the router's, and its sign-out
-          // confirmation and the Delete account screen need somewhere to open.
-          HeroControllerScope.none(
-            child: Navigator(
-              pages: [
-                MaterialPage<void>(
-                  key: const ValueKey('legal-gate-page'),
-                  child: LegalGateScreen(user: user, legal: legal),
-                ),
-              ],
-              onDidRemovePage: (_) {},
+          // Its own messenger and navigator: the gate sits above the router's. Its sign-out
+          // confirmation and the Delete account screen open here, and snack bars from beneath
+          // never land on it.
+          ScaffoldMessenger(
+            child: HeroControllerScope.none(
+              child: Navigator(
+                key: _navigator,
+                pages: [
+                  MaterialPage<void>(
+                    key: const ValueKey('legal-gate-page'),
+                    child: LegalGateScreen(user: user, legal: legal, appMessenger: ScaffoldMessenger.maybeOf(context)),
+                  ),
+                ],
+                onDidRemovePage: (_) {},
+              ),
             ),
           ),
       ],
     );
   }
+
+  /// The same transitions, with Android's predictive-back one (whose routes claim the system
+  /// back gesture) replaced by the plain zoom transition.
+  static PageTransitionsTheme _withoutPredictiveBack(PageTransitionsTheme base) => PageTransitionsTheme(
+        builders: {
+          ...base.builders,
+          TargetPlatform.android: const ZoomPageTransitionsBuilder(),
+        },
+      );
 }
 
 /// The gate's screen: the documents to accept, or the "temporarily unavailable" notice.
 class LegalGateScreen extends ConsumerStatefulWidget {
-  const LegalGateScreen({super.key, required this.user, required this.legal});
+  const LegalGateScreen({super.key, required this.user, required this.legal, this.appMessenger});
 
   final AuthUser user;
   final LegalStatus legal;
+
+  /// The app's messenger (outside the gate's own), for what must outlive the gate.
+  final ScaffoldMessengerState? appMessenger;
 
   @override
   ConsumerState<LegalGateScreen> createState() => _LegalGateScreenState();
@@ -181,7 +246,8 @@ class _LegalGateScreenState extends ConsumerState<LegalGateScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _message = changed ? l10n.legalGateChanged : l10n.legalGateFailed;
+        // N2: a failed reload is a failure to LOAD, not to save an agreement.
+        _message = changed ? l10n.legalGateChanged : l10n.legalLoadFailed;
       });
     }
   }
@@ -209,7 +275,10 @@ class _LegalGateScreenState extends ConsumerState<LegalGateScreen> {
   }
 
   void _deleteAccount() {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DeleteAccountScreen()));
+    // "Account deleted" goes to the app's messenger, not the gate's own: the gate (and its
+    // messenger) are gone once the account is, and the sign-in screen is where it is read.
+    final appMessenger = widget.appMessenger;
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => DeleteAccountScreen(doneMessenger: appMessenger)));
   }
 
   @override
@@ -326,6 +395,9 @@ class _LegalGateScreenState extends ConsumerState<LegalGateScreen> {
                         ),
                     ],
                   ),
+                  // LD-11 (lead decision S3): the academy stays reachable from the gate -- a
+                  // child-safety concern above all. The P-5 rows hide themselves when unset.
+                  const SupportLinksTiles(),
                 ],
               ),
             ),

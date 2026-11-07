@@ -145,33 +145,43 @@ class _ParentSignupScreenState extends ConsumerState<ParentSignupScreen> {
       return;
     }
     if (kLessonAudioNoticeLive && !_noticeTicked) return;
+    // N3: busy BEFORE the first await, so a second tap cannot start a second submission.
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     // PD-58: the documents must be known before anything is sent. Not yet answered: wait for
     // it. Failed: ask once more, then fail closed -- nothing is submitted.
     await _legalLoad;
     if (!mounted) return;
     if (_legalFailed) {
-      setState(() => _busy = true);
       _legalLoad = _loadLegal();
       await _legalLoad;
       if (!mounted) return;
-      setState(() => _busy = false);
       if (_legalFailed) {
-        setState(() => _error = l10n.signupLegalUnavailable);
+        setState(() {
+          _busy = false;
+          _error = l10n.signupLegalUnavailable;
+        });
         return;
       }
     }
-    if (!_legalAllTicked) return;
     final legal = _legal;
     final client = ref.read(legalClientProvider);
+    if (!_legalAllTicked) {
+      // The unticked boxes say so themselves.
+      setState(() => _busy = false);
+      return;
+    }
     if (legal != null && client == null) {
-      setState(() => _error = l10n.signupFailed);
+      setState(() {
+        _busy = false;
+        _error = l10n.signupFailed;
+      });
       return;
     }
     final locale = Localizations.localeOf(context).toLanguageTag();
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
     try {
       await ref.read(parentSignupRepositoryProvider).verify(
             email: _email.text.trim(),

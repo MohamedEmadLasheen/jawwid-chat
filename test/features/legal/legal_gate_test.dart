@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
@@ -91,6 +93,8 @@ void main() {
     bool passwordSignIn = false,
     ParentNoticeRepository? notices,
     bool lessonAudioGate = false,
+    GoRouter? router,
+    SupportContact? support,
   }) async {
     homeTaps = 0;
     opened = [];
@@ -124,6 +128,7 @@ void main() {
       appLockStoreProvider.overrideWithValue(InMemoryAppLockStore(lockPrefs)),
       appLockClockProvider.overrideWithValue(TestClock().call),
       if (notices != null) parentNoticeRepositoryProvider.overrideWithValue(notices),
+      if (support != null) supportContactProvider.overrideWithValue(support),
     ]);
     addTearDown(container.dispose);
     if (passwordSignIn) {
@@ -132,6 +137,29 @@ void main() {
       await container.read(authControllerProvider.notifier).signIn(username: 'u', password: 'p');
     } else {
       await container.read(authControllerProvider.notifier).restore();
+    }
+    const delegates = [
+      L10n.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ];
+    if (router != null) {
+      // As the app runs: a router, so the system back goes through the back-button
+      // dispatcher rather than WidgetsApp's own navigator.
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          locale: locale,
+          theme: JawwidTheme.light(isArabic: locale.languageCode == 'ar'),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: delegates,
+          routerConfig: router,
+          builder: (context, child) => JawwidApp.sessionGates(child!),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return;
     }
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -386,7 +414,9 @@ void main() {
       wire.refused(refusal);
       await tester.pumpAndSettle();
 
-      expect(auth.meCalls, before + 1);
+      // One /me in flight and at most ONE queued behind it (B1): a refusal that lands while
+      // a /me is out may be newer than that /me's answer, so one more is asked -- never more.
+      expect(auth.meCalls, before + 2);
       expect(gate(), findsOneWidget);
       expect(homeReachable(), isFalse);
     });
@@ -458,6 +488,303 @@ void main() {
       await tap(tester, agree());
       expect(gate(), findsNothing);
       expect(find.byKey(const ValueKey('app-lock-offer')), findsOneWidget);
+    });
+  });
+
+  group('B1: a stale answer never moves the gate', () {
+    const staleRefusal = AppError(AppErrorKind.forbidden, code: WireErrors.termsNotAccepted);
+
+    testWidgets('(a) a /me started before Agree, answering "required" after it, does not bring the gate back',
+        (tester) async {
+      await pump(tester, legal: requiredBoth);
+      final early = Completer<AuthUser>();
+      auth.pending = early;
+      wire.refused(staleRefusal); // asks /me; the answer is held
+      await tester.pumpAndSettle();
+
+      legalRepo.acceptAnswer = LegalStatus.acceptedStatus;
+      await tickAll(tester);
+      await tap(tester, agree());
+      expect(gate(), findsNothing);
+
+      early.complete(auth.user); // still `required`: computed before the acceptance
+      await tester.pumpAndSettle();
+      expect(gate(), findsNothing);
+      expect(container.read(authControllerProvider).user?.legal?.state, LegalState.accepted);
+    });
+
+    testWidgets('(b) a 403 sent before Agree, answered after it, is settled by a fresh /me', (tester) async {
+      await pump(tester, legal: requiredBoth);
+      final early = Completer<AuthUser>();
+      auth.pending = early;
+      wire.refused(staleRefusal); // /me #1, held
+      await tester.pumpAndSettle();
+
+      legalRepo.acceptAnswer = LegalStatus.acceptedStatus;
+      await tickAll(tester);
+      await tap(tester, agree());
+      expect(gate(), findsNothing);
+      final before = auth.meCalls;
+
+      // The refusal of a request sent before Agree arrives now, with its (old) detail.
+      wire.refused(const AppError(AppErrorKind.forbidden, code: WireErrors.termsNotAccepted, detail: {
+        'required': [
+          {
+            'documentKey': 'terms_family',
+            'version': '2026-12-01',
+            'urlAr': 'https://legal.example.test/ar/terms',
+            'urlEn': 'https://legal.example.test/en/terms',
+          },
+        ],
+      }));
+      await tester.pumpAndSettle();
+
+      auth.user = auth.user.withLegal(LegalStatus.acceptedStatus); // what the server now says
+      early.complete(auth.user.withLegal(requiredBoth)); // /me #1: stale
+      await tester.pumpAndSettle();
+
+      expect(auth.meCalls, before + 1, reason: 'one fresh /me after the one in flight');
+      expect(gate(), findsNothing);
+    });
+
+    testWidgets('a stale /me never LIFTS a gate a newer answer raised', (tester) async {
+      await pump(tester, legal: LegalStatus.acceptedStatus);
+      final early = Completer<AuthUser>();
+      auth.pending = early;
+      final refresh = container.read(authControllerProvider.notifier).refreshIdentity();
+      wire.report(requiredBoth); // a token refresh, newer than that /me
+      await tester.pumpAndSettle();
+      expect(gate(), findsOneWidget);
+
+      early.complete(auth.user.withLegal(LegalStatus.acceptedStatus));
+      await refresh;
+      await tester.pumpAndSettle();
+      expect(gate(), findsOneWidget);
+    });
+  });
+
+  group('S4: the identity refresh never outlives its session', () {
+    testWidgets('signed out while /me is out: stays signed out', (tester) async {
+      await pump(tester, legal: requiredBoth);
+      final early = Completer<AuthUser>();
+      auth.pending = early;
+      final refresh = container.read(authControllerProvider.notifier).refreshIdentity();
+      await container.read(authControllerProvider.notifier).signOut();
+      early.complete(auth.user);
+      await refresh;
+      await tester.pumpAndSettle();
+      expect(container.read(authControllerProvider), isA<AuthSignedOut>());
+      expect(gate(), findsNothing);
+    });
+
+    testWidgets('another account signed in while /me is out: the answer about the first is dropped',
+        (tester) async {
+      await pump(tester, legal: requiredBoth);
+      final early = Completer<AuthUser>();
+      auth.pending = early;
+      final first = auth.user;
+      final refresh = container.read(authControllerProvider.notifier).refreshIdentity();
+      await container.read(authControllerProvider.notifier).signOut();
+      auth.user = const AuthUser(id: 'u2', displayName: 'Abu Omar', role: UserRole.parent, legal: LegalStatus.acceptedStatus);
+      await container.read(authControllerProvider.notifier).signIn(username: 'u2', password: 'p');
+      early.complete(first);
+      await refresh;
+      await tester.pumpAndSettle();
+      expect(container.read(authControllerProvider).user?.id, 'u2');
+      expect(gate(), findsNothing);
+    });
+  });
+
+  group('N4: an unchanged block changes nothing', () {
+    testWidgets('a token refresh with the same block does not rebuild the auth state', (tester) async {
+      await pump(tester, legal: requiredBoth);
+      var notified = 0;
+      container.listen(authControllerProvider, (_, _) => notified++);
+      wire.report(const LegalStatus(state: LegalState.required, required: [termsDoc, conductDoc]));
+      wire.report(requiredBoth);
+      expect(notified, 0);
+      wire.report(LegalStatus.acceptedStatus);
+      expect(notified, 1);
+    });
+  });
+
+  group('S1: system back while the gate is up', () {
+    late List<MethodCall> exits;
+
+    GoRouter twoRoutes() => GoRouter(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              // MaterialPage, as the app's router builds them (`_page` in router.dart): the
+              // pages carry the predictive-back gesture detector.
+              pageBuilder: (_, state) => MaterialPage<void>(
+                key: state.pageKey,
+                child: Scaffold(body: Center(child: TextButton(onPressed: () => homeTaps++, child: const Text(home)))),
+              ),
+              routes: [
+                GoRoute(
+                  path: 'chat',
+                  pageBuilder: (_, state) => MaterialPage<void>(
+                    key: state.pageKey,
+                    child: const Scaffold(body: Center(child: TextField(key: ValueKey('draft')))),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+
+    void watchExits(WidgetTester tester) {
+      exits = [];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'SystemNavigator.pop') exits.add(call);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    }
+
+    Future<GoRouter> atChat(WidgetTester tester, LegalStatus legal) async {
+      final router = twoRoutes();
+      addTearDown(router.dispose);
+      await pump(tester, legal: legal, router: router);
+      unawaited(router.push('/chat'));
+      await tester.pumpAndSettle();
+      return router;
+    }
+
+    // The top match: after a push, `uri` still names the page beneath.
+    String where(GoRouter router) => router.routerDelegate.currentConfiguration.last.matchedLocation;
+
+    testWidgets('without a gate, Back still leaves the chat (no change)', (tester) async {
+      watchExits(tester);
+      final router = await atChat(tester, LegalStatus.acceptedStatus);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(where(router), '/');
+    });
+
+    testWidgets('Back does not pop the covered chat route: the draft survives', (tester) async {
+      watchExits(tester);
+      final router = await atChat(tester, LegalStatus.acceptedStatus);
+      await tester.enterText(find.byKey(const ValueKey('draft')), 'half a message');
+      wire.report(requiredBoth);
+      await tester.pumpAndSettle();
+      expect(gate(), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(where(router), '/chat');
+      expect(exits, isEmpty);
+      expect(gate(), findsOneWidget);
+
+      legalRepo.acceptAnswer = LegalStatus.acceptedStatus;
+      await tickAll(tester);
+      await tap(tester, agree());
+      expect(find.text('half a message'), findsOneWidget);
+    });
+
+    testWidgets("Back closes the gate's own Delete account screen, nothing beneath", (tester) async {
+      watchExits(tester);
+      final router = await atChat(tester, requiredBoth);
+      await tap(tester, find.byKey(const ValueKey('legal-delete-account')));
+      expect(find.byType(DeleteAccountScreen), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(DeleteAccountScreen), findsNothing);
+      expect(gate(), findsOneWidget);
+      expect(where(router), '/chat');
+    });
+
+    testWidgets('Back at the root under the gate does not close the app', (tester) async {
+      watchExits(tester);
+      final router = twoRoutes();
+      addTearDown(router.dispose);
+      await pump(tester, legal: requiredBoth, router: router);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(exits, isEmpty);
+      expect(gate(), findsOneWidget);
+    });
+
+    testWidgets('a predictive back gesture (Android 14+) does not pop the covered route', (tester) async {
+      watchExits(tester);
+      final router = await atChat(tester, requiredBoth);
+      Future<void> send(MethodCall call) async {
+        await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+          'flutter/backgesture',
+          const StandardMethodCodec().encodeMethodCall(call),
+          (_) {},
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      await send(const MethodCall('startBackGesture', {
+        'touchOffset': [5.0, 300.0],
+        'progress': 0.0,
+        'swipeEdge': 0,
+      }));
+      await send(const MethodCall('updateBackGestureProgress', {
+        'x': 200.0,
+        'y': 300.0,
+        'progress': 0.5,
+        'swipeEdge': 0,
+      }));
+      await send(const MethodCall('commitBackGesture'));
+      await tester.pumpAndSettle();
+      expect(where(router), '/chat');
+      expect(exits, isEmpty);
+      expect(gate(), findsOneWidget);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+  });
+
+  group('S2: snack bars from beneath', () {
+    testWidgets('a snack bar raised by the covered app is not reachable on the gate', (tester) async {
+      await pump(tester, legal: requiredBoth);
+      var undone = 0;
+      ScaffoldMessenger.of(tester.element(find.text(home))).showSnackBar(
+        SnackBar(content: const Text('from beneath'), action: SnackBarAction(label: 'UNDO', onPressed: () => undone++)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('UNDO').hitTestable(), findsNothing);
+      expect(find.text('from beneath').hitTestable(), findsNothing);
+      expect(undone, 0);
+    });
+  });
+
+  group('S3: the academy stays reachable (LD-11)', () {
+    const support = SupportContact(url: 'https://site.example.test/{lang}/help', email: 'help@example.test');
+
+    testWidgets('the support rows are on the gate when configured', (tester) async {
+      await pump(tester, legal: requiredBoth, support: support);
+      final help = find.byKey(const ValueKey('settings-support-help'));
+      expect(help, findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-support-email')), findsOneWidget);
+      await tap(tester, help);
+      expect(opened, [Uri.parse('https://site.example.test/en/help')]);
+    });
+
+    testWidgets('and on the "temporarily unavailable" notice', (tester) async {
+      await pump(tester, legal: unavailable, support: support);
+      expect(find.byKey(const ValueKey('settings-support-help')), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-support-email')), findsOneWidget);
+    });
+
+    testWidgets('unset: no rows (they hide themselves)', (tester) async {
+      await pump(tester, legal: requiredBoth, support: const SupportContact(url: '', email: ''));
+      expect(find.byKey(const ValueKey('settings-support-help')), findsNothing);
+      expect(find.byKey(const ValueKey('settings-support-email')), findsNothing);
+    });
+  });
+
+  group('N2: a failed reload says so', () {
+    testWidgets("Try again on the unavailable notice that fails: couldn't load, not couldn't save", (tester) async {
+      await pump(tester, legal: unavailable);
+      legalRepo.currentError = const AppError(AppErrorKind.network);
+      await tap(tester, find.byKey(const ValueKey('legal-unavailable-retry')));
+      expect(find.text(en.legalLoadFailed), findsOneWidget);
+      expect(find.text(en.legalGateFailed), findsNothing);
     });
   });
 
@@ -558,6 +885,7 @@ typedef _Acceptance = ({List<LegalDocument> documents, String client, String loc
 
 class _FakeLegal implements LegalRepository {
   LegalStatus reload = LegalStatus.acceptedStatus;
+  AppError? currentError;
   int currentCalls = 0;
   LegalStatus acceptAnswer = LegalStatus.acceptedStatus;
   AppError? acceptError;
@@ -566,6 +894,8 @@ class _FakeLegal implements LegalRepository {
   @override
   Future<LegalStatus> current() async {
     currentCalls++;
+    final error = currentError;
+    if (error != null) throw error;
     return reload;
   }
 
