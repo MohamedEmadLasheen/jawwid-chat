@@ -1,5 +1,6 @@
 import { formatMajor } from './money';
 import type { BankAccount } from './billing.service';
+import { cardFailureText } from './card-failure';
 
 /**
  * PD-27: the payment link's page -- plain server-rendered HTML, no script.
@@ -39,6 +40,8 @@ export interface PayPageModel {
   /** The state Stripe sent the parent back with. */
   checkout: 'success' | 'cancelled' | null;
   error: string | null;
+  /** PD-27 completion: the latest card attempt's Stripe decline code, when it failed. */
+  cardFailure?: string | null;
 }
 
 const T = {
@@ -138,6 +141,7 @@ export function renderPayPage(m: PayPageModel, lang: PayLang, ctx: { token: stri
   else if (m.status === 'not_found') notice = note('muted', t.statusNotFound);
   else if (confirming) notice = note('info', t.confirming);
   else if (m.checkout === 'cancelled') notice = note('muted', t.cancelledCheckout);
+  if (m.status === 'open' && !confirming && m.cardFailure) notice += note('warn', e(cardFailureText(m.cardFailure, lang)));
   if (m.error) notice += note('warn', e(m.error));
 
   const payable = m.status === 'open' && !confirming;

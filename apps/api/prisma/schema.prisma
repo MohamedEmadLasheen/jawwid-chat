@@ -2604,6 +2604,13 @@ model Payment {
   voidedAt                DateTime? @map("voided_at") @db.Timestamptz
   voidedBy                String?   @map("voided_by") @db.Uuid
   voidReason              String?   @map("void_reason")
+  /// 20261107120000: a card payment's Stripe references and payment method, set at insert, never changed.
+  stripeCustomerId        String?   @map("stripe_customer_id")
+  stripeChargeId          String?   @unique @map("stripe_charge_id")
+  paymentMethodType       String?   @map("payment_method_type")
+  cardBrand               String?   @map("card_brand")
+  cardLast4               String?   @map("card_last4")
+  cardWallet              String?   @map("card_wallet")
 
   @@map("payment")
   @@schema("chat")
@@ -2678,6 +2685,12 @@ model PaymentCheckout {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
   expiresAt       DateTime @map("expires_at") @db.Timestamptz
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  /// 20261107120000: what Stripe used, and declined attempts (Stripe's code only).
+  stripeCustomerId      String?   @map("stripe_customer_id")
+  stripePaymentIntentId String?   @map("stripe_payment_intent_id")
+  failureCount          Int       @default(0) @map("failure_count")
+  failureCode           String?   @map("failure_code")
+  lastFailedAt          DateTime? @map("last_failed_at") @db.Timestamptz
 
   @@map("payment_checkout")
   @@schema("chat")
@@ -2690,8 +2703,26 @@ model StripeEvent {
   livemode   Boolean
   receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz
   outcome    String
+  /// 20261107120000: the academy (when Chat knows it), the object and payment intent the event was about, Stripe's time.
+  organizationId  String?   @map("organization_id") @db.Uuid
+  objectId        String?   @map("object_id")
+  paymentIntentId String?   @map("payment_intent_id")
+  stripeCreatedAt DateTime? @map("stripe_created_at") @db.Timestamptz
 
   @@map("stripe_event")
+  @@schema("chat")
+}
+
+/// PD-27 (20261107120000): the Stripe Customer Chat created for a family, per mode. Never changed or deleted.
+model StripeCustomer {
+  familyId         String   @map("family_id") @db.Uuid
+  livemode         Boolean
+  organizationId   String   @map("organization_id") @db.Uuid
+  stripeCustomerId String   @unique @map("stripe_customer_id")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([familyId, livemode])
+  @@map("stripe_customer")
   @@schema("chat")
 }
 

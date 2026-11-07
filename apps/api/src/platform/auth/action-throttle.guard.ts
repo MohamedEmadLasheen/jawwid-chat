@@ -68,6 +68,8 @@ export const ActionScope = {
   REWARD_GIVE: 'reward_give_actor',
   /** PD-45 PR-4: a parent's own location (PUT /me/location, POST /me/location/later). */
   LOCATION_WRITE: 'location_write_actor',
+  /** PD-27: a parent opening Stripe Checkout (POST /me/billing/checkout); each one is a Stripe API call. */
+  CHECKOUT_START: 'checkout_start_actor',
 } as const;
 
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];

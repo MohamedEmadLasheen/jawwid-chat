@@ -235,9 +235,8 @@ interface BankAccount {      // every field optional except accountName
 | `POST /stripe/webhook` | Stripe only: `Stripe-Signature` over the raw body, `STRIPE_WEBHOOK_SECRET`. 400 unverified; 200 for every verified event (handled or ignored); 503 without the secret. |
 
 Stripe Dashboard → Developers → Webhooks → endpoint `https://<api>/api/v1/stripe/webhook`,
-events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-`checkout.session.async_payment_failed`, `checkout.session.expired`, `refund.created`,
-`refund.updated`.
+events: see `pd027-stripe-lifecycle.md` §5.2 (since 2026-11-07: the checkout events, `payment_intent.succeeded`,
+`payment_intent.payment_failed`, `refund.created`, `refund.updated`, `charge.refunded`).
 
 ## Environment
 
