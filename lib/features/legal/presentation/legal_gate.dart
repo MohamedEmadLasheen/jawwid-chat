@@ -57,6 +57,14 @@ import '../application/legal_client.dart';
 ///    back, handled above. The gate's own routes keep it.
 ///  * **Snack bars (S2).** The gate has its own [ScaffoldMessenger]: a snack bar raised by a
 ///    covered screen shows only on that (covered, untappable) screen, never on the gate.
+///  * **Who handles Back, as told to the platform (R1).** With predictive back on (Android
+///    14+), `WidgetsApp` forwards each [NavigationNotification] to
+///    `SystemNavigator.setFrameworkHandlesBack`; "false" hands Back to the system, which then
+///    backgrounds the app without asking the framework. The gate's own navigator (whose root
+///    page cannot pop) would say false, and the router's say would be stale once the gate
+///    lifts. So the gate's notifications are swallowed; while covered the gate tells the
+///    platform "the framework handles Back" (it handles every back, above); and when it lifts
+///    it re-sends the router's own last answer.
 class LegalGate extends ConsumerStatefulWidget {
   const LegalGate({super.key, required this.child});
 
@@ -69,6 +77,27 @@ class LegalGate extends ConsumerStatefulWidget {
 class _LegalGateState extends ConsumerState<LegalGate> with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
   bool _covered = false;
+
+  /// The router's last [NavigationNotification.canHandlePop], kept while the gate holds
+  /// the platform's answer, and re-sent when it lifts. Unknown means true: if nothing can
+  /// pop, the framework's back still ends in `SystemNavigator.pop()`.
+  bool? _routerCanHandlePop;
+
+  /// While covered the router's notifications stop here (the gate's answer stands); otherwise
+  /// they go on to `WidgetsApp` untouched.
+  bool _onRouterNavigation(NavigationNotification notification) {
+    _routerCanHandlePop = notification.canHandlePop;
+    return _covered;
+  }
+
+  /// Tells the platform who handles Back, through `WidgetsApp` (which waits for the app to
+  /// be ready). After the frame: a notification must not be dispatched during a build.
+  void _reportBackHandling() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      NavigationNotification(canHandlePop: _covered || (_routerCanHandlePop ?? true)).dispatch(context);
+    }, debugLabel: 'LegalGate.reportBackHandling');
+  }
 
   @override
   void initState() {
@@ -97,20 +126,26 @@ class _LegalGateState extends ConsumerState<LegalGate> with WidgetsBindingObserv
     final legal = user?.legal;
     final callOnScreen = ref.watch(appLockCallBypassProvider);
     final covered = user != null && legal != null && legal.holdsApp && !callOnScreen;
-    _covered = covered;
+    if (covered != _covered) {
+      _covered = covered;
+      _reportBackHandling();
+    }
 
     final theme = Theme.of(context);
     // The same tree whether covered or not, so the router below is never remounted.
     return Stack(
       fit: StackFit.expand,
       children: [
-        Theme(
-          data: covered ? theme.copyWith(pageTransitionsTheme: _withoutPredictiveBack(theme.pageTransitionsTheme)) : theme,
-          child: IgnorePointer(
-            ignoring: covered,
-            child: ExcludeSemantics(
-              excluding: covered,
-              child: ExcludeFocus(excluding: covered, child: widget.child),
+        NotificationListener<NavigationNotification>(
+          onNotification: _onRouterNavigation,
+          child: Theme(
+            data: covered ? theme.copyWith(pageTransitionsTheme: _withoutPredictiveBack(theme.pageTransitionsTheme)) : theme,
+            child: IgnorePointer(
+              ignoring: covered,
+              child: ExcludeSemantics(
+                excluding: covered,
+                child: ExcludeFocus(excluding: covered, child: widget.child),
+              ),
             ),
           ),
         ),
@@ -120,15 +155,19 @@ class _LegalGateState extends ConsumerState<LegalGate> with WidgetsBindingObserv
           // never land on it.
           ScaffoldMessenger(
             child: HeroControllerScope.none(
-              child: Navigator(
-                key: _navigator,
-                pages: [
-                  MaterialPage<void>(
-                    key: const ValueKey('legal-gate-page'),
-                    child: LegalGateScreen(user: user, legal: legal, appMessenger: ScaffoldMessenger.maybeOf(context)),
-                  ),
-                ],
-                onDidRemovePage: (_) {},
+              // R1: the gate's navigator never speaks for the app to the platform.
+              child: NotificationListener<NavigationNotification>(
+                onNotification: (_) => true,
+                child: Navigator(
+                  key: _navigator,
+                  pages: [
+                    MaterialPage<void>(
+                      key: const ValueKey('legal-gate-page'),
+                      child: LegalGateScreen(user: user, legal: legal, appMessenger: ScaffoldMessenger.maybeOf(context)),
+                    ),
+                  ],
+                  onDidRemovePage: (_) {},
+                ),
               ),
             ),
           ),

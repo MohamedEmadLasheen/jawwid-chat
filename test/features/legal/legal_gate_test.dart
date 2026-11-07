@@ -595,6 +595,29 @@ void main() {
     });
   });
 
+  group('B1 nit: a re-read that fails oddly still settles', () {
+    testWidgets('a /me failing with a non-AppError still runs the queued re-read, and the queue clears',
+        (tester) async {
+      await pump(tester, legal: LegalStatus.acceptedStatus);
+      const refusal = AppError(AppErrorKind.forbidden, code: WireErrors.termsNotAccepted);
+      final early = Completer<AuthUser>();
+      auth.pending = early;
+      final before = auth.meCalls;
+      wire.refused(refusal); // /me #1, held
+      wire.refused(refusal); // queued behind it
+      auth.user = auth.user.withLegal(requiredBoth);
+      early.completeError(StateError('an answer this build could not decode'));
+      await tester.pumpAndSettle();
+
+      expect(auth.meCalls, before + 2, reason: 'the queued re-read ran');
+      expect(gate(), findsOneWidget);
+
+      wire.refused(refusal); // nothing stuck: a new refusal asks again
+      await tester.pumpAndSettle();
+      expect(auth.meCalls, before + 3);
+    });
+  });
+
   group('N4: an unchanged block changes nothing', () {
     testWidgets('a token refresh with the same block does not rebuild the auth state', (tester) async {
       await pump(tester, legal: requiredBoth);
@@ -610,6 +633,10 @@ void main() {
 
   group('S1: system back while the gate is up', () {
     late List<MethodCall> exits;
+
+    /// Every `SystemNavigator.setFrameworkHandlesBack` value sent, in order (Android 14+
+    /// predictive back: false hands Back to the system, which backgrounds the app).
+    late List<bool> handlesBack;
 
     GoRouter twoRoutes() => GoRouter(
           initialLocation: '/',
@@ -637,8 +664,10 @@ void main() {
 
     void watchExits(WidgetTester tester) {
       exits = [];
+      handlesBack = [];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'SystemNavigator.pop') exits.add(call);
+        if (call.method == 'SystemNavigator.setFrameworkHandlesBack') handlesBack.add(call.arguments as bool);
         return null;
       });
       addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
@@ -736,6 +765,42 @@ void main() {
       expect(where(router), '/chat');
       expect(exits, isEmpty);
       expect(gate(), findsOneWidget);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    // R1: the framework must keep Back while the gate is up (it handles every back), and get
+    // the ROUTER's answer back once the gate lifts -- not the gate's own navigator's.
+    testWidgets('R1: the framework keeps Back while gated, and the router decides again after Agree',
+        (tester) async {
+      watchExits(tester);
+      // WidgetsApp tells the engine nothing until the app has a lifecycle state.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await atChat(tester, LegalStatus.acceptedStatus);
+      expect(handlesBack.last, isTrue, reason: 'no gate, at /chat: the router can pop');
+
+      wire.report(requiredBoth);
+      await tester.pumpAndSettle();
+      expect(gate(), findsOneWidget);
+      expect(handlesBack.last, isTrue, reason: 'gated: the gate handles every back');
+
+      legalRepo.acceptAnswer = LegalStatus.acceptedStatus;
+      await tickAll(tester);
+      await tap(tester, agree());
+      expect(gate(), findsNothing);
+      expect(handlesBack.last, isTrue, reason: 'lifted, at /chat: the router can pop again');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    testWidgets('R1: lifted at the root, Back goes back to the system (the router cannot pop)', (tester) async {
+      watchExits(tester);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final router = twoRoutes();
+      addTearDown(router.dispose);
+      await pump(tester, legal: requiredBoth, router: router);
+      expect(handlesBack.last, isTrue, reason: 'gated');
+
+      legalRepo.acceptAnswer = LegalStatus.acceptedStatus;
+      await tickAll(tester);
+      await tap(tester, agree());
+      expect(handlesBack.last, isFalse, reason: "the router's own answer at its root");
     }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 

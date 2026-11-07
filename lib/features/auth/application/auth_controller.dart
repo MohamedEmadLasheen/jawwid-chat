@@ -293,13 +293,22 @@ class AuthController extends Notifier<AuthState> {
     }
     final inFlight = _termsCheck;
     if (inFlight == null) return _startTermsCheck();
-    return _termsQueued ??= inFlight.then((_) {
-      _termsQueued = null;
-      return _startTermsCheck();
-    });
+    // Runs however the re-read ended -- an error included -- so the queue always clears.
+    return _termsQueued ??= inFlight.catchError((Object _) {}).whenComplete(() => _termsQueued = null).then((_) => _startTermsCheck());
   }
 
-  Future<void> _startTermsCheck() => _termsCheck = refreshIdentity().whenComplete(() => _termsCheck = null);
+  /// One re-read for the Terms of Use. It never fails to its caller: the refusal was the
+  /// transport's (`LegalWire.refused` does not await it), so an error here -- even one that
+  /// is not an [AppError], which [refreshIdentity] lets through -- would be uncaught.
+  Future<void> _startTermsCheck() => _termsCheck = _termsReread().whenComplete(() => _termsCheck = null);
+
+  Future<void> _termsReread() async {
+    try {
+      await refreshIdentity();
+    } catch (error) {
+      _logger.warn('terms re-read failed', data: {'type': error.runtimeType.toString()});
+    }
+  }
 
   /// `POST /auth/logout` for a session about to be dropped locally. Never throws and never
   /// blocks the sign-out: a session the client can no longer name expires on its own.
