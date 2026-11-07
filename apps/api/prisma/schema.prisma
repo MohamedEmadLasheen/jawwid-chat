@@ -2455,7 +2455,7 @@ model ParentFeedback {
 }
 
 /// PD-32 amendment: the parent accounts that have opened the administration's
-/// reply to a feedback item (the app's unread dot). 20261107100000 owns the DDL.
+/// reply to a feedback item (the app's unread dot). 20261107120000 owns the DDL.
 model ParentFeedbackReplySeen {
   feedbackId String   @map("feedback_id") @db.Uuid
   contactId  String   @map("contact_id") @db.Uuid
@@ -3085,6 +3085,61 @@ model LessonChangeUnannounced {
   @@map("lesson_change_unannounced")
   @@schema("chat")
 }
+
+// =====================================================================
+// PD-58 (ENG-09) -- BEGIN. 20261107110000_chat_pd058_terms.sql owns the DDL.
+// Read-only mapping: both tables are written only by their SQL functions
+// (chat.publish_legal_version, chat.accept_legal_documents) and refuse every
+// UPDATE and DELETE. No relation is added to Account, so this block stands
+// alone. Document keys: terms_family | terms_teacher | terms_staff | code_of_conduct.
+// =====================================================================
+
+/// A legal document version as the owner published it. Append-only.
+model LegalDocumentVersion {
+  documentKey          String   @map("document_key")
+  version              String
+  urlAr                String   @map("url_ar")
+  urlEn                String   @map("url_en")
+  /// P-1: SHA-256 (lowercase hex) of the exact text served at urlAr / urlEn.
+  contentSha256Ar      String   @map("content_sha256_ar")
+  contentSha256En      String   @map("content_sha256_en")
+  /// P-3: false for a non-material change; accounts that accepted an earlier
+  /// version that required acceptance need not accept again.
+  requiresReacceptance Boolean  @default(true) @map("requires_reacceptance")
+  effectiveAt          DateTime @default(now()) @map("effective_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy            String?  @map("created_by") @db.Uuid
+
+  acceptances TermsAcceptance[]
+
+  @@id([documentKey, version])
+  @@map("legal_document_version")
+  @@schema("chat")
+}
+
+/// An account accepted a version of its terms or of the Code of Conduct. Immutable.
+model TermsAcceptance {
+  accountId   String   @map("account_id") @db.Uuid
+  documentKey String   @map("document_key")
+  version     String
+  /// The database's clock; the guard trigger stamps it.
+  acceptedAt  DateTime @default(now()) @map("accepted_at") @db.Timestamptz
+  /// P-2: signup | gate. P-4: no IP address or user agent is stored here.
+  method      String
+  /// android | ios | web_portal | admin_web
+  client      String
+  locale      String
+
+  documentVersion LegalDocumentVersion @relation(fields: [documentKey, version], references: [documentKey, version], onDelete: Restrict, onUpdate: NoAction)
+
+  @@id([accountId, documentKey, version])
+  @@index([documentKey, version], map: "terms_acceptance_document_idx")
+  @@map("terms_acceptance")
+  @@schema("chat")
+}
+
+// PD-58 (ENG-09) -- END.
+// =====================================================================
 
 /// PD-57 (A-1, A-2): a report of someone else's message or of a person, or the
 /// case a block opens (reason `blocked`). SQL owns the DDL and the rules:

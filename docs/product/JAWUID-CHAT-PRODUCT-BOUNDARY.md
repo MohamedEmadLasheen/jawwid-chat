@@ -3245,7 +3245,7 @@ unread dot           per item, per parent account: a reply with no row in
 unchanged            the complaint lifecycle and its resolution rules
 ```
 
-Migration `20261107100000_chat_pd032_feedback_reply_notices` (was `20261103120000`; renumbered 2026-11-07).
+Migration `20261107120000_chat_pd032_feedback_reply_notices` (was `20261103120000`, then `20261107100000`; renumbered 2026-11-07).
 
 ---
 

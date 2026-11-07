@@ -6,6 +6,8 @@
 #   API_BASE_URL         https://<api host>/api/v1          (compiled in)
 #   PRIVACY_POLICY_URL   https://...  ({lang} -> ar | en)   (the owner's text)
 #   TERMS_URL            https://...  ({lang} -> ar | en)   (the owner's text)
+#   SUPPORT_URL          https://...  ({lang} -> ar | en)   (help page, shown in the app; Apple 1.2/1.5)
+#   SUPPORT_EMAIL        name@host.tld                      (support address, shown in the app)
 #   LESSONS_ORIGIN       optional, https://...               (PD-29 lesson audio)
 #   SENTRY_DSN           optional, https://...               (crash reporting; unset = off)
 #   SENTRY_ENVIRONMENT   optional, default production
@@ -40,10 +42,22 @@ https_url() { # name value
   esac
 }
 
+email_address() { # name value
+  local name="$1" value="$2"
+  [ -n "$value" ] || fail "$name is not set: a store build must carry it"
+  case "$value" in
+    *[[:space:]]*) fail "$name must not contain spaces" ;;
+  esac
+  # One @, something before it, and a dotted host after it. Plausible, not a full RFC check.
+  [[ "$value" =~ ^[^@:/]+@[^@:/.]+(\.[^@:/.]+)+$ ]] || fail "$name must be an e-mail address like support@example.org, got: $value"
+}
+
 https_url API_BASE_URL "${API_BASE_URL:-}"
 case "$API_BASE_URL" in */api/v1) : ;; *) fail "API_BASE_URL must end in /api/v1" ;; esac
 https_url PRIVACY_POLICY_URL "${PRIVACY_POLICY_URL:-}"
 https_url TERMS_URL "${TERMS_URL:-}"
+https_url SUPPORT_URL "${SUPPORT_URL:-}"
+email_address SUPPORT_EMAIL "${SUPPORT_EMAIL:-}"
 [ -z "${LESSONS_ORIGIN:-}" ] || https_url LESSONS_ORIGIN "$LESSONS_ORIGIN"
 [ -z "${SENTRY_DSN:-}" ] || https_url SENTRY_DSN "$SENTRY_DSN"
 [ -n "${SENTRY_DSN:-}" ] || echo "build-store: SENTRY_DSN is not set: this build will report no crashes" >&2
@@ -64,6 +78,8 @@ DEFINES=(
   --dart-define=JAWWID_API_BASE_URL="$API_BASE_URL"
   --dart-define=PRIVACY_POLICY_URL="$PRIVACY_POLICY_URL"
   --dart-define=TERMS_URL="$TERMS_URL"
+  --dart-define=SUPPORT_URL="$SUPPORT_URL"
+  --dart-define=SUPPORT_EMAIL="$SUPPORT_EMAIL"
   --dart-define=JAWWID_LESSONS_ORIGIN="${LESSONS_ORIGIN:-}"
   --dart-define=SENTRY_DSN="${SENTRY_DSN:-}"
   --dart-define=SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-production}"

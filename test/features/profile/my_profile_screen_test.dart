@@ -135,6 +135,44 @@ void main() {
       expect(find.text('Loves maths.'), findsOneWidget);
     });
 
+    // PARENT-010 (store review, 2026-11-03): the line under the parent's name showed the
+    // server's stored code, the bare word "parent", in any language. The API writes
+    // `parent` for a guardian it created itself; a person-written value ("Mother") is text.
+    testWidgets('PARENT-010: the stored relationship code "parent" is worded, not shown raw', (tester) async {
+      await tester.pumpWidget(harness(
+        repository: FakeProfileRepository(
+          initial: const ParentProfile(displayName: 'Huda', relationship: 'parent', children: []),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('parent'), findsNothing);
+      expect(find.text('Parent'), findsOneWidget);
+    });
+
+    testWidgets('PARENT-010: in Arabic it reads ولي الأمر', (tester) async {
+      await tester.pumpWidget(harness(
+        locale: const Locale('ar'),
+        repository: FakeProfileRepository(
+          initial: const ParentProfile(displayName: 'Huda', relationship: 'Parent', children: []),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Parent'), findsNothing);
+      expect(find.text('parent'), findsNothing);
+      expect(find.text('ولي الأمر'), findsOneWidget);
+    });
+
+    testWidgets('PARENT-010: a relationship a person wrote is kept as written', (tester) async {
+      await tester.pumpWidget(harness(
+        repository: FakeProfileRepository(
+          initial: const ParentProfile(displayName: 'Huda', relationship: 'Mother', children: []),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Mother'), findsOneWidget);
+    });
+
     testWidgets('a parent with no photo gets initials, not an empty circle', (tester) async {
       await tester.pumpWidget(harness(repository: FakeProfileRepository()));
       await tester.pumpAndSettle();

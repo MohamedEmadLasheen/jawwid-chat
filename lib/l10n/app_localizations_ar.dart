@@ -5217,6 +5217,12 @@ class L10nAr extends L10n {
   String get legalTerms => 'شروط الاستخدام';
 
   @override
+  String get supportHelpAction => 'المساعدة والدعم';
+
+  @override
+  String get supportContactAction => 'تواصل مع الدعم';
+
+  @override
   String get deleteAccountTitle => 'حذف الحساب';
 
   @override
@@ -5493,7 +5499,12 @@ class L10nAr extends L10n {
 
   @override
   String get blockErrorNotAllowed =>
-      'لا يمكن حظر هذا الشخص. يمكنك الإبلاغ عنه بدلًا من ذلك.';
+      'لا يمكن حظر هذا الشخص. إن كانت لديك ملاحظة أو مشكلة، فيرجى التواصل مع الدعم.';
+
+  @override
+  String blockErrorNotAllowedWithEmail(String email) {
+    return 'لا يمكن حظر هذا الشخص. إن كانت لديك ملاحظة أو مشكلة، فيرجى التواصل مع الدعم عبر $email.';
+  }
 
   @override
   String get blockErrorNoSharedConversation =>
