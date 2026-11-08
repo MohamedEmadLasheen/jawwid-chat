@@ -89,10 +89,6 @@ jobs:
       - name: Build the release App Bundle through the store build script
         # The same script and flags a real store build uses; it accepts the placeholders above.
         run: bash scripts/mobile/build-store.sh android
-      - name: Android JVM unit tests (android/app/src/test)
-        # No other workflow runs these (PushPayloadTest, the ring checks); the build above has
-        # already fetched the Flutter plugins Gradle needs.
-        run: (cd android && ./gradlew --no-daemon :app:testDebugUnitTest)
       - name: Verify target/min SDK and 16 KB alignment
         run: |
           set -uo pipefail
@@ -165,11 +161,39 @@ jobs:
             # collected). AD_ID would contradict the drafted declaration, so it fails.
             perms="$("$tools/aapt2" dump permissions "$apk" 2>&1 || true)"
             { echo; echo "Merged-manifest permissions:"; grep -E "uses-permission|permission:" <<< "$perms" || true; echo; } >> "$R"
-            if grep -q 'com.google.android.gms.permission.AD_ID' <<< "$perms"; then
+            # Only trust an answer from a dump that really read this app's permissions.
+            if ! grep -q "^package: com.jawwid.jawwid_chat" <<< "$perms" || ! grep -q "^uses-permission: name='android.permission.INTERNET'" <<< "$perms"; then
+              rec FAIL "Data safety: aapt2 dump permissions did not return this app's permissions; AD_ID not checked"
+            elif grep -q 'com.google.android.gms.permission.AD_ID' <<< "$perms"; then
               rec FAIL "Data safety: the merged manifest requests AD_ID, but the declaration says no Advertising ID"
             else rec PASS "Data safety: no AD_ID permission in the merged manifest"; fi
           fi
           [ "$bad" -eq 0 ] || { echo "::error::release readiness (Android) failed; see the report"; exit 1; }
+      - name: Android JVM unit tests (android/app/src/test)
+        # No other workflow runs these (PushPayloadTest, the ring checks). After the checks above,
+        # so a test failure never hides their report; the store build already fetched the plugins.
+        # Gradle reports NO-SOURCE as success, so the step also requires real test results.
+        if: success() || failure()
+        run: |
+          set -uo pipefail
+          R="$RUNNER_TEMP/release-readiness-android-report.txt"
+          if (cd android && ./gradlew --no-daemon :app:testDebugUnitTest); then status=0; else status=$?; fi
+          dir=android/app/build/test-results/testDebugUnitTest
+          tests=0; failures=0
+          for x in "$dir"/*.xml; do
+            [ -f "$x" ] || continue
+            t="$(sed -n 's/.*<testsuite[^>]* tests="\([0-9]*\)".*/\1/p' "$x" | head -1)"
+            f="$(sed -n 's/.*<testsuite[^>]* failures="\([0-9]*\)".*/\1/p' "$x" | head -1)"
+            e="$(sed -n 's/.*<testsuite[^>]* errors="\([0-9]*\)".*/\1/p' "$x" | head -1)"
+            tests=$((tests + ${t:-0})); failures=$((failures + ${f:-0} + ${e:-0}))
+            echo "  $(basename "$x" .xml): tests=${t:-?} failures=${f:-?} errors=${e:-?}" >> "$R"
+          done
+          if [ "$status" -ne 0 ] || [ "$failures" -gt 0 ]; then
+            printf '%-13s %s\n' FAIL "Android JVM unit tests: $failures failed (gradle exit $status)" | tee -a "$R"; exit 1
+          elif [ "$tests" -eq 0 ]; then
+            printf '%-13s %s\n' FAIL "Android JVM unit tests: none ran (NO-SOURCE?)" | tee -a "$R"; exit 1
+          fi
+          printf '%-13s %s\n' PASS "Android JVM unit tests: $tests passed" | tee -a "$R"
       - name: Upload the text report (never the AAB or APK)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
