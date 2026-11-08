@@ -1,10 +1,12 @@
 # Monitoring, Logging and Alerting
 
-Owner: AI #7 · Date: 2026-09-05 · Updated: 2026-10-21 (structured logs and error tracking wired)
+Owner: AI #7 · Date: 2026-09-05 · Updated: 2026-10-21 (structured logs and error tracking wired);
+2026-11-09 (LR-29: what is monitored at launch, what is missing, the minimal launch set, §7)
 Status: **partly implemented.** No monitoring backend is provisioned (BLOCKER-3).
 The application side — health endpoints, build identity, sanitised probe
 errors, structured JSON logs and Sentry error tracking — exists and is tested;
-metrics, dashboards and alerts do not.
+metrics and dashboards do not. The only alerts are App Platform's two app-level
+rules in the spec (§7.1). **For launch, read §7.**
 
 ## 1. Stack
 
@@ -12,10 +14,10 @@ metrics, dashboards and alerts do not.
 |---|---|---|
 | Errors | Sentry (`SENTRY_DSN`) | **wired** in API and worker (§3a); inert without a DSN |
 | Traces / metrics | OpenTelemetry → OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`) | not wired; `OTEL_*` optional until it is |
-| Dashboards / alerts | Grafana (or the hosting platform's built-in) | not provisioned |
+| Dashboards / alerts | Grafana (or the hosting platform's built-in) | dashboards not provisioned; App Platform's `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` in the spec (§7.1) |
 | Logs | structured JSON to stdout, collected by the platform | **implemented** in API and worker (§3) |
 | Health | `/health/live`, `/health/ready`, `/health` | **implemented and tested** |
-| Uptime | external HTTP check against `/health/live` | not provisioned |
+| Uptime | DigitalOcean Uptime check against `/health/ready` | not provisioned; the owner creates it after the first deploy (§7.3) |
 
 No second system for anything already covered — one error tracker, one metrics
 pipeline (role assignment §41).
@@ -238,7 +240,156 @@ on retry.
   optional until an exporter is wired.
 - `correlation_id` is not carried through the outbox yet, and log lines written
   outside the request log do not carry the `request_id` (§4).
-- WebSocket handler failures are logged by the gateway but not reported to the
-  error tracker; only HTTP 5xx, the worker loop and process faults are.
 - No SLOs agreed. Suggested starting point: API availability 99.5% monthly,
   p95 latency < 500 ms, message-send success > 99.9%.
+
+## 7. Launch minimum: uptime, alerts, on call (LR-29)
+
+The §5 table is the target. This section is what production actually has at
+the first deploy, what is missing, and the smallest set that closes LR-29 with
+no paid service. Nothing here changes a live system: the spec applies only at a
+deploy the owner approves, and the console steps are the owner's.
+
+### 7.1 What is monitored today
+
+| Signal | Where | What it catches | Who hears it |
+|---|---|---|---|
+| Readiness `GET /health/ready` | App Platform `health_check` on `api` (`.do/app.production.yaml`, every 10 s, 3 failures) | Postgres, Redis or the revocation store unreachable (`apps/api/src/infra/health/health.service.ts`, `readiness()`); a 503 takes the instance out of routing, never restarts it | nobody: it is a routing decision, not an alert |
+| Liveness `GET /health/live` | App Platform `liveness_health_check` on `api` (every 30 s, 3 failures) | a wedged API process; touches no dependency (`health.controller.ts`, `live()`), so the container is restarted | nobody directly; a restart loop shows only as `RESTART_COUNT` (§7.4) |
+| Admin Web `GET /healthz` | App Platform health and liveness checks on `admin-web` | nginx down | nobody |
+| Worker | none: it serves no HTTP, so it has no health check; a crash exits and App Platform restarts it | a crash, only as a restart | nobody (§7.4) |
+| Post-deploy smoke test | `Smoke test` step of `.github/workflows/deploy-production.yml`, running `scripts/infra/smoke.sh` against `PRODUCTION_API_BASE_URL` | `/health/live` 200, `/health/ready` 200, no credential-shaped text in the health payload, security headers, CORS refuses a foreign origin | whoever ran the deploy (the workflow fails); once per deploy, never after |
+| Errors | Sentry, API and worker (§3a) | 5xx, worker-subsystem failures, WebSocket handler faults, process faults | the members of the Sentry project, by Sentry's own notification rules. `SENTRY_DSN` is **required** in production (`infra/env/manifest.tsv`, `PROD` column `req`), so a production deploy without it is refused |
+| `DEPLOYMENT_FAILED`, `DOMAIN_FAILED` | app-level `alerts:` in `.do/app.production.yaml` | a failed deploy; a domain or certificate that fails to configure | the App Platform alert destinations (§7.5); not yet set to anyone named |
+| Backups | `backup-daily.yml`, `backup-weekly.yml` (scheduled) | a failed backup run | GitHub e-mails a failed **scheduled** run to the user who last changed its `cron:` line, not to an on-call person |
+
+All health routes sit outside `/api/v1` (`apps/api/src/main.ts`, the global
+prefix excludes `health`, `health/live`, `health/ready`) and are
+unauthenticated (`@Public()`), so an outside checker needs no token.
+
+### 7.2 What is missing
+
+1. **An uptime check from outside DigitalOcean's app.** Every probe above runs
+   inside App Platform. If the domain, the TLS certificate, DNS or the whole app
+   is down, nothing outside notices, and the smoke test runs only during a
+   deploy.
+2. **An on-call person (OA-19).** `incident-response.md` "Gaps": no rotation,
+   no escalation path, no contact list. The owner names the person.
+3. **An alert destination.** The two spec alerts and any uptime check need an
+   e-mail address to go to; none is configured, and none can be inferred.
+4. **Component alerts** for the API and the worker (CPU, memory, restarts),
+   proposed in §7.4 and not yet in the spec.
+
+Still out of scope for launch, unchanged: metrics, dashboards, queue age,
+error-rate alerts (§5, §6; BLOCKER-3).
+
+### 7.3 Recommended minimal set for launch
+
+No paid service. Every piece is either already in the spec, a DigitalOcean
+feature on the existing account, or Sentry's existing project.
+
+| # | What | Who, when |
+|---|---|---|
+| 1 | The owner names the on-call person and a backup (OA-19), and that person's e-mail. Both must be members of the DigitalOcean team (App Platform and Uptime only notify team members' e-mails) and of the Sentry project | owner, before launch |
+| 2 | DigitalOcean Uptime check on `https://api.chat.jawwid.com/health/ready`, alerting the on-call e-mail (steps below) | owner, after the first production deploy succeeds |
+| 3 | App Platform alert destinations: the on-call e-mail for `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` (§7.5) | owner, after the first deploy (the app id exists only then) |
+| 4 | Component alerts (§7.4), added through the generator in a follow-up PR | engineering, then applied by the next approved deploy |
+| 5 | Sentry: confirm the on-call person is a project member and the project's alert rule e-mails on a new issue (Sentry's default rule) | owner |
+
+**Why `/health/ready` and not `/health/live`:** readiness is 503 whenever the
+API cannot serve users (database, Redis or the revocation store down) as well
+as when the API itself is down, so it is the symptom users feel. `/health/live`
+would stay green through a database outage. The §5 "API down" row predates this
+choice; for launch the uptime check uses `/health/ready`.
+
+**Steps: create the uptime check** (DigitalOcean control panel; labels may
+read slightly differently in the console):
+
+1. Wait until `Deploy production` has succeeded and its smoke test passed, and
+   `https://api.chat.jawwid.com/health/ready` answers 200 in a browser.
+2. Control panel → **Monitoring** → **Uptime** → **Create Uptime check**
+   (or the project → **Create** → **Uptime check**).
+3. Type **HTTPS**; URL `https://api.chat.jawwid.com/health/ready`; name
+   `jawwid-chat-production-api-ready`; regions: pick **at least two**,
+   including a European one (users and the app are in Frankfurt), so one
+   region's network trouble is not reported as an outage.
+4. Before saving, read the price shown. **If the console shows a charge, stop**:
+   a paid resource is the owner's decision and this plan assumes none.
+5. Add alerts on the check, each to the on-call e-mail:
+   - **Down** (the check fails), period **2 minutes**: SEV-1 per §5.
+   - **SSL certificate expiry**, **14 days** before: SEV-3 per §5.
+   - **Latency** above **2000 ms** for **5 minutes**: optional; skip it if it
+     turns out noisy.
+6. Confirm the first results show the check **Up**. Do **not** take the
+   production API down to test the alert; the check's history shows that it
+   runs, and the e-mail address is the part to double-check.
+
+Optional, same steps: a second check on the Admin Web host's `/healthz`.
+
+**Staging:** no uptime check. Staging is not watched out of hours.
+
+### 7.4 Proposed component alerts (not yet in the spec)
+
+`.do/app.production.yaml` is **generated** by `scripts/infra/app-spec.py`
+(the header says so), and the `app-spec` guard
+(`bash scripts/qa/guards.sh app-spec`) fails CI when the file differs from
+what the generator renders. Editing the YAML by hand would therefore fail CI
+and be overwritten at the next render, so these alerts are a proposal here and
+belong in a follow-up PR that changes `app-spec.py` (component blocks for `api`
+and `worker`) and re-renders. That same guard runs
+`doctl apps spec validate --schema-only` on the rendered spec, which is the
+check of the exact field names below; they are written from DigitalOcean's app
+spec reference (`alerts[]` on a service or worker: `rule`, `operator`,
+`value`, `window`) and were **not** validated here.
+
+```yaml
+# under services[name=api] and workers[name=worker]
+    alerts:
+      # A crash loop. For the worker this is the ONLY crash signal: it has no
+      # health check, and App Platform restarts it silently.
+      - rule: RESTART_COUNT
+        operator: GREATER_THAN
+        value: 3
+        window: FIVE_MINUTES
+      - rule: MEM_UTILIZATION
+        operator: GREATER_THAN
+        value: 85
+        window: TEN_MINUTES
+      - rule: CPU_UTILIZATION
+        operator: GREATER_THAN
+        value: 90
+        window: TEN_MINUTES
+```
+
+| Alert | Why this threshold |
+|---|---|
+| `RESTART_COUNT` > 3 in 5 min | one restart is a deploy or a single fault; four in five minutes is a loop. A wedged API needs about 110 s to be restarted by liveness (20 s initial delay + 3 × 30 s), so liveness alone restarts it at most about three times in 5 min; a process that crashes on boot restarts faster and crosses the threshold. A wedged API is caught by the uptime check instead |
+| `MEM_UTILIZATION` > 85% for 10 min | the API runs on 1 GB, the worker on 0.5 GB; a sustained climb ends in an out-of-memory kill |
+| `CPU_UTILIZATION` > 90% for 10 min | one shared vCPU each; sustained saturation shows as latency before it shows as errors |
+
+Not proposed: `DEPLOYMENT_LIVE` (one e-mail per successful deploy is noise for
+an on-call inbox; the deploy run already reports it), and alerts on `admin-web`
+and the review-period `redis` component (Redis loss already shows as
+`/health/ready` 503 on the uptime check). Production only: staging would send
+the same e-mails to the same person.
+
+### 7.5 Alert destinations
+
+App Platform alerts carry no recipient in the spec. After the first deploy, the
+owner sets the on-call e-mail as the destination of each app alert: the app →
+**Settings** → alert policies in the console, or
+`doctl apps list-alerts <app id>` and
+`doctl apps update-alert-destinations <app id> <alert id> --alert-destinations <file>`
+with the e-mail in the file. Repeat for the component alerts once §7.4 is
+deployed (each alert is a separate id). The address must belong to a member of
+the DigitalOcean team.
+
+### 7.6 When LR-29 is done
+
+- [ ] OA-19 answered: on-call person and backup named, e-mail known (owner).
+- [ ] Uptime check on `/health/ready` exists, two or more regions, Down and
+      certificate alerts to the on-call e-mail (owner, §7.3).
+- [ ] `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` deliver to the on-call e-mail (owner, §7.5).
+- [ ] Component alerts in the generator, rendered, CI green, deployed (§7.4).
+- [ ] On-call person is in the Sentry project and gets new-issue e-mails.
+- [ ] `incident-response.md` "Gaps" updated with the named contact.
