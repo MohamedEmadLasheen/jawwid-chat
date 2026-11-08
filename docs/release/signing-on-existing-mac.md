@@ -4,8 +4,7 @@
 secret or workflow.
 **Date:** 2026-11-08. **Risk of this paper:** Low.
 **Roles:** security reviewer and release manager (builder session), for the engineering lead.
-**Builds on:** `docs/release/signed-build-options.md` (branch `claude/lr76-signed-build-options`, "the
-options paper"). Its facts A1–A12, G1–G5 and H1–H8 and its options (a)–(d) are not repeated here.
+**Builds on:** `docs/release/signed-build-options.md` (on `main`, "the options paper"). Its facts A1–A12, G1–G5 and H1–H8 and its options (a)–(d) are not repeated here.
 This paper answers one new question: the owner has **no second Mac**, so option (b) of the options paper
 is unavailable. What is the safest way to sign on the Mac we have?
 
@@ -41,10 +40,14 @@ the exact wording.
 - M6. "If an app is changed or infected by a virus after being granted access to your keychain, the app is
   no longer trusted, and you must grant access again."
   <https://support.apple.com/guide/keychain-access/if-a-trusted-app-asks-for-keychain-access-kyca1331/mac>
-- M7. FileVault: "to secure all data at rest". "Without valid login credentials or a cryptographic
-  recovery key, the internal APFS volumes remain encrypted". "To set up FileVault, you must be an
-  administrator." Other users are enabled with their own login password ("Enable Users").
-  <https://support.apple.com/guide/security/volume-encryption-with-filevault-sec4c6dc1b6e/web>,
+- M7. FileVault, Platform Security guide: "to secure all data at rest". "Without valid login credentials
+  or a cryptographic recovery key, the internal APFS volumes remain encrypted".
+  <https://support.apple.com/guide/security/volume-encryption-with-filevault-sec4c6dc1b6e/web>
+  Mac User Guide: "To set up FileVault, you must be an administrator." "If there's an Enable Users
+  button, you must enter a user's login password before they can unlock the encrypted disk" (so Enable
+  Users is needed only when that button appears). Recovery key: "keep a copy of the key somewhere other
+  than your encrypted startup disk", "not in the same physical location as your Mac", and "Don't forget
+  your recovery key": without it or the password "your files and settings will be lost forever".
   <https://support.apple.com/guide/mac-help/protect-data-on-your-mac-with-filevault-mh11785/mac>
 - M8. System Integrity Protection limits writes to "critical system files" "regardless of whether that
   process is running sandboxed or with administrative privileges".
@@ -54,16 +57,41 @@ the exact wording.
   <https://support.apple.com/guide/mac-help/change-lock-screen-settings-on-mac-mh11784/mac>
 - M10. Fast user switching lets several users be "logged in at the same time".
   <https://support.apple.com/guide/mac-help/switch-quickly-between-users-mchlp2439/mac>
-- M11. Erase All Content and Settings: "erase all of your data, settings, and apps, while maintaining the
-  operating system currently installed". It "requires macOS Monterey 12 or later" and an Apple silicon or
-  T2 Mac. <https://support.apple.com/en-us/102664>
+- M11. Erase All Content and Settings erases data, settings and apps "while maintaining the operating
+  system currently installed". **It is an erase, not a reinstall.** Eligibility: "Erase All Content and
+  Settings requires macOS Monterey 12 or later and a Mac with Apple silicon or Mac with the Apple T2
+  Security Chip." It asks for "the password for your macOS user account" and "the password for your Apple
+  Account". Steps: Apple menu → System Settings → General → Transfer or Reset → Erase All Content and
+  Settings (on Monterey: System Preferences → menu bar "System Preferences" → Erase All Content and
+  Settings). <https://support.apple.com/en-us/102664>
+- M12. Reinstalling macOS from macOS Recovery. "Reinstalling macOS doesn't remove your apps or personal
+  data", so a reinstall alone is **not** an erase; the erase is a separate Disk Utility step.
+  <https://support.apple.com/en-us/102655>
+  - Start up from Recovery, <https://support.apple.com/en-us/102518>: **Apple silicon**: shut down, then
+    "Press and hold the power button … When you see 'Loading startup options' or the Options icon, release
+    the power button", then "Click Options, then click the Continue button". **Intel**: "Press and release
+    the power button to turn on your Mac, then immediately press and hold … Command (⌘) and R."
+  - Erase then reinstall, **Apple silicon**, <https://support.apple.com/en-us/102506>: in Recovery choose
+    Disk Utility; "select Macintosh HD in the sidebar"; "Click the Erase button in the toolbar" with "Name:
+    Macintosh HD, Format: APFS"; "Click Erase. However, if you see an Erase Volume Group button, click that
+    button instead."; "click Erase Mac to confirm"; "After your Mac activates, click Exit to Recovery
+    Utilities"; then "select Reinstall macOS in the utilities window, then click Continue and follow the
+    onscreen instructions." The page warns: "Erasing your Mac permanently deletes its files."
+  - Erase then reinstall, **Intel without a T2 chip**,
+    <https://support.apple.com/guide/mac-help/erase-and-reinstall-macos-mh27903/mac>: "Choose Apple menu >
+    Restart, then immediately press and hold Command-R"; "select Disk Utility, then click Continue"; "select
+    the volume you want to erase in the sidebar, then click Erase in the toolbar"; name it, Format "APFS",
+    "click Erase Volume Group"; "click Done, then choose Disk Utility > Quit Disk Utility"; "click Reinstall
+    macOS [name], then click Continue"; "Follow the onscreen instructions." The page says not to use these
+    steps on Apple silicon or T2 Macs.
+  - **UNVERIFIED:** the Disk Utility steps for an **Intel Mac with a T2 chip** (Apple's page 102639, not
+    fetched). If this Mac is one, read that page before starting.
 - **UNVERIFIED on an official page today:**
   - that an administrator can become root with `sudo` and so read every user's files. This is standard
     Unix behaviour on macOS, but no Apple page fetched today says it. This paper relies on it;
   - the Keychain Access steps to create a new keychain, set it to lock after inactivity or on sleep, and
     the Access Control tab labels ("Allow all applications…", "Confirm before allowing access", "Always
-    allow access by these applications"). The current Keychain Access guide has no such articles;
-  - Apple's steps to reinstall macOS from macOS Recovery (not fetched).
+    allow access by these applications"). The current Keychain Access guide has no such articles.
 
 **Apple signing and App Store Connect**
 - C1. WWDC21 "Distribute apps in Xcode with cloud signing" (Apple's session transcript, 2021, not reference
@@ -106,7 +134,9 @@ the exact wording.
 
 **Google Play**
 - P1. Play Console: the account owner is "The first registered account in Play Console." and "Has full
-  access to Play Console." A separate permission covers "Use Play App Signing to sign APKs."
+  access to Play Console." Play App Signing is not its own permission: it is bundled in "Release to
+  production, exclude devices, and use Play App Signing", which covers "Create, edit, and roll out
+  releases to production." and "Use Play App Signing to sign APKs."
   <https://support.google.com/googleplay/android-developer/answer/9844686>
 - P2. "To configure Play App Signing, you must have admin permission." The upload key holder is "You (Keep
   this secure!)". Reset: "In the 'Upload key certificate' section, click **Request upload key reset**."
@@ -116,10 +146,12 @@ the exact wording.
   page gives none).
 
 **GitHub**
-- H9. "each GitHub-hosted runner is a new virtual machine (VM) hosted by GitHub"; macOS runners exist.
+- H9. "With the exception of single-CPU runners, each GitHub-hosted runner is a new virtual machine (VM)
+  hosted by GitHub." ("Single-CPU runners are hosted in a container on a shared VM.") macOS runners exist.
   <https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners>
-  Hardening: GitHub-hosted runners "execute code within ephemeral and clean isolated virtual machines";
-  "Pin actions to a full-length commit SHA".
+  Hardening: GitHub-hosted runners "execute code within ephemeral and clean isolated virtual machines".
+  For third-party actions, "The best measure is to lock your workflow dependencies with a lockfile";
+  "Pin actions to a full-length commit SHA" is offered "For repositories that cannot adopt a lockfile".
   <https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions>
   **UNVERIFIED:** which Xcode versions the current macOS image has (listed in `actions/runner-images`, not
   fetched).
@@ -162,7 +194,7 @@ What it does **not** protect against:
 - **Malware running as the admin user.** An administrator "can access your entire Mac" over the network
   (M2), controls permissions (M3) and, with `sudo`, becomes root (UNVERIFIED on an Apple page; standard
   behaviour). Root can read the signing user's files, attach to its processes and record its keystrokes.
-  Whether the 2026-10-06 malware already has the admin password or root is **unknown**.
+  Under this paper's worst-case assumption (§1), nobody can rule that out.
 - **Root-level persistence.** SIP protects critical system files even from admin processes (M8), but not
   `/Applications`, `/Library`, `/usr/local` or `/opt/homebrew`. Software in those shared places (Xcode,
   Homebrew, CocoaPods, a shared JDK) is used by **both** users.
@@ -218,8 +250,10 @@ only user-level malware that never got the admin password, and nobody can say th
   certificate → **Request upload key reset**, with a reason (P2). Who may ask: **UNVERIFIED**; the owner as
   account owner has full access (P1). Waiting time: **UNVERIFIED**.
 - Where to keep it: the `.jks` lives only in the signing user's home (for example
-  `~/release/jawwid-upload.jks`, mode 600), its two passwords only in the password manager. Never in the
-  repository, never in the main user, never in a synced folder.
+  `~/release/jawwid-upload.jks`, mode 600). Its two passwords are in the password manager **and**, because
+  the build requires it, in plain text in `android/key.properties` (`storePassword`, `keyPassword`;
+  `docs/mobile/android-release-signing.md`). That file is git-ignored; keep it only in the signing user's
+  checkout, mode 600. Neither file goes in the repository, the main user, or a synced folder.
 - Backup: §6.
 - Because the key is resettable, a leak is an inconvenience, not a disaster. Build tampering (§3) is
   still the real Android risk.
@@ -235,14 +269,17 @@ Rules (the lead's, for the owner):
 3. Turn on "Require password after screen saver begins or display is turned off" with a short delay (M9),
    in both users.
 4. No File Sharing, no shared folders between the users; leave the Public / Drop Box folders empty and
-   unused (M2). Move nothing between users except the **public** repository, which the signing user clones
-   itself from GitHub.
+   unused (M2). Move no files between users. The signing user clones the **public** repository itself
+   from GitHub and fetches everything else it needs (the `.p8` key, `google-services.json`) itself from
+   the official console, under rule 7.
 5. Never copy the keystore, a `.p12`, a `.p8` or their passwords into the main user, into the repository,
    into a chat with an agent, or into an agent brief.
 6. The signing user installs its own Flutter (the version `ci.yml` pins) in its own home and uses fresh
    Gradle and CocoaPods caches, so it does not share the main user's `~/development/flutter` or caches.
    Xcode in `/Applications` is still shared (§4.1).
-7. The signing user is never used for web browsing, email or anything else.
+7. The signing user's browser opens **only** the official consoles: App Store Connect and the Apple
+   Developer site, Google Play Console, the Firebase console, and GitHub (to clone and to read release
+   notes). No other web browsing, no email, no other use. Install no browser extensions there.
 
 These rules reduce what **agents** can reach. They do not fix §3: they assume the host itself is clean.
 
@@ -250,11 +287,17 @@ These rules reduce what **agents** can reach. They do not fix §3: they assume t
 
 A compromised host can change what it builds, wherever the keys live. Two ways out:
 
-1. **Settle the Mac first**: back up documents only, erase, reinstall macOS,
-   rotate credentials, and reinstall tools from official sources. Erase All Content and Settings removes
-   "all of your data, settings, and apps" but keeps the installed OS (M11). Whether that is enough is
-   the owner's decision (see §8); the stricter path is a macOS reinstall from
-   Recovery (Apple steps **UNVERIFIED** today). Do **not** restore apps, hidden tool folders, shell dotfiles,
+1. **Settle the Mac first**: back up documents only, erase the disk, reinstall macOS, rotate credentials,
+   and reinstall tools from official sources. Two Apple actions exist, and they are not the same:
+   - **Erase the disk in Disk Utility from macOS Recovery, then Reinstall macOS** (M12). This erases
+     everything **and** installs a fresh copy of macOS. **This is the action that meets this paper's bar**
+     ("erase and reinstall macOS").
+   - **Erase All Content and Settings** (M11). This erases data, settings and apps but **keeps the
+     installed operating system**. It is not a reinstall. It is quicker, and the system volume is
+     protected by SIP (M8), but it does not meet the bar by itself; if the owner chooses it, the lead
+     decides, before lifting the machine rule, whether it is enough.
+
+   Do **not** restore apps, hidden tool folders, shell dotfiles,
    `~/.npm`, `~/.cache`, `~/development` or other tool folders from a backup or with Migration Assistant:
    that would bring the infection back. Re-clone repositories from GitHub.
 2. **Build on GitHub-hosted runners**: a new, ephemeral VM for each job (H9; options paper H7), signing
@@ -269,7 +312,7 @@ A compromised host can change what it builds, wherever the keys live. Two ways o
 | Secret | Primary copy | Backup | If lost | If leaked |
 |---|---|---|---|---|
 | Android upload keystore (`.jks`) | signing user's home, mode 600 | password manager (as an attachment, if it supports files) **and** one offline encrypted copy (an encrypted disk image or encrypted USB stick, password in the password manager), kept off the Mac | upload key reset (P2) | upload key reset (P2); then rotate the Play Console passwords |
-| Keystore and key passwords | password manager | the password manager's own emergency/recovery kit (offline) | the keystore is useless: reset (P2) | reset (P2) |
+| Keystore and key passwords | password manager; also in plain text in the signing user's git-ignored `android/key.properties` (mode 600), which the build requires (§4.4) | the password manager's own emergency/recovery kit (offline) | the keystore is useless: reset (P2) | reset (P2) |
 | iOS, cloud-managed certificate | Apple (C2) | **nothing to back up** | n/a | revoke/rotate (Account Holder or Admin, C2, C4) |
 | iOS, local certificate (only if cloud signing is not used) | separate keychain (§4.2) | export as `.p12` with a strong password; store like the keystore | create a new one (Account Holder or Admin; one distribution certificate type per team, options paper A7) | revoke (C4); App Store apps unaffected |
 | App Store Connect API key (`.p8`) | signing user only, or a GitHub environment secret for (C) | **none on purpose**: it downloads once (C3); if lost, revoke and make a new one | revoke, re-create | revoke at once (C3) |
@@ -279,11 +322,11 @@ A compromised host can change what it builds, wherever the keys live. Two ways o
 Owner-time figures are the lead's estimates, not measured. Money: only the verified figures of the options
 paper are used; none of the options below needs new paid resources.
 
-| | (A) Dedicated user on this Mac as it is | (B) Erase and reinstall, then dedicated user | (C) GitHub-hosted runners | (D) Separate Mac |
+| | (A) Dedicated user on this Mac as it is. **Not recommended; would require the owner to lift the machine rule explicitly** | (B) Erase and reinstall macOS, then dedicated user | (C) GitHub-hosted runners | (D) Separate Mac |
 |---|---|---|---|---|
 | Security | Weak: keys separated from user-level agents only. Build integrity rests on an unsettled host. | Good: clean OS and tools, keys outside the agents' user, cloud iOS signing. | Good to strong: a clean VM per build, no key on any Mac. New attack surface: the workflow, secrets, approvals on a public repository. | Strong (options paper (b)) |
-| Residual risk | Root or admin-level persistence, keylogging, tampered Xcode/Flutter/caches; a signed malicious build. | Agents again run as admin in the main user beside the signing user; a future incident repeats the problem. Shared `/Applications` Xcode. | Owner's GitHub account and approval device; third-party actions (pin by SHA, H9); log leaks (options paper H4, H8); an Admin-level `.p8` in GitHub if a lower role fails. | Physical theft |
-| Owner time (estimate) | About 1–2 hours: create the user, sign in, first build | About 1 day: backup, erase, reinstall, rotate credentials, reinstall tools, then ~2 hours for the user | About 1–2 hours of approvals and secret entry, after 2–3 days of agent engineering | n/a |
+| Residual risk | Root or admin-level persistence, keylogging, tampered Xcode/Flutter/caches; a signed malicious build. | Agents run in the main user, which stays an administrator, beside the signing user; a future incident repeats the problem. Shared `/Applications` Xcode. | Owner's GitHub account and approval device; third-party actions (lockfile, or pin by SHA, H9); log leaks (options paper H4, H8); an Admin-level `.p8` in GitHub if a lower role fails. | Physical theft |
+| Owner time (estimate) | About 1–2 hours: create the user, sign in, first build (plus lifting the machine rule first) | About 1 day: pre-erase checklist, backup, erase, reinstall, rotate credentials, reinstall tools, then ~2 hours for the user | About 1–2 hours of approvals and secret entry, after 2–3 days of agent engineering | n/a |
 | Money (verified) | none new | none new | free standard runners in a public repository (options paper H1) | **unavailable**; not priced |
 | Engineering effort | Small: a checklist | Small: a checklist; agent work resumes after the reinstall | Medium–High: workflow, Environment, test export with the API key; High-risk review | n/a |
 | Unblocks LR-76 | Yes, but with a risk the lead does not accept | Yes | Yes | — |
@@ -304,48 +347,112 @@ Why:
 - Credential rotation is required in every case (§3).
 
 **Owner actions for (B), in order:**
-1. **Decide** whether to erase and reinstall plus rotate credentials and tell the lead.
-2. **Back up documents only** (not apps, not tool folders, not dotfiles; see §5) to an external disk.
-   Confirm every repository you care about is pushed to GitHub.
-3. **Erase and reinstall macOS** (§5, M11; or the stricter Recovery reinstall).
-4. **Turn on FileVault** (M7) and the lock-screen password (M9). Keep the Mac on the latest macOS.
-5. **Rotate credentials from the clean Mac**, not from the old system: Apple ID, Google (Play Console)
-   account, GitHub account and its tokens, password-manager master password, and any API tokens the
-   agents used. Sign out of other sessions where each service allows it. Revoke any existing App Store
-   Connect API keys you do not recognise (Users and Access → Integrations, C3) and check Certificates,
-   Identifiers & Profiles for certificates you did not make (revoke them, C4).
-6. **Create the main admin user** for yourself and development, then a **Standard user** named for
-   example `release` (Users & Groups, M1), with its own long password, and **Enable** it in FileVault (M7).
-7. **In the `release` user only:** install Xcode from the App Store, Flutter (the version `ci.yml` pins)
-   from flutter.dev into this user's home, CocoaPods and a JDK 17, as the options paper's (b) lists.
-   Sign in to Xcode with your Account Holder Apple ID. Apply §4.5.
+1. **Decide** to erase and reinstall plus rotate credentials, **and choose which erase** (step 3: R or
+   E), and tell the lead.
+2. **Pre-erase checklist.** Do not start step 3 until **every** box is ticked. If any one fails, stop and
+   tell the lead; an erase with a box unticked can lock you out of your own accounts.
+   - [ ] You know your **Apple Account password** (the erase asks for it, M11, and the Mac must activate
+     after a Disk Utility erase, M12). Test it by signing in at appleid.apple.com **from another device**.
+   - [ ] A **second trusted device** (your phone) receives Apple two-factor codes. Check it now.
+   - [ ] Your **password-manager vault opens from another device** (phone or another computer), with the
+     master password, not only from this Mac.
+   - [ ] You hold **recovery codes** for GitHub and Google, saved outside this Mac, and your **authenticator
+     app** (or passkeys) is on your phone, not only on this Mac.
+   - [ ] You know the **Wi-Fi password** (needed in Recovery to activate and download macOS).
+   - [ ] **Local-only work is saved.** In every repository and every worktree, list unpushed work
+     (`git log --branches --not --remotes`, `git stash list`, `git status`). Code written on this Mac may
+     have been changed by someone else: **do not push it unreviewed.** Either review each diff line by line
+     (or have the lead review it) before pushing, or drop it.
+   - [ ] **Local configuration with no other copy is saved:** `.env` files and other settings whose values
+     exist nowhere else. Copy the **values** into the password manager (not the files to the backup disk);
+     treat them as exposed and rotate them in step 5.
+   - [ ] **Documents only** (not apps, not tool folders, not dotfiles; see §5) are backed up to an external
+     disk.
+3. **IRREVERSIBLE: erase this Mac.** After this step nothing on the internal disk can be recovered
+   ("Erasing your Mac permanently deletes its files", M12). Choose **one** and write down which:
+   - **R (recommended; meets this paper's bar): erase the disk and reinstall macOS from macOS Recovery**
+     (M12). Start up from Recovery (Apple silicon: hold the power button until "Loading startup options",
+     then Options → Continue; Intel: power on, then at once hold Command-R). Then follow Apple's page for
+     your Mac: Apple silicon <https://support.apple.com/en-us/102506>; Intel without T2
+     <https://support.apple.com/guide/mac-help/erase-and-reinstall-macos-mh27903/mac>; Intel with T2
+     <https://support.apple.com/en-us/102639> (not verified here, read it first). In short: Disk Utility →
+     select Macintosh HD → Erase (APFS; "Erase Volume Group" if shown) → confirm → back to the utilities
+     window → **Reinstall macOS** → Continue → follow the onscreen instructions.
+   - **E: Erase All Content and Settings** (M11): System Settings → General → Transfer or Reset → Erase All
+     Content and Settings. This **keeps the installed macOS**; it is an erase, not a reinstall. Only
+     possible on macOS Monterey 12 or later **and** an Apple silicon or T2 Mac. If you choose E, the lead
+     decides whether it is enough before lifting the machine rule (§5).
+4. **Turn on FileVault** (M7; you must be an administrator, so do it as the first user, which is an
+   admin). **Keep the FileVault recovery key off this Mac** and not where the Mac is kept (for example in
+   the password manager, opened from your phone). Without the password or that key, Apple says "your files
+   and settings will be lost forever". Turn on the lock-screen password (M9). Keep the Mac on the latest
+   macOS.
+5. **Rotate credentials from the clean Mac** (or your phone), not from the old system. Sign out of all
+   other sessions where each service allows it.
+   - **Accounts:** Apple Account, Google account (Play Console, Firebase), GitHub account, the
+     password-manager master password. Regenerate GitHub and Google recovery codes.
+   - **GitHub:** remove every SSH key registered on the account and add new ones; revoke every personal
+     access token and the `gh` CLI token (sign in again later); review **authorised OAuth apps** and
+     GitHub Apps and revoke what you do not need; rotate the `jawwid-bot` token.
+   - **Developer tools:** npm token, Sentry token, Anthropic and OpenAI API keys, and any other token the
+     agents used.
+   - **App Store Connect:** revoke **every** API key whose `.p8` file was ever on this Mac, recognised or
+     not (Users and Access → Integrations, C3). In Certificates, Identifiers & Profiles, revoke **every**
+     certificate whose private key was in this Mac's keychain, recognised or not (C4; App Store apps are
+     unaffected).
+   - **Production secrets (Supabase, Stripe and other service keys): coordinate with the lead. Do not
+     rotate them on your own**: rotating them ad hoc breaks the running services. The lead plans the order
+     and the redeploys.
+6. **Create the `release` user:** a **Standard user** named for example `release` (Users & Groups, M1),
+   with its own long password. If FileVault shows an **Enable Users** button, enable `release` there (M7).
+   Your first user stays the admin user for yourself and development.
+7. **Install the tools.** A Standard user cannot use `sudo`, and installing a JDK package, CocoaPods
+   (system gem or Homebrew) and Xcode's first-launch components normally asks for an administrator. When
+   macOS asks, type the **admin user's** name and password into that prompt; **do not** make `release` an
+   administrator. These tools land in shared places (`/Applications`, `/Library`, `/opt/homebrew`), as
+   §4.1 says. Inside `release`: Xcode from the App Store, Flutter (the version `ci.yml` pins) from
+   flutter.dev into this user's home, CocoaPods and a JDK 17, as the options paper's (b) lists. Sign in to
+   Xcode with your Account Holder Apple ID. Apply §4.5.
 8. **iOS, first release:** in `release`, clone the repository, check out the release tag, run
    `scripts/mobile/build-store.sh ios` (or let the lead give the exact command), open
    `build/ios/archive/Runner.xcarchive`, and in Organizer choose **Distribute App** → App Store Connect.
    As Account Holder you can cloud-sign directly (C1, C2); no distribution certificate needs to be created
    or backed up. (The script's own export may fail without a local certificate; see options paper §7.)
 9. **Optional, for (C) later:** in App Store Connect → Users and Access → Integrations, create a **team API
-   key** with **App Manager** access (C3). Download the `.p8` **once**, inside `release` only. Run one test
+   key** with **App Manager** access (C3). Download the `.p8` **once**, inside `release` only, from its
+   browser (allowed by §4.5 rule 7). Run one test
    `xcodebuild -exportArchive -allowProvisioningUpdates -authenticationKeyPath … -authenticationKeyID …
    -authenticationKeyIssuerID …` (C1) and record whether App Manager is enough. If it is not, revoke it and
    decide whether an Admin key is acceptable.
 10. **Android:** in `release`, generate the upload keystore with the `keytool` line in
-    `docs/mobile/android-release-signing.md`, put `google-services.json` and `android/key.properties` in
-    place, build with `scripts/mobile/build-store.sh android`, create the app in Play Console and keep **Play
+    `docs/mobile/android-release-signing.md`, download `google-services.json` from the Firebase console in
+    `release`'s browser (§4.5 rule 7), create `android/key.properties` (mode 600; it holds both passwords in
+    plain text, §4.4), build with `scripts/mobile/build-store.sh android`, create the app in Play Console,
+    upload the `.aab` from `release`'s browser, and keep **Play
     App Signing with a Google-generated key** (options paper G1, G3). Record the upload certificate's
     SHA-256.
 11. **Back up** the keystore and passwords as in §6 (password manager plus one offline encrypted copy).
-12. **Tell the lead** in writing that the Mac is reinstalled and credentials are rotated, with the date.
-    The lead then lifts the machine rule, and agents work only in the main user.
+12. **Tell the lead** in writing, with the date:
+    - **which erase was done: R (erase the disk and reinstall macOS from Recovery) or E (Erase All Content
+      and Settings, installed macOS kept)**;
+    - that every box of the step 2 checklist was ticked;
+    - which credentials of step 5 are rotated, and which production secrets are still waiting for the
+      coordinated rotation with the lead.
+
+    After **R**, the lead lifts the machine rule. After **E**, the lead first decides whether E is enough
+    (§5) and records that decision. Agents then work only in the main user.
 
 **If the owner declines the reinstall:** the lead recommends option (C) instead, with credentials rotated
-from a trusted device (a phone or another computer), and no release signing on this Mac at all. Option (A)
-remains **not recommended**; if the owner still chooses it, it should be limited to Android test tracks
-(resettable key) and never used for a production iOS or Play release.
+from a trusted device (a phone or another computer), and no release signing on this Mac at all.
 
-**Owner-only permissions in this plan (Account Holder):** cloud signing for App Store distribution (C1);
-creating, revoking and rotating certificates (C2, C4); creating and revoking team API keys (C3); granting
-"Access to Cloud Managed Distribution Certificate" to others (C1). Play: account owner, full access (P1).
+**Permissions this plan needs** (the owner, as Account Holder, has all of them):
+- Cloud signing for App Store distribution: Account Holder or Admin by default (C1).
+- Creating, revoking and rotating certificates: Account Holder or Admin (C2, C4).
+- Creating and revoking team API keys: Account Holder or Admin (C3).
+- Granting "Access to Cloud Managed Distribution Certificate" to a Developer (C1): **UNVERIFIED** which
+  roles may grant it; no cited page says.
+- Play: the account owner has full access (P1); Play App Signing is within "Release to production, exclude
+  devices, and use Play App Signing" (P1); configuring it needs admin permission (P2).
 
 ## 9. Open items (UNVERIFIED)
 
@@ -354,6 +461,8 @@ creating, revoking and rotating certificates (C2, C4); creating and revoking tea
 - Whether the current Apple role table still gives Admin cloud signing by default (C2).
 - Which Play permission may request an upload key reset, and how long it takes (P2).
 - Keychain Access UI steps for a separate keychain and per-app access (§2).
-- Apple's macOS Recovery reinstall steps; the default home-folder permissions for a new user (§2, §4.1).
+- Apple's Disk Utility erase steps for an Intel Mac with a T2 chip (page 102639, M12); the default
+  home-folder permissions for a new user (§4.1).
+- Which App Store Connect roles may grant "Access to Cloud Managed Distribution Certificate" (§8).
 - The tracker mapping for LR-06, LR-07c, LR-48, LR-49 and LR-08 (options paper §6).
 - Owner-time figures are estimates.
