@@ -108,7 +108,10 @@ jobs:
             aligns="$(readelf -lW "$so" 2>/dev/null | awk '$1 == "LOAD" { print $NF }')"
             if [ -z "$aligns" ]; then rec FAIL "LR-51 ELF  $name: no LOAD segments could be read"; continue; fi
             low=""; for a in $aligns; do [ $((a)) -ge 16384 ] || low="$low $a"; done
-            if [ -n "$low" ]; then rec FAIL "LR-51 ELF  $name: LOAD p_align below 16 KB:$low"
+            # Play's 16 KB rule covers the 64-bit ABIs only; a 32-bit library below 16 KB is noted, not failed.
+            if [ -n "$low" ] && [[ "$name" == */armeabi-v7a/* || "$name" == */x86/* ]]; then
+              echo "INFO          LR-51 ELF  $name: 32-bit, LOAD p_align$low (not covered by the 16 KB rule)" >> "$R"
+            elif [ -n "$low" ]; then rec FAIL "LR-51 ELF  $name: LOAD p_align below 16 KB:$low"
             else rec PASS "LR-51 ELF  $name: LOAD p_align $(echo $aligns | tr ' ' '\n' | sort -u | tr '\n' ' ')"; fi
           done < <(find "$RUNNER_TEMP/aab/base/lib" -name '*.so' 2>/dev/null | sort)
           [ "$n" -gt 0 ] || rec FAIL "LR-51 ELF  the App Bundle holds no native libraries (a Flutter release must)"
@@ -121,13 +124,10 @@ jobs:
           # if its SHA-256 matches the pin; otherwise the APK checks are not done.
           bt="$RUNNER_TEMP/bundletool/bundletool-all-$BUNDLETOOL_VERSION.jar"; mkdir -p "${bt%/*}"
           curl -fsSL -o "$bt" "https://github.com/google/bundletool/releases/download/$BUNDLETOOL_VERSION/bundletool-all-$BUNDLETOOL_VERSION.jar" || rm -f "$bt"
-          got="$( [ -f "$bt" ] && sha256sum "$bt" | cut -d' ' -f1 )"
+          got="$( [ -f "$bt" ] && sha256sum "$bt" | cut -d' ' -f1 || true )"
           echo "bundletool $BUNDLETOOL_VERSION downloaded sha256: ${got:-download failed}" >> "$R"
           apk=""
-          if [ "$BUNDLETOOL_SHA256" = UNPINNED ]; then
-            rec "NOT VERIFIED" "LR-50 SDK versions and LR-51 zipalign: bundletool checksum not pinned yet"
-            echo "::warning::BUNDLETOOL_SHA256 is not pinned; LR-50 and the zipalign check were NOT verified"
-          elif [ "$got" != "$BUNDLETOOL_SHA256" ]; then
+          if [ "$got" != "$BUNDLETOOL_SHA256" ]; then
             rec FAIL "bundletool checksum mismatch (pinned $BUNDLETOOL_SHA256, got ${got:-nothing}); not run"
           elif java -jar "$bt" build-apks --bundle="$AAB" --output="$RUNNER_TEMP/u.apks" --mode=universal \
                  --ks="$RUNNER_TEMP/ci-throwaway.jks" --ks-pass="pass:$CI_KS_PASS" --ks-key-alias=ci \
@@ -151,10 +151,11 @@ jobs:
             major="$(basename "$tools" | cut -d. -f1)"
             if ! [[ "$major" =~ ^[0-9]+$ ]] || [ "$major" -lt 35 ]; then
               rec "NOT VERIFIED" "LR-51 zipalign: build-tools $(basename "$tools") has no -P (needs 35+)"
+              echo "::warning::LR-51 zipalign was NOT verified: build-tools 35+ not found on the runner"
             elif out="$("$tools/zipalign" -c -P 16 -v 4 "$apk" 2>&1)"; then
-              grep -E 'lib/.*\.so' <<< "$out" >> "$R"; rec PASS "LR-51 zipalign -c -P 16 -v 4 on the universal APK"
+              grep -E 'lib/.*\.so' <<< "$out" >> "$R" || true; rec PASS "LR-51 zipalign -c -P 16 -v 4 on the universal APK"
             else
-              grep -E 'lib/.*\.so|BAD|FAIL' <<< "$out" >> "$R"; rec FAIL "LR-51 zipalign -c -P 16: native libraries not 16 KB aligned"
+              grep -E 'lib/.*\.so|BAD|FAIL' <<< "$out" >> "$R" || true; rec FAIL "LR-51 zipalign -c -P 16: native libraries not 16 KB aligned"
             fi
           fi
           [ "$bad" -eq 0 ] || { echo "::error::release readiness (Android) failed; see the report"; exit 1; }
