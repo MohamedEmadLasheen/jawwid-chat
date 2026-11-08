@@ -62,7 +62,9 @@ class MainActivity : FlutterFragmentActivity() {
             handleCallIntent(intent)
             handlePushTap(intent)
         }
-        // The tracker outlives an activity recreate (e.g. rotation): a live call keeps it.
+        // Rotation does not recreate this activity (manifest configChanges). A real
+        // recreate detaches the engine, whose cleanup clears the tracker, so this
+        // starts from nothing and fails closed: the lock screen comes back.
         applyLockScreenPolicy()
     }
 
@@ -193,8 +195,10 @@ class MainActivity : FlutterFragmentActivity() {
                     JawwidPush.attach(applicationContext, callChannel)
                     result.success(null)
                 }
-                // Every way a call ends for this device (decline, missed, ended, answered
-                // elsewhere, failed) reaches here, so the lock screen comes back.
+                // Dart sends this when a call ends for this device (decline, missed, ended,
+                // answered elsewhere, failed) and when its call controller is torn down
+                // mid-call (sign-out, session rebuild). Not sent if Dart never took the ring
+                // (busy, no session): that entry lapses with the tracker's ring window.
                 "dismiss" -> {
                     call.argument<String>("callId")?.let {
                         JawwidPush.cancelCall(applicationContext, it)
