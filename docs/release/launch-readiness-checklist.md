@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 23:04 Cairo (21:04 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-08 23:14 Cairo (21:14 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `83d5e687`, which contains #500, #502, #504–#515, #519 and #520. Main CI on it: run 42500808259, success.
 
 ## 1. Dashboard
@@ -94,14 +94,14 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
-1. **Owner approvals waiting** (all independently reviewed and accepted):
+1. **Owner approvals waiting** (all independently reviewed and accepted). **#516 and #518 re-checked 2026-11-08:** CI 30/30 on heads `e56568c1` and `e2fa3a0b`; `Review: ACCEPT` at those exact SHAs; 0 open threads; no conflict with `main` @ `83d5e687` and no shared files; the ruleset does not require an up-to-date branch. #518 changes `.github/workflows/`, so it also needs the owner's **Code Owner approval on GitHub**. Merge order: #516, then #518:
    - #516: LR-77 backup fix;
    - #518: its workflow guard;
    - #517: LR-78 ring-test fix;
    - #497, #498, #449.
 2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
 3. **OT-2b** (the owner's signing decision): turn the chosen option into a step-by-step handoff.
-4. **OT-3** (first deploy): the handoff draft is written. The lead answers its open questions; it is final once #516 and #518 are merged.
+4. **OT-3** (first deploy): the handoff draft is written and the lead has answered 10 of its 11 questions. The production Environment holds 19 secrets and 12 variables, with values checked where they are not secret. Still to answer: Q2, the database project and region, which the owner checks by looking only. The handoff becomes final after #516 and #518 merge and a docs follow-up.
 5. **LR-13, LR-27 and LR-79** as soon as #449 merges; **LR-26** once #449, #498 and #503 land.
 6. #503: merge if the other session has not.
 
@@ -114,7 +114,8 @@ The owner works through these in a separate terminal session, using the handoff 
 | ~~OT-1~~ **Done, verified 2026-11-08** | Create the App Store Connect app record and confirm the App ID `com.jawwid.jawwidChat` has Push Notifications. Browser only; no keys are created on this Mac | LR-06 (record part), LR-09a, LR-09c, LR-57b; first step toward LR-48 | **Verified by the lead from the screenshots (E-08).** Primary language English (U.S.) is kept for version 1, with an Arabic localization to be added (LR-09k). The developer account name shown is "Jawwid LLC", an input for OA-08 (legal entity), to be confirmed by the owner |
 | OT-2 | Decide where signed store builds are made (LR-76) | LR-76, then LR-06 (certificate), LR-07c, LR-48, LR-49, LR-08 | **Answered 2026-11-08:** no second Mac; the owner is the Account Holder. Follow-up **OT-2b**: decide how this Mac becomes trustworthy for signing (erase and reinstall, then a dedicated signing user, versus building on GitHub runners). The lead's assessment is in chat; agent J's verified paper is coming |
 | OT-3 | First deploy package: (1) approve implementing the LR-77 backup fix; (2) read the readiness report (#512); (3) approve the first production deploy (OA-21): a paid App Platform app (about $32/month) and 177 forward-only migrations | LR-77, LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued. **Handoff drafted 2026-11-08** (kept outside the repo; not usable yet). It has 11 open questions for the lead, among them: staging or production first, the database project and region, and whether the production LiveKit project exists. It also lists two documentation follow-ups once #516 and #518 merge: the readiness doc's "pending the owner" text, and `backup-recovery.md` on the scheduled-backup failure mode. Usable only after #516 and #518 merge, the questions are answered, and the owner approves the deploy (OA-21) |
-| ~~OT-4~~ **Done, accepted 2026-11-08 with documented gaps** | Play Console: create the app `Jawwid` / `com.jawwid.jawwid_chat` (Free, no upload) and screenshot the Dashboard and app signing | LR-07b, LR-69; prepares LR-09b, LR-09d, LR-09e, LR-09g, LR-09i | **Verified by the lead from the screenshots (E-09).** The owner approved the package name and the Play App Signing Terms during the task. Gaps: the Create app form was not captured (Free, en-US, App and the declarations are not on a screenshot); "Draft" status is not on a saved screenshot. Neither blocks anything |
+| ~~OT-4~~ **Done, accepted 2026-11-08 with documented gaps** | Play Console: create the app `Jawwid` / `com.jawwid.jawwid_chat` (Free, no upload) and screenshot the Dashboard and app signing | LR-07b, LR-69; prepares LR-09b, LR-09d, LR-09e, LR-09g, LR-09i | **Verified by the lead from the screenshots (E-09).** The owner approved the package name and the Play App Signing Terms during the task. Gaps: the Create app form was not captured (Free, en-US, App and the declarations are not on a screenshot); "Draft" status is not on a saved screenshot. Neither blocks anything. **Creating the app is not a release:** nothing is uploaded, tested, reviewed or published, and LR-49 and every launch item stay open |
+| **OT-4b (now)** | Look only: expand the Production and closed-testing "View tasks" lists on the Play Dashboard and copy their wording. Handoff: `~/jawwid-owner-evidence/OT-4b/HANDOFF.md` | LR-69 (closes its residual check) | **Ready 2026-11-08** |
 | OT-5 | Legal facts and hosting (OA-08), final Terms texts (OA-09) | LR-04, LR-02d, LR-02a | Queued |
 | OT-6 | Decisions: target audience (OA-11), payments (OA-12), storefronts (OA-10) | LR-10, LR-15, LR-17, LR-09c–e, LR-09k | Queued |
 
