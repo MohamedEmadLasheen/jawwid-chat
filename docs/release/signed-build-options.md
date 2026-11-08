@@ -235,7 +235,9 @@ This paper recommends the first: the owner then only approves, and an agent can 
 
 **Why environment secrets limited to `main` are mandatory, not a preference.** The hardening page says:
 "Any user with write access to your repository has read access to all secrets configured in your
-repository." (H4) `jawwid-bot`, the account every agent session uses, has write access. A signing key in
+repository." (H4) `jawwid-bot`, the account every agent session uses, has **write** access (verified
+by the lead on 2026-11-08: `gh api repos/MohamedEmadLasheen/jawwid-chat/collaborators/jawwid-bot/permission`
+returns `write`, not `admin`). A signing key in
 **repository** secrets could therefore be read by any agent through a workflow on its own branch, with no
 approval. Environment secrets are released only after the required reviewer approves, and only to runs
 from the allowed branch, `main` (H6). Nobody may later move a signing secret into repository secrets "for
@@ -243,7 +245,7 @@ convenience".
 
 | | iOS | Android |
 |---|---|---|
-| Where the private key lives | GitHub environment secrets: the base64 `.p12`, its password, the profile (H7). Each secret is at most 48 KB (H3). The secrets are decrypted onto a fresh VM that is destroyed after the job (H7). The `.p12` must first be **made somewhere**: its private key comes from a CSR on some trusted machine. That leads back to (a) or (b), unless an App Store Connect API key with cloud signing works from `xcodebuild` (A5, **unverified**). GitHub's recipe (H7) only imports the `.p12` and profile into a keychain. This project uses `CODE_SIGN_STYLE = Automatic` (`ios/Runner.xcodeproj/project.pbxproj:428`). A fresh runner not signed in to Apple therefore also needs one of: manual signing settings for the Release build; an `--export-options-plist` that names the profile (G5); or an App Store Connect API key with `-allowProvisioningUpdates` (how this behaves is unverified, A5). Without one, the first run is expected to fail at export. | Environment secrets: the base64 `.jks` and its passwords. The keystore is also generated somewhere first. |
+| Where the private key lives | GitHub environment secrets: the base64 `.p12`, its password, the profile (H7). Each secret is at most 48 KB (H3). The secrets are decrypted onto a fresh VM that is destroyed after the job (H7). The `.p12` must first be **made somewhere**: its private key comes from a CSR on some trusted machine. That leads back to (a) or (b), unless an App Store Connect API key with cloud signing works from `xcodebuild` (A5, **unverified**). GitHub's recipe (H7) only imports the `.p12` and profile into a keychain. This project uses `CODE_SIGN_STYLE = Automatic` (`ios/Runner.xcodeproj/project.pbxproj:460`, the Release configuration; Debug and Profile are Automatic too). A fresh runner not signed in to Apple therefore also needs one of: manual signing settings for the Release build; an `--export-options-plist` that names the profile (G5); or an App Store Connect API key with `-allowProvisioningUpdates` (how this behaves is unverified, A5). Without one, the first run is expected to fail at export. | Environment secrets: the base64 `.jks` and its passwords. The keystore is also generated somewhere first. |
 | Who could misuse it | Anyone who can change workflow code that reaches `main` and then get the environment approved. Fork PRs do **not** receive secrets (H2), but `pull_request_target` would (H4, H5). Anyone with admin rights on the repository. Anyone with write access, if a signing secret were ever put in repository secrets: "Any user with write access to your repository has read access to all secrets configured in your repository." (H4) That includes `jawwid-bot` and so every agent session (see the design above). Any third-party action the workflow uses (pin by SHA). The logs, which any logged-in GitHub user can read (H8). GitHub redacts registered secrets, but "automatic redaction is not guaranteed" (H4). Values **derived** from a secret are the real risk: a base64-decoded `.p12`, a keychain or `security` dump, or a password echoed by `set -x`. The workflow must never print these. GitHub itself. | Same. Upload key risk is bounded by G1 and G2. |
 | Setup time (estimate) | 2–3 days of engineering plus owner approvals, plus making the `.p12` (above). This includes solving export under automatic signing (above), which may take several runs. | Under a day after the keystore exists |
 | Money (verified) | Standard GitHub-hosted runners are free in public repositories (H1). Larger runners are billed (H1). If the repository were made private, macOS minutes cost $0.062/min (H1). | Same; Linux $0.006/min if private (H1) |
@@ -253,7 +255,10 @@ What the owner must do:
 1. Approve, explicitly, adding `.github/workflows/release-build.yml` and creating the Environment and its
    secrets (§5).
 2. In repository Settings → Environments, create `release`. Add yourself as required reviewer, turn on
-   Prevent self-review, and allow only `main`.
+   Prevent self-review, allow only `main`, and **deselect "Allow administrators to bypass configured
+   protection rules"** (H6). Otherwise an administrator's run can skip the approval, and the claims
+   above ("every run waits for the owner's approval", "an agent can never approve") hold only while
+   no agent account is an administrator. Never give `jawwid-bot` admin.
 3. Paste the secrets yourself in the GitHub UI: the `.p12` and its password, the profile, the keystore and
    its passwords, `google-services.json`, and `SENTRY_DSN`. Never through an agent.
 4. Confirm the fork-PR setting "Require approval for all external contributors" (H5).
@@ -329,7 +334,7 @@ needs a signed store build. **The lead should check this mapping against the tra
   projects on it.
 - iOS: archive with `scripts/mobile/build-store.sh ios`, then distribute from the Xcode Organizer so Apple
   cloud-signs (A2). No distribution private key needs to be kept on disk (A6 still unverified).
-  - `flutter build ipa` also tries to export. Without a distribution certificate that export may fail. The
+  - `flutter build ipa` also tries to export. Without a distribution certificate that export may fail (**unverified**: the Flutter page does not say). The
     script runs under `set -euo pipefail`, so it then stops before printing where the symbols and dSYMs
     are. The files are still written: `build/symbols/ios/<BUILD_NAME>+<BUILD_NUMBER>` and
     `build/ios/archive/Runner.xcarchive/dSYMs`.
