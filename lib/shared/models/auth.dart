@@ -1,3 +1,4 @@
+import 'legal.dart';
 import 'user_role.dart';
 
 /// Failures the *client* decides, as opposed to the `AUTH.*` codes the backend sends.
@@ -36,6 +37,7 @@ class AuthSession {
     required this.refreshToken,
     required this.accessTokenExpiresAt,
     this.remembered,
+    this.legal,
   });
 
   final String accessToken;
@@ -47,6 +49,10 @@ class AuthSession {
   /// browser store reads it (localStorage when true, sessionStorage otherwise); the phone
   /// keeps every session in the Keychain / Keystore.
   final bool? remembered;
+
+  /// PD-58: the token pair's `legal` block (login, refresh, password change), when the
+  /// server sent one. Never stored with the tokens: it is the server's answer of the moment.
+  final LegalStatus? legal;
 
   /// Treat the token as expired slightly early so a request does not race the expiry.
   bool isExpired(DateTime now, {Duration skew = const Duration(seconds: 30)}) =>
@@ -70,6 +76,7 @@ class AuthUser {
     this.locale,
     this.timeZone,
     this.isSuperAdmin = false,
+    this.legal,
   });
 
   final String id;
@@ -86,6 +93,22 @@ class AuthUser {
   /// PD-20 amendment: the organization's super admin, signed in with the Sales tabs.
   /// Only ever true together with [UserRole.sales].
   final bool isSuperAdmin;
+
+  /// PD-58: what this account must still accept (`GET /me`'s `legal`). Null when the server
+  /// sends no block at all -- the API before ENG-10 -- and then no gate is shown.
+  final LegalStatus? legal;
+
+  /// The same principal with another [legal] block; everything else unchanged.
+  AuthUser withLegal(LegalStatus? legal) => AuthUser(
+        id: id,
+        displayName: displayName,
+        role: role,
+        avatarUrl: avatarUrl,
+        locale: locale,
+        timeZone: timeZone,
+        isSuperAdmin: isSuperAdmin,
+        legal: legal,
+      );
 
   bool get isParent => role == UserRole.parent;
   bool get isTeacher => role == UserRole.teacher;

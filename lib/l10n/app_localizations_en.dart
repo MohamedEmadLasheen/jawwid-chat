@@ -5495,4 +5495,72 @@ class L10nEn extends L10n {
   @override
   String get blockedPeopleLoadError =>
       'We couldn\'t load the people you blocked.';
+
+  @override
+  String get legalGateTitle => 'Before you continue';
+
+  @override
+  String get legalGateIntro =>
+      'To keep using Jawwid, please read the documents below and agree to each one.';
+
+  @override
+  String get legalDocTermsTitle => 'Terms of Use';
+
+  @override
+  String get legalDocCodeOfConductTitle => 'Code of Conduct';
+
+  @override
+  String get legalDocOtherTitle => 'Legal document';
+
+  @override
+  String get legalAgreeTerms => 'I have read and agree to the Terms of Use';
+
+  @override
+  String get legalAgreeCodeOfConduct =>
+      'I have read and agree to the Code of Conduct';
+
+  @override
+  String get legalAgreeOther => 'I have read and agree to this document';
+
+  @override
+  String get legalGateOpen => 'Open';
+
+  @override
+  String legalGateOpenDocument(String document) {
+    return 'Open $document';
+  }
+
+  @override
+  String get legalGateAgree => 'Agree';
+
+  @override
+  String get legalGateChanged =>
+      'These documents have changed. Please read them and agree again.';
+
+  @override
+  String get legalGateSupportSession =>
+      'A support session can\'t agree on the account holder\'s behalf. The account holder must agree themselves.';
+
+  @override
+  String get legalGateFailed =>
+      'We couldn\'t save your agreement. Please try again.';
+
+  @override
+  String get legalUnavailableTitle => 'Temporarily unavailable';
+
+  @override
+  String get legalUnavailableBody =>
+      'We can\'t show the terms of use right now. Please try again in a little while.';
+
+  @override
+  String get signupLegalUnavailable =>
+      'Creating an account is temporarily unavailable. Please try again in a little while.';
+
+  @override
+  String get signupLegalChanged =>
+      'The terms have changed. Please read them and agree again.';
+
+  @override
+  String get legalLoadFailed =>
+      'We couldn\'t load the terms of use. Please try again.';
 }

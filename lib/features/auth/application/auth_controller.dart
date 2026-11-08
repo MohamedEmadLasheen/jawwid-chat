@@ -7,6 +7,8 @@ import '../../../core/errors/app_error.dart';
 import '../../../core/logging/redacting_logger.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../../../shared/models/auth.dart';
+import '../../../shared/models/legal.dart';
+import '../../legal/application/legal_wire.dart';
 import '../domain/auth_state.dart';
 import 'session_termination.dart';
 
@@ -24,8 +26,10 @@ class AuthController extends Notifier<AuthState> {
     void Function(AuthUser principal)? onPrincipal,
     Future<void> Function()? onSessionCleared,
     SessionTermination? termination,
+    LegalWire? legal,
     RedactingLogger logger = const RedactingLogger(),
   })  : _repository = repository,
+        _legalWire = legal,
         _tokens = tokens,
         _clearLocalData = clearLocalData,
         _onPrincipal = onPrincipal,
@@ -54,6 +58,22 @@ class AuthController extends Notifier<AuthState> {
   /// and leaving a revoked user looking at a protected screen until they restart.
   final SessionTermination? _termination;
 
+  /// PD-58: the wire from the transport for the Terms of Use -- a token pair's `legal` block
+  /// and every 403 `COMM.TERMS_NOT_ACCEPTED`. Bound in [build], like [_termination].
+  final LegalWire? _legalWire;
+
+  /// The identity refresh a TERMS_NOT_ACCEPTED refusal asked for, while it is out.
+  Future<void>? _termsCheck;
+
+  /// At most ONE more refresh, queued behind [_termsCheck] by a refusal that arrived while it
+  /// was out: that refusal may be newer than the answer already on its way.
+  Future<void>? _termsQueued;
+
+  /// PD-58: bumped by every [adoptLegal]. A `/me` that was sent before the latest adopted
+  /// block answers about an older moment, so its `legal` is not taken (B1): it can neither
+  /// bring back a gate an acceptance just lifted, nor lift one a newer answer raised.
+  int _legalSeq = 0;
+
   final RedactingLogger _logger;
 
   StreamSubscription<void>? _revocationWatch;
@@ -66,8 +86,10 @@ class AuthController extends Notifier<AuthState> {
   @override
   AuthState build() {
     _termination?.bind(onSessionEnded);
+    _legalWire?.bind(report: adoptLegal, refused: onTermsNotAccepted);
     ref.onDispose(() {
       _termination?.unbind(onSessionEnded);
+      _legalWire?.unbind(adoptLegal);
       _revocationWatch?.cancel();
     });
     return const AuthUnknown();
@@ -155,7 +177,10 @@ class AuthController extends Notifier<AuthState> {
       );
       await _tokens.write(session);
 
-      final principal = await _repository.currentUser();
+      final fetched = await _repository.currentUser();
+      // PD-58: `/me` and the token pair carry the same block; the pair's stands in only
+      // when `/me` has none.
+      final principal = fetched.legal == null && session.legal != null ? fetched.withLegal(session.legal) : fetched;
       _adopt(principal);
       state = AuthAuthenticated(principal);
     } catch (thrown) {
@@ -219,9 +244,18 @@ class AuthController extends Notifier<AuthState> {
   /// refusal, which is a session ending and goes down the one path for that.
   Future<void> refreshIdentity() async {
     if (state is! AuthAuthenticated) return;
+    final seq = _legalSeq;
 
     try {
-      final principal = await _repository.currentUser();
+      final fetched = await _repository.currentUser();
+      // PD-58: the block now held stands when this answer has none (it says nothing new, so
+      // it never lifts a gate already standing) and when a newer block was adopted while this
+      // request was out (the answer is stale, B1). Fail closed both ways.
+      final known = state.user?.legal;
+      final stale = _legalSeq != seq;
+      final principal = (fetched.legal == null || stale) && known != null ? fetched.withLegal(known) : fetched;
+      // A sign-out while this was in flight wins: the answer was about a session now over.
+      if (state is! AuthAuthenticated || state.user?.id != principal.id) return;
       state = AuthAuthenticated(principal);
       _onPrincipal?.call(principal);
     } on AppError catch (error) {
@@ -230,6 +264,49 @@ class AuthController extends Notifier<AuthState> {
       } else {
         _logger.warn('identity refresh failed', data: {'kind': error.kind.name});
       }
+    }
+  }
+
+  /// PD-58: what the server now says this account must accept -- from `GET /me/legal`, the
+  /// accept answer, or a token pair. Replaces the principal's block; nothing else changes.
+  /// Ignored when nobody is signed in. An unchanged block (every token refresh carries one)
+  /// leaves the state alone, so nothing that watches the session rebuilds -- but it still
+  /// counts as the newest answer for [refreshIdentity].
+  void adoptLegal(LegalStatus legal) {
+    final current = state;
+    if (current is! AuthAuthenticated) return;
+    _legalSeq++;
+    if (current.principal.legal == legal) return;
+    state = AuthAuthenticated(current.principal.withLegal(legal));
+  }
+
+  /// PD-58: a 403 `COMM.TERMS_NOT_ACCEPTED` from any route. The refusal's own
+  /// `detail.required` puts the gate up at once (fail closed, even if that refusal is old);
+  /// then the identity is re-read, which is the answer that stands. A refusal arriving while
+  /// a re-read is out queues one more after it -- at most one -- so a fresh `/me` always has
+  /// the last word: a burst asks `/me` at most twice.
+  Future<void> onTermsNotAccepted(AppError error) {
+    if (state is! AuthAuthenticated) return Future.value();
+    final detail = LegalDocument.listFromWire(error.detail?['required']);
+    if (detail != null && detail.isNotEmpty) {
+      adoptLegal(LegalStatus(state: LegalState.required, required: List.unmodifiable(detail)));
+    }
+    final inFlight = _termsCheck;
+    if (inFlight == null) return _startTermsCheck();
+    // Runs however the re-read ended -- an error included -- so the queue always clears.
+    return _termsQueued ??= inFlight.catchError((Object _) {}).whenComplete(() => _termsQueued = null).then((_) => _startTermsCheck());
+  }
+
+  /// One re-read for the Terms of Use. It never fails to its caller: the refusal was the
+  /// transport's (`LegalWire.refused` does not await it), so an error here -- even one that
+  /// is not an [AppError], which [refreshIdentity] lets through -- would be uncaught.
+  Future<void> _startTermsCheck() => _termsCheck = _termsReread().whenComplete(() => _termsCheck = null);
+
+  Future<void> _termsReread() async {
+    try {
+      await refreshIdentity();
+    } catch (error) {
+      _logger.warn('terms re-read failed', data: {'type': error.runtimeType.toString()});
     }
   }
 

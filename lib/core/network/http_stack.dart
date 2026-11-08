@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../shared/models/legal.dart';
 import '../data/repositories.dart';
 import '../errors/app_error.dart';
 import '../logging/redacting_logger.dart';
@@ -36,10 +37,12 @@ class StoredTokenProvider implements TokenProvider, RenewalReporting {
     required AuthRepository auth,
     required Future<void> Function(AppError) onEnded,
     Future<Renewal> Function(Future<Renewal> Function() exchange)? exclusive,
+    void Function(LegalStatus legal)? onLegal,
   })  : _store = store,
         _auth = auth,
         _onEnded = onEnded,
-        _exclusive = exclusive;
+        _exclusive = exclusive,
+        _onLegal = onLegal;
 
   final TokenStore _store;
   final AuthRepository _auth;
@@ -49,6 +52,10 @@ class StoredTokenProvider implements TokenProvider, RenewalReporting {
   /// so that no other holder of the same token can interleave. Only the browser store needs
   /// it (its tabs may share a token); null runs the exchange directly.
   final Future<Renewal> Function(Future<Renewal> Function() exchange)? _exclusive;
+
+  /// PD-58: a refreshed token pair's `legal` block, handed on when the server sent one, so a
+  /// version published while the app is open reaches the gate at the next renewal.
+  final void Function(LegalStatus legal)? _onLegal;
 
   /// Empty means none: the PD-28 browser store keeps the access token in memory only, so after
   /// a reload it has a refresh token and no access token. No header is sent, the API answers
@@ -83,6 +90,8 @@ class StoredTokenProvider implements TokenProvider, RenewalReporting {
     try {
       final renewed = await _auth.refresh(session.refreshToken);
       await _store.write(renewed);
+      final legal = renewed.legal;
+      if (legal != null) _onLegal?.call(legal);
       return Renewal.renewed(renewed.accessToken);
     } on AppError catch (error) {
       // Only a refresh that provably never arrived keeps the session. Anything else may have
@@ -193,10 +202,11 @@ ApiClient buildApiClient({
   required TokenProvider tokens,
   RedactingLogger logger = const RedactingLogger(),
   HttpClientAdapter? adapter,
+  void Function(AppError error)? onTermsNotAccepted,
 }) {
   final dio = Dio(_baseOptions(config));
 
   if (adapter != null) dio.httpClientAdapter = adapter;
 
-  return ApiClient(dio: dio, tokens: tokens, logger: logger);
+  return ApiClient(dio: dio, tokens: tokens, logger: logger, onTermsNotAccepted: onTermsNotAccepted);
 }
