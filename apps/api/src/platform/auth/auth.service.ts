@@ -872,6 +872,7 @@ export class AuthService {
       where: { staffSessionId: session.id, endedAt: null },
       data: { staffSessionId: pair.sessionId },
     });
+    await this.devicePushTokensFollow(session.id, pair.sessionId);
     return pair;
   }
 
@@ -972,6 +973,22 @@ export class AuthService {
     // the retry of a revocation that committed and was not confirmed. Throws
     // RevocationUnconfirmedError (503) rather than report an unconfirmed end.
     await this.revocation.confirmRevoked();
+  }
+
+  /**
+   * LR-46: a push token is bound to the session that registered it, and
+   * revoking that session deactivates it (a trigger on chat.session). A
+   * rotation -- a refresh, or a password change renewing the current session
+   * -- is the same sign-in continuing, so the trigger skips those two reasons
+   * ('rotated', PASSWORD_ROTATED_REASON; the migration names both) and the
+   * tokens move to the successor here, so that ending the successor still
+   * reaches them. Called after the successor exists.
+   */
+  private async devicePushTokensFollow(fromSessionId: string, toSessionId: string): Promise<void> {
+    await this.prisma.deviceToken.updateMany({
+      where: { sessionId: fromSessionId },
+      data: { sessionId: toSessionId },
+    });
   }
 
   /** A revocation on a request that is refused anyway: its barrier cannot change the answer. */
@@ -1228,6 +1245,7 @@ export class AuthService {
       where: { staffSessionId: keepSessionId, endedAt: null },
       data: { staffSessionId: pair.sessionId },
     });
+    await this.devicePushTokensFollow(keepSessionId, pair.sessionId);
     // RT-009: the sockets of the other sessions, not this device's.
     if (ids.length > 0) this.revocation.disconnectSessions(ids);
     await this.revocation.confirmRevoked();
