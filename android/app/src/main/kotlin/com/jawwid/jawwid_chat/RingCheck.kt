@@ -71,4 +71,31 @@ object RingCheck {
 
     /** Build.VERSION_CODES.UPSIDE_DOWN_CAKE, without Android on the test classpath. */
     const val ANDROID_14 = 34
+
+    /**
+     * LR-79: which calls are finished, so a ring check never re-posts one. Answer,
+     * Decline and Dart's `dismiss` mark a call ([markSettled], from cancelCall);
+     * sign-out marks every ring up to now ([clearAll]). A call is remembered for
+     * [keepMs] (two rings' time). The clock is passed in so the JVM tests can drive it.
+     */
+    class SettledCalls(private val now: () -> Long, private val keepMs: Long) {
+        private val calls = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+        @Volatile
+        private var allClearedAt = Long.MIN_VALUE
+
+        fun markSettled(callId: String) {
+            val t = now()
+            calls.entries.removeIf { t - it.value > keepMs }
+            calls[callId] = t
+        }
+
+        fun clearAll() {
+            allClearedAt = now()
+        }
+
+        /** Finished since a ring that started at [ringStartedAt] (same clock) was posted. */
+        fun isSettled(callId: String, ringStartedAt: Long): Boolean =
+            calls.containsKey(callId) || allClearedAt >= ringStartedAt
+    }
 }

@@ -15,7 +15,6 @@ import androidx.core.app.Person
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Store blocker S-05: what Android shows for a push while the app is closed,
@@ -85,11 +84,7 @@ object JawwidPush {
      * `dismiss`, all through [cancelCall]), with when, so a ring check never
      * re-posts one. Kept for two rings' time; this process only, like the check.
      */
-    private val settledCalls = ConcurrentHashMap<String, Long>()
-
-    /** LR-79: sign-out cleared every ring at this time ([clearMessages]). */
-    @Volatile
-    private var allRingsClearedAt = 0L
+    private val settled = RingCheck.SettledCalls({ SystemClock.elapsedRealtime() }, 2 * RING_TIMEOUT_MS)
 
     /**
      * LR-79: the ring checks run here, on the main thread, where Answer, Decline and
@@ -205,7 +200,7 @@ object JawwidPush {
     private fun checkRing(context: Context, callId: String, id: Int, builder: NotificationCompat.Builder, startedAt: Long, repostsDone: Int) {
         val elapsed = SystemClock.elapsedRealtime() - startedAt
         val active = isRingActive(context, id)
-        when (RingCheck.next(active, isSettled(callId, startedAt), repostsDone, elapsed, RING_TIMEOUT_MS)) {
+        when (RingCheck.next(active, settled.isSettled(callId, startedAt), repostsDone, elapsed, RING_TIMEOUT_MS)) {
             RingCheck.Next.ACTIVE ->
                 if (repostsDone > 0) android.util.Log.i(TAG, "ring $callId active after re-post $repostsDone")
             RingCheck.Next.SETTLED, RingCheck.Next.EXPIRED -> Unit
@@ -214,8 +209,10 @@ object JawwidPush {
             RingCheck.Next.REPOST -> {
                 val attempt = repostsDone + 1
                 android.util.Log.w(TAG, "ring $callId not active; re-post $attempt of ${RingCheck.MAX_REPOSTS}")
-                // The re-posted ring ends when the first one would have.
-                builder.setTimeoutAfter(RING_TIMEOUT_MS - elapsed)
+                // The re-posted ring ends when the first one would have. If the first one was
+                // only slow to appear (not dropped), the update must not sound a second time:
+                // only-alert-once alerts a ring that is not showing, and never re-alerts one that is.
+                builder.setTimeoutAfter(RING_TIMEOUT_MS - elapsed).setOnlyAlertOnce(true)
                 if (notify(context, id, builder)) watchRing(context, callId, id, builder, startedAt, attempt)
             }
         }
@@ -236,14 +233,6 @@ object JawwidPush {
         }
     }
 
-    private fun isSettled(callId: String, startedAt: Long): Boolean =
-        settledCalls.containsKey(callId) || allRingsClearedAt >= startedAt
-
-    private fun markSettled(callId: String) {
-        val now = SystemClock.elapsedRealtime()
-        settledCalls.entries.removeIf { now - it.value > 2 * RING_TIMEOUT_MS }
-        settledCalls[callId] = now
-    }
 
     /**
      * An ordinary notification (PD-32), drawn by the app because FCM sends data only.
@@ -307,7 +296,7 @@ object JawwidPush {
 
     /** Sign-out (PD-32): this app's notifications leave the tray, a ringing call's included. */
     fun clearMessages(context: Context) {
-        allRingsClearedAt = SystemClock.elapsedRealtime() // LR-79: no ring check re-posts one
+        settled.clearAll() // LR-79: no ring check re-posts one
         NotificationManagerCompat.from(context).cancelAll()
     }
 
@@ -344,7 +333,8 @@ object JawwidPush {
 
     /** Answer, Decline and Dart's `dismiss` all come here: the ring is down for good (LR-79). */
     fun cancelCall(context: Context, callId: String) {
-        markSettled(callId)
+        // LR-79: marked before the cancel, so a ring check that runs next never re-posts it.
+        settled.markSettled(callId)
         NotificationManagerCompat.from(context).cancel(notificationId(callId))
     }
 

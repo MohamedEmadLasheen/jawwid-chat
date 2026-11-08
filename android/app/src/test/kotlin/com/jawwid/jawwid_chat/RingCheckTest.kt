@@ -68,4 +68,41 @@ class RingCheckTest {
         assertFalse(RingCheck.fullScreenIntentAllowed(34) { false })
         assertFalse(RingCheck.fullScreenIntentAllowed(36) { false })
     }
+
+    // ---- LR-79: which calls are finished (the part most likely to ring for an ended call)
+
+    private var clock = 10_000L
+    private fun settled() = RingCheck.SettledCalls({ clock }, keepMs = 2 * timeout)
+
+    @Test
+    fun aCallAnsweredDeclinedOrDismissedIsNeverRepostedAgain() {
+        val s = settled()
+        val ringStarted = clock
+        assertFalse(s.isSettled("c1", ringStarted))
+        clock += 500
+        s.markSettled("c1")
+        assertTrue(s.isSettled("c1", ringStarted))
+        assertFalse("another call is not affected", s.isSettled("c2", ringStarted))
+    }
+
+    @Test
+    fun signOutSettlesEveryRingPostedBeforeIt_butNotALaterOne() {
+        val s = settled()
+        val earlier = clock
+        clock += 1_000
+        s.clearAll()
+        assertTrue(s.isSettled("any", earlier))
+        clock += 1
+        assertFalse("a ring that starts after the sign-out is live", s.isSettled("any", clock))
+    }
+
+    @Test
+    fun aFinishedCallIsForgottenAfterTwoRingsTime_onTheNextMark() {
+        val s = settled()
+        s.markSettled("old")
+        clock += 2 * timeout + 1
+        s.markSettled("new")
+        assertFalse(s.isSettled("old", 0L))
+        assertTrue(s.isSettled("new", 0L))
+    }
 }
