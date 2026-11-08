@@ -30,6 +30,10 @@ and adult action (checklist G-6 to G-10). None of that is built.
 
 **Answer:** "All or some functionality in my app is restricted" → add instructions.
 
+**Superseded by [`review-notes.md`](review-notes.md) §3 (2026-11-09).** That version has three accounts,
+including the deletion-test parent from #528. It adds the call test and the staff role, and sets out the
+payments choice (OA-12). The text below is kept for its history.
+
 Review accounts: `docs/release/review-accounts.md` (own "Jawwid App Review" organization; e-mail and
 password; no verification code). They exist only after launch items LR-01 (production backend) and LR-05
 (provisioning).
@@ -134,21 +138,49 @@ No real person's face, name or child in the video; use the review accounts.
 
 ## 6. Full-screen intent (Play Console → App content → Full-screen intent)
 
-**What the app does:** an incoming call rings over the lock screen while the app is closed, like a phone
-call (`AndroidManifest.xml:18-23`; `JawwidPush`). Without the permission the ring is a heads-up
-notification, still with Answer and Decline.
+**Launch item LR-09i. TRUE ONLY AFTER #524 MERGES** (LR-27, stacked on #449). Updated 2026-11-09 from
+#524's branch `claude/lr79-ring-repost`. Do not submit a build without #524: on `main` the app never asks
+whether it may use full-screen intents.
+
+**What the app does (with #524):**
+- An incoming call rings over the lock screen while the app is closed, like a phone call
+  (`android/app/src/main/AndroidManifest.xml:18-23` on `main`). The ring is a `CallStyle` incoming-call
+  notification with Answer and Decline. `JawwidPush` posts it from an FCM data message
+  (`AndroidManifest.xml:64-71`).
+- **On Android 14 and later**, the app asks the system whether it may still use full-screen intents
+  (`NotificationManager.canUseFullScreenIntent()`):
+  - #524 `JawwidPush.kt:180-188` (`canUseFullScreenIntent`);
+  - `RingCheck.kt:69-70`: below Android 14 the answer is always yes.
+- **When the permission is denied**, the call still rings, as a heads-up notification with Answer and
+  Decline. The app records that the ring was heads-up only (#524 `JawwidPush.kt:167-169`). The intent is
+  always attached (`:153-161`), because Android refuses to build a `CallStyle` notification without one.
+  Android itself turns the request into a heads-up notification.
+- Dart can ask the same question and can open the system setting
+  (`Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`, with the app's notification settings as the
+  fallback):
+  - #524 `MainActivity.kt:186-187`, `:257`;
+  - `lib/core/call_native/call_presentation.dart:214-228`.
+
+  **No screen calls them yet.** #524's description lists the in-app prompt as a follow-up that needs new
+  Arabic and English strings. So do not tell Google that the app *offers* the setting.
 
 | Question | Answer |
 |---|---|
 | Does your app's core functionality need full-screen intent? | **Yes: calling** (receiving incoming audio calls and live-lesson calls) |
-| Describe the use | "The app shows a full-screen incoming-call screen when a teacher, the academy or a family member calls, including for a scheduled live lesson. It is used only for incoming calls, never for messages, reminders or promotions." |
+| Describe the use | "The app shows a full-screen incoming-call screen when a teacher, the academy or a family member calls, including for a scheduled live lesson. It is used only for incoming calls, never for messages, reminders or promotions. On Android 14 and later the app checks whether it may use full-screen intents; if the permission is not granted, the call still rings as a heads-up notification with Answer and Decline." |
 
 Notes:
 - Google grants the permission by default only to apps whose core function is calling or alarms. Calls
-  and live lessons are the core of this app, but Google decides. If refused, nothing breaks: the heads-up
-  ring remains.
-- Launch item LR-27 is open: the app does not yet check `canUseFullScreenIntent()` on Android 14+ or
-  offer the setting. Fix it before submitting, so the reviewer's phone behaves as described.
+  and live lessons are the core of this app, but Google decides. If Google refuses, nothing breaks: the
+  heads-up ring remains.
+- **Before submitting:** check the submitted build contains #524 (`git merge-base --is-ancestor` with the
+  build's commit). Then, on an Android 14+ phone with full-screen intents turned off for the app (the
+  system's full-screen notification setting for Jawwid; its name differs by phone maker), confirm that a call still rings as a heads-up notification
+  and that Answer and Decline work. This is one of #524's own device checks ("FSI denied shows a heads-up
+  ring"). **Not verified:** no device test was run (machine rule), and no CI job runs `RingCheckTest` yet
+  (#524, "Known gaps").
+- When the follow-up prompt ships, the description may add: "and offers the system setting to turn it
+  back on". Not before.
 
 ## 7. Permissions (what the app asks for, and why)
 
