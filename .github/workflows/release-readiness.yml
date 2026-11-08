@@ -1,0 +1,230 @@
+# Release readiness: CI evidence for launch tracker items, before any real signing exists.
+#   LR-50  Android target API 36, min SDK 26          (aapt2 badging of an APK made from the AAB)
+#   LR-51  16 KB alignment of every native library    (ELF LOAD p_align, and zipalign -P 16)
+#   LR-52  iOS app built with Xcode 26 / iOS 26 SDK   (DTXcode, DTSDKName in the built Info.plist)
+#   LR-58 / LR-73  privacy manifest inside the built iOS app
+# docs/release/release-readiness-ci.md says what each check proves and what it does not.
+# Nothing here is for distribution: throwaway key, placeholder Firebase file, placeholder URLs.
+# Only text reports are uploaded, never an AAB, APK or .app. No secrets, no environment.
+name: Release readiness
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'ios/**'
+      - 'pubspec.*'
+      - 'lib/**'
+      - 'scripts/mobile/**'
+      - '.github/workflows/release-readiness.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+# The values a store build must carry (scripts/mobile/build-store.sh), as harmless placeholders.
+# They pass the script's checks (https, production-looking host) but point at the reserved
+# .invalid domain, so the built app can reach nothing. No value here is a secret.
+env:
+  BUILD_NAME: '0.0.1'
+  BUILD_NUMBER: '1'
+  API_BASE_URL: 'https://api.ci-not-for-distribution.invalid/api/v1'
+  PRIVACY_POLICY_URL: 'https://ci-not-for-distribution.invalid/privacy/{lang}'
+  TERMS_URL: 'https://ci-not-for-distribution.invalid/terms/{lang}'
+  SUPPORT_URL: 'https://ci-not-for-distribution.invalid/support/{lang}'
+  SUPPORT_EMAIL: 'support@ci-not-for-distribution.invalid'
+  SENTRY_DSN: 'https://0@ci-not-for-distribution.invalid/0'
+  SENTRY_ENVIRONMENT: 'ci-not-for-distribution'
+
+jobs:
+  android:
+    name: Release readiness · Android (LR-50, LR-51)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUNDLETOOL_VERSION: '1.18.1'
+      # SHA-256 of bundletool-all-<version>.jar. Until it is pinned the jar is never run and the
+      # APK checks are reported NOT VERIFIED; the report prints the downloaded file's hash.
+      BUNDLETOOL_SHA256: 'UNPINNED'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Use the runner's preinstalled JDK 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+      - name: Throwaway release key and placeholder Firebase file (neither leaves the runner)
+        # android/app/build.gradle.kts refuses a release build without android/key.properties
+        # and android/app/google-services.json. The key is made here with a random password,
+        # signs nothing that leaves this runner, and is deleted with it. The Firebase file names
+        # a project that does not exist (ci-not-for-distribution); push cannot work with it.
+        run: |
+          pass="$(openssl rand -hex 16)"
+          echo "::add-mask::$pass"
+          echo "CI_KS_PASS=$pass" >> "$GITHUB_ENV"
+          keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/ci-throwaway.jks" -storetype JKS \
+            -alias ci -keyalg RSA -keysize 2048 -validity 1 -dname "CN=ci throwaway not for distribution" \
+            -storepass "$pass" -keypass "$pass"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=ci\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/ci-throwaway.jks" "$pass" "$pass" > android/key.properties
+          cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": { "project_number": "000000000000", "project_id": "ci-not-for-distribution",
+                              "storage_bucket": "ci-not-for-distribution.invalid" },
+            "client": [ { "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                                           "android_client_info": { "package_name": "com.jawwid.jawwid_chat" } },
+                          "oauth_client": [], "api_key": [ { "current_key": "ci-not-for-distribution" } ],
+                          "services": { "appinvite_service": { "other_platform_oauth_client": [] } } } ],
+            "configuration_version": "1"
+          }
+          JSON
+      - name: Build the release App Bundle through the store build script
+        # The same script and flags a real store build uses; it accepts the placeholders above.
+        run: bash scripts/mobile/build-store.sh android
+      - name: Verify target/min SDK and 16 KB alignment
+        run: |
+          set -uo pipefail
+          R="$RUNNER_TEMP/release-readiness-android-report.txt"; bad=0
+          rec() { printf '%-13s %s\n' "$1" "$2" | tee -a "$R"; if [ "$1" = FAIL ]; then bad=1; fi; }
+          { echo "Release readiness, Android. Commit $GITHUB_SHA. NOT FOR DISTRIBUTION."
+            echo "Signed with a throwaway key; placeholder Firebase project and URLs."; echo; } > "$R"
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          [ -f "$AAB" ] || { rec FAIL "no App Bundle at $AAB"; exit 1; }
+
+          # LR-51, ELF: every LOAD segment of every native library aligned to at least 16 KB.
+          # Read straight from the AAB: these are the exact bytes Play installs.
+          mkdir -p "$RUNNER_TEMP/aab" && unzip -q -o "$AAB" 'base/lib/*' -d "$RUNNER_TEMP/aab" || true
+          n=0
+          while IFS= read -r so; do
+            n=$((n + 1)); name="${so#"$RUNNER_TEMP"/aab/}"
+            aligns="$(readelf -lW "$so" 2>/dev/null | awk '$1 == "LOAD" { print $NF }')"
+            if [ -z "$aligns" ]; then rec FAIL "LR-51 ELF  $name: no LOAD segments could be read"; continue; fi
+            low=""; for a in $aligns; do [ $((a)) -ge 16384 ] || low="$low $a"; done
+            if [ -n "$low" ]; then rec FAIL "LR-51 ELF  $name: LOAD p_align below 16 KB:$low"
+            else rec PASS "LR-51 ELF  $name: LOAD p_align $(echo $aligns | tr ' ' '\n' | sort -u | tr '\n' ' ')"; fi
+          done < <(find "$RUNNER_TEMP/aab/base/lib" -name '*.so' 2>/dev/null | sort)
+          [ "$n" -gt 0 ] || rec FAIL "LR-51 ELF  the App Bundle holds no native libraries (a Flutter release must)"
+
+          # The newest build-tools on the runner (zipalign -P needs 35 or later).
+          tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          echo "build-tools: $tools" >> "$R"
+
+          # bundletool, pinned by version and checksum, in its own directory. It is only run
+          # if its SHA-256 matches the pin; otherwise the APK checks are not done.
+          bt="$RUNNER_TEMP/bundletool/bundletool-all-$BUNDLETOOL_VERSION.jar"; mkdir -p "${bt%/*}"
+          curl -fsSL -o "$bt" "https://github.com/google/bundletool/releases/download/$BUNDLETOOL_VERSION/bundletool-all-$BUNDLETOOL_VERSION.jar" || rm -f "$bt"
+          got="$( [ -f "$bt" ] && sha256sum "$bt" | cut -d' ' -f1 )"
+          echo "bundletool $BUNDLETOOL_VERSION downloaded sha256: ${got:-download failed}" >> "$R"
+          apk=""
+          if [ "$BUNDLETOOL_SHA256" = UNPINNED ]; then
+            rec "NOT VERIFIED" "LR-50 SDK versions and LR-51 zipalign: bundletool checksum not pinned yet"
+            echo "::warning::BUNDLETOOL_SHA256 is not pinned; LR-50 and the zipalign check were NOT verified"
+          elif [ "$got" != "$BUNDLETOOL_SHA256" ]; then
+            rec FAIL "bundletool checksum mismatch (pinned $BUNDLETOOL_SHA256, got ${got:-nothing}); not run"
+          elif java -jar "$bt" build-apks --bundle="$AAB" --output="$RUNNER_TEMP/u.apks" --mode=universal \
+                 --ks="$RUNNER_TEMP/ci-throwaway.jks" --ks-pass="pass:$CI_KS_PASS" --ks-key-alias=ci \
+                 --key-pass="pass:$CI_KS_PASS" && unzip -q -o "$RUNNER_TEMP/u.apks" universal.apk -d "$RUNNER_TEMP/apk"; then
+            apk="$RUNNER_TEMP/apk/universal.apk"
+          else
+            rec FAIL "bundletool could not build a universal APK from the App Bundle"
+          fi
+
+          if [ -n "$apk" ]; then
+            # LR-50: what Android itself reads from the packaged manifest.
+            badging="$("$tools/aapt2" dump badging "$apk" 2>&1)"
+            pkg="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$badging")"
+            min="$(sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" <<< "$badging")"
+            tgt="$(sed -n "s/^targetSdkVersion:'\([0-9]*\)'.*/\1/p" <<< "$badging")"
+            echo "aapt2 badging: package=$pkg sdkVersion=$min targetSdkVersion=$tgt" >> "$R"
+            [ "$pkg" = com.jawwid.jawwid_chat ] && rec PASS "package com.jawwid.jawwid_chat" || rec FAIL "package is '$pkg', expected com.jawwid.jawwid_chat"
+            [ "$tgt" = 36 ] && rec PASS "LR-50 targetSdkVersion 36" || rec FAIL "LR-50 targetSdkVersion is '$tgt', expected 36"
+            [ "$min" = 26 ] && rec PASS "LR-50 minSdkVersion 26" || rec FAIL "LR-50 minSdkVersion is '$min', expected 26"
+            # LR-51, zip: uncompressed native libraries start on a 16 KB boundary in the APK.
+            major="$(basename "$tools" | cut -d. -f1)"
+            if ! [[ "$major" =~ ^[0-9]+$ ]] || [ "$major" -lt 35 ]; then
+              rec "NOT VERIFIED" "LR-51 zipalign: build-tools $(basename "$tools") has no -P (needs 35+)"
+            elif out="$("$tools/zipalign" -c -P 16 -v 4 "$apk" 2>&1)"; then
+              grep -E 'lib/.*\.so' <<< "$out" >> "$R"; rec PASS "LR-51 zipalign -c -P 16 -v 4 on the universal APK"
+            else
+              grep -E 'lib/.*\.so|BAD|FAIL' <<< "$out" >> "$R"; rec FAIL "LR-51 zipalign -c -P 16: native libraries not 16 KB aligned"
+            fi
+          fi
+          [ "$bad" -eq 0 ] || { echo "::error::release readiness (Android) failed; see the report"; exit 1; }
+      - name: Upload the text report (never the AAB or APK)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-readiness-android-report
+          path: ${{ runner.temp }}/release-readiness-android-report.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  ios:
+    name: Release readiness · iOS (LR-52, LR-58/LR-73)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26 explicitly
+        run: |
+          x="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)"
+          [ -n "$x" ] || { echo "::error::no Xcode 26 on this runner image"; ls -d /Applications/Xcode*; exit 1; }
+          sudo xcode-select -s "$x/Contents/Developer"
+          xcodebuild -version
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+      - name: Build the release app without signing
+        # build-store.sh ios runs `flutter build ipa`, which must sign; there is no key here.
+        # So the script only checks the placeholders, and the build below passes the same
+        # --dart-define set as the script's DEFINES (keep the two in step).
+        run: |
+          bash scripts/mobile/build-store.sh check
+          flutter pub get --enforce-lockfile
+          flutter build ios --release --no-codesign \
+            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER" --split-debug-info=build/symbols/ios \
+            --dart-define=JAWWID_API_BASE_URL="$API_BASE_URL" --dart-define=PRIVACY_POLICY_URL="$PRIVACY_POLICY_URL" \
+            --dart-define=TERMS_URL="$TERMS_URL" --dart-define=SUPPORT_URL="$SUPPORT_URL" \
+            --dart-define=SUPPORT_EMAIL="$SUPPORT_EMAIL" --dart-define=JAWWID_LESSONS_ORIGIN= \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN" --dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT"
+      - name: Verify the toolchain stamp, privacy manifest and identity in the built app
+        run: |
+          set -uo pipefail
+          R="$RUNNER_TEMP/release-readiness-ios-report.txt"; bad=0
+          rec() { printf '%-13s %s\n' "$1" "$2" | tee -a "$R"; if [ "$1" = FAIL ]; then bad=1; fi; }
+          { echo "Release readiness, iOS. Commit $GITHUB_SHA. NOT FOR DISTRIBUTION (unsigned)."
+            xcodebuild -version; echo; } > "$R"
+          APP=build/ios/iphoneos/Runner.app; P="$APP/Info.plist"
+          [ -f "$P" ] || { rec FAIL "no built Info.plist at $P"; exit 1; }
+          get() { plutil -extract "$1" raw -o - "$P" 2>/dev/null; }
+          dtx="$(get DTXcode)"; sdk="$(get DTSDKName)"; bid="$(get CFBundleIdentifier)"; enc="$(get ITSAppUsesNonExemptEncryption)"
+          echo "Info.plist: DTXcode=$dtx DTSDKName=$sdk CFBundleIdentifier=$bid ITSAppUsesNonExemptEncryption=$enc" >> "$R"
+          if [[ "$dtx" =~ ^[0-9]+$ ]] && [ "$dtx" -ge 2600 ]; then rec PASS "LR-52 DTXcode $dtx (Xcode 26 or later)"
+          else rec FAIL "LR-52 DTXcode is '$dtx', expected 2600 or more"; fi
+          case "$sdk" in iphoneos26*) rec PASS "LR-52 DTSDKName $sdk" ;; *) rec FAIL "LR-52 DTSDKName is '$sdk', expected iphoneos26*" ;; esac
+          if [ ! -f "$APP/PrivacyInfo.xcprivacy" ]; then rec FAIL "LR-58/LR-73 Runner.app/PrivacyInfo.xcprivacy is missing"
+          elif plutil -lint "$APP/PrivacyInfo.xcprivacy" >> "$R" 2>&1; then rec PASS "LR-58/LR-73 Runner.app/PrivacyInfo.xcprivacy present, plutil -lint OK"
+          else rec FAIL "LR-58/LR-73 Runner.app/PrivacyInfo.xcprivacy fails plutil -lint"; fi
+          [ "$enc" = false ] && rec PASS "ITSAppUsesNonExemptEncryption false" || rec FAIL "ITSAppUsesNonExemptEncryption is '$enc', expected false"
+          [ "$bid" = com.jawwid.jawwidChat ] && rec PASS "CFBundleIdentifier com.jawwid.jawwidChat" || rec FAIL "CFBundleIdentifier is '$bid', expected com.jawwid.jawwidChat"
+          [ "$bad" -eq 0 ] || { echo "::error::release readiness (iOS) failed; see the report"; exit 1; }
+      - name: Upload the text report (never the .app)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-readiness-ios-report
+          path: ${{ runner.temp }}/release-readiness-ios-report.txt
+          if-no-files-found: warn
+          retention-days: 30
