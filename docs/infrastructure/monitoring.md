@@ -254,7 +254,7 @@ deploy the owner approves, and the console steps are the owner's.
 
 | Signal | Where | What it catches | Who hears it |
 |---|---|---|---|
-| Readiness `GET /health/ready` | App Platform `health_check` on `api` (`.do/app.production.yaml`, every 10 s, 3 failures) | Postgres, Redis or the revocation store unreachable (`apps/api/src/infra/health/health.service.ts`, `readiness()`); a 503 takes the instance out of routing, never restarts it | nobody: it is a routing decision, not an alert |
+| Readiness `GET /health/ready` | App Platform `health_check` on `api` (`.do/app.production.yaml`, every 10 s, 3 failures) | Postgres or Redis unreachable (`apps/api/src/infra/health/health.service.ts`, `readiness()`; the revocation probe is reported but does not block readiness, `:121-122`); a 503 takes the instance out of routing, never restarts it | nobody: it is a routing decision, not an alert |
 | Liveness `GET /health/live` | App Platform `liveness_health_check` on `api` (every 30 s, 3 failures) | a wedged API process; touches no dependency (`health.controller.ts`, `live()`), so the container is restarted | nobody directly; a restart loop shows only as `RESTART_COUNT` (§7.4) |
 | Admin Web `GET /healthz` | App Platform health and liveness checks on `admin-web` | nginx down | nobody |
 | Worker | none: it serves no HTTP, so it has no health check; a crash exits and App Platform restarts it | a crash, only as a restart | nobody (§7.4) |
@@ -273,7 +273,7 @@ unauthenticated (`@Public()`), so an outside checker needs no token.
    inside App Platform. If the domain, the TLS certificate, DNS or the whole app
    is down, nothing outside notices, and the smoke test runs only during a
    deploy.
-2. **An on-call person (OA-19).** `incident-response.md` "Gaps": no rotation,
+2. **An on-call person (OA-19: the owner action "who is on call for production alerts" in the launch tracker, `docs/release/launch-readiness-checklist.md` §5, on PR #501's branch).** `incident-response.md` "Gaps": no rotation,
    no escalation path, no contact list. The owner names the person.
 3. **An alert destination.** The two spec alerts and any uptime check need an
    e-mail address to go to; none is configured, and none can be inferred.
@@ -297,7 +297,7 @@ feature on the existing account, or Sentry's existing project.
 | 5 | Sentry: confirm the on-call person is a project member and the project's alert rule e-mails on a new issue (Sentry's default rule) | owner |
 
 **Why `/health/ready` and not `/health/live`:** readiness is 503 whenever the
-API cannot serve users (database, Redis or the revocation store down) as well
+API cannot serve users (database or Redis down; a revocation backlog does not fail readiness, so nothing alerts on it yet) as well
 as when the API itself is down, so it is the symptom users feel. `/health/live`
 would stay green through a database outage. The §5 "API down" row predates this
 choice; for launch the uptime check uses `/health/ready`.
