@@ -7,7 +7,7 @@ Owner: AI #7 · Date: 2026-09-05 · Encryption and restore corrected, re-drilled
 | Data | Method | Frequency | Retention | Status |
 |---|---|---|---|---|
 | Postgres (authoritative state) | DigitalOcean Managed PostgreSQL: daily backups + point-in-time recovery | daily + continuous WAL | 7 days (DO's documented window; record the actual one, §6) | **provider feature: confirm it is on for the production cluster** |
-| Postgres (portable copy, pre-deploy) | `scripts/infra/backup-db.sh` (`pg_dump -Fc`, encrypted), GitHub artifact | before every deploy | 30 days | **implemented and drilled** |
+| Postgres (portable copy, pre-deploy) | `scripts/infra/backup-db.sh` (`pg_dump -Fc`, encrypted), GitHub artifact | before every deploy (skipped, with a warning, when the `chat` schema does not exist yet and `FIRST_DEPLOY` is unset or `true`: first deploy, §3, LR-77) | 30 days | **implemented and drilled** |
 | Postgres (portable copy, off-site) | `backup-db.sh` + `scripts/infra/backup-offsite.sh` to a dedicated Spaces bucket (`.github/workflows/backup-weekly.yml`) | weekly (Sun 02:17 UTC) | 8 weeks | **scheduled; first real run needs the `backup` Environment** (§3b) |
 | Object storage | Bucket versioning + lifecycle (`scripts/infra/storage-versioning.sh`) | continuous | deleted or overwritten objects: 30 days | **scripted and enforced; no bucket exists yet** (§1a) |
 | Redis | Not backed up by design | — | — | — |
@@ -174,6 +174,60 @@ openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -iter <iter> \
   schema does. A `--no-privileges` archive restores into a database the
   application cannot read (§4.2).
 - Every file written is mode `600`.
+
+### When the schema does not exist yet (first deploy, LR-77)
+
+The deploy workflows take the backup **before** the migrations, and the
+migrations are what create the `chat` schema. On a database that has never been
+migrated there is no `chat` schema yet, and `pg_dump --schema chat` errors when
+nothing matches. Before LR-77 that stopped the first deploy before any
+migration.
+
+`backup-db.sh --schema S` therefore first asks the database whether schema `S`
+exists, using the same client the dump uses (the `PG_IMAGE` container, or the
+local `psql`):
+
+| The database answers | What happens |
+|---|---|
+| the schema does **not** exist, and `FIRST_DEPLOY` is unset, empty or exactly `true` | No backup is taken and **no file is written**. The script prints a workflow `::warning::` ("Backup skipped") and a plain `NO BACKUP TAKEN` message, then exits 0 so the migrations can create the schema. |
+| the schema does **not** exist, and `FIRST_DEPLOY` is anything else (e.g. `false`) | The backup **fails** (exit 1) with a workflow `::error::` saying the schema is missing on a deploy that is not a first deploy, so `DATABASE_URL` probably names the wrong (or an empty) database. Nothing is dumped or written. |
+| the schema exists (even if it is empty) | The backup runs exactly as before. |
+| the query fails (cannot connect, wrong password) | The backup **fails**, as before. A database that cannot be reached is never "nothing to back up". The password is masked in the error. |
+| anything else | Treated as unknown: the dump runs as before, and pg_dump decides. |
+
+The check runs only when `S` is a plain lowercase name such as `chat`. A
+pattern with wildcards, quotes or capitals skips the check, and so does a
+local `pg_dump` with no `psql` installed. In both cases the dump runs as
+before. The test is `test/scripts/backup_db_first_deploy_test.dart`, using fake
+clients and no database.
+
+**`FIRST_DEPLOY` is the guard against the wrong database.** The realistic way
+to see "absent" on an established system is a `DATABASE_URL` naming the wrong
+database (on DigitalOcean, `defaultdb` exists and is empty), a URL with no
+database name, or a `PGDATABASE`/`PGSERVICE` override. With `FIRST_DEPLOY=false`
+that fails loudly instead of skipping the backup and migrating an empty
+database. The variable defaults to "skip allowed" so that the script alone
+unblocks the first deploy.
+
+**Pending the owner (workflow follow-up, `.github/` is owner-only).** The
+workflows do not set `FIRST_DEPLOY` yet. Until they do, every deploy behaves as
+a first deploy here. The change is one `env:` entry on the backup step:
+`FIRST_DEPLOY: ${{ inputs.first_deploy }}` in `deploy-production.yml` and
+`deploy-staging.yml`, and `FIRST_DEPLOY: 'false'` in the scheduled backups
+(`backup-daily.yml`, `backup-weekly.yml`). It should be in place before the
+first production deploy that carries real data.
+
+**If you see `NO BACKUP TAKEN` on anything other than a first deploy, stop.**
+It means `DATABASE_URL` points at a database with no Jawwid Chat schema, which
+is almost certainly the wrong database. Until the workflow follow-up lands, the
+scheduled backups (`backup-daily.yml`, `backup-weekly.yml`) still fail in that
+case, one step later: the step after the backup finds no archive and fails
+("Only encrypted archives leave the runner" in the daily one,
+`backup-offsite.sh upload` in the weekly one). With `FIRST_DEPLOY: 'false'` they
+fail at the backup step itself, with the clear error above. In
+a deploy, the "Upload the pre-deployment backup" step only warns when there is
+no file (`upload-artifact` defaults to `if-no-files-found: warn`), so the
+deploy continues to the migrations.
 
 ### 3b. The weekly off-site copy
 

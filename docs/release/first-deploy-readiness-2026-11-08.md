@@ -3,11 +3,14 @@
 Owner of this report: release manager (builder session). Low risk, documents only. **Nothing was
 deployed, run or changed to write it.**
 
-> **Status: the first deploy currently FAILS at the backup step, before any migration (Blocker LR-77,
-> §1d).** Both workflows back up the `chat` schema before `scripts/db/apply.sh` creates it, and the
-> backup refuses a database that has no `chat` schema yet. The first deploy (staging or production)
-> cannot succeed until LR-77's code fix is approved by the owner and merged. Do **not** work around it
-> by creating the schema by hand.
+> **Status: Blocker LR-77 (§1d) is fixed (update, 2026-11-08).** When this report was written, the
+> first deploy failed at the backup step, before any migration: both workflows back up the `chat`
+> schema before `scripts/db/apply.sh` creates it, and the backup refused a database with no `chat`
+> schema. `scripts/infra/backup-db.sh` now skips the backup, loudly and without writing a file, when
+> the schema does not exist and `FIRST_DEPLOY` is unset or `true`; with any other `FIRST_DEPLOY` value
+> it fails. A workflow follow-up that passes `FIRST_DEPLOY` is pending the owner (§1d). Do **not**
+> create the schema by hand. The LR-77 "fails at the backup step" / "until LR-77 is fixed" notes in §1a-§1c,
+> §4 and §6 describe the state before the fix.
 
 Evidence base: `main` @ `9bb0418d` (this branch's parent), read on 2026-11-08, plus read-only GitHub
 queries that list **names only** (no secret or variable value was printed or read):
@@ -192,6 +195,28 @@ Either way it needs a test that fails today (a backup against a database without
 fix is in the deploy path, so **the lead classes LR-77 High risk (deployment protection): it needs
 the owner's approval before it is implemented.** The owner must **not** create the `chat` schema by
 hand to get past it.
+
+**Update (2026-11-08): fixed (LR-77, PR #516).** The fix takes the first option and changes only
+`scripts/infra/backup-db.sh`. Before dumping, the script asks the database whether the `chat`
+schema exists, using the same client as the dump:
+- **No `chat` schema, and `FIRST_DEPLOY` unset, empty or exactly `true`:** it prints a workflow
+  warning ("Backup skipped") and `NO BACKUP TAKEN`, writes no file, and exits 0. The next step,
+  "Upload the pre-deployment backup", then finds no file. That step only warns (`upload-artifact`'s
+  default is `if-no-files-found: warn`), so the run goes on to the migrations.
+- **No `chat` schema, and `FIRST_DEPLOY` anything else (e.g. `false`):** the step fails with an error
+  saying the schema is missing on a deploy that is not a first deploy (wrong `DATABASE_URL`?).
+- **`chat` exists, even if empty:** the backup runs exactly as before.
+- **The database cannot be queried** (connection or password error): the step fails, as before.
+
+The test is `test/scripts/backup_db_first_deploy_test.dart`, which uses fake clients and no
+database.
+
+**Pending the owner: the workflow follow-up.** `.github/` is owner-only, so the workflows do not set
+`FIRST_DEPLOY` yet, and until they do every deploy is treated as a possible first deploy by this
+check. The change is one `env:` entry on the backup step: `FIRST_DEPLOY: ${{ inputs.first_deploy }}`
+in `deploy-production.yml` and `deploy-staging.yml`, and `FIRST_DEPLOY: 'false'` in
+`backup-daily.yml` and `backup-weekly.yml`. It should land before the first production deploy that
+carries real data (details: `docs/infrastructure/backup-recovery.md` §3).
 
 ---
 
