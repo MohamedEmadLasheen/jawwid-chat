@@ -6,7 +6,8 @@ deployed, run or changed to write it.**
 > **Status: the first deploy currently FAILS at the backup step, before any migration (Blocker LR-77,
 > §1d).** Both workflows back up the `chat` schema before `scripts/db/apply.sh` creates it, and the
 > backup refuses a database that has no `chat` schema yet. The first deploy (staging or production)
-> cannot succeed until LR-77's code fix is approved by the owner and merged. Do **not** work around it
+> cannot succeed until LR-77's code fix is approved by the owner and merged (the fix is written and
+> pending merge, §1d). Do **not** work around it
 > by creating the schema by hand.
 
 Evidence base: `main` @ `9bb0418d` (this branch's parent), read on 2026-11-08, plus read-only GitHub
@@ -192,6 +193,20 @@ Either way it needs a test that fails today (a backup against a database without
 fix is in the deploy path, so **the lead classes LR-77 High risk (deployment protection): it needs
 the owner's approval before it is implemented.** The owner must **not** create the `chat` schema by
 hand to get past it.
+
+**Update (2026-11-08): the fix is written and pending merge.** The owner approved the implementation
+on 2026-11-08; merging it still needs the owner's approval. The fix takes the first option and
+changes only `scripts/infra/backup-db.sh`. The workflows are not changed. Before dumping, the script
+asks the database whether the `chat` schema exists, using the same client as the dump:
+- **No `chat` schema:** it prints a workflow warning ("Backup skipped") and `NO BACKUP TAKEN`, writes
+  no file, and exits 0. The next step, "Upload the pre-deployment backup", then finds no file. That
+  step only warns (`upload-artifact`'s default is `if-no-files-found: warn`), so the run goes on to
+  the migrations.
+- **`chat` exists, even if empty:** the backup runs exactly as before.
+- **The database cannot be queried** (connection or password error): the step fails, as before.
+
+The test is `test/scripts/backup_db_first_deploy_test.dart`, which uses fake clients and no
+database. Until the fix is merged, the first deploy still stops at the backup step.
 
 ---
 

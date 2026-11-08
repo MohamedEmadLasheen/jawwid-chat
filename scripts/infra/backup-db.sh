@@ -152,6 +152,54 @@ dump_failed() {
   exit 1
 }
 
+# ---- first deploy: the schema may not exist yet (LR-77) ----------------------
+#
+# The deploy workflows back up BEFORE scripts/db/apply.sh creates the schema.
+# On a database that has never been migrated, `pg_dump --schema chat` matches
+# nothing and errors, and the first deploy stopped here before any migration.
+#
+# So, before dumping, ask the database whether the schema exists, with the same
+# client choice as the dump (the PG_IMAGE container, or the host's psql). The
+# backup is skipped ONLY when the database itself answers "absent":
+#   - "absent"            nothing to back up: say so loudly, write no file, exit 0
+#   - "present"           dump exactly as before (an empty schema is dumped too)
+#   - the query fails     connection or auth error: FAIL, as the dump would have.
+#                         An unreachable database is never "nothing to back up".
+#   - any other answer    treated as unknown: dump exactly as before, so pg_dump
+#                         decides, as it always did.
+# The check runs only for a plain lowercase name, which as a pg_dump pattern
+# means exactly that schema; it is then safe to put in the SQL literally. A
+# pattern (wildcards, quotes, capitals) skips the check and dumps as before, as
+# does a host pg_dump with no psql beside it.
+if [ -n "$SCHEMA" ] && [[ "$SCHEMA" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+  SCHEMA_SQL="select case when exists (select 1 from pg_catalog.pg_namespace where nspname = '${SCHEMA}') then 'schema-present' else 'schema-absent' end"
+  SCHEMA_STATE=""
+  if [ "$USE_CONTAINER" -eq 1 ]; then
+    SCHEMA_STATE="$(docker run --rm --network host \
+        --add-host=host.docker.internal:host-gateway \
+        -e PGCONNECT_TIMEOUT=10 \
+        "${PG_IMAGE:-postgres:17-alpine}" \
+        psql -X -q -A -t -v ON_ERROR_STOP=1 \
+             --dbname="$(docker_host_url "$DATABASE_URL")" -c "$SCHEMA_SQL" 2>"$LOG")" \
+      || dump_failed "checking whether schema '${SCHEMA}' exists FAILED (the database could not be queried; nothing was backed up):"
+  elif command -v psql >/dev/null 2>&1; then
+    SCHEMA_STATE="$(psql -X -q -A -t -v ON_ERROR_STOP=1 \
+        --dbname="$DATABASE_URL" -c "$SCHEMA_SQL" 2>"$LOG")" \
+      || dump_failed "checking whether schema '${SCHEMA}' exists FAILED (the database could not be queried; nothing was backed up):"
+  else
+    echo "  psql not installed; not checking whether schema '${SCHEMA}' exists"
+  fi
+  SCHEMA_STATE="$(printf '%s' "$SCHEMA_STATE" | tr -d '[:space:]')"
+  if [ "$SCHEMA_STATE" = "schema-absent" ]; then
+    echo "::warning title=Backup skipped::schema '${SCHEMA}' does not exist in this database: treated as a FIRST DEPLOY with nothing to back up. No backup file was written."
+    echo "NO BACKUP TAKEN: schema '${SCHEMA}' does not exist in the ${LABEL} database."
+    echo "This is expected ONLY on a first deploy, before the migrations create it."
+    echo "If this database should already hold Jawwid Chat data, STOP: DATABASE_URL"
+    echo "probably points at the wrong database."
+    exit 0
+  fi
+fi
+
 echo "Backing up ${LABEL} -> ${FILE}"
 if [ "$USE_CONTAINER" -eq 1 ]; then
   # The image tag must match the SERVER's major version: pg_dump refuses to
