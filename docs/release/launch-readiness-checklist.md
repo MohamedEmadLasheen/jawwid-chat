@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 16:20 Cairo (14:20 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-08 16:45 Cairo (14:45 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `9bb0418d`, which contains #500, #502, #504, #505, #506, #507 and #508. Main CI run 42485589672 on it: 15/15 green.
 
 ## 1. Dashboard
@@ -39,24 +39,24 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **92** | **15** | 14 | 8 | 28 | 20 | 4 | 3 |
+| **93** | **15** | 14 | 8 | 29 | 20 | 4 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
-| **Critical** | 31 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
+| **Critical** | 32 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-77, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
 | **High** | 23 | LR-13, LR-20, LR-52, LR-73, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-15, LR-16, LR-17, LR-71 |
-| Critical items blocked on the owner | 15 | LR-06, LR-09c, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-76, LR-01, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
+| Critical items blocked on the owner | 16 | LR-06, LR-09c, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-76, LR-01, LR-77, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
 
 **Completion.** Each figure is completed-and-verified ÷ applicable; N/A is excluded.
 
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
-| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 69 | 12 | **17 %** | 21 | 19 |
-| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 71 | 13 | **18 %** | 27 | 18 |
+| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 70 | 12 | **17 %** | 22 | 19 |
+| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 72 | 13 | **18 %** | 28 | 18 |
 | A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
 | B. Android: Google Play | 17 | 3 | **18 %** | 10 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
-| D. Shared backend and infrastructure | 17 | 2 | **12 %** | 8 | 5 |
+| D. Shared backend and infrastructure | 18 | 2 | **11 %** | 9 | 5 |
 | E. Security and QA | 17 | 7 | **41 %** | 1 | 4 |
 | F. Legal and compliance | 14 | 1 | **7 %** | 7 | 4 |
 
@@ -101,7 +101,7 @@ The owner works through these in a separate terminal session, using the handoff 
 |---|---|---|---|
 | **OT-1 (now)** | Create the App Store Connect app record and confirm the App ID `com.jawwid.jawwidChat` has Push Notifications. Browser only; no keys are created on this Mac | LR-06 (record part), LR-09a, LR-09c, LR-57b; first step toward LR-48 | **Assigned 2026-11-08** |
 | OT-2 | Decide where signed store builds are made (LR-76): this Mac once it is cleared, another clean Mac, or a CI release workflow | LR-76, then LR-06 (certificate), LR-07c, LR-48, LR-49, LR-08 | Queued |
-| OT-3 | Read the first-deploy readiness report (Builder H), add what is missing, then approve the first deploy (OA-21) | LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued; the report is being written |
+| OT-3 | First deploy package: (1) approve implementing the LR-77 backup fix; (2) read the readiness report (#512); (3) approve the first production deploy (OA-21): a paid App Platform app (about $32/month) and 177 forward-only migrations | LR-77, LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued; #512 is being corrected after its review |
 | OT-4 | Play Console: create the app with the final package name (OA-03; permanent) | LR-07b, LR-09b, LR-09g | Queued |
 | OT-5 | Legal facts and hosting (OA-08), final Terms texts (OA-09) | LR-04, LR-02d, LR-02a | Queued |
 | OT-6 | Decisions: target audience (OA-11), payments (OA-12), storefronts (OA-10) | LR-10, LR-15, LR-17, LR-09c–e, LR-09k | Queued |
@@ -187,12 +187,13 @@ Each requirement appears once:
 | [ ] | LR-36 | Icons: a non-upscaled 1024 iOS icon and an Android monochrome layer | Both | L | BLOCKED — OWNER ACTION REQUIRED | Owner; mobile engineer | OA-18 | Owner action OA-18 (a vector logo). |
 | [ ] | LR-37 | Unused `sqflite` removed | Both | L | IN PROGRESS | #503 | #503 | As for LR-25. |
 
-### D. Shared backend and infrastructure (2 of 17 done, 12 %)
+### D. Shared backend and infrastructure (2 of 18 done, 11 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
 | [ ] | LR-76 | A trusted machine produces the signed store builds (the distribution certificate and the upload key live there) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OT-2 | **New 2026-11-08.** The owner's rule bars running project code on this Mac until its security is settled, so no store build can be made here. There is no release-build workflow in `.github/workflows/`. Options: (a) the owner settles this Mac; (b) a separate clean Mac; (c) a CI release workflow on GitHub's macOS runners with signing secrets in a protected Environment (High risk: CI and secrets, so owner approval). Blocks LR-06 (certificate), LR-07c (upload key), LR-48, LR-49, LR-08. |
 | [ ] | LR-01 | A live production backend for store builds and reviewers (Apple 2.1(a)) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner; Release manager | Builder H report, then OA-21 (owner approves the deploy) | "Deploy production" has never run, and "Deploy staging" has never succeeded. **Verified 2026-11-08 (names only):** the `production` Environment already holds the deploy token, GHCR pull credentials, `DATABASE_URL`, `REDIS_URL`, storage keys, FCM and APNs keys and a server `SENTRY_DSN` (19 secrets, 12 variables). The domains were chosen on 2026-11-05 (`api.chat.jawwid.com`; repository variables set). `DIGITALOCEAN_APP_ID` is **created by the first deploy** (`first_deploy=true`). `staging` holds only the LiveKit names. Builder H is writing the exact gap list (`first-deploy-readiness-2026-11-08.md`). **Done when:** `/health/ready` returns 200 on the production host and a store build signs in. |
+| [ ] | LR-77 | The first deploy can back up an empty database (the pre-migration backup must not fail before the `chat` schema exists) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Backend engineer; owner (approval to implement) | OT-3 | **Found by the #512 review on 2026-11-08.** Both deploy workflows run `scripts/infra/backup-db.sh --schema chat` (`deploy-production.yml:388`) before `scripts/db/apply.sh` creates the schema (`apply.sh:25`). On a fresh database `pg_dump` finds no matching schema and `backup-db.sh:184-185` exits 1, so the first deploy stops before migrations. The fix changes a production safety step, which the lead classes as High risk, so it waits for the owner's approval **before implementation**. It is part of OT-3. |
 | [ ] | LR-02a | Terms gate on the API: no posting before acceptance (Apple 1.2; Play UGC "accept terms before posting") | Both | C | IN PROGRESS | Backend engineer; owner (merge) | OA-17, LR-02d | #497: independent review ACCEPT @ `9536446d` with one P2 (`auth.controller.ts:116-117` rotates the refresh token before `legal.dtoFor()`, so a database error lost the new tokens and the retry signed the user out everywhere). The lead fixed it in `9bc9416e` (dtoFor answers `unavailable` and never throws, with a new unit spec `legal-dto.spec.ts`). Independent review ACCEPT @ `9bc9416e`; CI is running. Next: **owner approves the merge (High: authentication, plus migration `20261107130000_chat_pd058_publish_order.sql`)**. Release order: app gates (done) → terms rows (LR-02d) → API. |
 | [ ] | LR-03 | Account deletion starts in the app for every account that can be created, with no "contact us" (Apple 5.1.1(v); Play account deletion) | Both | C | IN PROGRESS | Backend engineer; owner (merge) | OA-17 | #498 head `b11d2e6d`: 30/30 checks pass after another session's re-run. Review ACCEPT with two P2s:<br>• **P2-1:** a failing reminder could block erasures. The fix is uncommitted in `~/dev/jawwid-teacher-deletion`, one file; it needs a regression test.<br>• **P2-2:** the app copy says "deleted now" for a request.<br>Also in the same branch:<br>• `review-cohort.ts` must survive the review teacher's erasure (re-provisioning refuses with `TEACHER_CHANGED`);<br>• `review-accounts.md` must stop saying "takes effect immediately" for teachers.<br>Apple's account-deletion page allows a delayed deletion only when the user is told how long it takes; confirm the wording in the app. **Owner approves the merge (High: deletion).** |
 | [ ] | LR-05 | Demo accounts on the live backend that need no WhatsApp code (Apple 2.1(a); Play App access) | Both | C | BLOCKED — TECHNICAL DEPENDENCY | Owner; Release manager | LR-01, OA-21 | `cli/review-cohort.ts` was merged in #490. Needs LR-01, then the owner's domain and two passwords (OA-21). Also needed:<br>• past lessons and reports in the data;<br>• a third, disposable parent for the deletion test;<br>• **something payable**, because #507 found the review accounts have nothing to pay, so a reviewer cannot reach the pay sheet. |
