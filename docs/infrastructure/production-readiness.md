@@ -104,8 +104,8 @@ DNS, so it is the owner's. In this order — each step names what it unblocks.
 >   - `production`: 19 secrets, 12 variables;
 >   - `staging`: 2 secrets, 1 variable;
 >   - `backup`: 0 secrets, 0 variables. Repository-level Actions secrets: also 0 (read the same way).
-
-  This is **consistent with** every backup failure below. The failing step was not read, so it is not proven to be the only cause.
+>
+>   This is **consistent with** every backup failure below. The failing step was not read, so it is not proven to be the only cause.
 >
 >   The 2026-11-05 statement below that `production` "holds nothing" is therefore **out of date**.
 > - **Deploy production has never run** (`gh run list --workflow deploy-production.yml` is empty).
