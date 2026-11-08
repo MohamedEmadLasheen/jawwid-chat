@@ -275,7 +275,7 @@ Rules (the lead's, for the owner):
 5. Never copy the keystore, a `.p12`, a `.p8` or their passwords into the main user, into the repository,
    into a chat with an agent, or into an agent brief.
 6. The signing user installs its own Flutter (the version `ci.yml` pins) in its own home and uses fresh
-   Gradle and CocoaPods caches, so it does not share the main user's `~/development/flutter` or caches.
+   Gradle and CocoaPods caches, so it shares no tool folders or caches with the development user.
    Xcode in `/Applications` is still shared (§4.1).
 7. The signing user's browser opens **only** the official consoles: App Store Connect and the Apple
    Developer site, Google Play Console, the Firebase console, and GitHub (to clone and to read release
@@ -297,8 +297,8 @@ A compromised host can change what it builds, wherever the keys live. Two ways o
      protected by SIP (M8), but it does not meet the bar by itself; if the owner chooses it, the lead
      decides, before lifting the machine rule, whether it is enough.
 
-   Do **not** restore apps, hidden tool folders, shell dotfiles,
-   `~/.npm`, `~/.cache`, `~/development` or other tool folders from a backup or with Migration Assistant:
+   Do **not** restore apps, hidden tool folders, shell dotfiles, package-manager caches or other tool
+   folders from a backup or with Migration Assistant:
    that could bring a compromise back. Re-clone repositories from GitHub.
 2. **Build on GitHub-hosted runners**: a new, ephemeral VM for each job (H9; options paper H7), signing
    with cloud certificates through an App Store Connect key (C1) and the Android upload keystore held as
@@ -382,20 +382,15 @@ Why:
      Content and Settings. This **keeps the installed macOS**; it is an erase, not a reinstall. Only
      possible on macOS Monterey 12 or later **and** an Apple silicon or T2 Mac. If you choose E, the lead
      decides whether it is enough before lifting the machine rule (§5).
-4. **Turn on FileVault** (M7; you must be an administrator, so do it as the first user, which is an
-   admin). **Keep the FileVault recovery key off this Mac** and not where the Mac is kept (for example in
+4. **Turn on FileVault** (M7; it needs an administrator account). **Keep the FileVault recovery key off this Mac** and not where the Mac is kept (for example in
    the password manager, opened from your phone). Without the password or that key, Apple says "your files
    and settings will be lost forever". Turn on the lock-screen password (M9). Keep the Mac on the latest
    macOS.
 5. **Rotate credentials from the clean Mac** (or your phone), not from the old system. Sign out of all
    other sessions where each service allows it.
-   - **Accounts:** Apple Account, Google account (Play Console, Firebase), GitHub account, the
-     password-manager master password. Regenerate GitHub and Google recovery codes.
-   - **GitHub:** remove every SSH key registered on the account and add new ones; revoke every personal
-     access token and the `gh` CLI token (sign in again later); review **authorised OAuth apps** and
-     GitHub Apps and revoke what you do not need; rotate the `jawwid-bot` token.
-   - **Developer tools:** npm token, Sentry token, Anthropic and OpenAI API keys, and any other token the
-     agents used.
+   - **Every account, token and API key used on this Mac.** The lead keeps the full, private list and
+     goes through it with you. It covers your main accounts and their recovery codes, every developer
+     token and SSH key, and any authorised third-party apps.
    - **App Store Connect:** revoke **every** API key whose `.p8` file was ever on this Mac, recognised or
      not (Users and Access → Integrations, C3). In Certificates, Identifiers & Profiles, revoke **every**
      certificate whose private key was in this Mac's keychain, recognised or not (C4; App Store apps are
@@ -405,7 +400,7 @@ Why:
      and the redeploys.
 6. **Create the `release` user:** a **Standard user** named for example `release` (Users & Groups, M1),
    with its own long password. If FileVault shows an **Enable Users** button, enable `release` there (M7).
-   Your first user stays the admin user for yourself and development.
+   Your first user is for yourself and development; decide its rights with the lead.
 7. **Install the tools.** A Standard user cannot use `sudo`, and installing a JDK package, CocoaPods
    (system gem or Homebrew) and Xcode's first-launch components normally asks for an administrator. When
    macOS asks, type the **admin user's** name and password into that prompt; **do not** make `release` an
@@ -440,7 +435,7 @@ Why:
       coordinated rotation with the lead.
 
     After **R**, the lead lifts the machine rule. After **E**, the lead first decides whether E is enough
-    (§5) and records that decision. Agents then work only in the main user.
+    (§5) and records that decision. Agents then work only in the development user, never in `release`.
 
 **If the owner declines the reinstall:** the lead recommends option (C) instead, with credentials rotated
 from a trusted device (a phone or another computer), and no release signing on this Mac at all.
