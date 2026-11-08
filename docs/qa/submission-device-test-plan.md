@@ -95,6 +95,7 @@ Precondition: `APNS_VOIP_ENABLED=true` in staging, iOS VoIP token registered (SB
 | SB-25 | Killed. **Decline** from the ring screen. | The caller sees "declined". The call ends for both (PD lifecycle: decline is terminal). |
 | SB-26 | Two calls. A second call arrives while one is active. | It is refused or shown as busy; the first call is not dropped. |
 | SB-27 | Do Not Disturb / Focus on | Behaviour follows the OS setting. Write down what happens. Not a FAIL unless the app crashes. |
+| SB-28 | iOS only. **Killed** (swiped away). The teacher calls from the portal. Answer or decline, kill the app again, and repeat until it has been done 3 times. (LR-13) | The CallKit ring appears all 3 times. The app is never terminated by iOS: in Console.app, filtered to the app's process, there is no PushKit termination message (a VoIP push the app did not report to CallKit). |
 
 Release-qa matches every SB-2x against the API log: `incoming_call` scheduled per participant, the provider's accepted response, the media-token issue, and the join.
 
