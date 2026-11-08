@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post, Req, UseFilters } from '@nestjs/common';
 import { NotificationService } from '../notifications/notification.service';
+import type { AuthenticatedRequest } from '../../platform/auth/auth.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { SelfService } from '../../platform/permissions/route-access';
@@ -9,14 +10,29 @@ import { SelfService } from '../../platform/permissions/route-access';
 export class NotificationController {
   constructor(private readonly notifications: NotificationService) {}
 
-  /** Register a push token. One actor may hold many. */
+  /**
+   * Register a push token. One actor may hold many.
+   *
+   * LR-46: bound to the caller's CURRENT session (from the verified token, as
+   * the actor is), so signing that session out stops its pushes. The fields
+   * are picked one by one: a body is never spread into the call, so it cannot
+   * name an actor or a session.
+   */
   @SelfService()
   @Post('devices')
   async register(
     @ActorId() actorId: string,
+    @Req() request: AuthenticatedRequest,
     @Body() body: { token: string; platform: string; isVoip?: boolean; locale?: string },
   ) {
-    await this.notifications.registerDevice({ actorId, ...body });
+    await this.notifications.registerDevice({
+      actorId,
+      sessionId: request.sessionId ?? null,
+      token: body?.token,
+      platform: body?.platform,
+      isVoip: body?.isVoip,
+      locale: body?.locale,
+    });
     return { ok: true };
   }
 

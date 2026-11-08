@@ -384,13 +384,30 @@ export class NotificationService {
     });
   }
 
-  /** Registers a device. Multi-device is the norm, not the exception. */
+  /**
+   * Registers a device. Multi-device is the norm, not the exception.
+   *
+   * LR-46: the token is bound to `sessionId`, the caller's CURRENT session, so
+   * revoking that session deactivates it (a trigger on chat.session; see
+   * 20261109120000). A refresh rotation moves it to the successor session
+   * (AuthService). Internal callers with no session pass none, and the row
+   * keeps today's unbound behaviour.
+   *
+   * A token can move between accounts when a phone is handed over -- but only
+   * once the session that registered it has ended (signed out, revoked or
+   * expired). While the previous owner's session is live and the token active,
+   * another account registering it is refused with 409 and nothing changes:
+   * anyone who learned a token could otherwise redirect that person's pushes,
+   * the incoming-call push included, to their own account. A row with no
+   * session (registered before LR-46) stays rebindable, as it was.
+   */
   async registerDevice(input: {
     actorId: string;
     token: string;
     platform: string;
     isVoip?: boolean;
     locale?: string;
+    sessionId?: string | null;
   }): Promise<void> {
     // The actor's own organization, SET EXPLICITLY (as auth.service.ts does for
     // device and session): the column default is the DEFAULT tenant, so a
@@ -403,32 +420,55 @@ export class NotificationService {
       LIMIT 1`;
     if (!row) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
     const organizationId = row.organization_id;
-    await this.prisma.deviceToken.upsert({
-      where: { token: input.token },
-      create: {
-        organizationId,
-        actorId: input.actorId,
-        token: input.token,
-        platform: input.platform,
-        isVoip: input.isVoip ?? false,
-        locale: input.locale ?? 'ar',
-      },
-      // A token can move between accounts when a device is handed over.
-      //
-      // `platform` AND `isVoip` ARE UPDATED TOO. They were not, so a token
-      // re-registered with a different kind kept the kind it was first seen
-      // with. Harmless while nothing read `is_voip`; now that it decides
-      // whether a device may receive a call push, a stale value is the
-      // difference between a phone that rings and one that does not.
-      update: {
-        organizationId,
-        actorId: input.actorId,
-        platform: input.platform,
-        isVoip: input.isVoip ?? false,
-        isActive: true,
-        lastSeenAt: new Date(),
-        locale: input.locale ?? 'ar',
-      },
+    const sessionId = input.sessionId ?? null;
+    await this.prisma.$transaction(async (tx) => {
+      // The current binding, locked so two registrations of one token decide
+      // one after the other. `bound_live`: the session that registered it has
+      // not been revoked and has not expired.
+      const [existing] = await tx.$queryRaw<Array<{ actor_id: string; is_active: boolean; bound_live: boolean }>>`
+        SELECT d.actor_id::text, d.is_active,
+               (s.id IS NOT NULL AND s.revoked_at IS NULL AND s.expires_at > now()) AS bound_live
+          FROM chat.device_token d
+          LEFT JOIN chat.session s ON s.id = d.session_id
+         WHERE d.token = ${input.token}
+           FOR UPDATE OF d`;
+      if (existing && existing.actor_id !== input.actorId && existing.is_active && existing.bound_live) {
+        throw new CommError(
+          CommErrorCode.DEVICE_TOKEN_IN_USE,
+          'this device is registered to an account that is still signed in on it',
+          409,
+        );
+      }
+      await tx.deviceToken.upsert({
+        where: { token: input.token },
+        create: {
+          organizationId,
+          actorId: input.actorId,
+          token: input.token,
+          platform: input.platform,
+          isVoip: input.isVoip ?? false,
+          locale: input.locale ?? 'ar',
+          sessionId,
+        },
+        // A token can move between accounts when a device is handed over
+        // (only once the previous owner's session has ended; above).
+        //
+        // `platform` AND `isVoip` ARE UPDATED TOO. They were not, so a token
+        // re-registered with a different kind kept the kind it was first seen
+        // with. Harmless while nothing read `is_voip`; now that it decides
+        // whether a device may receive a call push, a stale value is the
+        // difference between a phone that rings and one that does not.
+        update: {
+          organizationId,
+          actorId: input.actorId,
+          platform: input.platform,
+          isVoip: input.isVoip ?? false,
+          isActive: true,
+          lastSeenAt: new Date(),
+          locale: input.locale ?? 'ar',
+          sessionId,
+        },
+      });
     });
   }
 

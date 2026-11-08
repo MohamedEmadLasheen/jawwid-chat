@@ -530,6 +530,10 @@ model DeviceToken {
   isActive       Boolean  @default(true) @map("is_active")
   lastSeenAt     DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// LR-46: the session that last registered this token (FK to chat.session, ON DELETE SET NULL;
+  /// SQL owns it). Revoking that session deactivates the token (a trigger). NULL = registered
+  /// before LR-46 or with no session: never deactivated by a revocation, and rebindable.
+  sessionId      String?  @map("session_id") @db.Uuid
 
   @@map("device_token")
   @@schema("chat")
