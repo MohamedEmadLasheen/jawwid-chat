@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 01:18 Cairo (23:18 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 01:20 Cairo (23:20 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -39,7 +39,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **96** | **17** | 16 | 11 | 29 | 18 | 2 | 3 |
+| **96** | **17** | 16 | 12 | 29 | 18 | 1 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
@@ -106,7 +106,10 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Lead | LR-24: drop the unused `remote-notification` background mode | #531 | **ACCEPT @ `fb6a0e1d`**; CI running |
 | Builder W9 (Arabic copy) | Owner wording choices with recommendations: PARENT-016 declined call (recommended «تم الاعتذار»), LR-41 five iOS permission prompts (keep three, two small fixes) | #532 | **ACCEPT @ `3b140dec`**; then the owner ticks one option per row |
 | Builder W10 (infra docs) | LR-29: what production watches, what is missing, the free launch set (DigitalOcean uptime check, alert e-mail, on-call); component alerts proposed for a generator follow-up | #533 | **ACCEPT @ `ff044aa0`**; CI running |
-| Auditor R2 (read-only) | LR-46 dry run: security pre-sign-off of `main` and the open launch PRs | report | Running |
+| Auditor R2 (read-only) | LR-46 dry run: security pre-sign-off of `main` and the open launch PRs | report | **Done:** 1 blocker, 5 should-fix (see LR-46). No open launch PR has a security concern |
+| Builder W11 (backend security) | LR-46 blocker: push-device registration always uses the authenticated caller; body whitelisted and type-checked | new PR | Started |
+| Builder W12 (backend privacy) | LR-46: no child name, amount or free-text reason in a push that can show on the lock screen | new PR | Started |
+| Builder W13 (Android privacy) | LR-46: show over the lock screen only while a call rings or is in progress (stacked on #524) | new PR | Started |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
@@ -246,7 +249,13 @@ Each requirement appears once:
 | [ ] | LR-08 | The app works on real phones from signed builds against production (Apple 2.1; Play pre-launch) | Both | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer and owner (phones) | LR-01, LR-06, LR-07b, LR-07c, LR-47, OA-20 | `submission-device-test-plan.md` (about 40 SB rows) has **never been run**. The 2026-11-02 iPhone checklist (`release-gate.md` §1) also left 22 of 24 rows untested. Needs LR-01, LR-06, LR-07, LR-47. Owner action OA-20. |
 | [ ] | LR-18 | Media and evidence access verified on the real deployment (RT-037, RT-038) | Both | H | BLOCKED — TECHNICAL DEPENDENCY | Security reviewer; QA | LR-01 | Needs LR-01. Test plan: `docs/qa/RT-037-STAGING-REAL-MEDIA-TEST.md`. |
 | [ ] | LR-22 | Crash reports are symbolicated | Both | H | READY FOR VERIFICATION | Release manager | LR-45 | #502 keeps the symbols (`--split-debug-info`); the upload is a documented `sentry-cli` step with the owner's token. Done when a forced test crash shows a symbolicated trace. |
-| [ ] | LR-46 | Final security sign-off on the release-candidate SHA | Both | H | NOT STARTED | Security reviewer (Fable 5.1) | LR-08 | Runs in Phase 3 on the merged release candidate. |
+| [ ] | LR-46 | Final security sign-off on the release-candidate SHA | Both | H | IN PROGRESS | Security reviewer; lead | LR-08 | **Pre-sign-off dry run on `main` @ `bc47d376` (2026-11-09, read-only, five parallel reviewers, the lead re-read the high-severity claims).** Result: 1 blocker, 5 should-fix, the rest fine.
+- **Blocker:** the push-device registration route took an identity field from the request body. Fix in progress (W11, test first). Not live: production has never been deployed.
+- **Should fix, in progress:** some pushes put personal details on the lock screen (W12); Android stays over the lock screen after a call (W13); a server sign-out does not stop pushes (queued).
+- **Before store review:** `TRUSTED_PROXY_HOPS` must be set, because public password routes have no per-address limit without it. It is a production setting, so the owner approves it (with OT-3).
+- **Lead decision:** the staff permission guard is still in shadow mode.
+- **Fine:** JWT, refresh-reuse detection, deletion, media signing, realtime authorization, headers, redaction, secure token storage, ATS, webhooks, raw SQL, tracked secrets.
+The final sign-off on the release candidate is the delta from `bc47d376`. |
 | [ ] | LR-63 | Signed, re-authorized media links; webhook signatures verified | Both | H | READY FOR VERIFICATION | Security audit | LR-18 | `media-url.ts:81-135`; `stripe-webhook.controller.ts:52-60`. Verified in code; it still needs the real-deployment test (LR-18). |
 | [ ] | LR-78 | The optional CI job "Android killed-app ring" is reliable: it fails only when the ring is really broken | AND | M | IN PROGRESS | Agent M (QA + mobile) | owner Code Owner approval of #517 | **Root cause found (agent M, 2026-11-08):** the app does post the ring, but Android 14's NotificationService silently drops a CallStyle notification when system_server's cached ApplicationInfo for the app is stale. The log shows "Cannot fix notification" with a SecurityException, on the first attempt of runs 42414696184, 42483333513, 42491644506 and 42494983644. **#517** (`f568cbbb`): the test re-pushes only on that exact drop, at most 3 pushes, and every other check is unchanged. `scripts/qa/` is a Code Owner path, so **the owner must approve the merge**. Independent review ACCEPT @ `f568cbbb`. |
 | [ ] | LR-79 | The first incoming-call ring is not lost when Android drops a CallStyle notification (app-side check that the ring is active, re-posting once) | AND | H | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | #449 (owns `JawwidPush.kt`) | Found by the LR-78 diagnosis. The same Android 14 system drop may hit real phones, for example right after an app update, so the first ring would be lost while the app believes it posted. **Unconfirmed on a phone.** Fix in `JawwidPush.notify` once #449 merges; add a device-plan row. |
