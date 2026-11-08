@@ -250,6 +250,11 @@ POST   /notifications/:id/delivered
 POST   /notifications/:id/opened
 ```
 
+`POST /notifications/devices` binds the token to the signed-in session (LR-46):
+revoking that session deactivates it. Registering a token that another account's
+live session still owns returns `409 COMM.DEVICE_TOKEN_IN_USE`; the app treats it
+like any registration failure (no retry, sign-in continues).
+
 Register on every launch and after each token rotation. Register the VoIP/CallKit
 token separately with `isVoip: true`. **Multi-device is normal** — never assume
 one device per user, and never unregister another device's token.
