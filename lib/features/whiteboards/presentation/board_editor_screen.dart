@@ -136,6 +136,32 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     );
   }
 
+  /// LR-39: a page opened over the full-screen board (an incoming call, a
+  /// conversation opened from a notification) is held portrait; the board may
+  /// turn again once it is back on top. Popups (sheets, dialogs) do not drive a
+  /// page's secondary animation, so the board's own tool sheets keep landscape.
+  ModalRoute<dynamic>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      _route?.secondaryAnimation?.removeStatusListener(_coveredChanged);
+      _route = route;
+      _route?.secondaryAnimation?.addStatusListener(_coveredChanged);
+    }
+  }
+
+  void _coveredChanged(AnimationStatus status) {
+    if (!_fullScreen) return;
+    if (status == AnimationStatus.forward || status == AnimationStatus.completed) {
+      unawaited(lockAppOrientation());
+    } else if (status == AnimationStatus.dismissed) {
+      unawaited(allowBoardFullScreenOrientations());
+    }
+  }
+
   void _emojiFontChanged() {
     if (mounted) setState(() {});
   }
@@ -147,6 +173,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
       _systemBars(hidden: false);
       unawaited(lockAppOrientation());
     }
+    _route?.secondaryAnimation?.removeStatusListener(_coveredChanged);
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
     // (its keep-alive) until every page is on the server.

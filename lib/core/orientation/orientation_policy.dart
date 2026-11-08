@@ -3,10 +3,14 @@ import 'package:flutter/services.dart';
 
 /// LR-39: which way up the app may be held.
 ///
-/// The screens are designed for portrait and were never checked in landscape, so the app is held
-/// portrait on phones (iOS and Android alike). The one exception is the
-/// whiteboard's full-screen mode, which PD-55 rev2 promises in landscape on a
-/// phone: it opens landscape while it is up and closes it again on the way out.
+/// The screens are designed for portrait and were never checked in landscape, so
+/// the app asks to be held portrait (iOS and Android alike). The one exception is
+/// the whiteboard's full-screen mode, which PD-55 rev2 promises in landscape: it
+/// opens landscape while it is up and on top, and closes it again on the way out.
+///
+/// These are preferences, not guarantees: iOS ignores them for an iPad app that
+/// supports multitasking, and Android 16+ ignores them on large screens, so a
+/// tablet may still turn every screen. The phone is what this policy is for.
 ///
 /// `Info.plist` and the Android manifest still allow landscape on purpose:
 /// without that, the full-screen board could not turn at all.
