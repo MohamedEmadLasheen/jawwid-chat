@@ -3,6 +3,12 @@
 Owner of this report: release manager (builder session). Low risk, documents only. **Nothing was
 deployed, run or changed to write it.**
 
+> **Status: the first deploy currently FAILS at the backup step, before any migration (Blocker LR-77,
+> §1d).** Both workflows back up the `chat` schema before `scripts/db/apply.sh` creates it, and the
+> backup refuses a database that has no `chat` schema yet. The first deploy (staging or production)
+> cannot succeed until LR-77's code fix is approved by the owner and merged. Do **not** work around it
+> by creating the schema by hand.
+
 Evidence base: `main` @ `9bb0418d` (this branch's parent), read on 2026-11-08, plus read-only GitHub
 queries that list **names only** (no secret or variable value was printed or read):
 
@@ -74,10 +80,11 @@ Job **`deploy` — "Deploy to staging"** (`:149-157`, GitHub Environment `stagin
 6. "Validate the staging configuration and resolve the app spec" (`:189-325`):
    `scripts/infra/check-env.sh staging` (every `req` name in `infra/env/manifest.tsv`) and
    `app-spec.py resolve staging`, which also requires staging's `REDIS_URL` to be the in-app
-   `redis://redis:6379` (`scripts/infra/app-spec.py:121, 764`).
+   `redis://redis:6379` (`scripts/infra/app-spec.py:121, 451-454`).
 7. "Preflight the database role capability" (`:327-334`): the BYPASSRLS probe, rolled back.
 8. **Backup:** "Back up the database before migrating" (`:336-348`): encrypted `pg_dump` of `chat`;
    refuses without `BACKUP_ENCRYPTION_PASSPHRASE`. (Staging does not upload it as an artifact.)
+   **On a never-migrated database this step FAILS and the run stops here** (Blocker LR-77, §1d).
 9. **Migrations:** "Apply database migrations" (`:350-355`): `scripts/db/apply.sh`, every file in
    `supabase/migrations/` not yet in `chat.schema_migrations`, in filename order (§5).
 10. "Load the pinned Quran text" (`:357-366`).
@@ -125,8 +132,8 @@ Job **`deploy`** (`:144-150`, GitHub Environment `production`, required reviewer
    succeeded on 2026-11-06, which is evidence it was applied; this step re-checks it.)
 10. "Preflight the database role capability" (`:360-367`).
 11. **Backup:** "Back up the database" (`:369-388`) and "Upload the pre-deployment backup" (`:390-395`,
-    artifact `pre-deploy-backup-<run>`, 30 days). On a never-migrated database the dump has no `chat`
-    data; it still must succeed.
+    artifact `pre-deploy-backup-<run>`, 30 days). **On a never-migrated database "Back up the
+    database" FAILS and the run stops here, before any migration** (Blocker LR-77, §1d).
 12. **Migrations:** "Apply database migrations" (`:397-401`).
 13. "Load the pinned Quran text" (`:403-412`).
 14. **"Release"** (`:414-425`) → `do-release.sh production`: creates `jawwid-chat-production`, prints
@@ -141,13 +148,50 @@ Neither workflow touches DNS. The app spec declares the hosts (`.do/app.producti
 issues certificates "once DNS resolves" (`production-readiness.md:49, 210-212`). The CNAME target is
 the app's default ingress hostname, which **exists only after step 11/14 creates the app**.
 
+**Today the first run never gets this far:** it stops at the backup step (§1d, Blocker LR-77). The
+rest of this paragraph describes the first run **after LR-77 is fixed**.
+
 **Consequence for the first run (inference, UNVERIFIED until it happens):** the first
 `first_deploy=true` run creates the app, applies the migrations and releases, then its **smoke test
 fails**, because `api.chat.jawwid.com` (or the staging host) does not resolve yet and `smoke.sh` does
 not retry. A red first run after a successful "Release" step is the expected outcome, not a failed
 deploy. The documented sequence (`production-readiness.md:207-213`) is: save the app id → add the
-CNAMEs → wait for the certificate → re-run **without** `first_deploy`; that run's smoke test is the
-proof. The re-run backs up again, finds no new migration, and runs `doctl apps update`.
+CNAMEs → wait for the certificate → start a new run (Actions → the workflow → Run workflow)
+**without** `first_deploy`; that run's smoke test is the proof. The new run backs up again (the `chat`
+schema exists by then), finds no new migration, and runs `doctl apps update`.
+
+### 1d. Blocker LR-77: the first deploy fails at the backup step
+
+**What happens.** Both workflows run `scripts/infra/backup-db.sh --out ./backups --schema chat`
+(`deploy-staging.yml:348`, `deploy-production.yml:388`) **before** "Apply database migrations"
+(`deploy-staging.yml:350-355`, `deploy-production.yml:397-401`). The `chat` schema is created only by
+the migration runner itself: `scripts/db/apply.sh:24-30` (`create schema if not exists chat;`). On a
+database that has never been migrated there is no `chat` schema when the backup runs, so:
+
+1. `pg_dump --schema=chat` matches no schema and exits non-zero. PostgreSQL's documentation for
+   `--strict-names` says: *"Note that if none of the extension/schema/table patterns find matches,
+   pg_dump will generate an error even without `--strict-names`."*
+   (<https://www.postgresql.org/docs/17/app-pgdump.html>, read 2026-11-08; the workflows run pg_dump
+   from `postgres:17-alpine`, `deploy-staging.yml:347`, `deploy-production.yml:387`.) **Verified on
+   the documentation:** that it is an error. **UNVERIFIED:** the exact message text (commonly "no
+   matching schemas were found"); the documentation page does not quote it, and nothing was run here.
+2. `backup-db.sh` runs pg_dump in a pipe under `set -euo pipefail` (`:27`); the failed pipe hits
+   `dump_failed "pg_dump or encryption FAILED:"` (`:184-185`), which exits 1 (`:148-153`).
+3. The step fails, so the job stops: **no migration, no Quran load, no app creation, no release.**
+   Nothing is changed, but the first deploy cannot proceed. This applies to staging and production
+   alike.
+
+**What it needs: a code fix, not an owner workaround.** One of:
+- `backup-db.sh` treats an absent target schema on a first deploy as "nothing to back up": it checks
+  that the schema does not exist, logs that loudly (a workflow warning saying no backup was taken
+  because the `chat` schema does not exist yet), and exits 0; any other pg_dump failure still fails
+  the step. Or
+- the workflows create the `chat` schema before the backup step (so the dump succeeds, nearly empty).
+
+Either way it needs a test that fails today (a backup against a database without the schema). The
+fix is in the deploy path, so **the lead classes LR-77 High risk (deployment protection): it needs
+the owner's approval before it is implemented.** The owner must **not** create the `chat` schema by
+hand to get past it.
 
 ---
 
@@ -246,7 +290,15 @@ the repository variables (`production-readiness.md:122-131`; also `scripts/infra
 ## 4. Staging first or production first
 
 Today: staging holds only `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (§2a); production holds
-every required name. **The owner decides; both are described.**
+every required name. **The owner decides; both are described.** Both options are blocked until LR-77
+(§1d) is fixed: the first `first_deploy=true` run of either workflow stops at the backup step today.
+
+Wherever a SHA is asked for below, use **the full 40-character commit SHA**, never the 7-character
+short form: copy it from the commit's page on GitHub (the copy button next to the short SHA copies the
+full one), from the workflow run's page ("Commit" link → its page), or from `git log -1 --format=%H
+origin/main` (the production workflow passes it straight to `git merge-base` and to the image tag,
+`deploy-production.yml:68`, `:98`; an image tagged with the full SHA is not found under a short one; the staging build tags the image with the full `GITHUB_SHA`,
+`deploy-staging.yml:72`).
 
 ### Option A: staging first (the documented path)
 
@@ -264,8 +316,9 @@ Minimal owner steps:
    `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RESET_CODE_HASH_SECRET`, `STORAGE_ACCESS_KEY`,
    `STORAGE_SECRET_KEY`, `STORAGE_SIGNING_SECRET`; variables `STORAGE_ENDPOINT`, `STORAGE_BUCKET`
    (optionally `STORAGE_REGION`).
-3. Deploy staging `first_deploy=true` → save the staging app id → two staging CNAMEs → re-run.
-4. Then production (Option B steps 2-5) with the SHA staging ran.
+3. Deploy staging `first_deploy=true` → save the staging app id → two staging CNAMEs → start a new run
+   (Actions → Deploy staging → Run workflow) with `first_deploy` unticked.
+4. Then production (Option B steps 2-5) with the full 40-character SHA staging ran.
 
 Risk: more owner work (a second database, bucket, key and 11 secrets) and about **$27/month more**
 while it runs (`production-readiness.md:33`). Benefit: the first-ever migration run, App Platform
@@ -282,19 +335,22 @@ changed", because staging has no `DIGITALOCEAN_ACCESS_TOKEN`.
 Minimal owner steps:
 1. Actions → **Deploy staging** → Run workflow on `main` (`image_tag` blank, `first_deploy` off). Wait
    for **Build and publish images** to succeed; the **Deploy to staging** job is expected to fail at
-   its first step and change nothing. Note the commit SHA of that run.
-2. Actions → **Deploy production** → `image_tag` = that SHA, `confirm` = `DEPLOY`, `first_deploy` = ✔.
-   Approve the `production` environment when prompted.
+   its first step and change nothing. Copy the full 40-character commit SHA of that run.
+2. Actions → **Deploy production** → `image_tag` = that full SHA, `confirm` = `DEPLOY`,
+   `first_deploy` = ✔. Approve the `production` environment when prompted. (Paid, irreversible: see
+   §6 item 7.)
 3. Copy the app id from the run summary ("First deploy of jawwid-chat-production") → Settings →
    Environments → `production` → Add secret `DIGITALOCEAN_APP_ID`.
 4. Add the two production CNAMEs (§3), wait until App Platform shows the domains as active.
-5. Re-run **Deploy production** with the same SHA, `first_deploy` off. Green smoke test = done.
+5. Start a new run (Actions → **Deploy production** → Run workflow) with the same full SHA,
+   `first_deploy` unticked. Green smoke test = done.
 
 Risk: the first-ever run of 177 migrations, the BYPASSRLS grant, the app creation and the DNS/TLS
 issuance all happen first on the production project. Mitigations already in place: the review period
 has **no real users** and the store builds stay on manual release (`production-readiness.md:31`); the
-database is empty, so a failed migration is fixed by recreating the empty Supabase project; the
-pre-deploy backup and the forward-only rollback (`production-runbook.md:195`) apply. What it skips:
+database is empty, so a failed migration can be cleared by deleting and recreating the Supabase
+project (a DELETE: confirm first in Supabase → Table Editor / SQL editor that it holds no data); the
+pre-deploy backup and the forward-only rollback (`production-runbook.md:195-218`, `production-readiness.md:58`) apply. What it skips:
 the staging restore drill before production (`production-readiness.md:58`) and the "it has been running
 on staging" prerequisite, which the owner would be waiving for the first deploy. The recurring
 deliberately red **Deploy staging** run is also a signal people must learn to read.
@@ -342,12 +398,14 @@ Production-first order (Option B). For Option A, do items 1-2 for staging first 
 names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report's inference (see
 "What could not be verified").
 
-1. **Decide staging-first or production-first** (§4). Unblocks: LR-01.
+1. **Decide staging-first or production-first** (§4), and **approve or decline the LR-77 fix** (§1d;
+   High risk, deployment protection). No first deploy can succeed until it is merged. Unblocks: LR-01.
 2. **Confirm the production values are right before the run** (names are present; values cannot be read
    by anyone in GitHub): `LAUNCH_PHASE` = `review`; `REDIS_URL` = `redis://redis:6379`; `DATABASE_URL`
    is the **Frankfurt** Supabase project's session pooler (`aws-0-eu-central-1.pooler.supabase.com`,
    port 5432, `sslmode=require`), recreated there if it is still the Ireland one
-   (`production-readiness.md:18-20, 27`); the role has `statement_timeout = '15s'` (`:28`); the
+   (`production-readiness.md:18-20, 27`) — recreating means **deleting** the Ireland project, so first
+   confirm in Supabase (Table Editor / SQL editor) that it is empty; the role has `statement_timeout = '15s'` (`:28`); the
    Supabase hardening is done (`:24`); the storage admin key is a different key from the app key; the
    LiveKit values are production's, not staging's. Unblocks: LR-01, LR-19.
 3. **Keep the backup passphrase outside GitHub** (password manager), the one in `production`'s
@@ -358,21 +416,44 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
    Unblocks: LR-01.
 6. **Build the API image:** Actions → **Deploy staging** → Run workflow → branch `main`, `image_tag`
    blank, `first_deploy` unticked → Run. Wait for "Build and publish images" to go green (the
-   "Deploy to staging" job then fails at its first step and changes nothing). Copy the commit SHA.
-   Unblocks: LR-01.
-7. **First production run:** Actions → **Deploy production** → Run workflow → `image_tag` = the SHA
-   from item 6, `confirm` = `DEPLOY`, `first_deploy` ticked → Run → approve `production` when asked.
-   Expect: every step green up to and including **Release**; **Smoke test** red (no DNS yet). If any
-   step before **Release** fails, nothing has been released; read the step's error. Unblocks: LR-01.
+   "Deploy to staging" job then fails at its first step and changes nothing). Copy **the full
+   40-character commit SHA**: open the run → click the commit link → on the commit page use the copy
+   button next to the short SHA (it copies all 40 characters), or run `git log -1 --format=%H
+   origin/main` after `git fetch`. The 7-character short SHA does not work. Unblocks: LR-01.
+7. **First production run — CURRENTLY FAILS (Blocker LR-77, §1d); do not start it until the LR-77 fix
+   is merged.** Today it stops at "Back up the database" before any migration, changing nothing.
+   **What this run does once LR-77 is fixed — read before starting it:**
+   - It **starts a paid DigitalOcean App Platform app**, `jawwid-chat-production`: about **$32/month**
+     before tax for the review period (API $12 + worker $5 + Admin Web $5 + in-app Redis $5 + Spaces
+     $5, `production-readiness.md:33`).
+   - It **applies 177 forward-only migrations** to the production database (§5). They cannot be
+     undone; there is no `down` mechanism (`production-runbook.md:204-209`; "Treat every production migration
+     as one-way", `production-readiness.md:58`).
+   - **If a step after "Apply database migrations" fails, the database stays changed** (whatever
+     migrations ran remain applied) even though nothing was released.
+
+   Steps: Actions → **Deploy production** → Run workflow → `image_tag` = the full 40-character SHA from
+   item 6, `confirm` = `DEPLOY`, `first_deploy` ticked → Run → approve `production` when asked.
+   Expect: every step green up to and including **Release**; **Smoke test** red (no DNS yet). If a step
+   before "Apply database migrations" fails, nothing was changed; read the step's error. Unblocks: LR-01.
 8. **Save the app id:** open that run's summary ("First deploy of jawwid-chat-production") → copy the
    id → Settings → Environments → `production` → Add secret → `DIGITALOCEAN_APP_ID`. Every later run
    refuses without it. Unblocks: LR-01.
+
+   **Recovery if "Release" failed after the app was created** (for example the run failed while
+   waiting for the deployment to become active, so no "Save the app id" summary was written): open
+   DigitalOcean → **Apps** → `jawwid-chat-production` → copy the app id (the UUID in the page address,
+   `cloud.digitalocean.com/apps/<app id>`, or under Settings) → save it as the `production`
+   Environment secret `DIGITALOCEAN_APP_ID`. Then start a new run (Actions → **Deploy production** →
+   Run workflow) with the same full SHA and `first_deploy` **unticked**. Do not tick `first_deploy`
+   again: the release refuses to create a second app of that name (`do-release.sh:60-64`).
 9. **DNS at Hostinger:** DigitalOcean → Apps → `jawwid-chat-production` → Settings → Domains → copy the
    CNAME target. Hostinger → Domains → `jawwid.com` → DNS / Nameservers → Add record: CNAME
    `api.chat` → target; CNAME `admin.chat` → target. Change no other record. Wait until DigitalOcean
    shows both domains active (certificate issued). Unblocks: LR-01, LR-18.
-10. **Second production run:** Actions → **Deploy production** → same SHA, `confirm` = `DEPLOY`,
-    `first_deploy` **unticked** → approve. Green **Smoke test** = LR-01's backend is live at
+10. **Second production run:** start a new run (Actions → **Deploy production** → Run workflow; not
+    "Re-run jobs" on the first run, which would repeat `first_deploy`) → the same full 40-character
+    SHA, `confirm` = `DEPLOY`, `first_deploy` **unticked** → approve. Green **Smoke test** = LR-01's backend is live at
     `https://api.chat.jawwid.com` (the account-deletion page then exists at `/account-deletion`,
     `production-readiness.md:74`). Unblocks: LR-01, LR-05 (review accounts can only be created on a
     live backend, `store-console/play-declarations.md:34`).
@@ -388,5 +469,5 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
 13. **Staging, before launch** (if Option B was chosen): §4 Option A steps 1-3, then the restore drill
     into staging (`production-readiness.md:58, 246`). Unblocks: LR-29.
 
-Until items 7-10 are done, LR-01 stays open. Nothing in this list changes Core, Core's DNS records or
+Until LR-77 is fixed and items 7-10 are done, LR-01 stays open. Nothing in this list changes Core, Core's DNS records or
 any protected project.
