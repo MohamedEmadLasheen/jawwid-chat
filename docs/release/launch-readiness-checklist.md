@@ -5,8 +5,8 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 17:59 Cairo (15:59 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
-- **State of `main`:** `22237717`, which contains #500, #502 and #504–#515. Main CI run 42488182440 on `6e0e1438`: 15/15 green; later merges are documents only.
+- **Last updated:** 2026-11-08 18:37 Cairo (16:37 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **State of `main`:** `83d5e687`, which contains #500, #502, #504–#515, #519 and #520. Main CI on it is pending; the last verified run is 42488182440 on `6e0e1438`, 15/15.
 
 ## 1. Dashboard
 
@@ -39,7 +39,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **95** | **16** | 15 | 7 | 30 | 20 | 4 | 3 |
+| **95** | **16** | 15 | 8 | 30 | 20 | 3 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
@@ -87,7 +87,9 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder I (Release manager + Security) | LR-76 signed-build options paper | #513 | **Merged** `aef40d66` |
 | Agent J (Security + Release) | LR-76 signing on the existing Mac (verified paper) | #514 | Both P1s fixed; final check of the public wording; **will be squash-merged** so the first commit never reaches `main` |
 | Agent K (QA engineer) | LR-08 device test plan refreshed for today's merges | #515 | **Merged** `ea5a2d69` |
-| Agent M (QA + mobile) | LR-78 flaky Android ring job | #517 | Root cause found; under review; **owner Code Owner approval needed** |
+| Agent M (QA + mobile) | LR-78 flaky Android ring job | #517 | Accepted @ `f568cbbb`; **owner Code Owner approval needed** |
+| QA agent | LR-28 reviewer-visible defects report | #519 | **Merged** `83d5e687` |
+| Builder N (Mobile engineer) | PARENT-024 video screen contrast | #520 | **Merged** `bdb631a9` |
 | Builder L (Backend/infra) | LR-77 first-deploy backup fix | #516 | Accepted @ `e56568c1`; **owner merge approval needed** (High) |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
@@ -231,7 +233,7 @@ Each requirement appears once:
 | [ ] | LR-63 | Signed, re-authorized media links; webhook signatures verified | Both | H | READY FOR VERIFICATION | Security audit | LR-18 | `media-url.ts:81-135`; `stripe-webhook.controller.ts:52-60`. Verified in code; it still needs the real-deployment test (LR-18). |
 | [ ] | LR-78 | The optional CI job "Android killed-app ring" is reliable: it fails only when the ring is really broken | AND | M | IN PROGRESS | Agent M (QA + mobile) | owner Code Owner approval of #517 | **Root cause found (agent M, 2026-11-08):** the app does post the ring, but Android 14's NotificationService silently drops a CallStyle notification when system_server's cached ApplicationInfo for the app is stale. The log shows "Cannot fix notification" with a SecurityException, on the first attempt of runs 42414696184, 42483333513, 42491644506 and 42494983644. **#517** (`f568cbbb`): the test re-pushes only on that exact drop, at most 3 pushes, and every other check is unchanged. `scripts/qa/` is a Code Owner path, so **the owner must approve the merge**. Independent review ACCEPT @ `f568cbbb`. |
 | [ ] | LR-79 | The first incoming-call ring is not lost when Android drops a CallStyle notification (app-side check that the ring is active, re-posting once) | AND | H | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | #449 (owns `JawwidPush.kt`) | Found by the LR-78 diagnosis. The same Android 14 system drop may hit real phones, for example right after an app update, so the first ring would be lost while the app believes it posted. **Unconfirmed on a phone.** Fix in `JawwidPush.notify` once #449 merges; add a device-plan row. |
-| [ ] | LR-28 | Defects a reviewer could see are closed (TEACHER-020, PARENT-016, PARENT-024, P2 retests) | Both | M | NOT STARTED | QA engineer | LR-08 | TEACHER-020 (#491) needs an iPhone check. PARENT-016 and PARENT-024 have no write-up. |
+| [ ] | LR-28 | Defects a reviewer could see are closed (TEACHER-020, PARENT-016, PARENT-024, P2 retests) | Both | M | IN PROGRESS | QA engineer; lead | LR-08 (devices); owner Arabic wording (PARENT-016) | **#519 merged** as `83d5e687` (report `docs/qa/reviewer-visible-defects-2026-11-08.md`):<br>• **TEACHER-020:** the fix is on `main` (#491), but a pass on the owner's iPhone 16 Pro Max cannot prove it; it needs a non-notch iPhone or an iPad.<br>• **PARENT-016:** the Arabic for a declined call is «مرفوضة» ("rejected"); the design asks for a neutral word. The owner approves the word; it waits for the l10n files (#449, #498, #503).<br>• **PARENT-024:** the video screen text was invisible; **fixed by #520**, merged as `bdb631a9`. A device check is still needed.<br>• `release-gate.md` §2b is out of date: seven of its nine "no fix" rows now have merged fixes. It is corrected when #501 is updated.<br>The PARENT-005 P-182 remainder is still unexplained. |
 | [ ] | LR-30 | The release documents tell the truth | — | M | IN PROGRESS | Lead | #501 (OA-16) | **#510 merged** as `5ed73ce6`: `production-readiness.md` (environment counts, deploy and backup history), `findings.md` (RT-006/012/016/022 fixed with evidence; RT-021 remainder), the red-team handoff and `API-CONTRACT.md`. Reviews ACCEPT @ `89d3196c`. Still open: `docs/qa/release-gate.md` S-11/S-12/S-15 "PASS" (fixed in #501, which waits for OA-16). |
 | [ ] | LR-33 | Staff permission guard enforced (`shadow` → `enforce`) | — | M | BLOCKED — TECHNICAL DEPENDENCY | Backend engineer; security reviewer | LR-01, owner (High) | Needs real shadow-denial logs (LR-01). It is authorization, so High risk: the owner approves the switch. |
 | [ ] | LR-44 | Connection recovery: realtime resumes after a server restart or network loss (PARENT-015) | Both | M | BLOCKED — TECHNICAL DEPENDENCY | QA engineer | LR-08 | The 2026-10-31 QA showed the app needed a relaunch after an API restart. Whether it is fixed on `main` is not verified. It is a device-plan row (LR-08). |
