@@ -12,15 +12,9 @@ is unavailable. What is the safest way to sign on the Mac we have?
 ## 1. Facts about this Mac (from the brief, not re-checked here)
 
 - The owner is the Apple **Account Holder** on team `KX683HAR3Y`.
-- On 2026-10-24 an internal triage classed this Mac as **"INFECTED-EVIDENCE"**:
-  - on 2026-10-06 an agent session ran a malicious loader from another project's code (a blockchain-C2
-    chain loader);
-  - stage-2 files appeared in the user's home (`~/.node_modules`), followed by an unexplained `pip`
-    network call;
-  - the triage recommended **credential rotation and an OS reinstall**. The owner has not decided yet.
-- All agents (Claude, Codex) run as the owner's macOS user, which is an **administrator**.
-- Nobody has shown how far the malware got. It is **not known** whether it obtained root, persisted, or
-  read the owner's browser sessions, keychain or tokens. This paper therefore assumes it may have.
+- This Mac has an **open security finding**, recorded outside this public repository. Until the owner settles
+  it, the machine rule stands: no project code runs here. This paper assumes the worst case: anything on
+  this Mac, including keys, passwords and build tools, may be readable or changeable by someone else.
 
 ## 2. New verified facts (read on the official page on 2026-11-08)
 
@@ -254,21 +248,21 @@ These rules reduce what **agents** can reach. They do not fix §3: they assume t
 
 ## 5. Build integrity: the deciding factor
 
-An infected host can change what it builds, wherever the keys live. Two ways out:
+A compromised host can change what it builds, wherever the keys live. Two ways out:
 
-1. **Settle the Mac first**, as the triage recommended: back up documents only, erase, reinstall macOS,
+1. **Settle the Mac first**: back up documents only, erase, reinstall macOS,
    rotate credentials, and reinstall tools from official sources. Erase All Content and Settings removes
-   "all of your data, settings, and apps" but keeps the installed OS (M11). Whether that meets the
-   triage's "OS reinstall" bar is the triage owner's call; the stricter path is a macOS reinstall from
-   Recovery (Apple steps **UNVERIFIED** today). Do **not** restore apps, `~/.node_modules`, shell dotfiles,
+   "all of your data, settings, and apps" but keeps the installed OS (M11). Whether that is enough is
+   the owner's decision (see §8); the stricter path is a macOS reinstall from
+   Recovery (Apple steps **UNVERIFIED** today). Do **not** restore apps, hidden tool folders, shell dotfiles,
    `~/.npm`, `~/.cache`, `~/development` or other tool folders from a backup or with Migration Assistant:
    that would bring the infection back. Re-clone repositories from GitHub.
 2. **Build on GitHub-hosted runners**: a new, ephemeral VM for each job (H9; options paper H7), signing
    with cloud certificates through an App Store Connect key (C1) and the Android upload keystore held as
    **environment** secrets. This is the options paper's **option (c)**, with the same High-risk owner
    approvals (options paper §5). C1 removes its main blocker (no `.p12` needs to exist), subject to the
-   one test export. Note that the owner still approves runs and pastes secrets from **some** device: with
-   unrotated credentials or a browser on an infected Mac, an attacker could do the same.
+   one test export. Note that the owner still approves runs and pastes secrets from **some** device: if that device or
+   its credentials are not trustworthy, the same risk applies.
 
 ## 6. Backup and recovery
 
@@ -301,19 +295,19 @@ paper are used; none of the options below needs new paid resources.
 **Option (B) now; option (C) later for repeatable releases. Not (A).**
 
 Why:
-- (A) would sign a build on a host classed "INFECTED-EVIDENCE". A separate user does not stop root-level
+- (A) would sign a build on a host with an unresolved security finding. A separate user does not stop root-level
   malware or a tampered toolchain (§4.1), and a signed malicious build is the one outcome we cannot undo.
-- (B) does what the triage already recommended, costs no money, lifts the machine rule for **all**
+- (B) settles the finding, costs no money, lifts the machine rule for **all**
   development as well, and takes about a day of the owner's time.
 - (C) is the better long-term design but needs High-risk approvals and days of engineering; it also
   depends on the owner's accounts being rotated, which (B) does anyway.
 - Credential rotation is required in every case (§3).
 
 **Owner actions for (B), in order:**
-1. **Decide** on the triage's recommendation (erase and reinstall plus rotation) and tell the lead.
+1. **Decide** whether to erase and reinstall plus rotate credentials and tell the lead.
 2. **Back up documents only** (not apps, not tool folders, not dotfiles; see §5) to an external disk.
    Confirm every repository you care about is pushed to GitHub.
-3. **Erase and reinstall macOS** (§5, M11; the stricter Recovery reinstall if the triage owner asks).
+3. **Erase and reinstall macOS** (§5, M11; or the stricter Recovery reinstall).
 4. **Turn on FileVault** (M7) and the lock-screen password (M9). Keep the Mac on the latest macOS.
 5. **Rotate credentials from the clean Mac**, not from the old system: Apple ID, Google (Play Console)
    account, GitHub account and its tokens, password-manager master password, and any API tokens the
