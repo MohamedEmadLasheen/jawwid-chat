@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/orientation/orientation_policy.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/design/tokens.dart';
 import 'package:jawwid_chat/features/whiteboards/application/board_editor_controller.dart';
@@ -121,6 +122,7 @@ void main() {
             GlobalCupertinoLocalizations.delegate,
           ],
           home: home,
+          navigatorObservers: [pageRouteObserver],
         ),
       ),
     );
@@ -486,15 +488,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(lastOrientations(), boardTurns);
 
-      // An incoming call (or a notification tap) pushes a page over the board.
-      unawaited(Navigator.of(tester.element(find.byType(BoardEditorScreen)))
-          .push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('call')))));
+      // A tool sheet (a popup, not a page) keeps landscape.
+      unawaited(showModalBottomSheet<void>(
+          context: tester.element(find.byType(BoardEditorScreen)), builder: (_) => const Text('sheet')));
       await tester.pumpAndSettle();
-      expect(lastOrientations(), portrait, reason: 'the page on top is held portrait');
+      expect(lastOrientations(), boardTurns, reason: 'a sheet over the board does not hold it portrait');
+      Navigator.of(tester.element(find.text('sheet'))).pop();
+      await tester.pumpAndSettle();
 
-      Navigator.of(tester.element(find.text('call'))).pop();
-      await tester.pumpAndSettle();
-      expect(lastOrientations(), boardTurns, reason: 'the full-screen board is on top again');
+      // A notification tap pushes a MaterialPage; the call screen is a page with no
+      // transition (router.dart `_still`). Both are held portrait while on top.
+      for (final covering in <Route<void>>[
+        MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('covering'))),
+        PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, __, ___) => const Scaffold(body: Text('covering')),
+        ),
+      ]) {
+        unawaited(Navigator.of(tester.element(find.byType(BoardEditorScreen))).push(covering));
+        await tester.pumpAndSettle();
+        expect(lastOrientations(), portrait, reason: 'the page on top (${covering.runtimeType}) is held portrait');
+        Navigator.of(tester.element(find.text('covering'))).pop();
+        await tester.pumpAndSettle();
+        expect(lastOrientations(), boardTurns, reason: 'the full-screen board is on top again');
+      }
 
       await tester.tap(find.byKey(const ValueKey('board-exit-full-screen')));
       await tester.pumpAndSettle();

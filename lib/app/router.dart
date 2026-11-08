@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/crash/crash_reporting.dart';
+import '../core/orientation/orientation_policy.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/billing/presentation/my_payments_screen.dart';
@@ -241,7 +242,8 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.splash,
     // PD-56: the crash reports' navigation breadcrumbs (none unless crash reporting is on).
-    observers: crashReportingObservers(),
+    // LR-39: the full-screen board learns when a page (a call) opens over it.
+    observers: [...crashReportingObservers(), pageRouteObserver],
     refreshListenable: notifier,
     redirect: (context, state) => _redirect(ref, state.matchedLocation),
     routes: [

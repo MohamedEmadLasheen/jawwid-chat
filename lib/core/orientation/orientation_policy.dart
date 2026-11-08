@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 /// LR-39: which way up the app may be held.
 ///
@@ -14,6 +15,11 @@ import 'package:flutter/services.dart';
 ///
 /// `Info.plist` and the Android manifest still allow landscape on purpose:
 /// without that, the full-screen board could not turn at all.
+/// Tells a page when another page covers it or uncovers it. The router registers it,
+/// so the full-screen board knows when a call (or any page) opens over it. Only pages
+/// count: sheets and dialogs are popups, so the board's tool sheets keep landscape.
+final RouteObserver<PageRoute<dynamic>> pageRouteObserver = RouteObserver<PageRoute<dynamic>>();
+
 const List<DeviceOrientation> kAppOrientations = [DeviceOrientation.portraitUp];
 
 /// The full-screen board: portrait or either landscape (never upside down).
