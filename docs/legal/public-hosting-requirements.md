@@ -18,8 +18,9 @@
 | Reporting and Complaints Policy | `reporting-and-complaints-policy-*.md` | Arabic and English | Apple 1.2 ("timely responses"); incorporated by reference in the terms |
 | Blocking, Suspension and Enforcement Policy | `blocking-and-enforcement-policy-*.md` | Arabic and English | Incorporated by reference |
 | Child Safety and Parental Responsibility Policy | `child-safety-policy-*.md` | Arabic and English | Google's Child Safety Standards (published standards); incorporated by reference |
-| Account deletion | Exists in code: `GET /account-deletion` on the API host (`apps/api/src/account-deletion/`) | Check its languages (H-3) | Google Play web deletion resource |
-| Support page | To create (H-5) | Arabic and English | Apple 1.5 Support URL; Apple 1.2 contact information |
+| Account deletion (the form) | Exists in code: `GET /api/v1/account-deletion` on the API host (`apps/api/src/account-deletion/`; the global prefix `api/v1` applies, `apps/api/src/main.ts:82`) | Arabic by default, English with `?lang=en` (`account-deletion-page.ts`) | Google Play web deletion resource |
+| Account deletion (information page) | `account-deletion-ar.md`, `account-deletion-en.md` (drafted 2026-11-09) | Arabic and English | Google Play "Delete account URL": app and developer name, steps, data deleted and kept (`publishing-gap-check.md` §3) |
+| Support page | `support-ar.md`, `support-en.md` (drafted 2026-11-09; H-5) | Arabic and English | Apple 1.5 Support URL; Apple 1.2 contact information |
 
 **Not published:** the technical and compliance documents in this folder (this file, the implementation guide, the matrices, the checklist, and the outstanding items). They stay in the repository.
 
@@ -97,6 +98,6 @@ Engineering ticket L-ENG-11 (developer guide §7) automates the first five check
 |---|---|---|
 | H-1 | The public host | A static page on the academy website under `jawwid.com`, not the API host |
 | H-2 | The path pattern | §2 |
-| H-3 | The account-deletion URL in the store listing: the API page itself, or a public page that links to it | Use the API page `/account-deletion` on the production API host (the route exists in code; the host `api.chat.jawwid.com` is from `docs/infrastructure/production-readiness.md`; check that it is reachable in production, and its Arabic and English versions), and link it from the support page |
+| H-3 | The account-deletion URL in the store listing: the API page itself, or a public page that links to it | Use the API page `/account-deletion` on the production API host (the route exists in code; the host `api.chat.jawwid.com` is from `docs/infrastructure/production-readiness.md`; check that it is reachable in production, and its Arabic and English versions), and link it from the support page. **Updated 2026-11-09:** the form's real path is `/api/v1/account-deletion`; the recommendation is now the static information page `account-deletion-*.md`, which links to the form (`publishing-gap-check.md` §3; `owner-confirmation-sheet.md` C-3, C-4) |
 | H-4 | Whether the Staff Terms appear in site navigation | Public URL, left out of the navigation |
 | H-5 | The support page's content: e-mail, hours, response time, and links to all the policies | Owner provides the e-mail and hours |
