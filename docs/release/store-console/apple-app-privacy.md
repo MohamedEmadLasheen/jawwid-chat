@@ -192,7 +192,9 @@ also complaints to the academy (`lib/core/data/http/http_moderation_repository.d
 - task comments (`lib/core/data/http/http_task_repository.dart:51`, `:56`);
 - a teacher's professional profile: bio, specialization, qualifications, experience, languages, and
   certificate files with title, issuer and date (`http_teacher_profile_repository.dart:72-79`, `:120-125`).
-  Shown to the teacher's families. The certificate files are also covered under Other User Content.
+  Today only the teacher sees it (the route `/settings/professional-profile` is teacher-only,
+  `lib/app/router.dart:558`); showing it to families is planned, not built. Certificate images and PDFs
+  (`lib/core/data/repositories.dart:1166`) are the same kind of data as the Photos or Videos and file items.
 
 **Gameplay Content: No.** The learning games are lessons; nothing a player makes is saved as game content.
 
