@@ -107,17 +107,23 @@ export function publicSummary(target: string, m: ReviewCohortManifest) {
   };
 }
 
+/**
+ * DATABASE_URL's host:port/database, or a refusal (exit 2). An unparseable
+ * URL's own error would quote the URL, password and all, so it is never shown.
+ */
+export function targetFromDatabaseUrl(databaseUrl: string): string {
+  try {
+    return describeTarget(databaseUrl);
+  } catch {
+    fail('USAGE', 'DATABASE_URL is not a valid URL');
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) fail('USAGE', 'DATABASE_URL is not set');
-  // An unparseable URL's error would quote the URL, password and all.
-  let target: string;
-  try {
-    target = describeTarget(databaseUrl);
-  } catch {
-    fail('USAGE', 'DATABASE_URL is not a valid URL');
-  }
+  const target = targetFromDatabaseUrl(databaseUrl);
   if (!args.target) fail('USAGE', `--target is required; DATABASE_URL points at ${target}`);
   if (args.target !== target) fail('TARGET_MISMATCH', `--target ${args.target} does not match DATABASE_URL (${target})`);
   if (!args.emailDomain) fail('USAGE', '--email-domain is required');

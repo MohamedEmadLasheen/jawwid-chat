@@ -34,13 +34,21 @@ on:
         description: 'Login domain of the review accounts (one Jawwid controls). Must stay the same for good.'
         required: true
         type: string
+      confirm_email_domain:
+        description: 'Type the login domain again. The first run fixes it for good, so a typo must not get through.'
+        required: true
+        type: string
 
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  # Two runs at once could create duplicate rows (review-accounts.md).
+  # Two runs at once could create duplicate rows (review-accounts.md). GitHub
+  # keeps at most one pending run per group: a third run cancels the pending
+  # second one. Deliberately NOT the deploy-production group, so a queued
+  # cohort run can never cancel a queued deploy; the runbook says not to run
+  # this while a deploy is in progress.
   group: review-cohort
   cancel-in-progress: false
 
@@ -54,6 +62,7 @@ jobs:
     env:
       IMAGE_TAG: ${{ inputs.image_tag }}
       EMAIL_DOMAIN: ${{ inputs.email_domain }}
+      CONFIRM_EMAIL_DOMAIN: ${{ inputs.confirm_email_domain }}
     steps:
       - name: Inputs are well formed
         # Inputs are read from the environment, never interpolated into the
@@ -68,6 +77,8 @@ jobs:
           [ "${#IMAGE_TAG}" -eq 40 ] || { echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1; }
           printf '%s' "$EMAIL_DOMAIN" | grep -Eq '^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$' \
             || { echo "::error::email_domain must be a plain lowercase domain name"; exit 1; }
+          [ "$CONFIRM_EMAIL_DOMAIN" = "$EMAIL_DOMAIN" ] \
+            || { echo "::error::confirm_email_domain does not match email_domain. Nothing was changed."; exit 1; }
 
       - name: The tag must be an ancestor of main
         # The same check as deploy-production.yml: only a merged, reviewed
@@ -129,8 +140,12 @@ jobs:
 
       - name: Provision the review cohort
         # --target is derived by the CLI's own describeTarget, inside the same
-        # image, so it matches exactly what the command checks; only
-        # host:port/database is ever printed, never the URL. The container runs
+        # image, so it matches exactly what the command checks. GitHub masks
+        # only the whole DATABASE_URL secret, so the derived host:port/database
+        # is registered with ::add-mask:: before anything prints: the log of
+        # this public repository shows *** in its place, in this step and in
+        # the CLI's own output. A failure to load the module and an invalid URL
+        # get different messages; neither quotes the URL. The container runs
         # as this runner's user so it can read the mode-600 files it is given
         # read-only. DATABASE_URL is passed by name (-e DATABASE_URL), so its
         # value is never on a command line.
@@ -148,14 +163,27 @@ jobs:
               "$IMAGE" "$@"
           }
           target="$(run node -e '
+            let describeTarget;
             try {
-              process.stdout.write(require("./dist/cli/bootstrap-super-admin.js").describeTarget(process.env.DATABASE_URL));
+              ({ describeTarget } = require("./dist/cli/bootstrap-super-admin.js"));
+            } catch {
+              describeTarget = undefined;
+            }
+            if (typeof describeTarget !== "function") {
+              process.stderr.write("could not load dist/cli/bootstrap-super-admin.js from the image\n");
+              process.exit(3);
+            }
+            let target;
+            try {
+              target = describeTarget(process.env.DATABASE_URL);
             } catch {
               process.stderr.write("DATABASE_URL is not a valid URL\n");
               process.exit(2);
-            }')" || { echo "::error::could not derive --target from DATABASE_URL"; exit 1; }
+            }
+            process.stdout.write(target);')" || { echo "::error::could not derive --target from DATABASE_URL (see the line above)"; exit 1; }
           [ -n "$target" ] || { echo "::error::could not derive --target from DATABASE_URL"; exit 1; }
-          echo "Target: $target"
+          echo "::add-mask::$target"
+          echo "Target derived from DATABASE_URL (masked in this log)."
           run node dist/cli/provision-review-cohort.js \
             --target "$target" \
             --email-domain "$EMAIL_DOMAIN" \

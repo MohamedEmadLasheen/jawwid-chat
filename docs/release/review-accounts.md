@@ -36,7 +36,12 @@ laptop.
 
 It runs only through the **Review cohort** GitHub workflow. The workflow uses the API image already built for a
 commit on main, runs as the `production` GitHub Environment (so that Environment's required reviewers approve every
-run), and never prints a password or the database address.
+run), and never prints a password or the database address: the repository is public, so anyone can read its run
+logs.
+
+Because it runs as the `production` Environment, every run also appears in that Environment's **deployment
+history**, next to the real deploys. A "Review cohort" entry there is this workflow, not a deploy: it changes only
+the review organization's rows and deploys nothing.
 
 1. Choose the login domain and three different passwords, each at least 12 characters.
    - **The domain must be one Jawwid controls** (or one that can never receive mail). "Forgot password" sends a
@@ -47,16 +52,25 @@ run), and never prints a password or the database address.
    - `REVIEW_PARENT_PASSWORD` (for `parent@<domain>`)
    - `REVIEW_TEACHER_PASSWORD` (for `teacher@<domain>`)
    - `REVIEW_DELETION_PARENT_PASSWORD` (for `parent2@<domain>`, the deletion test)
-3. Actions → **Review cohort** → Run workflow, from `main`:
-   - `image_tag`: the full commit SHA that production runs (it must be on main, and its API image must exist);
-   - `email_domain`: the domain from step 1.
+3. **Run it only when no production deploy is in progress** (Actions → **Deploy production** shows no queued or
+   running run), and with **the SHA production currently runs**: the `image_tag` of the latest successful
+   **Deploy production** run. The workflow checks only that the SHA is on main. A merged commit that is not deployed
+   yet may expect a migration production does not have, and the run would then stop partway. (A re-run with the
+   right SHA repairs that: every step finds before it creates.) The two workflows deliberately do not share a
+   concurrency group, because a queued cohort run could then cancel a queued deploy, so this rule is yours to keep.
+4. Actions → **Review cohort** → Run workflow, from `main`:
+   - `image_tag`: the SHA from step 3 (it must be on main, and its API image must exist);
+   - `email_domain`: the domain from step 1;
+   - `confirm_email_domain`: the same domain typed again. The first run fixes the domain for good, so the run stops,
+     changing nothing, if the two differ.
    Then approve the run when the `production` Environment asks.
-   - It stops with a clear error, changing nothing, if a secret is missing, the SHA is not on main, or the image
-     does not exist.
+   - It stops with a clear error, changing nothing, if a secret is missing, the two domains differ, the SHA is not
+     on main, or the image does not exist.
    - It writes the passwords to private (mode 600) files on the runner only for the run, and deletes them at the
      end even if the run fails.
-   - It prints ids, the three logins and the database's host:port/name, never a password or the database URL.
-4. Enter the logins and passwords **only** in App Store Connect (App Review Information → Sign-in required) and in
+   - It prints ids and the three logins. The database's host:port/name is masked (the log shows `***` in its
+     place), and a password or the database URL is never printed.
+5. Enter the logins and passwords **only** in App Store Connect (App Review Information → Sign-in required) and in
    Play Console (App content → App access, and Testing → Pre-launch report → Credentials). Never put them in the
    repository, a ticket, a chat or a log.
 
@@ -79,8 +93,11 @@ Run the workflow again after every review, and whenever an account misbehaves. I
   The family and the child stay. The command creates the parent again with the same email and gives it back its
   place: the family group for `parent`, a new 1:1 with the supervisor for `parent2`.
 - **The teacher account cannot be deleted** while a child is assigned to it, so it never needs restoring.
-- **Run one copy at a time.** Two runs at once could create duplicate rows. The workflow queues a second run until
-  the first one ends.
+- **Run one copy at a time.** Two runs at once could create duplicate rows. The workflow never runs two at once: it
+  holds a second run as pending until the first one ends. GitHub keeps only one pending run, so a third run cancels
+  the pending second one (nothing is changed by a cancelled pending run). Start the next run after the last one ends.
+- **The same rules as the first run apply:** no production deploy in progress, and the SHA production currently runs
+  (step 3 above).
 
 After a parent deletion, the review organization keeps a "family without an account" task that nobody works on. It
 is harmless.
