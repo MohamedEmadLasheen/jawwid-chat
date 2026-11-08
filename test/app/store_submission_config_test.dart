@@ -40,6 +40,17 @@ void main() {
     expect(read('android/app/src/main/AndroidManifest.xml'), contains('android:allowBackup="false"'));
   });
 
+  test('the call foreground service is typed microphone only, with no phoneCall (Play FGS policy, LR-14)', () {
+    final manifest = read('android/app/src/main/AndroidManifest.xml');
+    expect(manifest, contains('android:foregroundServiceType="microphone"'));
+    expect(manifest, contains('android.permission.FOREGROUND_SERVICE_MICROPHONE'));
+    expect(manifest, isNot(contains('phoneCall')));
+    expect(manifest, isNot(contains('FOREGROUND_SERVICE_PHONE_CALL')));
+    expect(manifest, isNot(contains('MANAGE_OWN_CALLS')));
+    final service = read('android/app/src/main/kotlin/com/jawwid/jawwid_chat/CallForegroundService.kt');
+    expect(service, isNot(contains('FOREGROUND_SERVICE_TYPE_PHONE_CALL')));
+  });
+
   test('iOS can save an exported board picture to Photos without being terminated', () {
     // A PNG export goes to the share sheet (board_export.dart), whose "Save Image" adds it
     // to Photos. Without this key iOS terminates the app at that tap.

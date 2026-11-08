@@ -112,7 +112,8 @@ sentry-cli debug-files upload --org ORG --project PROJECT \
     refuses to build without it);
   - the manifest gains `USE_FULL_SCREEN_INTENT`, which needs the Play Console
     full-screen-intent declaration.
-  - With #411, a call foreground service (`microphone|phoneCall`), which needs the
+  - With #411, a call foreground service (type `microphone` only; LR-14 removed `phoneCall`
+    because the app has no Telecom ConnectionService), which needs the
     foreground-service declaration and a video.
 
 ## Store listings

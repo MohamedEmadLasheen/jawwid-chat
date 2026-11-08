@@ -22,13 +22,11 @@
          heads-up notification, still with Answer and Decline. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <!-- Store blocker S-06: an ongoing call keeps its microphone when the app goes to the
-         background (CallForegroundService, types microphone|phoneCall). MANAGE_OWN_CALLS is
-         the runtime prerequisite of the phoneCall type (a normal permission, granted at
-         install); the service also runs with the microphone type alone. -->
+         background (CallForegroundService, type microphone only). LR-14: Android reserves
+         the phone-call service type for calls run through a Telecom ConnectionService,
+         which this app does not have, so it is not declared and neither is its permission. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
     <!-- enableOnBackInvokedCallback: predictive back (Android 14+). The system back
          gesture previews the screen underneath before it commits; Flutter drives it
          through the PredictiveBackPageTransitionsBuilder in lib/design/theme.dart.
@@ -75,7 +73,7 @@
         <service
             android:name=".CallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="microphone|phoneCall"/>
+            android:foregroundServiceType="microphone"/>
         <!-- "Decline" on the incoming-call notification, "Hang up" on the ongoing one. -->
         <receiver
             android:name=".CallActionReceiver"

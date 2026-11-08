@@ -34,10 +34,38 @@ class RedactingLogger {
     'phone_number',
     'phonenumber',
     'msisdn',
+    'email',
+    'e_mail',
+    'email_address',
+    'emailaddress',
+    'otp',
+    'otp_code',
+    'otpcode',
+    'verification_code',
+    'verificationcode',
+    'one_time_code',
+    'onetimecode',
+    'reset_code',
+    'resetcode',
     'body',
     'message',
     'text',
   };
+
+  /// `code` is shared: it carries one-time codes (sign-up, recovery, password reset) but
+  /// also diagnostic codes worth keeping (`COMM.NOT_CONVERSATION_MEMBER`, HTTP 404). Its
+  /// value is dropped when it is shaped like a one-time code.
+  static const _codeKey = 'code';
+  static final _otpShaped = RegExp(r'^\s*\d[\d\s-]{2,10}\d\s*$');
+
+  /// E-mail addresses appearing anywhere in free text.
+  static final _email = RegExp(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}');
+
+  /// A one-time code named in free text: "otp=123456", "code: 1234", "verification code 987654".
+  static final _otpInline = RegExp(
+    r'\b((?:otp|code|verification[ _]?code|one[ _-]?time[ _]?code)\s*[:=]?\s*)\d{4,8}\b',
+    caseSensitive: false,
+  );
 
   /// Bearer tokens and JWTs appearing inline in free text.
   static final _bearer = RegExp(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', caseSensitive: false);
@@ -74,11 +102,13 @@ class RedactingLogger {
     developer.log('$safeMessage$safeData', name: name, level: level);
   }
 
-  /// Strip token- and phone-shaped substrings from free text.
+  /// Strip token-, e-mail-, one-time-code- and phone-shaped substrings from free text.
   static String redactText(String input) {
     return input
         .replaceAll(_bearer, _mask)
         .replaceAll(_jwt, _mask)
+        .replaceAll(_email, _mask)
+        .replaceAllMapped(_otpInline, (m) => '${m[1]}$_mask')
         .replaceAll(_phone, _mask);
   }
 
@@ -86,11 +116,22 @@ class RedactingLogger {
   static Map<String, Object?> redactMap(Map<String, Object?> input) {
     final out = <String, Object?>{};
     input.forEach((key, value) {
-      out[key] = _sensitiveKeys.contains(key.toLowerCase())
+      final lower = key.toLowerCase();
+      out[key] = _sensitiveKeys.contains(lower) ||
+              (lower == _codeKey && _isOtpShaped(value))
           ? _mask
           : _redactValue(value);
     });
     return out;
+  }
+
+  static bool _isOtpShaped(Object? value) {
+    final digits = switch (value) {
+      final int n when n >= 0 => '$n',
+      final String s when _otpShaped.hasMatch(s) => s.replaceAll(RegExp(r'[\s-]'), ''),
+      _ => null,
+    };
+    return digits != null && digits.length >= 4 && digits.length <= 8;
   }
 
   static Object? _redactValue(Object? value) => switch (value) {
