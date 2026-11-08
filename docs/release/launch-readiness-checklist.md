@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 23:42 Cairo (21:42 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 00:00 Cairo (22:00 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -92,7 +92,11 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder N (Mobile engineer) | PARENT-024 video screen contrast | #520 | **Merged** `bdb631a9` |
 | Builder L (Backend/infra) | LR-77 first-deploy backup fix | #516 | **Merged by the owner** `bc47d376` (2026-11-08 21:18 UTC) |
 | Builder L (Backend/infra) | LR-77 workflow guard | #518 | **Merged by the owner** `84a4e5d5` (2026-11-08 21:17 UTC; owner's Code Owner approval 21:17 UTC) |
-| Lead | LR-77 docs after the merges | #521 | Open @ `d62e98dd`; independent review running |
+| Lead | LR-77 docs after the merges | #521 | Review ACCEPT @ `fb72aea1`; CI 29/30 (the optional Android ring job hit the known LR-78 drop, re-run started); **owner merge approval needed** |
+| Builder W1 (release) | LR-50, LR-51, LR-52, LR-58, LR-73: a release-readiness CI workflow (Android AAB checks for target/min SDK and 16 KB alignment; iOS build with Xcode 26, SDK and privacy manifest checks); no signing secrets | new PR | Started 2026-11-09 |
+| Builder W2 (mobile) | LR-79 (re-post a dropped ring) and LR-27 (FSI permission on Android 14+), stacked on #449 | new PR into #449's branch | Started 2026-11-09 |
+| Builder W4 (legal docs) | LR-04: owner confirmation sheet, missing deletion and support pages, hosting recommendation | new PR | Started 2026-11-09 |
+| Auditor R1 (read-only) | LR-71 dry run: every drafted console answer checked against the code | report | Started 2026-11-09 |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
