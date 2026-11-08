@@ -40,6 +40,15 @@ final microphonePermissionProvider = Provider<MicrophonePermission>(
   (ref) => RecordMicrophonePermission(),
 );
 
+/// The microphone question as calls ask it: [microphonePermissionProvider]
+/// behind a [SharedMicrophonePermission], so the controller (asking while an
+/// outgoing call rings) and the media client (asking as it joins) never have
+/// two platform prompts open at once (LR-74). Tests override the port above;
+/// the sharing stays real.
+final callMicrophoneProvider = Provider<MicrophonePermission>(
+  (ref) => SharedMicrophonePermission(ref.watch(microphonePermissionProvider)),
+);
+
 /// Where call audio comes out (W7's own seam — see [AudioRoute]).
 final audioRouteProvider = Provider<AudioRoute>((ref) => LiveKitAudioRoute());
 
@@ -54,7 +63,7 @@ typedef CallMediaClientFactory = CallMediaClient Function();
 final callMediaClientFactoryProvider = Provider<CallMediaClientFactory>((ref) {
   final calls = ref.watch(callRepositoryProvider);
   final newRoom = ref.watch(mediaRoomFactoryProvider);
-  final microphone = ref.watch(microphonePermissionProvider);
+  final microphone = ref.watch(callMicrophoneProvider);
   final logger = ref.watch(loggerProvider);
 
   return () => CallMediaClient(

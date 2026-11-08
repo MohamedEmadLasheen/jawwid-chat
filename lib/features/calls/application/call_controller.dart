@@ -327,6 +327,10 @@ class CallController extends Notifier<CallUiState> {
 
     ref.onDispose(() {
       _rejoiner.stop();
+      // LR-74: a sign-out or user switch mid-call must not leave the
+      // ongoing-call service (and its notification) running for a call this
+      // session no longer owns.
+      _finishOngoing();
       unawaited(_eventSub?.cancel());
       _eventSub = null;
       unawaited(_nativeSub?.cancel());
@@ -490,7 +494,9 @@ class CallController extends Notifier<CallUiState> {
         // LR-74: as [start] -- the microphone, and with it the ongoing-call
         // service, while this member is still in front. The server already
         // rings the others, so a refusal here changes nothing; the answer's
-        // media join reports it as it always has.
+        // media join reports it as it always has. An answer that arrives
+        // while this prompt is still open SHARES it ([callMicrophoneProvider]):
+        // a second concurrent platform request would read "denied".
         unawaited(_prepareOutgoing(join.callId));
         return ScheduledJoinResult.joined;
 
@@ -698,8 +704,15 @@ class CallController extends Notifier<CallUiState> {
   }
 
   /// Leave the terminal screen and return to idle.
+  ///
+  /// A FAILED call may still hold its media (a hang-up that never reached the
+  /// server, while live): it never passed through [_goTerminal], so the
+  /// microphone would keep sending with no screen and no notification. It is
+  /// released here. For an ended call this is a no-op -- already torn down.
   void dismiss() {
     if (!state.isTerminal) return;
+    _rejoiner.stop();
+    unawaited(_teardownMedia());
     _finishOngoing();
     state = CallUiState(canSwitchSpeaker: _audio?.canSwitch ?? false);
   }
@@ -931,11 +944,17 @@ class CallController extends Notifier<CallUiState> {
     if (access == MicrophoneAccess.granted) _startOngoing(callId);
   }
 
-  /// The microphone question, or null when this build has no microphone seam.
+  /// The microphone question -- the SAME shared one the media client asks
+  /// ([callMicrophoneProvider]), so the two never prompt at once.
+  ///
+  /// Null only when the permission provider itself cannot be built. The
+  /// try/catch covers exactly that read and nothing else: an error from
+  /// `ensure()` is not caught here (the `record` implementation never throws;
+  /// it answers [MicrophoneAccess.unavailable] instead).
   Future<MicrophoneAccess?> _askMicrophone() async {
     final MicrophonePermission microphone;
     try {
-      microphone = ref.read(microphonePermissionProvider);
+      microphone = ref.read(callMicrophoneProvider);
     } catch (_) {
       return null;
     }

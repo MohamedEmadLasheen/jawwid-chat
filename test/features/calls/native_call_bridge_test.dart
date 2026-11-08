@@ -30,7 +30,10 @@ import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/calls/application/call_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_media_providers.dart';
+import 'package:jawwid_chat/features/calls/data/scheduled_call_repository.dart';
+import 'package:jawwid_chat/features/calls/domain/scheduled_call.dart';
 
+import 'calls_page_fakes.dart' show RecordingScheduled;
 import 'w7_call_fakes.dart';
 
 /// The system call screen, recorded rather than presented.
@@ -81,6 +84,7 @@ void main() {
   late ScriptedAuth auth;
   late SpySocket socket;
   late FakePresentation native;
+  late RecordingScheduled scheduled;
 
   Future<void> settle() => Future<void>.delayed(Duration.zero);
 
@@ -90,6 +94,7 @@ void main() {
     mic = FakeMic();
     audio = FakeAudioRoute(canSwitch: true);
     auth = ScriptedAuth(signedInSession ? signedIn() : const AuthSignedOut());
+    scheduled = RecordingScheduled();
     socket = SpySocket();
     native = FakePresentation();
 
@@ -103,6 +108,7 @@ void main() {
         microphonePermissionProvider.overrideWithValue(mic),
         audioRouteProvider.overrideWithValue(audio),
         callPresentationProvider.overrideWithValue(native),
+        scheduledCallRepositoryProvider.overrideWithValue(scheduled),
       ],
     );
     addTearDown(container.dispose);
@@ -450,13 +456,98 @@ void main() {
         peerLabel: 'Mr. Ahmed',
         isGroup: false,
       );
+      // Answered and LIVE: the microphone is sending.
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.live);
       calls.endError = const AppError(AppErrorKind.network);
 
       await controllerOf(container).hangUp();
       expect(stateOf(container).phase, CallUiPhase.failed);
       expect(native.ongoing, ['start:call_1']);
+      expect(room.disconnects, 0, reason: 'a failed hang-up leaves the media up until the screen is left');
 
       controllerOf(container).dismiss();
+      await settle();
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+      expect(room.disconnects, 1,
+          reason: 'leaving the screen releases the microphone -- no hidden call keeps sending');
+      expect(room.disposes, 1);
+      expect(stateOf(container).phase, CallUiPhase.idle);
+    });
+
+    Future<void> joinStartedScheduled(ProviderContainer container) async {
+      scheduled.joinAnswer = const ScheduledJoin(
+        callId: 'call_1',
+        conversationId: 'conv_1',
+        mode: ScheduledJoinMode.started,
+      );
+      final result = await controllerOf(container).joinScheduled(
+        scheduledCallId: 'sc_1',
+        conversationId: 'conv_1',
+        peerLabel: 'Omar',
+        isGroup: false,
+      );
+      expect(result, ScheduledJoinResult.joined);
+      await settle();
+    }
+
+    test('N7h. a scheduled call answered while its prompt is open asks ONCE, and proceeds on the grant', () async {
+      final container = await ready();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+
+      await joinStartedScheduled(container);
+      expect(stateOf(container).phase, CallUiPhase.outgoingRinging);
+      expect(mic.calls, 1, reason: 'asked while ringing, in front');
+      expect(native.ongoing, isEmpty);
+
+      // The other side answers while the question is still on screen.
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+      expect(mic.calls, 1,
+          reason: 'the media join shares the open question -- a second concurrent '
+              'platform request would read "denied" on Android');
+      expect(stateOf(container).phase, CallUiPhase.connecting);
+      expect(room.connects, isEmpty, reason: 'nothing is joined before the answer');
+
+      prompt.complete(MicrophoneAccess.granted);
+      await settle();
+      expect(mic.calls, 1);
+      expect(stateOf(container).phase, CallUiPhase.live);
+      expect(stateOf(container).failure, isNull);
+      expect(calls.tokenCalls, ['call_1']);
+      expect(native.ongoing, ['start:call_1'], reason: 'started once, by whichever saw the grant first');
+    });
+
+    test('N7i. ...and a refusal of that one prompt fails the call as a microphone problem, asking nothing more', () async {
+      final container = await ready();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+
+      await joinStartedScheduled(container);
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+
+      prompt.complete(MicrophoneAccess.denied);
+      await settle();
+      expect(mic.calls, 1);
+      expect(stateOf(container).phase, CallUiPhase.failed);
+      expect(stateOf(container).failure, CallUiFailure.microphone);
+      expect(room.connects, isEmpty);
+      expect(native.ongoing, isEmpty);
+    });
+
+    test('N7j. a session that goes away mid-call stops the ongoing-call service', () async {
+      final container = await ready();
+      await controllerOf(container).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      expect(native.ongoing, ['start:call_1']);
+
+      container.invalidate(callControllerProvider);
       await settle();
       expect(native.ongoing, ['start:call_1', 'stop:call_1']);
     });
