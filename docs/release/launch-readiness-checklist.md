@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 21:39 Cairo (19:39 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-08 21:57 Cairo (19:57 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `83d5e687`, which contains #500, #502, #504–#515, #519 and #520. Main CI on it: run 42500808259, success.
 
 ## 1. Dashboard
@@ -101,7 +101,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
    - #497, #498, #449.
 2. **OT-4 is stopped at step 3** (Play's Create app form asks for the package name and for acceptance of the Play App Signing Terms of Service). Waiting for the owner: approve OA-03 and authorize those terms; then the lead issues a corrected handoff.
 3. **OT-2b** (the owner's signing decision): turn the chosen option into a step-by-step handoff.
-4. **OT-3** (first deploy) handoff, once #516 and #518 are merged.
+4. **OT-3** (first deploy): the handoff draft is written. The lead answers its open questions; it is final once #516 and #518 are merged.
 5. **LR-13, LR-27 and LR-79** as soon as #449 merges; **LR-26** once #449, #498 and #503 land.
 6. #503: merge if the other session has not.
 
@@ -113,7 +113,7 @@ The owner works through these in a separate terminal session, using the handoff 
 |---|---|---|---|
 | ~~OT-1~~ **Done, verified 2026-11-08** | Create the App Store Connect app record and confirm the App ID `com.jawwid.jawwidChat` has Push Notifications. Browser only; no keys are created on this Mac | LR-06 (record part), LR-09a, LR-09c, LR-57b; first step toward LR-48 | **Verified by the lead from the screenshots (E-08).** Primary language English (U.S.) is kept for version 1, with an Arabic localization to be added (LR-09k). The developer account name shown is "Jawwid LLC", an input for OA-08 (legal entity), to be confirmed by the owner |
 | OT-2 | Decide where signed store builds are made (LR-76) | LR-76, then LR-06 (certificate), LR-07c, LR-48, LR-49, LR-08 | **Answered 2026-11-08:** no second Mac; the owner is the Account Holder. Follow-up **OT-2b**: decide how this Mac becomes trustworthy for signing (erase and reinstall, then a dedicated signing user, versus building on GitHub runners). The lead's assessment is in chat; agent J's verified paper is coming |
-| OT-3 | First deploy package: (1) approve implementing the LR-77 backup fix; (2) read the readiness report (#512); (3) approve the first production deploy (OA-21): a paid App Platform app (about $32/month) and 177 forward-only migrations | LR-77, LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued; #512 is being corrected after its review |
+| OT-3 | First deploy package: (1) approve implementing the LR-77 backup fix; (2) read the readiness report (#512); (3) approve the first production deploy (OA-21): a paid App Platform app (about $32/month) and 177 forward-only migrations | LR-77, LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued. **Handoff drafted 2026-11-08** (kept outside the repo; not usable yet). It has 11 open questions for the lead, among them: staging or production first, the database project and region, and whether the production LiveKit project exists. It also lists two documentation follow-ups once #516 and #518 merge: the readiness doc's "pending the owner" text, and `backup-recovery.md` on the scheduled-backup failure mode. Usable only after #516 and #518 merge, the questions are answered, and the owner approves the deploy (OA-21) |
 | **OT-4 (now)** | Play Console: confirm the Organization account's verification, create the app (Free, no upload), and screenshot the Dashboard's testing requirements. Handoff: `~/jawwid-owner-evidence/OT-4/HANDOFF.md` | LR-07a, LR-69; prepares LR-09b, LR-09d, LR-09e, LR-09g, LR-09i | **Stopped at step 3, 2026-11-08 (correctly).** Steps 1–2 done; the lead viewed both account screenshots. The Create app form did not match the handoff: it asks for the **package name** (the handoff assumed the first upload sets it) and has a third declaration, the **Play App Signing Terms of Service**. Nothing was entered or ticked. Waiting for the owner: OA-03 and authorization of those terms. |
 | OT-5 | Legal facts and hosting (OA-08), final Terms texts (OA-09) | LR-04, LR-02d, LR-02a | Queued |
 | OT-6 | Decisions: target audience (OA-11), payments (OA-12), storefronts (OA-10) | LR-10, LR-15, LR-17, LR-09c–e, LR-09k | Queued |
