@@ -42,12 +42,12 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | Completed and verified | Ready for verification | In progress | Blocked: owner | Blocked: technical | Not started | Not applicable |
 |---|---|---|---|---|---|---|---|
-| 88 | 14 | 8 | 19 | 24 | 16 | 4 | 3 |
+| 89 | 14 | 8 | 20 | 24 | 16 | 4 | 3 |
 
 | Still open | Count | IDs |
 |---|---|---|
 | **Critical** | 30 | LR-01, 02a, 02b, 02d, 03, 04, 05, 06, 07a, 07b, 07c, 08, 09a–09k (11 console items), 10, 43, 45, 47, 48, 49, 72 |
-| **High** | 19 | LR-11a, 11b, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 46, 50, 51, 52, 65, 71 |
+| **High** | 20 | LR-11a, 11b, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 46, 50, 51, 52, 65, 71, 73 |
 | **Owner actions open** | 21 | OA-01 to OA-21 and OA-23 (§7); 13 of the 30 Critical items wait on the owner |
 
 The counts are recomputed from the tables in §3–§6 after every update.
@@ -58,7 +58,7 @@ Each percentage is completed-and-verified ÷ applicable items in that slice. N/A
 
 | Slice | Applicable | Completed and verified | % | What dominates the gap |
 |---|---|---|---|---|
-| **iOS** (store = iOS or Both) | 65 | 10 | **15 %** | Signing and the app record (owner), the production backend, device tests, console forms |
+| **iOS** (store = iOS or Both) | 66 | 10 | **15 %** | Signing and the app record (owner), the production backend, device tests, console forms |
 | **Android** (store = AND or Both) | 68 | 11 | **16 %** | The Organization account, package name and upload key (owner), the production backend, device tests, console forms |
 | **Shared backend and infrastructure** (area BE) | 17 | 1 | **6 %** | Never deployed; backups failing; no Sentry or Firebase project |
 | **Legal and compliance** (area LEGAL) | 25 | 2 | **8 %** | Entity facts, hosting, counsel, the audience and storefront decisions, console forms |
@@ -73,7 +73,8 @@ A percentage measures tracked work, not approval. Apple and Google decide.
 | Lead (this session) | This tracker; reconciling GitHub; merges under the merge conditions | `~/dev/jawwid-launch-tracker` → pushed to `claude/launch-readiness-org` (#501) | 14:30 | Running |
 | Builder A (Mobile engineer, Opus) | LR-14 foreground-service type, LR-42 log redaction | `~/dev/jawwid-lr14-android` → **#505** | 14:55 | Done; under independent review and CI |
 | Builder B (Backend engineer, Opus) | LR-32 `wss://` in production, LR-38 message paging validation | `~/dev/jawwid-lr32-api` → **#506** | 14:55 | Done; under independent review and CI |
-| Drafter C (Store compliance, Opus) | LR-09a–k, LR-23 console answers and listing copy | `~/dev/jawwid-store-console`, `claude/lr09-store-console-drafts` | 14:55 | Running |
+| Drafter C (Store compliance, Opus) | LR-09a–k, LR-23 console answers and listing copy | `~/dev/jawwid-store-console` → **#507** | 14:55 | Done; under review |
+| Builder D (Mobile engineer, Opus) | LR-73 iOS privacy manifest data types | `~/dev/jawwid-lr73-ios`, `claude/lr73-ios-privacy-manifest` | 16:00 | Running |
 | Independent reviewers (3 fresh Opus sessions, read-only) | Review #505, #506 and this tracker (#501) | none (read-only) | 15:40 | Running |
 | Another session (not this one) | CI re-runs on #498 and #503 (Gradle outage); both are now 30/30 green | its own | before 14:30 | Not touched by the lead |
 
@@ -131,7 +132,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-02d | Final Terms of Use and Code of Conduct texts and versions loaded as terms rows (N-3) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel | Without the rows, the gate has nothing to show. Owner action OA-09. |
 | [ ] | LR-03 | Account deletion starts in the app for every account that can be created, with no "contact us" (Apple 5.1.1(v); Play account deletion) | BE | Both | C | IN PROGRESS | Backend engineer; owner (merge) | #498 head `b11d2e6d`: 30/30 checks pass after another session's re-run. Review ACCEPT with two P2s:<br>• **P2-1:** a failing reminder could block erasures. The fix is uncommitted in `~/dev/jawwid-teacher-deletion`, one file; it needs a regression test.<br>• **P2-2:** the app copy says "deleted now" for a request.<br>Also in the same branch:<br>• `review-cohort.ts` must survive the review teacher's erasure (re-provisioning refuses with `TEACHER_CHANGED`);<br>• `review-accounts.md` must stop saying "takes effect immediately" for teachers.<br>Apple's account-deletion page allows a delayed deletion only when the user is told how long it takes; confirm the wording in the app. **Owner approves the merge (High: deletion).** |
 | [ ] | LR-04 | Public Privacy Policy, Terms, support page and deletion page in Arabic and English, with no placeholders (Apple 5.1.1(i) and the Support URL; Play privacy policy and the deletion web link) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel; Release manager | `docs/legal/*` drafts still contain `{{ENTITY_NAME}}` and other placeholders. `build-store.sh` refuses to build without the four URLs. Owner action OA-08. |
-| [ ] | LR-05 | Demo accounts on the live backend that need no WhatsApp code (Apple 2.1(a); Play App access) | BE | Both | C | BLOCKED — TECHNICAL DEPENDENCY | Owner; Release manager | `cli/review-cohort.ts` was merged in #490. Needs LR-01, then the owner's domain and two passwords (OA-21). Also needed: past lessons and reports in the data, and a third, disposable parent for the deletion test. |
+| [ ] | LR-05 | Demo accounts on the live backend that need no WhatsApp code (Apple 2.1(a); Play App access) | BE | Both | C | BLOCKED — TECHNICAL DEPENDENCY | Owner; Release manager | `cli/review-cohort.ts` was merged in #490. Needs LR-01, then the owner's domain and two passwords (OA-21). Also needed:<br>• past lessons and reports in the data;<br>• a third, disposable parent for the deletion test;<br>• **something payable**, because #507 found the review accounts have nothing to pay, so a reviewer cannot reach the pay sheet. |
 | [ ] | LR-06 | Apple Distribution certificate, App Store profile with Push, App Store Connect record for `com.jawwid.jawwidChat` | iOS | iOS | C | BLOCKED — OWNER ACTION REQUIRED | Owner | `exportArchive`: `No signing certificate "iOS Distribution" found`. Owner action OA-01. Done when the export succeeds and `aps-environment = production` is in the signed entitlements. |
 | [ ] | LR-07a | Google Play **Organization** developer account, verified (D-U-N-S, identity, website) | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | Play must verify the account before any app can be submitted. A D-U-N-S number can take up to 30 days. **The longest lead time on the whole list.** Owner action OA-02. |
 | [ ] | LR-07b | Final Android package name, permanent after the first upload, even to internal testing | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | `build.gradle.kts:59` uses `com.jawwid.jawwid_chat`; iOS uses `com.jawwid.jawwidChat`. Recommendation: keep `com.jawwid.jawwid_chat`. Owner action OA-03. |
@@ -161,7 +162,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-21 | Unique, increasing build numbers and a production-only store build | iOS | Both | H | READY FOR VERIFICATION | Release manager | #502 merged as `14860ad3` on 2026-11-08 by the lead. Review ACCEPT @ `6c4856a7`; 30/30 checks green on the PR head. Verify on the first store build of each platform. |
 | [ ] | LR-22 | Crash reports are symbolicated | SQA | Both | H | READY FOR VERIFICATION | Release manager | #502 keeps the symbols (`--split-debug-info`); the upload is a documented `sentry-cli` step with the owner's token. Done when a forced test crash shows a symbolicated trace. |
 | [ ] | LR-46 | Final security sign-off on the release-candidate SHA | SQA | Both | H | NOT STARTED | Security reviewer (Fable 5.1) | Runs in Phase 3 on the merged release candidate. |
-| [ ] | LR-23 | App Privacy label and Data safety match the code and SDKs (Firebase Installations id, Sentry diagnostics, purchase history, CoarseLocation) | LEGAL | Both | M | IN PROGRESS | Drafter C | Drafts go to `docs/release/store-console/`. Still needed: Xcode's privacy report on the archive. |
+| [ ] | LR-23 | App Privacy label and Data safety match the code and SDKs (Firebase Installations id, Sentry diagnostics, purchase history, CoarseLocation) | LEGAL | Both | M | IN PROGRESS | Drafter C | **#507** (`00c02445`) has the drafts. Findings: keep Coarse Location (country, region and time zone; no GPS); declare Purchase History on both stores; the manifest is missing seven types (LR-73). Still needed: Xcode's privacy report on the archive. |
 | [ ] | LR-24 | Every iOS background mode is justified (`voip`, `audio`, `remote-notification`) | iOS | iOS | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | `remote-notification` has no handler on `main`. It depends on LR-11. |
 | [ ] | LR-25 | Reporting or blocking a staff member behaves honestly | AND | Both | M | IN PROGRESS | Mobile engineer (#503) | #503 head `e83a6c05`: lead review ACCEPT recorded. The CI re-run is in progress, started by another session. Merge when it is green. |
 | [ ] | LR-26 | Microphone denial is recoverable ("Open settings") | AND | Both | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | Needs new strings in the l10n files, which #449, #498 and #503 all edit. Start when they land. |
@@ -187,7 +188,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 
 | ✓ | ID | Requirement (policy) | Area | Store | Pri | Status | Who | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
-| [ ] | LR-09a | Apple App Privacy details: all data, including SDKs; Sentry is Diagnostics | LEGAL | iOS | C | IN PROGRESS | Drafter C, then owner (enters) | Draft: `docs/release/store-console/apple-app-privacy.md`. |
+| [ ] | LR-09a | Apple App Privacy details: all data, including SDKs; Sentry is Diagnostics | LEGAL | iOS | C | IN PROGRESS | Drafter C, then owner (enters) | Draft in **#507**: `docs/release/store-console/apple-app-privacy.md`. |
 | [ ] | LR-09b | Play Data safety form, including the deletion web link | LEGAL | AND | C | IN PROGRESS | Drafter C, then owner | Draft: `google-data-safety.md`. It also needs LR-04's URL. |
 | [ ] | LR-09c | Apple age rating, 2026 questionnaire (tiers 4+/9+/13+/16+/18+, the social-media question, and Shared Location/Dating from 16 Nov 2026) | LEGAL | iOS | C | IN PROGRESS | Drafter C, then owner | Decide whether 24-hour stories count as a "social feed". This depends on LR-10. |
 | [ ] | LR-09d | IARC content rating questionnaire | LEGAL | AND | C | IN PROGRESS | Drafter C, then owner | Draft: `age-rating.md`. |
@@ -214,7 +215,8 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [x] | LR-55 | Only `MainActivity` exported; `allowBackup=false`; no cleartext traffic | AND | AND | H | COMPLETED AND VERIFIED | Android audit | E-02 |
 | [x] | LR-56 | iOS usage strings for every capability used, in Arabic and English, with none unused | iOS | iOS | M | COMPLETED AND VERIFIED | iOS audit | E-02 (tone: LR-41) |
 | [x] | LR-57 | Export compliance key `ITSAppUsesNonExemptEncryption = false` (only the OS's own TLS) | LEGAL | iOS | M | COMPLETED AND VERIFIED | iOS audit | E-02 |
-| [ ] | LR-58 | Privacy manifest present; no tracking; required-reason APIs declared | iOS | iOS | M | READY FOR VERIFICATION | iOS audit | `PrivacyInfo.xcprivacy` has `NSPrivacyTracking=false`. App Store Connect rejects an upload with missing reasons, so the upload itself (LR-48) is the proof. |
+| [ ] | LR-58 | Privacy manifest present; no tracking; required-reason APIs declared | iOS | iOS | M | READY FOR VERIFICATION | iOS audit | `PrivacyInfo.xcprivacy` has `NSPrivacyTracking=false`. App Store Connect rejects an upload with missing reasons, so the upload itself (LR-48) is the proof. The collected data types are tracked in LR-73. |
+| [ ] | LR-73 | The iOS privacy manifest declares every collected data type, matching the App Privacy label | iOS | iOS | H | IN PROGRESS | Builder D | Drafter C found seven types missing: phone number, other financial info, e-mails or texts, customer support, purchase history, product interaction, other diagnostics. Builder D is working in `~/dev/jawwid-lr73-ios` on `claude/lr73-ios-privacy-manifest`. |
 | [x] | LR-59 | No ads, analytics, attribution or tracking SDK; no ATT prompt needed | SQA | Both | M | COMPLETED AND VERIFIED | Security audit | E-02 |
 | [x] | LR-60 | No secrets in the repository or in the binary's build defines | SQA | Both | H | COMPLETED AND VERIFIED | Security audit | E-02 |
 | [x] | LR-61 | Tokens in Keychain or Keystore; local data cleared at sign-out | SQA | Both | H | COMPLETED AND VERIFIED | Security audit | E-02 |
