@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 00:00 Cairo (22:00 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 00:33 Cairo (22:33 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -93,10 +93,14 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder L (Backend/infra) | LR-77 first-deploy backup fix | #516 | **Merged by the owner** `bc47d376` (2026-11-08 21:18 UTC) |
 | Builder L (Backend/infra) | LR-77 workflow guard | #518 | **Merged by the owner** `84a4e5d5` (2026-11-08 21:17 UTC; owner's Code Owner approval 21:17 UTC) |
 | Lead | LR-77 docs after the merges | #521 | Review ACCEPT @ `fb72aea1`; CI 29/30 (the optional Android ring job hit the known LR-78 drop, re-run started); **owner merge approval needed** |
-| Builder W1 (release) | LR-50, LR-51, LR-52, LR-58, LR-73: a release-readiness CI workflow (Android AAB checks for target/min SDK and 16 KB alignment; iOS build with Xcode 26, SDK and privacy manifest checks); no signing secrets | new PR | Started 2026-11-09 |
-| Builder W2 (mobile) | LR-79 (re-post a dropped ring) and LR-27 (FSI permission on Android 14+), stacked on #449 | new PR into #449's branch | Started 2026-11-09 |
-| Builder W4 (legal docs) | LR-04: owner confirmation sheet, missing deletion and support pages, hosting recommendation | new PR | Started 2026-11-09 |
-| Auditor R1 (read-only) | LR-71 dry run: every drafted console answer checked against the code | report | Started 2026-11-09 |
+| Builder W1 (release) | LR-50, LR-51, LR-52, LR-58, LR-73: the release-readiness CI workflow. It also checks the merged manifest for AD_ID and runs the Android JVM unit tests, which no workflow ran before | #523 | Review ACCEPT @ `cc371e2b`; fixes from that review pushed (`c6b3d2dd`), re-review running; **owner Code Owner approval needed** |
+| Builder W2 (mobile) | LR-79 (re-post a dropped ring) and LR-27 (FSI permission on Android 14+), stacked on #449 | #524 (into #449's branch) | Review running |
+| Builder W4 (legal docs) | LR-04: owner confirmation sheet, support and deletion pages in Arabic and English, hosting recommendation | #525 | Review running |
+| Auditor R1 (read-only) | LR-71 dry run: 129 drafted console answers checked against the code | report | **Done:** 91 OK, 6 mismatches (5 stale text, 1 real: teacher deletion, LR-03), 24 depend on owner decisions, 8 unverified. Follow-ups: W6, #526, and the AD_ID check in #523 |
+| Lead | LR-39: portrait on every screen except the full-screen whiteboard (PD-55 rev2 keeps its landscape) | #522 | Two review rounds; fixes pushed (`feeb4712`), re-review running |
+| Lead | LR-23: Sentry automatic session tracking off (it would send undeclared usage data) | #526 | Review running |
+| Builder W5 (backend/release) | LR-05: a third, disposable review parent and a `workflow_dispatch` job that provisions the review accounts from the production Environment's secrets (no laptop). **High: merging and every run need the owner** | new PR | Started 2026-11-09 |
+| Builder W6 (store compliance) | LR-71: refresh the console drafts from the R1 pre-audit (stale passages, consistent crash-data purpose, OPEN items marked) | new PR | Started 2026-11-09 |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
