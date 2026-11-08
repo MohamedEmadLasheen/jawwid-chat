@@ -26,7 +26,7 @@
 
 ## 2. URL design (the owner decides; the pattern is a recommendation)
 
-- **H-1, the host.** A page on the academy's public website, for example `https://<host>`, where `<host>` is a subdomain or path of `jawwid.com`. It must **not** be the API host, so that legal pages do not depend on the API being up.
+- **H-1, the host.** A page on the academy's public website, for example `https://<host>`, where `<host>` is a subdomain or path of `jawwid.com`. It must **not** be the API host, so that legal pages do not depend on the API being up. The current recommendation is the Admin Web host, `https://admin.chat.jawwid.com/legal/` (§6, H-1).
   - The account-deletion page is the exception: it lives on the API because it acts.
 - **H-2, the path pattern.** Use one pattern with the language in the path, because the app already substitutes `{lang}` (`lib/core/legal/legal_links.dart`):
   - `https://<host>/{lang}/privacy`
@@ -96,7 +96,7 @@ Engineering ticket L-ENG-11 (developer guide §7) automates the first five check
 
 | # | Decision | Recommendation |
 |---|---|---|
-| H-1 | The public host | A static page on the academy website under `jawwid.com`, not the API host |
+| H-1 | The public host | Not the API host. **Updated 2026-11-09:** the recommendation is now the Admin Web host, `https://admin.chat.jawwid.com/legal/` (Option A in `docs/release/legal-pages-hosting.md`; `owner-confirmation-sheet.md` C-1). The academy website under `jawwid.com` remains the alternative (Option B) |
 | H-2 | The path pattern | §2 |
 | H-3 | The account-deletion URL in the store listing: the API page itself, or a public page that links to it | Use the API page `/account-deletion` on the production API host (the route exists in code; the host `api.chat.jawwid.com` is from `docs/infrastructure/production-readiness.md`; check that it is reachable in production, and its Arabic and English versions), and link it from the support page. **Updated 2026-11-09:** the form's real path is `/api/v1/account-deletion`; the recommendation is now the static information page `account-deletion-*.md`, which links to the form (`publishing-gap-check.md` §3; `owner-confirmation-sheet.md` C-3, C-4) |
 | H-4 | Whether the Staff Terms appear in site navigation | Public URL, left out of the navigation |

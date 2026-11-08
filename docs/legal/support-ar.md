@@ -19,7 +19,7 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 
 1.1 إذا كان طفل في خطر داهم، فاتصل أولًا بخدمات الطوارئ المحلية: {{EMERGENCY_CONTACTS}}. ثم أبلِغ الأكاديمية.
 
-1.2 لأي مخاوف تتعلق بسلامة طفل، راسلنا على {{SAFEGUARDING_EMAIL}}، أو قدّم بلاغًا في التطبيق مع اختيار سبب «سلامة طفل». وتشرح سياسة سلامة الأطفال والمسؤولية الأبوية ما يحدث بعد ذلك.
+1.2 لأي مخاوف تتعلق بسلامة طفل، راسلنا على {{SAFEGUARDING_EMAIL}}، أو قدّم بلاغًا في التطبيق مع اختيار سبب «سلامة طفل». وتشرح سياسة سلامة الأطفال ومسؤولية أولياء الأمور ما يحدث بعد ذلك.
 
 ## 2. كيف تتواصل معنا
 
@@ -54,7 +54,7 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 - [سياسة الخصوصية](privacy-policy-ar.md)
 - [سياسة البلاغات والشكاوى](reporting-and-complaints-policy-ar.md)
 - [سياسة الحظر والإيقاف وتطبيق القواعد](blocking-and-enforcement-policy-ar.md)
-- [سياسة سلامة الأطفال والمسؤولية الأبوية](child-safety-policy-ar.md)
+- [سياسة سلامة الأطفال ومسؤولية أولياء الأمور](child-safety-policy-ar.md)
 - [شروط المعلمين](terms-teachers-ar.md)
 - [حذف الحساب](account-deletion-ar.md)
 

@@ -85,10 +85,24 @@ The account-deletion **form** stays on the API: `https://api.chat.jawwid.com/api
 4. **nginx.** In `default.conf.template`, following its own rule (no `add_header` in a location):
    a `map $uri $jawwid_csp` entry `~^/legal(/|$)` →
    `default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
-   a `$jawwid_cache_control` entry `~^/legal(/|$)` → `no-cache`; and
+   a `$jawwid_cache_control` entry `~^/legal(/|$)` → `no-cache`;
+   `location = /legal { absolute_redirect off; return 301 /legal/; }`, the same exact-match redirect
+   `/teacher` already has, because without it a bare `/legal` falls through to `location /` and serves the
+   Admin Web app; and
    `location /legal/ { try_files $uri $uri/index.html =404; }`, so a missing page is a 404, never the
-   Admin Web app.
-5. **Checks.** `scripts/infra/check-web-headers.sh` asserts the `/legal/` policy; `smoke.sh` fetches
+   Admin Web app. The renderer also writes `legal-web/index.html`, a plain page linking to `ar/` and `en/`,
+   so that `/legal/` itself is not a 404.
+   **`X-Robots-Tag`: keep it.** The server block sends `X-Robots-Tag: noindex, nofollow` on every response
+   (it is a server-level `add_header`), so it also covers `/legal/`. Decision: leave it unchanged for launch.
+   The stores, the app and the support page reach the legal pages by direct link, and neither Apple nor
+   Google requires them to be indexed by search engines; keeping the header means the console's security
+   headers are not touched beyond the two `map` entries and two locations. If the owner later wants the
+   pages to appear in search results, the change is to replace the server-level header with
+   `add_header X-Robots-Tag $jawwid_robots always;` and a `map $uri $jawwid_robots` that gives
+   `~^/legal(/|$)` an empty value (nginx sends no header for an empty value) and `noindex, nofollow` to
+   everything else. That would be a separate, reviewed change.
+5. **Checks.** `scripts/infra/check-web-headers.sh` asserts the `/legal/` policy (including the
+   `X-Robots-Tag` above and the `/legal` → `/legal/` redirect); `smoke.sh` fetches
    `/legal/ar/privacy` and `/legal/en/privacy` after each deploy; ticket L-ENG-11 adds the
    `public-hosting-requirements.md` §5 checks to the release audit.
 
