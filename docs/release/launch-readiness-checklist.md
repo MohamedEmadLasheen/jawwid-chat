@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 00:53 Cairo (22:53 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 01:03 Cairo (23:03 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -39,21 +39,21 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **95** | **17** | 16 | 8 | 29 | 19 | 3 | 3 |
+| **96** | **17** | 16 | 11 | 29 | 18 | 2 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
 | **Critical** | 31 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-77, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
-| **High** | 24 | LR-13, LR-20, LR-52, LR-73, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-79, LR-15, LR-16, LR-17, LR-71 |
+| **High** | 25 | LR-13, LR-20, LR-52, LR-73, LR-80, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-79, LR-15, LR-16, LR-17, LR-71 |
 | Critical items blocked on the owner | 16 | LR-06, LR-09a, LR-09c, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-76, LR-01, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
 
 **Completion.** Each figure is completed-and-verified ÷ applicable; N/A is excluded.
 
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
-| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 70 | 13 | **19 %** | 22 | 19 |
+| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 71 | 13 | **18 %** | 22 | 20 |
 | **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 74 | 15 | **20 %** | 27 | 19 |
-| A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
+| A. iOS: Apple App Store | 16 | 2 | **12 %** | 4 | 5 |
 | B. Android: Google Play | 17 | 4 | **24 %** | 9 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
 | D. Shared backend and infrastructure | 18 | 2 | **11 %** | 9 | 5 |
@@ -95,12 +95,15 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Lead | LR-77 docs after the merges | #521 | Review ACCEPT @ `fb72aea1`; CI 30/30; **owner merge approval needed** |
 | Builder W1 (release) | LR-50, LR-51, LR-52, LR-58, LR-73: the release-readiness CI workflow. It also checks the merged manifest for AD_ID, and runs the Android JVM unit tests, reported NOT VERIFIED on commits without any | #523 | Four review rounds; **ACCEPT @ `fddd64d5`**; CI running; **owner Code Owner approval needed** |
 | Builder W2 (mobile) | LR-79 (re-post a dropped ring, never a double ring) and LR-27 (FSI permission on Android 14+), stacked on #449 | #524 (into #449's branch) | **ACCEPT @ `7e1f07fe`**; CI runs only after #449 merges and #524 is retargeted to main |
-| Builder W4 (legal docs) | LR-04: owner confirmation sheet, support and deletion pages in Arabic and English, hosting recommendation | #525 | First review: CHANGES (the deletion page understated what is kept); fixed @ `aa2f2285`; re-review running |
+| Builder W4 (legal docs) | LR-04: owner confirmation sheet, support and deletion pages in Arabic and English, hosting recommendation | #525 | Review ACCEPT @ `aa2f2285` after one CHANGES round; CI running |
 | Auditor R1 (read-only) | LR-71 dry run: 129 drafted console answers checked against the code | report | **Done:** 91 OK, 6 mismatches (5 stale text, 1 real: teacher deletion, LR-03), 24 depend on owner decisions, 8 unverified. Follow-ups: W6, #526, and the AD_ID check in #523 |
 | Lead | LR-39: portrait on every screen except the full-screen whiteboard (PD-55 rev2 keeps its landscape); a page that lands on top of the board, a call included, is held portrait | #522 | Five review rounds; **ACCEPT @ `7567d88e`**; CI running |
 | Lead | LR-23: Sentry automatic session tracking off (it would send undeclared usage data) | #526 | **ACCEPT @ `bb5340b7`**; CI running |
-| Builder W5 (backend/release) | LR-05: a third, disposable review parent and a `workflow_dispatch` job that provisions the review accounts from the production Environment's secrets (no laptop); the database target is masked in the public log. **High: merging and every run need the owner** | #528 | ACCEPT @ `03c0caec` with P2s; fixed @ `0d776241`; re-review running |
+| Builder W5 (backend/release) | LR-05: a third, disposable review parent and a `workflow_dispatch` job that provisions the review accounts from the production Environment's secrets (no laptop); the database target is masked in the public log. **High: merging and every run need the owner** | #528 | ACCEPT @ `0d776241`; CI caught a fake test URL tripping the secret scan, fixed @ `920b04c1`; delta re-review running; **owner Code Owner approval and approval of every run needed** |
 | Builder W6 (store compliance) | LR-71: console drafts refreshed from the R1 pre-audit. Crash data is App Functionality on Apple, and App functionality plus Analytics on Google, because the two stores define the purposes differently | #527 | **ACCEPT @ `618c967c`**; CI running |
+| Builder W7 (iOS) | LR-13: the VoIP push registry is created at launch | #529 (into #449's branch) | **ACCEPT @ `ccd29221`**; CI after #449 merges |
+| Builder W8 (store compliance) | LR-09f review notes, LR-24 background-mode justifications, LR-09i FSI text after #524. It found two things: `remote-notification` is unused (fixed in #531), and VoIP stays off in production (new LR-80) | #530 | Review running |
+| Lead | LR-24: drop the unused `remote-notification` background mode | #531 | Review running |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
@@ -150,7 +153,7 @@ Each requirement appears once:
 - The iOS and Android percentages in §1 count every item that applies to that store.
 - Within each list, open items come first, ordered by priority.
 
-### A. iOS: Apple App Store (2 of 15 done, 13 %)
+### A. iOS: Apple App Store (2 of 16 done, 12 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
@@ -158,14 +161,15 @@ Each requirement appears once:
 | [ ] | LR-09a | Apple App Privacy details: all data, including SDKs; Sentry is Diagnostics | iOS | C | BLOCKED — OWNER ACTION REQUIRED | Drafter C, then owner (enters) | OA-08 (counsel), OT-1 evidence | Draft merged (#507, `docs/release/store-console/apple-app-privacy.md`). The App Store Connect record now exists (Apple ID `6832258042`). The owner enters it once counsel answers the open point in the draft (whether Quran-lesson enrolment counts as "religious beliefs"). |
 | [ ] | LR-09c | Apple age rating, 2026 questionnaire (tiers 4+/9+/13+/16+/18+, the social-media question, and Shared Location/Dating from 16 Nov 2026) | iOS | C | BLOCKED — OWNER ACTION REQUIRED | Drafter C, then owner | LR-10 | Draft merged (#507, `age-rating.md`). Waits on the target-audience decision (OA-11) and whether stories count as a "social feed". Shared Location and Dating questions arrive on 16 Nov. |
 | [ ] | LR-48 | iOS build uploaded to App Store Connect; TestFlight internal test passes | iOS | C | BLOCKED — TECHNICAL DEPENDENCY | Release manager; owner (upload) | LR-01, LR-04, LR-06, LR-45 | Needs LR-06, LR-45, LR-04, LR-01. Up to 100 internal testers; external testing needs beta review. |
-| [ ] | LR-13 | The iOS VoIP push registry exists at launch, so a killed app's call is always reported to CallKit (Apple PushKit rule: unreported VoIP pushes terminate the app) | iOS | H | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | LR-11a (#449 owns the file) | `AppDelegate.swift:134-135` creates it inside `startRegistering()`, only after Dart starts. Open PR #449 also edits `AppDelegate.swift`, so this waits for #449 to merge (OA-17). |
+| [ ] | LR-13 | The iOS VoIP push registry exists at launch, so a killed app's call is always reported to CallKit (Apple PushKit rule: unreported VoIP pushes terminate the app) | iOS | H | IN PROGRESS | Builder W7 (iOS) | #449 (base), then #529 | **#529** (stacked on #449): `PKPushRegistry` created in `didFinishLaunchingWithOptions`; the token is held until a session starts. Independent review ACCEPT @ `ccd29221` (no findings). CI runs once #449 merges and #529 is retargeted to main. Device row SB-28 proves it. |
 | [ ] | LR-20 | Every role that can sign into the app can delete its account (Apple 5.1.1(v)) | iOS | H | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-14 | Sales staff and the Super Admin can sign in, but deletion covers parents and teachers only. Recommendation: a closure request, like #498. Owner action OA-14. |
 | [ ] | LR-52 | Built with Xcode 26 and the iOS 26 SDK (Apple, since 28 Apr 2026) | iOS | H | READY FOR VERIFICATION | Release manager | LR-48 | Xcode 26.6 is on the build Mac. Check the archive's SDK when it is uploaded. |
 | [ ] | LR-73 | The iOS privacy manifest declares every collected data type, matching the App Privacy label | iOS | H | READY FOR VERIFICATION | Builder D | LR-48 | **#508 merged** as `a6a7e1b1`: the manifest declares the label's 16 types, with a strict test. Review ACCEPT @ `0c840300`; PR CI 30/30. Final proof: Xcode's privacy report on the archive, and the upload is accepted (LR-48). |
-| [ ] | LR-24 | Every iOS background mode is justified (`voip`, `audio`, `remote-notification`) | iOS | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | LR-11b | `remote-notification` has no handler on `main`. It depends on LR-11. |
+| [ ] | LR-24 | Every iOS background mode is justified (`voip`, `audio`, `remote-notification`) | iOS | M | IN PROGRESS | Lead (#531); drafter W8 (#530) | #531, #530 | `remote-notification` had no use: the server sends iOS no silent push (checked on main, #449 and the uncommitted push work). **#531** removes it, with a guard test pinning `voip` and `audio`; review running. **#530** `ios-background-modes.md` gives the justification text per mode. |
 | [ ] | LR-57b | Export compliance answer in App Store Connect | iOS | M | BLOCKED — TECHNICAL DEPENDENCY | Owner | LR-48 | The record exists (Apple ID `6832258042`, owner-reported 2026-11-08). The plist key `ITSAppUsesNonExemptEncryption = false` (LR-57) answers the export question for each uploaded build, so this is confirmed at the first upload. |
 | [ ] | LR-58 | Privacy manifest present; no tracking; required-reason APIs declared | iOS | M | READY FOR VERIFICATION | iOS audit | LR-48 | `PrivacyInfo.xcprivacy` has `NSPrivacyTracking=false`. App Store Connect rejects an upload with missing reasons, so the upload itself (LR-48) is the proof. The collected data types are tracked in LR-73. |
-| [ ] | LR-39 | iPhone landscape layouts checked, or the app restricted to portrait | iOS | L | NOT STARTED | QA engineer | LR-08 | `Info.plist` allows landscape. Check during the device run. |
+| [ ] | LR-39 | iPhone landscape layouts checked, or the app restricted to portrait | iOS | L | IN PROGRESS | Lead | #522 | **#522**: portrait on every screen except the full-screen whiteboard (PD-55 rev2 keeps its landscape). Any page that lands on top of the full-screen board, a call included, is held portrait. Five review rounds; ACCEPT @ `7567d88e`. Device row I-50 proves it on a phone. |
+| [ ] | LR-80 | iOS calls ring on a closed iPhone in production: VoIP delivery switched on (`APNS_VOIP_ENABLED=true`, a production Environment variable) only **after** the registry exists at launch (LR-13) is in the store build. Turned on earlier, an unreported VoIP push can get the app terminated and VoIP delivery stopped | iOS | H | BLOCKED — TECHNICAL DEPENDENCY | Owner (production setting); lead (checks the build) | LR-13 (#449, #529), LR-01 | Found 2026-11-09 by the review-notes work (#530): the gate defaults to off (`push.provider.selector.ts:50-67`), and the production Environment has no `APNS_VOIP_ENABLED` variable (read with the GitHub API). Until it is on, a closed iPhone never rings for a call (LR-12). The owner sets it, with explicit approval, as part of the first deploy or the release after LR-13. |
 | [ ] | LR-41 | The tone of the Arabic permission strings | iOS | L | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-18 | Five strings in `ios/Runner/ar.lproj/InfoPlist.strings`. Owner action OA-18. |
 | [x] | LR-56 | iOS usage strings for every capability used, in Arabic and English, with none unused | iOS | M | COMPLETED AND VERIFIED | iOS audit | — | E-02 (tone: LR-41) |
 | [x] | LR-57 | Export compliance key `ITSAppUsesNonExemptEncryption = false` (only the OS's own TLS) | iOS | M | COMPLETED AND VERIFIED | iOS audit | — | E-02 |
