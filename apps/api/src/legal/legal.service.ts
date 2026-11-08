@@ -225,9 +225,21 @@ export class LegalService implements OnModuleInit {
     return { state, required, unavailable };
   }
 
-  /** The DTO for an account, for GET /me, login, refresh and a password change. Never throws on configuration. */
+  /**
+   * The DTO for an account, for GET /me, login, refresh and a password change.
+   * Never throws. A failed read answers 'unavailable', which still fails closed
+   * (the app shows the notice, never the content). Login, refresh and a password
+   * change have already rotated the session when this runs: throwing here would
+   * lose the new token pair, and the client's retry with the old refresh token
+   * would count as reuse and revoke every session of the account.
+   */
   async dtoFor(accountId: string): Promise<LegalDto> {
-    return this.toDto(await this.statusOf(accountId));
+    try {
+      return this.toDto(await this.statusOf(accountId));
+    } catch (e) {
+      this.log.warn(`Terms of Use status unreadable for a token response; answering 'unavailable' (${(e as Error).name})`);
+      return this.toDto(null);
+    }
   }
 
   /**
