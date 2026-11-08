@@ -67,6 +67,8 @@ jobs:
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
           # The runner's pg_dump is 16; pg_dump refuses a newer server (17).
           PG_IMAGE: postgres:17-alpine
+          # LR-77 (#516): a scheduled backup is never a first deploy; a missing schema fails.
+          FIRST_DEPLOY: 'false'
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Only encrypted archives leave the runner

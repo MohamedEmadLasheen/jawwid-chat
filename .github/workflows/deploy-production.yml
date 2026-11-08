@@ -385,6 +385,9 @@ jobs:
           # itself: without this the backup fails against Postgres 17 and the
           # deployment stops here. backup-db.sh runs pg_dump from this image.
           PG_IMAGE: postgres:17-alpine
+          # LR-77 (#516): only a first deploy may skip the backup of a schema that does
+          # not exist yet; any other run fails if the schema is missing (wrong DATABASE_URL?).
+          FIRST_DEPLOY: ${{ inputs.first_deploy == true && 'true' || 'false' }}
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Upload the pre-deployment backup
