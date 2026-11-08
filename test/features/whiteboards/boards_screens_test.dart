@@ -1,9 +1,8 @@
-import 'dart:async';
-
 // PD-39: the Boards tab and the editor, as a teacher sees them (design §10 5a,
 // 5b): Deleted boards says how long a board can come back and that it is
 // deleted for good within 60 days; deleting says until when it can be
 // restored; there is no "delete forever"; a pen stroke on the page is saved.
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
