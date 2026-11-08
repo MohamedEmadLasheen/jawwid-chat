@@ -207,6 +207,30 @@ class PlatformCallPresentation implements CallPresentation {
   @override
   Future<void> callFinished({required String callId}) => _quietly('ongoingStop', {'callId': callId});
 
+  /// LR-27: may an incoming call take over the screen? Only Android 14+ can say
+  /// no (the person or Play revoked it); a ring is then a heads-up notification.
+  /// Every other case -- iOS, older Android, no platform side, a failure -- is
+  /// `true`: there is nothing to ask the person for.
+  Future<bool> canUseFullScreenIntent() async {
+    if (!_available) return true;
+    try {
+      return await _channel.invokeMethod<bool>('canUseFullScreenIntent') ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// LR-27: open the system screen where the person allows it (Android 14+).
+  /// Returns whether a screen opened; never throws.
+  Future<bool> openFullScreenIntentSettings() async {
+    if (!_available) return false;
+    try {
+      return await _channel.invokeMethod<bool>('openFullScreenIntentSettings') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// A platform without the ongoing-call half (iOS, which has CallKit) answers
   /// notImplemented; that is not a failure of the call.
   Future<void> _quietly(String method, Map<String, Object?> args) async {
