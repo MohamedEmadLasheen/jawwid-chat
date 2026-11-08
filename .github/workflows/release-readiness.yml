@@ -179,7 +179,9 @@ jobs:
           R="$RUNNER_TEMP/release-readiness-android-report.txt"
           # The JVM tests land with #449 (PushPayloadTest) and #524 (RingCheckTest). A commit
           # without any is reported as such, never as a pass.
-          if ! find android/app/src/test -name '*.kt' -o -name '*.java' 2>/dev/null | grep -q .; then
+          # Counted with wc (it reads everything), so pipefail cannot see a SIGPIPE from find.
+          sources="$(find android/app/src/test \( -name '*.kt' -o -name '*.java' \) 2>/dev/null | wc -l || true)"
+          if [ "${sources// /}" -eq 0 ]; then
             printf '%-13s %s\n' "NOT VERIFIED" "Android JVM unit tests: this commit has none under android/app/src/test" | tee -a "$R"
             echo "::warning::No Android JVM unit tests on this commit; nothing was run"
             exit 0
