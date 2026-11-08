@@ -1,13 +1,11 @@
 package com.jawwid.jawwid_chat
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -25,8 +23,8 @@ import androidx.core.content.ContextCompat
  * CallController when this device's media joins a call (`ongoingStart` on
  * jawwid/call_native), stopped on every terminal path (`ongoingStop`).
  *
- * TYPES: `microphone` always; `phoneCall` too when its runtime prerequisite
- * (MANAGE_OWN_CALLS, a normal permission granted at install) is held. A start
+ * TYPE: `microphone` only (LR-14). The phone-call type is for calls run through a
+ * Telecom ConnectionService, which this app does not have. A start
  * the platform refuses (Android 12+ forbids starting one from the background)
  * is caught, never a crash: the call goes on in front.
  *
@@ -63,13 +61,10 @@ class CallForegroundService : Service() {
         return START_NOT_STICKY
     }
 
+    /** Must stay a subset of the manifest's `foregroundServiceType` (microphone). */
     private fun serviceTypes(): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
-        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.MANAGE_OWN_CALLS) == PackageManager.PERMISSION_GRANTED) {
-            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-        }
-        return types
+        return ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
     }
 
     private fun notification(callId: String, title: String): android.app.Notification {
