@@ -4,6 +4,7 @@ import { canOpenArea, holdsAny, isDepartment, isSuperAdmin, type NavArea } from 
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
+import { LegalGuard } from '@/features/legal/LegalGuard'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -104,6 +105,7 @@ export function AppRoutes() {
   if (!isAuthenticated || !staff) return <LoginPage />
 
   return (
+    <LegalGuard>
     <AppShell>
       <Routes>
         <Route path="/" element={<Navigate to={homeFor(staff)} replace />} />
@@ -248,5 +250,6 @@ export function AppRoutes() {
         <Route path="*" element={<Navigate to={homeFor(staff)} replace />} />
       </Routes>
     </AppShell>
+    </LegalGuard>
   )
 }

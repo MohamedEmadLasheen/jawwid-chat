@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useSession } from '@/core/auth/SessionProvider'
+import { legalGateState } from '@/features/legal/legal'
 import { Avatar } from '@/shared/components/Avatar'
 import { useCall } from './CallProvider'
 import { callCopyFor, type CallCopy } from './copy'
@@ -156,11 +158,16 @@ export function CallOverlay() {
   const copy = callCopyFor(locale)
   const navigate = useNavigate()
   const { ref, style, handle } = useDrag()
+  const { staff } = useSession()
 
   if (!controller || state.phase === 'idle') return null
 
   const conversationPath = state.conversationId ? `/chat/${encodeURIComponent(state.conversationId)}` : null
   const inCall = state.phase === 'connecting' || state.phase === 'live' || state.phase === 'reconnecting'
+  // PD-58: while the Terms gate (or its "unavailable" page) is up, nothing of the
+  // app shows: no ringing window (Answer would be refused, 403). A call already
+  // under way when a new version is published keeps its window.
+  if (legalGateState(staff?.legal) !== 'none' && !inCall) return null
   const incoming = state.phase === 'incomingRinging'
   const status = statusText(state, copy)
 
