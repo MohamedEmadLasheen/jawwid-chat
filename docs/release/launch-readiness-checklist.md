@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 15:50 Cairo (13:50 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-08 16:20 Cairo (14:20 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `9bb0418d`, which contains #500, #502, #504, #505, #506, #507 and #508. Main CI run 42485589672 on it: 15/15 green.
 
 ## 1. Dashboard
@@ -39,36 +39,37 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **91** | **15** | 14 | 8 | 27 | 20 | 4 | 3 |
+| **92** | **15** | 14 | 8 | 28 | 20 | 4 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
-| **Critical** | 30 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-01, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
+| **Critical** | 31 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
 | **High** | 23 | LR-13, LR-20, LR-52, LR-73, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-15, LR-16, LR-17, LR-71 |
-| Critical items blocked on the owner | 14 | LR-06, LR-09c, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-01, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
+| Critical items blocked on the owner | 15 | LR-06, LR-09c, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-76, LR-01, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
 
 **Completion.** Each figure is completed-and-verified ÷ applicable; N/A is excluded.
 
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
-| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 68 | 12 | **18 %** | 20 | 19 |
-| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 70 | 13 | **19 %** | 26 | 18 |
+| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 69 | 12 | **17 %** | 21 | 19 |
+| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 71 | 13 | **18 %** | 27 | 18 |
 | A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
 | B. Android: Google Play | 17 | 3 | **18 %** | 10 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
-| D. Shared backend and infrastructure | 16 | 2 | **12 %** | 7 | 5 |
+| D. Shared backend and infrastructure | 17 | 2 | **12 %** | 8 | 5 |
 | E. Security and QA | 17 | 7 | **41 %** | 1 | 4 |
 | F. Legal and compliance | 14 | 1 | **7 %** | 7 | 4 |
 
 ### Current blockers (what stops submission today)
-1. **No production server.** It has never been deployed, and staging has never deployed successfully. Waits on OA-06 (the DigitalOcean app id and domain), then OA-21 (approval).
-2. **No store signing:**
+1. **No production server.** It has never been deployed, and staging has never deployed successfully. The `production` Environment is largely configured and the domain is chosen. The app id is created by the first deploy. Waits on Builder H's gap list, then the owner's approval (OT-3 / OA-21).
+2. **Nowhere to build signed store builds** (LR-76): project code may not run on this Mac, and there is no CI release workflow (OT-2).
+3. **No store signing:**
    - Apple: the Distribution certificate, App Store profile and App Store Connect record (OA-01). The Apple Developer account exists.
    - Google: the package name and upload key (OA-03). The Play Organization account exists.
-3. **No Firebase project or Sentry DSN for release builds** (OA-04, OA-05).
-4. **No hosted legal pages** (OA-08), and **no final Terms texts** (OA-09).
-5. **High-risk merges waiting for the owner:** #497 (Terms gate API), #498 (teacher deletion), #449 (push opens the item) (OA-17).
-6. **Nothing tested on real phones** yet (LR-08). This waits on items 1–3.
+4. **No app-side Firebase file or app Sentry DSN for release builds** (OA-04, OA-05). The server side of both exists.
+5. **No hosted legal pages** (OA-08), and **no final Terms texts** (OA-09).
+6. **High-risk merges waiting for the owner:** #497 (Terms gate API), #498 (teacher deletion), #449 (push opens the item) (OA-17).
+7. **Nothing tested on real phones** yet (LR-08). This waits on items 1–4.
 
 ### Active agents and task owners
 
@@ -92,8 +93,18 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 7. **LR-30:** correct the stale release documents.
 8. **Staging deploy preparation**, as soon as OA-06 arrives.
 
-## 2. Owner: your next action
-**Send the DigitalOcean App Platform app id for the production API and the web address it should use, or say there is no App Platform app yet (OA-06).** Every server, review-account and device step waits on this. The full list is in §5.
+## 2. Owner execution (one task at a time)
+
+The owner works through these in a separate terminal session, using the handoff the lead gives for each one. Only the lead checks evidence and ticks boxes.
+
+| Order | Owner task | Unblocks | State |
+|---|---|---|---|
+| **OT-1 (now)** | Create the App Store Connect app record and confirm the App ID `com.jawwid.jawwidChat` has Push Notifications. Browser only; no keys are created on this Mac | LR-06 (record part), LR-09a, LR-09c, LR-57b; first step toward LR-48 | **Assigned 2026-11-08** |
+| OT-2 | Decide where signed store builds are made (LR-76): this Mac once it is cleared, another clean Mac, or a CI release workflow | LR-76, then LR-06 (certificate), LR-07c, LR-48, LR-49, LR-08 | Queued |
+| OT-3 | Read the first-deploy readiness report (Builder H), add what is missing, then approve the first deploy (OA-21) | LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued; the report is being written |
+| OT-4 | Play Console: create the app with the final package name (OA-03; permanent) | LR-07b, LR-09b, LR-09g | Queued |
+| OT-5 | Legal facts and hosting (OA-08), final Terms texts (OA-09) | LR-04, LR-02d, LR-02a | Queued |
+| OT-6 | Decisions: target audience (OA-11), payments (OA-12), storefronts (OA-10) | LR-10, LR-15, LR-17, LR-09c–e, LR-09k | Queued |
 
 ## 3. Status key
 
@@ -176,17 +187,18 @@ Each requirement appears once:
 | [ ] | LR-36 | Icons: a non-upscaled 1024 iOS icon and an Android monochrome layer | Both | L | BLOCKED — OWNER ACTION REQUIRED | Owner; mobile engineer | OA-18 | Owner action OA-18 (a vector logo). |
 | [ ] | LR-37 | Unused `sqflite` removed | Both | L | IN PROGRESS | #503 | #503 | As for LR-25. |
 
-### D. Shared backend and infrastructure (2 of 16 done, 12 %)
+### D. Shared backend and infrastructure (2 of 17 done, 12 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
-| [ ] | LR-01 | A live production backend for store builds and reviewers (Apple 2.1(a)) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner; Release manager | OA-06, OA-21 | "Deploy production" has never run, and "Deploy staging" has never succeeded (failed 2026-10-06, cancelled 2026-11-05); `DIGITALOCEAN_APP_ID` is unset; DNS is unconfirmed. Next: the owner supplies the app id and DNS (OA-06) and approves the first staging deploy, then production (OA-21). **Done when:** `/health/ready` returns 200 on the production host and a store build signs in. |
+| [ ] | LR-76 | A trusted machine produces the signed store builds (the distribution certificate and the upload key live there) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OT-2 | **New 2026-11-08.** The owner's rule bars running project code on this Mac until its security is settled, so no store build can be made here. There is no release-build workflow in `.github/workflows/`. Options: (a) the owner settles this Mac; (b) a separate clean Mac; (c) a CI release workflow on GitHub's macOS runners with signing secrets in a protected Environment (High risk: CI and secrets, so owner approval). Blocks LR-06 (certificate), LR-07c (upload key), LR-48, LR-49, LR-08. |
+| [ ] | LR-01 | A live production backend for store builds and reviewers (Apple 2.1(a)) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner; Release manager | Builder H report, then OA-21 (owner approves the deploy) | "Deploy production" has never run, and "Deploy staging" has never succeeded. **Verified 2026-11-08 (names only):** the `production` Environment already holds the deploy token, GHCR pull credentials, `DATABASE_URL`, `REDIS_URL`, storage keys, FCM and APNs keys and a server `SENTRY_DSN` (19 secrets, 12 variables). The domains were chosen on 2026-11-05 (`api.chat.jawwid.com`; repository variables set). `DIGITALOCEAN_APP_ID` is **created by the first deploy** (`first_deploy=true`). `staging` holds only the LiveKit names. Builder H is writing the exact gap list (`first-deploy-readiness-2026-11-08.md`). **Done when:** `/health/ready` returns 200 on the production host and a store build signs in. |
 | [ ] | LR-02a | Terms gate on the API: no posting before acceptance (Apple 1.2; Play UGC "accept terms before posting") | Both | C | IN PROGRESS | Backend engineer; owner (merge) | OA-17, LR-02d | #497: independent review ACCEPT @ `9536446d` with one P2 (`auth.controller.ts:116-117` rotates the refresh token before `legal.dtoFor()`, so a database error lost the new tokens and the retry signed the user out everywhere). The lead fixed it in `9bc9416e` (dtoFor answers `unavailable` and never throws, with a new unit spec `legal-dto.spec.ts`). Independent review ACCEPT @ `9bc9416e`; CI is running. Next: **owner approves the merge (High: authentication, plus migration `20261107130000_chat_pd058_publish_order.sql`)**. Release order: app gates (done) → terms rows (LR-02d) → API. |
 | [ ] | LR-03 | Account deletion starts in the app for every account that can be created, with no "contact us" (Apple 5.1.1(v); Play account deletion) | Both | C | IN PROGRESS | Backend engineer; owner (merge) | OA-17 | #498 head `b11d2e6d`: 30/30 checks pass after another session's re-run. Review ACCEPT with two P2s:<br>• **P2-1:** a failing reminder could block erasures. The fix is uncommitted in `~/dev/jawwid-teacher-deletion`, one file; it needs a regression test.<br>• **P2-2:** the app copy says "deleted now" for a request.<br>Also in the same branch:<br>• `review-cohort.ts` must survive the review teacher's erasure (re-provisioning refuses with `TEACHER_CHANGED`);<br>• `review-accounts.md` must stop saying "takes effect immediately" for teachers.<br>Apple's account-deletion page allows a delayed deletion only when the user is told how long it takes; confirm the wording in the app. **Owner approves the merge (High: deletion).** |
 | [ ] | LR-05 | Demo accounts on the live backend that need no WhatsApp code (Apple 2.1(a); Play App access) | Both | C | BLOCKED — TECHNICAL DEPENDENCY | Owner; Release manager | LR-01, OA-21 | `cli/review-cohort.ts` was merged in #490. Needs LR-01, then the owner's domain and two passwords (OA-21). Also needed:<br>• past lessons and reports in the data;<br>• a third, disposable parent for the deletion test;<br>• **something payable**, because #507 found the review accounts have nothing to pay, so a reviewer cannot reach the pay sheet. |
 | [ ] | LR-43 | Registration and sign-in work on production: e-mail and password, WhatsApp codes, parent sign-up with terms acceptance | Both | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer | LR-01 | Needs LR-01. G-38 end-to-end smoke passes in CI (main run on `496560a3`), but CI is not production. Done when the device plan rows for sign-up and sign-in pass on production. |
-| [ ] | LR-45 | Sentry DSN for the app (store builds refuse to build without it since #502), plus a token for symbol upload | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-05 | `build-store.sh` (merged `14860ad3`) requires an https `SENTRY_DSN`. Owner action OA-05. |
-| [ ] | LR-47 | Firebase project and `google-services.json` for the release build; APNs key configured for push | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-04 | CI job: "Android build (debug builds, release refuses without Firebase)". Owner action OA-04. |
+| [ ] | LR-45 | Sentry DSN for the app (store builds refuse to build without it since #502), plus a token for symbol upload | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-05 | The server `SENTRY_DSN` is in the `production` Environment (name verified 2026-11-08). The **app** DSN for store builds (`build-store.sh` requires an https `SENTRY_DSN`, #502) and a symbol-upload token are still needed; it may be the same Sentry project. Owner action OA-05. |
+| [ ] | LR-47 | Firebase project and `google-services.json` for the release build; APNs key configured for push | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-04 | **Server side exists:** `FCM_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID` and the APNs key are in the `production` Environment (names verified 2026-11-08), so a Firebase project exists. **App side missing:** the `google-services.json` for the final package in the release build (CI: "release refuses without Firebase"). Owner action OA-04. |
 | [ ] | LR-02c | Terms gate in Admin Web (staff accept before acting) | — | H | READY FOR VERIFICATION | Frontend engineer | LR-02a | #500 merged as `496560a3`. Review: ACCEPT @ `34474f6f`; main CI run 42465970426 is green. It does nothing until the API sends a `legal` block (#497, LR-02a): with today's API there is no gate. Verify against an API that has #497. |
 | [ ] | LR-11a | A push notification opens its item: parent feedback replies (PD-32) | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner (merge) | OA-17 | #449 head `c205aba0`: 30/30 checks pass. Independent review ACCEPT with no P1 or P2 (not yet posted). It contains migration `20261107150000`, so **the owner must approve the merge (High: migration)**. Owner action OA-17. |
 | [ ] | LR-11b | Notification taps open the item, the permission is explained first, and pushes go only to the signed-in account (gates S-11, S-12, S-15) | Both | H | BLOCKED — OWNER ACTION REQUIRED | Mobile and backend engineers | OA-17 | The code exists only in the uncommitted `~/dev/jawwid-push-acceptance` tree (50 files; preserved, never edited). Porting it as a patch onto a new branch changes who receives pushes and re-claims a migration slot, so **the owner must approve implementation (High)**. Owner action OA-17. |
@@ -253,7 +265,7 @@ Questions go to the owner one at a time, in this order.
 | OA-03 | Confirm the final Android package name (recommended: keep `com.jawwid.jawwid_chat`) and create the upload keystore you keep safe | The package name is permanent after the first upload | Google Play | Mon 9 Nov 12:00 | LR-07b, LR-07c, LR-49 |
 | OA-04 | The Firebase project for Jawwid Chat: the `google-services.json` for the final package, and the APNs key confirmed | A release Android build refuses to build without it; push and calls need it | Both | Mon 9 Nov 12:00 | LR-47, LR-12, LR-49 |
 | OA-05 | A Sentry project DSN for the app, and a token for symbol upload | Store builds refuse to build without the DSN (#502) | Both | Mon 9 Nov 12:00 | LR-45, LR-22, LR-48, LR-49 |
-| OA-06 | The DigitalOcean app id (`DIGITALOCEAN_APP_ID`) and the DNS for the production API host | No production deploy is possible without them | Both | Mon 9 Nov 12:00 | LR-01 and everything after it |
+| OA-06 | ~~The DigitalOcean app id and the domain~~ **Corrected 2026-11-08:** the first deploy creates the app id (`first_deploy=true`), and the domain was chosen on 2026-11-05 (`chat.jawwid.com`). What remains is in Builder H's gap list and OT-3. | — | Both | — | — |
 | OA-07 | Credentials for the `backup` Environment: a read-only database role, a passphrase and a bucket key | Backups have failed every day | Both (data) | Tue 10 Nov | LR-19 |
 
 ### Legal and business information
