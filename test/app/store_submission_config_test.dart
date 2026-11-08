@@ -60,6 +60,32 @@ void main() {
     }
   });
 
+  test('the iOS VoIP push registry exists at launch, not only once Dart starts (LR-13)', () {
+    // A VoIP push that relaunches a killed app reaches only a PKPushRegistry made, with
+    // its delegate set, before launch finishes. Made later (when Dart asks), the push is
+    // never reported to CallKit, iOS terminates the app, and may stop VoIP delivery.
+    final delegate = read('ios/Runner/AppDelegate.swift');
+    final launch = delegate.indexOf('didFinishLaunchingWithOptions launchOptions');
+    expect(launch, isNonNegative);
+    final launchEnd = delegate.indexOf('return super.application(application, didFinishLaunchingWithOptions', launch);
+    expect(launchEnd, isNonNegative);
+    final body = delegate.substring(launch, launchEnd);
+    expect(body, contains('PKPushRegistry(queue:'));
+    expect(body, contains('registry.delegate = self'));
+    expect(body, contains('desiredPushTypes = [.voIP]'));
+    expect(body.indexOf('PKPushRegistry(queue:'), lessThan(body.indexOf('ensureEngine()')));
+
+    // Exactly one registry, and startRegistering does not make it.
+    expect(RegExp(r'PKPushRegistry\(queue:').allMatches(delegate).length, 1);
+    final start = delegate.indexOf('private func startRegistering()');
+    expect(start, isNonNegative);
+    final startEnd = delegate.indexOf('\n  }\n', start);
+    final startBody = delegate.substring(start, startEnd);
+    expect(startBody, isNot(contains('PKPushRegistry(')));
+    // A token that arrived before Dart asked is handed over when it asks.
+    expect(startBody, contains('pushToken(for: .voIP)'));
+  });
+
   test('a duplicate VoIP push is still reported to CallKit', () {
     // iOS terminates an app that returns from a VoIP delivery without reporting a call.
     final bridge = read('ios/Runner/CallKitBridge.swift');

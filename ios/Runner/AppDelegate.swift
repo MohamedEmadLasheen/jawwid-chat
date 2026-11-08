@@ -65,6 +65,11 @@ import UIKit
   private var pushChannel: FlutterMethodChannel?
   private var voipRegistry: PKPushRegistry?
 
+  /// Whether Dart has asked for tokens (`start`). Until then the VoIP token stays
+  /// in the registry (`pushToken(for:)`) instead of going to a Dart that is not
+  /// listening for it yet; `startRegistering` reads and reports it.
+  private var voipTokensWanted = false
+
   /// Tokens that arrived before Flutter was listening. The platform hands them
   /// over when it is ready, which is not when Dart asks.
   private var pendingTokens: [[String: String]] = []
@@ -88,6 +93,15 @@ import UIKit
     // Before launch finishes: the tap that launched a closed app is delivered to the
     // delegate set by then, and to no other.
     UNUserNotificationCenter.current().delegate = self
+    // LR-13: PushKit's rule. A VoIP push that relaunches a killed app is delivered only
+    // to a registry that exists, with its delegate set, by the time launch finishes, and
+    // a push the app does not report to CallKit gets it terminated (and, repeated, stops
+    // VoIP delivery). So the registry is made here, independent of Dart. Its token still
+    // reaches Dart only once a session asks (`startRegistering`).
+    let registry = PKPushRegistry(queue: .main)
+    registry.delegate = self
+    registry.desiredPushTypes = [.voIP]
+    voipRegistry = registry
     ensureEngine()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -178,11 +192,14 @@ import UIKit
       UIApplication.shared.registerForRemoteNotifications()
     }
 
-    guard voipRegistry == nil else { return }
-    let registry = PKPushRegistry(queue: .main)
-    registry.delegate = self
-    registry.desiredPushTypes = [.voIP]
-    voipRegistry = registry
+    // The registry has existed since launch (LR-13), so its token may already be
+    // here. It was held back until a session asked; hand over the current one now.
+    // Every session start reports it, as `registerForRemoteNotifications` does
+    // for the standard token; Dart and the server both treat a repeat as a no-op.
+    voipTokensWanted = true
+    if let token = voipRegistry?.pushToken(for: .voIP) {
+      report(token: token, kind: "voip")
+    }
   }
 
   /// Hand a token to Flutter, or hold it until Flutter is there.
@@ -326,7 +343,8 @@ extension AppDelegate: PKPushRegistryDelegate {
     didUpdate pushCredentials: PKPushCredentials,
     for type: PKPushType
   ) {
-    guard type == .voIP else { return }
+    // Before a session asks, the registry keeps the token; `startRegistering` reports it.
+    guard type == .voIP, voipTokensWanted else { return }
     report(token: pushCredentials.token, kind: "voip")
   }
 
