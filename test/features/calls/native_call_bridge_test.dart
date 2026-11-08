@@ -20,6 +20,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/call_media/microphone_permission.dart';
 import 'package:jawwid_chat/core/call_native/call_native_providers.dart';
 import 'package:jawwid_chat/core/call_native/call_presentation.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
@@ -326,6 +327,137 @@ void main() {
       native.emit(NativeCallActionKind.end);
       await settle();
       expect(calls.endCalls, ['call_1']);
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+    });
+  });
+
+  // =======================================================================
+  // LR-74: Android 14+ refuses a MICROPHONE foreground service without
+  // RECORD_AUDIO, and Android 12+ refuses any from the background. So the
+  // ongoing-call service starts only after the microphone is granted, and an
+  // outgoing call gets both while the caller is still looking at the app.
+  group('N7. LR-74: the ongoing-call service waits for the microphone', () {
+    test('N7a. answering with the prompt still open starts nothing; the grant starts it once', () async {
+      final container = await ringing();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+      expect(mic.calls, 1, reason: 'the question is open');
+      expect(stateOf(container).phase, CallUiPhase.connecting);
+      expect(native.ongoing, isEmpty, reason: 'no microphone service before the grant');
+
+      prompt.complete(MicrophoneAccess.granted);
+      await settle();
+      expect(native.ongoing, ['start:call_1']);
+      expect(stateOf(container).phase, CallUiPhase.live);
+    });
+
+    test('N7b. answering with the microphone refused never starts it', () async {
+      final container = await ringing();
+      mic.access = MicrophoneAccess.denied;
+
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+
+      expect(stateOf(container).failure, CallUiFailure.microphone);
+      expect(native.ongoing, isEmpty);
+    });
+
+    test('N7c. a call that ends while the prompt is open is never started (nothing could stop it)', () async {
+      await ringing();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'missed'));
+      await settle();
+      prompt.complete(MicrophoneAccess.granted);
+      await settle();
+
+      expect(native.ongoing, isEmpty);
+    });
+
+    test('N7d. an outgoing call asks BEFORE dialling, and starts the service while ringing, once', () async {
+      final container = await ready();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+
+      final placing = controllerOf(container).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      await settle();
+      expect(mic.calls, 1);
+      expect(calls.startCalls, isEmpty, reason: 'nobody rings before the answer');
+      expect(native.ongoing, isEmpty);
+
+      prompt.complete(MicrophoneAccess.granted);
+      await placing;
+      expect(stateOf(container).phase, CallUiPhase.outgoingRinging);
+      expect(native.ongoing, ['start:call_1'],
+          reason: 'started in front, so the answer may arrive behind the lock screen');
+
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.live);
+      expect(native.ongoing, ['start:call_1'], reason: 'joining media does not start it again');
+
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'answered'));
+      await settle();
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+    });
+
+    test('N7e. an outgoing call with the microphone refused rings nobody and starts nothing', () async {
+      final container = await ready();
+      mic.access = MicrophoneAccess.denied;
+
+      await controllerOf(container).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+
+      expect(stateOf(container).phase, CallUiPhase.failed);
+      expect(stateOf(container).failure, CallUiFailure.microphone);
+      expect(stateOf(container).callId, isNull);
+      expect(calls.startCalls, isEmpty);
+      expect(native.ongoing, isEmpty);
+    });
+
+    test('N7f. an outgoing call that is declined stops the service it started', () async {
+      final container = await ready();
+      await controllerOf(container).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+
+      socket.emit(CallEventNames.declined, Frames.participant());
+      await settle();
+
+      expect(stateOf(container).phase, CallUiPhase.ended);
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+    });
+
+    test('N7g. leaving a FAILED call (a hang-up that never reached the server) stops it', () async {
+      final container = await ready();
+      await controllerOf(container).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      calls.endError = const AppError(AppErrorKind.network);
+
+      await controllerOf(container).hangUp();
+      expect(stateOf(container).phase, CallUiPhase.failed);
+      expect(native.ongoing, ['start:call_1']);
+
+      controllerOf(container).dismiss();
+      await settle();
       expect(native.ongoing, ['start:call_1', 'stop:call_1']);
     });
   });

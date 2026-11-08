@@ -216,14 +216,16 @@ void main() {
       expect(state.callId, 'call_1');
       expect(state.peerLabel, 'Mr. Ahmed');
       expect(room.connects, isEmpty);
-      expect(mic.calls, 0);
+      // LR-74: the microphone is asked BEFORE dialling (while the caller is in
+      // front), and that is all -- nothing is joined.
+      expect(mic.calls, 1);
     });
 
     test('A5. the callee answering is what joins media', () async {
       final container = await liveOutgoing();
 
-      // Microphone asked BEFORE the room, which is W4's ordering (A4).
-      expect(mic.calls, 1);
+      // Once before dialling (LR-74), and once by W4 BEFORE the room (A4).
+      expect(mic.calls, 2);
       expect(room.connects, hasLength(1));
       expect(calls.tokenCalls, ['call_1']);
       expect(stateOf(container).phase, CallUiPhase.live);
@@ -278,6 +280,7 @@ void main() {
       expect(stateOf(container).failure, CallUiFailure.microphone);
       expect(room.connects, isEmpty, reason: 'nothing is joined after a refusal');
       expect(calls.tokenCalls, isEmpty, reason: 'and no token is even minted');
+      expect(calls.startCalls, isEmpty, reason: 'LR-74: asked before dialling, so nobody rang');
     });
 
     test('A4b. an unavailable microphone is the same refusal', () async {
