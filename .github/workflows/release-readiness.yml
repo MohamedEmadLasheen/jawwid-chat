@@ -46,10 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      BUNDLETOOL_VERSION: '1.18.1'
-      # SHA-256 of bundletool-all-<version>.jar. Until it is pinned the jar is never run and the
-      # APK checks are reported NOT VERIFIED; the report prints the downloaded file's hash.
-      BUNDLETOOL_SHA256: 'UNPINNED'
+      BUNDLETOOL_VERSION: '1.18.3'
+      # SHA-256 of bundletool-all-<version>.jar, from the asset digest GitHub publishes for the
+      # google/bundletool 1.18.3 release. A mismatch fails the job and the jar is never run.
+      BUNDLETOOL_SHA256: 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
