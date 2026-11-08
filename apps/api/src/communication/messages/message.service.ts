@@ -49,6 +49,7 @@ import { currentImpersonationId } from '../../platform/request-context';
 import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 import { withOwedMakeups } from './owed-makeup';
+import { ListCursor, parseListCursor } from './list-cursor';
 import { MESSAGE_MAX_CHARACTERS, messageTooLong } from './message-length';
 import { blockedBy, hasBlocked, hideableByBlock, notHiddenByBlock } from '../../platform/blocks';
 
@@ -556,6 +557,9 @@ export class MessageService {
   async list(
     input: ListMessagesInput,
   ): Promise<{ messages: MessageDto[]; nextBefore: string | null }> {
+    // LR-38: the cursors are checked first, so a malformed one is a 400 and
+    // never a BigInt SyntaxError (500), and before+after is refused, not merged.
+    const cursor = parseListCursor(input.before, input.after);
     const actor = await this.conversations.requireActor(input.actorId);
     const conv = await this.conversations.requireConversation(input.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
@@ -567,10 +571,10 @@ export class MessageService {
     const defaultLimit = await this.config.get('communication.page_size_default');
     const limit = Math.min(input.limit ?? defaultLimit, maxLimit);
 
-    const ascending = input.after !== undefined;
+    const ascending = cursor.after !== undefined;
     // A card that owes a make-up reads its live make-up's time (owed-makeup.ts).
     const rows = await withOwedMakeups(this.prisma, await this.prisma.message.findMany({
-      where: this.visibilityFilter(actor, conv.id, input),
+      where: this.visibilityFilter(actor, conv.id, cursor),
       include: MESSAGE_INCLUDE,
       orderBy: { seq: ascending ? 'asc' : 'desc' },
       take: limit,
@@ -619,12 +623,13 @@ export class MessageService {
   private visibilityFilter(
     actor: Actor,
     conversationId: string | { in: string[] },
-    input: ListMessagesInput,
+    cursor: ListCursor = {},
   ): Prisma.MessageWhereInput {
     const where: Prisma.MessageWhereInput = { conversationId };
 
-    if (input.before) where.seq = { lt: BigInt(input.before) };
-    if (input.after) where.seq = { gt: BigInt(input.after) };
+    // Already validated by parseListCursor: at most one of the two is set.
+    if (cursor.before !== undefined) where.seq = { lt: cursor.before };
+    if (cursor.after !== undefined) where.seq = { gt: cursor.after };
 
     if (!this.authz.canReadInternal(actor)) {
       where.visibility = Visibility.CUSTOMER;
@@ -658,7 +663,7 @@ export class MessageService {
     const found = await Promise.all(
       conversationIds.map((id) =>
         this.prisma.message.findFirst({
-          where: this.visibilityFilter(actor, id, {} as ListMessagesInput),
+          where: this.visibilityFilter(actor, id),
           orderBy: { seq: 'desc' },
           // RQA-F4: a card's kind, so a list row can name it ("Lesson report").
           include: { card: { select: { kind: true } } },
@@ -1190,7 +1195,7 @@ export class MessageService {
     const pins = await this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, orderBy: { pinnedAt: 'asc' } });
     if (pins.length === 0) return { pins: [] };
     const rows = await this.prisma.message.findMany({
-      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
+      where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
       include: MESSAGE_INCLUDE,
     });
     const dtos = await this.dtosFor(rows, conv.id, actor);
@@ -1234,7 +1239,7 @@ export class MessageService {
       const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
       if (!(await this.conversations.canReadResolved(actor, conv, membership)).allowed) continue;
       const rows = await this.prisma.message.findMany({
-        where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: ids } }] },
+        where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: ids } }] },
         include: MESSAGE_INCLUDE,
       });
       for (const d of await this.dtosFor(rows, conv.id, actor)) dtos.set(d.id, { ...d, starred: true });
@@ -1317,7 +1322,7 @@ export class MessageService {
         LIMIT ${window}`;
       if (candidates.length > 0) {
         const visible = await this.prisma.message.findMany({
-          where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+          where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: candidates.map((c) => c.id) } }] },
           include: MESSAGE_INCLUDE,
           orderBy: { seq: 'desc' },
           take: page - hits.length,
@@ -1376,7 +1381,7 @@ export class MessageService {
       if (candidates.length > 0) {
         rows.push(
           ...(await this.prisma.message.findMany({
-            where: { AND: [this.visibilityFilter(actor, { in: ids }, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+            where: { AND: [this.visibilityFilter(actor, { in: ids }), { id: { in: candidates.map((c) => c.id) } }] },
             include: MESSAGE_INCLUDE,
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: limit - rows.length,
@@ -1427,7 +1432,7 @@ export class MessageService {
       const rows = await this.prisma.message.findMany({
         where: {
           AND: [
-            this.visibilityFilter(actor, conversationId, {} as ListMessagesInput),
+            this.visibilityFilter(actor, conversationId),
             upToSeq === null ? {} : { seq: { lte: upToSeq } },
           ],
         },
@@ -1709,7 +1714,7 @@ export class MessageService {
     if (!loaded) return null;
     const { actor, conv } = loaded;
     const message = await this.prisma.message.findFirst({
-      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: loaded.message.id, deletedForAll: false }] },
+      where: { AND: [this.visibilityFilter(actor, conv.id), { id: loaded.message.id, deletedForAll: false }] },
       include: { attachments: { orderBy: { createdAt: 'asc' } } },
     });
     return message ? { actor, conv, message } : null;
@@ -1739,7 +1744,7 @@ export class MessageService {
 
     const { actor, conv, message } = await this.loadForActor(attachment.message.id, actorId);
     const visible = await this.prisma.message.count({
-      where: { ...this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), id: attachment.message.id },
+      where: { ...this.visibilityFilter(actor, conv.id), id: attachment.message.id },
     });
     if (visible === 0) throw absent();
     // PD-57: the bytes of a message the viewer's block hides are not served to them.
