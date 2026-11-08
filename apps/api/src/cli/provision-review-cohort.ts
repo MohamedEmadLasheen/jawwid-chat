@@ -12,16 +12,22 @@ import { ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest }
  *     --email-domain <domain the owner chose> \
  *     --parent-password-file ~/.jawwid/review-parent.pw \
  *     --teacher-password-file ~/.jawwid/review-teacher.pw \
+ *     --deletion-parent-password-file ~/.jawwid/review-parent2.pw \
  *     [--allow-non-local]
+ *
+ * In production it is run ONLY by the "Review cohort" workflow
+ * (.github/workflows/review-cohort.yml), never from a laptop.
  *
  * The rails of seed-org-chat and bootstrap-super-admin: the target must be
  * named and must match DATABASE_URL; outside APP_ENV local/test/ci it refuses
  * unless told otherwise. A PASSWORD IS NEVER ACCEPTED ON THE COMMAND LINE,
  * never printed and never logged: each account's password is read from its own
  * file, readable by its owner only (chmod 600), and stored only as a hash.
+ * DATABASE_URL is never printed either, only its host:port/database.
  *
- * Safe to run again: it repairs a deleted or locked-out review account and
- * re-sets both passwords from the files.
+ * Safe to run again: it repairs a deleted or locked-out review account (the
+ * disposable deletion-test parent included) and re-sets all three passwords
+ * from the files.
  */
 
 const LOCAL_ENVS = new Set(['local', 'test', 'ci', '']);
@@ -38,6 +44,7 @@ export function parseArgs(argv: string[]) {
     emailDomain: undefined as string | undefined,
     parentPasswordFile: undefined as string | undefined,
     teacherPasswordFile: undefined as string | undefined,
+    deletionParentPasswordFile: undefined as string | undefined,
     allowNonLocal: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -52,10 +59,14 @@ export function parseArgs(argv: string[]) {
       case '--email-domain': args.emailDomain = value(); break;
       case '--parent-password-file': args.parentPasswordFile = value(); break;
       case '--teacher-password-file': args.teacherPasswordFile = value(); break;
+      case '--deletion-parent-password-file': args.deletionParentPasswordFile = value(); break;
       case '--allow-non-local': args.allowNonLocal = true; break;
       default:
         if (/password/i.test(flag) && !flag.endsWith('-file')) {
-          fail('USAGE', 'a password is never accepted on the command line; use --parent-password-file / --teacher-password-file');
+          fail(
+            'USAGE',
+            'a password is never accepted on the command line; use --parent-password-file / --teacher-password-file / --deletion-parent-password-file',
+          );
         }
         // Never echo an argument: a mistyped command line may hold a password.
         fail('USAGE', `unknown argument at position ${i + 1}`);
@@ -90,6 +101,7 @@ export function publicSummary(target: string, m: ReviewCohortManifest) {
     organizationId: m.organizationId,
     parent: { subject: m.parent.subject, created: m.parent.created },
     teacher: { subject: m.teacher.subject, created: m.teacher.created },
+    deletionParent: { subject: m.deletionParent.subject, created: m.deletionParent.created },
     learnerId: m.learnerId,
     familyGroupId: m.familyGroupId,
   };
@@ -99,7 +111,13 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) fail('USAGE', 'DATABASE_URL is not set');
-  const target = describeTarget(databaseUrl);
+  // An unparseable URL's error would quote the URL, password and all.
+  let target: string;
+  try {
+    target = describeTarget(databaseUrl);
+  } catch {
+    fail('USAGE', 'DATABASE_URL is not a valid URL');
+  }
   if (!args.target) fail('USAGE', `--target is required; DATABASE_URL points at ${target}`);
   if (args.target !== target) fail('TARGET_MISMATCH', `--target ${args.target} does not match DATABASE_URL (${target})`);
   if (!args.emailDomain) fail('USAGE', '--email-domain is required');
@@ -109,10 +127,13 @@ async function main(): Promise<void> {
   }
   const parentPassword = readPassword(args.parentPasswordFile, 'parent');
   const teacherPassword = readPassword(args.teacherPasswordFile, 'teacher');
+  const deletionParentPassword = readPassword(args.deletionParentPasswordFile, 'deletion-parent');
 
   const prisma = cliPrismaClient(databaseUrl);
   try {
-    const m = await provisionReviewCohort(prisma, { emailDomain: args.emailDomain, parentPassword, teacherPassword });
+    const m = await provisionReviewCohort(prisma, {
+      emailDomain: args.emailDomain, parentPassword, teacherPassword, deletionParentPassword,
+    });
     process.stdout.write(`${JSON.stringify(publicSummary(target, m))}\n`);
   } catch (error) {
     // A refusal's message is ours. Any other error's message is not printed:

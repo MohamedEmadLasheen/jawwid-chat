@@ -1,0 +1,185 @@
+# App Store / Google Play review accounts (LR-05). Owner: release engineering.
+#
+# Runs apps/api/src/cli/provision-review-cohort.ts against the PRODUCTION
+# database, from the API image already built for a commit on main. Runbook:
+# docs/release/review-accounts.md. Never run the command from a laptop.
+#
+# MANUAL ONLY, and gated by the `production` GitHub Environment (its required
+# reviewers and its branch restriction to main): every run is an owner
+# decision recorded against a specific commit.
+#
+# What it writes: only the review organization ("app-review") -- three
+# ordinary logins (parent@, teacher@, parent2@<domain>), synthetic staff with
+# no login, two synthetic families. Safe to repeat; a re-run is the repair
+# procedure (lockouts cleared, passwords re-set, a deleted parent re-created).
+#
+# Secrets (production Environment): DATABASE_URL, REVIEW_PARENT_PASSWORD,
+# REVIEW_TEACHER_PASSWORD, REVIEW_DELETION_PARENT_PASSWORD. No password and no
+# DATABASE_URL is ever echoed, passed on a command line or written to a log:
+# the passwords reach the container only as mode-600 files, DATABASE_URL only
+# as an environment variable passed by name.
+#
+# No third-party action is used, so there is nothing to pin: registry login,
+# the main-ancestry check and the run are plain shell.
+name: Review cohort
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Full 40-character commit SHA on main whose API image (ghcr.io/<repo>/api:<sha>) is already built.'
+        required: true
+        type: string
+      email_domain:
+        description: 'Login domain of the review accounts (one Jawwid controls). Must stay the same for good.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  # Two runs at once could create duplicate rows (review-accounts.md).
+  group: review-cohort
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Provision the review accounts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      EMAIL_DOMAIN: ${{ inputs.email_domain }}
+    steps:
+      - name: Inputs are well formed
+        # Inputs are read from the environment, never interpolated into the
+        # script, so an input cannot inject shell.
+        run: |
+          # The production Environment's branch restriction is the real gate;
+          # this makes a run from another branch fail with a clear message.
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::run this workflow from main"; exit 1; }
+          case "$IMAGE_TAG" in
+            *[!0-9a-f]*|'') echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1 ;;
+          esac
+          [ "${#IMAGE_TAG}" -eq 40 ] || { echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1; }
+          printf '%s' "$EMAIL_DOMAIN" | grep -Eq '^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$' \
+            || { echo "::error::email_domain must be a plain lowercase domain name"; exit 1; }
+
+      - name: The tag must be an ancestor of main
+        # The same check as deploy-production.yml: only a merged, reviewed
+        # commit's image may touch production. The repository is public, so
+        # main is fetched without a credential and without a checkout action.
+        run: |
+          git init -q "$RUNNER_TEMP/main"
+          cd "$RUNNER_TEMP/main"
+          git fetch -q --depth=200 "https://github.com/${GITHUB_REPOSITORY}.git" "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor "$IMAGE_TAG" origin/main 2>/dev/null; then
+            echo "::error::$IMAGE_TAG is not on main (or not within its last 200 commits). The review cohort runs reviewed commits only."
+            exit 1
+          fi
+
+      - name: The secrets are present
+        # Booleans only: no secret value enters this step.
+        env:
+          HAS_DATABASE_URL: ${{ secrets.DATABASE_URL != '' }}
+          HAS_PARENT: ${{ secrets.REVIEW_PARENT_PASSWORD != '' }}
+          HAS_TEACHER: ${{ secrets.REVIEW_TEACHER_PASSWORD != '' }}
+          HAS_DELETION_PARENT: ${{ secrets.REVIEW_DELETION_PARENT_PASSWORD != '' }}
+        run: |
+          rc=0
+          [ "$HAS_DATABASE_URL" = "true" ] || { echo "::error title=Review cohort secrets::DATABASE_URL is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_PARENT" = "true" ] || { echo "::error title=Review cohort secrets::REVIEW_PARENT_PASSWORD is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_TEACHER" = "true" ] || { echo "::error title=Review cohort secrets::REVIEW_TEACHER_PASSWORD is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_DELETION_PARENT" = "true" ] || { echo "::error title=Review cohort secrets::REVIEW_DELETION_PARENT_PASSWORD is not set in the production GitHub Environment"; rc=1; }
+          [ "$rc" -eq 0 ] || echo "Nothing was changed. Owner steps: docs/release/review-accounts.md"
+          exit "$rc"
+
+      - name: Pull the API image for this commit
+        # Never builds: production runs what was built and tested for this commit.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/api:${IMAGE_TAG}"
+          docker pull -q "$IMAGE" >/dev/null \
+            || { echo "::error::$IMAGE does not exist -- build and deploy this commit first"; exit 1; }
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Write the password files
+        # Mode 600 in a mode-700 directory under RUNNER_TEMP; printf '%s' writes
+        # the value with no trailing newline and nothing is echoed. Secrets are
+        # masked in the log by GitHub; they are also never printed here.
+        env:
+          REVIEW_PARENT_PASSWORD: ${{ secrets.REVIEW_PARENT_PASSWORD }}
+          REVIEW_TEACHER_PASSWORD: ${{ secrets.REVIEW_TEACHER_PASSWORD }}
+          REVIEW_DELETION_PARENT_PASSWORD: ${{ secrets.REVIEW_DELETION_PARENT_PASSWORD }}
+        run: |
+          umask 077
+          dir="$RUNNER_TEMP/review-cohort"
+          rm -rf "$dir"
+          mkdir -m 700 "$dir"
+          printf '%s' "$REVIEW_PARENT_PASSWORD" > "$dir/parent.pw"
+          printf '%s' "$REVIEW_TEACHER_PASSWORD" > "$dir/teacher.pw"
+          printf '%s' "$REVIEW_DELETION_PARENT_PASSWORD" > "$dir/parent2.pw"
+          chmod 600 "$dir/parent.pw" "$dir/teacher.pw" "$dir/parent2.pw"
+
+      - name: Provision the review cohort
+        # --target is derived by the CLI's own describeTarget, inside the same
+        # image, so it matches exactly what the command checks; only
+        # host:port/database is ever printed, never the URL. The container runs
+        # as this runner's user so it can read the mode-600 files it is given
+        # read-only. DATABASE_URL is passed by name (-e DATABASE_URL), so its
+        # value is never on a command line.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          dir="$RUNNER_TEMP/review-cohort"
+          run() {
+            docker run --rm \
+              --user "$(id -u):$(id -g)" \
+              -e HOME=/tmp \
+              -e DATABASE_URL \
+              -e APP_ENV=production \
+              -v "$dir:/run/review-cohort:ro" \
+              "$IMAGE" "$@"
+          }
+          target="$(run node -e '
+            try {
+              process.stdout.write(require("./dist/cli/bootstrap-super-admin.js").describeTarget(process.env.DATABASE_URL));
+            } catch {
+              process.stderr.write("DATABASE_URL is not a valid URL\n");
+              process.exit(2);
+            }')" || { echo "::error::could not derive --target from DATABASE_URL"; exit 1; }
+          [ -n "$target" ] || { echo "::error::could not derive --target from DATABASE_URL"; exit 1; }
+          echo "Target: $target"
+          run node dist/cli/provision-review-cohort.js \
+            --target "$target" \
+            --email-domain "$EMAIL_DOMAIN" \
+            --parent-password-file /run/review-cohort/parent.pw \
+            --teacher-password-file /run/review-cohort/teacher.pw \
+            --deletion-parent-password-file /run/review-cohort/parent2.pw \
+            --allow-non-local
+
+      - name: Record the run
+        if: success()
+        run: |
+          {
+            echo "### Review cohort provisioned"
+            echo ""
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| commit | \`${IMAGE_TAG}\` |"
+            echo "| logins | \`parent@${EMAIL_DOMAIN}\`, \`teacher@${EMAIL_DOMAIN}\`, \`parent2@${EMAIL_DOMAIN}\` |"
+            echo "| run by | ${GITHUB_ACTOR} |"
+            echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the password files and the registry login
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/review-cohort"
+          docker logout ghcr.io >/dev/null 2>&1 || true

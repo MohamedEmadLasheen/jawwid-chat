@@ -30,11 +30,16 @@ import { insertLearnerWithTeacherForQa } from './qa-teacher-assignment';
  * staff, and nothing a reviewer does (a report, a block, a message, a missed
  * lesson report) reaches Jawwid's own staff.
  *
- * Exactly two accounts can sign in, both ordinary, neither with any admin
+ * Exactly three accounts can sign in, all ordinary, none with any admin
  * scope:
  *
  *   parent   -- the primary guardian of one family with one child
  *   teacher  -- that child's teacher
+ *   parent2  -- the DISPOSABLE parent for the reviewers' account-deletion
+ *               test (LR-05): the primary guardian of a second family of its
+ *               own, with one child who has no teacher and no lessons, and a
+ *               1:1 with the supervisor. It shares no conversation with the
+ *               other two, so deleting it changes nothing they see.
  *
  * The organization around them -- an Operations Manager, a Teachers manager
  * and a supervisor -- is SYNTHETIC STAFF WITH NO ACCOUNT: there is no login for
@@ -58,8 +63,10 @@ import { insertLearnerWithTeacherForQa } from './qa-teacher-assignment';
  *     owner's file; a changed password also ends that account's sessions;
  *   - a parent account a reviewer deleted (PD-56 erases it in place and frees
  *     the email; the family and child stay) is created again and given its
- *     seats back. The teacher account cannot be deleted while the child is
- *     assigned to it (TEACHER_DELETION_BLOCKED), so it never needs this.
+ *     seats back -- either parent, and the disposable one is expected to be
+ *     deleted after every review. The teacher account cannot be deleted while
+ *     the child is assigned to it (TEACHER_DELETION_BLOCKED), so it never
+ *     needs this.
  *
  * Synthetic people only (G-20). Passwords are hashed here and never stored,
  * returned or printed.
@@ -85,21 +92,40 @@ export const REVIEW_PEOPLE = {
   child: 'Yahya Adel',
 } as const;
 
+/** The disposable family for the account-deletion test. Names are invented (G-20). */
+export const REVIEW_DELETION_PEOPLE = {
+  parent: 'Laila Hamdi',
+  family: 'Hamdi family',
+  child: 'Omar Hamdi',
+} as const;
+
 export interface ReviewCohortOptions {
-  /** Subjects are `parent@<domain>` and `teacher@<domain>`. */
+  /** Subjects are `parent@<domain>`, `teacher@<domain>` and `parent2@<domain>`. */
   emailDomain: string;
-  /** Plaintext, >= REVIEW_MIN_PASSWORD_LENGTH, one per account and different. */
+  /** Plaintext, >= REVIEW_MIN_PASSWORD_LENGTH, one per account and all different. */
   parentPassword: string;
   teacherPassword: string;
+  deletionParentPassword: string;
   /** Tests pass precomputed hashes so Argon2 does not dominate the suite. */
   parentPasswordHash?: string;
   teacherPasswordHash?: string;
+  deletionParentPasswordHash?: string;
 }
 
 export interface ReviewCohortManifest {
   organizationId: string;
   parent: { subject: string; accountId: string; contactId: string; created: boolean };
   teacher: { subject: string; accountId: string; teacherId: string; created: boolean };
+  /** The disposable parent: its own family, child and 1:1 with the supervisor. */
+  deletionParent: {
+    subject: string;
+    accountId: string;
+    contactId: string;
+    created: boolean;
+    familyId: string;
+    learnerId: string;
+    directId: string;
+  };
   staff: { operationsManagerId: string; teachersManagerId: string; supervisorId: string };
   familyId: string;
   learnerId: string;
@@ -109,7 +135,7 @@ export interface ReviewCohortManifest {
 }
 
 /**
- * Stricter than the product's own floor (PASSWORD_MIN_LENGTH): these two
+ * Stricter than the product's own floor (PASSWORD_MIN_LENGTH): these three
  * passwords are handed to Apple and Google and sit on a production login.
  */
 export const REVIEW_MIN_PASSWORD_LENGTH = 12;
@@ -122,15 +148,24 @@ export class ReviewCohortRefusal extends Error {
 }
 
 export function validateOptions(opts: ReviewCohortOptions): void {
-  for (const [who, pw] of [['parent', opts.parentPassword], ['teacher', opts.teacherPassword]] as const) {
-    if (pw.length < REVIEW_MIN_PASSWORD_LENGTH || pw.length > MAX_PASSWORD_LENGTH) {
+  const passwords = [
+    ['parent', opts.parentPassword],
+    ['teacher', opts.teacherPassword],
+    ['deletion parent', opts.deletionParentPassword],
+  ] as const;
+  for (const [who, pw] of passwords) {
+    if (typeof pw !== 'string' || pw.length < REVIEW_MIN_PASSWORD_LENGTH || pw.length > MAX_PASSWORD_LENGTH) {
       throw new ReviewCohortRefusal(
         'PASSWORD', `the ${who} password must be ${REVIEW_MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters`,
       );
     }
   }
-  if (opts.parentPassword === opts.teacherPassword) {
-    throw new ReviewCohortRefusal('PASSWORD', 'the parent and teacher passwords must be different');
+  for (let i = 0; i < passwords.length; i++) {
+    for (let j = i + 1; j < passwords.length; j++) {
+      if (passwords[i][1] === passwords[j][1]) {
+        throw new ReviewCohortRefusal('PASSWORD', `the ${passwords[i][0]} and ${passwords[j][0]} passwords must be different`);
+      }
+    }
   }
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(opts.emailDomain)) {
     throw new ReviewCohortRefusal('USAGE', 'emailDomain must be a plain domain name');
@@ -220,7 +255,7 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
   }
 
   // --- accounts: found by subject; erased accounts free their subject (PD-56)
-  const login = async (key: 'parent' | 'teacher', kind: 'family' | 'teacher', password: string, preHashed?: string) => {
+  const login = async (key: 'parent' | 'teacher' | 'parent2', kind: 'family' | 'teacher', password: string, preHashed?: string) => {
     const subject = `${key}@${opts.emailDomain}`;
     const passwordHash = preHashed ?? (await hashPassword(password));
     const existing = await prisma.account.findUnique({ where: { subject } });
@@ -284,35 +319,44 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
       data: { organizationId: orgId, name: REVIEW_PEOPLE.teacher, isActive: true, accountId: teacherLogin.accountId },
     }));
 
-  // --- the family, its parent and its child
-  const family =
-    (await prisma.family.findFirst({ where: { organizationId: orgId, displayName: REVIEW_PEOPLE.family } })) ??
+  // --- a family, found by name inside the review organization
+  const familyNamed = async (displayName: string) =>
+    (await prisma.family.findFirst({ where: { organizationId: orgId, displayName } })) ??
     (await prisma.family.create({
-      data: { organizationId: orgId, displayName: REVIEW_PEOPLE.family, ownerId: supervisorId, language: 'en' },
+      data: { organizationId: orgId, displayName, ownerId: supervisorId, language: 'en' },
     }));
+  // --- its primary guardian, found by account: a re-created (previously
+  // deleted) account gets a new contact, made the family's primary again.
+  const guardian = async (family: { id: string; primaryContactId: string | null }, name: string, accountId: string) => {
+    const contact =
+      (await prisma.contact.findFirst({ where: { familyId: family.id, accountId } })) ??
+      (await prisma.contact.create({
+        data: {
+          organizationId: orgId,
+          familyId: family.id,
+          name,
+          relationship: 'parent',
+          rolePreset: 'primary_guardian',
+          canMessage: true,
+          canViewProgress: true,
+          canManageSchedule: true,
+          canManageBilling: true,
+          canManageContacts: true,
+          canCancel: true,
+          accountId,
+          isActive: true,
+        },
+      }));
+    if (family.primaryContactId !== contact.id) {
+      await prisma.family.update({ where: { id: family.id }, data: { primaryContactId: contact.id } });
+    }
+    return contact;
+  };
+
+  // --- the family, its parent and its child
+  const family = await familyNamed(REVIEW_PEOPLE.family);
   const parentLogin = await login('parent', 'family', opts.parentPassword, opts.parentPasswordHash);
-  const contact =
-    (await prisma.contact.findFirst({ where: { familyId: family.id, accountId: parentLogin.accountId } })) ??
-    (await prisma.contact.create({
-      data: {
-        organizationId: orgId,
-        familyId: family.id,
-        name: REVIEW_PEOPLE.parent,
-        relationship: 'parent',
-        rolePreset: 'primary_guardian',
-        canMessage: true,
-        canViewProgress: true,
-        canManageSchedule: true,
-        canManageBilling: true,
-        canManageContacts: true,
-        canCancel: true,
-        accountId: parentLogin.accountId,
-        isActive: true,
-      },
-    }));
-  if (family.primaryContactId !== contact.id) {
-    await prisma.family.update({ where: { id: family.id }, data: { primaryContactId: contact.id } });
-  }
+  const contact = await guardian(family, REVIEW_PEOPLE.parent, parentLogin.accountId);
 
   let learner = await prisma.learner.findFirst({ where: { familyId: family.id, name: REVIEW_PEOPLE.child } });
   if (!learner) {
@@ -375,10 +419,38 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
     await say(teacherDirect.id, line.from === 'supervisor' ? supervisorId : teacher.id, `td-${i}`, line.body);
   }
 
+  // --- the disposable parent for the account-deletion test: its own family
+  // and child, so deleting it touches nothing the other two accounts see. The
+  // child has NO teacher (no OD-04 stand-in, no lessons, no family group): the
+  // parent and the supervisor share only a 1:1.
+  const deletionFamily = await familyNamed(REVIEW_DELETION_PEOPLE.family);
+  const deletionLogin = await login('parent2', 'family', opts.deletionParentPassword, opts.deletionParentPasswordHash);
+  const deletionContact = await guardian(deletionFamily, REVIEW_DELETION_PEOPLE.parent, deletionLogin.accountId);
+  const deletionLearner =
+    (await prisma.learner.findFirst({ where: { familyId: deletionFamily.id, name: REVIEW_DELETION_PEOPLE.child } })) ??
+    (await prisma.learner.create({
+      data: { organizationId: orgId, familyId: deletionFamily.id, name: REVIEW_DELETION_PEOPLE.child },
+    }));
+  if (deletionLearner.teacherId !== null) {
+    throw new ReviewCohortRefusal('TEACHER_CHANGED', 'the disposable review child has a teacher; it never should; investigate');
+  }
+  await orgStructure.assignSupervisor(operationsManagerId, deletionLearner.id, { supervisorId, reason: WHY });
+  const deletionDirect = await conversations.getOrCreateDirect(deletionContact.id, supervisorId);
+  for (const [i, line] of REVIEW_MESSAGES.deletionParentDirect.entries()) {
+    await say(deletionDirect.id, line.from === 'supervisor' ? supervisorId : deletionContact.id, `dpd-${i}`, line.body);
+  }
+
   return {
     organizationId: orgId,
     parent: { ...parentLogin, contactId: contact.id },
     teacher: { ...teacherLogin, teacherId: teacher.id },
+    deletionParent: {
+      ...deletionLogin,
+      contactId: deletionContact.id,
+      familyId: deletionFamily.id,
+      learnerId: deletionLearner.id,
+      directId: deletionDirect.id,
+    },
     staff: { operationsManagerId, teachersManagerId, supervisorId },
     familyId: family.id,
     learnerId: learner.id,
@@ -446,5 +518,9 @@ export const REVIEW_MESSAGES = {
   teacherDirect: [
     { from: 'teacher', body: 'My availability for next week is updated.' },
     { from: 'supervisor', body: 'Thank you, Hassan.' },
+  ],
+  deletionParentDirect: [
+    { from: 'supervisor', body: "Welcome, Laila. I am Omar's supervisor; you can write to me here any time." },
+    { from: 'parent', body: 'Thank you, Nada.' },
   ],
 } as const;
