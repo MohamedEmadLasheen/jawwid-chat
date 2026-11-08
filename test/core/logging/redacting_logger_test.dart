@@ -129,6 +129,26 @@ void main() {
       expect(out['request_id'], 'req_7');
     });
 
+    test('masks jwt, session and credential keys, and header-style spellings (LR-75 review)', () {
+      final out = RedactingLogger.redactMap({
+        'jwtToken': 'opaque-1',
+        'jwt_token': 'opaque-2',
+        'sessionToken': 'opaque-3',
+        'session_token': 'opaque-4',
+        'credential': 'opaque-5',
+        'credentials': 'opaque-6',
+        'id-token': 'opaque-7',
+        'X-Auth-Token': 'opaque-8',
+        'request-id': 'req_9',
+      });
+
+      for (final key in ['jwtToken', 'jwt_token', 'sessionToken', 'session_token', 'credential', 'credentials', 'id-token', 'X-Auth-Token']) {
+        expect(out[key], '[redacted]', reason: key);
+      }
+      expect(out.toString(), isNot(contains('opaque-')));
+      expect(out['request-id'], 'req_9');
+    });
+
     test('masks a code key only when it holds a one-time code (LR-42)', () {
       final out = RedactingLogger.redactMap({
         'code': '482 913',

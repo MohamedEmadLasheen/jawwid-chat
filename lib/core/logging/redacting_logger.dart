@@ -28,6 +28,13 @@ class RedactingLogger {
     'id_token',
     'idtoken',
     'jwt',
+    'jwt_token',
+    'jwttoken',
+    'session_token',
+    'sessiontoken',
+    'credential',
+    'credentials',
+    'x_auth_token',
     'authorization',
     'password',
     'secret',
@@ -121,7 +128,8 @@ class RedactingLogger {
   static Map<String, Object?> redactMap(Map<String, Object?> input) {
     final out = <String, Object?>{};
     input.forEach((key, value) {
-      final lower = key.toLowerCase();
+      // Header-style keys (X-Auth-Token, id-token) match their snake_case entries.
+      final lower = key.toLowerCase().replaceAll('-', '_');
       out[key] = _sensitiveKeys.contains(lower) ||
               (lower == _codeKey && _isOtpShaped(value))
           ? _mask
