@@ -2,6 +2,8 @@
 
 Owner: release-qa, refreshed 2026-11-05 against `main` @ `c4563a20` and against the live DigitalOcean and GitHub state (read-only: `doctl apps list`, `doctl databases list`, `doctl spaces keys list`, `gh api …/environments`). Launch sizes and the staging Redis are ADR-013.
 
+*Corrected 2026-11-08 (LR-30):* the GitHub facts were re-checked against `main` @ `9bb0418d` and the live GitHub state (read-only `gh api …/environments` and `gh run list`). The corrections are marked in place below. The Monitoring row (❌) was re-checked and is still accurate: the production spec has only the `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` alerts, and no uptime-check workflow exists.
+
 **Phase 1** means the system app is submitted to the App Store and Google Play, against a production backend on DigitalOcean App Platform (ADR-010, ADR-012). Materials are frozen and are not part of it.
 
 Status: 🔴 **NOT READY.** Two different kinds of work remain, and they close separately:
@@ -64,6 +66,8 @@ These are the code-side half of Phase 1. Gate ids refer to `docs/qa/release-gate
 
 The verdicts below are copied from the gate on 2026-11-05; the gate wins if they differ.
 
+*Corrected 2026-11-08 (LR-30):* the push gates S-11, S-12, S-13 and S-15 are marked "PASS (code, tests)" in `docs/qa/release-gate.md`, but that evidence is from an uncommitted tree built on PR #449 and PR #408, not from `main`. On `main` they have **not** passed. This checklist does not count them as passed.
+
 | Item | Code | State on `main` | Owner provides |
 |---|---|---|---|
 | iOS release signing and push entitlement (S-03) | ✅ config | Release uses `Runner/RunnerRelease.entitlements` (`aps-environment = production`), team `KX683HAR3Y`. Never yet signed with a distribution certificate. The bundle id is `com.jawwid.jawwidChat`. | The paid team's distribution certificate and App Store profile, and the App Store Connect app record. |
@@ -87,6 +91,37 @@ The verdicts below are copied from the gate on 2026-11-05; the gate wins if they
 
 Everything the repository can do is done. The rest needs accounts, money or
 DNS, so it is the owner's. In this order — each step names what it unblocks.
+> **Corrected 2026-11-08 (LR-30).** The paragraph below this note was written on 2026-11-05 and
+> is partly out of date. What GitHub shows on 2026-11-08 (read-only: `gh api …/environments`,
+> `gh run list`):
+>
+> - **Three Environments exist, not two:** `staging` (created 2026-09-24), `production`
+>   (created 2026-10-31) and `backup` (created 2026-11-06). `staging` and `production` each have
+>   a required reviewer and a branch policy. `backup` has **no** protection rules.
+> - **What the Environments hold, by count only (read by the lead on 2026-11-08 with
+>   `gh api repos/MohamedEmadLasheen/jawwid-chat/environments/<name>/{secrets,variables} --jq .total_count`;
+>   no names or values were read):**
+>   - `production`: 19 secrets, 12 variables;
+>   - `staging`: 2 secrets, 1 variable;
+>   - `backup`: 0 secrets, 0 variables. Repository-level Actions secrets: also 0 (read the same way).
+>
+>   This is **consistent with** every backup failure below. The failing step was not read, so it is not proven to be the only cause.
+>
+>   The 2026-11-05 statement below that `production` "holds nothing" is therefore **out of date**.
+> - **Deploy production has never run** (`gh run list --workflow deploy-production.yml` is empty).
+> - **Deploy staging has never succeeded.** 34 runs failed, the last on 2026-10-06 (run
+>   37508314286, on push). The only run since, 42095782131 on 2026-11-05 (started by hand), was
+>   cancelled.
+> - **Every backup run so far has failed:** the daily backup on 2026-11-06, 2026-11-07 and
+>   2026-11-08 (runs 42188163423, 42352744376, 42460966243) and the first weekly backup on
+>   2026-11-08 (run 42465417108). Both workflows run in the `backup` Environment and stop at
+>   their first step when its credentials are missing (`BACKUP_DATABASE_URL`,
+>   `BACKUP_ENCRYPTION_PASSPHRASE`, and for the weekly copy the backup bucket key and
+>   location). The run logs were not read in this check, so which value is missing is not
+>   confirmed here; the owner's step 6 and RISK-6 (b) below remain open.
+> - The DigitalOcean facts below were not re-checked on 2026-11-08 (no `doctl` access in this
+>   check).
+
 Re-verified on 2026-11-05. In GitHub, the `staging` Environment holds only
 `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. The `production`
 Environment exists (created 2026-10-31, required reviewer, deployments limited
@@ -137,6 +172,10 @@ Spaces bucket, no Spaces key and no Valkey. The domain is chosen (step 3).
    `production` has a required reviewer and deployments limited to `main`. The
    production workflow's safety depends on these rules, and no file can
    enforce them, so keep them.
+   *Corrected 2026-11-08 (LR-30):* a third Environment, `backup`, also exists
+   (created 2026-11-06) and has no protection rules. The backup workflows read
+   their credentials from it; until it holds them, every backup run fails (see
+   the note above).
 5. **Add the deploy credentials to both Environments:**
    * `DIGITALOCEAN_ACCESS_TOKEN`: a DigitalOcean personal access token with
      read, create and update on apps (plus read on projects if step 1 set
@@ -222,6 +261,7 @@ nothing. It never reports a deployment that did not happen (ADR-003).
 ## Blockers
 
 **BLOCKER-1 · No hosting.** The provider was chosen on 2026-10-22: DigitalOcean App Platform (ADR-010). The app spec and release step are in the repository (ADR-012). The project holds a Postgres cluster, and nothing else is provisioned. Owner: product owner, via **Owner steps that remain** above. Until then, every deploy run stops at its first step with the missing item named, and changes nothing (ADR-003). A red `Deploy staging` run is the expected outcome, not a regression. It must not be "fixed" by relaxing a guard.
+*Corrected 2026-11-08 (LR-30):* nothing has ever been deployed. `Deploy production` has never run, and `Deploy staging` has never succeeded (last failure 2026-10-06; the one run since, on 2026-11-05, was cancelled).
 
 **BLOCKER-2 · No git remote. ✅ CLOSED 2026-09-24.**
 
@@ -239,6 +279,7 @@ nothing. It never reports a deployment that did not happen (ADR-003).
 - **RISK-4 · Multi-instance realtime is unproven.** Production must run one API instance until two instances are shown, on staging, to deliver every event through the Redis adapter.
 - **RISK-5 · Shared working trees.** Several agents work in one repository. Verify the committed tree, never the working copy.
 - **RISK-6 · Backups between deploys rest entirely on the provider.** 🟡 Mitigated in code: `backup-weekly.yml` takes an encrypted dump every Sunday and keeps 8 weeks in Spaces (`backup-recovery.md` §3b), whether or not anyone deploys. Open until (a) the provider's daily backups and 7-day PITR are confirmed on the production cluster, (b) the `backup` Environment, read-only role and dedicated bucket key exist (`backup-recovery.md` §3b) and the weekly job has run once, and (c) the §5a restore drill from a weekly copy has passed.
+  *Corrected 2026-11-08 (LR-30):* the `backup` Environment now exists, but every scheduled backup so far has failed (daily: 2026-11-06, 11-07, 11-08; weekly: 2026-11-08). No backup has been taken by either workflow, so (b) is not met.
 
 ## What would make this green (Phase 1 order)
 

@@ -205,8 +205,8 @@ assumed.
 | A-4 | Roles hard-coded: `StaffRole` and `FAMILY_FACING_STAFF_ROLES` in `contracts/vocab.ts`, `CHECK` in `chat.staff.role` | `vocab.ts:17-36`, `090200:20` | role table + migration (rename `coverage`, add `super_admin`, move departments) — **PD-5, closed** |
 | A-5 | No `super_admin` | everywhere | as above; Admin Web's "has no super_admin" test is KNOWN WRONG and is replaced. **PD-5 closed: it exists from day one.** |
 | A-6 | Three routes take no actor at all | `conversation.controller.ts:36`, `notification.controller.ts:21,28` | `AuthenticatedGuard` + scope |
-| A-7 | Receipt roster disclosed to contacts (staff ids, read times) — RT-012 | `dto.ts` `toMessageDto` | viewer-scoped receipts |
-| A-8 | Object-level authorization absent on `signUrlsForMessages` — RT-006 | `attachment.service.ts` | actor parameter + `canRead` |
+| A-7 | Receipt roster disclosed to contacts (staff ids, read times) — RT-012 | `dto.ts` `toMessageDto` | viewer-scoped receipts. **Corrected 2026-11-08 (LR-30): fixed on `main`** (PD-37, commit `d3be2821`, PR #140; see `docs/red-team/findings.md` RT-012). |
+| A-8 | Object-level authorization absent on `signUrlsForMessages` — RT-006 | `attachment.service.ts` | actor parameter + `canRead`. **Corrected 2026-11-08 (LR-30): fixed on `main`.** The actor is passed and the media route re-checks read access per request (commit `4d028e11`, PR #38; see `docs/red-team/findings.md` RT-006). |
 | A-9 | Authorization computed outside the acting transaction — RT-014 | services | re-check inside `$transaction` where state can change |
 | A-10 | Realtime actor cached for the socket lifetime — RT-009 | `realtime.gateway.ts` | re-validate on heartbeat; drop on revocation |
 
