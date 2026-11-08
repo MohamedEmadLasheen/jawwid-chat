@@ -141,9 +141,11 @@ jobs:
             # LR-50: what Android itself reads from the packaged manifest.
             badging="$("$tools/aapt2" dump badging "$apk" 2>&1)"
             pkg="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$badging")"
-            min="$(sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" <<< "$badging")"
+            # Older aapt2 prints sdkVersion:'N', newer prints minSdkVersion:'N' (seen on CI, 2026-11-09).
+            min="$(sed -n -E "s/^(min)?[sS]dkVersion:'([0-9]+)'.*/\2/p" <<< "$badging" | head -1)"
+            grep -E "^(min|target)?[sS]dkVersion:" <<< "$badging" >> "$R" || true
             tgt="$(sed -n "s/^targetSdkVersion:'\([0-9]*\)'.*/\1/p" <<< "$badging")"
-            echo "aapt2 badging: package=$pkg sdkVersion=$min targetSdkVersion=$tgt" >> "$R"
+            echo "aapt2 badging: package=$pkg minSdkVersion=$min targetSdkVersion=$tgt" >> "$R"
             [ "$pkg" = com.jawwid.jawwid_chat ] && rec PASS "package com.jawwid.jawwid_chat" || rec FAIL "package is '$pkg', expected com.jawwid.jawwid_chat"
             [ "$tgt" = 36 ] && rec PASS "LR-50 targetSdkVersion 36" || rec FAIL "LR-50 targetSdkVersion is '$tgt', expected 36"
             [ "$min" = 26 ] && rec PASS "LR-50 minSdkVersion 26" || rec FAIL "LR-50 minSdkVersion is '$min', expected 26"
