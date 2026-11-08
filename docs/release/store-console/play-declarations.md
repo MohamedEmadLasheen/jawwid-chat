@@ -152,7 +152,7 @@ whether it may use full-screen intents.
   - #524 `JawwidPush.kt:180-188` (`canUseFullScreenIntent`);
   - `RingCheck.kt:69-70`: below Android 14 the answer is always yes.
 - **When the permission is denied**, the call still rings, as a heads-up notification with Answer and
-  Decline. The app records that the ring was heads-up only (#524 `JawwidPush.kt:167-169`). The intent is
+  Decline. The app logs (Logcat only) that the ring was heads-up only (#524 `JawwidPush.kt:167-169`). The intent is
   always attached (`:153-161`), because Android refuses to build a `CallStyle` notification without one.
   Android itself turns the request into a heads-up notification.
 - Dart can ask the same question and can open the system setting

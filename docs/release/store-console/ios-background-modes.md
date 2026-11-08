@@ -96,7 +96,9 @@ when the user locks the screen or switches to another app (PD-56).
   to iOS.
 
 **#449 does not add a use.** The tracker said `remote-notification` depends on #449 (and LR-11). #449
-changes `ios/Runner/AppDelegate.swift` only. Checked with `git diff origin/main...origin/claude/pd032-feedback-reply-notifications -- ios/Runner/AppDelegate.swift`. It adds:
+changes two iOS files: `ios/Runner/AppDelegate.swift` and its test, `ios/RunnerTests/RunnerTests.swift`.
+It does not touch `Info.plist` or the APNs push type, and adds no `didReceiveRemoteNotification` and no
+`content-available`. Checked with `git diff origin/main...origin/claude/pd032-feedback-reply-notifications -- ios/`. In `AppDelegate.swift` it adds:
 - `UNUserNotificationCenter` delegate methods: `willPresent`, to show an ordinary push as a banner while
   the app is open, and `didReceive`, to route a tap.
 - A `jawwid/push_opens` channel.
