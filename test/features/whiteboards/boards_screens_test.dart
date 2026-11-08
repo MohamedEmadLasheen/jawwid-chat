@@ -122,7 +122,7 @@ void main() {
             GlobalCupertinoLocalizations.delegate,
           ],
           home: home,
-          navigatorObservers: [pageRouteObserver],
+          navigatorObservers: [orientationObserver],
         ),
       ),
     );
@@ -513,6 +513,20 @@ void main() {
         await tester.pumpAndSettle();
         expect(lastOrientations(), boardTurns, reason: 'the full-screen board is on top again');
       }
+
+      // A call that arrives while one of the board's sheets is open goes above the sheet.
+      unawaited(showModalBottomSheet<void>(
+          context: tester.element(find.byType(BoardEditorScreen)), builder: (_) => const Text('sheet')));
+      await tester.pumpAndSettle();
+      unawaited(Navigator.of(tester.element(find.byType(BoardEditorScreen)))
+          .push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('call over a sheet')))));
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), portrait, reason: 'a page above a sheet above the board is held portrait');
+      Navigator.of(tester.element(find.text('call over a sheet'))).pop();
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.text('sheet'))).pop();
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), boardTurns, reason: 'the board is on top again');
 
       await tester.tap(find.byKey(const ValueKey('board-exit-full-screen')));
       await tester.pumpAndSettle();

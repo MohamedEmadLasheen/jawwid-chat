@@ -61,7 +61,7 @@ class BoardEditorScreen extends ConsumerStatefulWidget {
   ConsumerState<BoardEditorScreen> createState() => _BoardEditorScreenState();
 }
 
-class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> with RouteAware {
+class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   final _canvas = GlobalKey<BoardCanvasState>();
   final _view = BoardViewController();
   BoardTool _tool = BoardTool.pen;
@@ -123,6 +123,7 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> with Rout
     _view.fit();
     _systemBars(hidden: on);
     // LR-39 / PD-55 rev2: only the full-screen board may turn to landscape.
+    _claimOrientation(on);
     unawaited(on ? allowBoardFullScreenOrientations() : lockAppOrientation());
   }
 
@@ -136,31 +137,19 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> with Rout
     );
   }
 
-  /// LR-39: a page opened over the full-screen board (an incoming call, a
-  /// conversation opened from a notification) is held portrait; the board may turn
-  /// again once it is back on top. [pageRouteObserver] reports pages only, so the
-  /// board's own sheets and dialogs keep landscape.
-  PageRoute<dynamic>? _route;
+  /// LR-39: while full screen, this board's route is the one [orientationObserver]
+  /// lets turn; a page that opens over it (an incoming call) is held portrait.
+  /// Kept, so [dispose] can let go without looking the route up again.
+  Route<dynamic>? _claimedRoute;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route is PageRoute<dynamic> && route != _route) {
-      if (_route != null) pageRouteObserver.unsubscribe(this);
-      _route = route;
-      pageRouteObserver.subscribe(this, route);
+  void _claimOrientation(bool on) {
+    if (on) {
+      _claimedRoute = ModalRoute.of(context);
+      orientationObserver.boardRoute = _claimedRoute;
+    } else {
+      if (identical(orientationObserver.boardRoute, _claimedRoute)) orientationObserver.boardRoute = null;
+      _claimedRoute = null;
     }
-  }
-
-  @override
-  void didPushNext() {
-    if (_fullScreen) unawaited(lockAppOrientation());
-  }
-
-  @override
-  void didPopNext() {
-    if (_fullScreen) unawaited(allowBoardFullScreenOrientations());
   }
 
   void _emojiFontChanged() {
@@ -172,9 +161,9 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> with Rout
     boardEmojiFontReady.removeListener(_emojiFontChanged);
     if (_fullScreen) {
       _systemBars(hidden: false);
+      _claimOrientation(false);
       unawaited(lockAppOrientation());
     }
-    pageRouteObserver.unsubscribe(this);
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
     // (its keep-alive) until every page is on the server.

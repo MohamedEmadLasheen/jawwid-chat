@@ -91,6 +91,9 @@ void main() {
     expect(lock, greaterThan(binding));
     expect(main.indexOf('runApp(', lock), isNonNegative);
 
+    // The router must report what lands on top, or a call over the board could turn.
+    expect(read('lib/app/router.dart'), contains('observers: [...crashReportingObservers(), orientationObserver]'));
+
     final board = read('lib/features/whiteboards/presentation/board_editor_screen.dart');
     expect(board, contains('on ? allowBoardFullScreenOrientations() : lockAppOrientation()'));
     final dispose = board.indexOf('void dispose()');

@@ -243,7 +243,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: Routes.splash,
     // PD-56: the crash reports' navigation breadcrumbs (none unless crash reporting is on).
     // LR-39: the full-screen board learns when a page (a call) opens over it.
-    observers: [...crashReportingObservers(), pageRouteObserver],
+    observers: [...crashReportingObservers(), orientationObserver],
     refreshListenable: notifier,
     redirect: (context, state) => _redirect(ref, state.matchedLocation),
     routes: [
