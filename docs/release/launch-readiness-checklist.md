@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 01:06 Cairo (23:06 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 01:18 Cairo (23:18 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -93,17 +93,20 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder L (Backend/infra) | LR-77 first-deploy backup fix | #516 | **Merged by the owner** `bc47d376` (2026-11-08 21:18 UTC) |
 | Builder L (Backend/infra) | LR-77 workflow guard | #518 | **Merged by the owner** `84a4e5d5` (2026-11-08 21:17 UTC; owner's Code Owner approval 21:17 UTC) |
 | Lead | LR-77 docs after the merges | #521 | Review ACCEPT @ `fb72aea1`; CI 30/30; **owner merge approval needed** |
-| Builder W1 (release) | LR-50, LR-51, LR-52, LR-58, LR-73: the release-readiness CI workflow. It also checks the merged manifest for AD_ID, and runs the Android JVM unit tests, reported NOT VERIFIED on commits without any | #523 | Four review rounds; **ACCEPT @ `fddd64d5`**; CI running; **owner Code Owner approval needed** |
+| Builder W1 (release) | LR-50, LR-51, LR-52, LR-58, LR-73: the release-readiness CI workflow. It also checks the merged manifest for AD_ID, and runs the Android JVM unit tests, reported NOT VERIFIED on commits without any | #523 | **ACCEPT @ `9c022267`**. The first real CI run gave evidence for LR-50, 51, 52, 58, 73 and the AD_ID check; the min-SDK parse is fixed. CI running; **owner Code Owner approval needed** |
 | Builder W2 (mobile) | LR-79 (re-post a dropped ring, never a double ring) and LR-27 (FSI permission on Android 14+), stacked on #449 | #524 (into #449's branch) | **ACCEPT @ `7e1f07fe`**; CI runs only after #449 merges and #524 is retargeted to main |
 | Builder W4 (legal docs) | LR-04: owner confirmation sheet, support and deletion pages in Arabic and English, hosting recommendation | #525 | Review ACCEPT @ `aa2f2285` after one CHANGES round; CI running |
 | Auditor R1 (read-only) | LR-71 dry run: 129 drafted console answers checked against the code | report | **Done:** 91 OK, 6 mismatches (5 stale text, 1 real: teacher deletion, LR-03), 24 depend on owner decisions, 8 unverified. Follow-ups: W6, #526, and the AD_ID check in #523 |
 | Lead | LR-39: portrait on every screen except the full-screen whiteboard (PD-55 rev2 keeps its landscape); a page that lands on top of the board, a call included, is held portrait | #522 | Five review rounds; **ACCEPT @ `7567d88e`**; CI running |
 | Lead | LR-23: Sentry automatic session tracking off (it would send undeclared usage data) | #526 | **ACCEPT @ `bb5340b7`**; CI running |
-| Builder W5 (backend/release) | LR-05: a third, disposable review parent and a `workflow_dispatch` job that provisions the review accounts from the production Environment's secrets (no laptop); the database target is masked in the public log. **High: merging and every run need the owner** | #528 | ACCEPT @ `0d776241`; CI caught a fake test URL tripping the secret scan, fixed @ `920b04c1`; delta re-review running; **owner Code Owner approval and approval of every run needed** |
+| Builder W5 (backend/release) | LR-05: a third, disposable review parent and a `workflow_dispatch` job that provisions the review accounts from the production Environment's secrets (no laptop); the database target is masked in the public log. **High: merging and every run need the owner** | #528 | **ACCEPT @ `920b04c1`** (after review fixes and a secret-scan fix to a test URL); CI running; **owner Code Owner approval and approval of every run needed** |
 | Builder W6 (store compliance) | LR-71: console drafts refreshed from the R1 pre-audit. Crash data is App Functionality on Apple, and App functionality plus Analytics on Google, because the two stores define the purposes differently | #527 | **ACCEPT @ `618c967c`**; CI running |
 | Builder W7 (iOS) | LR-13: the VoIP push registry is created at launch | #529 (into #449's branch) | **ACCEPT @ `ccd29221`**; CI after #449 merges |
-| Builder W8 (store compliance) | LR-09f review notes, LR-24 background-mode justifications, LR-09i FSI text after #524. It found two things: `remote-notification` is unused (fixed in #531), and VoIP stays off in production (new LR-80) | #530 | Review running |
-| Lead | LR-24: drop the unused `remote-notification` background mode | #531 | Review running |
+| Builder W8 (store compliance) | LR-09f review notes (they state everything deletion keeps), LR-24 background-mode justifications, LR-09i FSI text after #524. It found two things: `remote-notification` is unused (fixed in #531), and VoIP stays off in production (new LR-80) | #530 | **ACCEPT @ `722b0f47`** after one CHANGES round; CI running |
+| Lead | LR-24: drop the unused `remote-notification` background mode | #531 | **ACCEPT @ `fb6a0e1d`**; CI running |
+| Builder W9 (Arabic copy) | Owner wording choices with recommendations: PARENT-016 declined call (recommended «تم الاعتذار»), LR-41 five iOS permission prompts (keep three, two small fixes) | #532 | **ACCEPT @ `3b140dec`**; then the owner ticks one option per row |
+| Builder W10 (infra docs) | LR-29: what production watches, what is missing, the free launch set (DigitalOcean uptime check, alert e-mail, on-call); component alerts proposed for a generator follow-up | #533 | **ACCEPT @ `ff044aa0`**; CI running |
+| Auditor R2 (read-only) | LR-46 dry run: security pre-sign-off of `main` and the open launch PRs | report | Running |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
