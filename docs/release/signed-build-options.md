@@ -55,9 +55,8 @@ confirmed there.
 **Apple**
 - A1. "Cloud-managed certificates are associated with your Apple Developer Program membership and
   managed remotely." <https://developer.apple.com/help/account/certificates/cloud-managed-certificates/>
-- A2. "In Xcode 13 or later, Xcode will cloud sign any apps or software for distribution when you're
-  using the Xcode Organizer archive and distribution workflow." The page also says Xcode cloud-signs
-  when no local distribution certificate is found. (same URL)
+- A2. "Xcode 13 or later will cloud sign any apps or software for distribution if you're using the Xcode
+  Organizer archive and distribution workflow, and a local signing certificate is not found." (same URL)
 - A3. Managing and rotating cloud-managed certificates: "Required role: Account Holder or Admin."
   (same URL)
 - A4. The roles table lists "Create other cloud-managed certificate types" and, in App Store Connect,
@@ -100,15 +99,17 @@ confirmed there.
   key certificate → **Request upload key reset**. (same URL)
   **UNVERIFIED:** who may request the reset (the page says configuring Play App Signing needs admin
   permission), and how long until the new key works. The page states no waiting period.
-- G3. New apps are enrolled by default in Google-generated signing keys. **UNVERIFIED:** whether Play App
+- G3. For new apps: "Your app will be automatically enrolled in quantum-ready, hybrid signing with
+  Google-generated keys." **UNVERIFIED:** whether Play App
   Signing is mandatory. The page has no "mandatory" wording. (same URL)
 - G4. "There is a US$25 one-time registration fee."
   <https://support.google.com/googleplay/android-developer/answer/6112435>
 - G5. Flutter: keep the keystore and `key.properties` private and never in public source control.
   <https://docs.flutter.dev/deployment/android>
-  The iOS page covers `flutter build ipa` and `--export-options-plist`, and an App Store Connect API key
-  with App Manager access for automation. <https://docs.flutter.dev/deployment/ios>
-  (Partly from a summary of the page, so check the wording against the live page before relying on it.)
+  The iOS page: "You can create new IPAs with the same options without launching Xcode by running
+  `flutter build ipa --export-options-plist=path/to/ExportOptions.plist`." Also: "You'll need to generate
+  an App Store Connect API Key with App Manager access to automate operations with App Store Connect."
+  <https://docs.flutter.dev/deployment/ios>
 
 **GitHub**
 - H1. "The use of standard GitHub-hosted runners is free: * In public repositories …" and "Larger runners
@@ -117,8 +118,10 @@ confirmed there.
   <https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions>
   **UNVERIFIED:** that the free-runner sentence names macOS. It says "standard GitHub-hosted runners".
 - H2. "With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is
-  triggered from a forked repository." Also: "GitHub does not redact secrets that are printed in logs."
-  "You can use Base64 encoding to store small binary blobs as secrets."
+  triggered from a forked repository." "You can use Base64 encoding to store small binary blobs as
+  secrets." The page's "does not redact" warning applies **only** to its large-secret workaround: "When
+  using this workaround, GitHub does not redact secrets that are printed in logs." This paper does not use
+  that workaround.
   <https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions>
 - H3. "Secrets are limited to 48 KB in size."; the limit is 100 environment secrets.
   <https://docs.github.com/en/actions/reference/security/secrets>
@@ -126,6 +129,11 @@ confirmed there.
   referenced secrets". "Avoid using the `pull_request_target` and `workflow_run` workflow triggers with
   untrusted pull requests or code content." "A workflow job cannot access environment secrets until
   approval is granted by a reviewer."
+  On redaction: "Because there are multiple ways a secret value can be transformed, automatic redaction is
+  not guaranteed." Also: "If your secret is transformed in some way (such as Base64 or URL-encoded)", and
+  "Structured data can cause secret redaction within logs to fail".
+  On access: "Any user with write access to your repository has read access to all secrets configured in
+  your repository."
   <https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions>
 - H5. "By default, all first-time contributors require approval to run workflows". After one merged
   commit or PR, a user "will not require approval". `pull_request_target` runs "regardless of approval
@@ -134,7 +142,8 @@ confirmed there.
 - H6. Environments:
   - "Users with GitHub Free plans can only configure environments for public repositories."
   - Required reviewers: "up to 6 people or teams", and one approval is enough.
-  - An optional **Prevent self-review**.
+  - An optional **Prevent self-review**: "to prevent users from approving workflows runs that they
+    triggered, select Prevent self-review."
   - Optional allowed branches and tags.
   - Jobs "can only access these secrets after any configured rules (for example, required reviewers) pass".
   <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment>
@@ -144,8 +153,11 @@ confirmed there.
   - import them into a new temporary keychain;
   - delete the keychain in an `always()` step (needed on self-hosted runners).
   <https://docs.github.com/en/actions/use-cases-and-examples/deploying/installing-an-apple-certificate-on-macos-runners-for-xcode-development>
-- H8. **UNVERIFIED:** that Actions logs and artifacts of a public repository can be read by anyone.
-  It was not confirmed on docs.github.com in this pass, so this paper assumes they can.
+- H8. "You must be logged in to a GitHub account to view workflow run information, including for public
+  repositories." Viewing and downloading logs and artifacts: "Read access to the repository is required to
+  perform these steps." In a public repository every logged-in user has read access, so the logs and
+  artifacts are readable by **any logged-in GitHub user**.
+  <https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/monitoring-workflows/using-workflow-run-logs>
 
 ## 4. The options
 
@@ -153,7 +165,7 @@ confirmed there.
 
 | | iOS | Android |
 |---|---|---|
-| Where the private key lives | The login keychain of this Mac (a downloaded distribution certificate and its key). With cloud signing (A2) no distribution key is kept locally when exporting from the Organizer. | `jawwid-upload.jks` on this Mac's disk, with its passwords in the owner's password manager (`android-release-signing.md`) |
+| Where the private key lives | The login keychain of this Mac (a downloaded distribution certificate and its key). With cloud signing from the Organizer (A2), the distribution key may not need to sit on this Mac (A6 unverified). | `jawwid-upload.jks` on this Mac's disk, with its passwords in the owner's password manager (`android-release-signing.md`) |
 | Who could misuse it | Anything that runs as the owner's user on this Mac: any residual malware if "settled" was wrong, and **every AI agent session (Claude, Codex) that runs shell commands here**. Every worktree and session on this Mac shares the user account. Also anyone holding the Apple ID session. | Same. A stolen upload key alone cannot replace the app on users' phones (G1). It lets the thief upload builds only if they also hold Play Console access. The key can be reset (G2). |
 | Setup time (estimate) | Hours after "settled": Xcode is already set up for team `KX683HAR3Y` | About an hour: generate the key, write `key.properties`, add `google-services.json` |
 | Money (verified) | Apple Developer Program $99/year (A8), presumably already paid | Play registration US$25 once (G4), if not already paid |
@@ -209,11 +221,31 @@ The design:
 - iOS on a standard `macos` runner, Android on `ubuntu`.
 - Never `pull_request_target` or `workflow_run` (H4).
 
+**Who starts the run.** With the owner as the only required reviewer and Prevent self-review on, the owner
+cannot approve a run they started themselves (H6). If the owner dispatches the run, nobody can approve it
+and the release stalls. So one of these must be chosen:
+- **`jawwid-bot` dispatches, the owner approves.** Agent sessions push and merge as `jawwid-bot`, which is
+  not the owner. The consequence: the bot's write access can then **start** release runs, and any agent
+  session can ask for one. Every run still waits for the owner's approval before it sees a secret (H4, H6).
+- **The owner dispatches** and Prevent self-review is left **off**. Then the owner's own approval is the
+  only gate.
+- **Add a second human reviewer** who approves runs the owner starts.
+
+This paper recommends the first: the owner then only approves, and an agent can never approve.
+
+**Why environment secrets limited to `main` are mandatory, not a preference.** The hardening page says:
+"Any user with write access to your repository has read access to all secrets configured in your
+repository." (H4) `jawwid-bot`, the account every agent session uses, has write access. A signing key in
+**repository** secrets could therefore be read by any agent through a workflow on its own branch, with no
+approval. Environment secrets are released only after the required reviewer approves, and only to runs
+from the allowed branch, `main` (H6). Nobody may later move a signing secret into repository secrets "for
+convenience".
+
 | | iOS | Android |
 |---|---|---|
-| Where the private key lives | GitHub environment secrets: the base64 `.p12`, its password, the profile (H7). Each secret is at most 48 KB (H3). The secrets are decrypted onto a fresh VM that is destroyed after the job (H7). The `.p12` must first be **made somewhere**: its private key comes from a CSR on some trusted machine. That leads back to (a) or (b), unless an App Store Connect API key with cloud signing works from `xcodebuild` (A5, **unverified**). | Environment secrets: the base64 `.jks` and its passwords. The keystore is also generated somewhere first. |
-| Who could misuse it | Anyone who can change workflow code that reaches `main` and then get the environment approved. Fork PRs do **not** receive secrets (H2), but `pull_request_target` would (H4, H5). Anyone with admin rights on the repository. Any third-party action the workflow uses (pin by SHA). The public logs (H8), because GitHub does not redact secrets printed in them (H2). GitHub itself. | Same. Upload key risk is bounded by G1 and G2. |
-| Setup time (estimate) | 1–2 days of engineering plus owner approvals, plus making the `.p12` (above) | Under a day after the keystore exists |
+| Where the private key lives | GitHub environment secrets: the base64 `.p12`, its password, the profile (H7). Each secret is at most 48 KB (H3). The secrets are decrypted onto a fresh VM that is destroyed after the job (H7). The `.p12` must first be **made somewhere**: its private key comes from a CSR on some trusted machine. That leads back to (a) or (b), unless an App Store Connect API key with cloud signing works from `xcodebuild` (A5, **unverified**). GitHub's recipe (H7) only imports the `.p12` and profile into a keychain. This project uses `CODE_SIGN_STYLE = Automatic` (`ios/Runner.xcodeproj/project.pbxproj:428`). A fresh runner not signed in to Apple therefore also needs one of: manual signing settings for the Release build; an `--export-options-plist` that names the profile (G5); or an App Store Connect API key with `-allowProvisioningUpdates` (how this behaves is unverified, A5). Without one, the first run is expected to fail at export. | Environment secrets: the base64 `.jks` and its passwords. The keystore is also generated somewhere first. |
+| Who could misuse it | Anyone who can change workflow code that reaches `main` and then get the environment approved. Fork PRs do **not** receive secrets (H2), but `pull_request_target` would (H4, H5). Anyone with admin rights on the repository. Anyone with write access, if a signing secret were ever put in repository secrets: "Any user with write access to your repository has read access to all secrets configured in your repository." (H4) That includes `jawwid-bot` and so every agent session (see the design above). Any third-party action the workflow uses (pin by SHA). The logs, which any logged-in GitHub user can read (H8). GitHub redacts registered secrets, but "automatic redaction is not guaranteed" (H4). Values **derived** from a secret are the real risk: a base64-decoded `.p12`, a keychain or `security` dump, or a password echoed by `set -x`. The workflow must never print these. GitHub itself. | Same. Upload key risk is bounded by G1 and G2. |
+| Setup time (estimate) | 2–3 days of engineering plus owner approvals, plus making the `.p12` (above). This includes solving export under automatic signing (above), which may take several runs. | Under a day after the keystore exists |
 | Money (verified) | Standard GitHub-hosted runners are free in public repositories (H1). Larger runners are billed (H1). If the repository were made private, macOS minutes cost $0.062/min (H1). | Same; Linux $0.006/min if private (H1) |
 | Blocked by | **owner approval** (see §5) and an existing `.p12` | owner approval and an existing keystore |
 
@@ -225,7 +257,9 @@ What the owner must do:
 3. Paste the secrets yourself in the GitHub UI: the `.p12` and its password, the profile, the keystore and
    its passwords, `google-services.json`, and `SENTRY_DSN`. Never through an agent.
 4. Confirm the fork-PR setting "Require approval for all external contributors" (H5).
-5. Approve each run when it asks.
+5. Approve each run when it asks. Do **not** start runs yourself while Prevent self-review is on: you could
+   not approve them. Let `jawwid-bot` (an agent session) dispatch the run, or pick another choice from
+   "Who starts the run" above.
 
 Gain: the build is repeatable, from a known commit, on a throwaway VM, with no key on any agent's machine.
 Cost: the keys live with GitHub; the setup is High risk; it cannot be the very first step.
@@ -295,6 +329,12 @@ needs a signed store build. **The lead should check this mapping against the tra
   projects on it.
 - iOS: archive with `scripts/mobile/build-store.sh ios`, then distribute from the Xcode Organizer so Apple
   cloud-signs (A2). No distribution private key needs to be kept on disk (A6 still unverified).
+  - `flutter build ipa` also tries to export. Without a distribution certificate that export may fail. The
+    script runs under `set -euo pipefail`, so it then stops before printing where the symbols and dSYMs
+    are. The files are still written: `build/symbols/ios/<BUILD_NAME>+<BUILD_NUMBER>` and
+    `build/ios/archive/Runner.xcarchive/dSYMs`.
+  - The archive is at `build/ios/archive/Runner.xcarchive`, not in the Organizer's own list. Open it by
+    hand (double-click it, or `open` it) so the Organizer shows it, then choose Distribute App.
 - Android: generate the upload key on that Mac, keep it in the password manager, and keep Play App
   Signing with a Google-held app signing key (G1), so a leaked upload key is recoverable (G2).
 
