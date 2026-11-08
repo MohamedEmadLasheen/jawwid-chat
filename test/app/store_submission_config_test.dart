@@ -80,4 +80,16 @@ void main() {
     expect(reported, isNonNegative);
     expect(reported - dup, lessThan(400));
   });
+
+  test('the iPhone app is portrait only (LR-39)', () {
+    // Landscape layouts were never checked; a reviewer rotating the phone must not
+    // see a broken screen. The ~ipad key is separate and untouched.
+    final plist = read('ios/Runner/Info.plist');
+    final start = plist.indexOf('<key>UISupportedInterfaceOrientations</key>');
+    expect(start, isNonNegative);
+    final array = plist.substring(start, plist.indexOf('</array>', start));
+    expect(array, contains('UIInterfaceOrientationPortrait'));
+    expect(array, isNot(contains('Landscape')));
+    expect(array, isNot(contains('PortraitUpsideDown')));
+  });
 }
