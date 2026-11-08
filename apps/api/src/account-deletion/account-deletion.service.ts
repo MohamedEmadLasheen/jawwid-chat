@@ -61,6 +61,12 @@ export class AccountDeletionService {
     // A parent's PD-42 contact keys are server-keyed hashes: made here, deleted there.
     const contactKeys = kind === 'family' ? await contactKeyHashesOfAccount(this.prisma, accountId) : [];
     const { erasure, revoked } = await this.prisma.$transaction(async (tx) => {
+      // LR-46 (#537): lock the account's live sessions before erase_account touches its
+      // push tokens. registerDevice locks the session, then the token; taking them here in
+      // the same order means a registration racing this deletion waits instead of
+      // deadlocking it.
+      await tx.$queryRaw`
+        SELECT 1 FROM chat.session WHERE account_id = ${accountId}::uuid AND revoked_at IS NULL FOR UPDATE`;
       const [row] = await tx.$queryRaw<Array<{ r: Erasure }>>`
         SELECT chat.erase_account(${accountId}::uuid, ${ACCOUNT_DELETED_REASON}, ${contactKeys}::text[]) AS r`.catch((e: unknown) => {
         // A teacher with a lesson, a student or payroll still open: refused before any write.
