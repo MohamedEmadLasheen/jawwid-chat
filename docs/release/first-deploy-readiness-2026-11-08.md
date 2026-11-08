@@ -295,8 +295,7 @@ every required name. **The owner decides; both are described.** Both options are
 
 Wherever a SHA is asked for below, use **the full 40-character commit SHA**, never the 7-character
 short form: copy it from the commit's page on GitHub (the copy button next to the short SHA copies the
-full one), from the workflow run's page ("Commit" link → its page), or from `git log -1 --format=%H
-origin/main` (the production workflow passes it straight to `git merge-base` and to the image tag,
+full one), from the workflow run's page ("Commit" link → its page); it must be the commit the staging run built (the production workflow passes it straight to `git merge-base` and to the image tag,
 `deploy-production.yml:68`, `:98`; an image tagged with the full SHA is not found under a short one; the staging build tags the image with the full `GITHUB_SHA`,
 `deploy-staging.yml:72`).
 
@@ -316,7 +315,9 @@ Minimal owner steps:
    `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RESET_CODE_HASH_SECRET`, `STORAGE_ACCESS_KEY`,
    `STORAGE_SECRET_KEY`, `STORAGE_SIGNING_SECRET`; variables `STORAGE_ENDPOINT`, `STORAGE_BUCKET`
    (optionally `STORAGE_REGION`).
-3. Deploy staging `first_deploy=true` → save the staging app id → two staging CNAMEs → start a new run
+3. Deploy staging `first_deploy=true`. This **also starts a paid App Platform app** (about $27/month,
+   see the risk line below) and applies the forward-only migrations to the staging database, which
+   cannot be undone (staging holds no real data). → save the staging app id → two staging CNAMEs → start a new run
    (Actions → Deploy staging → Run workflow) with `first_deploy` unticked.
 4. Then production (Option B steps 2-5) with the full 40-character SHA staging ran.
 
@@ -418,8 +419,10 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
    blank, `first_deploy` unticked → Run. Wait for "Build and publish images" to go green (the
    "Deploy to staging" job then fails at its first step and changes nothing). Copy **the full
    40-character commit SHA**: open the run → click the commit link → on the commit page use the copy
-   button next to the short SHA (it copies all 40 characters), or run `git log -1 --format=%H
-   origin/main` after `git fetch`. The 7-character short SHA does not work. Unblocks: LR-01.
+   button next to the short SHA (it copies all 40 characters). Use the SHA of **that staging run**,
+   not simply the newest commit on `main`: if anything merged after the run, the newest commit has no
+   image and production stops at "The API image for this commit exists". The 7-character short SHA
+   does not work. Unblocks: LR-01.
 7. **First production run — CURRENTLY FAILS (Blocker LR-77, §1d); do not start it until the LR-77 fix
    is merged.** Today it stops at "Back up the database" before any migration, changing nothing.
    **What this run does once LR-77 is fixed — read before starting it:**
@@ -447,6 +450,8 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
    Environment secret `DIGITALOCEAN_APP_ID`. Then start a new run (Actions → **Deploy production** →
    Run workflow) with the same full SHA and `first_deploy` **unticked**. Do not tick `first_deploy`
    again: the release refuses to create a second app of that name (`do-release.sh:60-64`).
+   **If no app named `jawwid-chat-production` exists** (the create step failed before creating
+   anything), there is no id to save: start a new run with `first_deploy` **ticked** again.
 9. **DNS at Hostinger:** DigitalOcean → Apps → `jawwid-chat-production` → Settings → Domains → copy the
    CNAME target. Hostinger → Domains → `jawwid.com` → DNS / Nameservers → Add record: CNAME
    `api.chat` → target; CNAME `admin.chat` → target. Change no other record. Wait until DigitalOcean
