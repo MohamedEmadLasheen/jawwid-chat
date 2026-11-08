@@ -1,7 +1,9 @@
 # Google Play Console declarations: App content and permissions
 
-**Launch item LR-09. Draft, 2026-11-08.** Written from the code on `main` @ `cf731af2`.
-Paths are relative to the repository root, cited as `file:line`.
+**Launch items LR-09 and LR-71. Draft, 2026-11-08; re-verified 2026-11-09.** Pinned to `main` @
+`bc47d376` for §3, §5, §6 and §7 (re-checked in the LR-71 dry run, after the microphone-only fix LR-14,
+#505). §1, §2, §4, §8 and §9 are unchanged from the draft written at `cf731af2`; their open answers are
+listed in §10. Paths are relative to the repository root, cited as `file:line`.
 
 **Where it goes:** Play Console → the app → **Policy and programs → App content**, unless a row says otherwise.
 
@@ -17,7 +19,7 @@ values are typed only into the Play Console fields (`docs/release/review-account
 
 | Question | Answer | Reasoning |
 |---|---|---|
-| Target age groups | **18 and over only** `[OWNER DECISION: N-1 / LD-5]` | Only adults have accounts: parents, teachers and staff (`lib/shared/models/user_role.dart:9-21`). Children take part in lessons on a parent's signed-in phone. Recommended in `google-play-readiness-2026-11-03.md` and the launch checklist (LR-10). Counsel must confirm against the Families policy, because children use some of the content. |
+| Target age groups | **18 and over only** `[OWNER DECISION: N-1 / LD-5]` **OPEN (§10)** | Only adults have accounts: parents, teachers and staff (`lib/shared/models/user_role.dart:9-21`). Children take part in lessons on a parent's signed-in phone. Recommended in `google-play-readiness-2026-11-03.md` and the launch checklist (LR-10). Counsel must confirm against the Families policy, because children use some of the content. |
 | Could your store listing unintentionally appeal to children? | **No** | Only if the listing follows `listing-copy.md`: written to parents, no child imagery, no cartoon art, no "for kids". If the owner wants child-facing screenshots, the answer becomes Yes and Google may require Families compliance. |
 | Appeals to children: if Google asks for more | Explain: "Accounts are held only by parents, teachers and academy staff, all adults. Children have no account and do not sign in; lessons take place on the parent's device under the parent's account." | — |
 
@@ -84,7 +86,7 @@ Notes for the owner:
 | Question | Answer | Evidence |
 |---|---|---|
 | Does your app contain ads? | **No** | No ads SDK in `pubspec.yaml` or `android/app/build.gradle.kts:117-127`. Stories are the academy's own announcements to its families. |
-| Advertising ID: does your app use an advertising ID? | **No** | No `com.google.android.gms.permission.AD_ID` in `android/app/src/main/AndroidManifest.xml:6-31`. Firebase Messaging alone does not use it. **Check the merged manifest of the release AAB** (release audit WP-6). |
+| Advertising ID: does your app use an advertising ID? | **No** **OPEN (§10)** | No `com.google.android.gms.permission.AD_ID` in `android/app/src/main/AndroidManifest.xml:6-29`. Firebase Messaging alone does not use it. Pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6). |
 
 ## 4. Content declarations
 
@@ -98,19 +100,21 @@ Notes for the owner:
 | Data safety | See `google-data-safety.md` | — |
 | Content rating | See `age-rating.md` §2 | — |
 | Privacy policy URL | `{{PRIVACY_POLICY_URL}}` | LR-04 |
-| Child Safety Standards (self-certification) | **Not required for this category**, if Play does not ask. If the Console asks, answer with: published standards `{{CHILD_SAFETY_POLICY_URL}}`, in-app reporting (PD-57, with a child-safety reason), contact `{{SAFEGUARDING_EMAIL}}` | Required for social and dating apps; an education app appears out of scope (compliance checklist G-5). The policy text is ready in `docs/legal/child-safety-policy-*.md`. |
+| Child Safety Standards (self-certification) | **OPEN (§10).** Drafted answer: **Not required for this category**, if Play does not ask. If the Console asks, answer with: published standards `{{CHILD_SAFETY_POLICY_URL}}`, in-app reporting (PD-57, with a child-safety reason), contact `{{SAFEGUARDING_EMAIL}}` | Required for social and dating apps; an education app appears out of scope (compliance checklist G-5). The policy text is ready in `docs/legal/child-safety-policy-*.md`. |
 
 ## 5. Foreground service (Play Console → App content → Foreground service permissions)
 
 **What the app does:** during a call or live lesson, `CallForegroundService` keeps the microphone working
 when the person leaves the app or locks the screen, with an ongoing "call in progress" notification and
-a Hang up button (`android/app/src/main/AndroidManifest.xml:24-31`, `:74-82`).
+a Hang up button (`android/app/src/main/AndroidManifest.xml:24-29`, `:73-76`).
 
-**Submit only a build where launch item LR-14 is done.** Today the service declares
-`microphone|phoneCall` (`AndroidManifest.xml:78`) with `FOREGROUND_SERVICE_PHONE_CALL` and
-`MANAGE_OWN_CALLS` (`:30-31`). The app has no Telecom `ConnectionService`, so `phoneCall` is not
-justified. The lead's decision (LR-14) is **microphone only**. If a build still has `phoneCall`, the
-Console asks for it too, and the declaration would claim something the code does not do.
+**Microphone only (launch item LR-14, done in #505).** The service declares
+`android:foregroundServiceType="microphone"` (`AndroidManifest.xml:73-76`) and starts with
+`FOREGROUND_SERVICE_TYPE_MICROPHONE` only (`android/app/src/main/kotlin/com/jawwid/jawwid_chat/CallForegroundService.kt:54`, `:67`).
+The manifest asks only for `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE` (`:28-29`);
+`phoneCall`, `FOREGROUND_SERVICE_PHONE_CALL` and `MANAGE_OWN_CALLS` are gone, because the app has no
+Telecom `ConnectionService` (`:24-27`). Submit a build at or after `bc47d376`, so the declaration matches
+the code.
 
 | Field | Answer |
 |---|---|
@@ -163,11 +167,23 @@ except the two above (foreground service, full-screen intent).
 | `USE_BIOMETRIC` | `:17` | Optional app lock with face or fingerprint | When the user turns on app lock |
 | `USE_FULL_SCREEN_INTENT` | `:23` | Incoming-call screen | §6 |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE` | `:28-29` | Ongoing calls | §5 |
-| `FOREGROUND_SERVICE_PHONE_CALL`, `MANAGE_OWN_CALLS` | `:30-31` | **To be removed** (LR-14) | — |
+
+`FOREGROUND_SERVICE_PHONE_CALL` and `MANAGE_OWN_CALLS` were removed by LR-14 (#505); the app's manifest no
+longer declares them.
+
+**Added by plugins in the merged manifest** (normal permissions, granted at install, no form):
+
+| Permission | Source | Why | Status |
+|---|---|---|---|
+| `ACCESS_NETWORK_STATE` | `connectivity_plus` (`pubspec.yaml:62`; the plugin's own manifest declares it) | Knowing whether the phone is online | Confirmed from the plugin manifest |
+| `WAKE_LOCK`, `com.google.android.c2dm.permission.RECEIVE` | Firebase Cloud Messaging | Receiving push messages | UNVERIFIED: expected from Firebase, not confirmed without a build (machine rule) |
+
+The other plugins read declare nothing new beyond the app's own manifest (`record` adds `RECORD_AUDIO`,
+`local_auth` adds `USE_BIOMETRIC`; `livekit_client` and `flutter_webrtc` add none).
 
 Not requested: location, contacts, SMS, call log, camera as a permission (the system camera and photo
 picker are used: `lib/core/media/media_picker.dart`), `READ_MEDIA_*`, all-files access,
-`QUERY_ALL_PACKAGES`, accessibility. `allowBackup="false"` (`:38-39`). Check the merged manifest of the
+`QUERY_ALL_PACKAGES`, accessibility. `allowBackup="false"` (`:37`). Check the merged manifest of the
 release AAB for permissions that plugins add (release audit WP-6) and add any to this table.
 
 ## 8. Store settings (Play Console → Grow → Store presence → Store settings)
@@ -184,6 +200,23 @@ release AAB for permissions that plugins add (release audit WP-6) and add any to
 
 ## 9. Countries (Production → Countries / regions)
 
-`[OWNER DECISION: storefronts, LD-15 / LR-17]`. Recommended for the first release: the academy's
+`[OWNER DECISION: storefronts, LD-15 / LR-17]` **OPEN (§10)**. Recommended for the first release: the academy's
 markets (GCC and other Arab countries); not the US until the age-assurance work exists; the EU only with
 trader details verified. Google Play Age Signals and US state laws apply only where the app is distributed.
+
+## 10. Open items (LR-71)
+
+Each answer below stays as drafted until its owner decides. Nothing here changes an answer. The
+Data safety open items (payment info, religious beliefs, Sentry session tracking) are in
+`google-data-safety.md` §6.
+
+| # | Item | Answer today | Decision id and owner | Where |
+|---|---|---|---|---|
+| O-1 | Target audience | 18 and over only | **OPEN.** Owner: N-1 / LD-5; counsel confirms against the Families policy | §1; `age-rating.md` (Kids Category) |
+| O-2 | Families policy | Not applicable while the audience is 18+ | **OPEN.** Follows O-1; counsel L-15 (SDK terms for child-directed use) if any child age group is chosen | §1; `google-data-safety.md` §1 |
+| O-3 | Storefronts (countries) | Academy markets first | **OPEN.** Owner: LD-15 / LR-17. Also decides Apple's storefronts and age-assurance answer (`age-rating.md`) | §9 |
+| O-4 | Child Safety Standards | "Not required for this category", with the prepared answer if the Console asks | **OPEN.** Owner: whether Play's Child Safety Standards apply to this app (compliance checklist G-5); the designate and mailbox are LD-19. The app has user-generated content and messaging, so prepare the answer either way | §4 |
+| O-5 | Advertising ID | No | **OPEN** pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6) | §3; `google-data-safety.md` §2.1 |
+| O-6 | Merged-manifest permissions | §7 tables | **OPEN**, same check as O-5: confirm Firebase's `WAKE_LOCK` and `c2dm RECEIVE`, and that nothing else is added | §7 |
+| O-7 | Review payment paragraph | Either seed a payable request or delete the paragraph | **OPEN.** Owner (§2 note); live card payments are LR-34 | §2 |
+| O-8 | Category | Education | **OPEN.** Owner. Also weighs on the full-screen-intent case (§6) | §8 |

@@ -1,7 +1,8 @@
 # Apple App Privacy (the "nutrition label"): answers for App Store Connect
 
-**Launch items LR-09 and LR-23. Draft, 2026-11-08.** Written from the code on `main` @ `cf731af2`.
-Paths are relative to the repository root, cited as `file:line`.
+**Launch items LR-09, LR-23 and LR-71. Draft, 2026-11-08; re-verified 2026-11-09.** Pinned to `main` @
+`bc47d376`: the answers were audited against that commit in the LR-71 dry run, after the privacy-manifest
+fix LR-73 (#508), and every passage changed in the re-check was verified directly in the code. Paths are relative to the repository root, cited as `file:line`.
 
 **Where it goes:** App Store Connect → the app → **App Privacy** → Get Started / Edit.
 
@@ -16,7 +17,9 @@ Paths are relative to the repository root, cited as `file:line`.
   reports carry a hash of the account id (`lib/core/crash/crash_reporting.dart:60-70`).
 - **Over-declaring is safer than under-declaring.** Where the code makes an answer uncertain, this
   file declares the type and says why.
-- `[OWNER DECISION: ...]` marks an answer that waits for the owner or counsel.
+- `[OWNER DECISION: ...]` marks an answer that waits for the owner or counsel. **OPEN** marks the same
+  thing in the open-items list (§7), with the decision id. An OPEN answer stays as drafted until that
+  decision is made; it is not changed here.
 
 ---
 
@@ -36,12 +39,12 @@ Paths are relative to the repository root, cited as `file:line`.
 | Contact Info | Physical Address | **No** | — | — | — |
 | Contact Info | Other User Contact Info | **No** | — | — | — |
 | Health & Fitness | Health, Fitness | **No** | — | — | — |
-| Financial Info | Payment Info | **No** | — | — | — |
+| Financial Info | Payment Info | **No** `[OWNER DECISION: counsel, §3.2; OPEN, §7]` | — | — | — |
 | Financial Info | Credit Info | **No** | — | — | — |
 | Financial Info | Other Financial Info | Yes | Yes | No | App Functionality |
 | Location | Precise Location | **No** | — | — | — |
 | Location | Coarse Location | Yes | Yes | No | App Functionality |
-| Sensitive Info | Sensitive Info | **No** `[OWNER DECISION: counsel, §3.8]` | — | — | — |
+| Sensitive Info | Sensitive Info | **No** `[OWNER DECISION: counsel, §3.4; OPEN, §7]` | — | — | — |
 | Contacts | Contacts | **No** | — | — | — |
 | User Content | Emails or Text Messages | Yes | Yes | No | App Functionality |
 | User Content | Photos or Videos | Yes | Yes | No | App Functionality |
@@ -56,7 +59,7 @@ Paths are relative to the repository root, cited as `file:line`.
 | Purchases | Purchase History | Yes | Yes | No | App Functionality |
 | Usage Data | Product Interaction | Yes | Yes | No | App Functionality, Analytics |
 | Usage Data | Advertising Data | **No** | — | — | — |
-| Usage Data | Other Usage Data | **No** | — | — | — |
+| Usage Data | Other Usage Data | **No** (OPEN: Sentry session tracking, §3.8, §7) | — | — | — |
 | Diagnostics | Crash Data | Yes | Yes | No | App Functionality |
 | Diagnostics | Performance Data | **No** | — | — | — |
 | Diagnostics | Other Diagnostic Data | Yes | Yes | No | App Functionality |
@@ -99,7 +102,7 @@ unless the row says otherwise:
   `lib/core/data/http/http_account_recovery_repository.dart:28`, `:35`).
 - The phone number is held on the account's family record. Staff usually type it in Admin Web
   (data inventory §3, "Parent contact details"), but the app sends it too, so declare it.
-- **Finding:** the privacy manifest does not list it (`ios/Runner/PrivacyInfo.xcprivacy:24-136`).
+- The privacy manifest declares it (`ios/Runner/PrivacyInfo.xcprivacy:141-142`, added by LR-73, #508).
   This answers DEV-CONFIRM #17 in the data inventory: declare it. See §5.
 
 **Physical Address: No.** No street address field exists in the app. The parent's location is a
@@ -116,6 +119,8 @@ returned by Stripe on each invoice, linked to the family (`http_billing_reposito
 answer stays **No**, because the app never collects or sends card data; it only displays Stripe's own masked
 summary of a payment made outside the app. The invoice itself is declared under Purchase History. If counsel
 prefers to over-declare, change this to Yes, linked, App Functionality; the label is not otherwise affected.
+**OPEN (counsel; see §7):** whether the stored card summary counts as Payment Info. The answer stays No
+until counsel decides.
 
 **Other Financial Info: Yes.**
 - For a bank transfer, the parent uploads the **transfer receipt** (a photo, a camera shot or a PDF),
@@ -155,7 +160,7 @@ Both describe where the person is at a resolution coarser than a city. The manif
 Quran lessons counts as data revealing "religious or philosophical beliefs"]`.
 - The app has no field that records anyone's religion or beliefs.
 - But several markets treat religious-course data as special-category data (data inventory, LD-13 in
-  `docs/legal/outstanding-information-and-decisions.md`).
+  `docs/legal/outstanding-information-and-decisions.md`). **OPEN: L-10 / L-14 / LD-13 (§7).**
 - If counsel says yes, change this answer to **Yes, linked, not tracking, App Functionality**. Declaring
   it is never a policy violation; omitting a type that applies is.
 
@@ -188,6 +193,10 @@ also complaints to the academy (`lib/core/data/http/http_moderation_repository.d
 - reports and their notes (`http_moderation_repository.dart:21`), blocks (`lib/core/data/http/http_block_repository.dart:23`);
 - a teacher's lesson reports (`lib/core/data/http/http_lesson_repository.dart:54`, `:59`), absence notes (`:171`);
 - leave requests with a free-text reason (`lib/core/data/http/http_supervision_repository.dart:49`);
+- learner certificate requests: the learner, the certificate title, the achievement, the date, the name
+  to print, and an optional grade and note (`http_supervision_repository.dart:35-44`, `POST /learner-certificates`;
+  sent from `lib/features/supervision/presentation/supervision_ticket_sheet.dart:217`). Added in the LR-71 re-check;
+  the label answer does not change, because Other User Content is already Yes;
 - whiteboard drawings (`lib/features/whiteboards/data/whiteboards_repository.dart:158`);
 - task comments (`lib/core/data/http/http_task_repository.dart:51`, `:56`);
 - a teacher's professional profile: bio, specialization, qualifications, experience, languages, and
@@ -220,7 +229,8 @@ and **invoices to download**, and sends what they pay for:
 - the "Invoices" and "Receipts" sections (`lib/features/billing/presentation/my_payments_screen.dart:323-330`);
 - Sales staff record instalment payments in the app (`lib/core/data/http/http_sales_payments_repository.dart:64`).
 
-> **LR-23 finding:** the privacy manifest does not declare Purchase History. Add it (§5).
+> **LR-23 finding, now done:** the privacy manifest declares Purchase History
+> (`ios/Runner/PrivacyInfo.xcprivacy:194-205`, LR-73, #508). See §5.
 
 ### 3.8 Usage Data
 
@@ -231,10 +241,20 @@ and **invoices to download**, and sends what they pay for:
 - Message delivery and read receipts (`lib/features/messages/data/receipt_repository.dart:63`), mention
   "seen" marks (`lib/features/messages/data/mention_repository.dart:97`), notification "acted" marks
   (`lib/features/notifications/data/notifications_repository.dart:123`).
+- Material opens: when a lesson material is opened for a child, the server records which item, for which
+  child, by whom and when (`lib/features/materials/data/materials_repository.dart:127-129`,
+  `POST /materials/items/:id/open`; stored append-only as `MaterialOpen`, `apps/api/prisma/schema.prisma:2928-2941`).
+  The parent sees it back as "Opened this week" (`materials_repository.dart:19-21`, `:109`). Added in the
+  LR-71 re-check; Product Interaction is already Yes, so the label does not change.
 
 **Advertising Data: No.** No ads.
 
-**Other Usage Data: No.**
+**Other Usage Data: No.** **OPEN (lead's decision; see §7):** `SentryFlutter.init` does not set
+`enableAutoSessionTracking` (`lib/core/crash/crash_reporting.dart:36-51`), and the Sentry SDK turns
+automatic session tracking on by default, so release builds may send app-session start and end events
+(release health). Either the lead turns it off in code, and this answer stays No, or it stays on and the
+session data is declared (Other Usage Data, or Other Diagnostic Data, App Functionality, here and in
+`google-data-safety.md`). The answer is not changed until that decision.
 
 ### 3.9 Diagnostics (Sentry)
 
@@ -251,7 +271,11 @@ keeps the last navigation steps (screen names only) as breadcrumbs (`crash_repor
 `enableAutoPerformanceTracing = false`: `crash_reporting.dart:44-45`). No screenshots or view hierarchy
 are attached (`:42-43`). `sendDefaultPii = false` (`:41`).
 
-Purpose: **App Functionality**. Apple's definition of App Functionality includes "minimize app crashes".
+Purpose: **App Functionality** only, for Crash Data and Other Diagnostic Data. Apple's definition of App
+Functionality includes "minimize app crashes". Analytics is **not** declared for them: the reports go only
+to Sentry, are used to find and fix crashes, and there is no analytics SDK and no tracing
+(`crash_reporting.dart:44-45`). `google-data-safety.md` §2 uses the same purpose (re-checked under LR-71,
+so the two labels agree). The manifest says the same (`ios/Runner/PrivacyInfo.xcprivacy:124-135`, `:223-234`).
 
 ### 3.10 Types the app does not collect
 
@@ -278,18 +302,23 @@ Both wait for LR-04 (hosting) and LD-16.
 ## 5. Mismatches with the privacy manifest (for the Mobile engineer, LR-23)
 
 Apple compares the label with `PrivacyInfo.xcprivacy` and the SDK manifests in the privacy report.
-These manifest entries are missing. This PR only documents them; the manifest change is a separate
-ticket (outside this task's allowed files):
 
-| Add to `NSPrivacyCollectedDataTypes` | Why |
-|---|---|
-| `NSPrivacyCollectedDataTypePhoneNumber` | §3.1 |
-| `NSPrivacyCollectedDataTypeOtherFinancialInfo` | §3.2 |
-| `NSPrivacyCollectedDataTypeEmailsOrTextMessages` | §3.5 (today only `OtherUserContent` is declared) |
-| `NSPrivacyCollectedDataTypeCustomerSupport` | §3.5 |
-| `NSPrivacyCollectedDataTypePurchaseHistory` | §3.7 |
-| `NSPrivacyCollectedDataTypeProductInteraction` (purposes: App Functionality, Analytics) | §3.8 |
-| `NSPrivacyCollectedDataTypeOtherDiagnosticData` | §3.9 |
+**Done (LR-73, #508; re-checked at `bc47d376`).** The seven entries this section used to list as missing are
+now declared, each linked, not tracking, with the purposes below (`ios/Runner/PrivacyInfo.xcprivacy:136-234`).
+The manifest now lists the same 16 "Yes" types as §2, one for one (`:24-235`). Product Interaction now
+also covers material opens (§3.8); the manifest entry needs no change for that.
+
+| `NSPrivacyCollectedDataTypes` entry | Manifest lines | Purposes | Label section |
+|---|---|---|---|
+| `NSPrivacyCollectedDataTypePhoneNumber` | `:140-151` | App Functionality | §3.1 |
+| `NSPrivacyCollectedDataTypeOtherFinancialInfo` | `:154-165` | App Functionality | §3.2 |
+| `NSPrivacyCollectedDataTypeEmailsOrTextMessages` | `:167-178` | App Functionality | §3.5 |
+| `NSPrivacyCollectedDataTypeCustomerSupport` | `:181-192` | App Functionality | §3.5 |
+| `NSPrivacyCollectedDataTypePurchaseHistory` | `:194-205` | App Functionality | §3.7 |
+| `NSPrivacyCollectedDataTypeProductInteraction` | `:208-220` | App Functionality, Analytics | §3.8 |
+| `NSPrivacyCollectedDataTypeOtherDiagnosticData` | `:223-234` | App Functionality | §3.9 |
+
+What remains is the archive check below.
 
 Then run Xcode's **privacy report** on the archive (Organizer → the archive → Generate Privacy Report)
 and check that every SDK's declared types appear in this label.
@@ -301,3 +330,20 @@ and check that every SDK's declared types appear in this label.
 - [ ] If LD-8 is not done (the child's name in the Stripe line item), nothing changes here: Stripe is a
       processor, and Apple's label does not ask about sharing with processors.
 - [ ] The Privacy Policy (`docs/legal/privacy-policy-*.md`) says the same as this label.
+- [ ] The privacy report shows no Performance Data from the Sentry Cocoa SDK's own manifest. It could not
+      be read without a build (machine rule); if it is listed, declare Performance Data, App Functionality.
+- [ ] Every OPEN item in §7 is decided, and any answer it changes is updated here and in `google-data-safety.md`.
+
+## 7. Open items (LR-71)
+
+Each answer below stays as drafted until its owner decides. Nothing here changes an answer.
+
+| # | Item | Answer today | Decision id and owner | Where |
+|---|---|---|---|---|
+| O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §3.2; `google-data-safety.md` §2 |
+| O-2 | Sensitive Info: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel: L-10, L-14, LD-13 | §3.4; `google-data-safety.md` §2 |
+| O-3 | Other Usage Data: Sentry automatic session tracking | No | **OPEN.** The lead's engineering decision: turn it off in `crash_reporting.dart`, or declare it | §3.8; `google-data-safety.md` §2.2 |
+| O-4 | Privacy Policy and User Privacy Choices URLs | placeholders | **OPEN.** LR-04, LD-16 | §4 |
+
+The target audience, storefronts, Families, Child Safety Standards and Advertising ID items are Play
+questions; they are listed in `play-declarations.md` §10 and `google-data-safety.md` §6.
