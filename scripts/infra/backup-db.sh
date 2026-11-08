@@ -24,6 +24,19 @@
 # the backup is REFUSED unless APP_ENV is local, test or ci -- and an unset
 # APP_ENV is not local. --allow-plaintext overrides that, and makes writing an
 # unencrypted copy a recorded decision rather than a silent default.
+#
+# FIRST DEPLOY (LR-77). With --schema NAME, the script first asks the database
+# whether that schema exists. If the database answers that it does NOT, what
+# happens depends on the environment variable FIRST_DEPLOY:
+#   - unset, empty, or exactly "true"   NO BACKUP TAKEN: a loud warning, no file
+#                                       written, exit 0, so a first deploy can
+#                                       go on to the migrations that create it.
+#   - anything else (e.g. "false")      FAIL (exit 1), with an error saying the
+#                                       schema is missing on a deploy that is not
+#                                       a first deploy: DATABASE_URL probably
+#                                       names the wrong (or an empty) database.
+# The deploy workflows should pass FIRST_DEPLOY from their first_deploy input,
+# and the scheduled backups should set FIRST_DEPLOY=false.
 set -euo pipefail
 
 # shellcheck source=scripts/infra/backup-crypto.sh
@@ -161,7 +174,10 @@ dump_failed() {
 # So, before dumping, ask the database whether the schema exists, with the same
 # client choice as the dump (the PG_IMAGE container, or the host's psql). The
 # backup is skipped ONLY when the database itself answers "absent":
-#   - "absent"            nothing to back up: say so loudly, write no file, exit 0
+#   - "absent"            on a first deploy (FIRST_DEPLOY unset, empty or "true";
+#                         see the header): nothing to back up, so say so loudly,
+#                         write no file, exit 0. Otherwise (FIRST_DEPLOY=false):
+#                         FAIL, because an established database must have it.
 #   - "present"           dump exactly as before (an empty schema is dumped too)
 #   - the query fails     connection or auth error: FAIL, as the dump would have.
 #                         An unreachable database is never "nothing to back up".
@@ -191,6 +207,21 @@ if [ -n "$SCHEMA" ] && [[ "$SCHEMA" =~ ^[a-z_][a-z0-9_]*$ ]]; then
   fi
   SCHEMA_STATE="$(printf '%s' "$SCHEMA_STATE" | tr -d '[:space:]')"
   if [ "$SCHEMA_STATE" = "schema-absent" ]; then
+    case "${FIRST_DEPLOY:-}" in
+      ''|true) : ;;
+      *)
+        # The value is deliberately not echoed: it is free text, and this line
+        # is read by the runner as a workflow command.
+        echo "::error title=Backup failed::schema '${SCHEMA}' does not exist in this database, and this is not a first deploy (FIRST_DEPLOY is not 'true'). Wrong DATABASE_URL?" >&2
+        cat >&2 <<MSG
+backup FAILED: schema '${SCHEMA}' does not exist in the ${LABEL} database, and
+FIRST_DEPLOY says this is NOT a first deploy, so the schema should already be
+there. DATABASE_URL probably points at the wrong (or an empty) database: check
+the database name in it, and any PGDATABASE or PGSERVICE override. Nothing was
+backed up. Do not migrate this database until that is explained.
+MSG
+        exit 1 ;;
+    esac
     echo "::warning title=Backup skipped::schema '${SCHEMA}' does not exist in this database: treated as a FIRST DEPLOY with nothing to back up. No backup file was written."
     echo "NO BACKUP TAKEN: schema '${SCHEMA}' does not exist in the ${LABEL} database."
     echo "This is expected ONLY on a first deploy, before the migrations create it."
