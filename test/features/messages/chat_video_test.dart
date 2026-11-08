@@ -14,6 +14,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
 import 'package:jawwid_chat/core/media/attachment_opener.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/design/tokens.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_video_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -134,5 +135,38 @@ void main() {
     await tester.pumpWidget(app(const ChatVideoScreen(url: _url)));
     await tester.pumpAndSettle();
     expect(find.text(l10n.storyVideoFailed), findsOneWidget);
+  });
+
+  // PARENT-024 (LR-28): the title and the error text were dark grey on the black media surface.
+  testWidgets('on the black media surface, the title and the error text are in the media on-surface colour', (tester) async {
+    player = FakeStoryVideoPlayer(failOnLoad: true);
+    final l10n = await L10n.delegate.load(const Locale('en'));
+    await tester.pumpWidget(app(const ChatVideoScreen(url: _url)));
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.byType(ChatVideoScreen));
+    final tokens = JawwidTokens.of(context);
+
+    Color? effectiveColour(String text) => tester
+        .widget<RichText>(find.descendant(of: find.text(text), matching: find.byType(RichText)))
+        .text
+        .style
+        ?.color;
+
+    expect(effectiveColour(l10n.attachmentVideoLabel), tokens.colorMediaOnSurface, reason: 'the AppBar title');
+    expect(effectiveColour(l10n.storyVideoFailed), tokens.colorMediaOnSurface, reason: 'the error text');
+  });
+
+  testWidgets('a titled video\'s title is in the media on-surface colour too', (tester) async {
+    await tester.pumpWidget(app(const ChatVideoScreen(url: _url, title: 'Lesson clip')));
+    await tester.pumpAndSettle();
+
+    final tokens = JawwidTokens.of(tester.element(find.byType(ChatVideoScreen)));
+    final colour = tester
+        .widget<RichText>(find.descendant(of: find.text('Lesson clip'), matching: find.byType(RichText)))
+        .text
+        .style
+        ?.color;
+    expect(colour, tokens.colorMediaOnSurface);
   });
 }
