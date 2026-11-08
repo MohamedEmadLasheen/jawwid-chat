@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 21:57 Cairo (19:57 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-08 23:04 Cairo (21:04 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `83d5e687`, which contains #500, #502, #504–#515, #519 and #520. Main CI on it: run 42500808259, success.
 
 ## 1. Dashboard
@@ -21,7 +21,7 @@
 1. **The production backend has never been deployed** (no run of "Deploy production" ever). Reviewers need a live server (Apple 2.1(a)).
 2. **Store signing is not set up yet.** The Apple Developer account and the Play Organization account both exist (confirmed 2026-11-08), but:
    - Apple: no Distribution certificate, App Store profile or App Store Connect record;
-   - Google: the package name is not approved yet (OA-03) and there is no upload key;
+   - Google: the Play app exists with its final package name (OT-4, 2026-11-08) and Play App Signing on; there is no upload key yet;
    - there is no Sentry DSN for release builds. Firebase has an Android app for `com.jawwid.jawwid_chat` (owner's Firebase screenshot, 2026-11-08; the git-ignored local `google-services.json` names the same package); the Firebase iOS app and APNs key are not yet verified.
 
    Only the owner can create these.
@@ -39,22 +39,22 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **95** | **16** | 15 | 8 | 30 | 20 | 3 | 3 |
+| **95** | **17** | 15 | 8 | 30 | 19 | 3 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
-| **Critical** | 32 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-77, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
+| **Critical** | 31 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-77, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
 | **High** | 24 | LR-13, LR-20, LR-52, LR-73, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-79, LR-15, LR-16, LR-17, LR-71 |
-| Critical items blocked on the owner | 17 | LR-06, LR-09a, LR-09c, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-76, LR-01, LR-77, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
+| Critical items blocked on the owner | 17 | LR-06, LR-09a, LR-09c, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-76, LR-01, LR-77, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
 
 **Completion.** Each figure is completed-and-verified ÷ applicable; N/A is excluded.
 
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
 | **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 70 | 13 | **19 %** | 22 | 19 |
-| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 74 | 14 | **19 %** | 28 | 19 |
+| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 74 | 15 | **20 %** | 27 | 19 |
 | A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
-| B. Android: Google Play | 17 | 3 | **18 %** | 10 | 3 |
+| B. Android: Google Play | 17 | 4 | **24 %** | 9 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
 | D. Shared backend and infrastructure | 18 | 2 | **11 %** | 9 | 5 |
 | E. Security and QA | 19 | 8 | **42 %** | 1 | 5 |
@@ -65,7 +65,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 2. **Nowhere to build signed store builds** (LR-76): project code may not run on this Mac, and there is no CI release workflow (OT-2).
 3. **No store signing:**
    - Apple: the Distribution certificate, App Store profile and App Store Connect record (OA-01). The Apple Developer account exists.
-   - Google: the package name and upload key (OA-03). The Play Organization account exists.
+   - Google: the upload key (LR-07c, after OT-2b). The Play app exists with package `com.jawwid.jawwid_chat` (OT-4).
 4. **No app-side Firebase file or app Sentry DSN for release builds** (OA-04, OA-05). The server side of both exists.
 5. **No hosted legal pages** (OA-08), and **no final Terms texts** (OA-09).
 6. **High-risk merges waiting for the owner:** #497 (Terms gate API), #498 (teacher deletion), #449 (push opens the item) (OA-17).
@@ -99,7 +99,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
    - #518: its workflow guard;
    - #517: LR-78 ring-test fix;
    - #497, #498, #449.
-2. **OT-4 is stopped at step 3** (Play's Create app form asks for the package name and for acceptance of the Play App Signing Terms of Service). Waiting for the owner: approve OA-03 and authorize those terms; then the lead issues a corrected handoff.
+2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
 3. **OT-2b** (the owner's signing decision): turn the chosen option into a step-by-step handoff.
 4. **OT-3** (first deploy): the handoff draft is written. The lead answers its open questions; it is final once #516 and #518 are merged.
 5. **LR-13, LR-27 and LR-79** as soon as #449 merges; **LR-26** once #449, #498 and #503 land.
@@ -114,7 +114,7 @@ The owner works through these in a separate terminal session, using the handoff 
 | ~~OT-1~~ **Done, verified 2026-11-08** | Create the App Store Connect app record and confirm the App ID `com.jawwid.jawwidChat` has Push Notifications. Browser only; no keys are created on this Mac | LR-06 (record part), LR-09a, LR-09c, LR-57b; first step toward LR-48 | **Verified by the lead from the screenshots (E-08).** Primary language English (U.S.) is kept for version 1, with an Arabic localization to be added (LR-09k). The developer account name shown is "Jawwid LLC", an input for OA-08 (legal entity), to be confirmed by the owner |
 | OT-2 | Decide where signed store builds are made (LR-76) | LR-76, then LR-06 (certificate), LR-07c, LR-48, LR-49, LR-08 | **Answered 2026-11-08:** no second Mac; the owner is the Account Holder. Follow-up **OT-2b**: decide how this Mac becomes trustworthy for signing (erase and reinstall, then a dedicated signing user, versus building on GitHub runners). The lead's assessment is in chat; agent J's verified paper is coming |
 | OT-3 | First deploy package: (1) approve implementing the LR-77 backup fix; (2) read the readiness report (#512); (3) approve the first production deploy (OA-21): a paid App Platform app (about $32/month) and 177 forward-only migrations | LR-77, LR-01, then LR-05, LR-18, LR-43, LR-65, LR-29 | Queued. **Handoff drafted 2026-11-08** (kept outside the repo; not usable yet). It has 11 open questions for the lead, among them: staging or production first, the database project and region, and whether the production LiveKit project exists. It also lists two documentation follow-ups once #516 and #518 merge: the readiness doc's "pending the owner" text, and `backup-recovery.md` on the scheduled-backup failure mode. Usable only after #516 and #518 merge, the questions are answered, and the owner approves the deploy (OA-21) |
-| **OT-4 (now)** | Play Console: confirm the Organization account's verification, create the app (Free, no upload), and screenshot the Dashboard's testing requirements. Handoff: `~/jawwid-owner-evidence/OT-4/HANDOFF.md` | LR-07a, LR-69; prepares LR-09b, LR-09d, LR-09e, LR-09g, LR-09i | **Stopped at step 3, 2026-11-08 (correctly).** Steps 1–2 done; the lead viewed both account screenshots. The Create app form did not match the handoff: it asks for the **package name** (the handoff assumed the first upload sets it) and has a third declaration, the **Play App Signing Terms of Service**. Nothing was entered or ticked. Waiting for the owner: OA-03 and authorization of those terms. |
+| ~~OT-4~~ **Done, accepted 2026-11-08 with documented gaps** | Play Console: create the app `Jawwid` / `com.jawwid.jawwid_chat` (Free, no upload) and screenshot the Dashboard and app signing | LR-07b, LR-69; prepares LR-09b, LR-09d, LR-09e, LR-09g, LR-09i | **Verified by the lead from the screenshots (E-09).** The owner approved the package name and the Play App Signing Terms during the task. Gaps: the Create app form was not captured (Free, en-US, App and the declarations are not on a screenshot); "Draft" status is not on a saved screenshot. Neither blocks anything |
 | OT-5 | Legal facts and hosting (OA-08), final Terms texts (OA-09) | LR-04, LR-02d, LR-02a | Queued |
 | OT-6 | Decisions: target audience (OA-11), payments (OA-12), storefronts (OA-10) | LR-10, LR-15, LR-17, LR-09c–e, LR-09k | Queued |
 
@@ -162,17 +162,17 @@ Each requirement appears once:
 | [ ] | LR-40 | Unused `Main.storyboard` | iOS | L | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | Cosmetic. It does not affect review or behaviour (the window is built in `SceneDelegate`), and editing `project.pbxproj` without a local build is riskier than leaving it. Revisit after launch. |
 | [ ] | LR-66 | Sign in with Apple (4.8) | iOS | — | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | The app uses only its own e-mail/password and WhatsApp-code sign-in. Guideline 4.8 applies only when a third-party or social login sets up the account. |
 
-### B. Android: Google Play (3 of 17 done, 18 %)
+### B. Android: Google Play (4 of 17 done, 24 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
-| [ ] | LR-07a | Google Play **Organization** developer account, verified (D-U-N-S, identity, website) | AND | C | READY FOR VERIFICATION | Owner | Play app creation (check) | **The owner confirmed on 2026-11-08 that Jawwid has a Play Organization account.** **OT-4 steps 1–2 (lead viewed both screenshots, 2026-11-08):** the Developer account page shows Account type **Organization**, developer name Jawwid LLC, and the website with a green check. The Android developer verification → Identity tab lists the organization with no pending action. No page shows an explicit "Verified" status, so the row stays open. Still to check once the app is created: the Dashboard asks for no testing requirement (LR-69). |
-| [ ] | LR-07b | Final Android package name, permanent after the first upload, even to internal testing | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-03 | Read-only check on `main` @ `83d5e687` (2026-11-08): `android/app/build.gradle.kts:48` namespace and `:59` applicationId are both `com.jawwid.jawwid_chat`; every Kotlin source is in `com/jawwid/jawwid_chat/`; the git-ignored local `google-services.json` lists package `com.jawwid.jawwid_chat` only; the owner's Firebase screenshot shows the Android app "Jawwid Chat Android" with the same package. iOS uses `com.jawwid.jawwidChat`. **Correction:** Play's Create app form now asks for the package name when the app is created (OT-4), not only at the first upload. Recommendation: keep `com.jawwid.jawwid_chat`. Waiting for the owner's approval (OA-03). |
-| [ ] | LR-07c | Upload key created and kept by the owner; Play App Signing | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-03 | Only a throwaway key has ever signed a build. Release signing never falls back to the debug key (LR-53). Play App Signing is required for new apps, and the Create app form includes its Terms of Service (OT-4). Accepting the terms creates no key. The upload key is made later, in the signing setup the owner chooses (OT-2b). Owner action OA-03. |
-| [ ] | LR-09b | Play Data safety form, including the deletion web link | AND | C | BLOCKED — OWNER ACTION REQUIRED | Drafter C, then owner | LR-04, LR-07b | Draft merged (#507, `google-data-safety.md`). It needs the public deletion and privacy URLs (OA-08) and the Play app (OA-03). |
+| [ ] | LR-07a | Google Play **Organization** developer account, verified (D-U-N-S, identity, website) | AND | C | READY FOR VERIFICATION | Owner | Play app creation (check) | **The owner confirmed on 2026-11-08 that Jawwid has a Play Organization account.** OT-4 (E-09; the lead viewed the screenshots): Account type **Organization**, developer name Jawwid LLC, website with a green check; Android developer verification → Identity lists the organization with no pending action; Play let the app be created. **Not marked done:** no Play page shows an explicit "Verified" label or the D-U-N-S check. It closes when Play shows a verified status or accepts the first internal-testing upload (LR-49). |
+| [x] | LR-07b | Final Android package name, permanent after the first upload, even to internal testing | AND | C | COMPLETED AND VERIFIED | Owner | — | **Done (E-09).** The Play app `Jawwid` exists with package **`com.jawwid.jawwid_chat`** (`3-app-integrity.png`, which the lead viewed). The owner approved the name on 2026-11-08 (OA-03), and it can no longer change. It matches `android/app/build.gradle.kts:48` (namespace) and `:59` (applicationId) on `main` @ `83d5e687`, every Kotlin source folder, the git-ignored local `google-services.json` and the owner's Firebase screenshot. iOS uses `com.jawwid.jawwidChat`. |
+| [ ] | LR-07c | Upload key created and kept by the owner; Play App Signing | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | LR-76 (OT-2b) | **Play App Signing: on.** The app's Protected with Play page shows "Protect app signing key: Releases signed by Play" (`3b-app-signing.png`, E-09). Google holds the app signing key; no key was chosen, generated or uploaded (owner statement; no key prompt is visible). **Still open: the upload key.** Only a throwaway key has ever signed a build, and release signing never falls back to the debug key (LR-53). The upload key is created in the signing setup the owner chooses (OT-2b). |
+| [ ] | LR-09b | Play Data safety form, including the deletion web link | AND | C | BLOCKED — OWNER ACTION REQUIRED | Drafter C, then owner | LR-04, LR-07b | Draft merged (#507, `google-data-safety.md`). It needs the public deletion and privacy URLs (OA-08). The Play app exists (OT-4). |
 | [ ] | LR-09d | IARC content rating questionnaire | AND | C | BLOCKED — OWNER ACTION REQUIRED | Drafter C, then owner | LR-10 | Draft merged (#507, `age-rating.md`). Waits on OA-11. |
 | [ ] | LR-09e | Play target audience and content | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | LR-10 | Follows LR-10 (OA-11). |
-| [ ] | LR-09g | Play declarations: financial features ("none"), health ("none"), ads ("no"; no `AD_ID`), government, news | AND | C | BLOCKED — TECHNICAL DEPENDENCY | Drafter C | LR-07b | Draft merged (#507, `play-declarations.md`): financial "none", health "none", ads "no", government and news "no". Entered once the Play app exists. |
+| [ ] | LR-09g | Play declarations: financial features ("none"), health ("none"), ads ("no"; no `AD_ID`), government, news | AND | C | BLOCKED — OWNER ACTION REQUIRED | Drafter C; owner enters | — | Draft merged (#507, `play-declarations.md`): financial "none", health "none", ads "no", government and news "no". The Play app exists (OT-4), so it can now be entered in a future owner Play Console task. |
 | [ ] | LR-09h | Play foreground-service declaration, with a video of a voice call (microphone type) | AND | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer; owner (records) | LR-14, LR-08 | Needs LR-14 merged and a signed build on a phone. |
 | [ ] | LR-09i | Play full-screen intent declaration (calling app) | AND | C | BLOCKED — TECHNICAL DEPENDENCY | Drafter C | LR-27 | Draft merged (#507). The declaration is only true once LR-27 (the Android 14+ full-screen-intent check) ships. |
 | [ ] | LR-49 | Signed AAB on the Play internal-testing track; pre-launch report reviewed | AND | C | BLOCKED — TECHNICAL DEPENDENCY | Release manager; owner (upload) | LR-01, LR-04, LR-07b, LR-07c, LR-45, LR-47 | Needs LR-07a/b/c, LR-47, LR-45, LR-04, LR-01. The Data safety form is exempt only while the app is on internal testing alone. |
@@ -183,7 +183,7 @@ Each requirement appears once:
 | [x] | LR-54 | Minimal Android permissions; no `READ_MEDIA_*`; the system photo picker | AND | M | COMPLETED AND VERIFIED | Android audit; Builder A | — | E-06. Re-check on the final merged manifest at LR-49. |
 | [x] | LR-53 | Release signing never falls back to the debug key | AND | H | COMPLETED AND VERIFIED | Android audit | — | E-02 |
 | [x] | LR-55 | Only `MainActivity` exported; `allowBackup=false`; no cleartext traffic | AND | H | COMPLETED AND VERIFIED | Android audit | — | E-02 |
-| [ ] | LR-69 | Play: 12 testers for 14 days, then apply for production access | AND | — | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | Play answer 14151465 limits the rule to **personal** accounts created after 13 Nov 2023; we use an Organization account (LR-07a). If the Play Console Dashboard shows the testing requirement anyway, this row reopens at once, and it adds at least 14 days plus about 7 days of review. |
+| [ ] | LR-69 | Play: 12 testers for 14 days, then apply for production access | AND | — | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | Play answer 14151465 limits the rule to **personal** accounts created after 13 Nov 2023; ours is an **Organization** account (`1-account.png`, E-09). **The new app's Dashboard is consistent with that** (`2-dashboard.png`, 2026-11-08 22:45): internal testing is open; closed testing, open testing, pre-registration and Production ("Create and publish a release") are locked only behind "Complete the initial setup tasks first"; nothing mentions 12 testers, 14 days or "Apply for production". Residual: the Production "View tasks" list was not expanded. It will be checked when the store forms are entered, and if the requirement appears this row reopens at once (at least 14 days plus about 7 days of review). |
 
 ### C. The mobile app on both platforms (0 of 9 done, 0 %)
 
@@ -277,7 +277,7 @@ Questions go to the owner one at a time, in this order.
 |---|---|---|---|---|---|
 | ~~OA-02~~ | **Answered 2026-11-08: yes, Jawwid has a Play Organization account.** | — | Google Play | Done | — |
 | OA-01 | In the existing Apple Developer account (confirmed 2026-11-08): create the Apple Distribution certificate, the App Store provisioning profile with Push for `com.jawwid.jawwidChat`, and the App Store Connect app record | Only the Account Holder or an Admin can do it | App Store | Mon 9 Nov 12:00 | LR-06, LR-48, LR-57b |
-| OA-03 | Approve the final Android package name (recommended: keep `com.jawwid.jawwid_chat`, which the code and Firebase already use) and authorize accepting Play's App Signing Terms of Service in the Create app form. The upload keystore follows later, in the OT-2b signing setup | The package name is permanent once the app is created; Play's Create app form asks for it now (OT-4) | Google Play | Mon 9 Nov 12:00 | LR-07b, LR-07c, LR-49 |
+| ~~OA-03~~ | **Answered 2026-11-08:** the owner approved `com.jawwid.jawwid_chat` and accepting the Play App Signing Terms when the app was created (OT-4). The upload keystore follows in the OT-2b signing setup | The package name is permanent once the app is created; Play's Create app form asks for it now (OT-4) | Google Play | Done | LR-07b, LR-07c, LR-49 |
 | OA-04 | The Firebase project for Jawwid Chat: the `google-services.json` for the final package, and the APNs key confirmed. **Android part found 2026-11-08:** Firebase has the Android app for `com.jawwid.jawwid_chat`; still to confirm: the iOS app and the APNs key | A release Android build refuses to build without it; push and calls need it | Both | Mon 9 Nov 12:00 | LR-47, LR-12, LR-49 |
 | OA-05 | A Sentry project DSN for the app, and a token for symbol upload | Store builds refuse to build without the DSN (#502) | Both | Mon 9 Nov 12:00 | LR-45, LR-22, LR-48, LR-49 |
 | OA-06 | ~~The DigitalOcean app id and the domain~~ **Corrected 2026-11-08:** the first deploy creates the app id (`first_deploy=true`), and the domain was chosen on 2026-11-05 (`chat.jawwid.com`). What remains is in Builder H's gap list and OT-3. | — | Both | — | — |
@@ -334,6 +334,7 @@ Questions go to the owner one at a time, in this order.
 | E-06 | LR-42, LR-54 | 2026-11-08 | Builder A (mobile); lead (guard test) | #505, merge `b05d141a82b89d080e012b34d34ede3c1cc23596` (head `5cc153fc`) | PR CI 30/30; main CI run 42485589672: 15/15 success | `Review: ACCEPT @ a59f7d34…` and the delta `Review: ACCEPT @ 5cc153fc488373e484439b9e4dd04eaf8fcb92bb` on #505 | Unit tests (logger); manifest guard test. No device needed for these two rows | Play permissions policy (answer 9888170); Apple 5.1.2 |
 | E-07 | LR-75 | 2026-11-08 | Builder G (mobile); lead (review fixes) | #511, merge `6e0e1438bfd9d2879b91a527f480b569856e68f3` (head `4fe2417c`) | PR CI 30/30; main CI run 42488182440 on `6e0e1438`: 15/15 success | `Review: ACCEPT @ 435f5f2f…` and the delta `Review: ACCEPT @ 4fe2417c690de9e5ccaceadb11c1b5cc40149691` on #511 | Unit tests in `redacting_logger_test.dart`; no device needed | Apple 5.1.2 / red-team RT-021 |
 | E-08 | LR-06 (record part only; the row stays open) | 2026-11-08 | Owner, with the owner-task assistant; verified by the lead | n/a (Apple consoles) | n/a | The lead viewed both screenshots | `~/jawwid-owner-evidence/OT-1/1-app-id.png` (App ID, Push enabled, Certificates (0)), `2-app-record.png` (App Information), `REPORT.md`. **Gaps, stated explicitly:** the full capability list is not captured (the screenshot is filtered to Push Notifications); User Access = Full Access is not evidenced; "no changes saved" is the owner's statement; that the App ID already existed is inferred from its Xcode-style description | Apple App Store Connect help: create an app record; register an App ID |
+| E-09 | LR-07b (done); evidence for LR-07a, LR-07c and LR-69 (still open or N/A) | 2026-11-08 | Owner, with the owner-task assistant; verified by the lead | n/a (Play Console) | n/a | The lead viewed all five screenshots | `~/jawwid-owner-evidence/OT-4/`: `1-account.png`, `1-account-b.png`, `2-dashboard.png`, `3-app-integrity.png` (app `Jawwid`, `com.jawwid.jawwid_chat`), `3b-app-signing.png` ("Releases signed by Play"), `REPORT.md`. **Gaps, stated explicitly:** the Create app form was not captured, so Free, en-US, App and the declarations are the owner's statement (to be checked in Store settings); "Draft" status is shown only in a screenshot that was not saved; "no setting changed, no release started" is the owner's statement, consistent with the Dashboard | Play Console help 9859152 (create an app); 9842756 (Play App Signing); 14151465 (testing requirement) |
 
 ## 7. Official sources (checked live on 2026-11-08)
 
