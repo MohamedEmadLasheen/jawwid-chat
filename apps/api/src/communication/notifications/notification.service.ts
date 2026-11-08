@@ -1,4 +1,5 @@
 import { CommError, CommErrorCode } from '../../platform/errors';
+import { AuthError, AuthErrorCode } from '../../platform/auth/auth.errors';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { actorIsLive } from '../../platform/liveness';
 import { Prisma } from '@prisma/client';
@@ -230,9 +231,7 @@ export class NotificationService {
       return false;
     }
 
-    const active = await this.prisma.deviceToken.findMany({
-      where: { actorId: n.recipientId, isActive: true },
-    });
+    const active = await this.liveDeviceTokens(n.recipientId);
 
     // WHICH DEVICES MAY RECEIVE THIS. A VoIP token takes call pushes and
     // nothing else: on iOS a PushKit delivery that does not report a call to
@@ -296,6 +295,32 @@ export class NotificationService {
     // delivery metrics lie. DELIVERED/OPENED are set only by markDelivered /
     // markOpened, driven by a real client or provider callback.
     return true;
+  }
+
+  /**
+   * LR-46: the recipient's active tokens that may still be pushed to.
+   *
+   * A token bound to a session that is no longer live -- revoked, or expired
+   * without ever being revoked (no trigger fires for an expiry) -- is skipped:
+   * that sign-in has ended, so its phone gets nothing. The revocation trigger
+   * and the locked registration already keep such rows inactive; this is the
+   * safeguard for anything that slips past them, and the only thing that
+   * covers expiry. A skipped row is left as it is (not deactivated here): the
+   * next registration from a live session rebinds and reactivates it.
+   *
+   * A row with no session (registered before LR-46, or by an internal caller)
+   * keeps today's behaviour and is pushed to while active.
+   */
+  private async liveDeviceTokens(actorId: string) {
+    const rows = await this.prisma.deviceToken.findMany({ where: { actorId, isActive: true } });
+    const bound = [...new Set(rows.map((t) => t.sessionId).filter((id): id is string => id !== null))];
+    if (bound.length === 0) return rows;
+    const live = await this.prisma.session.findMany({
+      where: { id: { in: bound }, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    const liveIds = new Set(live.map((s) => s.id));
+    return rows.filter((t) => t.sessionId === null || liveIds.has(t.sessionId));
   }
 
   /**
@@ -391,7 +416,9 @@ export class NotificationService {
    * revoking that session deactivates it (a trigger on chat.session; see
    * 20261109120000). A refresh rotation moves it to the successor session
    * (AuthService). Internal callers with no session pass none, and the row
-   * keeps today's unbound behaviour.
+   * keeps today's unbound behaviour. A session that has ended by the time the
+   * registration commits (revoked, rotated or expired after authenticate()
+   * checked it) is refused, 401 AUTH.UNAUTHENTICATED, and nothing is bound.
    *
    * A token can move between accounts when a phone is handed over -- but only
    * once the session that registered it has ended (signed out, revoked or
@@ -422,6 +449,36 @@ export class NotificationService {
     const organizationId = row.organization_id;
     const sessionId = input.sessionId ?? null;
     await this.prisma.$transaction(async (tx) => {
+      // The caller's session, LOCKED FIRST and re-checked (review of #537).
+      // authenticate() checked it when the request started; a sign-out, a
+      // remote revocation or a refresh rotation can commit between that check
+      // and this transaction. Without this lock a token could be bound to a
+      // session that has already ended: a revoked one after its trigger ran
+      // (the token stays active), or a 'rotated' one after AuthService moved
+      // its tokens to the successor (signing the successor out would no longer
+      // reach it, and any account could take it).
+      //
+      // FOR SHARE conflicts with the revocation's UPDATE of revoked_at, so the
+      // two are ordered: a revocation committed first is seen here and refused;
+      // one that comes after waits for this commit, and then its trigger (or
+      // the follow-the-successor move) reaches the row this writes.
+      //
+      // Lock order: the session, then the token row -- the order a revocation
+      // takes them in (its UPDATE, then its trigger) -- so the two cannot
+      // deadlock.
+      //
+      // A dead session is answered exactly as the guard answers it when the
+      // request arrives a moment later: 401 AUTH.UNAUTHENTICATED ("refresh
+      // once, then end"). Nothing is written.
+      if (sessionId !== null) {
+        const [session] = await tx.$queryRaw<Array<{ live: boolean }>>`
+          SELECT (revoked_at IS NULL AND expires_at > now()) AS live
+            FROM chat.session
+           WHERE id = ${sessionId}::uuid
+             FOR SHARE`;
+        if (!session?.live) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+      }
+
       // The current binding, locked so two registrations of one token decide
       // one after the other. `bound_live`: the session that registered it has
       // not been revoked and has not expired.

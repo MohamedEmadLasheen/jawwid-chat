@@ -14,7 +14,13 @@
  *     another account (409 DEVICE_TOKEN_IN_USE, nothing changes); once that
  *     session has ended, another account on the same phone may register it;
  *   - a token row from before the migration (no session) keeps today's
- *     behaviour: any account may rebind it.
+ *     behaviour: any account may rebind it;
+ *   - (review of #537) a registration that passed authenticate() but whose
+ *     session ends before it commits -- revoked, or rotated by a refresh --
+ *     is refused (401) and binds nothing, whichever commits first; the
+ *     session is locked before the token row;
+ *   - (review of #537) a push is never sent to a token whose bound session is
+ *     no longer live (revoked or expired); an unbound row is still pushed to.
  *
  * Synthetic people only (G-20).
  */
@@ -24,8 +30,12 @@ import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
 import { PlatformModule } from '@platform/platform.module';
 import { AuthModule } from '@platform/auth/auth.module';
+import { AuthError, AuthErrorCode } from '@platform/auth/auth.errors';
 import { hashPassword } from '@platform/auth/password';
 import { CommErrorCode } from '@platform/errors';
+import { PrismaService } from '@platform/prisma.service';
+import { NotificationService } from '@communication/notifications/notification.service';
+import type { PushProvider } from '@communication/notifications/push.provider';
 import { CommunicationModule } from '@communication/communication.module';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -96,6 +106,58 @@ function register(accessToken: string, token: string, platform = 'ios') {
 
 const row = (token: string) => g.prisma.deviceToken.findUniqueOrThrow({ where: { token } });
 
+// -- races (review of #537) ---------------------------------------------------
+/** A second pool: a writer holding its own transaction on its own connection. */
+const writer = new PrismaService();
+
+function deferred<T = void>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+async function waitUntil(cond: () => Promise<boolean>, what: string, withinMs = 10_000) {
+  const end = Date.now() + withinMs;
+  while (!(await cond())) {
+    if (Date.now() > end) throw new Error(`timed out: ${what}`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+const lockWaiters = async () =>
+  Number((await g.prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`select count(*) as n from pg_locks where not granted`))[0]!.n);
+
+/**
+ * A revocation of `sessionId` written and NOT yet committed -- the moment a
+ * sign-out (or a refresh's `revoke(..., 'rotated')`) holds the session row.
+ * Its trigger has already run inside it, for a reason the trigger acts on.
+ */
+async function heldRevocation(sessionId: string, reason: string) {
+  const written = deferred();
+  const commit = deferred();
+  const done = writer.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `update chat.session set revoked_at = now(), revoked_reason = $1 where id = $2::uuid and revoked_at is null`,
+      reason,
+      sessionId,
+    );
+    written.resolve();
+    await commit.promise;
+  }, { timeout: 20_000 });
+  await written.promise;
+  return { commit: async () => { commit.resolve(); await done; } };
+}
+
+/**
+ * The registration exactly as the controller makes it, for a request whose
+ * authenticate() has ALREADY passed on `sessionId`: what happens next is the
+ * race. Resolves to the refusal's code, or 'ok'.
+ */
+function lateRegister(actorId: string, sessionId: string, token: string): Promise<string> {
+  return g.notifications
+    .registerDevice({ actorId, sessionId, token, platform: 'ios' })
+    .then(() => 'ok')
+    .catch((e: unknown) => (e instanceof AuthError ? e.code : `unexpected: ${String(e)}`));
+}
+
 beforeAll(async () => {
   await g.prisma.$connect();
   await truncate(g.prisma);
@@ -146,6 +208,7 @@ afterAll(async () => {
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
   await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'lr46h-%'`);
   await g.prisma.$disconnect();
+  await writer.$disconnect();
   if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
   else process.env.REDIS_URL = inheritedRedisUrl;
 });
@@ -308,5 +371,161 @@ describe('LR-46 (b): a token cannot be taken from a live session', () => {
     const otherLogin = await login(other.subject, ios);
     expect((await register(otherLogin.accessToken, token)).status).toBe(201);
     expect(await row(token)).toMatchObject({ actorId: other.id, sessionId: otherLogin.sessionId, isActive: true });
+  });
+});
+
+/** Ends a session by expiry alone: no revocation, so no trigger fires. */
+const expireSession = (sessionId: string) =>
+  g.prisma.$executeRawUnsafe(
+    `update chat.session
+        set authenticated_at = now() - interval '2 hours', created_at = now() - interval '2 hours',
+            expires_at = now() - interval '1 hour'
+      where id = $1::uuid`,
+    sessionId,
+  );
+
+describe('LR-46 (review of #537): a registration racing the end of its session binds nothing', () => {
+  // The request's authenticate() has passed on the session; the session then
+  // ends before the registration's transaction. Driven at the service, with
+  // the session the guard verified, because over HTTP the guard would refuse
+  // the request before it reached the race.
+
+  it('revoked after authenticate(), before the registration: refused (401), no row written', async () => {
+    const parent = m.families[7]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+    await g.prisma.session.update({
+      where: { id: phone.sessionId },
+      data: { revokedAt: new Date(), revokedReason: 'lr46: revoked mid-request' },
+    });
+
+    expect(await lateRegister(parent.id, phone.sessionId, token)).toBe(AuthErrorCode.UNAUTHENTICATED);
+    expect(await g.prisma.deviceToken.findUnique({ where: { token } })).toBeNull();
+  });
+
+  it('expired after authenticate(), before the registration: refused (401), no row written', async () => {
+    const parent = m.families[7]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+    await expireSession(phone.sessionId);
+
+    expect(await lateRegister(parent.id, phone.sessionId, token)).toBe(AuthErrorCode.UNAUTHENTICATED);
+    expect(await g.prisma.deviceToken.findUnique({ where: { token } })).toBeNull();
+  });
+
+  it('rotated by a refresh after authenticate(): refused; the token stays on the successor, and signing it out still reaches it', async () => {
+    const parent = m.families[7]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+    expect((await register(phone.accessToken, token)).status).toBe(201);
+
+    // authenticate() on S1 ... the app's refresh rotates S1 -> S2 and moves the token ...
+    const renewed = asLogin(await call(null, 'POST', '/auth/refresh', { refreshToken: phone.refreshToken }));
+    expect(renewed.status).toBe(200);
+    expect(await row(token)).toMatchObject({ sessionId: renewed.sessionId, isActive: true });
+
+    // ... and only then does the registration on S1 run. It used to rebind the
+    // token to S1, a 'rotated' session the trigger never fires for.
+    expect(await lateRegister(parent.id, phone.sessionId, token)).toBe(AuthErrorCode.UNAUTHENTICATED);
+    expect(await row(token)).toMatchObject({ actorId: parent.id, sessionId: renewed.sessionId, isActive: true });
+
+    expect((await call(renewed.accessToken, 'POST', '/auth/logout')).status).toBe(200);
+    expect((await row(token)).isActive).toBe(false);
+  });
+
+  it('a sign-out holding the session row when the registration starts: the registration waits on the SESSION, then is refused; the token stays deactivated', async () => {
+    const parent = m.families[7]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+    expect((await register(phone.accessToken, token)).status).toBe(201);
+
+    // The revocation has written (its trigger already deactivated the token) but not committed.
+    const held = await heldRevocation(phone.sessionId, 'lr46: raced sign-out');
+    const outcome = lateRegister(parent.id, phone.sessionId, token);
+    await waitUntil(async () => (await lockWaiters()) > 0, 'the registration is blocked on the session row');
+    await held.commit();
+
+    // Before the fix the registration waited on the token row instead and,
+    // once the revocation committed, set is_active = true on a revoked session.
+    expect(await outcome).toBe(AuthErrorCode.UNAUTHENTICATED);
+    expect(await row(token)).toMatchObject({ sessionId: phone.sessionId, isActive: false });
+  });
+
+  it('a refresh rotation holding the session row when the registration starts: refused, so nothing is bound to the rotated session', async () => {
+    const parent = m.families[7]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+
+    // 'rotated': the reason the trigger deliberately skips. Without the lock
+    // the registration would not even wait, and would bind an active token
+    // to a session that has ended.
+    const held = await heldRevocation(phone.sessionId, 'rotated');
+    const outcome = lateRegister(parent.id, phone.sessionId, token);
+    await waitUntil(async () => (await lockWaiters()) > 0, 'the registration is blocked on the session row');
+    await held.commit();
+
+    expect(await outcome).toBe(AuthErrorCode.UNAUTHENTICATED);
+    expect(await g.prisma.deviceToken.findUnique({ where: { token } })).toBeNull();
+  });
+
+  // The other order -- the registration commits first, the revocation after --
+  // is the ordinary case: the revocation's trigger reaches the committed row
+  // ("signing out deactivates that session's tokens", above).
+});
+
+describe('LR-46 (review of #537): a push is sent only to tokens whose session is live', () => {
+  const sent: string[] = [];
+  const push = {
+    send: async (msg: { token: string }) => {
+      sent.push(msg.token);
+      return { ok: true };
+    },
+  } as unknown as PushProvider;
+  let notifications: NotificationService;
+
+  beforeAll(() => {
+    notifications = new NotificationService(g.prisma, g.templates, g.quietHours, g.config, push);
+  });
+
+  it('skips a token bound to an expired or a revoked session; a live one and an unbound (pre-LR-46) one are pushed to', async () => {
+    const parent = m.families[8]!.parent;
+    const live = await login(parent.subject, ios);
+    const expired = await login(parent.subject, ios);
+    const stranded = await login(parent.subject, android);
+    const liveToken = newToken();
+    const expiredToken = newToken();
+    const strandedToken = newToken();
+    const unboundToken = newToken();
+    expect((await register(live.accessToken, liveToken)).status).toBe(201);
+    expect((await register(expired.accessToken, expiredToken)).status).toBe(201);
+    expect((await register(stranded.accessToken, strandedToken, 'android')).status).toBe(201);
+    await g.prisma.deviceToken.create({ data: { organizationId: orgId, actorId: parent.id, token: unboundToken, platform: 'ios' } });
+
+    // Expired without ever being revoked: no trigger fires, the row stays active.
+    await expireSession(expired.sessionId);
+    // Revoked for a reason the trigger skips, with no successor to move to (a
+    // rotation whose issue() then failed): the row stays active too.
+    await g.prisma.session.update({
+      where: { id: stranded.sessionId },
+      data: { revokedAt: new Date(), revokedReason: 'rotated' },
+    });
+    expect((await row(expiredToken)).isActive).toBe(true);
+    expect((await row(strandedToken)).isActive).toBe(true);
+
+    sent.length = 0;
+    await notifications.schedule({
+      dedupeKey: `lr46:${randomUUID()}:${parent.id}`,
+      templateKey: 'lesson_reminder_soon',
+      eventType: 'lesson_scheduled',
+      recipientId: parent.id,
+      locale: 'en',
+      variables: { startsAt: new Date('2026-12-10T15:00:00Z').toISOString() },
+      scheduledAt: new Date(Date.now() - 1000),
+      respectQuietHours: false,
+    });
+    await notifications.dispatchDue(new Date());
+
+    const mine = new Set([liveToken, expiredToken, strandedToken, unboundToken]);
+    expect(sent.filter((t) => mine.has(t)).sort()).toEqual([liveToken, unboundToken].sort());
   });
 });
