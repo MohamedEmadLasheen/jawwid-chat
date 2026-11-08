@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 01:20 Cairo (23:20 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 01:30 Cairo (23:30 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -107,9 +107,10 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W9 (Arabic copy) | Owner wording choices with recommendations: PARENT-016 declined call (recommended «تم الاعتذار»), LR-41 five iOS permission prompts (keep three, two small fixes) | #532 | **ACCEPT @ `3b140dec`**; then the owner ticks one option per row |
 | Builder W10 (infra docs) | LR-29: what production watches, what is missing, the free launch set (DigitalOcean uptime check, alert e-mail, on-call); component alerts proposed for a generator follow-up | #533 | **ACCEPT @ `ff044aa0`**; CI running |
 | Auditor R2 (read-only) | LR-46 dry run: security pre-sign-off of `main` and the open launch PRs | report | **Done:** 1 blocker, 5 should-fix (see LR-46). No open launch PR has a security concern |
-| Builder W11 (backend security) | LR-46 blocker: push-device registration always uses the authenticated caller; body whitelisted and type-checked | new PR | Started |
-| Builder W12 (backend privacy) | LR-46: no child name, amount or free-text reason in a push that can show on the lock screen | new PR | Started |
-| Builder W13 (Android privacy) | LR-46: show over the lock screen only while a call rings or is in progress (stacked on #524) | new PR | Started |
+| Builder W11 (backend security) | LR-46 blocker: push-device registration always uses the authenticated caller; body whitelisted and type-checked | #534 | **ACCEPT @ `8d1dff77`**; CI running |
+| Builder W12 (backend privacy) | LR-46: no child name, amount or free-text reason in a push that can show on the lock screen; the inbox keeps the details | #536 | **ACCEPT @ `7053582f`**; CI running |
+| Builder W13 (Android privacy) | LR-46: show over the lock screen only while a call rings or is in progress (stacked on #524) | #535 | ACCEPT @ `e869df5d` with one P2 (a call dropped when the controller is torn down); fix round running |
+| Builder W14 (backend security) | LR-46: each push token is tied to the session that registered it; sign-out and revoke-all stop pushes; a token cannot be moved while its owner's session is active. **High: migration slot `20261109120000`, assigned by the lead** (stacked on #449) | new PR | Started |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
