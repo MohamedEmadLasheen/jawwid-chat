@@ -5,8 +5,8 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 15:20 Cairo (13:20 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
-- **State of `main`:** `9bb0418d`, which contains #500, #502, #504, #505, #506, #507 and #508. Main CI on it is running.
+- **Last updated:** 2026-11-08 15:50 Cairo (13:50 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **State of `main`:** `9bb0418d`, which contains #500, #502, #504, #505, #506, #507 and #508. Main CI run 42485589672 on it: 15/15 green.
 
 ## 1. Dashboard
 
@@ -39,7 +39,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **90** | **11** | 18 | 7 | 27 | 20 | 4 | 3 |
+| **91** | **15** | 14 | 8 | 27 | 20 | 4 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
@@ -51,13 +51,13 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
-| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 67 | 9 | **13 %** | 20 | 19 |
-| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 69 | 9 | **13 %** | 26 | 18 |
+| **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 68 | 12 | **18 %** | 20 | 19 |
+| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 70 | 13 | **19 %** | 26 | 18 |
 | A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
-| B. Android: Google Play | 17 | 2 | **12 %** | 10 | 3 |
+| B. Android: Google Play | 17 | 3 | **18 %** | 10 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
-| D. Shared backend and infrastructure | 16 | 0 | **0 %** | 7 | 5 |
-| E. Security and QA | 16 | 6 | **38 %** | 1 | 4 |
+| D. Shared backend and infrastructure | 16 | 2 | **12 %** | 7 | 5 |
+| E. Security and QA | 17 | 7 | **41 %** | 1 | 4 |
 | F. Legal and compliance | 14 | 1 | **7 %** | 7 | 4 |
 
 ### Current blockers (what stops submission today)
@@ -83,8 +83,8 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
-1. **Main CI on `9bb0418d`** (the merges of #505–#508): when it is green, mark LR-32, LR-38, LR-42 and LR-54 COMPLETED, with evidence.
-2. **#509:** accepted @ `5051ff7e`; merge when green.
+1. **#509:** accepted @ `5051ff7e`. Its optional Android ring job failed with the known flaky signature (it passes on `main`), and a re-run is in progress. Merge when green.
+2. **#510** (LR-30 document corrections): a delta review is running; merge when accepted and green. **LR-75** (Builder G): review, then merge.
 3. **#507:** accepted @ `a7f34293`; merge when green.
 4. **#503:** merge if the other session has not done so (green, lead ACCEPT at `e83a6c05`).
 5. **LR-13 and LR-27** (iOS VoIP registry at launch; Android full-screen-intent check), as soon as #449 merges.
@@ -139,7 +139,7 @@ Each requirement appears once:
 | [ ] | LR-40 | Unused `Main.storyboard` | iOS | L | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | Cosmetic. It does not affect review or behaviour (the window is built in `SceneDelegate`), and editing `project.pbxproj` without a local build is riskier than leaving it. Revisit after launch. |
 | [ ] | LR-66 | Sign in with Apple (4.8) | iOS | — | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | The app uses only its own e-mail/password and WhatsApp-code sign-in. Guideline 4.8 applies only when a third-party or social login sets up the account. |
 
-### B. Android: Google Play (2 of 17 done, 12 %)
+### B. Android: Google Play (3 of 17 done, 18 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
@@ -153,11 +153,11 @@ Each requirement appears once:
 | [ ] | LR-09h | Play foreground-service declaration, with a video of a voice call (microphone type) | AND | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer; owner (records) | LR-14, LR-08 | Needs LR-14 merged and a signed build on a phone. |
 | [ ] | LR-09i | Play full-screen intent declaration (calling app) | AND | C | BLOCKED — TECHNICAL DEPENDENCY | Drafter C | LR-27 | Draft merged (#507). The declaration is only true once LR-27 (the Android 14+ full-screen-intent check) ships. |
 | [ ] | LR-49 | Signed AAB on the Play internal-testing track; pre-launch report reviewed | AND | C | BLOCKED — TECHNICAL DEPENDENCY | Release manager; owner (upload) | LR-01, LR-04, LR-07b, LR-07c, LR-45, LR-47 | Needs LR-07a/b/c, LR-47, LR-45, LR-04, LR-01. The Data safety form is exempt only while the app is on internal testing alone. |
-| [ ] | LR-14 | Foreground-service types match Play policy: `microphone` only, no unjustified `phoneCall` | AND | H | READY FOR VERIFICATION | Builder A; lead | LR-08 | **#505 merged** as `b05d141a` (2026-11-08): `microphone` only; `phoneCall`, `FOREGROUND_SERVICE_PHONE_CALL` and `MANAGE_OWN_CALLS` removed, with a guard test. Reviews ACCEPT @ `a59f7d34` and `5cc153fc`; PR CI 30/30. Still needed: main CI on the merge, then a device check (lock the screen mid-call on Android 14+). |
+| [ ] | LR-14 | Foreground-service types match Play policy: `microphone` only, no unjustified `phoneCall` | AND | H | READY FOR VERIFICATION | Builder A; lead | LR-08, LR-74 | **#505 merged** as `b05d141a`: `microphone` only, with a guard test. Reviews ACCEPT @ `a59f7d34` and `5cc153fc`; PR CI 30/30; main CI run 42485589672 on `9bb0418d`: 15/15. **Still needed:** a device check (lock the screen mid-call on Android 14+) and LR-74. |
 | [ ] | LR-50 | Target API 36, min SDK 26 (Play: API 36 for new apps since 31 Aug 2026) | AND | H | READY FOR VERIFICATION | Release manager | LR-49 | Flutter defaults (`FlutterExtension.kt:23,34`); `minSdk = 26`. Check again on the final AAB (`bundletool dump manifest`). |
 | [ ] | LR-51 | 16 KB memory pages (Play: updates without them are blocked from 1 Feb 2027) | AND | H | READY FOR VERIFICATION | Release manager | LR-49 | arm64 WebRTC and Sentry libraries are aligned at 0x4000. Re-check on the final AAB. |
 | [ ] | LR-27 | Full-screen call permission checked on Android 14+ (Play: must work when FSI is denied) | AND | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | LR-11a (#449 owns the file) | `JawwidPush.kt:141` always sets the intent. #449 edits `JawwidPush.kt`, so this waits for #449. |
-| [ ] | LR-54 | Minimal Android permissions; no `READ_MEDIA_*`; the system photo picker | AND | M | READY FOR VERIFICATION | Android audit; Builder A | main CI | No `READ_MEDIA_*`; the system photo picker. The unjustified phone-call permissions were removed by #505 (`b05d141a`). Done once main CI on the merge is green; re-check on the final merged manifest (LR-49). |
+| [x] | LR-54 | Minimal Android permissions; no `READ_MEDIA_*`; the system photo picker | AND | M | COMPLETED AND VERIFIED | Android audit; Builder A | — | E-06. Re-check on the final merged manifest at LR-49. |
 | [x] | LR-53 | Release signing never falls back to the debug key | AND | H | COMPLETED AND VERIFIED | Android audit | — | E-02 |
 | [x] | LR-55 | Only `MainActivity` exported; `allowBackup=false`; no cleartext traffic | AND | H | COMPLETED AND VERIFIED | Android audit | — | E-02 |
 | [ ] | LR-69 | Play: 12 testers for 14 days, then apply for production access | AND | — | NOT APPLICABLE — WITH DOCUMENTED REASON | Lead | — | Play answer 14151465 limits the rule to **personal** accounts created after 13 Nov 2023; we use an Organization account (LR-07a). If the Play Console Dashboard shows the testing requirement anyway, this row reopens at once, and it adds at least 14 days plus about 7 days of review. |
@@ -176,7 +176,7 @@ Each requirement appears once:
 | [ ] | LR-36 | Icons: a non-upscaled 1024 iOS icon and an Android monochrome layer | Both | L | BLOCKED — OWNER ACTION REQUIRED | Owner; mobile engineer | OA-18 | Owner action OA-18 (a vector logo). |
 | [ ] | LR-37 | Unused `sqflite` removed | Both | L | IN PROGRESS | #503 | #503 | As for LR-25. |
 
-### D. Shared backend and infrastructure (0 of 16 done, 0 %)
+### D. Shared backend and infrastructure (2 of 16 done, 12 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
@@ -194,10 +194,10 @@ Each requirement appears once:
 | [ ] | LR-65 | Parent deletion in the app, plus a bilingual public deletion page that works without the app | Both | H | READY FOR VERIFICATION | Accounts audit | LR-01, LR-09b | `settings_screen.dart:279`; `account-deletion.controller.ts`. The page must be reachable on the production host (LR-01) and named in the console (LR-09b). |
 | [ ] | LR-29 | Uptime monitoring and someone on call | Both | M | BLOCKED — OWNER ACTION REQUIRED | Owner; release manager | LR-01, OA-19 | Owner action OA-19 (name a person). Needs LR-01. |
 | [ ] | LR-31 | The closed-account state the policies promise (P-6) | Both | M | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel | OA-15 | An erased e-mail can sign up again. Either build it (High: account security) or have counsel soften the wording. Owner action OA-15. |
-| [ ] | LR-32 | `LIVEKIT_URL` must be `wss://` in production | Both | M | READY FOR VERIFICATION | Builder B; lead | main CI | **#506 merged** as `8e26b0dc`: `ws://` refused when `APP_ENV=production`, with unit tests. Reviews ACCEPT @ `4c404750` and `2100b65b`; PR CI 30/30. Becomes COMPLETED once main CI is green. |
-| [ ] | LR-38 | RT-017/018: invalid `before`/`after` return 400, not 500 | Both | L | READY FOR VERIFICATION | Builder B | main CI | **#506 merged** (`8e26b0dc`): bad cursors and both-at-once return 400; `after=0` stays valid. Unit and integration specs. Becomes COMPLETED once main CI is green. |
+| [x] | LR-32 | `LIVEKIT_URL` must be `wss://` in production | Both | M | COMPLETED AND VERIFIED | Builder B; lead | — | E-05 |
+| [x] | LR-38 | RT-017/018: invalid `before`/`after` return 400, not 500 | Both | L | COMPLETED AND VERIFIED | Builder B | — | E-05 |
 
-### E. Security and QA (6 of 16 done, 38 %)
+### E. Security and QA (7 of 17 done, 41 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
@@ -210,7 +210,8 @@ Each requirement appears once:
 | [ ] | LR-30 | The release documents tell the truth | — | M | IN PROGRESS | Lead | — | #501 corrects the gate notes and the payments path. Still stale: `release-gate.md` S-06/S-09, `production-readiness.md`, `findings.md` RT-006/012/016/022. |
 | [ ] | LR-33 | Staff permission guard enforced (`shadow` → `enforce`) | — | M | BLOCKED — TECHNICAL DEPENDENCY | Backend engineer; security reviewer | LR-01, owner (High) | Needs real shadow-denial logs (LR-01). It is authorization, so High risk: the owner approves the switch. |
 | [ ] | LR-44 | Connection recovery: realtime resumes after a server restart or network loss (PARENT-015) | Both | M | BLOCKED — TECHNICAL DEPENDENCY | QA engineer | LR-08 | The 2026-10-31 QA showed the app needed a relaunch after an API restart. Whether it is fixed on `main` is not verified. It is a device-plan row (LR-08). |
-| [ ] | LR-42 | The app log redacts e-mail addresses and one-time codes (RT-021) | Both | L | READY FOR VERIFICATION | Builder A | main CI | **#505 merged** (`b05d141a`): e-mail and OTP redaction, six tests. Review ACCEPT. Becomes COMPLETED once main CI on the merge is green. |
+| [ ] | LR-75 | The app log masks opaque `authToken`, `idToken` and `jwt` values (remainder of RT-021) | Both | L | IN PROGRESS | Builder G | — | Found by the #510 review. Builder G is working in `~/dev/jawwid-lr75-redact`. |
+| [x] | LR-42 | The app log redacts e-mail addresses and one-time codes (RT-021) | Both | L | COMPLETED AND VERIFIED | Builder A | — | E-06. The scope is e-mail and OTP. Opaque `authToken`, `idToken` and `jwt` values are LR-75. |
 | [x] | LR-60 | No secrets in the repository or in the binary's build defines | Both | H | COMPLETED AND VERIFIED | Security audit | — | E-02 |
 | [x] | LR-61 | Tokens in Keychain or Keystore; local data cleared at sign-out | Both | H | COMPLETED AND VERIFIED | Security audit | — | E-02 |
 | [x] | LR-62 | Authentication on every API route by default; every public route justified | Both | H | COMPLETED AND VERIFIED | Security audit | — | E-02 |
@@ -302,6 +303,8 @@ Questions go to the owner one at a time, in this order.
 | E-02 | LR-53, 55, 56, 57, 59, 60, 61, 62, 67 | 2026-11-08 | Eight read-only audits (iOS, Android, security); the lead spot-checked | Code on `main` @ `cebbcd99`; the file:line references are in #501's audit; unchanged by #500, #502 and #504 | Main CI run 42417856955: 15/15 jobs | #501's independent reviewer confirmed 28 load-bearing claims against `cebbcd99` | Static facts; no device needed | Apple export compliance; Apple 5.1.2; Play permissions policy (answer 9888170) |
 | E-03 | LR-64 | 2026-11-08 | PD-57 builders; audited 11-08 | PD-57 PRs #463–#482, all on `main` | Integration specs `platform/blocks` and moderation; main CI run 42417856955 on `cebbcd99`: success, 15/15 jobs | PD-57 reviews; confirmed again by the #501 audit | Server-side, so no device needed; the in-app sheet is also covered by LR-25 | Apple 1.2; Play UGC (answer 9876937) |
 | E-04 | LR-68 | 2026-11-08 | Payments audit | `conversation.controller.ts:237-250` on `cebbcd99` | Main CI run 42417856955: success | #501 reviewer | n/a | Apple 3.1.1 and 3.1.3(d) |
+| E-05 | LR-32, LR-38 | 2026-11-08 | Builder B (backend); lead (scanner fix) | #506, merge `8e26b0dc5e65cb21a41c418ae278937462bd486b` (head `2100b65b`) | PR CI 30/30; main CI run 42485589672 on `9bb0418d`: 15/15 success | `Review: ACCEPT @ 4c404750…` and the delta `Review: ACCEPT @ 2100b65b9730f76e4ef78ff0033601d06c6534d4` on #506 (fresh reviewer sessions) | Server-side, unit and integration specs; no device needed | Apple 5.1.2 / Play data in transit encrypted (LR-32); stability (LR-38) |
+| E-06 | LR-42, LR-54 | 2026-11-08 | Builder A (mobile); lead (guard test) | #505, merge `b05d141a82b89d080e012b34d34ede3c1cc23596` (head `5cc153fc`) | PR CI 30/30; main CI run 42485589672: 15/15 success | `Review: ACCEPT @ a59f7d34…` and the delta `Review: ACCEPT @ 5cc153fc488373e484439b9e4dd04eaf8fcb92bb` on #505 | Unit tests (logger); manifest guard test. No device needed for these two rows | Play permissions policy (answer 9888170); Apple 5.1.2 |
 
 ## 7. Official sources (checked live on 2026-11-08)
 
