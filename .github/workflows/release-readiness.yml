@@ -89,6 +89,10 @@ jobs:
       - name: Build the release App Bundle through the store build script
         # The same script and flags a real store build uses; it accepts the placeholders above.
         run: bash scripts/mobile/build-store.sh android
+      - name: Android JVM unit tests (android/app/src/test)
+        # No other workflow runs these (PushPayloadTest, the ring checks); the build above has
+        # already fetched the Flutter plugins Gradle needs.
+        run: (cd android && ./gradlew --no-daemon :app:testDebugUnitTest)
       - name: Verify target/min SDK and 16 KB alignment
         run: |
           set -uo pipefail
@@ -157,6 +161,13 @@ jobs:
             else
               grep -E 'lib/.*\.so|BAD|FAIL' <<< "$out" >> "$R" || true; rec FAIL "LR-51 zipalign -c -P 16: native libraries not 16 KB aligned"
             fi
+            # The merged manifest's permissions, as Play sees them (Data safety: Advertising ID not
+            # collected). AD_ID would contradict the drafted declaration, so it fails.
+            perms="$("$tools/aapt2" dump permissions "$apk" 2>&1 || true)"
+            { echo; echo "Merged-manifest permissions:"; grep -E "uses-permission|permission:" <<< "$perms" || true; echo; } >> "$R"
+            if grep -q 'com.google.android.gms.permission.AD_ID' <<< "$perms"; then
+              rec FAIL "Data safety: the merged manifest requests AD_ID, but the declaration says no Advertising ID"
+            else rec PASS "Data safety: no AD_ID permission in the merged manifest"; fi
           fi
           [ "$bad" -eq 0 ] || { echo "::error::release readiness (Android) failed; see the report"; exit 1; }
       - name: Upload the text report (never the AAB or APK)
@@ -209,7 +220,7 @@ jobs:
             xcodebuild -version; echo; } > "$R"
           APP=build/ios/iphoneos/Runner.app; P="$APP/Info.plist"
           [ -f "$P" ] || { rec FAIL "no built Info.plist at $P"; exit 1; }
-          get() { plutil -extract "$1" raw -o - "$P" 2>/dev/null; }
+          get() { plutil -extract "$1" raw -o - "$P" 2>/dev/null || true; }
           dtx="$(get DTXcode)"; sdk="$(get DTSDKName)"; bid="$(get CFBundleIdentifier)"; enc="$(get ITSAppUsesNonExemptEncryption)"
           echo "Info.plist: DTXcode=$dtx DTSDKName=$sdk CFBundleIdentifier=$bid ITSAppUsesNonExemptEncryption=$enc" >> "$R"
           if [[ "$dtx" =~ ^[0-9]+$ ]] && [ "$dtx" -ge 2600 ]; then rec PASS "LR-52 DTXcode $dtx (Xcode 26 or later)"
