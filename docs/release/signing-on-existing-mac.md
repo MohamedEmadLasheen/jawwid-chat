@@ -299,7 +299,7 @@ A compromised host can change what it builds, wherever the keys live. Two ways o
 
    Do **not** restore apps, hidden tool folders, shell dotfiles,
    `~/.npm`, `~/.cache`, `~/development` or other tool folders from a backup or with Migration Assistant:
-   that would bring the infection back. Re-clone repositories from GitHub.
+   that could bring a compromise back. Re-clone repositories from GitHub.
 2. **Build on GitHub-hosted runners**: a new, ephemeral VM for each job (H9; options paper H7), signing
    with cloud certificates through an App Store Connect key (C1) and the Android upload keystore held as
    **environment** secrets. This is the options paper's **option (c)**, with the same High-risk owner
@@ -325,7 +325,7 @@ paper are used; none of the options below needs new paid resources.
 | | (A) Dedicated user on this Mac as it is. **Not recommended; would require the owner to lift the machine rule explicitly** | (B) Erase and reinstall macOS, then dedicated user | (C) GitHub-hosted runners | (D) Separate Mac |
 |---|---|---|---|---|
 | Security | Weak: keys separated from user-level agents only. Build integrity rests on an unsettled host. | Good: clean OS and tools, keys outside the agents' user, cloud iOS signing. | Good to strong: a clean VM per build, no key on any Mac. New attack surface: the workflow, secrets, approvals on a public repository. | Strong (options paper (b)) |
-| Residual risk | Root or admin-level persistence, keylogging, tampered Xcode/Flutter/caches; a signed malicious build. | Agents run in the main user, which stays an administrator, beside the signing user; a future incident repeats the problem. Shared `/Applications` Xcode. | Owner's GitHub account and approval device; third-party actions (lockfile, or pin by SHA, H9); log leaks (options paper H4, H8); an Admin-level `.p8` in GitHub if a lower role fails. | Physical theft |
+| Residual risk | Root or admin-level persistence, keylogging, tampered Xcode/Flutter/caches; a signed malicious build. | The development user, where agents run, keeps whatever rights it is given, beside the signing user; a future incident repeats the problem. Shared `/Applications` Xcode. | Owner's GitHub account and approval device; third-party actions (lockfile, or pin by SHA, H9); log leaks (options paper H4, H8); an Admin-level `.p8` in GitHub if a lower role fails. | Physical theft |
 | Owner time (estimate) | About 1–2 hours: create the user, sign in, first build (plus lifting the machine rule first) | About 1 day: pre-erase checklist, backup, erase, reinstall, rotate credentials, reinstall tools, then ~2 hours for the user | About 1–2 hours of approvals and secret entry, after 2–3 days of agent engineering | n/a |
 | Money (verified) | none new | none new | free standard runners in a public repository (options paper H1) | **unavailable**; not priced |
 | Engineering effort | Small: a checklist | Small: a checklist; agent work resumes after the reinstall | Medium–High: workflow, Environment, test export with the API key; High-risk review | n/a |
