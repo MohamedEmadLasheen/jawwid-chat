@@ -12,6 +12,7 @@ import '../../../app/providers.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../core/media/media_picker.dart';
+import '../../../core/orientation/orientation_policy.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
@@ -121,6 +122,8 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
     });
     _view.fit();
     _systemBars(hidden: on);
+    // LR-39 / PD-55 rev2: only the full-screen board may turn to landscape.
+    unawaited(on ? allowBoardFullScreenOrientations() : lockAppOrientation());
   }
 
   /// The status and navigation bars go with the app bar (a phone or tablet; a browser keeps its own).
@@ -140,7 +143,10 @@ class _BoardEditorScreenState extends ConsumerState<BoardEditorScreen> {
   @override
   void dispose() {
     boardEmojiFontReady.removeListener(_emojiFontChanged);
-    if (_fullScreen) _systemBars(hidden: false);
+    if (_fullScreen) {
+      _systemBars(hidden: false);
+      unawaited(lockAppOrientation());
+    }
     _lifecycle.dispose();
     // Leaving the board: the draft is written now; the controller stays alive
     // (its keep-alive) until every page is on the server.
