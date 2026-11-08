@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 17:50 Cairo (15:50 UTC).
+- **Last updated:** 2026-11-08 15:10 Cairo (13:10 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `14860ad3`, which contains #500, #502 and #504. Main CI run 42481004529 is green.
 
 ## 1. Dashboard
@@ -79,13 +79,13 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder B (Backend engineer) | LR-32, LR-38 | #506 | Built and accepted; CI running |
 | Drafter C (Store compliance) | LR-09a–k, LR-23 store-console answers | #507 | Drafted and accepted (2 wording fixes pending); CI running |
 | Builder D (Mobile engineer) | LR-73 iOS privacy manifest | #508 | Built and accepted; CI running |
-| Builder E (Mobile engineer) | LR-74 call microphone and service order | #509 | Fixing the two review P2s |
+| Builder E (Mobile engineer) | LR-74 call microphone and service order | #509 | Fixed and accepted @ `5051ff7e`; CI running |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
 1. **Merge #505, #506, #507 and #508** as soon as their CI is fully green (all reviewed and accepted at their head commits).
-2. **#509:** Builder E is fixing the two review P2s; then a delta review, then merge when green.
-3. **#507:** the P2 wording fixes are done (`be1d43ee`); merge after the delta review and CI.
+2. **#509:** accepted @ `5051ff7e`; merge when green.
+3. **#507:** accepted @ `a7f34293`; merge when green.
 4. **#503:** merge if the other session has not done so (green, lead ACCEPT at `e83a6c05`).
 5. **LR-13 and LR-27** (iOS VoIP registry at launch; Android full-screen-intent check), as soon as #449 merges.
 6. **LR-26** (microphone "Open settings") once #449, #498 and #503 have landed (they share the l10n files).
@@ -169,7 +169,7 @@ Each requirement appears once:
 | [ ] | LR-02b | Terms gate and sign-up acceptance in the iOS and Android app | Both | C | READY FOR VERIFICATION | Mobile engineer; QA | LR-02a, LR-08 | #504 merged as `cf731af2` on 2026-11-08 12:27 UTC. Independent review: ACCEPT @ `af1a3e1a`. Main CI: run 42480381161 was cancelled by a newer push; run 42481004529 on `14860ad3` contains it and **passed**. Still needed: a device test against an API with #497. |
 | [ ] | LR-12 | Incoming calls ring while the app is closed (S-06) | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner; mobile engineer | LR-47, LR-08 | iOS: PushKit and CallKit are merged but off until `APNS_VOIP_ENABLED=true`. Android: the full-screen ring is merged (#408, #458). Needs LR-47 and the device test. |
 | [ ] | LR-21 | Unique, increasing build numbers and a production-only store build | Both | H | READY FOR VERIFICATION | Release manager | LR-48, LR-49 | #502 merged as `14860ad3` on 2026-11-08 by the lead. Review ACCEPT @ `6c4856a7`; 30/30 checks green on the PR head; main CI run 42481004529 on the merge is green. Verify on the first store build of each platform. |
-| [ ] | LR-74 | Calls keep the microphone when the screen locks, even on a fresh install. The call service starts only after the microphone is granted, and the caller is asked before dialling (Play FGS rules on Android 14+) | Both | H | IN PROGRESS | Builder E | #509 review and CI | Found by the #505 review. **#509** (`d5aea3c2`): seven new tests; nothing native changes. Independent review ACCEPT, but the lead requires two P2s fixed first: overlapping microphone prompts on a scheduled call, and `dismiss()` leaving media connected. Builder E is fixing them; a delta review follows. Optional native follow-up: a "Calling…" notification text in both languages. |
+| [ ] | LR-74 | Calls keep the microphone when the screen locks, even on a fresh install. The call service starts only after the microphone is granted, and the caller is asked before dialling (Play FGS rules on Android 14+) | Both | H | IN PROGRESS | Builder E | #509 review and CI | Found by the #505 review. **#509** (`d5aea3c2`): seven new tests; nothing native changes. Independent review ACCEPT, but the lead requires two P2s fixed first: overlapping microphone prompts on a scheduled call, and `dismiss()` leaving media connected. Builder E fixed both in `5051ff7e` (one shared microphone request; `dismiss()` tears down media). Delta review ACCEPT @ `5051ff7e`. CI is running; merge when green. Optional native follow-up: a "Calling…" notification text in both languages. |
 | [ ] | LR-25 | Reporting or blocking a staff member behaves honestly | Both | M | IN PROGRESS | Mobile engineer (#503) | #503 | #503 head `e83a6c05`: lead review ACCEPT recorded; 30/30 checks pass after another session's re-run. Merge when the other session finishes with it. |
 | [ ] | LR-26 | Microphone denial is recoverable ("Open settings") | Both | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | #449, #498, #503 (l10n files) | Needs new strings in the l10n files, which #449, #498 and #503 all edit. Start when they land. |
 | [ ] | LR-35 | The picker no longer offers CSV, which the server refuses | Both | L | IN PROGRESS | #503 | #503 | As for LR-25. |
@@ -233,7 +233,7 @@ Each requirement appears once:
 | [ ] | LR-16 | Objectionable-content filter and moderation copy approved (Apple 1.2, which now also covers nonconsensual intimate imagery; Play UGC) | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-13 | The #493 filter is live in code. The word list (18 Arabic, 19 English words) is still a draft, and so are the report reasons and the conduct warning. Owner action OA-13. |
 | [ ] | LR-17 | Storefronts: US age-assurance laws, EU trader status (Apple and, from Nov 2026, Play), China | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel | OA-10 | Texas SB 2420 has been in force since 4 Jun 2026 (Declared Age Range API), with Utah and Louisiana also active. A trader declaration is needed even without EU distribution on Apple. Recommendation: the academy's markets first; no China; the US only after age assurance. Owner action OA-10. |
 | [ ] | LR-71 | Final compliance audit of every console answer against the code and this file | Both | H | NOT STARTED | Store compliance (Fable 5.1) | LR-09a–k | Last step before the owner's go. |
-| [ ] | LR-23 | App Privacy label and Data safety match the code and SDKs (Firebase Installations id, Sentry diagnostics, purchase history, CoarseLocation) | Both | M | IN PROGRESS | Drafter C | #507, LR-73 | **#507** has the drafts; independent review ACCEPT @ `00c02445`. The lead fixed both P2 wording points in `be1d43ee` (the teacher profile is declared as Play "Other info"; why Payment Info stays No); a delta review is running. Findings: keep Coarse Location (country, region and time zone; no GPS); declare Purchase History on both stores; the manifest is missing seven types (LR-73). Still needed: Xcode's privacy report on the archive. |
+| [ ] | LR-23 | App Privacy label and Data safety match the code and SDKs (Firebase Installations id, Sentry diagnostics, purchase history, CoarseLocation) | Both | M | IN PROGRESS | Drafter C | #507, LR-73 | **#507** has the drafts; independent review ACCEPT @ `00c02445`. The lead fixed both P2 wording points (`be1d43ee`, `8f65579e`, `a7f34293`): the teacher profile is declared as Play "Other info", and the doc explains why Payment Info stays No. Delta review ACCEPT @ `a7f34293`. CI is running. Findings: keep Coarse Location (country, region and time zone; no GPS); declare Purchase History on both stores; the manifest is missing seven types (LR-73). Still needed: Xcode's privacy report on the archive. |
 | [ ] | LR-34 | Live card payments at launch decided, and the review notes match the screen | Both | M | BLOCKED — OWNER ACTION REQUIRED | Owner | OA-12 | Without `STRIPE_*` in production, the pay sheet offers bank transfer only. Owner action OA-12. |
 | [x] | LR-68 | No digital content or feature unlocked by payment; chat is never locked (Apple 3.1.1 does not apply) | Both | H | COMPLETED AND VERIFIED | Payments audit | — | E-04 |
 
