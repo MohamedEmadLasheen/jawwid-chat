@@ -4,7 +4,7 @@
 `google-play-readiness-2026-11-03.md`, `release-scorecard.md`), which are now history. Owner: the engineering lead
 (CEO session). It is updated after every task, merge or owner answer. Each change cites its evidence.
 
-- **Last updated:** 2026-11-08 16:25 Cairo (14:25 UTC).
+- **Last updated:** 2026-11-08 16:45 Cairo (14:45 UTC).
 - **State of `main`:** `14860ad3`, which contains #500, #504 and #502. Its CI run 42481004529 passed.
 - **Sources:**
   - the eight read-only audits of 2026-11-08 (PR #501, independently reviewed);
@@ -18,7 +18,7 @@
 | Store | Verdict | Earliest defensible "ready to submit" |
 |---|---|---|
 | **Apple App Store** | **NOT READY** | **Fri 13 Nov 2026**, only if the owner inputs due Mon 9 Nov (§7) arrive on time |
-| **Google Play** | **NOT READY** | **Fri 13 Nov 2026** only if the Play Organization account is **already verified**; otherwise set by Google's D-U-N-S and identity verification (up to ~30 days) |
+| **Google Play** | **NOT READY** | **Fri 13 Nov 2026**, on the same conditions as iOS. The owner confirmed the Play Organization account exists on 2026-11-08. |
 
 **The 48-hour target (Tue 10 Nov, 15:00 Cairo) is not realistic.** Engineering alone cannot close the gap, for five reasons:
 1. **The production backend has never been deployed** (no run of "Deploy production" ever). Reviewers need a live server (Apple 2.1(a)).
@@ -42,13 +42,13 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | Completed and verified | Ready for verification | In progress | Blocked: owner | Blocked: technical | Not started | Not applicable |
 |---|---|---|---|---|---|---|---|
-| 89 | 11 | 10 | 21 | 24 | 16 | 4 | 3 |
+| 89 | 11 | 11 | 21 | 23 | 16 | 4 | 3 |
 
 | Still open | Count | IDs |
 |---|---|---|
 | **Critical** | 30 | LR-01, 02a, 02b, 02d, 03, 04, 05, 06, 07a, 07b, 07c, 08, 09a–09k (11 console items), 10, 43, 45, 47, 48, 49, 72 |
 | **High** | 22 | LR-02c, 11a, 11b, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 46, 50, 51, 52, 63, 65, 71, 73 |
-| **Owner actions open** | 22 | OA-01 to OA-21 and OA-23 (§7). Of the 30 open Critical items, 11 are BLOCKED on the owner, and 2 more (LR-02a, LR-03) wait for the owner's merge approval. |
+| **Owner actions open** | 21 | OA-01, OA-03 to OA-21 and OA-23 (§7). Of the 30 open Critical items, 10 are BLOCKED on the owner, and 2 more (LR-02a, LR-03) wait for the owner's merge approval. |
 
 The counts are recomputed from the tables in §3–§6 after every update.
 
@@ -134,7 +134,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-04 | Public Privacy Policy, Terms, support page and deletion page in Arabic and English, with no placeholders (Apple 5.1.1(i) and the Support URL; Play privacy policy and the deletion web link) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel; Release manager | `docs/legal/*` drafts still contain `{{ENTITY_NAME}}` and other placeholders. `build-store.sh` refuses to build without `API_BASE_URL`, `PRIVACY_POLICY_URL`, `TERMS_URL` and `SUPPORT_URL`. The deletion page is required by the stores, not by the script. Owner action OA-08. |
 | [ ] | LR-05 | Demo accounts on the live backend that need no WhatsApp code (Apple 2.1(a); Play App access) | BE | Both | C | BLOCKED — TECHNICAL DEPENDENCY | Owner; Release manager | `cli/review-cohort.ts` was merged in #490. Needs LR-01, then the owner's domain and two passwords (OA-21). Also needed:<br>• past lessons and reports in the data;<br>• a third, disposable parent for the deletion test;<br>• **something payable**, because #507 found the review accounts have nothing to pay, so a reviewer cannot reach the pay sheet. |
 | [ ] | LR-06 | Apple Distribution certificate, App Store profile with Push, App Store Connect record for `com.jawwid.jawwidChat` | iOS | iOS | C | BLOCKED — OWNER ACTION REQUIRED | Owner | `exportArchive`: `No signing certificate "iOS Distribution" found`. Owner action OA-01. Done when the export succeeds and `aps-environment = production` is in the signed entitlements. |
-| [ ] | LR-07a | Google Play **Organization** developer account, verified (D-U-N-S, identity, website) | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | Play must verify the account before any app can be submitted. A D-U-N-S number can take up to 30 days. **The longest lead time on the whole list.** Owner action OA-02. |
+| [ ] | LR-07a | Google Play **Organization** developer account, verified (D-U-N-S, identity, website) | AND | AND | C | READY FOR VERIFICATION | Owner | **The owner confirmed on 2026-11-08 that Jawwid has a Play Organization account.** Still to check when the app is created: Play Console shows the account as verified and asks for no testing requirement (LR-69). |
 | [ ] | LR-07b | Final Android package name, permanent after the first upload, even to internal testing | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | `build.gradle.kts:59` uses `com.jawwid.jawwid_chat`; iOS uses `com.jawwid.jawwidChat`. Recommendation: keep `com.jawwid.jawwid_chat`. Owner action OA-03. |
 | [ ] | LR-07c | Upload key created and kept by the owner; Play App Signing | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | Only a throwaway key has ever signed a build. Release signing never falls back to the debug key (LR-53). Owner action OA-03. |
 | [ ] | LR-47 | Firebase project and `google-services.json` for the release build; APNs key configured for push | BE | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | CI job: "Android build (debug builds, release refuses without Firebase)". Owner action OA-04. |
@@ -238,7 +238,7 @@ Questions go to the owner one at a time, in this order.
 
 | # | What we need from you | Why | Store / feature | Deadline | What it blocks |
 |---|---|---|---|---|---|
-| OA-02 | **Does Jawwid already have a verified Google Play Organization developer account (with a D-U-N-S number)?** If not, start it today: the D-U-N-S number is free but can take up to 30 days. | Play will not accept any app from an unverified account | Google Play | **Today, Sun 8 Nov** | LR-07a, LR-49, every Android submission step |
+| ~~OA-02~~ | **Answered 2026-11-08: yes, Jawwid has a Play Organization account.** | — | Google Play | Done | — |
 | OA-01 | Create the Apple Distribution certificate, the App Store provisioning profile with Push for `com.jawwid.jawwidChat`, and the App Store Connect app record | Only the Account Holder or an Admin can do it | App Store | Mon 9 Nov 12:00 | LR-06, LR-48, LR-57b |
 | OA-03 | Confirm the final Android package name (recommended: keep `com.jawwid.jawwid_chat`) and create the upload keystore you keep safe | The package name is permanent after the first upload | Google Play | Mon 9 Nov 12:00 | LR-07b, LR-07c, LR-49 |
 | OA-04 | The Firebase project for Jawwid Chat: the `google-services.json` for the final package, and the APNs key confirmed | A release Android build refuses to build without it; push and calls need it | Both | Mon 9 Nov 12:00 | LR-47, LR-12, LR-49 |
