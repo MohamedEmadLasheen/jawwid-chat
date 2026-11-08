@@ -16,6 +16,13 @@ PRD. Those are your calls and AI #1's work.
 > times during the audit and eight findings were fixed while the report was being
 > written.** Anything read from an older copy of these documents is stale.
 
+> **Corrected 2026-11-08 (LR-30).** This handoff is a 2026-09-06 snapshot and is
+> not the current status. In particular **RT-006, RT-012, RT-016 and RT-022 are
+> FIXED on `main`** (code evidence and the PRs are in the
+> [`findings.md`](findings.md) register rows), and RT-001 and RT-009 were closed
+> later as well. Use `findings.md` for the current status of every finding, not
+> the tables below.
+
 ## Where this stands
 
 28 findings. **15 open, 12 resolved, 1 closed.**
