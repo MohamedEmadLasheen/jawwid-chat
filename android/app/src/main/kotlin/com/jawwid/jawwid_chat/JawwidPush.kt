@@ -61,7 +61,7 @@ object JawwidPush {
      * missed there, and a ring still on this screen would be a dead one. The
      * FCM TTL of a call push (fcm.provider.ts) is the same 45 s.
      */
-    private const val RING_TIMEOUT_MS = 45_000L
+    internal const val RING_TIMEOUT_MS = 45_000L
 
     /** A decline older than the ring is moot: the call is over on the server. */
     private const val PENDING_DECLINE_MAX_AGE_MS = RING_TIMEOUT_MS
