@@ -46,12 +46,16 @@ credential). No credential, entity name, address or URL has been invented.
    `canUseFullScreenIntent()`) is still open.
 8. **"Encrypted in transit: Yes": LR-32 is done (#506).** The server refuses a non-`wss://` LiveKit URL
    when `APP_ENV=production` (`apps/api/src/communication/calls/media-token.ts:92-102`).
-9. **Crash data purposes now agree (LR-71):** App Functionality only on both stores
+9. **Crash data purposes differ between the stores on purpose (LR-71):** Google gets "App functionality,
+   Analytics", because Google's Data safety Analytics purpose covers monitoring app health and diagnosing
+   and fixing bugs or crashes. Apple gets App Functionality only, because Apple's App Functionality covers
+   minimizing app crashes. The stores define purposes differently; do not make them match
    (`google-data-safety.md` §2.3).
 10. **Collected but not cited before (LR-71):** learner certificate requests (Other User Content) and
     material opens (Product Interaction / App interactions). Both fall under types already declared Yes.
-11. **Sentry automatic session tracking is on by default** and not turned off in
-    `lib/core/crash/crash_reporting.dart`. OPEN for the lead's decision: turn it off, or declare it.
+11. **Sentry automatic session tracking is on by default** and not yet turned off in
+    `lib/core/crash/crash_reporting.dart` on main. Decided: off in #526 (pending merge). Confirm #526 is
+    in the submitted build before either privacy form is saved; if not, declare it.
 
 ## Owner must confirm
 

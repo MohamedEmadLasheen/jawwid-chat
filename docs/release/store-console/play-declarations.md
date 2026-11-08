@@ -106,7 +106,7 @@ Notes for the owner:
 
 **What the app does:** during a call or live lesson, `CallForegroundService` keeps the microphone working
 when the person leaves the app or locks the screen, with an ongoing "call in progress" notification and
-a Hang up button (`android/app/src/main/AndroidManifest.xml:24-29`, `:73-76`).
+a Hang up button handled by `CallActionReceiver` (`android/app/src/main/AndroidManifest.xml:24-29`, `:73-80`).
 
 **Microphone only (launch item LR-14, done in #505).** The service declares
 `android:foregroundServiceType="microphone"` (`AndroidManifest.xml:73-76`) and starts with
@@ -207,8 +207,8 @@ trader details verified. Google Play Age Signals and US state laws apply only wh
 ## 10. Open items (LR-71)
 
 Each answer below stays as drafted until its owner decides. Nothing here changes an answer. The
-Data safety open items (payment info, religious beliefs, Sentry session tracking) are in
-`google-data-safety.md` §6.
+Data safety items (payment info, religious beliefs, and Sentry session tracking, decided off in #526
+pending merge) are in `google-data-safety.md` §6.
 
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|

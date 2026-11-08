@@ -2,7 +2,8 @@
 
 **Launch items LR-09, LR-23 and LR-71. Draft, 2026-11-08; re-verified 2026-11-09.** Pinned to `main` @
 `bc47d376`: the answers were audited against that commit in the LR-71 dry run, after the privacy-manifest
-fix LR-73 (#508), and every passage changed in the re-check was verified directly in the code. Paths are relative to the repository root, cited as `file:line`.
+fix LR-73 (#508), and every passage changed in the re-check was verified directly in the code. Paths are
+relative to the repository root, cited as `file:line`.
 
 **Where it goes:** App Store Connect → the app → **App Privacy** → Get Started / Edit.
 
@@ -59,7 +60,7 @@ fix LR-73 (#508), and every passage changed in the re-check was verified directl
 | Purchases | Purchase History | Yes | Yes | No | App Functionality |
 | Usage Data | Product Interaction | Yes | Yes | No | App Functionality, Analytics |
 | Usage Data | Advertising Data | **No** | — | — | — |
-| Usage Data | Other Usage Data | **No** (OPEN: Sentry session tracking, §3.8, §7) | — | — | — |
+| Usage Data | Other Usage Data | **No** (Sentry session tracking decided off in #526, pending merge: §3.8, §7) | — | — | — |
 | Diagnostics | Crash Data | Yes | Yes | No | App Functionality |
 | Diagnostics | Performance Data | **No** | — | — | — |
 | Diagnostics | Other Diagnostic Data | Yes | Yes | No | App Functionality |
@@ -249,12 +250,13 @@ and **invoices to download**, and sends what they pay for:
 
 **Advertising Data: No.** No ads.
 
-**Other Usage Data: No.** **OPEN (lead's decision; see §7):** `SentryFlutter.init` does not set
-`enableAutoSessionTracking` (`lib/core/crash/crash_reporting.dart:36-51`), and the Sentry SDK turns
-automatic session tracking on by default, so release builds may send app-session start and end events
-(release health). Either the lead turns it off in code, and this answer stays No, or it stays on and the
-session data is declared (Other Usage Data, or Other Diagnostic Data, App Functionality, here and in
-`google-data-safety.md`). The answer is not changed until that decision.
+**Other Usage Data: No.** **Decided: off in #526 (pending merge); see §7.** On main today,
+`SentryFlutter.init` does not set `enableAutoSessionTracking` (`lib/core/crash/crash_reporting.dart:36-51`),
+and the Sentry SDK turns automatic session tracking on by default, so release builds may send app-session
+start and end events (release health). The lead decided to turn it off in code (#526), so this answer
+stays No. Before you press Publish, confirm #526 is merged and in the submitted build; if it is not, the
+session data must be declared (Other Usage Data, or Other Diagnostic Data, App Functionality, here and in
+`google-data-safety.md`).
 
 ### 3.9 Diagnostics (Sentry)
 
@@ -265,7 +267,7 @@ Store builds must carry the DSN (launch item LR-21), so answer as if it is on.
 Linked: it carries the hashed account id (`:64`).
 
 **Other Diagnostic Data: Yes.** Sentry adds the device model and OS version to each event, and the app
-keeps the last navigation steps (screen names only) as breadcrumbs (`crash_reporting.dart:45-49`, `:83-95`).
+keeps the last navigation steps (screen names only) as breadcrumbs (`crash_reporting.dart:45-49`, `:83-96`).
 
 **Performance Data: No.** Performance tracing is off (`tracesSampleRate = null`,
 `enableAutoPerformanceTracing = false`: `crash_reporting.dart:44-45`). No screenshots or view hierarchy
@@ -274,8 +276,10 @@ are attached (`:42-43`). `sendDefaultPii = false` (`:41`).
 Purpose: **App Functionality** only, for Crash Data and Other Diagnostic Data. Apple's definition of App
 Functionality includes "minimize app crashes". Analytics is **not** declared for them: the reports go only
 to Sentry, are used to find and fix crashes, and there is no analytics SDK and no tracing
-(`crash_reporting.dart:44-45`). `google-data-safety.md` §2 uses the same purpose (re-checked under LR-71,
-so the two labels agree). The manifest says the same (`ios/Runner/PrivacyInfo.xcprivacy:124-135`, `:223-234`).
+(`crash_reporting.dart:44-45`). The manifest says the same (`ios/Runner/PrivacyInfo.xcprivacy:124-135`, `:223-234`).
+Google declares "App functionality, Analytics" for the same data, because Google's Analytics purpose
+covers diagnosing and fixing crashes; the stores define purposes differently (`google-data-safety.md` §2.3).
+Do not add Analytics here to match Google.
 
 ### 3.10 Types the app does not collect
 
@@ -341,8 +345,8 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|
 | O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §3.2; `google-data-safety.md` §2 |
-| O-2 | Sensitive Info: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel: L-10, L-14, LD-13 | §3.4; `google-data-safety.md` §2 |
-| O-3 | Other Usage Data: Sentry automatic session tracking | No | **OPEN.** The lead's engineering decision: turn it off in `crash_reporting.dart`, or declare it | §3.8; `google-data-safety.md` §2.2 |
+| O-2 | Sensitive Info: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §3.4; `google-data-safety.md` §2 |
+| O-3 | Other Usage Data: Sentry automatic session tracking | No | **Decided: off in #526 (pending merge).** Confirm #526 is in the submitted build; if not, declare it | §3.8; `google-data-safety.md` §2.2 |
 | O-4 | Privacy Policy and User Privacy Choices URLs | placeholders | **OPEN.** LR-04, LD-16 | §4 |
 
 The target audience, storefronts, Families, Child Safety Standards and Advertising ID items are Play

@@ -2,8 +2,8 @@
 
 **Launch items LR-09, LR-23 and LR-71. Draft, 2026-11-08; re-verified 2026-11-09.** Pinned to `main` @
 `bc47d376`: the answers were audited against that commit in the LR-71 dry run, after the `wss://` fix
-LR-32 (#506), and every passage changed in the re-check was verified directly in the code. Paths are relative to the repository root, cited as `file:line`. The evidence for each data type is the
-same as in `apple-app-privacy.md` §3; this file repeats the key lines and adds what is Android-only.
+LR-32 (#506), and every passage changed in the re-check was verified directly in the code. Paths are
+relative to the repository root, cited as `file:line`. The evidence for each data type is the same as in `apple-app-privacy.md` §3; this file repeats the key lines and adds what is Android-only.
 
 **Where it goes:** Play Console → the app → **Policy and programs → App content → Data safety**.
 
@@ -75,8 +75,8 @@ Every row: **Shared = No**, **purposes never include Advertising or marketing or
 | App activity | Other user-generated content | Yes | No | Optional | App functionality | Feedback to the academy (`lib/core/data/http/http_feedback_repository.dart:47`), reports (`lib/core/data/http/http_moderation_repository.dart:21`), lesson reports (`lib/core/data/http/http_lesson_repository.dart:54`, `:59`), leave requests (`lib/core/data/http/http_supervision_repository.dart:49`), learner certificate requests with title, achievement, date, printed name and optional grade and note (`http_supervision_repository.dart:35-44`; added under LR-71, answer unchanged), whiteboards (`lib/features/whiteboards/data/whiteboards_repository.dart:158`), task comments (`lib/core/data/http/http_task_repository.dart:56`), profile "about" text |
 | App activity | Other actions | **No** | — | — | — | — |
 | Web browsing | Web browsing history | **No** | — | — | — | The web view is limited to the academy's activity pages (`lib/features/materials/presentation/activity_view_mobile.dart:62-68`) |
-| App info and performance | Crash logs | Yes | No | Required (cannot be turned off in the app) | App functionality | Sentry, release builds with a DSN (`lib/core/crash/crash_reporting.dart:24-50`). Purpose: see §2.3 |
-| App info and performance | Diagnostics | Yes | No | Required | App functionality | Sentry's device model and OS version, navigation breadcrumbs only (`crash_reporting.dart:45-49`, `:83-95`); no performance tracing (`:44-45`). Purpose: see §2.3. Sentry session tracking: **OPEN (§6)** |
+| App info and performance | Crash logs | Yes | No | Required (cannot be turned off in the app) | App functionality, Analytics | Sentry, release builds with a DSN (`lib/core/crash/crash_reporting.dart:24-50`). Purpose: see §2.3 |
+| App info and performance | Diagnostics | Yes | No | Required | App functionality, Analytics | Sentry's device model and OS version, navigation breadcrumbs only (`crash_reporting.dart:45-49`, `:83-96`); no performance tracing (`:44-45`). Purpose: see §2.3. Sentry session tracking: decided off in #526, pending merge (§2.2, §6 O-5) |
 | App info and performance | Other app performance data | **No** | — | — | — | Tracing is off |
 | Device or other IDs | Device or other IDs | Yes | No | Required | App functionality | See §2.1 |
 
@@ -103,25 +103,30 @@ Every row: **Shared = No**, **purposes never include Advertising or marketing or
 | SDK | Data it sends | Declared above as |
 |---|---|---|
 | Firebase Cloud Messaging (`android/app/build.gradle.kts:123-125`) | Installation ID, FCM token, the notification payload in transit | Device or other IDs |
-| Sentry (`sentry_flutter`, `pubspec.yaml:130`) | Crash stack, device model and OS, hashed account id, navigation breadcrumbs. Also, unless turned off, the SDK's automatic app-session events (release health) and possibly its own installation id (UNVERIFIED without a build): `crash_reporting.dart:36-51` does not set `enableAutoSessionTracking`, which is on by default. **OPEN (§6)** | Crash logs, Diagnostics, User IDs |
+| Sentry (`sentry_flutter`, `pubspec.yaml:130`) | Crash stack, device model and OS, hashed account id, navigation breadcrumbs. On main today, `crash_reporting.dart:36-51` does not set `enableAutoSessionTracking`, which is on by default, so the SDK may also send automatic app-session events (release health) and possibly its own installation id (UNVERIFIED without a build). **Decided: off in #526 (pending merge)**; see §6 O-5 | Crash logs, Diagnostics, User IDs |
 | LiveKit (`livekit_client`, `pubspec.yaml:38`) | Live microphone audio (relayed, not recorded), participant id | Voice or sound recordings, User IDs |
 | Stripe | Nothing from the app's code: Checkout opens in the browser | — (see §4) |
 | No advertising, analytics, attribution or social-login SDK | — | `docs/legal/data-inventory-and-retention-matrix.md` §2, "Not used" |
 
-### 2.3 Crash logs and diagnostics: why "App functionality" only (LR-71)
+### 2.3 Crash logs and diagnostics: why the purposes differ from Apple's (LR-71)
 
-The 2026-11-08 draft gave crash logs and diagnostics the purposes "App functionality, Analytics", while
-`apple-app-privacy.md` §3.9 and the iOS privacy manifest (`ios/Runner/PrivacyInfo.xcprivacy:124-135`,
-`:223-234`) give App Functionality only. The two labels now agree on **App functionality** only, because
-the code uses this data only to find and fix crashes:
-- the reports go only to Sentry, and only in a release build with a DSN (`crash_reporting.dart:24-28`);
+Google: **App functionality, Analytics.** Apple (`apple-app-privacy.md` §3.9 and the iOS privacy manifest,
+`ios/Runner/PrivacyInfo.xcprivacy:124-135`, `:223-234`): **App Functionality** only. The difference is
+deliberate. The use is the same on both stores; the two stores sort that use under different purposes:
+- **Google's** Data safety "Analytics" purpose covers monitoring app health and diagnosing and fixing bugs
+  or crashes. That is exactly what Sentry data is used for, so Analytics is declared on Google.
+- **Apple's** App Functionality purpose covers minimizing app crashes, and Apple's Analytics is about
+  understanding how people use the app. So Apple stays at App Functionality only.
+
+What the data is used for (`lib/core/crash/crash_reporting.dart`):
+- the reports go only to Sentry, and only in a release build with a DSN (`:24-28`);
 - performance tracing is off (`:44-45`), user-interaction and native breadcrumbs are off (`:46-47`), and
-  only navigation breadcrumbs are kept (`:49`, `:84-96`);
+  only navigation breadcrumbs are kept (`:49`, `:83-96`);
 - there is no analytics SDK in the app (§2.2), and nothing reads crash data to measure how people use the app.
 
-Re-read Google's live definitions on the day. If Google's form counts "monitoring app stability" as
-Analytics rather than App functionality, add Analytics here **and** in `apple-app-privacy.md`, so the two
-stay the same.
+Do not copy one store's purposes to the other. Re-read both stores' live purpose definitions on the day
+(the Google wording above was not re-fetched for this draft). Over-declaring on Google is safer than
+under-declaring.
 
 ## 3. Security practices
 
@@ -177,9 +182,9 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|
 | O-1 | User payment info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §2 |
-| O-2 | Political or religious beliefs: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel: L-10, L-14, LD-13 | §2 |
+| O-2 | Political or religious beliefs: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §2 |
 | O-3 | Families Policy question | Not asked (audience 18+) | **OPEN.** Owner: target audience N-1 / LD-5; counsel: L-15 (SDK terms for child-directed use) | §1; `play-declarations.md` §1 |
 | O-4 | Advertising ID not collected | Not collected | **OPEN** pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6) | §2.1; `play-declarations.md` §3 |
-| O-5 | Sentry automatic session tracking | Not declared beyond Crash logs and Diagnostics | **OPEN.** The lead's engineering decision: turn it off in `crash_reporting.dart`, or declare it (Diagnostics or App interactions, App functionality) | §2, §2.2; `apple-app-privacy.md` §3.8 |
+| O-5 | Sentry automatic session tracking | Not declared beyond Crash logs and Diagnostics | **Decided: off in #526 (pending merge).** The lead turns `enableAutoSessionTracking` off in `crash_reporting.dart`, so nothing more is declared. Before Save, confirm #526 is merged and in the submitted build; if not, declare it (Diagnostics or App interactions, App functionality) | §2, §2.2; `apple-app-privacy.md` §3.8 |
 | O-6 | Name "Shared" because of the child's name in the Stripe line item | Not shared | **OPEN.** Owner LD-8; counsel L-4 | §4 |
 | O-7 | Delete account URL | placeholder | **OPEN.** LR-04, LD-16 | §1, §3.2 |
