@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 17:17 Cairo (15:17 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-08 17:42 Cairo (15:42 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `aef40d66`, which contains #500, #502 and #504–#513. Main CI run 42488182440 on `6e0e1438`: 15/15 green.
 
 ## 1. Dashboard
@@ -39,7 +39,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **93** | **16** | 15 | 6 | 30 | 19 | 4 | 3 |
+| **94** | **16** | 15 | 7 | 30 | 19 | 4 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
@@ -52,12 +52,12 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
 | **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 70 | 13 | **19 %** | 22 | 19 |
-| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 72 | 14 | **19 %** | 28 | 18 |
+| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 73 | 14 | **19 %** | 28 | 18 |
 | A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
 | B. Android: Google Play | 17 | 3 | **18 %** | 10 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
 | D. Shared backend and infrastructure | 18 | 2 | **11 %** | 9 | 5 |
-| E. Security and QA | 17 | 8 | **47 %** | 1 | 4 |
+| E. Security and QA | 18 | 8 | **44 %** | 1 | 4 |
 | F. Legal and compliance | 14 | 1 | **7 %** | 7 | 4 |
 
 ### Current blockers (what stops submission today)
@@ -86,7 +86,8 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder H (Release manager) | LR-01 first-deploy readiness report | #512 | **Merged** `6a31ba8e` |
 | Builder I (Release manager + Security) | LR-76 signed-build options paper | #513 | **Merged** `aef40d66` |
 | Agent J (Security + Release) | LR-76 signing on the existing Mac (verified paper) | #514 | Both P1s fixed; final check of the public wording; **will be squash-merged** so the first commit never reaches `main` |
-| Agent K (QA engineer) | LR-08 device test plan refreshed for today's merges | #515 | Accepted @ `d5358896`; merge when green |
+| Agent K (QA engineer) | LR-08 device test plan refreshed for today's merges | #515 | **Merged** `ea5a2d69` |
+| Agent M (QA + mobile) | LR-78 flaky Android ring job | `~/dev/jawwid-lr78-ring` | Running |
 | Builder L (Backend/infra) | LR-77 first-deploy backup fix | #516 | Accepted @ `e56568c1`; **owner merge approval needed** (High) |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
@@ -215,7 +216,7 @@ Each requirement appears once:
 | [x] | LR-32 | `LIVEKIT_URL` must be `wss://` in production | Both | M | COMPLETED AND VERIFIED | Builder B; lead | — | E-05 |
 | [x] | LR-38 | RT-017/018: invalid `before`/`after` return 400, not 500 | Both | L | COMPLETED AND VERIFIED | Builder B | — | E-05 |
 
-### E. Security and QA (8 of 17 done, 47 %)
+### E. Security and QA (8 of 18 done, 44 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
@@ -224,6 +225,7 @@ Each requirement appears once:
 | [ ] | LR-22 | Crash reports are symbolicated | Both | H | READY FOR VERIFICATION | Release manager | LR-45 | #502 keeps the symbols (`--split-debug-info`); the upload is a documented `sentry-cli` step with the owner's token. Done when a forced test crash shows a symbolicated trace. |
 | [ ] | LR-46 | Final security sign-off on the release-candidate SHA | Both | H | NOT STARTED | Security reviewer (Fable 5.1) | LR-08 | Runs in Phase 3 on the merged release candidate. |
 | [ ] | LR-63 | Signed, re-authorized media links; webhook signatures verified | Both | H | READY FOR VERIFICATION | Security audit | LR-18 | `media-url.ts:81-135`; `stripe-webhook.controller.ts:52-60`. Verified in code; it still needs the real-deployment test (LR-18). |
+| [ ] | LR-78 | The optional CI job "Android killed-app ring" is reliable: it fails only when the ring is really broken | AND | M | IN PROGRESS | Agent M (QA + mobile) | — | It failed intermittently with "no notification … after the call push" on #498, #509, #516 and the documents-only #514, and passed on re-run and on `main`. A flaky check hides real ring regressions (LR-12) and slows every merge. Agent M is diagnosing it from the CI logs in `~/dev/jawwid-lr78-ring`. Any `.github/` change goes to the owner. |
 | [ ] | LR-28 | Defects a reviewer could see are closed (TEACHER-020, PARENT-016, PARENT-024, P2 retests) | Both | M | NOT STARTED | QA engineer | LR-08 | TEACHER-020 (#491) needs an iPhone check. PARENT-016 and PARENT-024 have no write-up. |
 | [ ] | LR-30 | The release documents tell the truth | — | M | IN PROGRESS | Lead | #501 (OA-16) | **#510 merged** as `5ed73ce6`: `production-readiness.md` (environment counts, deploy and backup history), `findings.md` (RT-006/012/016/022 fixed with evidence; RT-021 remainder), the red-team handoff and `API-CONTRACT.md`. Reviews ACCEPT @ `89d3196c`. Still open: `docs/qa/release-gate.md` S-11/S-12/S-15 "PASS" (fixed in #501, which waits for OA-16). |
 | [ ] | LR-33 | Staff permission guard enforced (`shadow` → `enforce`) | — | M | BLOCKED — TECHNICAL DEPENDENCY | Backend engineer; security reviewer | LR-01, owner (High) | Needs real shadow-denial logs (LR-01). It is authorization, so High risk: the owner approves the switch. |
