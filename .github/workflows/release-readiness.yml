@@ -177,21 +177,30 @@ jobs:
         run: |
           set -uo pipefail
           R="$RUNNER_TEMP/release-readiness-android-report.txt"
+          # The JVM tests land with #449 (PushPayloadTest) and #524 (RingCheckTest). A commit
+          # without any is reported as such, never as a pass.
+          if ! find android/app/src/test -name '*.kt' -o -name '*.java' 2>/dev/null | grep -q .; then
+            printf '%-13s %s\n' "NOT VERIFIED" "Android JVM unit tests: this commit has none under android/app/src/test" | tee -a "$R"
+            echo "::warning::No Android JVM unit tests on this commit; nothing was run"
+            exit 0
+          fi
           if (cd android && ./gradlew --no-daemon :app:testDebugUnitTest); then status=0; else status=$?; fi
-          dir=android/app/build/test-results/testDebugUnitTest
+          # android/build.gradle.kts moves every build folder to <repo>/build/<project>.
+          dir=build/app/test-results/testDebugUnitTest
           tests=0; failures=0
           for x in "$dir"/*.xml; do
             [ -f "$x" ] || continue
             t="$(sed -n 's/.*<testsuite[^>]* tests="\([0-9]*\)".*/\1/p' "$x" | head -1)"
             f="$(sed -n 's/.*<testsuite[^>]* failures="\([0-9]*\)".*/\1/p' "$x" | head -1)"
             e="$(sed -n 's/.*<testsuite[^>]* errors="\([0-9]*\)".*/\1/p' "$x" | head -1)"
-            tests=$((tests + ${t:-0})); failures=$((failures + ${f:-0} + ${e:-0}))
+            k="$(sed -n 's/.*<testsuite[^>]* skipped="\([0-9]*\)".*/\1/p' "$x" | head -1)"
+            tests=$((tests + ${t:-0} - ${k:-0})); failures=$((failures + ${f:-0} + ${e:-0}))
             echo "  $(basename "$x" .xml): tests=${t:-?} failures=${f:-?} errors=${e:-?}" >> "$R"
           done
           if [ "$status" -ne 0 ] || [ "$failures" -gt 0 ]; then
-            printf '%-13s %s\n' FAIL "Android JVM unit tests: $failures failed (gradle exit $status)" | tee -a "$R"; exit 1
+            printf '%-13s %s\n' FAIL "Android JVM unit tests: gradle exit $status; $failures test failures recorded" | tee -a "$R"; exit 1
           elif [ "$tests" -eq 0 ]; then
-            printf '%-13s %s\n' FAIL "Android JVM unit tests: none ran (NO-SOURCE?)" | tee -a "$R"; exit 1
+            printf '%-13s %s\n' FAIL "Android JVM unit tests: none ran (all skipped, or no results in $dir)" | tee -a "$R"; exit 1
           fi
           printf '%-13s %s\n' PASS "Android JVM unit tests: $tests passed" | tee -a "$R"
       - name: Upload the text report (never the AAB or APK)

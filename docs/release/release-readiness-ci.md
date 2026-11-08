@@ -33,7 +33,7 @@ its `--dart-define` list is repeated in the workflow and must be kept in step wi
 | LR-50 | `aapt2 dump badging` on a universal APK made from the AAB by `bundletool` | the packaged manifest says `targetSdkVersion` 36 and `minSdkVersion` (`sdkVersion`) 26, for package `com.jawwid.jawwid_chat` |
 | LR-51 | `readelf -lW` on every `base/lib/**/*.so` inside the AAB | every 64-bit (`arm64-v8a`, `x86_64`) ELF `LOAD` segment has `p_align` of at least 16 KB (0x4000), so the libraries load on 16 KB-page devices. Play's rule covers 64-bit ABIs only; 32-bit libraries are listed as `INFO` |
 | Data safety | `aapt2 dump permissions` on the universal APK | the merged manifest (with every library's permissions) has no `AD_ID`, matching "Advertising ID: not collected"; the full permission list is in the report |
-| (tests) | `./gradlew :app:testDebugUnitTest` | the Android JVM unit tests under `android/app/src/test` pass; no other workflow runs them |
+| (tests) | `./gradlew :app:testDebugUnitTest`, results read from `build/app/test-results` | the Android JVM unit tests under `android/app/src/test` ran (at least one, not skipped) and passed; no other workflow runs them. A commit with no such tests (today's `main`; they arrive with #449 and #524) is `NOT VERIFIED`, not a pass |
 | LR-51 | `zipalign -c -P 16 -v 4` on the universal APK (build-tools 35+) | uncompressed native libraries start on a 16 KB boundary inside the APK |
 | LR-52 | `plutil` on `Runner.app/Info.plist` | `DTXcode` is 2600 or more and `DTSDKName` starts with `iphoneos26`: the app was built with Xcode 26 and the iOS 26 SDK |
 | LR-58/LR-73 | `Runner.app/PrivacyInfo.xcprivacy` exists and passes `plutil -lint` | the privacy manifest is copied into the built app and is a valid property list |
