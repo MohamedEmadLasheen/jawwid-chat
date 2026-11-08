@@ -331,6 +331,66 @@ void main() {
   });
 
   // =======================================================================
+  group('N7. the controller torn down mid-call lets go of the native side', () {
+    // Sign-out, or a session/socket rebuild, disposes the controller and drops
+    // the room. Without these, Android keeps the ongoing-call service running
+    // and keeps showing the app over the lock screen.
+    test('N7a. a live call: the ongoing-call service stops and the screen is dismissed', () async {
+      final container = await ringing();
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+      expect(native.ongoing, ['start:call_1']);
+      expect(native.dismissals, isEmpty);
+
+      auth.endSession();
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.idle);
+
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+      expect(native.dismissals, [('call_1', CallDismissReason.failed)]);
+    });
+
+    test('N7b. a ringing call is dismissed; nothing was started, so nothing stops', () async {
+      final container = await ringing();
+
+      auth.endSession();
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.idle);
+
+      expect(native.ongoing, isEmpty);
+      expect(native.dismissals, [('call_1', CallDismissReason.failed)]);
+    });
+
+    test('N7c. no call: nothing is sent', () async {
+      final container = await ready();
+
+      auth.endSession();
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.idle);
+
+      expect(native.ongoing, isEmpty);
+      expect(native.dismissals, isEmpty);
+    });
+
+    test('N7d. a call that already ended is not stopped or dismissed again', () async {
+      final container = await ringing();
+      native.emit(NativeCallActionKind.answer);
+      await settle();
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'answered'));
+      await settle();
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+      expect(native.dismissals, [('call_1', CallDismissReason.remoteEnded)]);
+
+      auth.endSession();
+      await settle();
+      expect(stateOf(container).phase, CallUiPhase.idle);
+
+      expect(native.ongoing, ['start:call_1', 'stop:call_1']);
+      expect(native.dismissals, [('call_1', CallDismissReason.remoteEnded)]);
+    });
+  });
+
+  // =======================================================================
   group('N4. THE SYSTEM SCREEN COMES DOWN ON THE SERVER\'S WORD', () {
     test('N4a. call.ended dismisses it', () async {
       await ringing();
