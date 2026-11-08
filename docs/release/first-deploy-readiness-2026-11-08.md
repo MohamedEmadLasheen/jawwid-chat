@@ -7,7 +7,7 @@ deployed, run or changed to write it.**
 > first deploy failed at the backup step, before any migration: both workflows back up the `chat`
 > schema before `scripts/db/apply.sh` creates it, and the backup refused a database with no `chat`
 > schema. `scripts/infra/backup-db.sh` now skips the backup, loudly and without writing a file, when
-> the schema does not exist and `FIRST_DEPLOY` is unset or `true`; with any other `FIRST_DEPLOY` value
+> the schema does not exist and `FIRST_DEPLOY` is unset, empty or `true`; with any other `FIRST_DEPLOY` value
 > it fails. The workflow follow-up (#518, merged 2026-11-08 as `84a4e5d5`) passes `FIRST_DEPLOY` to
 > that step: the deploy's `first_deploy` input in both deploy workflows, and `'false'` in the scheduled
 > backups (§1d). Do **not**

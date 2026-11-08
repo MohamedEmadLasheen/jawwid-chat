@@ -220,7 +220,8 @@ It means `DATABASE_URL` points at a database with no Jawwid Chat schema, which
 is almost certainly the wrong database. The scheduled backups
 (`backup-daily.yml`, `backup-weekly.yml`) run with `FIRST_DEPLOY: 'false'`, so
 in that case they fail at the backup step itself, with the clear error above.
-Until the first production deploy creates the schema, they fail every night;
+Until the first production deploy creates the schema, they fail on every
+scheduled run (nightly for the daily one, Sundays for the weekly one);
 today they stop even earlier, at "The backup credentials are present", because
 the `backup` Environment has no secrets yet. In
 a deploy, the "Upload the pre-deployment backup" step only warns when there is
