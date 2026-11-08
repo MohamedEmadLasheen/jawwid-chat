@@ -111,6 +111,11 @@ country and a region, declared as Coarse Location (§3.3).
 browser**, outside the app (`lib/core/data/http/http_billing_repository.dart:31-32`;
 `docs/release/app-review-notes-payments.md` §4). Jawwid never receives the card number
 (data inventory §2, Stripe; §3, "Payment card data").
+After a card payment, the server stores and shows the **card brand, the last four digits and the wallet type**
+returned by Stripe on each invoice, linked to the family (`http_billing_repository.dart:125-133`, `:226`). The
+answer stays **No**, because the app never collects or sends card data; it only displays Stripe's own masked
+summary of a payment made outside the app. The invoice itself is declared under Purchase History. If counsel
+prefers to over-declare, change this to Yes, linked, App Functionality; the label is not otherwise affected.
 
 **Other Financial Info: Yes.**
 - For a bank transfer, the parent uploads the **transfer receipt** (a photo, a camera shot or a PDF),
@@ -184,7 +189,10 @@ also complaints to the academy (`lib/core/data/http/http_moderation_repository.d
 - a teacher's lesson reports (`lib/core/data/http/http_lesson_repository.dart:54`, `:59`), absence notes (`:171`);
 - leave requests with a free-text reason (`lib/core/data/http/http_supervision_repository.dart:49`);
 - whiteboard drawings (`lib/features/whiteboards/data/whiteboards_repository.dart:158`);
-- task comments (`lib/core/data/http/http_task_repository.dart:51`, `:56`).
+- task comments (`lib/core/data/http/http_task_repository.dart:51`, `:56`);
+- a teacher's professional profile: bio, specialization, qualifications, experience, languages, and
+  certificate files with title, issuer and date (`http_teacher_profile_repository.dart:72-79`, `:120-125`).
+  Shown to the teacher's families. The certificate files are also covered under Other User Content.
 
 **Gameplay Content: No.** The learning games are lessons; nothing a player makes is saved as game content.
 
