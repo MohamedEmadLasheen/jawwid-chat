@@ -102,6 +102,33 @@ void main() {
       expect(out['display_name'], 'Amina');
     });
 
+    test('masks opaque auth, id and jwt token values by key (LR-75)', () {
+      // Opaque values are not JWT-shaped, so only the key can protect them.
+      final out = RedactingLogger.redactMap({
+        'authToken': 'opaque-abc123',
+        'auth_token': 'opaque-def456',
+        'idToken': 'opaque-ghi789',
+        'id_token': 'opaque-jkl012',
+        'ID_TOKEN': 'opaque-mno345',
+        'jwt': 'opaque-pqr678',
+        'JWT': 'opaque-stu901',
+        'nested': {'authToken': 'opaque-vwx234'},
+        'request_id': 'req_7',
+      });
+
+      expect(out['authToken'], '[redacted]');
+      expect(out['auth_token'], '[redacted]');
+      expect(out['idToken'], '[redacted]');
+      expect(out['id_token'], '[redacted]');
+      expect(out['ID_TOKEN'], '[redacted]');
+      expect(out['jwt'], '[redacted]');
+      expect(out['JWT'], '[redacted]');
+      expect((out['nested']! as Map<String, Object?>)['authToken'], '[redacted]');
+      expect(out.toString(), isNot(contains('opaque-')));
+      // An unrelated key is untouched.
+      expect(out['request_id'], 'req_7');
+    });
+
     test('masks a code key only when it holds a one-time code (LR-42)', () {
       final out = RedactingLogger.redactMap({
         'code': '482 913',
