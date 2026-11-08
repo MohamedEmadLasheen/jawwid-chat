@@ -5,8 +5,8 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 16:45 Cairo (14:45 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
-- **State of `main`:** `9bb0418d`, which contains #500, #502, #504, #505, #506, #507 and #508. Main CI run 42485589672 on it: 15/15 green.
+- **Last updated:** 2026-11-08 17:30 Cairo (15:30 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **State of `main`:** `6e0e1438`, which contains #500, #502 and #504–#511. Main CI on it is running.
 
 ## 1. Dashboard
 
@@ -39,7 +39,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **93** | **15** | 14 | 8 | 29 | 20 | 4 | 3 |
+| **93** | **15** | 16 | 6 | 29 | 20 | 4 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
@@ -80,18 +80,20 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder B (Backend engineer) | LR-32, LR-38 | #506 | **Merged** `8e26b0dc` |
 | Drafter C (Store compliance) | LR-09a–k, LR-23 store-console answers | #507 | **Merged** `9bb0418d` |
 | Builder D (Mobile engineer) | LR-73 iOS privacy manifest | #508 | **Merged** `a6a7e1b1` |
-| Builder E (Mobile engineer) | LR-74 call microphone and service order | #509 | Fixed and accepted @ `5051ff7e`; CI running |
+| Builder E (Mobile engineer) | LR-74 call microphone and service order | #509 | **Merged** `481cdef2` |
+| Builder F (Release manager) | LR-30 document corrections | #510 | **Merged** `5ed73ce6` |
+| Builder G (Mobile engineer) | LR-75 token redaction | #511 | **Merged** `6e0e1438` |
+| Builder H (Release manager) | LR-01 first-deploy readiness report | #512 | Accepted @ `e36bc8cd`; CI running |
+| Builder I (Release manager + Security) | LR-76 signed-build options paper | #513 | Fixing review findings (one P1 misquote) |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
-1. **#509:** accepted @ `5051ff7e`. Its optional Android ring job failed with the known flaky signature (it passes on `main`), and a re-run is in progress. Merge when green.
-2. **#510** (LR-30 document corrections): a delta review is running; merge when accepted and green. **LR-75** (Builder G): review, then merge.
-3. **#507:** accepted @ `a7f34293`; merge when green.
-4. **#503:** merge if the other session has not done so (green, lead ACCEPT at `e83a6c05`).
-5. **LR-13 and LR-27** (iOS VoIP registry at launch; Android full-screen-intent check), as soon as #449 merges.
-6. **LR-26** (microphone "Open settings") once #449, #498 and #503 have landed (they share the l10n files).
-7. **LR-30:** correct the stale release documents.
-8. **Staging deploy preparation**, as soon as OA-06 arrives.
+1. Main CI on `6e0e1438`: when green, mark LR-75 COMPLETED and record LR-74's merge evidence.
+2. **#512** (first-deploy report): merge when CI is green, then write the **OT-3 handoff**.
+3. **#513** (signed-build options): re-review after Builder I's fixes, then write the **OT-2 handoff**.
+4. **LR-77** (first-deploy backup fix): design ready. Implementation starts the moment the owner approves (OT-3, step 1).
+5. **LR-13 and LR-27** as soon as #449 merges; **LR-26** once #449, #498 and #503 land.
+6. #503: merge if the other session has not.
 
 ## 2. Owner execution (one task at a time)
 
@@ -180,7 +182,7 @@ Each requirement appears once:
 | [ ] | LR-02b | Terms gate and sign-up acceptance in the iOS and Android app | Both | C | READY FOR VERIFICATION | Mobile engineer; QA | LR-02a, LR-08 | #504 merged as `cf731af2` on 2026-11-08 12:27 UTC. Independent review: ACCEPT @ `af1a3e1a`. Main CI: run 42480381161 was cancelled by a newer push; run 42481004529 on `14860ad3` contains it and **passed**. Still needed: a device test against an API with #497. |
 | [ ] | LR-12 | Incoming calls ring while the app is closed (S-06) | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner; mobile engineer | LR-47, LR-08 | iOS: PushKit and CallKit are merged but off until `APNS_VOIP_ENABLED=true`. Android: the full-screen ring is merged (#408, #458). Needs LR-47 and the device test. |
 | [ ] | LR-21 | Unique, increasing build numbers and a production-only store build | Both | H | READY FOR VERIFICATION | Release manager | LR-48, LR-49 | #502 merged as `14860ad3` on 2026-11-08 by the lead. Review ACCEPT @ `6c4856a7`; 30/30 checks green on the PR head; main CI run 42481004529 on the merge is green. Verify on the first store build of each platform. |
-| [ ] | LR-74 | Calls keep the microphone when the screen locks, even on a fresh install. The call service starts only after the microphone is granted, and the caller is asked before dialling (Play FGS rules on Android 14+) | Both | H | IN PROGRESS | Builder E | #509 review and CI | Found by the #505 review. **#509** (`d5aea3c2`): seven new tests; nothing native changes. Independent review ACCEPT, but the lead requires two P2s fixed first: overlapping microphone prompts on a scheduled call, and `dismiss()` leaving media connected. Builder E fixed both in `5051ff7e` (one shared microphone request; `dismiss()` tears down media). Delta review ACCEPT @ `5051ff7e`. CI is running; merge when green. Optional native follow-up: a "Calling…" notification text in both languages. |
+| [ ] | LR-74 | Calls keep the microphone when the screen locks, even on a fresh install. The call service starts only after the microphone is granted, and the caller is asked before dialling (Play FGS rules on Android 14+) | Both | H | READY FOR VERIFICATION | Builder E | main CI, LR-08 | **#509 merged** as `481cdef2` (2026-11-08): the call service starts only after the microphone is granted, and the caller is asked before dialling. Microphone requests are shared, so prompts never overlap, and `dismiss()` tears down media. Reviews ACCEPT @ `d5aea3c2` and `5051ff7e`; PR CI 30/30 (the optional ring job passed on re-run). **Still needed:** main CI, then a device check (fresh install, deny then allow, lock the screen mid-call). |
 | [ ] | LR-25 | Reporting or blocking a staff member behaves honestly | Both | M | IN PROGRESS | Mobile engineer (#503) | #503 | #503 head `e83a6c05`: lead review ACCEPT recorded; 30/30 checks pass after another session's re-run. Merge when the other session finishes with it. |
 | [ ] | LR-26 | Microphone denial is recoverable ("Open settings") | Both | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | #449, #498, #503 (l10n files) | Needs new strings in the l10n files, which #449, #498 and #503 all edit. Start when they land. |
 | [ ] | LR-35 | The picker no longer offers CSV, which the server refuses | Both | L | IN PROGRESS | #503 | #503 | As for LR-25. |
@@ -192,7 +194,7 @@ Each requirement appears once:
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
 | [ ] | LR-76 | A trusted machine produces the signed store builds (the distribution certificate and the upload key live there) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | OT-2 | **New 2026-11-08.** The owner's rule bars running project code on this Mac until its security is settled, so no store build can be made here. There is no release-build workflow in `.github/workflows/`. Options: (a) the owner settles this Mac; (b) a separate clean Mac; (c) a CI release workflow on GitHub's macOS runners with signing secrets in a protected Environment (High risk: CI and secrets, so owner approval). Blocks LR-06 (certificate), LR-07c (upload key), LR-48, LR-49, LR-08. |
-| [ ] | LR-01 | A live production backend for store builds and reviewers (Apple 2.1(a)) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner; Release manager | Builder H report, then OA-21 (owner approves the deploy) | "Deploy production" has never run, and "Deploy staging" has never succeeded. **Verified 2026-11-08 (names only):** the `production` Environment already holds the deploy token, GHCR pull credentials, `DATABASE_URL`, `REDIS_URL`, storage keys, FCM and APNs keys and a server `SENTRY_DSN` (19 secrets, 12 variables). The domains were chosen on 2026-11-05 (`api.chat.jawwid.com`; repository variables set). `DIGITALOCEAN_APP_ID` is **created by the first deploy** (`first_deploy=true`). `staging` holds only the LiveKit names. Builder H is writing the exact gap list (`first-deploy-readiness-2026-11-08.md`). **Done when:** `/health/ready` returns 200 on the production host and a store build signs in. |
+| [ ] | LR-01 | A live production backend for store builds and reviewers (Apple 2.1(a)) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner; Release manager | LR-77 (owner approval to implement), then OT-3 | "Deploy production" has never run, and "Deploy staging" has never succeeded. **Verified 2026-11-08 (names only):** the `production` Environment already holds the deploy token, GHCR pull credentials, `DATABASE_URL`, `REDIS_URL`, storage keys, FCM and APNs keys and a server `SENTRY_DSN` (19 secrets, 12 variables). The domains were chosen on 2026-11-05 (`api.chat.jawwid.com`; repository variables set). `DIGITALOCEAN_APP_ID` is **created by the first deploy** (`first_deploy=true`). `staging` holds only the LiveKit names. **#512** (`first-deploy-readiness-2026-11-08.md`, independent review ACCEPT @ `e36bc8cd`) is the gap list. Production holds every name its deploy needs. A production-first path works today (staging only builds the image). The first run is expected to fail its smoke test until DNS is added, and **it currently fails earlier, at the backup step (LR-77)**. **Done when:** `/health/ready` returns 200 on the production host and a store build signs in. |
 | [ ] | LR-77 | The first deploy can back up an empty database (the pre-migration backup must not fail before the `chat` schema exists) | Both | C | BLOCKED — OWNER ACTION REQUIRED | Backend engineer; owner (approval to implement) | OT-3 | **Found by the #512 review on 2026-11-08.** Both deploy workflows run `scripts/infra/backup-db.sh --schema chat` (`deploy-production.yml:388`) before `scripts/db/apply.sh` creates the schema (`apply.sh:25`). On a fresh database `pg_dump` finds no matching schema and `backup-db.sh:184-185` exits 1, so the first deploy stops before migrations. The fix changes a production safety step, which the lead classes as High risk, so it waits for the owner's approval **before implementation**. It is part of OT-3. |
 | [ ] | LR-02a | Terms gate on the API: no posting before acceptance (Apple 1.2; Play UGC "accept terms before posting") | Both | C | IN PROGRESS | Backend engineer; owner (merge) | OA-17, LR-02d | #497: independent review ACCEPT @ `9536446d` with one P2 (`auth.controller.ts:116-117` rotates the refresh token before `legal.dtoFor()`, so a database error lost the new tokens and the retry signed the user out everywhere). The lead fixed it in `9bc9416e` (dtoFor answers `unavailable` and never throws, with a new unit spec `legal-dto.spec.ts`). Independent review ACCEPT @ `9bc9416e`; CI is running. Next: **owner approves the merge (High: authentication, plus migration `20261107130000_chat_pd058_publish_order.sql`)**. Release order: app gates (done) → terms rows (LR-02d) → API. |
 | [ ] | LR-03 | Account deletion starts in the app for every account that can be created, with no "contact us" (Apple 5.1.1(v); Play account deletion) | Both | C | IN PROGRESS | Backend engineer; owner (merge) | OA-17 | #498 head `b11d2e6d`: 30/30 checks pass after another session's re-run. Review ACCEPT with two P2s:<br>• **P2-1:** a failing reminder could block erasures. The fix is uncommitted in `~/dev/jawwid-teacher-deletion`, one file; it needs a regression test.<br>• **P2-2:** the app copy says "deleted now" for a request.<br>Also in the same branch:<br>• `review-cohort.ts` must survive the review teacher's erasure (re-provisioning refuses with `TEACHER_CHANGED`);<br>• `review-accounts.md` must stop saying "takes effect immediately" for teachers.<br>Apple's account-deletion page allows a delayed deletion only when the user is told how long it takes; confirm the wording in the app. **Owner approves the merge (High: deletion).** |
@@ -220,10 +222,10 @@ Each requirement appears once:
 | [ ] | LR-46 | Final security sign-off on the release-candidate SHA | Both | H | NOT STARTED | Security reviewer (Fable 5.1) | LR-08 | Runs in Phase 3 on the merged release candidate. |
 | [ ] | LR-63 | Signed, re-authorized media links; webhook signatures verified | Both | H | READY FOR VERIFICATION | Security audit | LR-18 | `media-url.ts:81-135`; `stripe-webhook.controller.ts:52-60`. Verified in code; it still needs the real-deployment test (LR-18). |
 | [ ] | LR-28 | Defects a reviewer could see are closed (TEACHER-020, PARENT-016, PARENT-024, P2 retests) | Both | M | NOT STARTED | QA engineer | LR-08 | TEACHER-020 (#491) needs an iPhone check. PARENT-016 and PARENT-024 have no write-up. |
-| [ ] | LR-30 | The release documents tell the truth | — | M | IN PROGRESS | Lead | — | #501 corrects the gate notes and the payments path. Still stale: `release-gate.md` S-06/S-09, `production-readiness.md`, `findings.md` RT-006/012/016/022. |
+| [ ] | LR-30 | The release documents tell the truth | — | M | IN PROGRESS | Lead | #501 (OA-16) | **#510 merged** as `5ed73ce6`: `production-readiness.md` (environment counts, deploy and backup history), `findings.md` (RT-006/012/016/022 fixed with evidence; RT-021 remainder), the red-team handoff and `API-CONTRACT.md`. Reviews ACCEPT @ `89d3196c`. Still open: `docs/qa/release-gate.md` S-11/S-12/S-15 "PASS" (fixed in #501, which waits for OA-16). |
 | [ ] | LR-33 | Staff permission guard enforced (`shadow` → `enforce`) | — | M | BLOCKED — TECHNICAL DEPENDENCY | Backend engineer; security reviewer | LR-01, owner (High) | Needs real shadow-denial logs (LR-01). It is authorization, so High risk: the owner approves the switch. |
 | [ ] | LR-44 | Connection recovery: realtime resumes after a server restart or network loss (PARENT-015) | Both | M | BLOCKED — TECHNICAL DEPENDENCY | QA engineer | LR-08 | The 2026-10-31 QA showed the app needed a relaunch after an API restart. Whether it is fixed on `main` is not verified. It is a device-plan row (LR-08). |
-| [ ] | LR-75 | The app log masks opaque `authToken`, `idToken` and `jwt` values (remainder of RT-021) | Both | L | IN PROGRESS | Builder G | — | Found by the #510 review. Builder G is working in `~/dev/jawwid-lr75-redact`. |
+| [ ] | LR-75 | The app log masks opaque `authToken`, `idToken` and `jwt` values (remainder of RT-021) | Both | L | READY FOR VERIFICATION | Builder G; lead | main CI | **#511 merged** as `6e0e1438`: opaque `authToken`, `idToken`, `jwt`, `jwtToken`, `sessionToken`, `credential(s)` and `X-Auth-Token` values are masked, and hyphenated keys are normalised. Reviews ACCEPT @ `435f5f2f` and `4fe2417c`; PR CI 30/30. Becomes COMPLETED when main CI on `6e0e1438` is green. |
 | [x] | LR-42 | The app log redacts e-mail addresses and one-time codes (RT-021) | Both | L | COMPLETED AND VERIFIED | Builder A | — | E-06. The scope is e-mail and OTP. Opaque `authToken`, `idToken` and `jwt` values are LR-75. |
 | [x] | LR-60 | No secrets in the repository or in the binary's build defines | Both | H | COMPLETED AND VERIFIED | Security audit | — | E-02 |
 | [x] | LR-61 | Tokens in Keychain or Keystore; local data cleared at sign-out | Both | H | COMPLETED AND VERIFIED | Security audit | — | E-02 |
