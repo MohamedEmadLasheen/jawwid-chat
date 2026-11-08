@@ -5,8 +5,8 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-08 17:42 Cairo (15:42 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
-- **State of `main`:** `aef40d66`, which contains #500, #502 and #504–#513. Main CI run 42488182440 on `6e0e1438`: 15/15 green.
+- **Last updated:** 2026-11-08 17:53 Cairo (15:53 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **State of `main`:** `22237717`, which contains #500, #502 and #504–#515. Main CI run 42488182440 on `6e0e1438`: 15/15 green; later merges are documents only.
 
 ## 1. Dashboard
 
@@ -39,12 +39,12 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | ✅ Completed and verified | 🔎 Ready for verification | 🔧 In progress | ⛔ Blocked: owner | ⏳ Blocked: technical | ○ Not started | N/A |
 |---|---|---|---|---|---|---|---|
-| **94** | **16** | 15 | 7 | 30 | 19 | 4 | 3 |
+| **95** | **16** | 15 | 7 | 30 | 20 | 4 | 3 |
 
 | Still open | Count | Items |
 |---|---|---|
 | **Critical** | 32 | LR-06, LR-09a, LR-09c, LR-48, LR-07a, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-09g, LR-09h, LR-09i, LR-49, LR-02b, LR-76, LR-01, LR-77, LR-02a, LR-03, LR-05, LR-43, LR-45, LR-47, LR-08, LR-02d, LR-04, LR-09f, LR-09j, LR-09k, LR-10, LR-72 |
-| **High** | 23 | LR-13, LR-20, LR-52, LR-73, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-15, LR-16, LR-17, LR-71 |
+| **High** | 24 | LR-13, LR-20, LR-52, LR-73, LR-14, LR-50, LR-51, LR-12, LR-21, LR-74, LR-02c, LR-11a, LR-11b, LR-19, LR-65, LR-18, LR-22, LR-46, LR-63, LR-79, LR-15, LR-16, LR-17, LR-71 |
 | Critical items blocked on the owner | 17 | LR-06, LR-09a, LR-09c, LR-07b, LR-07c, LR-09b, LR-09d, LR-09e, LR-76, LR-01, LR-77, LR-45, LR-47, LR-02d, LR-04, LR-09k, LR-10 (plus LR-02a and LR-03, which wait for the owner's merge approval) |
 
 **Completion.** Each figure is completed-and-verified ÷ applicable; N/A is excluded.
@@ -52,12 +52,12 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Platform or category | Applicable | ✅ Done | % | Open Critical | Open High |
 |---|---|---|---|---|---|
 | **iOS launch** (every item that applies to iOS: A + the both-store items in C–F) | 70 | 13 | **19 %** | 22 | 19 |
-| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 73 | 14 | **19 %** | 28 | 18 |
+| **Android launch** (every item that applies to Android: B + the both-store items in C–F) | 74 | 14 | **19 %** | 28 | 19 |
 | A. iOS: Apple App Store | 15 | 2 | **13 %** | 4 | 4 |
 | B. Android: Google Play | 17 | 3 | **18 %** | 10 | 3 |
 | C. The mobile app on both platforms | 9 | 0 | **0 %** | 1 | 3 |
 | D. Shared backend and infrastructure | 18 | 2 | **11 %** | 9 | 5 |
-| E. Security and QA | 18 | 8 | **44 %** | 1 | 4 |
+| E. Security and QA | 19 | 8 | **42 %** | 1 | 5 |
 | F. Legal and compliance | 14 | 1 | **7 %** | 7 | 4 |
 
 ### Current blockers (what stops submission today)
@@ -87,7 +87,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder I (Release manager + Security) | LR-76 signed-build options paper | #513 | **Merged** `aef40d66` |
 | Agent J (Security + Release) | LR-76 signing on the existing Mac (verified paper) | #514 | Both P1s fixed; final check of the public wording; **will be squash-merged** so the first commit never reaches `main` |
 | Agent K (QA engineer) | LR-08 device test plan refreshed for today's merges | #515 | **Merged** `ea5a2d69` |
-| Agent M (QA + mobile) | LR-78 flaky Android ring job | `~/dev/jawwid-lr78-ring` | Running |
+| Agent M (QA + mobile) | LR-78 flaky Android ring job | #517 | Root cause found; under review; **owner Code Owner approval needed** |
 | Builder L (Backend/infra) | LR-77 first-deploy backup fix | #516 | Accepted @ `e56568c1`; **owner merge approval needed** (High) |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
@@ -216,7 +216,7 @@ Each requirement appears once:
 | [x] | LR-32 | `LIVEKIT_URL` must be `wss://` in production | Both | M | COMPLETED AND VERIFIED | Builder B; lead | — | E-05 |
 | [x] | LR-38 | RT-017/018: invalid `before`/`after` return 400, not 500 | Both | L | COMPLETED AND VERIFIED | Builder B | — | E-05 |
 
-### E. Security and QA (8 of 18 done, 44 %)
+### E. Security and QA (8 of 19 done, 42 %)
 
 | ✓ | ID | Requirement (policy) | Store | Pri | Status | Owner / agent | Depends on | Evidence and next step |
 |---|---|---|---|---|---|---|---|---|
@@ -225,7 +225,8 @@ Each requirement appears once:
 | [ ] | LR-22 | Crash reports are symbolicated | Both | H | READY FOR VERIFICATION | Release manager | LR-45 | #502 keeps the symbols (`--split-debug-info`); the upload is a documented `sentry-cli` step with the owner's token. Done when a forced test crash shows a symbolicated trace. |
 | [ ] | LR-46 | Final security sign-off on the release-candidate SHA | Both | H | NOT STARTED | Security reviewer (Fable 5.1) | LR-08 | Runs in Phase 3 on the merged release candidate. |
 | [ ] | LR-63 | Signed, re-authorized media links; webhook signatures verified | Both | H | READY FOR VERIFICATION | Security audit | LR-18 | `media-url.ts:81-135`; `stripe-webhook.controller.ts:52-60`. Verified in code; it still needs the real-deployment test (LR-18). |
-| [ ] | LR-78 | The optional CI job "Android killed-app ring" is reliable: it fails only when the ring is really broken | AND | M | IN PROGRESS | Agent M (QA + mobile) | — | It failed intermittently with "no notification … after the call push" on #498, #509, #516 and the documents-only #514, and passed on re-run and on `main`. A flaky check hides real ring regressions (LR-12) and slows every merge. Agent M is diagnosing it from the CI logs in `~/dev/jawwid-lr78-ring`. Any `.github/` change goes to the owner. |
+| [ ] | LR-78 | The optional CI job "Android killed-app ring" is reliable: it fails only when the ring is really broken | AND | M | IN PROGRESS | Agent M (QA + mobile) | #517 review, then owner Code Owner approval | **Root cause found (agent M, 2026-11-08):** the app does post the ring, but Android 14's NotificationService silently drops a CallStyle notification when system_server's cached ApplicationInfo for the app is stale. The log shows "Cannot fix notification" with a SecurityException, on the first attempt of runs 42414696184, 42483333513, 42491644506 and 42494983644. **#517** (`f568cbbb`): the test re-pushes only on that exact drop, at most 3 pushes, and every other check is unchanged. `scripts/qa/` is a Code Owner path, so **the owner must approve the merge**. An independent review is running. |
+| [ ] | LR-79 | The first incoming-call ring is not lost when Android drops a CallStyle notification (app-side check that the ring is active, re-posting once) | AND | H | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | #449 (owns `JawwidPush.kt`) | Found by the LR-78 diagnosis. The same Android 14 system drop may hit real phones, for example right after an app update, so the first ring would be lost while the app believes it posted. **Unconfirmed on a phone.** Fix in `JawwidPush.notify` once #449 merges; add a device-plan row. |
 | [ ] | LR-28 | Defects a reviewer could see are closed (TEACHER-020, PARENT-016, PARENT-024, P2 retests) | Both | M | NOT STARTED | QA engineer | LR-08 | TEACHER-020 (#491) needs an iPhone check. PARENT-016 and PARENT-024 have no write-up. |
 | [ ] | LR-30 | The release documents tell the truth | — | M | IN PROGRESS | Lead | #501 (OA-16) | **#510 merged** as `5ed73ce6`: `production-readiness.md` (environment counts, deploy and backup history), `findings.md` (RT-006/012/016/022 fixed with evidence; RT-021 remainder), the red-team handoff and `API-CONTRACT.md`. Reviews ACCEPT @ `89d3196c`. Still open: `docs/qa/release-gate.md` S-11/S-12/S-15 "PASS" (fixed in #501, which waits for OA-16). |
 | [ ] | LR-33 | Staff permission guard enforced (`shadow` → `enforce`) | — | M | BLOCKED — TECHNICAL DEPENDENCY | Backend engineer; security reviewer | LR-01, owner (High) | Needs real shadow-denial logs (LR-01). It is authorization, so High risk: the owner approves the switch. |
