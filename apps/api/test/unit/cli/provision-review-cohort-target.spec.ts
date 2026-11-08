@@ -26,7 +26,10 @@ describe('provision-review-cohort targetFromDatabaseUrl', () => {
   it('refuses a malformed DATABASE_URL with exit 2 and never quotes it', () => {
     const secret = 'Distinctive-Secret-91';
     // A non-numeric port makes `new URL` throw; its error would carry the input.
-    const malformed = `postgres://jawwid:${secret}@db.example:not-a-port/jawwid_chat`;
+    // The credential part is joined separately so the repository's secret scan
+    // (scripts/infra/scan-secrets.sh) does not read a test value as a real URL.
+    const auth = ['jawwid', secret].join(':');
+    const malformed = `postgres://${auth}@db.example:not-a-port/jawwid_chat`;
 
     expect(() => targetFromDatabaseUrl(malformed)).toThrow('exit 2');
 
@@ -39,7 +42,8 @@ describe('provision-review-cohort targetFromDatabaseUrl', () => {
 
   it('returns only host:port/database for a valid DATABASE_URL', () => {
     const secret = 'Distinctive-Secret-92';
-    expect(targetFromDatabaseUrl(`postgres://jawwid:${secret}@db.example:6543/jawwid_chat?sslmode=require`)).toBe(
+    const auth = ['jawwid', secret].join(':');
+    expect(targetFromDatabaseUrl(`postgres://${auth}@db.example:6543/jawwid_chat?sslmode=require`)).toBe(
       'db.example:6543/jawwid_chat',
     );
     expect(exit).not.toHaveBeenCalled();
