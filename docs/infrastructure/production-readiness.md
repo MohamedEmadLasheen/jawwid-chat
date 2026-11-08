@@ -98,12 +98,14 @@ DNS, so it is the owner's. In this order — each step names what it unblocks.
 > - **Three Environments exist, not two:** `staging` (created 2026-09-24), `production`
 >   (created 2026-10-31) and `backup` (created 2026-11-06). `staging` and `production` each have
 >   a required reviewer and a branch policy. `backup` has **no** protection rules.
-> - **What the Environments hold was not re-checked.** This check could list the Environments
->   but was not permitted to read their secret or variable counts. So the statement below that
->   `production` "holds nothing" (and the list of what `staging` holds) is **withdrawn as
->   unverified**, not confirmed. Re-read the counts with
->   `gh api repos/MohamedEmadLasheen/jawwid-chat/environments/<name>/secrets --jq .total_count`
->   (names and counts only, never values) before relying on either.
+> - **What the Environments hold, by count only (read by the lead on 2026-11-08 with
+>   `gh api repos/MohamedEmadLasheen/jawwid-chat/environments/<name>/{secrets,variables} --jq .total_count`;
+>   no names or values were read):**
+>   - `production`: 19 secrets, 12 variables;
+>   - `staging`: 2 secrets, 1 variable;
+>   - `backup`: 0 secrets, 0 variables. This explains every backup failure below.
+>
+>   The 2026-11-05 statement below that `production` "holds nothing" is therefore **out of date**.
 > - **Deploy production has never run** (`gh run list --workflow deploy-production.yml` is empty).
 > - **Deploy staging has never succeeded.** 34 runs failed, the last on 2026-10-06 (run
 >   37508314286, on push). The only run since, 42095782131 on 2026-11-05 (started by hand), was
