@@ -4,8 +4,8 @@
 `google-play-readiness-2026-11-03.md`, `release-scorecard.md`), which are now history. Owner: the engineering lead
 (CEO session). It is updated after every task, merge or owner answer. Each change cites its evidence.
 
-- **Last updated:** 2026-11-08 15:55 Cairo (13:55 UTC).
-- **State of `main`:** `14860ad3`, which contains #500, #504 and #502. Its CI run 42481004529 is in progress.
+- **Last updated:** 2026-11-08 16:25 Cairo (14:25 UTC).
+- **State of `main`:** `14860ad3`, which contains #500, #504 and #502. Its CI run 42481004529 passed.
 - **Sources:**
   - the eight read-only audits of 2026-11-08 (PR #501, independently reviewed);
   - two policy re-checks on Apple's and Google's official pages, also on 2026-11-08 (§9);
@@ -28,8 +28,8 @@
    - Firebase project and Sentry DSN for builds.
 
    Only the owner can create these.
-3. **No legal page is hosted.** The drafts still contain `{{ENTITY_NAME}}`, and the store build script refuses to build without the four URLs.
-4. **Nothing has run on a real phone** against a real server: push, calls, deletion and the terms gate (22 of 24 device rows untested).
+3. **No legal page is hosted.** The drafts still contain `{{ENTITY_NAME}}`, and the store build script refuses to build without the API, privacy, terms and support URLs.
+4. **Nothing has run on a real phone** against a real server: push, calls, deletion and the terms gate (the submission device plan of about 40 rows has never been run).
 5. **Four High-risk changes need the owner's approval:** #497, #498, #449 and the push port.
 
 From the moment the owner inputs arrive, the critical path is about 4 days:
@@ -42,13 +42,13 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Total | Completed and verified | Ready for verification | In progress | Blocked: owner | Blocked: technical | Not started | Not applicable |
 |---|---|---|---|---|---|---|---|
-| 89 | 14 | 8 | 20 | 24 | 16 | 4 | 3 |
+| 89 | 11 | 10 | 21 | 24 | 16 | 4 | 3 |
 
 | Still open | Count | IDs |
 |---|---|---|
 | **Critical** | 30 | LR-01, 02a, 02b, 02d, 03, 04, 05, 06, 07a, 07b, 07c, 08, 09a–09k (11 console items), 10, 43, 45, 47, 48, 49, 72 |
-| **High** | 20 | LR-11a, 11b, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 46, 50, 51, 52, 65, 71, 73 |
-| **Owner actions open** | 21 | OA-01 to OA-21 and OA-23 (§7); 13 of the 30 Critical items wait on the owner |
+| **High** | 22 | LR-02c, 11a, 11b, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 46, 50, 51, 52, 63, 65, 71, 73 |
+| **Owner actions open** | 22 | OA-01 to OA-21 and OA-23 (§7). Of the 30 open Critical items, 11 are BLOCKED on the owner, and 2 more (LR-02a, LR-03) wait for the owner's merge approval. |
 
 The counts are recomputed from the tables in §3–§6 after every update.
 
@@ -58,11 +58,11 @@ Each percentage is completed-and-verified ÷ applicable items in that slice. N/A
 
 | Slice | Applicable | Completed and verified | % | What dominates the gap |
 |---|---|---|---|---|
-| **iOS** (store = iOS or Both) | 66 | 10 | **15 %** | Signing and the app record (owner), the production backend, device tests, console forms |
-| **Android** (store = AND or Both) | 68 | 11 | **16 %** | The Organization account, package name and upload key (owner), the production backend, device tests, console forms |
-| **Shared backend and infrastructure** (area BE) | 17 | 1 | **6 %** | Never deployed; backups failing; no Sentry or Firebase project |
+| **iOS** (store = iOS or Both) | 66 | 9 | **14 %** | Signing and the app record (owner), the production backend, device tests, console forms |
+| **Android** (store = AND or Both) | 68 | 9 | **13 %** | The Organization account, package name and upload key (owner), the production backend, device tests, console forms |
+| **Shared backend and infrastructure** (area BE) | 17 | 0 | **0 %** | Never deployed; backups failing; no Sentry or Firebase project |
 | **Legal and compliance** (area LEGAL) | 25 | 2 | **8 %** | Entity facts, hosting, counsel, the audience and storefront decisions, console forms |
-| **Security and QA** (area SQA) | 16 | 7 | **44 %** | The real-deployment media test, the device plan, the final security sign-off |
+| **Security and QA** (area SQA) | 16 | 6 | **38 %** | The real-deployment media test, the device plan, the final security sign-off |
 
 A percentage measures tracked work, not approval. Apple and Google decide.
 
@@ -80,7 +80,7 @@ A percentage measures tracked work, not approval. Apple and Google decide.
 
 ### Next tasks, in order
 1. Review and merge Builders A and B (Medium risk) and Drafter C (Low) as their PRs turn green.
-2. After #503's re-run is green, merge it (lead ACCEPT @ `e83a6c05` already recorded).
+2. #503 is green, with a lead ACCEPT at `e83a6c05`. Merge it if the other session has not done so.
 3. #497: the P2 fix is pushed (`9bc9416e`). Re-review it once CI is green, then wait for the owner's merge approval.
 4. #498: another session is active on it, so the lead does not edit it. Still open: the P2-1 fix (uncommitted in `~/dev/jawwid-teacher-deletion`, preserved), P2-2, the review cohort and `review-accounts.md`.
 5. When #449 merges: LR-13 (iOS VoIP registry at launch) and LR-27 (full-screen intent check). Both are blocked only because #449 owns those files.
@@ -126,12 +126,12 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 |---|---|---|---|---|---|---|---|---|
 | [ ] | LR-01 | A live production backend for store builds and reviewers (Apple 2.1(a)) | BE | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner; Release manager | "Deploy production" has never run, and "Deploy staging" has never succeeded (failed 2026-10-06, cancelled 2026-11-05); `DIGITALOCEAN_APP_ID` is unset; DNS is unconfirmed. Next: the owner supplies the app id and DNS (OA-06) and approves the first staging deploy, then production (OA-21). **Done when:** `/health/ready` returns 200 on the production host and a store build signs in. |
 | [ ] | LR-43 | Registration and sign-in work on production: e-mail and password, WhatsApp codes, parent sign-up with terms acceptance | BE | Both | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer | Needs LR-01. G-38 end-to-end smoke passes in CI (main run on `496560a3`), but CI is not production. Done when the device plan rows for sign-up and sign-in pass on production. |
-| [ ] | LR-02a | Terms gate on the API: no posting before acceptance (Apple 1.2; Play UGC "accept terms before posting") | BE | Both | C | IN PROGRESS | Backend engineer; owner (merge) | #497: independent review ACCEPT @ `9536446d` with one P2 (`auth.controller.ts:116-117` rotates the refresh token before `legal.dtoFor()`, so a database error lost the new tokens and the retry signed the user out everywhere). The lead fixed it in `9bc9416e` (dtoFor answers `unavailable` and never throws, with a new unit spec `legal-dto.spec.ts`); CI is running. Next: re-review the fix, then **owner approves the merge (High: auth)**. Release order: app gates (done) → terms rows (LR-02d) → API. |
-| [ ] | LR-02b | Terms gate and sign-up acceptance in the iOS and Android app | iOS | Both | C | READY FOR VERIFICATION | Mobile engineer; QA | #504 merged as `cf731af2` on 2026-11-08 12:27 UTC. Independent review: ACCEPT @ `af1a3e1a`. Main CI: run 42480381161 was cancelled by a newer push; run 42481004529 on `14860ad3` contains it and is running. Still needed: a device test against an API with #497. |
-| [x] | LR-02c | Terms gate in Admin Web (staff accept before acting) | BE | — | H | COMPLETED AND VERIFIED | Frontend engineer | Evidence log E-01. |
+| [ ] | LR-02a | Terms gate on the API: no posting before acceptance (Apple 1.2; Play UGC "accept terms before posting") | BE | Both | C | IN PROGRESS | Backend engineer; owner (merge) | #497: independent review ACCEPT @ `9536446d` with one P2 (`auth.controller.ts:116-117` rotates the refresh token before `legal.dtoFor()`, so a database error lost the new tokens and the retry signed the user out everywhere). The lead fixed it in `9bc9416e` (dtoFor answers `unavailable` and never throws, with a new unit spec `legal-dto.spec.ts`); CI is running. Next: re-review the fix, then **owner approves the merge (High: authentication, plus migration `20261107130000_chat_pd058_publish_order.sql`)**. Release order: app gates (done) → terms rows (LR-02d) → API. |
+| [ ] | LR-02b | Terms gate and sign-up acceptance in the iOS and Android app | iOS | Both | C | READY FOR VERIFICATION | Mobile engineer; QA | #504 merged as `cf731af2` on 2026-11-08 12:27 UTC. Independent review: ACCEPT @ `af1a3e1a`. Main CI: run 42480381161 was cancelled by a newer push; run 42481004529 on `14860ad3` contains it and **passed**. Still needed: a device test against an API with #497. |
+| [ ] | LR-02c | Terms gate in Admin Web (staff accept before acting) | BE | — | H | READY FOR VERIFICATION | Frontend engineer | #500 merged as `496560a3`. Review: ACCEPT @ `34474f6f`; main CI run 42465970426 is green. It does nothing until the API sends a `legal` block (#497, LR-02a): with today's API there is no gate. Verify against an API that has #497. |
 | [ ] | LR-02d | Final Terms of Use and Code of Conduct texts and versions loaded as terms rows (N-3) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel | Without the rows, the gate has nothing to show. Owner action OA-09. |
 | [ ] | LR-03 | Account deletion starts in the app for every account that can be created, with no "contact us" (Apple 5.1.1(v); Play account deletion) | BE | Both | C | IN PROGRESS | Backend engineer; owner (merge) | #498 head `b11d2e6d`: 30/30 checks pass after another session's re-run. Review ACCEPT with two P2s:<br>• **P2-1:** a failing reminder could block erasures. The fix is uncommitted in `~/dev/jawwid-teacher-deletion`, one file; it needs a regression test.<br>• **P2-2:** the app copy says "deleted now" for a request.<br>Also in the same branch:<br>• `review-cohort.ts` must survive the review teacher's erasure (re-provisioning refuses with `TEACHER_CHANGED`);<br>• `review-accounts.md` must stop saying "takes effect immediately" for teachers.<br>Apple's account-deletion page allows a delayed deletion only when the user is told how long it takes; confirm the wording in the app. **Owner approves the merge (High: deletion).** |
-| [ ] | LR-04 | Public Privacy Policy, Terms, support page and deletion page in Arabic and English, with no placeholders (Apple 5.1.1(i) and the Support URL; Play privacy policy and the deletion web link) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel; Release manager | `docs/legal/*` drafts still contain `{{ENTITY_NAME}}` and other placeholders. `build-store.sh` refuses to build without the four URLs. Owner action OA-08. |
+| [ ] | LR-04 | Public Privacy Policy, Terms, support page and deletion page in Arabic and English, with no placeholders (Apple 5.1.1(i) and the Support URL; Play privacy policy and the deletion web link) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel; Release manager | `docs/legal/*` drafts still contain `{{ENTITY_NAME}}` and other placeholders. `build-store.sh` refuses to build without `API_BASE_URL`, `PRIVACY_POLICY_URL`, `TERMS_URL` and `SUPPORT_URL`. The deletion page is required by the stores, not by the script. Owner action OA-08. |
 | [ ] | LR-05 | Demo accounts on the live backend that need no WhatsApp code (Apple 2.1(a); Play App access) | BE | Both | C | BLOCKED — TECHNICAL DEPENDENCY | Owner; Release manager | `cli/review-cohort.ts` was merged in #490. Needs LR-01, then the owner's domain and two passwords (OA-21). Also needed:<br>• past lessons and reports in the data;<br>• a third, disposable parent for the deletion test;<br>• **something payable**, because #507 found the review accounts have nothing to pay, so a reviewer cannot reach the pay sheet. |
 | [ ] | LR-06 | Apple Distribution certificate, App Store profile with Push, App Store Connect record for `com.jawwid.jawwidChat` | iOS | iOS | C | BLOCKED — OWNER ACTION REQUIRED | Owner | `exportArchive`: `No signing certificate "iOS Distribution" found`. Owner action OA-01. Done when the export succeeds and `aps-environment = production` is in the signed entitlements. |
 | [ ] | LR-07a | Google Play **Organization** developer account, verified (D-U-N-S, identity, website) | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | Play must verify the account before any app can be submitted. A D-U-N-S number can take up to 30 days. **The longest lead time on the whole list.** Owner action OA-02. |
@@ -139,7 +139,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-07c | Upload key created and kept by the owner; Play App Signing | AND | AND | C | BLOCKED — OWNER ACTION REQUIRED | Owner | Only a throwaway key has ever signed a build. Release signing never falls back to the debug key (LR-53). Owner action OA-03. |
 | [ ] | LR-47 | Firebase project and `google-services.json` for the release build; APNs key configured for push | BE | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | CI job: "Android build (debug builds, release refuses without Firebase)". Owner action OA-04. |
 | [ ] | LR-45 | Sentry DSN for the app (store builds refuse to build without it since #502), plus a token for symbol upload | BE | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner | `build-store.sh` (merged `14860ad3`) requires an https `SENTRY_DSN`. Owner action OA-05. |
-| [ ] | LR-08 | The app works on real phones from signed builds against production (Apple 2.1; Play pre-launch) | SQA | Both | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer and owner (phones) | `submission-device-test-plan.md`: 22 of 24 rows NOT TESTED. Needs LR-01, LR-06, LR-07, LR-47. Owner action OA-20. |
+| [ ] | LR-08 | The app works on real phones from signed builds against production (Apple 2.1; Play pre-launch) | SQA | Both | C | BLOCKED — TECHNICAL DEPENDENCY | QA engineer and owner (phones) | `submission-device-test-plan.md` (about 40 SB rows) has **never been run**. The 2026-11-02 iPhone checklist (`release-gate.md` §1) also left 22 of 24 rows untested. Needs LR-01, LR-06, LR-07, LR-47. Owner action OA-20. |
 | [ ] | LR-10 | Target audience decided (Play target audience and Families; Apple 1.3 and 5.1.4) | LEGAL | Both | C | BLOCKED — OWNER ACTION REQUIRED | Owner and counsel | Children never sign in (`user_role.dart:9-21`), but parents open child-designed content. Choosing any child age band brings in the Families policy. Recommendation: account holders 18+, not the Kids category, no child imagery. Owner action OA-11. |
 | [ ] | LR-48 | iOS build uploaded to App Store Connect; TestFlight internal test passes | iOS | iOS | C | BLOCKED — TECHNICAL DEPENDENCY | Release manager; owner (upload) | Needs LR-06, LR-45, LR-04, LR-01. Up to 100 internal testers; external testing needs beta review. |
 | [ ] | LR-49 | Signed AAB on the Play internal-testing track; pre-launch report reviewed | AND | AND | C | BLOCKED — TECHNICAL DEPENDENCY | Release manager; owner (upload) | Needs LR-07a/b/c, LR-47, LR-45, LR-04, LR-01. The Data safety form is exempt only while the app is on internal testing alone. |
@@ -151,7 +151,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-11a | A push notification opens its item: parent feedback replies (PD-32) | BE | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner (merge) | #449 head `c205aba0`: 30/30 checks pass. Independent review ACCEPT with no P1 or P2 (not yet posted). It contains migration `20261107150000`, so **the owner must approve the merge (High: migration)**. Owner action OA-17. |
 | [ ] | LR-11b | Notification taps open the item, the permission is explained first, and pushes go only to the signed-in account (gates S-11, S-12, S-15) | BE | Both | H | BLOCKED — OWNER ACTION REQUIRED | Mobile and backend engineers | The code exists only in the uncommitted `~/dev/jawwid-push-acceptance` tree (50 files; preserved, never edited). Porting it as a patch onto a new branch changes who receives pushes and re-claims a migration slot, so **the owner must approve implementation (High)**. Owner action OA-17. |
 | [ ] | LR-12 | Incoming calls ring while the app is closed (S-06) | AND | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner; mobile engineer | iOS: PushKit and CallKit are merged but off until `APNS_VOIP_ENABLED=true`. Android: the full-screen ring is merged (#408, #458). Needs LR-47 and the device test. |
-| [ ] | LR-13 | The iOS VoIP push registry exists at launch, so a killed app's call is always reported to CallKit (Apple PushKit rule: unreported VoIP pushes terminate the app) | iOS | iOS | H | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | `AppDelegate.swift:128,135` creates it only after Dart starts. Open PR #449 also edits `AppDelegate.swift`, so this waits for #449 to merge (OA-17). |
+| [ ] | LR-13 | The iOS VoIP push registry exists at launch, so a killed app's call is always reported to CallKit (Apple PushKit rule: unreported VoIP pushes terminate the app) | iOS | iOS | H | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | `AppDelegate.swift:134-135` creates it inside `startRegistering()`, only after Dart starts. Open PR #449 also edits `AppDelegate.swift`, so this waits for #449 to merge (OA-17). |
 | [ ] | LR-14 | Foreground-service types match Play policy: `microphone` only, no unjustified `phoneCall` | AND | AND | H | IN PROGRESS | Builder A; lead | Lead decision recorded 2026-11-08. **#505** removes `phoneCall`, `FOREGROUND_SERVICE_PHONE_CALL` and `MANAGE_OWN_CALLS` (`a59f7d34`). The lead added a manifest guard test (`5cc153fc`). Next: CI, independent review, merge, then a device check (lock the screen mid-call). |
 | [ ] | LR-15 | Payments presented within Apple 3.1.3(d) (one-to-one real-time services) and Play's billing exemption (a 1:1 live class) | LEGAL | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner; store compliance | Open risks:<br>• "Subscriptions" and «الاشتراكات» may read as 3.1.2 subscriptions;<br>• a family lesson call can seat siblings, which is one-to-few and would need in-app purchase;<br>• Play's anti-steering rule versus the in-app Stripe link (§9).<br>Owner action OA-12. |
 | [ ] | LR-16 | Objectionable-content filter and moderation copy approved (Apple 1.2, which now also covers nonconsensual intimate imagery; Play UGC) | LEGAL | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner | The #493 filter is live in code. The word list (18 Arabic, 19 English words) is still a draft, and so are the report reasons and the conduct warning. Owner action OA-13. |
@@ -159,12 +159,12 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-18 | Media and evidence access verified on the real deployment (RT-037, RT-038) | SQA | Both | H | BLOCKED — TECHNICAL DEPENDENCY | Security reviewer; QA | Needs LR-01. Test plan: `docs/qa/RT-037-STAGING-REAL-MEDIA-TEST.md`. |
 | [ ] | LR-19 | Production backups run and a restore drill passes | BE | Both | H | BLOCKED — OWNER ACTION REQUIRED | Owner; release manager | The daily backup failed again on 11-08 07:59 UTC, and so did the weekly one on 11-08 09:01 UTC. The `backup` Environment has no credentials. Owner action OA-07. |
 | [ ] | LR-20 | Every role that can sign into the app can delete its account (Apple 5.1.1(v)) | BE | iOS | H | BLOCKED — OWNER ACTION REQUIRED | Owner | Sales staff and the Super Admin can sign in, but deletion covers parents and teachers only. Recommendation: a closure request, like #498. Owner action OA-14. |
-| [ ] | LR-21 | Unique, increasing build numbers and a production-only store build | iOS | Both | H | READY FOR VERIFICATION | Release manager | #502 merged as `14860ad3` on 2026-11-08 by the lead. Review ACCEPT @ `6c4856a7`; 30/30 checks green on the PR head. Verify on the first store build of each platform. |
+| [ ] | LR-21 | Unique, increasing build numbers and a production-only store build | iOS | Both | H | READY FOR VERIFICATION | Release manager | #502 merged as `14860ad3` on 2026-11-08 by the lead. Review ACCEPT @ `6c4856a7`; 30/30 checks green on the PR head; main CI run 42481004529 on the merge is green. Verify on the first store build of each platform. |
 | [ ] | LR-22 | Crash reports are symbolicated | SQA | Both | H | READY FOR VERIFICATION | Release manager | #502 keeps the symbols (`--split-debug-info`); the upload is a documented `sentry-cli` step with the owner's token. Done when a forced test crash shows a symbolicated trace. |
 | [ ] | LR-46 | Final security sign-off on the release-candidate SHA | SQA | Both | H | NOT STARTED | Security reviewer (Fable 5.1) | Runs in Phase 3 on the merged release candidate. |
 | [ ] | LR-23 | App Privacy label and Data safety match the code and SDKs (Firebase Installations id, Sentry diagnostics, purchase history, CoarseLocation) | LEGAL | Both | M | IN PROGRESS | Drafter C | **#507** (`00c02445`) has the drafts. Findings: keep Coarse Location (country, region and time zone; no GPS); declare Purchase History on both stores; the manifest is missing seven types (LR-73). Still needed: Xcode's privacy report on the archive. |
 | [ ] | LR-24 | Every iOS background mode is justified (`voip`, `audio`, `remote-notification`) | iOS | iOS | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | `remote-notification` has no handler on `main`. It depends on LR-11. |
-| [ ] | LR-25 | Reporting or blocking a staff member behaves honestly | AND | Both | M | IN PROGRESS | Mobile engineer (#503) | #503 head `e83a6c05`: lead review ACCEPT recorded. The CI re-run is in progress, started by another session. Merge when it is green. |
+| [ ] | LR-25 | Reporting or blocking a staff member behaves honestly | AND | Both | M | IN PROGRESS | Mobile engineer (#503) | #503 head `e83a6c05`: lead review ACCEPT recorded; 30/30 checks pass after another session's re-run. Merge when the other session finishes with it. |
 | [ ] | LR-26 | Microphone denial is recoverable ("Open settings") | AND | Both | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | Needs new strings in the l10n files, which #449, #498 and #503 all edit. Start when they land. |
 | [ ] | LR-27 | Full-screen call permission checked on Android 14+ (Play: must work when FSI is denied) | AND | AND | M | BLOCKED — TECHNICAL DEPENDENCY | Mobile engineer | `JawwidPush.kt:141` always sets the intent. #449 edits `JawwidPush.kt`, so this waits for #449. |
 | [ ] | LR-28 | Defects a reviewer could see are closed (TEACHER-020, PARENT-016, PARENT-024, P2 retests) | SQA | Both | M | NOT STARTED | QA engineer | TEACHER-020 (#491) needs an iPhone check. PARENT-016 and PARENT-024 have no write-up. |
@@ -211,7 +211,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [ ] | LR-51 | 16 KB memory pages (Play: updates without them are blocked from 1 Feb 2027) | AND | AND | H | READY FOR VERIFICATION | Release manager | arm64 WebRTC and Sentry libraries are aligned at 0x4000. Re-check on the final AAB. |
 | [ ] | LR-52 | Built with Xcode 26 and the iOS 26 SDK (Apple, since 28 Apr 2026) | iOS | iOS | H | READY FOR VERIFICATION | Release manager | Xcode 26.6 is on the build Mac. Check the archive's SDK when it is uploaded. |
 | [x] | LR-53 | Release signing never falls back to the debug key | AND | AND | H | COMPLETED AND VERIFIED | Android audit | E-02 |
-| [x] | LR-54 | Minimal Android permissions; no `READ_MEDIA_*`; the system photo picker | AND | AND | M | COMPLETED AND VERIFIED | Android audit | E-02 (LR-14 narrows it further) |
+| [ ] | LR-54 | Minimal Android permissions; no `READ_MEDIA_*`; the system photo picker | AND | AND | M | IN PROGRESS | Android audit; Builder A | No `READ_MEDIA_*`; the system photo picker is used. But `FOREGROUND_SERVICE_PHONE_CALL` and `MANAGE_OWN_CALLS` are still on `main` until #505 (LR-14) merges. |
 | [x] | LR-55 | Only `MainActivity` exported; `allowBackup=false`; no cleartext traffic | AND | AND | H | COMPLETED AND VERIFIED | Android audit | E-02 |
 | [x] | LR-56 | iOS usage strings for every capability used, in Arabic and English, with none unused | iOS | iOS | M | COMPLETED AND VERIFIED | iOS audit | E-02 (tone: LR-41) |
 | [x] | LR-57 | Export compliance key `ITSAppUsesNonExemptEncryption = false` (only the OS's own TLS) | LEGAL | iOS | M | COMPLETED AND VERIFIED | iOS audit | E-02 |
@@ -221,7 +221,7 @@ Owner approvals are never bypassed (`docs/engineering/ai-delegation.md` §3). Hi
 | [x] | LR-60 | No secrets in the repository or in the binary's build defines | SQA | Both | H | COMPLETED AND VERIFIED | Security audit | E-02 |
 | [x] | LR-61 | Tokens in Keychain or Keystore; local data cleared at sign-out | SQA | Both | H | COMPLETED AND VERIFIED | Security audit | E-02 |
 | [x] | LR-62 | Authentication on every API route by default; every public route justified | SQA | Both | H | COMPLETED AND VERIFIED | Security audit | E-02 |
-| [x] | LR-63 | Signed, re-authorized media links; webhook signatures verified | SQA | Both | H | COMPLETED AND VERIFIED | Security audit | E-02 (real deployment: LR-18) |
+| [ ] | LR-63 | Signed, re-authorized media links; webhook signatures verified | SQA | Both | H | READY FOR VERIFICATION | Security audit | `media-url.ts:81-135`; `stripe-webhook.controller.ts:52-60`. Verified in code; it still needs the real-deployment test (LR-18). |
 | [x] | LR-64 | Report a message or a person; blocking enforced on the server (Apple 1.2; Play UGC) | SQA | Both | H | COMPLETED AND VERIFIED | PD-57 builders | E-03 |
 | [ ] | LR-65 | Parent deletion in the app, plus a bilingual public deletion page that works without the app | BE | Both | H | READY FOR VERIFICATION | Accounts audit | `settings_screen.dart:279`; `account-deletion.controller.ts`. The page must be reachable on the production host (LR-01) and named in the console (LR-09b). |
 | [x] | LR-67 | Release builds cannot run on fixture data | SQA | Both | M | COMPLETED AND VERIFIED | Security audit | E-02 |
@@ -264,7 +264,7 @@ Questions go to the owner one at a time, in this order.
 | OA-14 | Account deletion for staff who sign into the app | A closure request, like the one for teachers | Tue 10 Nov | LR-20 |
 | OA-15 | The closed-account state (P-6): build it, or have counsel soften the wording | Build it (needs your approval: High) | Wed 11 Nov | LR-31 |
 | OA-16 | Approve the engineering organization in #501, so this tracker can merge to `main` | Approve | Mon 9 Nov | Tracker on `main`; role definitions |
-| OA-17 | High-risk approvals:<br>• merge **#449** (it adds a migration);<br>• merge **#497** and **#498** after their P2 fixes;<br>• **approve implementation** of the push port (LR-11b) | Approve | Mon 9 Nov | LR-11a, LR-11b, LR-13, LR-27, LR-02a, LR-03 |
+| OA-17 | High-risk approvals:<br>• merge **#449** (it adds a migration);<br>• merge **#497** (authentication; adds migration `20261107130000`) and **#498** (deletion; adds migration `20261107140000`) after their P2 fixes;<br>• **approve implementation** of the push port (LR-11b) | Approve | Mon 9 Nov | LR-11a, LR-11b, LR-13, LR-27, LR-02a, LR-03 |
 | OA-18 | A vector or high-resolution logo; read the five Arabic permission strings | — | Wed 11 Nov | LR-36, LR-41 |
 | OA-19 | Who is on call for production alerts | Name a person | Wed 11 Nov | LR-29 |
 
@@ -290,10 +290,9 @@ Questions go to the owner one at a time, in this order.
 
 | # | Rows | Date | Agent | PR / commit | CI | Independent review | Device / integration | Policy source |
 |---|---|---|---|---|---|---|---|---|
-| E-01 | LR-02c | 2026-11-08 | Frontend engineer (builder) | #500, merge `496560a380500df7f8104baa024aeeeaa7393367` (head `34474f6f`) | Main CI run 42465970426 on `496560a3`: success | `Review: ACCEPT @ 34474f6f0861495e2b702ee0174b61effa7fd85e` (separate review agent) on #500 | Admin Web is not a store binary; Vitest in CI | Apple 1.2 / Play UGC (terms before posting) |
-| E-02 | LR-53, 54, 55, 56, 57, 59, 60, 61, 62, 63, 67 | 2026-11-08 | Eight read-only audits (iOS, Android, security); the lead spot-checked | Code on `main` @ `cebbcd99`; the file:line references are in #501's audit; unchanged by #500, #502 and #504 | Main CI run 42417856955: 15/15 jobs | #501's independent reviewer confirmed 28 load-bearing claims against `cebbcd99` | Static facts; no device needed. LR-63 also needs the real-deployment test (LR-18) | Apple export compliance; Apple 5.1.2; Play permissions policy (answer 9888170) |
-| E-03 | LR-64 | 2026-11-08 | PD-57 builders; audited 11-08 | PD-57 PRs #463–#482, all on `main` | Integration specs `platform/blocks` and moderation, green on main | PD-57 reviews; confirmed again by the #501 audit | Server-side, so no device needed; the in-app sheet is also covered by LR-25 | Apple 1.2; Play UGC (answer 9876937) |
-| E-04 | LR-68 | 2026-11-08 | Payments audit | `conversation.controller.ts:237-250` on `cebbcd99` | Main CI green | #501 reviewer | n/a | Apple 3.1.1 and 3.1.3(d) |
+| E-02 | LR-53, 55, 56, 57, 59, 60, 61, 62, 67 | 2026-11-08 | Eight read-only audits (iOS, Android, security); the lead spot-checked | Code on `main` @ `cebbcd99`; the file:line references are in #501's audit; unchanged by #500, #502 and #504 | Main CI run 42417856955: 15/15 jobs | #501's independent reviewer confirmed 28 load-bearing claims against `cebbcd99` | Static facts; no device needed | Apple export compliance; Apple 5.1.2; Play permissions policy (answer 9888170) |
+| E-03 | LR-64 | 2026-11-08 | PD-57 builders; audited 11-08 | PD-57 PRs #463–#482, all on `main` | Integration specs `platform/blocks` and moderation; main CI run 42417856955 on `cebbcd99`: success, 15/15 jobs | PD-57 reviews; confirmed again by the #501 audit | Server-side, so no device needed; the in-app sheet is also covered by LR-25 | Apple 1.2; Play UGC (answer 9876937) |
+| E-04 | LR-68 | 2026-11-08 | Payments audit | `conversation.controller.ts:237-250` on `cebbcd99` | Main CI run 42417856955: success | #501 reviewer | n/a | Apple 3.1.1 and 3.1.3(d) |
 
 ## 9. Official sources (checked live on 2026-11-08)
 
