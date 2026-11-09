@@ -15,6 +15,9 @@
 #      migrations, and again after the release
 #   6  deploy-staging records the digest of its OWN push as the artifact the
 #      other two download
+#   7  review-cohort never prints a review login (LR-46 P3-9): the login
+#      domain is in no env: block, each job masks it in its first step, the
+#      CLI's raw output is reduced to counts, and no line prints <x>@$EMAIL_DOMAIN
 #
 #   bash scripts/qa/check-image-digest-gates.sh            # selftest, then check
 #
@@ -145,6 +148,21 @@ def check(t):
         if "/api@sha256:[0-9a-f]{64}$" not in prov:
             P.append("review-cohort: provision does not refuse an IMAGE that is not digest-pinned")
 
+    # 7 ----------------------------------------------------------------------
+    rct = t["review-cohort"]
+    if re.search(r"\$\{\{\s*inputs\.(?:confirm_)?email_domain", rct):
+        P.append("review-cohort: the login domain is in an env: block or expression (its value is printed in the log)")
+    if re.search(r"(?:parent2?|teacher)@\$\{?EMAIL_DOMAIN", rct):
+        P.append("review-cohort: a review login is printed (summary or log)")
+    if re.search(r'(?:echo|printf)[^\n]*"\$out"', prov):
+        P.append("review-cohort: the CLI's raw output (it names the logins) is printed")
+    if '<<<"$out"' not in prov:
+        P.append("review-cohort: the CLI's output is not reduced to counts")
+    if not prov or not steps(prov) or "::add-mask::" not in steps(prov)[0][1]:
+        P.append("review-cohort: the provision job's first step does not mask the login domain")
+    if not pre or not steps(pre) or "::add-mask::$EMAIL_DOMAIN" not in steps(pre)[0][1]:
+        P.append("review-cohort: preflight's first step does not mask the login domain")
+
     # 3, 5 -------------------------------------------------------------------
     pj = jobs(t["deploy-production"])
     ppre, dep = pj.get("preflight", ""), pj.get("deploy", "")
@@ -210,6 +228,13 @@ MUTATIONS = [
     ("deploy-staging", "          name: api-image-digest\n", "          name: api-digest\n"),
     ("review-cohort", 'and .event == "workflow_dispatch" and .head_branch == "main"', 'and true'),
     ("deploy-production", 'and .event == "workflow_dispatch" and .head_branch == "main"', 'and true'),
+    # 7: the review logins never reach the public log or summary (LR-46 P3-9)
+    ("review-cohort", "      IMAGE_TAG: ${{ inputs.image_tag }}\n    steps:\n",
+     "      IMAGE_TAG: ${{ inputs.image_tag }}\n      EMAIL_DOMAIN: ${{ inputs.email_domain }}\n    steps:\n"),
+    ("review-cohort", 'echo "| run by | ${GITHUB_ACTOR} |"', 'echo "| logins | parent@${EMAIL_DOMAIN} |"'),
+    ("review-cohort", 'read -r total created org <<<"$counts"', 'echo "$out"; read -r total created org <<<"$counts"'),
+    ("review-cohort", 'echo "::add-mask::$d"', 'true'),
+    ("review-cohort", '[ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"', 'true'),
 ]
 
 bad = 0

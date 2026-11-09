@@ -27,6 +27,17 @@
 # provision job then runs the image BY DIGEST, so moving the tag afterwards
 # changes nothing. Runbook: docs/release/review-accounts.md.
 #
+# LR-46 P3-9: the repository is public, and so are this workflow's logs and
+# run summaries. The review logins (parent@, teacher@, parent2@<domain>) are
+# never printed: anyone who saw them could lock the accounts with ten wrong
+# passwords during store review. The login domain is read from the event
+# payload, never placed in an env: block (GitHub prints a step's env values in
+# its log), and is registered with ::add-mask:: first thing in each job, so
+# the CLI's own output, which names the logins, shows *** in its place. The
+# CLI's stdout is also reduced to counts before it is printed. The summary
+# records counts, the organization slug, the commit and the image digest. The
+# owner keeps the logins in the store review notes and a password manager.
+#
 # No action is used at all, so there is nothing to pin: registry login, the
 # checks and the run are plain shell, gh and jq from the runner image.
 name: Review cohort
@@ -78,13 +89,18 @@ jobs:
       image: ${{ steps.image.outputs.image }}
     env:
       IMAGE_TAG: ${{ inputs.image_tag }}
-      EMAIL_DOMAIN: ${{ inputs.email_domain }}
-      CONFIRM_EMAIL_DOMAIN: ${{ inputs.confirm_email_domain }}
     steps:
       - name: Inputs are well formed
-        # Inputs are read from the environment, never interpolated into the
-        # script, so an input cannot inject shell.
+        # Inputs are never interpolated into the script, so an input cannot
+        # inject shell. image_tag comes through env:. The two domain inputs are
+        # read from the event payload instead (LR-46 P3-9): an env: value is
+        # printed in the step's log, and the domain names the review logins.
+        # It is masked before anything else runs, and no message quotes it.
         run: |
+          EMAIL_DOMAIN="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
+          CONFIRM_EMAIL_DOMAIN="$(jq -r '.inputs.confirm_email_domain // ""' "$GITHUB_EVENT_PATH")"
+          [ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"
+          [ -z "$CONFIRM_EMAIL_DOMAIN" ] || echo "::add-mask::$CONFIRM_EMAIL_DOMAIN"
           # The production Environment's branch restriction is the real gate
           # (checked below); this makes a run from another branch fail with a
           # clear message.
@@ -199,10 +215,20 @@ jobs:
       name: production
     env:
       IMAGE_TAG: ${{ inputs.image_tag }}
-      EMAIL_DOMAIN: ${{ inputs.email_domain }}
       # Pinned by digest in preflight: ghcr.io/<repo>/api@sha256:<64 hex>.
       IMAGE: ${{ needs.preflight.outputs.image }}
+      # No EMAIL_DOMAIN here (LR-46 P3-9): an env: value is printed in every
+      # step's log. The steps read it from the event payload.
     steps:
+      - name: Mask the login domain
+        # A mask is per job, so preflight's does not cover this one. First
+        # step, before the CLI (whose output names the logins) can print.
+        run: |
+          d="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
+          [ -n "$d" ] || { echo "::error::email_domain is empty"; exit 1; }
+          echo "::add-mask::$d"
+          echo "The login domain is masked in this job's log."
+
       - name: The secrets are present
         # Booleans only: no secret value enters this step.
         env:
@@ -261,9 +287,16 @@ jobs:
         # as this runner's user so it can read the mode-600 files it is given
         # read-only. DATABASE_URL is passed by name (-e DATABASE_URL), so its
         # value is never on a command line.
+        #
+        # LR-46 P3-9: the CLI's stdout is one JSON line that names the three
+        # logins. It is captured, never echoed, and reduced with jq to counts
+        # and ids; output jq cannot read is not printed at all. A refusal goes
+        # to stderr and may quote a login: the domain is masked (first step),
+        # so the log shows parent@*** at most.
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          EMAIL_DOMAIN="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
           dir="$RUNNER_TEMP/review-cohort"
           run() {
             docker run --rm \
@@ -296,15 +329,32 @@ jobs:
           [ -n "$target" ] || { echo "::error::could not derive --target from DATABASE_URL"; exit 1; }
           echo "::add-mask::$target"
           echo "Target derived from DATABASE_URL (masked in this log)."
-          run node dist/cli/provision-review-cohort.js \
+          out="$(run node dist/cli/provision-review-cohort.js \
             --target "$target" \
             --email-domain "$EMAIL_DOMAIN" \
             --parent-password-file /run/review-cohort/parent.pw \
             --teacher-password-file /run/review-cohort/teacher.pw \
             --deletion-parent-password-file /run/review-cohort/parent2.pw \
-            --allow-non-local
+            --allow-non-local)" && rc=0 || rc=$?
+          # The CLI sets exit code 2 on a refusal, with the reason on stderr
+          # (already in the log above).
+          [ "$rc" -eq 0 ] || { echo "::error::the review cohort command refused or failed (exit $rc); its reason is above"; exit 1; }
+          # Only these fields leave jq: no login, no target. Exactly three
+          # accounts must be reported, or the run is not called a success.
+          counts="$(jq -er '
+            [.parent, .teacher, .deletionParent] as $a
+            | if ($a | map(select(type == "object" and (.created | type) == "boolean")) | length) == 3
+              then "\($a | length) \($a | map(select(.created)) | length) \(.organizationId // "?")"
+              else error("unexpected") end' <<<"$out" 2>/dev/null)" \
+            || { echo "::error::the command succeeded but its summary could not be read; it is not printed because it names the logins"; exit 1; }
+          read -r total created org <<<"$counts"
+          echo "$total review logins provisioned ($created created, $((total - created)) already existed) in the app-review organization ($org)."
+          echo "REVIEW_LOGINS_TOTAL=$total" >> "$GITHUB_ENV"
+          echo "REVIEW_LOGINS_CREATED=$created" >> "$GITHUB_ENV"
 
       - name: Record the run
+        # LR-46 P3-9: counts only, never a login. The summary of a public
+        # repository's run is public.
         if: success()
         run: |
           {
@@ -314,7 +364,8 @@ jobs:
             echo "|---|---|"
             echo "| commit | \`${IMAGE_TAG}\` |"
             echo "| image | \`${IMAGE}\` |"
-            echo "| logins | \`parent@${EMAIL_DOMAIN}\`, \`teacher@${EMAIL_DOMAIN}\`, \`parent2@${EMAIL_DOMAIN}\` |"
+            echo "| organization | \`app-review\` |"
+            echo "| review logins | ${REVIEW_LOGINS_TOTAL} provisioned (${REVIEW_LOGINS_CREATED} created); the logins are in the store review notes and the owner's password manager, never here |"
             echo "| run by | ${GITHUB_ACTOR} |"
             echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
           } >> "$GITHUB_STEP_SUMMARY"
