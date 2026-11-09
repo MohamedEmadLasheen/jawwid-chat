@@ -6,8 +6,9 @@
 #   - Android: Google Play's INTERNAL testing track, as a DRAFT release (scripts/mobile/play-upload.sh;
 #     the package, track and status are constants there). Signed in to Google through Workload
 #     Identity Federation: no Google key is stored anywhere.
-#   - iOS: App Store Connect / TestFlight, through `xcodebuild -exportArchive` with destination
-#     `upload` (Apple cloud signing). Nothing is sent for App Review and nothing is released.
+#   - iOS: App Store Connect / TestFlight. One cloud-signed export to a local .ipa, verified, its
+#     SHA-256 recorded; Apple's Transporter then uploads that exact file (hash checked again first).
+#     Nothing is sent for App Review and nothing is released.
 # A person releases each build to testers, and later to the public, in Play Console and App Store
 # Connect. No build output is kept as a GitHub artifact.
 #
@@ -31,7 +32,9 @@
 # Never add pull_request, pull_request_target, workflow_run or push triggers to this file.
 # scripts/qa/check-store-upload-guards.sh (run by CI through scripts/qa/guards.sh) fails if this
 # file gains another trigger, an unpinned action, an expression inside a run block, a GitHub
-# artifact upload, a second job with id-token: write, or any other store channel or action.
+# artifact upload, a second job with id-token: write or a Google sign-in outside the android job,
+# loses an identity assertion, uploads anything but the verified .ipa, lets sentry-cli see its
+# token other than through env or print its output, or any other store channel or action.
 name: Release store builds
 
 on:
@@ -91,6 +94,13 @@ jobs:
         run: |
           set -euo pipefail
           [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run this workflow from main (it ran from $GITHUB_REF)."; exit 1; }
+          # This run's own identity, read from the runner and independent of any OIDC token. Google's
+          # provider condition pins the same values (docs/release/signed-builds-ci.md §3.2); the
+          # android job asserts them again before it signs in.
+          [ "$GITHUB_REPOSITORY_ID" = 1362573850 ] || { echo "::error::repository id $GITHUB_REPOSITORY_ID is not 1362573850 (MohamedEmadLasheen/jawwid-chat)."; exit 1; }
+          [ "$GITHUB_REPOSITORY_OWNER_ID" = 183662661 ] || { echo "::error::repository owner id $GITHUB_REPOSITORY_OWNER_ID is not 183662661 (MohamedEmadLasheen)."; exit 1; }
+          [ "$GITHUB_REPOSITORY" = MohamedEmadLasheen/jawwid-chat ] || { echo "::error::repository $GITHUB_REPOSITORY is not MohamedEmadLasheen/jawwid-chat."; exit 1; }
+          [ "$GITHUB_WORKFLOW_REF" = MohamedEmadLasheen/jawwid-chat/.github/workflows/release-store-builds.yml@refs/heads/main ] || { echo "::error::workflow ref $GITHUB_WORKFLOW_REF is not release-store-builds.yml on refs/heads/main."; exit 1; }
           [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::ref must be a full 40-character lower-case commit SHA."; exit 1; }
           [[ "$BUILD_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::build_name must be x.y.z (digits only)."; exit 1; }
           [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::build_number must be a positive integer."; exit 1; }
@@ -155,10 +165,11 @@ jobs:
     timeout-minutes: 60
     environment: store-release
     # id-token: write lets google-github-actions/auth exchange this job's GitHub OIDC token for a
-    # short-lived Google access token (Workload Identity Federation). Only this job has it; the
-    # Google side accepts the token only for this repository, the store-release Environment and
-    # refs/heads/main (docs/release/signed-builds-ci.md, owner setup). A job-level block replaces
-    # the workflow's, so contents: read is repeated.
+    # short-lived Google access token (Workload Identity Federation). Only this job has it, and only
+    # this job signs in to Google. The Google provider accepts the token only when its claims are
+    # repository_id 1362573850, repository_owner_id 183662661, ref refs/heads/main, environment
+    # store-release and job_workflow_ref this file on main (docs/release/signed-builds-ci.md §3.2).
+    # A job-level block replaces the workflow's, so contents: read is repeated.
     permissions:
       contents: read
       id-token: write
@@ -166,6 +177,16 @@ jobs:
       BUILD_NAME: ${{ inputs.build_name }}
       BUILD_NUMBER: ${{ inputs.build_number }}
     steps:
+      - name: This job's identity is the one Google's provider condition expects
+        # From the runner's own context, before anything else and before the Google sign-in: a
+        # mismatch fails here, closed, rather than at Google.
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REPOSITORY_ID" = 1362573850 ] || { echo "::error::repository id $GITHUB_REPOSITORY_ID is not 1362573850 (MohamedEmadLasheen/jawwid-chat)."; exit 1; }
+          [ "$GITHUB_REPOSITORY_OWNER_ID" = 183662661 ] || { echo "::error::repository owner id $GITHUB_REPOSITORY_OWNER_ID is not 183662661 (MohamedEmadLasheen)."; exit 1; }
+          [ "$GITHUB_REPOSITORY" = MohamedEmadLasheen/jawwid-chat ] || { echo "::error::repository $GITHUB_REPOSITORY is not MohamedEmadLasheen/jawwid-chat."; exit 1; }
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::ref $GITHUB_REF is not refs/heads/main."; exit 1; }
+          [ "$GITHUB_WORKFLOW_REF" = MohamedEmadLasheen/jawwid-chat/.github/workflows/release-store-builds.yml@refs/heads/main ] || { echo "::error::workflow ref $GITHUB_WORKFLOW_REF is not release-store-builds.yml on refs/heads/main."; exit 1; }
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.preflight.outputs.sha }}
@@ -315,22 +336,42 @@ jobs:
           echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the Dart split-debug-info symbols, and the R8
-        # mapping file when the build wrote one. sentry-cli reads the token, organisation, project
-        # and (optional) server from the environment; the token is never on a command line.
+        # mapping file when the build wrote one. Symbols go to Sentry and nowhere else, and nothing of
+        # them, of the token or of sentry-cli's configuration reaches the log:
+        #   - sentry-cli reads the token, organisation, project and (optional) server from this env
+        #     only, never from a command line; it logs at warn;
+        #   - it runs in an empty directory under RUNNER_TEMP with HOME pointed there, so no config
+        #     file from the checkout or the home directory is read;
+        #   - its output goes to a file that is never printed: one summary line per upload, and on a
+        #     failure only sentry-cli's own "error:" lines, cut short;
+        #   - that directory and build/symbols are deleted by the always-cleanup step.
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           SENTRY_URL: ${{ vars.SENTRY_URL }}
+          SENTRY_LOG_LEVEL: warn
+          SENTRY_NO_PROGRESS_BAR: '1'
         run: |
           set -euo pipefail
           [ -n "$SENTRY_URL" ] || unset SENTRY_URL
-          SYM="build/symbols/android/$BUILD_NAME+$BUILD_NUMBER"
-          [ -n "$(ls -A "$SYM" 2>/dev/null)" ] || { echo "::error::no Dart symbols in $SYM (split-debug-info path not honoured)"; exit 1; }
-          "$SENTRY_CLI" debug-files upload "$SYM"
-          MAP=build/app/outputs/mapping/release/mapping.txt
+          O="$RUNNER_TEMP/sentry-out"; mkdir -p "$O"; chmod 700 "$O"; cd "$O"
+          sq() { # what, then the arguments
+            local what="$1"; shift
+            if HOME="$O" "$SENTRY_CLI" "$@" > "$O/sentry.log" 2>&1; then
+              echo "Sentry: $what uploaded"
+            else
+              grep -E '^[[:space:]]*error:' "$O/sentry.log" | cut -c1-200 | head -5 || true
+              echo "::error title=Sentry upload failed::$what was not uploaded (check SENTRY_ORG, SENTRY_PROJECT, SENTRY_URL and the token, docs/release/signed-builds-ci.md §3.5). Nothing was sent to Play."
+              exit 1
+            fi
+          }
+          SYM="$GITHUB_WORKSPACE/build/symbols/android/$BUILD_NAME+$BUILD_NUMBER"
+          [ -n "$(ls -A "$SYM" 2>/dev/null)" ] || { echo "::error::no Dart symbols in build/symbols/android (split-debug-info path not honoured)"; exit 1; }
+          sq "Dart symbols" debug-files upload "$SYM"
+          MAP="$GITHUB_WORKSPACE/build/app/outputs/mapping/release/mapping.txt"
           if [ -f "$MAP" ]; then
-            "$SENTRY_CLI" upload-proguard "$MAP"
+            sq "R8 mapping" upload-proguard "$MAP"
             echo "- Sentry: Dart symbols and the R8 mapping file uploaded" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- Sentry: Dart symbols uploaded (the build wrote no R8 mapping file)" >> "$GITHUB_STEP_SUMMARY"
@@ -356,11 +397,12 @@ jobs:
           bash release-tools/scripts/mobile/play-upload.sh \
             build/app/outputs/bundle/release/app-release.aab "$BUILD_NAME" "$BUILD_NUMBER"
           echo "- Google Play: draft release '$BUILD_NAME ($BUILD_NUMBER)' on the internal testing track; release it to testers in Play Console" >> "$GITHUB_STEP_SUMMARY"
-      - name: Remove the signing material and the build outputs
+      - name: Remove the signing material, the symbols and the build outputs
         if: always()
         run: |
           rm -f android/key.properties android/app/google-services.json
           rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/jarsigner.txt" "$RUNNER_TEMP/sentry-cli"
+          rm -rf "$RUNNER_TEMP/sentry-out" build/symbols build/app/outputs
 
   ios:
     name: Signed iOS app, uploaded to App Store Connect / TestFlight (cloud signing; UNVERIFIED until the first run)
@@ -473,8 +515,9 @@ jobs:
         # key (Admin may be needed), and that no extra flag is required. The full xcodebuild log stays on
         # the runner: it lists build settings, including the base64 dart-defines that carry SENTRY_DSN.
         # Only error lines are printed, and never one that mentions DART_DEFINES.
-        # This export stays on the runner (destination export): it is what the next step verifies.
-        # The upload is a second export of the SAME archive, after verification and symbols.
+        # This is the ONLY export (destination export, to a local .ipa on the runner). The next step
+        # verifies it and records its SHA-256; the upload step sends that same file, byte for byte.
+        # Symbols are not put inside the .ipa for Apple: they go to Sentry only.
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -504,12 +547,13 @@ jobs:
             <key>destination</key><string>export</string>
             <key>signingStyle</key><string>automatic</string>
             <key>teamID</key><string>$TEAM_ID</string>
+            <key>uploadSymbols</key><false/>
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict>
           </plist>
           PLIST
           plutil -lint "$B/ExportOptions.plist"
-          run_quiet "xcodebuild -exportArchive (local)" "$B/export.log" \
+          run_quiet "xcodebuild export (local .ipa)" "$B/export.log" \
             xcodebuild -quiet -exportArchive -archivePath "$B/Runner.xcarchive" \
               -exportOptionsPlist "$B/ExportOptions.plist" -exportPath "$B/export" "${AUTH[@]}"
       - name: Verify the .ipa is App Store signed, for this app and version
@@ -548,8 +592,26 @@ jobs:
           SYM="build/symbols/ios/$BUILD_NAME+$BUILD_NUMBER"
           [ -n "$(ls -A "$SYM" 2>/dev/null)" ] && rec PASS "Dart symbols in $SYM" || rec FAIL "no Dart symbols in $SYM (split-debug-info path not honoured)"
           [ -n "$(ls -A "$B/Runner.xcarchive/dSYMs" 2>/dev/null)" ] && rec PASS "dSYMs in the archive" || rec FAIL "no dSYMs in the archive"
-          cat "$B/report.md" >> "$GITHUB_STEP_SUMMARY"
+          # The CodeDirectory hash of every signed bundle in the .ipa (the app, its frameworks and
+          # extensions), for the record. The upload sends this very file (its SHA-256 is checked again
+          # just before), so these are the cdhashes App Store Connect receives.
+          : > "$B/cdhashes.txt"
+          for x in "$APP" "$APP"/Frameworks/* "$APP"/PlugIns/*; do
+            [ -e "$x" ] || continue
+            d="$(codesign -d -vvv "$x" 2>&1 || true)"
+            h="$(printf '%s\n' "$d" | awk -F= '/^CandidateCDHashFull sha256=/{print $2; exit}')"
+            [ -n "$h" ] || h="$(printf '%s\n' "$d" | awk -F= '/^CDHash=/{print $2; exit}')"
+            if [ -n "$h" ]; then echo "${x#"$B/check/Payload/"} $h" >> "$B/cdhashes.txt"; else rec FAIL "no cdhash for ${x#"$B/check/Payload/"}"; fi
+          done
+          rec PASS "cdhashes recorded for $(grep -c . "$B/cdhashes.txt") signed bundle(s)"
+          IPA="${ipas[0]}"
+          chmod a-w "$IPA"
+          sha="$(shasum -a 256 "$IPA" | awk '{print $1}')"
+          [[ "$sha" =~ ^[0-9a-f]{64}$ ]] && rec PASS ".ipa SHA-256 $sha" || rec FAIL "could not hash the .ipa"
+          { cat "$B/report.md"; echo ""; echo "cdhashes:"; echo '```'; cat "$B/cdhashes.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           [ "$bad" -eq 0 ] || { echo "::error::the .ipa failed verification; it is not uploaded"; exit 1; }
+          echo "VERIFIED_IPA=$IPA" >> "$GITHUB_ENV"
+          echo "VERIFIED_IPA_SHA256=$sha" >> "$GITHUB_ENV"
       - name: Install sentry-cli (pinned version and SHA-256)
         run: |
           set -euo pipefail
@@ -558,55 +620,81 @@ jobs:
           echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the archive's dSYMs and the Dart
-        # split-debug-info symbols. sentry-cli reads the token, organisation, project and (optional)
-        # server from the environment; the token is never on a command line.
+        # split-debug-info symbols, handled exactly as in the android job (token through env only,
+        # log level warn, empty working directory and HOME, output kept off the log, symbols and
+        # output deleted by the always-cleanup step). Symbols go to Sentry only.
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           SENTRY_URL: ${{ vars.SENTRY_URL }}
+          SENTRY_LOG_LEVEL: warn
+          SENTRY_NO_PROGRESS_BAR: '1'
         run: |
           set -euo pipefail
           [ -n "$SENTRY_URL" ] || unset SENTRY_URL
-          "$SENTRY_CLI" debug-files upload "$RUNNER_TEMP/ios-build/Runner.xcarchive/dSYMs"
-          "$SENTRY_CLI" debug-files upload "build/symbols/ios/$BUILD_NAME+$BUILD_NUMBER"
+          O="$RUNNER_TEMP/sentry-out"; mkdir -p "$O"; chmod 700 "$O"; cd "$O"
+          sq() { # what, then the arguments
+            local what="$1"; shift
+            if HOME="$O" "$SENTRY_CLI" "$@" > "$O/sentry.log" 2>&1; then
+              echo "Sentry: $what uploaded"
+            else
+              grep -E '^[[:space:]]*error:' "$O/sentry.log" | cut -c1-200 | head -5 || true
+              echo "::error title=Sentry upload failed::$what was not uploaded (check SENTRY_ORG, SENTRY_PROJECT, SENTRY_URL and the token, docs/release/signed-builds-ci.md §3.5). Nothing was sent to App Store Connect."
+              exit 1
+            fi
+          }
+          sq "dSYMs" debug-files upload "$RUNNER_TEMP/ios-build/Runner.xcarchive/dSYMs"
+          sq "Dart symbols" debug-files upload "$GITHUB_WORKSPACE/build/symbols/ios/$BUILD_NAME+$BUILD_NUMBER"
           echo "- Sentry: dSYMs and Dart symbols uploaded" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload the verified archive to App Store Connect (destination upload; no review, no release)
-        # `xcodebuild -exportArchive` cannot upload an .ipa that was already exported, so the upload is
-        # a second export of the SAME archive with the same method, team and signing style, and
-        # destination `upload`: Apple cloud-signs it again and sends it to App Store Connect, where it
-        # is processed for TestFlight. Nothing here asks for App Review or releases a version.
+      - name: Upload the verified .ipa itself to App Store Connect with Transporter (no review, no release; UNVERIFIED flags)
+        # The bytes uploaded are the bytes verified. There is one export; the verification step
+        # recorded the .ipa's SHA-256 and made it read-only, and it is checked again here, right
+        # before the upload. Apple's Transporter command-line tool (shipped with Xcode, or inside
+        # Transporter.app) uploads that file with the App Store Connect API key, in upload mode only.
+        # There is no second export (Apple would sign it again, and that signature could not be
+        # compared with the verified one before it is sent) and no other uploader. No Transporter on the
+        # runner, a changed .ipa, or an upload Transporter does not report as successful: the job
+        # fails and says so. Nothing here asks for App Review or releases a version.
+        # UNVERIFIED until the first run: that Transporter is reachable on macos-26 (xcrun or
+        # Transporter.app), its upload flags as used below, and that it finds the key in
+        # ~/.appstoreconnect/private_keys. The full Transporter log stays on the runner.
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
         run: |
           set -euo pipefail
           B="$RUNNER_TEMP/ios-build"
-          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH"
-                -authenticationKeyID "$ASC_API_KEY_ID" -authenticationKeyIssuerID "$ASC_API_ISSUER_ID")
-          cat > "$B/UploadOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>teamID</key><string>$TEAM_ID</string>
-            <key>uploadSymbols</key><true/>
-            <key>manageAppVersionAndBuildNumber</key><false/>
-          </dict>
-          </plist>
-          PLIST
-          plutil -lint "$B/UploadOptions.plist"
-          if ! xcodebuild -quiet -exportArchive -archivePath "$B/Runner.xcarchive" \
-                 -exportOptionsPlist "$B/UploadOptions.plist" -exportPath "$B/upload" "${AUTH[@]}" > "$B/upload.log" 2>&1; then
-            grep -E 'error:|error -|\*\* .* FAILED \*\*|No profiles|No Accounts|not authorized|already been uploaded|bundle version' "$B/upload.log" \
-              | grep -v 'DART_DEFINES' | head -60 || true
+          [ -n "${VERIFIED_IPA:-}" ] && [ -f "$VERIFIED_IPA" ] || { echo "::error::no verified .ipa; nothing was uploaded."; exit 1; }
+          [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
+          T="$(xcrun --find iTMSTransporter 2>/dev/null || true)"
+          TA=/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter
+          [ -n "$T" ] || [ ! -x "$TA" ] || T="$TA"
+          [ -n "$T" ] || { echo "::error title=No Transporter on this runner::xcrun iTMSTransporter and Transporter.app were not found. Nothing was uploaded. The verified .ipa is uploaded byte for byte or not at all (no second export, no other uploader); tell the lead."; exit 1; }
+          # The key file, named AuthKey_<id>.p8, only for this step: removed when it ends, and again by
+          # the always-cleanup step.
+          K="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$K"; chmod 700 "$K"
+          KF="$K/$(basename "$ASC_KEY_PATH")"
+          trap 'rm -f "$KF"' EXIT
+          install -m 600 "$ASC_KEY_PATH" "$KF"
+          show() { grep -E 'ERROR ITMS-|\[ERROR\]|were not uploaded|could not be uploaded|uploaded successfully|not authorized|already been uploaded|bundle version' "$B/transporter.log" | cut -c1-300 | head -40 || true; }
+          if ! "$T" -m upload -assetFile "$VERIFIED_IPA" -apiKey "$ASC_API_KEY_ID" -apiIssuer "$ASC_API_ISSUER_ID" -v informational > "$B/transporter.log" 2>&1; then
+            show
             echo "::error title=App Store Connect upload failed::see the lines above and docs/release/signed-builds-ci.md, 'If the iOS job fails'"
             exit 1
           fi
-          echo "- App Store Connect: build $BUILD_NAME ($BUILD_NUMBER) uploaded; it appears in TestFlight after Apple processes it" >> "$GITHUB_STEP_SUMMARY"
-      - name: Remove the signing material, build logs and outputs
+          # Exit status 0 is not enough: Transporter must also say the package was uploaded.
+          if grep -qE 'ERROR ITMS-|were not uploaded|could not be uploaded' "$B/transporter.log" \
+             || ! grep -qE 'uploaded successfully' "$B/transporter.log"; then
+            show
+            echo "::error title=Upload not confirmed::Transporter did not report the package as uploaded successfully. Look in App Store Connect before any re-run: if the build is there, a re-run needs a new build_number."
+            exit 1
+          fi
+          echo "- App Store Connect: the verified .ipa (SHA-256 \`$VERIFIED_IPA_SHA256\`), build $BUILD_NAME ($BUILD_NUMBER), uploaded with Transporter; it appears in TestFlight after Apple processes it" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the signing material, the symbols, build logs and outputs
         if: always()
-        run: rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/ios-build" "$RUNNER_TEMP/sentry-cli"
+        run: |
+          rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/ios-build" "$RUNNER_TEMP/sentry-cli"
+          rm -rf "$RUNNER_TEMP/sentry-out" build/symbols
+          [ -z "${ASC_KEY_PATH:-}" ] || rm -f "$HOME/.appstoreconnect/private_keys/$(basename "$ASC_KEY_PATH")"

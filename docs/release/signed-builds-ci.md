@@ -13,8 +13,9 @@ artifact any more. Instead, after the same checks and signature verification, th
 debug symbols to Sentry and then the build itself, **only** to:
 - **Google Play: the internal testing track, as a draft release** (nobody receives it until a person
   releases it in Play Console), signed in through **Workload Identity Federation** (no Google key exists);
-- **App Store Connect / TestFlight**, through `xcodebuild -exportArchive` with destination `upload`
-  (Apple cloud signing). Nothing is sent for App Review and nothing is released.
+- **App Store Connect / TestFlight**: one cloud-signed export to a local `.ipa`, which is verified and
+  hashed; Apple's Transporter (`iTMSTransporter`) then uploads **that exact file** after its SHA-256 is
+  checked again. Nothing is sent for App Review and nothing is released.
 
 ## 1. What it does
 
@@ -31,6 +32,12 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
    refuses unless
    - the run started from `main`, `ref` is a full SHA that is an ancestor of `origin/main`, and the
      version inputs are well-formed;
+   - the run's own identity, read from the runner (not from any token), is exactly: repository id
+     `1362573850`, owner id `183662661`, repository `MohamedEmadLasheen/jawwid-chat`, ref
+     `refs/heads/main`, workflow ref
+     `MohamedEmadLasheen/jawwid-chat/.github/workflows/release-store-builds.yml@refs/heads/main`. These
+     are the values Google's provider condition pins (§3.2); the Android job asserts them again before it
+     signs in;
    - the `store-release` Environment, read through the API, has at least one required reviewer,
      *Selected branches and tags* with exactly one rule, the branch `main`, and "Allow administrators to
      bypass" **off**. Anything it cannot read, or does not recognise, is a refusal.
@@ -53,8 +60,11 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
    - installs **sentry-cli 3.8.2**, checked against its pinned SHA-256 (`scripts/mobile/install-sentry-cli.sh`),
      and uploads the Dart symbols (and the R8 `mapping.txt`, if the build wrote one) to Sentry. This runs
      **before** the store upload, so a broken Sentry setup stops the release rather than shipping a
-     build whose crashes cannot be read;
-   - signs in to Google with `google-github-actions/auth` (v3.0.0, pinned by SHA): GitHub's OIDC token
+     build whose crashes cannot be read. See "Sentry and the log" below;
+   - asserts its own identity (the same five values as preflight) as its **first** step, before any
+     checkout and long before the Google sign-in;
+   - signs in to Google with `google-github-actions/auth` (v3.0.0, pinned by SHA; the only Google sign-in
+     in the workflow): GitHub's OIDC token
      for this job is exchanged for a **15-minute** access token of the Play service account, scope
      `androidpublisher` only, no credentials file written. The token is masked;
    - runs `scripts/mobile/play-upload.sh`, which does `edits.insert` → `edits.bundles.upload` →
@@ -68,29 +78,63 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
    - the same two checkouts and the same before-any-build check of its secrets and variables (§3.6);
    - decodes the App Store Connect `.p8` key (mode 600) and checks it parses as a private key;
    - runs `scripts/mobile/build-store.sh ios-config` (§5);
-   - `xcodebuild archive`, then `xcodebuild -exportArchive` to a **local** `.ipa` (method
-     `app-store-connect`, destination `export`), both with `-allowProvisioningUpdates` and
-     `-authenticationKeyPath/-ID/-IssuerID`, so Apple **cloud-signs**;
+   - `xcodebuild archive`, then **one** `xcodebuild -exportArchive` to a **local** `.ipa` (method
+     `app-store-connect`, destination `export`, `uploadSymbols` false, `manageAppVersionAndBuildNumber`
+     false), both with `-allowProvisioningUpdates` and `-authenticationKeyPath/-ID/-IssuerID`, so Apple
+     **cloud-signs**;
    - verifies that `.ipa` exactly as before: `codesign --verify --deep --strict`; a distribution
      certificate; team `KX683HAR3Y`; `get-task-allow` false; `aps-environment` production; an App Store
-     profile (no device list); bundle id, version and build number; Dart symbols and dSYMs present;
+     profile (no device list); bundle id, version and build number; Dart symbols and dSYMs present.
+     It then records the CodeDirectory hash (`codesign -d -vvv`: `CandidateCDHashFull sha256`, else
+     `CDHash`) of the app and of every framework and extension inside it, makes the `.ipa` read-only, and
+     records its **SHA-256** (all shown in the run summary). Any missing value fails the job;
    - installs sentry-cli (as above) and uploads the archive's dSYMs and the Dart symbols to Sentry;
-   - **uploads**: a second `xcodebuild -exportArchive` of the **same archive** with the same method, team
-     and signing style and destination `upload`, plus `uploadSymbols` true and
-     `manageAppVersionAndBuildNumber` false (Xcode must not change the version or build number). Apple
-     cloud-signs it again and sends it to App Store Connect, where it is processed for TestFlight;
-   - always deletes the `.p8`, the build logs and the outputs.
+   - **uploads the verified file itself**: re-computes the `.ipa`'s SHA-256 and refuses unless it equals
+     the recorded one, then runs Apple's Transporter, `iTMSTransporter -m upload -assetFile <that .ipa>
+     -apiKey <ASC_API_KEY_ID> -apiIssuer <ASC_API_ISSUER_ID> -v informational`, with the `.p8` copied to
+     `~/.appstoreconnect/private_keys/AuthKey_<id>.p8` (mode 600) for that step only. Transporter is found
+     with `xcrun --find iTMSTransporter`, else at
+     `/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter`. The job succeeds only if
+     Transporter exits 0 **and** reports the package "uploaded successfully" with no `ERROR ITMS-` line;
+     only those result lines are printed, the full log stays on the runner;
+   - always deletes the `.p8` (both copies), the symbols, the build logs and the outputs.
 
-   *Why two exports.* `xcodebuild -exportArchive` cannot upload an `.ipa` that has already been exported;
-   it uploads only what it exports itself. The only other Apple command-line uploader is not used here
-   by decision. So the job verifies the local export, and the upload is a re-export of the same archive
-   with identical options except the destination. The app binary, entitlements source, team, bundle id
-   and version are the archive's in both; only the cloud signature is made a second time. The residual
-   risk (Apple signing the second export differently) is small and visible: App Store Connect rejects an
-   upload whose signature is not a valid App Store distribution signature.
+   *Why one export and Transporter (owner requirement R1).* The build Apple receives must be the build
+   that was verified. A second `xcodebuild -exportArchive` with destination `upload` (the first OT-2b
+   design) signs the app **again** in Apple's cloud and sends it in the same command, so its signature
+   and cdhashes can never be compared with the verified ones before they leave the runner; it is removed
+   and the guard refuses it. Instead there is one export, and the bytes uploaded are the bytes verified:
+   the SHA-256 of the whole `.ipa` is checked immediately before the upload, which covers every
+   executable, `Info.plist`, entitlement and cdhash inside it. `altool` stays banned.
+   *Fail closed:* if Transporter is not on the runner, the job stops with "No Transporter on this runner"
+   and uploads nothing; there is no fallback to a second export. *UNVERIFIED until the first run* (not
+   checked under the machine rule): that `xcrun` or Transporter.app provides `iTMSTransporter` on the
+   `macos-26` image (it may only ship with Transporter.app, which the image may not have), the flags
+   `-m upload`, `-assetFile`, `-apiKey`, `-apiIssuer`, `-v informational`, whether an `-assetDescription`
+   is needed for an `.ipa`, that `~/.appstoreconnect/private_keys` is searched for the key, and the exact
+   "uploaded successfully" wording. If any is wrong the job fails at the upload step with nothing
+   uploaded; tell the lead (§6, risk 5).
 
 Both signing jobs install Flutter **without** the shared cache (`cache: false`). Every action is pinned
 to a full commit SHA. Inputs reach the shell only through `env`, never inside a `run` script.
+
+**Sentry and the log (owner requirement R3).** Debug symbols and the R8 mapping go to Sentry and nowhere
+else, and nothing of them, of the token or of sentry-cli's configuration reaches the public log:
+- the token reaches sentry-cli **only** as `SENTRY_AUTH_TOKEN` in the Sentry step's `env` (sentry-cli
+  reads it from there); never `--auth-token`, never a command line, never echoed;
+- `SENTRY_LOG_LEVEL: warn` in every Sentry step; no `--log-level debug`/`trace`, no `set -x`, no
+  `sentry-cli info`/`login`/config print, no `.sentryclirc`;
+- sentry-cli runs in an empty `$RUNNER_TEMP/sentry-out` with `HOME` pointed there, so no config file
+  from the checkout or the home directory is read;
+- only `debug-files upload` and `upload-proguard` are run (no source bundles, no source maps), through a
+  helper that keeps sentry-cli's output in a file and prints one summary line ("Sentry: Dart symbols
+  uploaded"); on a failure it prints at most five of sentry-cli's own `error:` lines, cut to 200
+  characters;
+- no artifact is uploaded, and the `.ipa` carries no symbols for Apple (`uploadSymbols` false);
+- the always-cleanup step deletes `$RUNNER_TEMP/sentry-out`, `build/symbols` (and on Android
+  `build/app/outputs`, which holds the mapping file), even after a failure.
+
+The guard (§5.2) fails CI if any of these is broken.
 
 ## 2. What it does not do
 
@@ -134,7 +178,20 @@ dispatched by `jawwid-bot` (asked by the lead) and approved by you. The lead rec
 ### 3.2 (a) Google Cloud: Workload Identity Federation for the Play upload
 
 No JSON key is ever created. GitHub proves who is asking with a short-lived OIDC token; Google accepts
-it only for this repository, the `store-release` Environment and `main`.
+it only when **every** claim below matches (owner requirement R2). The values are this repository's:
+
+| Claim | Required value | Why |
+|---|---|---|
+| `repository_id` | `1362573850` | the repository's **immutable** id: a deleted and re-created, renamed or transferred repository with the same name has a different id |
+| `repository_owner_id` | `183662661` | the owner's immutable id: a new account that takes the name `MohamedEmadLasheen` after a rename has a different id |
+| `repository` | `MohamedEmadLasheen/jawwid-chat` | readability only (names can be re-used; the ids above are the lock) |
+| `ref` | `refs/heads/main` | only runs from `main` (reviewed, merged code) |
+| `environment` | `store-release` | only jobs that waited for the owner's approval in the protected Environment |
+| `job_workflow_ref` | `MohamedEmadLasheen/jawwid-chat/.github/workflows/release-store-builds.yml@refs/heads/main` | only this workflow file, from `main`: no other workflow in the repository, even one that names the same Environment, can obtain the token |
+
+Inside the workflow, only the `android` job has `id-token: write` and only it signs in to Google; its
+first step, and preflight, assert the same repository id, owner id, repository, ref and workflow ref from
+the runner's own context, so a mismatch fails before Google is asked (the guard, §5.2, keeps it so).
 
 1. Create (or pick) a Google Cloud project, then in Cloud Shell:
    ```sh
@@ -151,9 +208,10 @@ it only for this repository, the `store-release` Environment and `main`.
    gcloud iam service-accounts create jawwid-play-upload \
      --display-name="Jawwid Play internal upload (GitHub Actions)"
    ```
-3. A Workload Identity Pool and an OIDC provider for GitHub, with the attribute mapping and the
-   **attribute condition** (the condition is the real lock: a token from any other repository,
-   Environment or branch is refused at the exchange):
+3. A Workload Identity Pool and an OIDC provider for GitHub, with this exact attribute mapping and
+   **attribute condition** (the condition is the real lock: a token whose claims differ in any way is
+   refused at the exchange). If the provider already exists from an earlier draft, use
+   `providers update-oidc` with the same two flags instead of `create-oidc`:
    ```sh
    gcloud iam workload-identity-pools create github \
      --location=global --display-name="GitHub Actions"
@@ -161,26 +219,44 @@ it only for this repository, the `store-release` Environment and `main`.
      --location=global --workload-identity-pool=github \
      --display-name="jawwid-chat store-release" \
      --issuer-uri="https://token.actions.githubusercontent.com" \
-     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.environment=assertion.environment,attribute.ref=assertion.ref" \
-     --attribute-condition="assertion.repository=='MohamedEmadLasheen/jawwid-chat' && assertion.environment=='store-release' && assertion.ref=='refs/heads/main'"
+     --attribute-mapping="google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.repository_owner_id=assertion.repository_owner_id,attribute.repository=assertion.repository,attribute.ref=assertion.ref,attribute.environment=assertion.environment,attribute.job_workflow_ref=assertion.job_workflow_ref" \
+     --attribute-condition="assertion.repository_id=='1362573850' && assertion.repository_owner_id=='183662661' && assertion.repository=='MohamedEmadLasheen/jawwid-chat' && assertion.ref=='refs/heads/main' && assertion.environment=='store-release' && assertion.job_workflow_ref=='MohamedEmadLasheen/jawwid-chat/.github/workflows/release-store-builds.yml@refs/heads/main'"
    ```
-4. Let identities from that repository impersonate the service account:
+   The mapping, one attribute per claim:
+
+   | Google attribute | GitHub claim |
+   |---|---|
+   | `google.subject` | `assertion.sub` (`repo:MohamedEmadLasheen/jawwid-chat:environment:store-release`) |
+   | `attribute.repository_id` | `assertion.repository_id` |
+   | `attribute.repository_owner_id` | `assertion.repository_owner_id` |
+   | `attribute.repository` | `assertion.repository` |
+   | `attribute.ref` | `assertion.ref` |
+   | `attribute.environment` | `assertion.environment` |
+   | `attribute.job_workflow_ref` | `assertion.job_workflow_ref` |
+
+   The ids are compared as strings (GitHub sends them as strings), hence the quotes.
+4. Let identities from that repository **by id** impersonate the service account. The principal binding
+   uses `attribute.repository_id`, not the name, so a re-created or renamed repository never matches:
    ```sh
    gcloud iam service-accounts add-iam-policy-binding \
      "jawwid-play-upload@$PROJECT_ID.iam.gserviceaccount.com" \
      --role=roles/iam.workloadIdentityUser \
-     --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/MohamedEmadLasheen/jawwid-chat"
+     --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository_id/1362573850"
    ```
-   The binding names only the repository; the Environment and branch are enforced by the provider's
+   If an earlier binding on `attribute.repository/MohamedEmadLasheen/jawwid-chat` exists, remove it
+   (`remove-iam-policy-binding` with that member) so only the id-based one is left. The binding names
+   only the repository id; the owner id, ref, Environment and workflow are enforced by the provider's
    condition (step 3), which every token must pass first.
 5. The two Environment **variables** (not secrets):
    - `PLAY_WIF_PROVIDER` = `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/providers/jawwid-chat`
    - `PLAY_SERVICE_ACCOUNT` = `jawwid-play-upload@<PROJECT_ID>.iam.gserviceaccount.com`
 
 **UNVERIFIED:** that GitHub's OIDC token for a job with `environment: store-release` carries the
-`environment` claim used by the condition (GitHub documents it; not observed under the machine rule. If
-the first run fails at "Sign in to Google" with a condition or "unauthorized" error, this is the first
-thing to check). **UNVERIFIED:** that `roles/iam.workloadIdentityUser` alone lets the auth action mint
+`environment`, `repository_id`, `repository_owner_id` and `job_workflow_ref` claims with exactly the
+values above (GitHub documents them; for a workflow that is not reusable, `job_workflow_ref` is the
+workflow's own path and ref; not observed under the machine rule). If the first run fails at "Sign in to
+Google" with a condition or "unauthorized" error, compare the claims first; never loosen the condition
+without the owner. **UNVERIFIED:** that `roles/iam.workloadIdentityUser` alone lets the auth action mint
 an access token; if the error names `iam.serviceAccounts.getAccessToken`, also grant
 `roles/iam.serviceAccountTokenCreator` on the service account to the same `principalSet` (tell the lead
 first).
@@ -320,14 +396,34 @@ files. It fails if:
   its override refusal is gone;
 - any of `production`, `beta`, `alpha`, `rollout`, `completed`, `altool`, `iTMSTransporter`, `submit…`,
   `appStoreVersionSubmissions`, `reviewSubmissions`, `releaseType` appears in the workflow or
-  `scripts/mobile/` (plus `inProgress`, `halted`, `userFraction` in `play-upload.sh`), except on three
+  `scripts/mobile/` (plus `inProgress`, `halted`, `userFraction` in `play-upload.sh`), except on the
   listed workflow lines (the Sentry environment default, the `aps-environment` check, the Xcode selection
-  that skips pre-release Xcode) and the word `production` in `build-store.sh` (its production-host check);
+  that skips pre-release Xcode, and the three lines that find Transporter) and the word `production` in
+  `build-store.sh` (its production-host check);
 - `upload-artifact` appears;
 - an action is not pinned to a full commit SHA;
 - an expression (`${{ … }}`) is written inside a `run` block;
 - a script in `scripts/mobile/` other than `play-upload.sh` talks to the Play Developer API, or anything
-  calls the App Store Connect API directly.
+  calls the App Store Connect API directly;
+- **R1:** there is more than one `-exportArchive`, an export with destination `upload`, `uploadSymbols`
+  not exactly once and false, `iTMSTransporter` named anywhere but the three lines that find it, a
+  Transporter mode other than `-m upload`, more than one Transporter call or a call that uploads
+  anything but `"$VERIFIED_IPA"`, the verification step not recording `VERIFIED_IPA_SHA256`, the SHA-256
+  re-check missing or after the upload, or the iOS always-cleanup not deleting the key copied for
+  Transporter (`altool` stays banned with the store words above);
+- **R2:** `google-github-actions/auth` appears anywhere but once in the `android` job, or before that
+  job's identity assertions; `preflight` or `android` does not assert the repository id `1362573850`,
+  owner id `183662661`, repository, `refs/heads/main` and the workflow ref; `android` or `ios` is not in
+  `store-release` (the id-token rule above still holds);
+- **R3:** `SENTRY_AUTH_TOKEN` appears anywhere but the step `env` lines and the presence checks (or at
+  all in `scripts/mobile/`); `auth-token`, a `debug`/`trace` log level, `set -x`/`xtrace`, a source upload
+  flag (`--include-sources`, source maps or bundles), `.sentryclirc` or `sentry-cli info/login/config`
+  appears; sentry-cli is called other than through the output-capturing helper, or the helper runs
+  anything but `debug-files upload`/`upload-proguard` on one path; a Sentry step lacks
+  `SENTRY_LOG_LEVEL: warn`; or an always-cleanup does not delete `build/symbols` and
+  `$RUNNER_TEMP/sentry-out`.
+
+Each rule has at least one mutation in the selftest.
 
 ### 5.3 Tests
 
@@ -347,27 +443,35 @@ a versionCode mismatch is refused; the "package not found" answer prints the STO
    secrets, owner approval, `main` only, no admin bypass (read back by preflight), manual trigger only,
    every action pinned by SHA, inputs only through `env`, `persist-credentials: false`, no Flutter cache,
    the guard of §5.2.
-2. **Google access.** `id-token: write` is on the Android job only. A Google token is minted only for a
-   job of this repository, in `store-release`, on `refs/heads/main` (the provider condition), after your
-   approval; it lives 15 minutes and carries only the `androidpublisher` scope. In Play Console the
+2. **Google access.** `id-token: write` is on the Android job only, and only it signs in. A Google token
+   is minted only for a job of the repository with id `1362573850` (owner id `183662661`), in
+   `store-release`, on `refs/heads/main`, running this workflow file from `main` (the provider condition,
+   §3.2), after your approval; it lives 15 minutes and carries only the `androidpublisher` scope. In Play Console the
    service account can release to testing tracks only; the script can only make an internal draft.
 3. **Apple access.** The App Store Connect key can do whatever its role allows (App Manager can submit
    for review and release versions in App Store Connect). The workflow never does: it only runs
-   `xcodebuild` archive/export, and the guard refuses any submission or release call. "Manually release
-   this version" (§3.4) is the second lock.
+   `xcodebuild` archive/export and Transporter in upload mode, and the guard refuses any submission or
+   release call and any other Transporter mode. "Manually release this version" (§3.4) is the second lock.
 4. **Logs.** Logs are readable by any logged-in GitHub user. Values pass through `env`, are never echoed,
-   and the scripts never use `set -x`. The `xcodebuild` logs (they list the base64 dart-defines that carry
-   the Sentry DSN) stay on the runner; only error lines are printed. `play-upload.sh` prints only status
+   and the scripts never use `set -x`. The `xcodebuild` and Transporter logs (the former lists the base64
+   dart-defines that carry the Sentry DSN) stay on the runner; only error/result lines are printed.
+   sentry-cli's output is never printed (§1, "Sentry and the log"). `play-upload.sh` prints only status
    codes. No build output is kept as an artifact.
 5. **Apple, UNVERIFIED until the first run:** that Xcode 26 still cloud-signs with the WWDC21 flags; that
    the archive's development signing works on a runner with no Apple account (`-allowProvisioningUpdates`
    may create development certificates that accumulate; revoke the CI-created ones periodically); that
-   App Manager is enough (§3.4); that `-exportArchive` with destination `upload` accepts the
-   `-authenticationKey*` flags and the `uploadSymbols` / `manageAppVersionAndBuildNumber` keys as used;
-   that `--split-debug-info` is honoured through `--config-only` (the job fails clearly if not).
-   **If the iOS job fails:** read the printed `error:` lines; "No Accounts"/"not authorized" points to the
-   key's role; "No profiles"/"requires a provisioning profile" to provisioning; "already been uploaded" or
-   "bundle version" to a reused `build_number`. Fix it in the Apple account; never weaken the verification.
+   App Manager is enough (§3.4); that `--split-debug-info` is honoured through `--config-only` (the job
+   fails clearly if not); and everything about Transporter listed in §1 ("Why one export and
+   Transporter"). **Residual gap of R1:** the equivalence is proven up to the moment Transporter reads
+   the file (SHA-256 checked immediately before); what Apple stores after processing is not read back,
+   because nothing in the workflow may call the App Store Connect API. **If Transporter is missing on
+   `macos-26`**, the iOS job cannot upload at all until the lead proposes, and you approve, a way to
+   upload that same `.ipa` (for example Apple's App Store Connect "build uploads" API, which would need a
+   new, reviewed script and a guard change); a second export is not an option under R1.
+   **If the iOS job fails:** read the printed `error:` / `ERROR ITMS-` lines; "No Accounts"/"not
+   authorized" points to the key's role; "No profiles"/"requires a provisioning profile" to provisioning;
+   "already been uploaded" or "bundle version" to a reused `build_number`. Fix it in the Apple account;
+   never weaken the verification.
 6. **Google, UNVERIFIED until the first run:** the `environment` claim (§3.2), the token permission
    (§3.2), the Play permission, the first-upload rule and draft-only behaviour (§3.3).
 7. **Code that runs with the secrets.** After approval, the build commit's build scripts, Gradle, Swift

@@ -65,6 +65,12 @@ all passed through the environment:
 - iOS: `sentry-cli debug-files upload` on the archive's `dSYMs` and on
   `build/symbols/ios/<BUILD_NAME>+<BUILD_NUMBER>`.
 
+The token reaches sentry-cli only through `SENTRY_AUTH_TOKEN` in the step's environment (never a
+command-line flag or a config file), it logs at `warn`, its output is kept in a file that is never
+printed (one summary line per upload), and the symbols and that file are deleted at the end of the job
+whatever happens. The symbols go to Sentry only: not to a GitHub artifact, and not inside the `.ipa`
+(`uploadSymbols` is false).
+
 For a build made by hand, upload them yourself, with your own Sentry auth token in your shell (never in
 the repo or the script). `ORG` and `PROJECT` are the Sentry organisation and project slugs:
 
