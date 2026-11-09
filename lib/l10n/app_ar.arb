@@ -172,6 +172,8 @@
     }
   },
   "callFailedMicrophone": "يحتاج جَوِّد إلى إذن الميكروفون لإجراء المكالمات.",
+  "callMicrophoneSettingsHint": "اسمح لجَوِّد باستخدام الميكروفون من الإعدادات، ثم اضغط «إعادة المحاولة».",
+  "callOpenSettings": "فتح الإعدادات",
   "callFailedNotAllowed": "هذه المكالمة غير متاحة.",
   "callFailedNetwork": "تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.",
   "callOutgoing": "جارٍ الاتصال…",

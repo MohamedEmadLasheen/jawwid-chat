@@ -10,6 +10,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/call_controller.dart';
+import '../application/call_media_providers.dart';
 import 'call_controls.dart';
 
 /// Leave the call for its conversation: to read it, or to record a voice
@@ -192,6 +193,8 @@ class _StatusLine extends StatelessWidget {
                 color: isFailure ? CallPalette.alert : CallPalette.muted,
               ),
             ),
+          if (isFailure && state.failure == CallUiFailure.microphone)
+            const _MicrophoneHelp(),
           if (state.phase == CallUiPhase.live ||
               state.phase == CallUiPhase.reconnecting)
             const Padding(
@@ -204,6 +207,44 @@ class _StatusLine extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: Spacing.spacing2),
               child: _Duration(value: state.duration!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// LR-26: the way out of a refused microphone, so it never dead-ends. What to
+/// do, in words, and the button to Settings where the platform can open it.
+/// Try again (in the actions below) then answers, places or rejoins the call.
+class _MicrophoneHelp extends ConsumerWidget {
+  const _MicrophoneHelp();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final settings = ref.watch(microphoneSettingsProvider);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.spacing2),
+      child: Column(
+        children: [
+          Text(
+            l10n.callMicrophoneSettingsHint,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: CallPalette.muted),
+          ),
+          if (settings.canOpen)
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.spacing2),
+              child: TextButton.icon(
+                key: const ValueKey('call-open-settings'),
+                style: TextButton.styleFrom(foregroundColor: CallPalette.foreground),
+                icon: const Icon(Icons.settings),
+                label: Text(l10n.callOpenSettings),
+                onPressed: () => settings.open(),
+              ),
             ),
         ],
       ),

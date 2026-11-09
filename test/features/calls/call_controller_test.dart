@@ -216,14 +216,16 @@ void main() {
       expect(state.callId, 'call_1');
       expect(state.peerLabel, 'Mr. Ahmed');
       expect(room.connects, isEmpty);
-      expect(mic.calls, 0);
+      // LR-26: asked once, BEFORE dialling -- a question, not a join.
+      expect(mic.calls, 1);
     });
 
     test('A5. the callee answering is what joins media', () async {
       final container = await liveOutgoing();
 
-      // Microphone asked BEFORE the room, which is W4's ordering (A4).
-      expect(mic.calls, 1);
+      // Microphone asked BEFORE the room, which is W4's ordering (A4) -- and
+      // once before dialling too (LR-26).
+      expect(mic.calls, 2);
       expect(room.connects, hasLength(1));
       expect(calls.tokenCalls, ['call_1']);
       expect(stateOf(container).phase, CallUiPhase.live);

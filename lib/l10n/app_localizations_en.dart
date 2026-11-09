@@ -373,6 +373,13 @@ class L10nEn extends L10n {
       'Jawwid needs microphone access to make calls.';
 
   @override
+  String get callMicrophoneSettingsHint =>
+      'Allow microphone access for Jawwid in Settings, then tap Try again.';
+
+  @override
+  String get callOpenSettings => 'Open settings';
+
+  @override
   String get callFailedNotAllowed => 'This call is not available.';
 
   @override

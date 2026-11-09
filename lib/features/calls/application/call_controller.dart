@@ -6,6 +6,7 @@ import '../../../app/providers.dart';
 import '../../../core/call_media/audio_route.dart';
 import '../../../core/call_media/call_media_client.dart';
 import '../../../core/call_media/media_room.dart';
+import '../../../core/call_media/microphone_permission.dart';
 import '../../../core/call_native/call_native_providers.dart';
 import '../../../core/call_native/call_presentation.dart';
 import '../../../core/data/repositories.dart';
@@ -289,6 +290,11 @@ class CallController extends Notifier<CallUiState> {
   /// controls to stay, so the difference has to be held somewhere.
   bool _rejoining = false;
 
+  /// LR-26: an incoming call this device tried to answer while the microphone
+  /// was refused. Nothing was accepted on the server, so it is still RINGING
+  /// there, and Try again answers it rather than placing a new call.
+  String? _answerBlockedByMicrophone;
+
   @override
   CallUiState build() {
     // THE IDENTITY IS THE LIFECYCLE. Watching the account id means a sign-out or
@@ -372,6 +378,15 @@ class CallController extends Notifier<CallUiState> {
       canSwitchSpeaker: _audio?.canSwitch ?? false,
       speakerPreferred: _audio?.speakerPreferred ?? false,
     );
+
+    // LR-26: the microphone BEFORE dialling (`screens/call.md` §7). A refusal
+    // rings nobody; the screen explains and offers Settings and Try again.
+    if (!await _microphoneReady()) {
+      if (!_alive || state.phase != CallUiPhase.starting) return;
+      state = state.copyWith(phase: CallUiPhase.failed, failure: CallUiFailure.microphone);
+      return;
+    }
+    if (!_alive || state.phase != CallUiPhase.starting) return;
 
     try {
       final started = await calls.start(conversationId: conversationId);
@@ -527,6 +542,21 @@ class CallController extends Notifier<CallUiState> {
     if (state.phase != CallUiPhase.incomingRinging) return;
 
     state = state.copyWith(phase: CallUiPhase.connecting, clearFailure: true);
+
+    // LR-26: the microphone BEFORE answering. A refusal accepts nothing, so the
+    // caller is not put into a call nobody on this side can speak in, and the
+    // ring stays answerable once the microphone is allowed.
+    if (!await _microphoneReady()) {
+      if (!_alive || state.phase != CallUiPhase.connecting || state.callId != callId) return;
+      _answerBlockedByMicrophone = callId;
+      // The system screen cannot offer Settings or Try again; the app can.
+      _dismissNative(callId, CallDismissReason.failed);
+      state = state.copyWith(phase: CallUiPhase.failed, failure: CallUiFailure.microphone);
+      return;
+    }
+    if (!_alive || state.phase != CallUiPhase.connecting || state.callId != callId) return;
+    _answerBlockedByMicrophone = null;
+
     try {
       await calls.accept(callId: callId);
     } catch (error) {
@@ -632,8 +662,22 @@ class CallController extends Notifier<CallUiState> {
   /// rejoining a room for it would be the client deciding a dead call is alive.
   /// This starts a NEW call in the same conversation, which is what the user
   /// pressing "Try again" means.
+  ///
+  /// EXCEPT A REFUSED MICROPHONE (LR-26), which is this device's problem and
+  /// says nothing about the call. Typically the person has just come back from
+  /// Settings. If no call was placed yet, the new call below is the right one.
+  /// If a call exists, it is the SAME call that is answered (a ring we did not
+  /// accept) or rejoined (the media join was refused) -- placing a second call
+  /// would ring everybody again while the first is still alive. If that call
+  /// has ended in the meantime, the server says so (`call.ended`, or a refused
+  /// token) and the screen shows that instead.
   Future<void> retry() async {
     if (state.phase != CallUiPhase.failed) return;
+    final failedCallId = state.callId;
+    if (state.failure == CallUiFailure.microphone && failedCallId != null) {
+      await _retryMicrophone(failedCallId);
+      return;
+    }
     final conversationId = state.conversationId;
     final peerLabel = state.peerLabel;
     if (conversationId == null) return;
@@ -872,6 +916,34 @@ class CallController extends Notifier<CallUiState> {
       clearInterrupted: true,
     );
     unawaited(_teardownMedia());
+  }
+
+  // --------------------------------------------------------------- microphone
+
+  /// LR-26: ask for the microphone (prompting if it was never decided). The
+  /// media client asks again when it joins; by then the answer is settled and
+  /// no second prompt appears.
+  Future<bool> _microphoneReady() async =>
+      await ref.read(microphonePermissionProvider).ensure() == MicrophoneAccess.granted;
+
+  /// See [retry]: the same call, answered or rejoined.
+  Future<void> _retryMicrophone(String callId) async {
+    if (_answerBlockedByMicrophone == callId) {
+      // Still ringing on the server: answer it, through the one answer path.
+      state = state.copyWith(phase: CallUiPhase.incomingRinging, clearFailure: true);
+      await accept();
+      return;
+    }
+    // Accepted, and refused at the media join. The media client allows a
+    // reconnect from `failed` (the rejoiner uses it too), and nothing was
+    // joined, so there is nothing to tear down first.
+    state = state.copyWith(phase: CallUiPhase.connecting, clearFailure: true);
+    final media = _media;
+    if (media != null) {
+      await media.connect(callId: callId);
+    } else {
+      await _joinMedia(callId);
+    }
   }
 
   // -------------------------------------------------------------------- media
