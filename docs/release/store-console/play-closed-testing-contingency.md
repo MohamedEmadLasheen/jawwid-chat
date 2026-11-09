@@ -127,7 +127,7 @@ Day 0 is the day the requirement is detected (the first-upload day).
 | 3 to S + 12 | **Every day:** read the opted-in count on the Testers tab and write the date and count in the tracker. If it drops below 12, add testers the same day. | Short weekly check-in with testers: are they still using the app? | Collect feedback into a short list (what testers said, what was changed) for the application in §4. |
 | S + 13 | Confirm 14 consecutive days at 12 or more (S is the first day at 12 or more; if that was day 2, this is day 15). Take a screenshot of the counter. | Thank the testers; tell them the app stays installed and keeps working. | Prepare the answers in §4 with the owner. |
 | S + 14 | **Apply for production access** (§4), and not before. | | |
-| 15 to ~22 | Wait for Google's answer (typically days; UNVERIFIED). If refused, read the reason, fix, and reapply; the 14 days may restart. | | Fix anything Google names. |
+| After applying (from S + 14, about a week) | Wait for Google's answer (typically days; UNVERIFIED). If refused, read the reason, fix, and reapply; the 14 days may restart. | | Fix anything Google names. |
 | after approval | Production release, staged rollout (readiness review §6 step 6). | | Monitor crash-free sessions. |
 
 **What to track, daily, in the launch tracker:** date; opted-in tester count; whether 12 or more; any
@@ -157,7 +157,7 @@ Treat a refusal as a 14-day cost in the plan, not a stop.
 
 - **Internal testing and the device plan are unchanged**; they run in parallel with the closed test.
 - If the requirement applies, **Android production moves by about 3 weeks** from the first-upload
-  day: 1 to 2 days to get 12 testers opted in, 14 days of test, then Google's review of the
+  day: 1 to 2 days to get 12 testers opted in (day S), 14 days of test from S, then Google's review of the
   application (several days). A refusal adds another 14 days.
 - **iOS is not affected.** The App Store submission can proceed on its own schedule, with the
   understanding that the two stores may launch apart. Whether to hold iOS for a joint launch is an
