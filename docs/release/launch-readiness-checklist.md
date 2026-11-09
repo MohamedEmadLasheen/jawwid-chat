@@ -124,8 +124,8 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
 1. **Owner merge approvals waiting.** Independently reviewed and accepted at the exact head, with CI green there (2026-11-09):
-   - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541, #544. #546. **High, migration:** #545 (after #539 and #537).
-   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history; CI finishing).
+   - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541, #544, #546. **High, migration:** #545 (after #539 and #537).
+   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history).
    - **Stacked on #449, follow once it merges:** #524, #529, #535, and #537 (High: migration; after #534).
    - **Stacked on #533:** #543 (production alerts on api and worker; accepted).
    - **Older:** #497, #498, #449, #517.
