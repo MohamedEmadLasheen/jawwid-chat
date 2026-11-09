@@ -215,6 +215,19 @@ export class ConversationSeatService {
       const rows = await tx.$queryRaw<Array<SeatRow & { left_kind: string }>>`
         SELECT seat_id::text AS id, conversation_id::text, staff_id::text, member_id::text, reason, left_kind
           FROM chat.claim_seat_sweep(${now}::timestamptz, ${SWEEP_BATCH}::int)`;
+      // RT-014 lock order: the member rows of every conversation this pass
+      // touches, in id order, before the first seat ends. Ending a seat locks
+      // its conversation (the announcement); ending a second seat of that
+      // conversation afterwards could then deadlock with a send holding the
+      // second seat's row (FOR SHARE) and waiting for the conversation. Locked
+      // first, a send and this sweep simply wait for each other.
+      if (rows.length > 0) {
+        const conversationIds = [...new Set(rows.map((r) => r.conversation_id))];
+        await tx.$queryRaw`
+          SELECT 1 FROM chat.conversation_member
+           WHERE conversation_id = ANY(${conversationIds}::uuid[]) AND left_at IS NULL
+           ORDER BY id FOR UPDATE`;
+      }
       for (const r of rows) {
         const holder = await tx.staff.findUnique({ where: { id: r.staff_id }, select: { name: true } });
         await this.endSeatInTx(tx, r, r.left_kind, null, holder?.name ?? null);
