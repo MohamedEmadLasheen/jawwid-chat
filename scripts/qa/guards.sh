@@ -309,10 +309,15 @@ gate_app_spec() {
   # `doctl apps spec validate --schema-only` (offline, no credentials). doctl
   # is REQUIRED: without it the gate fails rather than skipping the schema.
   # The selftest runs first and proves each of those drifts is caught.
+  # LR-46 P2-2/P2-3 rides on this gate (a new gate id would need a ci.yml step):
+  # the deploy workflows run only an image whose digest a Deploy staging run at
+  # that commit recorded, and the review cohort refuses an unprotected
+  # production Environment. Static, with its own selftest.
   if ! command -v "$PYTHON" >/dev/null 2>&1; then
     echo "guards: $PYTHON not found -- the app-spec gate cannot run, so it FAILS"
     return 2
   fi
+  PYTHON="$PYTHON" bash scripts/qa/check-image-digest-gates.sh || return 1
   "$PYTHON" -I scripts/infra/app-spec.py selftest || return 1
   "$PYTHON" -I scripts/infra/app-spec.py check
 }

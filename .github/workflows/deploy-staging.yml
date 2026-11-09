@@ -64,15 +64,20 @@ jobs:
 
       - id: meta
         name: Resolve release identity
+        # The input reaches the shell only through env, never through ${{ }}
+        # inside the script, so it cannot inject shell.
+        env:
+          INPUT_TAG: ${{ inputs.image_tag }}
         run: |
-          if [ -n "${{ inputs.image_tag }}" ]; then
-            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-            echo "reusing existing image ${{ inputs.image_tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            [[ "$INPUT_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1; }
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            echo "reusing existing image $INPUT_TAG"
           else
             echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           fi
           # The Admin Web image is per environment (ADR-006), so its tag says so.
-          echo "admin_web_tag=staging-${{ inputs.image_tag || github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "admin_web_tag=staging-${INPUT_TAG:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the registry
@@ -86,6 +91,7 @@ jobs:
       - name: Build and push API image
         if: inputs.image_tag == ''
         run: |
+          set -euo pipefail
           IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/api"
           # Build identity is baked in so /health/live can answer
           # "what is running?" without consulting the pipeline.
@@ -93,8 +99,35 @@ jobs:
             --build-arg NODE_ENV=production \
             -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:staging" \
             apps/api
-          docker push "$IMAGE:${GITHUB_SHA}"
+          # LR-46 P2-2: the digest is taken from OUR push, never re-read from the
+          # registry afterwards (anyone with packages:write could move the tag in
+          # between). Production and the review cohort accept api:<sha> only if
+          # the tag still resolves to the digest a run of THIS workflow file at
+          # THAT commit recorded here.
+          pushed="$(docker push "$IMAGE:${GITHUB_SHA}")"
+          printf '%s\n' "$pushed"
+          digest="$(printf '%s\n' "$pushed" | sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\) size:.*/\1/p' | tail -n 1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+            || { echo "::error::could not read the pushed digest of $IMAGE:${GITHUB_SHA} from docker push"; exit 1; }
           docker push "$IMAGE:staging"
+          mkdir -p "$RUNNER_TEMP/api-image-digest"
+          printf '%s %s\n' "$GITHUB_SHA" "$digest" > "$RUNNER_TEMP/api-image-digest/api-image-digest"
+          echo "API image $IMAGE@$digest (commit $GITHUB_SHA)"
+
+      - name: Record the API image digest
+        # The record production trusts (LR-46 P2-2). Only a run of this file at
+        # commit <sha> can upload into a run whose head_sha is <sha>, so a
+        # writer who edits this file on a branch records under the BRANCH's
+        # commit, never under a reviewed one. 90 days is the longest a public
+        # repository keeps an artifact; an older commit is re-recorded by
+        # running this workflow on a ref that points at it.
+        if: inputs.image_tag == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-image-digest
+          path: ${{ runner.temp }}/api-image-digest/api-image-digest
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Install Flutter for the teacher web portal (PD-28)
         if: inputs.image_tag == ''

@@ -64,8 +64,17 @@ the review organization's rows and deploys nothing.
    - `confirm_email_domain`: the same domain typed again. The first run fixes the domain for good, so the run stops,
      changing nothing, if the two differ.
    Then approve the run when the `production` Environment asks.
+   - Before you are asked to approve, a **Preflight** job (no secrets) refuses the run unless the `production`
+     Environment has **required reviewers** and **Deployment branches = Selected branches, with exactly one rule:
+     the branch `main`**. It reads this through the GitHub API and refuses if it cannot read it. Its summary lists
+     the reviewers and branch rules it found.
+   - Preflight also checks the **image itself**, not only the commit: `api:<sha>` must point at the digest that a
+     **Deploy staging** run at that same commit recorded when it pushed the image (LR-46). If the tag was
+     overwritten, or the record is older than 90 days, the run stops. To fix it, run Deploy staging on a ref at that
+     commit. A commit from before this check cannot be used, because its workflow records no digest. The accounts job
+     then pulls and runs the image **by digest**, and the run summary records it.
    - It stops with a clear error, changing nothing, if a secret is missing, the two domains differ, the SHA is not
-     on main, or the image does not exist.
+     on main, the image does not exist, or the image is not the recorded one.
    - It writes the passwords to private (mode 600) files on the runner only for the run, and deletes them at the
      end even if the run fails.
    - It prints ids and the three logins. The database's host:port/name is masked (the log shows `***` in its
