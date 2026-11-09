@@ -112,7 +112,7 @@ jobs:
           fi
 
       - name: The production Environment is protected (required reviewers, main only)
-        # LR-46 P2-3, the same check as release-store-builds.yml. GitHub creates
+        # LR-46 P2-3, the same check as release-store-builds.yml (#547, pending merge). GitHub creates
         # an Environment named by a job on first use with NO protection, and the
         # in-file GITHUB_REF check above is only as good as this file. Refuse
         # unless the reviewers and the main-only branch rule are really there.
@@ -171,6 +171,7 @@ jobs:
           runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/runs?head_sha=$IMAGE_TAG&per_page=100" \
             | jq -r --arg repo "$GITHUB_REPOSITORY" --arg sha "$IMAGE_TAG" \
                 '.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo
+                  and .event == "workflow_dispatch" and .head_branch == "main"
                   and ((.path // "") | split("@")[0]) == ".github/workflows/deploy-staging.yml") | .id')" \
             || { echo "::error::could not list the Deploy staging runs with the job token"; exit 1; }
           found=""

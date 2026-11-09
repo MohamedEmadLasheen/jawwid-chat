@@ -70,8 +70,11 @@ the review organization's rows and deploys nothing.
      the reviewers and branch rules it found.
    - Preflight also checks the **image itself**, not only the commit: `api:<sha>` must point at the digest that a
      **Deploy staging** run at that same commit recorded when it pushed the image (LR-46). If the tag was
-     overwritten, or the record is older than 90 days, the run stops. To fix it, run Deploy staging on a ref at that
-     commit. A commit from before this check cannot be used, because its workflow records no digest. The accounts job
+     overwritten, or the record is older than 90 days, the run stops. Only a **manual Deploy staging run from `main`**
+     counts (a pull-request or branch run could execute an edited workflow), so build the image while that commit is
+     `main`'s head; for an older commit, deploy a newer one instead.
+     The `production` Environment's required reviewer may approve their own run: with the owner as the only reviewer
+     that is intended (self-review and admin bypass are shown in the run summary, not refused). A commit from before this check cannot be used, because its workflow records no digest. The accounts job
      then pulls and runs the image **by digest**, and the run summary records it.
    - It stops with a clear error, changing nothing, if a secret is missing, the two domains differ, the SHA is not
      on main, the image does not exist, or the image is not the recorded one.

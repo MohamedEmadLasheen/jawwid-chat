@@ -113,6 +113,7 @@ jobs:
           runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/runs?head_sha=$IMAGE_TAG&per_page=100" \
             | jq -r --arg repo "$GITHUB_REPOSITORY" --arg sha "$IMAGE_TAG" \
                 '.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo
+                  and .event == "workflow_dispatch" and .head_branch == "main"
                   and ((.path // "") | split("@")[0]) == ".github/workflows/deploy-staging.yml") | .id')" \
             || { echo "::error::could not list the Deploy staging runs with the job token"; exit 1; }
           found=""

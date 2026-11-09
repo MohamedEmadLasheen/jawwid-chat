@@ -45,6 +45,9 @@ DIGEST_CHECK = [
     'actions/workflows/deploy-staging.yml/runs?head_sha=$IMAGE_TAG',
     'select(.head_sha == $sha and .head_repository.full_name == $repo',
     '== ".github/workflows/deploy-staging.yml"',
+    # a pull_request run executes the merge commit's (possibly edited) file under head_sha:
+    # only a manual run from main may vouch for a digest.
+    'and .event == "workflow_dispatch" and .head_branch == "main"',
     'gh run download "$id" -R "$GITHUB_REPOSITORY" -n api-image-digest',
     '= "$IMAGE_TAG $digest" ]',
 ]
@@ -205,6 +208,8 @@ MUTATIONS = [
     ("deploy-production", "runs?head_sha=$IMAGE_TAG", "runs?branch=main"),
     ("deploy-staging", 'echo "reusing existing image $INPUT_TAG"', 'echo "reusing existing image ${{ inputs.image_tag }}"'),
     ("deploy-staging", "          name: api-image-digest\n", "          name: api-digest\n"),
+    ("review-cohort", 'and .event == "workflow_dispatch" and .head_branch == "main"', 'and true'),
+    ("deploy-production", 'and .event == "workflow_dispatch" and .head_branch == "main"', 'and true'),
 ]
 
 bad = 0
