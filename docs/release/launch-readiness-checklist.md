@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 10:40 Cairo (08:40 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 11:16 Cairo (09:16 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -141,15 +141,20 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W20 (realtime security) | RT-019: the legacy `message.delivered { messageIds }` frame is bounded (1–100 UUIDs), charged to the receipt budget and uses the current identity. No client sends that form | #544 | **ACCEPT @ `1d2e0ff1`**; CI running |
 | Builder W21 (database security) | RT-029: a learner's teacher must be in the learner's organization (trigger; fails loudly if a stored row crosses the boundary); the relationship check keeps a test through a replica-mode row. **High: migration `20261109130000`**; merges after #539 and #537 | #545 | **ACCEPT @ `e90016fb`**; CI running; **owner approval needed (migration)** |
 | Builder W22 (backend security) | RT-014: a send re-checks membership inside its transaction (member rows locked first, in the removal order) and takes its recipients from the locked read; a deadlock is retried once, then a retryable 503 with Retry-After | #546 | **ACCEPT @ `9b9f5774`** (three rounds); CI 30/30 |
+| Builder W23 (backend) | #498 completed: the earlier P2-1 fix (it had been left uncommitted; that tree is preserved) and the four new P2s (demo-teacher repair, migration lock timeout, payout wording marked for legal review, request-mode screen text) | #498 | **ACCEPT @ `ea2243a0`**, CI 30/30; **High: migration** |
+| Lead | #449 reviewed in full for the first time | #449 | **ACCEPT @ `c205aba0`**, no P1 or P2; **High: migration** |
+| Builder W24 (release) | LR-76 option C: signed store builds in a gated `store-release` Environment. No keys are created; artifacts are age-encrypted to the owner's public key (1-day retention); preflight refuses an unprotected Environment | #547 | **ACCEPT @ `66f9418f`**; CI running; **High: owner Code Owner approval; every key needs a separate approval** |
+| Lead | Deploy workflows: inputs reach the shell only through env; `image_tag` must be a full SHA | #548 | **ACCEPT @ `5349bf83`**; **owner Code Owner approval needed** |
+| Builder W25 (QA) | LR-09j: reproducible store screenshots, Arabic and English, with fakes (no server, no real people). The lock was completed by hand from the SDK and pub's cached hashes. Captures probably have no status bar (documented) | #549 | ACCEPT @ `3a5ffb1d`; the analyzer clash is fixed @ `5739da30`, delta review running |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
 1. **Owner merge approvals waiting.** Independently reviewed and accepted at the exact head, with CI green there (2026-11-09):
    - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541, #544, #546. **High, migration:** #545 (after #539 and #537).
-   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history).
+   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history), #548 (deploy inputs via env), #547 (signed builds; High; CI finishing).
    - **Stacked on #449, follow once it merges:** #524, #529, #535, and #537 (High: migration; after #534).
    - **Stacked on #533:** #543 (production alerts on api and worker; accepted).
-   - **Older:** #497 (ready), #517 (ready, Code Owner). **Not ready:** #449 (no review ACCEPT had been posted; full review running) and #498 (no ACCEPT; its P2-1 fix was uncommitted, now `557a877d` with tests; full re-review running).
+   - **Older:** #497 (ready), #517 (ready, Code Owner). Now ready, both High (migration): #449 (`c205aba0`) and #498 (`ea2243a0`).
    - **Batches and order:** `docs/release/merge-plan-2026-11-09.md`.
    - **Merge-order notes:** #534 before #537. When #498 and #537 meet, the session lock goes inside #498's `run()` helper (noted on both PRs).
 2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
