@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 04:35 Cairo (02:35 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 04:50 Cairo (02:50 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -117,6 +117,8 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W18 (test) | A CI test that failed only between 01:00 and 02:00 UTC: an earlier make-up lesson double-booked the teacher. The API's refusal was correct; the test now steps to the teacher's next free half hour | #541 | **ACCEPT @ `e36dbe60`**, CI 30/30 |
 | Lead | LR-46: CI's secret scan sees the whole git history. The step deepens by SHA, so no `origin/*` refs appear for other steps | #542 | **ACCEPT @ `ccc3ed5b`** (the first version used `fetch-depth: 0`, whose side effect the review caught); **owner Code Owner approval needed** |
 | Builder W19 (infra) | LR-29: production component alerts (restarts, memory, CPU) on api and worker, through the spec generator; CI validates with `doctl` | #543 (into #533's branch) | **ACCEPT @ `b6dc2326`** |
+| Builder W20 (realtime security) | RT-019: the legacy `message.delivered { messageIds }` frame is bounded (1–100 UUIDs), charged to the receipt budget and uses the current identity. No client sends that form | #544 | **ACCEPT @ `1d2e0ff1`**; CI running |
+| Builder W21 (database security) | RT-029: a learner's teacher must be in the learner's organization (trigger; fails loudly if a stored row crosses the boundary); the relationship check keeps a test through a replica-mode row. **High: migration `20261109130000`**; merges after #539 and #537 | #545 | **ACCEPT @ `e90016fb`**; CI running; **owner approval needed (migration)** |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
