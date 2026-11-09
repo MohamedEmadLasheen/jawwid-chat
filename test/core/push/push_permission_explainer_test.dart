@@ -1,7 +1,8 @@
 /// LR-11 (explain-first): the system notification prompt is never the first thing a
 /// person sees. Before the native `start` (which asks Android 13+ for POST_NOTIFICATIONS
 /// and iOS for notification authorization) the app explains what it notifies about, and
-/// only "Continue" lets the registrar ask the platform.
+/// only "Continue" lets the registrar call `start`. Tokens are never gated: the native
+/// `register` (no prompt) is called at once, whatever the answer.
 ///
 /// These drive the registrar and the explainer together, without a widget: the screen
 /// half (the dialog and when it may appear) is `push_permission_explainer_host_test.dart`.
@@ -110,6 +111,69 @@ void main() {
     expect(store.hasContinued, isFalse);
     expect(store.lastDeclined, t0);
     expect(c.read(pushExplainerProvider), PushExplainerPhase.idle);
+  });
+
+  test('Not now still registers tokens: only the permission prompt is withheld', () async {
+    final c = build();
+    c.read(pushRegistrarProvider);
+    await h.settle();
+    expect(tokens.registers, 1, reason: 'tokens are requested before any answer');
+
+    await explainer(c).answer(proceed: false);
+    await h.settle();
+    tokens.emit(h.voipToken);
+    tokens.emit(h.standardToken);
+    await h.settle();
+
+    expect(api.registered, [h.voipToken, h.standardToken]);
+    expect(tokens.starts, 0);
+  });
+
+  test('a headless start (no screen, nobody to answer) registers without waiting', () async {
+    // An engine woken in the background: the explanation stays unanswered.
+    final c = build();
+    c.read(pushRegistrarProvider);
+    await h.settle();
+
+    expect(c.read(pushExplainerProvider), PushExplainerPhase.waiting);
+    expect(tokens.registers, 1);
+    tokens.emit(h.voipToken);
+    await h.settle();
+    expect(api.registered, [h.voipToken]);
+    expect(tokens.starts, 0, reason: 'no prompt without an explanation');
+  });
+
+  test('Continue asks exactly once: one register at the start, one start after', () async {
+    final c = build();
+    c.read(pushRegistrarProvider);
+    await h.settle();
+    expect(tokens.starts, 0);
+
+    await explainer(c).answer(proceed: true);
+    await h.settle();
+    await explainer(c).answer(proceed: true);
+    await h.settle();
+
+    expect(tokens.registers, 1);
+    expect(tokens.starts, 1);
+  });
+
+  test('nothing left for the OS to ask (Android before 13, already granted, iOS answered): '
+      'no explanation and no start', () async {
+    final c = build();
+    tokens.promptPossible = false;
+    c.read(pushRegistrarProvider);
+    await h.settle();
+
+    expect(c.read(pushExplainerProvider), PushExplainerPhase.idle);
+    expect(tokens.registers, 1);
+    expect(tokens.starts, 0);
+    expect(store.lastDeclined, isNull);
+    expect(store.hasContinued, isFalse);
+
+    tokens.emit(h.standardToken);
+    await h.settle();
+    expect(api.registered, [h.standardToken]);
   });
 
   test('after Not now, the next app start within a day does not ask again', () async {

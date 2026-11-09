@@ -5566,7 +5566,7 @@ class L10nEn extends L10n {
 
   @override
   String get notificationPermissionCallsNote =>
-      'Calls need notifications to ring when the app is closed.';
+      'So messages and calls appear while the app is closed.';
 
   @override
   String get notificationPermissionContinue => 'Continue';

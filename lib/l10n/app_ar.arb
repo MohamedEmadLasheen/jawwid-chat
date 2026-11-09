@@ -2146,7 +2146,7 @@
   "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."},
   "legalLoadFailed": "تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.",
   "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."},
-  "notificationPermissionCallsNote": "تحتاج المكالمات إلى الإشعارات لكي ترنّ والتطبيق مغلق.",
+  "notificationPermissionCallsNote": "لتظهر الرسائل والمكالمات والتطبيق مغلق.",
   "@notificationPermissionCallsNote": {"description": "LR-11: second line of the explanation shown before the system notification prompt, under notificationPermissionBody."},
   "notificationPermissionContinue": "متابعة",
   "@notificationPermissionContinue": {"description": "LR-11: the explanation's button that goes on to the system notification prompt."},

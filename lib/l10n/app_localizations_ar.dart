@@ -5653,7 +5653,7 @@ class L10nAr extends L10n {
 
   @override
   String get notificationPermissionCallsNote =>
-      'تحتاج المكالمات إلى الإشعارات لكي ترنّ والتطبيق مغلق.';
+      'لتظهر الرسائل والمكالمات والتطبيق مغلق.';
 
   @override
   String get notificationPermissionContinue => 'متابعة';

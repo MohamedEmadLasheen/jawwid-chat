@@ -32,6 +32,18 @@ class FakeTokens implements PushTokens {
   final _tokens = StreamController<PushToken>.broadcast();
   int starts = 0;
 
+  /// Native `register` calls: tokens without the permission prompt (LR-11).
+  int registers = 0;
+
+  /// What `register` answers: whether `start` could still show the OS prompt.
+  bool promptPossible = true;
+
+  @override
+  Future<bool> register() async {
+    registers++;
+    return promptPossible;
+  }
+
   @override
   Future<void> start() async => starts++;
 

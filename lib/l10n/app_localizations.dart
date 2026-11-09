@@ -9556,7 +9556,7 @@ abstract class L10n {
   /// LR-11: second line of the explanation shown before the system notification prompt, under notificationPermissionBody.
   ///
   /// In en, this message translates to:
-  /// **'Calls need notifications to ring when the app is closed.'**
+  /// **'So messages and calls appear while the app is closed.'**
   String get notificationPermissionCallsNote;
 
   /// LR-11: the explanation's button that goes on to the system notification prompt.

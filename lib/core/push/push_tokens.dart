@@ -57,7 +57,18 @@ class PushToken {
 /// layer W8-W3 will build, and the call itself still arrives over the existing
 /// realtime connection. Nothing here may grow a method that answers a call.
 abstract interface class PushTokens {
-  /// Ask the platform to register for push, if it has not already.
+  /// Register for push WITHOUT asking the person anything (LR-11): every token
+  /// this device can hold is requested and reported on [tokens], but no
+  /// notification permission prompt is shown.
+  ///
+  /// Resolves to whether [start] could still show the OS notification prompt:
+  /// false when there is nothing left to ask (Android before 13 has no runtime
+  /// prompt; the permission is already granted; iOS has already had its answer),
+  /// true when it could, or when that is not known. Safe to call repeatedly.
+  Future<bool> register();
+
+  /// Everything [register] does, AND ask for the notification permission (the
+  /// system prompt on Android 13+ and iOS), if it has not already been asked.
   ///
   /// Safe to call repeatedly. Returns when the request has been made — a token
   /// arrives on [tokens] afterwards, and may never arrive at all (a simulator,
@@ -91,6 +102,20 @@ class PlatformPushTokens implements PushTokens {
 
   final MethodChannel _channel;
   final _tokens = StreamController<PushToken>.broadcast();
+
+  @override
+  Future<bool> register() async {
+    try {
+      // Null (an answer without a value) is "not known": explain, then ask.
+      return await _channel.invokeMethod<bool>('register') ?? true;
+    } on PlatformException {
+      return true;
+    } on MissingPluginException {
+      // No native side, or one without `register`: the explanation and then
+      // [start] behave exactly as before the split.
+      return true;
+    }
+  }
 
   @override
   Future<void> start() async {

@@ -55,10 +55,10 @@ class HttpPushRegistration implements PushRegistrationApi {
 ///
 /// ## What it does, and when
 ///
-/// * a session begins  -> ask the platform for tokens, register each one. The
-///                        platform is asked only once the LR-11 explanation is
-///                        cleared (`push_permission_explainer.dart`), because
-///                        asking is what shows the OS notification prompt
+/// * a session begins  -> ask the platform for tokens (no prompt), register each
+///                        one. The notification PERMISSION is asked for only
+///                        once the LR-11 explanation is cleared
+///                        (`push_permission_explainer.dart`); tokens never wait
 /// * a token rotates   -> register the new one (the server upserts by token)
 /// * a session ends    -> retire what this device registered
 ///
@@ -97,9 +97,10 @@ class PushRegistrar {
   final PushRegistrationApi _api;
   final RedactingLogger _log;
 
-  /// LR-11 explain-first: asked before the platform, whose `start` is what makes
-  /// the OS show its notification prompt. False means "not this session". Null (a
-  /// test of the registration alone) asks the platform straight away.
+  /// LR-11 explain-first: asked before the platform's `start`, which is what makes
+  /// the OS show its notification prompt. False means "not this session". Token
+  /// registration (`PushTokens.register`) never waits for it. Null (a test of the
+  /// registration alone) calls `start` straight away.
   final Future<bool> Function()? _clearToStart;
 
   StreamSubscription<PushToken>? _sub;
@@ -124,8 +125,25 @@ class PushRegistrar {
     // whatever the explanation's answer.
     _sub = _tokens.tokens().listen(_onToken);
 
+    // LR-11: tokens are requested NOW, with no prompt, whether or not anyone ever
+    // answers the explanation -- a headless start (an engine woken by a push, no
+    // screen to explain on) and a "Not now" both still register this device.
+    // Only the notification PERMISSION waits for the explanation.
+    bool promptPossible;
+    try {
+      promptPossible = await _tokens.register();
+    } catch (_) {
+      promptPossible = true;
+    }
+    if (!_started || generation != _generation) return;
+
     final gate = _clearToStart;
     if (gate != null) {
+      if (!promptPossible) {
+        // Nothing for the OS to ask (Android before 13, already granted, iOS already
+        // answered): no explanation, and no `start`, because `register` did the rest.
+        return;
+      }
       bool clear;
       try {
         clear = await gate();
@@ -136,10 +154,11 @@ class PushRegistrar {
       }
       if (!_started || generation != _generation) return;
       if (!clear) {
-        _log.info('push: notifications not now; the platform is not asked this session');
+        _log.info('push: notifications not now; the permission is not asked this session');
         return;
       }
     }
+    // Register again AND ask for the notification permission: the system prompt.
     await _tokens.start();
   }
 

@@ -88,6 +88,52 @@ void main() {
     await expectLater(tokens.start(), completes);
   });
 
+  group('LR-11: register (tokens, no prompt) is a separate native call from start', () {
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+    test('register calls `register`, never `start`, and passes on its answer', () async {
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return call.method == 'register' ? false : null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final tokens = PlatformPushTokens();
+      addTearDown(tokens.dispose);
+
+      expect(await tokens.register(), isFalse, reason: 'nothing left for the OS to ask');
+      expect(calls, ['register']);
+
+      await tokens.start();
+      expect(calls, ['register', 'start']);
+    });
+
+    test('an answer without a value, or a native error: a prompt is assumed possible',
+        () async {
+      Object? answer;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (answer is PlatformException) throw answer!;
+        return answer;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final tokens = PlatformPushTokens();
+      addTearDown(tokens.dispose);
+
+      answer = null;
+      expect(await tokens.register(), isTrue);
+      answer = PlatformException(code: 'boom');
+      expect(await tokens.register(), isTrue);
+    });
+
+    test('no native side: register does not throw, and assumes a prompt is possible',
+        () async {
+      final tokens = PlatformPushTokens();
+      addTearDown(tokens.dispose);
+
+      expect(await tokens.register(), isTrue);
+    });
+  });
+
   test('the stream is terminal after dispose', () async {
     final tokens = PlatformPushTokens();
     await tokens.dispose();

@@ -11,7 +11,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// requests POST_NOTIFICATIONS and iOS requests notification authorization. Called
 /// cold, straight after sign-in, the person meets a system dialog with no idea why
 /// Jawwid wants it. So [PushRegistrar] asks [PushExplainer.clearToStart] first, and
-/// only a "Continue" on the explanation lets it call the platform.
+/// only a "Continue" on the explanation lets it call `start`.
+///
+/// Token registration is NOT gated: the registrar calls the native `register` (the
+/// same as `start` minus the permission request) as soon as a session begins, so a
+/// "Not now", an unanswered explanation, or a start with no screen at all still
+/// leaves this device registered. Without the permission the OS shows no banners;
+/// calls on iOS still ring through PushKit and CallKit. And where `register` reports
+/// that there is no prompt left to show (Android before 13, already granted, iOS
+/// already answered), the explanation is skipped entirely.
 ///
 /// ## What is remembered, and for whom
 ///
@@ -22,7 +30,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///  * **Continue, once** -> never shown again on this device. The OS has asked by
 ///    then and owns the answer; a second account signing in on the same phone is not
 ///    shown it either, because the permission belongs to the app, not to the account.
-///  * **Not now** -> the platform is not asked for the rest of this session, and the
+///  * **Not now** -> the permission is not asked for the rest of this session (tokens
+///    are still registered), and the
 ///    explanation is not shown again for [pushExplainerSnooze]: the next app start or
 ///    sign-in after that asks again. At most once a day.
 ///
@@ -31,8 +40,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// ## What it does NOT change
 ///
-/// Who receives pushes, how tokens are registered or retired, and every server call
-/// stay exactly as they were; this only decides WHEN the platform is first asked.
+/// Who receives pushes, how and when tokens are registered or retired, and every
+/// server call stay exactly as they were; this only decides WHEN the notification
+/// permission is first asked for.
 abstract interface class PushExplainerStore {
   /// Whether anybody on this device pressed Continue.
   Future<bool> continued();
@@ -185,6 +195,8 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
   /// The dialog went away without an answer (its screen was removed under it, a
   /// sign-out). Still waiting: the next host to mount asks again.
   void release() {
+    // Called a microtask after a host is disposed: the app may be gone by then.
+    if (!ref.mounted) return;
     if (state == PushExplainerPhase.onScreen && _pending != null) {
       state = PushExplainerPhase.waiting;
     }
