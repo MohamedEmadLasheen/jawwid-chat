@@ -86,7 +86,7 @@ sentry-cli debug-files upload --org ORG --project PROJECT \
   build.
 - iPhone only for Phase 1 (`TARGETED_DEVICE_FAMILY = 1`; the department
   head's decision, 2026-11-02).
-- Background modes: `voip`, `remote-notification` and `audio` (calls).
+- Background modes: `voip` and `audio` (calls). No `remote-notification`: the server sends iOS no silent push (LR-24, #531).
 - Notification permission: asked when push registration starts, which is when a
   session begins (after sign-in), never at launch (`AppDelegate.startRegistering`).
   The push PRs (#449 with #408) replace this: the app explains first and asks only

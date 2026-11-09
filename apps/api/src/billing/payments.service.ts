@@ -9,6 +9,7 @@ import type { BillingAccess } from '../platform/pd012-policy';
 import { MediaUrlSigner } from '../platform/media-url';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { NotificationService } from '../communication/notifications/notification.service';
+import { GENERIC_PUSH_TEMPLATE } from './lock-screen-push';
 import { SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
 import { todayIn } from '../leave/leave.service';
 import { BillingService, mapPaymentRefusal, parseBankAccount, requireLessonPackage, type BankAccount } from './billing.service';
@@ -640,7 +641,10 @@ export class PaymentsService {
       for (const r of recipients) {
         await this.notifications.schedule({
           dedupeKey: `payment_receipt_rejected:${receipt.id}:${r.id}`,
-          templateKey: 'payment_receipt_rejected',
+          // The amount and the staff member's reason are read in the Center
+          // (inbox.payment_receipt_rejected), never on a lock screen: the
+          // reason is free text, so not even for someone who turned names on.
+          templateKey: GENERIC_PUSH_TEMPLATE,
           eventType: 'payment_receipt_rejected',
           recipientId: r.id,
           locale: r.locale,

@@ -7,8 +7,10 @@ deployed, run or changed to write it.**
 > first deploy failed at the backup step, before any migration: both workflows back up the `chat`
 > schema before `scripts/db/apply.sh` creates it, and the backup refused a database with no `chat`
 > schema. `scripts/infra/backup-db.sh` now skips the backup, loudly and without writing a file, when
-> the schema does not exist and `FIRST_DEPLOY` is unset or `true`; with any other `FIRST_DEPLOY` value
-> it fails. A workflow follow-up that passes `FIRST_DEPLOY` is pending the owner (§1d). Do **not**
+> the schema does not exist and `FIRST_DEPLOY` is unset, empty or `true`; with any other `FIRST_DEPLOY` value
+> it fails. The workflow follow-up (#518, merged 2026-11-08 as `84a4e5d5`) passes `FIRST_DEPLOY` to
+> that step: the deploy's `first_deploy` input in both deploy workflows, and `'false'` in the scheduled
+> backups (§1d). Do **not**
 > create the schema by hand. The LR-77 "fails at the backup step" / "until LR-77 is fixed" notes in §1a-§1c,
 > §4 and §6 describe the state before the fix.
 
@@ -211,12 +213,12 @@ schema exists, using the same client as the dump:
 The test is `test/scripts/backup_db_first_deploy_test.dart`, which uses fake clients and no
 database.
 
-**Pending the owner: the workflow follow-up.** `.github/` is owner-only, so the workflows do not set
-`FIRST_DEPLOY` yet, and until they do every deploy is treated as a possible first deploy by this
-check. The change is one `env:` entry on the backup step: `FIRST_DEPLOY: ${{ inputs.first_deploy }}`
-in `deploy-production.yml` and `deploy-staging.yml`, and `FIRST_DEPLOY: 'false'` in
-`backup-daily.yml` and `backup-weekly.yml`. It should land before the first production deploy that
-carries real data (details: `docs/infrastructure/backup-recovery.md` §3).
+**The workflow follow-up is merged (#518, `84a4e5d5`, 2026-11-08; #516 is `bc47d376`).** The backup
+step now receives `FIRST_DEPLOY: ${{ inputs.first_deploy == true && 'true' || 'false' }}` in
+`deploy-production.yml` and `deploy-staging.yml`, and `FIRST_DEPLOY: 'false'` in `backup-daily.yml`
+and `backup-weekly.yml`. So only a run started with `first_deploy` ticked may skip the backup; every
+other deploy, and every scheduled backup, fails at the backup step if the `chat` schema is missing
+(details: `docs/infrastructure/backup-recovery.md` §3).
 
 ---
 
@@ -448,9 +450,9 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
    not simply the newest commit on `main`: if anything merged after the run, the newest commit has no
    image and production stops at "The API image for this commit exists". The 7-character short SHA
    does not work. Unblocks: LR-01.
-7. **First production run — CURRENTLY FAILS (Blocker LR-77, §1d); do not start it until the LR-77 fix
-   is merged.** Today it stops at "Back up the database" before any migration, changing nothing.
-   **What this run does once LR-77 is fixed — read before starting it:**
+7. **First production run.** The LR-77 fix (#516, #518) is merged; with `first_deploy` ticked, "Back
+   up the database" skips with a "Backup skipped" warning and the run continues to the migrations.
+   **What this run does — read before starting it:**
    - It **starts a paid DigitalOcean App Platform app**, `jawwid-chat-production`: about **$32/month**
      before tax for the review period (API $12 + worker $5 + Admin Web $5 + in-app Redis $5 + Spaces
      $5, `production-readiness.md:33`).

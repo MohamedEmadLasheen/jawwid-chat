@@ -2,6 +2,7 @@
 // 5b): Deleted boards says how long a board can come back and that it is
 // deleted for good within 60 days; deleting says until when it can be
 // restored; there is no "delete forever"; a pen stroke on the page is saved.
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -13,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/orientation/orientation_policy.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/design/tokens.dart';
 import 'package:jawwid_chat/features/whiteboards/application/board_editor_controller.dart';
@@ -120,6 +122,7 @@ void main() {
             GlobalCupertinoLocalizations.delegate,
           ],
           home: home,
+          navigatorObservers: [orientationObserver],
         ),
       ),
     );
@@ -355,6 +358,12 @@ void main() {
     tearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
 
     // Immersive is setEnabledSystemUIMode; manual mode with every overlay (the bars back) is setEnabledSystemUIOverlays.
+    // LR-39: which orientations the app asked for, last one wins.
+    List<String> lastOrientations() =>
+        List<String>.from(system.lastWhere((c) => c.method == 'SystemChrome.setPreferredOrientations').arguments as List);
+    const portrait = ['DeviceOrientation.portraitUp'];
+    const boardTurns = ['DeviceOrientation.portraitUp', 'DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'];
+
     Iterable<MethodCall> uiModes() =>
         system.where((c) => c.method == 'SystemChrome.setEnabledSystemUIMode' || c.method == 'SystemChrome.setEnabledSystemUIOverlays');
 
@@ -371,6 +380,7 @@ void main() {
       expect(after.height, greaterThan(before.height + 200), reason: 'the app bar, page strip and docked tools are gone');
       expect(uiModes().single.method, 'SystemChrome.setEnabledSystemUIMode');
       expect(uiModes().single.arguments, 'SystemUiMode.immersiveSticky');
+      expect(lastOrientations(), boardTurns, reason: 'LR-39: only the full-screen board may turn');
       expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == l10n.boardPageOf('1', '1')), findsOneWidget);
 
       // The tools float -- and fold down to one button, and come back.
@@ -399,6 +409,7 @@ void main() {
       expect(find.byType(AppBar), findsOneWidget);
       expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
       expect(uiModes().last.arguments, hasLength(SystemUiOverlay.values.length));
+      expect(lastOrientations(), portrait, reason: 'LR-39: leaving full screen holds the app portrait again');
       await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
     });
@@ -427,6 +438,7 @@ void main() {
       expect(find.byType(BoardEditorScreen), findsOneWidget, reason: 'the first Back only leaves full screen');
       expect(find.byType(AppBar), findsOneWidget);
       expect(uiModes().map((c) => c.method), ['SystemChrome.setEnabledSystemUIMode', 'SystemChrome.setEnabledSystemUIOverlays'], reason: '$system');
+      expect(lastOrientations(), portrait, reason: 'LR-39');
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
@@ -454,6 +466,73 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BoardEditorScreen), findsNothing);
       expect(uiModes().last.method, 'SystemChrome.setEnabledSystemUIOverlays', reason: 'the system bars come back');
+      expect(lastOrientations(), portrait, reason: 'LR-39: leaving the board from full screen holds the app portrait');
+    });
+
+    testWidgets('LR-39: a page opened over the full-screen board is held portrait; the board turns again when it is back on top', (tester) async {
+      final l10n = await pump(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BoardEditorScreen(boardId: 'b1'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        size: const Size(844, 390),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.boardFullScreen));
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), boardTurns);
+
+      // A tool sheet (a popup, not a page) keeps landscape.
+      unawaited(showModalBottomSheet<void>(
+          context: tester.element(find.byType(BoardEditorScreen)), builder: (_) => const Text('sheet')));
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), boardTurns, reason: 'a sheet over the board does not hold it portrait');
+      Navigator.of(tester.element(find.text('sheet'))).pop();
+      await tester.pumpAndSettle();
+
+      // A notification tap pushes a MaterialPage; the call screen is a page with no
+      // transition (router.dart `_still`). Both are held portrait while on top.
+      for (final covering in <Route<void>>[
+        MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('covering'))),
+        PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, __, ___) => const Scaffold(body: Text('covering')),
+        ),
+      ]) {
+        unawaited(Navigator.of(tester.element(find.byType(BoardEditorScreen))).push(covering));
+        await tester.pumpAndSettle();
+        expect(lastOrientations(), portrait, reason: 'the page on top (${covering.runtimeType}) is held portrait');
+        Navigator.of(tester.element(find.text('covering'))).pop();
+        await tester.pumpAndSettle();
+        expect(lastOrientations(), boardTurns, reason: 'the full-screen board is on top again');
+      }
+
+      // A call that arrives while one of the board's sheets is open goes above the sheet.
+      unawaited(showModalBottomSheet<void>(
+          context: tester.element(find.byType(BoardEditorScreen)), builder: (_) => const Text('sheet')));
+      await tester.pumpAndSettle();
+      unawaited(Navigator.of(tester.element(find.byType(BoardEditorScreen)))
+          .push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('call over a sheet')))));
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), portrait, reason: 'a page above a sheet above the board is held portrait');
+      Navigator.of(tester.element(find.text('call over a sheet'))).pop();
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.text('sheet'))).pop();
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), boardTurns, reason: 'the board is on top again');
+
+      await tester.tap(find.byKey(const ValueKey('board-exit-full-screen')));
+      await tester.pumpAndSettle();
+      expect(lastOrientations(), portrait);
+      await tester.pump(BoardEditorController.saveDelay + const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
     });
 
     // TEACHER-020 (store review, 2026-11-03): board header taps do nothing on iOS. In full

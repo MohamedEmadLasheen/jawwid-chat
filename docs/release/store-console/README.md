@@ -4,6 +4,12 @@
 code).** Draft, 2026-11-08, written by the App Store Compliance Specialist from the code on `main` @
 `cf731af2`. Nothing here has been entered in a console; the owner pastes the answers.
 
+**LR-71 re-check, 2026-11-09:** `apple-app-privacy.md`, `google-data-safety.md` and the parts of
+`play-declarations.md` named in its header were re-verified against `main` @ `bc47d376` and are pinned
+there. `age-rating.md` and `listing-copy.md` were not changed and stay pinned to `cf731af2`. Each
+re-verified file ends with an **Open items** list: answers that wait for an owner, counsel or lead
+decision, marked **OPEN** with the decision id.
+
 Every answer cites its evidence as `file:line`. `[OWNER DECISION: ...]` marks an answer that waits for
 the owner or counsel. `{{PLACEHOLDER}}` marks a fact that does not exist yet (a URL, an e-mail, a
 credential). No credential, entity name, address or URL has been invented.
@@ -12,10 +18,12 @@ credential). No credential, entity name, address or URL has been invented.
 
 | File | Console | What it answers |
 |---|---|---|
-| [apple-app-privacy.md](apple-app-privacy.md) | App Store Connect → App Privacy | Every data type: collected, linked, tracking, purposes, evidence. Lists the privacy-manifest gaps (§5) |
+| [apple-app-privacy.md](apple-app-privacy.md) | App Store Connect → App Privacy | Every data type: collected, linked, tracking, purposes, evidence. Maps each type to its privacy-manifest entry (§5) |
 | [google-data-safety.md](google-data-safety.md) | Play Console → App content → Data safety | Every data type, the Firebase Installations ID, Sentry, encryption in transit, deletion |
 | [age-rating.md](age-rating.md) | App Store Connect → Age Rating; Play → Content rating (IARC) | Apple's current questionnaire (incl. user-generated content, messaging, social media) and IARC |
 | [play-declarations.md](play-declarations.md) | Play Console → App content, Store settings | Target audience, App access (review instructions), ads, financial features, health, news, government, foreground service (and its video), full-screen intent, permissions, category, countries |
+| [review-notes.md](review-notes.md) | App Store Connect → App Review Information → Notes; Play → App access | The paste-ready review text (LR-09f): three review accounts, deletion, calls, the staff role, the payments choice (OA-12), and the byte count |
+| [ios-background-modes.md](ios-background-modes.md) | (App Review checks the app) | LR-24: each `UIBackgroundModes` entry, the code that uses it, and its justification. `remote-notification` has no use: remove it |
 | [listing-copy.md](listing-copy.md) | Both listings | Name, subtitle, short and full descriptions, keywords, what's new (Arabic first), screenshot sizes and shot list |
 
 ## Findings from the code (for the lead)
@@ -23,10 +31,10 @@ credential). No credential, entity name, address or URL has been invented.
 1. **Coarse Location stays declared (LR-23).** Besides the phone's time zone, the parent picks a country
    and region (PD-45), sent to the server (`lib/shared/location/location_repository.dart:45-48`). No GPS
    or location permission exists on either platform.
-2. **The iOS privacy manifest is missing seven collected types** that the label must declare: phone
-   number, other financial info (bank-transfer receipts), emails or text messages, customer support,
-   purchase history, product interaction, other diagnostic data (`apple-app-privacy.md` §5). A separate
-   ticket for the Mobile engineer, because this task may not edit `ios/`.
+2. **Done (LR-73, #508):** the iOS privacy manifest now declares the seven collected types it used to
+   miss (phone number, other financial info, emails or text messages, customer support, purchase
+   history, product interaction, other diagnostic data): `ios/Runner/PrivacyInfo.xcprivacy:136-234`;
+   `apple-app-privacy.md` §5.
 3. **Purchase History must be declared** on both stores: the app shows payments, receipts and
    downloadable invoices (`lib/features/billing/presentation/my_payments_screen.dart:323-330`).
 4. **The review cohort has nothing to pay**, so a reviewer cannot reach the pay sheet that the payments
@@ -35,9 +43,21 @@ credential). No credential, entity name, address or URL has been invented.
    review notes must wait for the LR-15 rename or avoid it.
 6. **The data inventory cites `checkout.service.ts:129`** for the child's name in the Stripe line item; it
    is now line 147.
-7. **The Foreground service and full-screen intent declarations must match the submitted build**: submit
-   only after LR-14 (drop `phoneCall` and `MANAGE_OWN_CALLS`) and LR-27 (check `canUseFullScreenIntent()`).
-8. **"Encrypted in transit: Yes" depends on LR-32**: the server still accepts a `ws://` LiveKit URL.
+7. **The Foreground service and full-screen intent declarations must match the submitted build.** LR-14
+   is done (#505: microphone only, `phoneCall` and `MANAGE_OWN_CALLS` removed). LR-27 (check
+   `canUseFullScreenIntent()`) is still open.
+8. **"Encrypted in transit: Yes": LR-32 is done (#506).** The server refuses a non-`wss://` LiveKit URL
+   when `APP_ENV=production` (`apps/api/src/communication/calls/media-token.ts:92-102`).
+9. **Crash data purposes differ between the stores on purpose (LR-71):** Google gets "App functionality,
+   Analytics", because Google's Data safety Analytics purpose covers monitoring app health and diagnosing
+   and fixing bugs or crashes. Apple gets App Functionality only, because Apple's App Functionality covers
+   minimizing app crashes. The stores define purposes differently; do not make them match
+   (`google-data-safety.md` §2.3).
+10. **Collected but not cited before (LR-71):** learner certificate requests (Other User Content) and
+    material opens (Product Interaction / App interactions). Both fall under types already declared Yes.
+11. **Sentry automatic session tracking is on by default** and not yet turned off in
+    `lib/core/crash/crash_reporting.dart` on main. Decided: off in #526 (pending merge). Confirm #526 is
+    in the submitted build before either privacy form is saved; if not, declare it.
 
 ## Owner must confirm
 
@@ -66,9 +86,9 @@ Each item has a recommendation, so the answer can be yes or no.
 ## Before submission (blocks the answers being true)
 
 LR-01 (production backend), LR-03 (teacher deletion), LR-04 (hosted policies), LR-05 (review accounts),
-LR-11 (notification permission timing), LR-14 (microphone-only service), LR-15 (payment wording),
-LR-27 (full-screen check), LR-32 (`wss://`), and the merged-manifest and privacy-report checks of the
-release builds (release audit WP-6). See the launch readiness checklist.
+LR-11 (notification permission timing), LR-15 (payment wording), LR-27 (full-screen check), and the
+merged-manifest and privacy-report checks of the release builds (release audit WP-6). LR-14 (#505),
+LR-32 (#506) and LR-73 (#508) are done. See the launch readiness checklist.
 
 ## Not verified here
 

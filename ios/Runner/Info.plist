@@ -36,15 +36,16 @@
 	     compliance question per build. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<!-- W8-W1. `voip` lets a PushKit push wake the app so an incoming call can
-	     be reported; `remote-notification` does the same for a data push.
-	     Receiving a VoIP push obliges an immediate CallKit report, which is
-	     W8-W3's -- until it exists the SERVER does not deliver one
-	     (APNS_VOIP_ENABLED defaults to false). -->
+	<!-- W8-W1. `voip` lets a PushKit push wake the app so an incoming call is
+	     reported to CallKit (CallKitBridge.swift). The server delivers VoIP
+	     pushes only once production sets APNS_VOIP_ENABLED=true, after the
+	     registry exists at launch (LR-13).
+	     LR-24: no `remote-notification`. The server sends no silent (data)
+	     push to iOS, only alerts and VoIP pushes, and an alert needs no
+	     background mode; App Review rejects a mode with no use. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>voip</string>
-		<string>remote-notification</string>
 		<!-- PD-56: a voice call keeps its audio when the screen locks or the
 		     person switches app. -->
 		<string>audio</string>
