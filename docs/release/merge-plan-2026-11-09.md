@@ -72,6 +72,8 @@ how each was resolved form the recipe for the real merges:
 | **#554 after the #449 stack (#524, #535, #529, #537)** | `call_controller.dart`, `call_media_providers.dart`, `call_controller_test.dart`, device plan | `start()` keeps the shared LR-74 microphone question (`_askMicrophone()`); `_microphoneReady()` must go through `_askMicrophone()` too (no second concurrent prompt); `dismiss()` keeps the teardown, then clears the parked answer; keep both providers; rows SB-28, SB-29, SB-38. **Behaviour gap to fix in that merge:** `_retryMicrophone`'s reconnect must pass `onMicrophoneGranted` so the Android ongoing-call service starts (test N7i2), or a retried call can be cut off in the background |
 | #545, #551 after #539 | `findings.md` | keep #539's rows; RT-029 gets both notes |
 
+**Round 2 (2026-11-09 evening):** #554–#557 added on top (41 PRs) @ `bfc905f1`; CI run `42651098763` passed every job.
+
 Each real merge of a stacked or conflicting PR still gets its own CI run and a delta review at its new head.
 
 ## Batches
@@ -89,6 +91,7 @@ Each real merge of a stacked or conflicting PR still gets its own CI run and a d
 | **3b. After #546** | #552 `7ac19737` (stacked on #546) | RT-014 follow-up: room syncs and the seat sweep lock member rows before the conversation | Medium: concurrency; no migration | retarget, CI, delta review, then main CI with integration shards |
 | **4b. Store tooling** (Code Owner where `.github/` is touched) | #547 `66f9418f`, #548 `5349bf83`, #549 `6365275f` | signed store builds on GitHub runners (inert until secrets and owner approval exist); deploy inputs through env; store screenshots | #547 High (signing workflow; merging creates no key and runs nothing) | main CI green |
 | **7. New, after their bases** | #554 (LR-26, on #449), #555 and #556 (docs), #557 (LR-11 explain-first) | | Low / Low / Low / Medium | main CI |
+| **7b. LR-46 fixes, after their bases** | #561 (on #535), #560 (on #528, Code Owner), #559 (on #551, **High: migration `20261109160000`**), #558 (docs) | lock-screen call only; production runs a recorded image digest; organization guards fail closed | High for #559 and #560 | main CI after each |
 | **Excluded** | #553: duplicate of #524, do not merge | | | |
 | **Separate** | #503 (another session's PR; it shares `lib/l10n/*` with #449 and #498), #517 (Code Owner, `scripts/qa`), #543 (after #533, then retarget) | | Low / Low / Low | main CI |
 
