@@ -10,7 +10,7 @@ and English, **without a server and without real people** (LR-10). The shot list
 | The synthetic people, chats, calls and lessons | `integration_test/screenshot_fixtures.dart` |
 | The fakes the app runs on (no server, no microphone, no CallKit) | `integration_test/screenshot_fakes.dart` |
 | The host side that saves each PNG | `test_driver/integration_test.dart` |
-| The script: simulator / emulator, status bar, size check, JPEG copies | `scripts/mobile/screenshots/capture.sh` |
+| The script: simulator / emulator, status bar (see the checklist: probably not in the captures), size check, JPEG copies | `scripts/mobile/screenshots/capture.sh` |
 
 ## 1. What the run does
 
@@ -137,7 +137,11 @@ Wiring this into CI is a `.github/` change and needs a Code Owner PR. The propos
       crop it out (listing-copy §9.2).
 - [ ] **No debug banner, no keyboard, no system dialog** (microphone, notifications) and no CallKit screen over the
       app.
-- [ ] **The status bar is clean:** 9:41, full battery, full signal.
+- [ ] **The top strip:** these captures most likely show **no status bar**. The `integration_test` screenshot copies only
+      the app's own view (iOS: the app's windows; Android: the FlutterView), and the status bar is drawn by the system in a
+      separate window, so the clean-status-bar steps in the script probably have no effect. Before upload, look at the
+      top of each image: if it is an empty strip, either crop it or wait for the follow-up that captures with
+      `xcrun simctl io <udid> screenshot` / `adb exec-out screencap -p`, which includes the system status bar.
 - [ ] **The call shot (07)** shows the teacher's name and a running timer, not "Connecting…".
 - [ ] **The Delete account shot (06)** shows the screen as a user meets it, with no error message.
 - [ ] **Sizes:** the script's check passed (1320 × 2868 for iOS, 1080 × 1920 for Android). Upload the **JPEG copies
