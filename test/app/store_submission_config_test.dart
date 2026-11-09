@@ -40,6 +40,30 @@ void main() {
     expect(read('android/app/src/main/AndroidManifest.xml'), contains('android:allowBackup="false"'));
   });
 
+  // LR-46 P3-13: Android 12+ device-to-device transfer ignores allowBackup="false";
+  // only dataExtractionRules stops it.
+  test('Android 12+ excludes every data domain from cloud backup and device transfer', () {
+    final manifest = read('android/app/src/main/AndroidManifest.xml');
+    final application = RegExp(r'<application\b[^>]*>').firstMatch(manifest)!.group(0)!;
+    expect(application, contains('android:allowBackup="false"'));
+    expect(application, contains('android:dataExtractionRules="@xml/data_extraction_rules"'));
+
+    final rules = read('android/app/src/main/res/xml/data_extraction_rules.xml');
+    expect(rules, isNot(contains('<include')), reason: 'nothing is opted back in');
+    const domains = [
+      'root', 'file', 'database', 'sharedpref', 'external',
+      'device_root', 'device_file', 'device_database', 'device_sharedpref',
+    ];
+    for (final section in ['cloud-backup', 'device-transfer']) {
+      final body = RegExp('<$section>(.*?)</$section>', dotAll: true).firstMatch(rules);
+      expect(body, isNotNull, reason: '<$section> is present');
+      for (final domain in domains) {
+        expect(body!.group(1), contains('<exclude domain="$domain" path="." />'),
+            reason: '<$section> excludes all of $domain');
+      }
+    }
+  });
+
   test('the call foreground service is typed microphone only, with no phoneCall (Play FGS policy, LR-14)', () {
     final manifest = read('android/app/src/main/AndroidManifest.xml');
     expect(manifest, contains('android:foregroundServiceType="microphone"'));

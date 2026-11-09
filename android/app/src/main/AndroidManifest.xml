@@ -32,9 +32,14 @@
          through the PredictiveBackPageTransitionsBuilder in lib/design/theme.dart.
          allowBackup="false": no Android cloud backup or device transfer. The session
          tokens are bound to this device's keystore, so a restored copy could not be
-         decrypted, and the app's preferences are not worth copying off the phone. -->
+         decrypted, and the app's preferences are not worth copying off the phone.
+         dataExtractionRules (LR-46 P3-13): on Android 12+ device-to-device transfer
+         ignores allowBackup, so res/xml/data_extraction_rules.xml excludes every domain
+         from both cloud backup and device transfer. On API 26-30 (minSdk 26)
+         allowBackup="false" alone already stops both, so no fullBackupContent is needed. -->
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
