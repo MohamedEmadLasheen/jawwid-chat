@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 11:16 Cairo (09:16 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 11:20 Cairo (09:20 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -159,7 +159,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
    - **Merge-order notes:** #534 before #537. When #498 and #537 meet, the session lock goes inside #498's `run()` helper (noted on both PRs).
 2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
 3. **OT-2b** (the owner's signing decision): turn the chosen option into a step-by-step handoff.
-4. **OT-3** (first deploy): the handoff draft is written and the lead has answered 10 of its 11 questions. The production Environment holds 19 secrets and 12 variables, with values checked where they are not secret. Still to answer: Q2, the database project and region, which the owner checks by looking only. #516 and #518 are merged; the docs follow-up is #521. The handoff becomes final after #521 and the owner's Q2 check.
+4. **OT-3** (first deploy): **the handoff is final** (`~/jawwid-owner-evidence/OT-3/HANDOFF.md`, kept outside the repo), with every lead question answered. It has three gates: the lead verifies the owner's OT-3a report, merge batches 1–3 are merged with green CI (they include the security blocker fix #534), and the owner says "Approve first production deploy". Part B (DNS) and Part C (`TRUSTED_PROXY_HOPS`) are separate owner tasks.
 5. **LR-13, LR-27 and LR-79** as soon as #449 merges; **LR-26** once #449, #498 and #503 land.
 6. #503: merge if the other session has not.
 
