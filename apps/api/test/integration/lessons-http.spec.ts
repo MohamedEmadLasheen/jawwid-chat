@@ -148,9 +148,35 @@ async function schedule(startMs: number): Promise<string> {
     return (await addLesson(g, app.get(LessonService), m.teacherSupervisors[0].id,
       { learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) })).id;
   }
-  const r = await http(tsup, 'POST', '/lessons', { learnerId: fam.child.id, startsAt: at(startMs), endsAt: at(startMs + 30 * MIN) });
+  const start = await freeStart(startMs);
+  const r = await http(tsup, 'POST', '/lessons', { learnerId: fam.child.id, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 30 * MIN).toISOString() });
   expect(r.status).toBe(201);
   return r.json.id as string;
+}
+
+/**
+ * The first start at `startMs` from now, or a whole number of 30 minutes later,
+ * whose 30 minutes the learner's teacher has free. Earlier tests leave lessons
+ * at times that depend on the clock: T2 books its make-up into the 4th free
+ * slot, which before 08:00 Cairo is 09:30 Cairo -- exactly `now + 6 h` when the
+ * suite runs between 03:00 and 04:00 Cairo (01:00-02:00 UTC), so PD-15's lesson
+ * got 409 LESSON_TEACHER_BUSY then. Nothing here tests an overlap (CHATSCHED-007
+ * does, through its own request), so a setup lesson steps past one instead.
+ * The live outcomes are the ones the database's no-double-booking rule counts.
+ */
+async function freeStart(startMs: number): Promise<Date> {
+  const { teacherId } = await g.prisma.learner.findUniqueOrThrow({ where: { id: fam.child.id }, select: { teacherId: true } });
+  const busy = await g.prisma.lesson.findMany({
+    where: { teacherId: teacherId!, OR: [{ outcome: null }, { outcome: { in: ['held', 'student_no_show', 'teacher_no_show'] } }] },
+    select: { startsAt: true, endsAt: true },
+  });
+  const t0 = Date.now() + startMs;
+  for (let step = 0; step < 48; step++) {
+    const from = t0 + step * 30 * MIN;
+    const to = from + 30 * MIN;
+    if (!busy.some((l) => l.startsAt.getTime() < to && l.endsAt.getTime() > from)) return new Date(from);
+  }
+  throw new Error(`no free 30 minutes for the teacher within a day of now + ${startMs / MIN} minutes`);
 }
 
 describe('lesson tickets over HTTP, in a PD-8 family group', () => {

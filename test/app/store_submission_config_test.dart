@@ -105,4 +105,15 @@ void main() {
     expect(array, contains('UIInterfaceOrientationLandscapeLeft'));
     expect(array, contains('UIInterfaceOrientationLandscapeRight'));
   });
+
+  test('iOS declares only the background modes it uses: voip and audio (LR-24)', () {
+    // App Review rejects a background mode with no use. The server sends iOS no silent
+    // (content-available) push, so remote-notification has none; add it back only with one.
+    final plist = read('ios/Runner/Info.plist');
+    final start = plist.indexOf('<key>UIBackgroundModes</key>');
+    expect(start, isNonNegative);
+    final array = plist.substring(start, plist.indexOf('</array>', start));
+    final modes = RegExp(r'<string>([^<]+)</string>').allMatches(array).map((m) => m.group(1)).toList();
+    expect(modes, ['voip', 'audio']);
+  });
 }
