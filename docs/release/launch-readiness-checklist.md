@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 05:14 Cairo (03:14 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 05:25 Cairo (03:25 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -101,7 +101,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Lead | LR-23: Sentry automatic session tracking off (it would send undeclared usage data) | #526 | **ACCEPT @ `bb5340b7`**; CI running |
 | Builder W5 (backend/release) | LR-05: a third, disposable review parent and a `workflow_dispatch` job that provisions the review accounts from the production Environment's secrets (no laptop); the database target is masked in the public log. **High: merging and every run need the owner** | #528 | **ACCEPT @ `920b04c1`** (after review fixes and a secret-scan fix to a test URL); CI running; **owner Code Owner approval and approval of every run needed** |
 | Builder W6 (store compliance) | LR-71: console drafts refreshed from the R1 pre-audit. Crash data is App Functionality on Apple, and App functionality plus Analytics on Google, because the two stores define the purposes differently | #527 | **ACCEPT @ `618c967c`**; CI running |
-| Builder W7 (iOS) | LR-13: the VoIP push registry is created at launch | #529 (into #449's branch) | **ACCEPT @ `ccd29221`**; CI 29/30: the optional ring job hit the known LR-78 drop and was re-run |
+| Builder W7 (iOS) | LR-13: the VoIP push registry is created at launch | #529 (into #449's branch) | **ACCEPT @ `ccd29221`**; CI 30/30 (after re-running the optional ring job, which hit the known LR-78 drop) |
 | Builder W8 (store compliance) | LR-09f review notes (they state everything deletion keeps), LR-24 background-mode justifications, LR-09i FSI text after #524. It found two things: `remote-notification` is unused (fixed in #531), and VoIP stays off in production (new LR-80) | #530 | **ACCEPT @ `722b0f47`** after one CHANGES round; CI running |
 | Lead | LR-24: drop the unused `remote-notification` background mode | #531 | **ACCEPT @ `fb6a0e1d`**; CI running |
 | Builder W9 (Arabic copy) | Owner wording choices with recommendations: PARENT-016 declined call (recommended «تم الاعتذار»), LR-41 five iOS permission prompts (keep three, two small fixes) | #532 | **ACCEPT @ `3b140dec`**; then the owner ticks one option per row |
@@ -119,12 +119,12 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W19 (infra) | LR-29: production component alerts (restarts, memory, CPU) on api and worker, through the spec generator; CI validates with `doctl` | #543 (into #533's branch) | **ACCEPT @ `b6dc2326`** |
 | Builder W20 (realtime security) | RT-019: the legacy `message.delivered { messageIds }` frame is bounded (1–100 UUIDs), charged to the receipt budget and uses the current identity. No client sends that form | #544 | **ACCEPT @ `1d2e0ff1`**; CI running |
 | Builder W21 (database security) | RT-029: a learner's teacher must be in the learner's organization (trigger; fails loudly if a stored row crosses the boundary); the relationship check keeps a test through a replica-mode row. **High: migration `20261109130000`**; merges after #539 and #537 | #545 | **ACCEPT @ `e90016fb`**; CI running; **owner approval needed (migration)** |
-| Builder W22 (backend security) | RT-014: a send re-checks membership inside its transaction (member rows locked first, in the removal order) and takes its recipients from the locked read; a deadlock is retried once, then a retryable 503 with Retry-After | #546 | **ACCEPT @ `9b9f5774`** (three rounds); CI running |
+| Builder W22 (backend security) | RT-014: a send re-checks membership inside its transaction (member rows locked first, in the removal order) and takes its recipients from the locked read; a deadlock is retried once, then a retryable 503 with Retry-After | #546 | **ACCEPT @ `9b9f5774`** (three rounds); CI 30/30 |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
 1. **Owner merge approvals waiting.** Independently reviewed and accepted at the exact head, with CI green there (2026-11-09):
-   - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541, #544. **High, migration:** #545 (after #539 and #537). **CI finishing:** #546.
+   - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541, #544. #546. **High, migration:** #545 (after #539 and #537).
    - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history; CI finishing).
    - **Stacked on #449, follow once it merges:** #524, #529, #535, and #537 (High: migration; after #534).
    - **Stacked on #533:** #543 (production alerts on api and worker; accepted).
