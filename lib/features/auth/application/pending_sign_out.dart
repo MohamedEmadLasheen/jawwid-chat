@@ -364,7 +364,11 @@ class PendingSignOutRetrier {
     if (waiting.isEmpty) return;
     final earliest = waiting.reduce((a, b) => a.isBefore(b) ? a : b);
     final delay = earliest.difference(_clock());
-    _due = _timer(delay.isNegative ? Duration.zero : delay, () => unawaited(flush()));
+    // Never sooner than [baseDelay]: an attempt that skipped without moving its
+    // `notBefore` (the keychain refused a read or the marker write) would otherwise
+    // re-arm a zero-delay timer and spin for as long as the keychain refuses.
+    // App start, connectivity and sign-in flush directly and are not delayed by this.
+    _due = _timer(delay < baseDelay ? baseDelay : delay, () => unawaited(flush()));
   }
 
   Future<void> _guard(String step, Future<void> Function() run) async {

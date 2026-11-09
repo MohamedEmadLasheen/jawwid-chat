@@ -58,6 +58,15 @@ class _RefusingStore implements PendingSignOutStore {
   }
 }
 
+/// A live token store whose keychain refuses every read (a locked device).
+class _UnreadableTokens implements TokenStore {
+  @override
+  Future<AuthSession?> read() => Future.error(StateError('keychain locked'));
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _FakeTimer implements Timer {
   _FakeTimer(this.duration, this.callback);
 
@@ -427,6 +436,18 @@ void main() {
 
       expect(server.calls, ['logout access-a']);
     });
+  });
+
+  test('a keychain that keeps refusing does not spin: the next timer waits at least baseDelay', () async {
+    final r = retrier(liveTokens: _UnreadableTokens());
+    await r.add(session('a', live: true));
+    now = now.add(const Duration(hours: 2)); // the entry is long due
+
+    await r.flush(force: true);
+
+    expect(server.calls, isEmpty, reason: 'the live store could not be read, so nothing is sent');
+    expect(timers, isNotEmpty);
+    expect(timers.last.duration, greaterThanOrEqualTo(r.baseDelay));
   });
 
   group('concurrent flushes send one refresh', () {
