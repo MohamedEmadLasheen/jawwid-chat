@@ -16,7 +16,10 @@
  *   2. the Teachers manager completes it
  *   3. the super admin completes it
  *   4. the deadline path (no staff) is unchanged by the check
- *   5. no request role may EXECUTE the function at all
+ *   5. the Operations manager GRANTED teachers.offboard through an access role
+ *      (PD-40) holds it and is still refused: the permission alone never
+ *      passes, the Teachers department must be theirs (review P2 on #566)
+ *   6. no request role may EXECUTE the function at all
  *
  * Direct SQL as the server's own connection (the API's role). Fixed instants
  * only: a lesson ahead is in 2099. Synthetic people (G-20).
@@ -131,7 +134,38 @@ describe('LR-46 P3-5: the database decides who completes a deletion request', ()
     expect((await stateOf(t.requestId)).state).toBe('pending');
   });
 
-  it('5. no request role may execute it', async () => {
+  it('5. holding teachers.offboard through an access role is not enough: the Operations manager is still refused', async () => {
+    const has = async (staffId: string) =>
+      (await g.prisma.$queryRaw<Array<{ has: boolean | null }>>`
+        SELECT chat.staff_has_permission(${staffId}::uuid, 'teachers.offboard') AS has`)[0]!.has;
+    const t = await pendingRequest('rolegrant');
+    expect(await has(m.operationsManager.id)).toBe(false);
+
+    // The super admin defines a manager-tier role with teachers.offboard (PD-40) and grants it.
+    const [{ id: roleId }] = await g.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT chat.define_access_role('lr46_offboarding', 'LR-46 offboarding (en)', 'LR-46 offboarding (ar)', null, 'manager',
+        ${['teachers.offboard']}::text[], 'spec', ${m.superAdmin.id}::uuid)::text AS id`;
+    const [{ added }] = await g.prisma.$queryRaw<Array<{ added: boolean }>>`
+      SELECT chat.grant_access_role(${m.operationsManager.id}::uuid, ${roleId}::uuid, 'spec', ${m.superAdmin.id}::uuid) AS added`;
+    expect(added).toBe(true);
+    try {
+      // They now HOLD the permission, yet do not run the Teachers department.
+      expect(await has(m.operationsManager.id)).toBe(true);
+      await expect(complete(t.requestId, m.operationsManager.id)).rejects.toThrow(REFUSED);
+      expect(await stateOf(t.requestId)).toEqual({ state: 'pending', completed_by: null });
+      expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: t.teacherId } })).toMatchObject({ name: 'teacher_rolegrant', isActive: true });
+      const account = await g.prisma.account.findUniqueOrThrow({ where: { id: t.accountId } });
+      expect(account.subject.startsWith('erased:')).toBe(false);
+    } finally {
+      // $executeRaw: archive_access_role returns void, which $queryRaw cannot read back.
+      await g.prisma.$executeRaw`
+        SELECT chat.revoke_access_role(${m.operationsManager.id}::uuid, ${roleId}::uuid, 'spec cleanup', ${m.superAdmin.id}::uuid)`;
+      await g.prisma.$executeRaw`SELECT chat.archive_access_role(${roleId}::uuid, 'spec cleanup', ${m.superAdmin.id}::uuid)`;
+    }
+    expect(await has(m.operationsManager.id)).toBe(false);
+  });
+
+  it('6. no request role may execute it', async () => {
     for (const role of ['chat_app', 'authenticated', 'anon']) {
       const [{ exists }] = await g.prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(`select exists (select 1 from pg_roles where rolname = $1) as exists`, role);
       if (!exists) continue;

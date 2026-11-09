@@ -70,9 +70,11 @@ begin
     select * into v_staff from chat.staff s where s.id = p_staff;
     if v_staff.id is null or v_staff.organization_id is distinct from v_req.organization_id
        or not v_staff.is_active or v_staff.left_at is not null
-       or not chat.staff_has_permission(v_staff.id, 'teachers.offboard')
-       or not (v_staff.role = 'super_admin'
-               or (v_staff.role = 'manager' and chat.teachers_department_role(v_staff.id) = 'manager')) then
+       -- coalesce: a NULL anywhere must refuse, never skip the refusal (an IF on NULL is false).
+       or not coalesce(chat.staff_has_permission(v_staff.id, 'teachers.offboard'), false)
+       or not coalesce(v_staff.role = 'super_admin'
+               or (v_staff.role = 'manager'
+                   and coalesce(chat.teachers_department_role(v_staff.id), '') = 'manager'), false) then
       raise exception 'only the Teachers manager or the super admin closes and deletes a teacher''s account'
         using errcode = 'insufficient_privilege';
     end if;
