@@ -112,7 +112,7 @@ void main() {
         () async {
       Object? answer;
       messenger.setMockMethodCallHandler(channel, (call) async {
-        if (answer is PlatformException) throw answer!;
+        if (answer is PlatformException) throw answer;
         return answer;
       });
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
