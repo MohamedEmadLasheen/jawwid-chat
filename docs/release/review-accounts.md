@@ -86,13 +86,23 @@ review one, so the slug alone is not trusted (LR-46 P3-10). Before it writes any
 organization with that slug:
 
 - is named exactly "Jawwid App Review", the name the command gives it when it creates it; and
-- holds nobody and nothing outside the review cohort: no login other than `parent@`, `teacher@` and `parent2@` of
-  the right kind (or a login a reviewer deleted), no staff other than the three synthetic ones, no teacher other
-  than "Hassan Mourad", and no family other than "Adel family" and "Hamdi family".
+- has no login other than `parent@`, `teacher@` and `parent2@` of the right kind (or a login a reviewer deleted);
+- has no staff other than the three synthetic ones;
+- has no teacher other than "Hassan Mourad", except a teacher whose login was deleted (deletion keeps the teacher
+  row and renames it "Deleted user"; it is accepted because its login is deleted, not because of that name); and
+- has no family other than "Adel family" and "Hamdi family" (checked by name).
 
-If any of that fails, it stops with `NOT_REVIEW_ORGANIZATION` and writes nothing. That means a real organization
+Only logins, staff, teachers and families are checked. Contacts, children, departments and conversations are not:
+a contact or child added by hand to one of the two review families is not caught.
+
+If any check fails, it stops with `NOT_REVIEW_ORGANIZATION` and writes nothing. That means a real organization
 took the slug, or someone added people to the review organization by hand. Investigate; do not rename or empty the
 organization to make the run pass.
+
+"Writes nothing" is promised for `NOT_REVIEW_ORGANIZATION`, not for every refusal. Later refusals
+(`DOMAIN_CHANGED`, `STAFF_ACCOUNT`, `SUBJECT_TAKEN`, `ACCOUNT_DEACTIVATED` and the rest) can come after the run has
+already written staff, departments and, for some, a login and its password into the review organization. The
+checks and the writes are also not one transaction, so someone added in the moment between them is not seen.
 
 It also never takes an account from another organization. If `parent@<domain>`, `teacher@<domain>` or
 `parent2@<domain>` already belongs to any other organization, the run stops with `SUBJECT_TAKEN`. That account is

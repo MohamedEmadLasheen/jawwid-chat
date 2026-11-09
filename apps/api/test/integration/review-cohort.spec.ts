@@ -14,6 +14,7 @@
  *
  * Synthetic people only (G-20).
  */
+import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import type Redis from 'ioredis';
@@ -139,6 +140,16 @@ describe('0. it writes only into a review organization, and never takes an accou
       ['a teacher the command never makes', (orgId) => g.prisma.teacher.create({
         data: { organizationId: orgId, name: 'Real Teacher', isActive: true },
       })],
+      // The erased-teacher name alone is not a pass: only an erased account is.
+      ['a "Deleted user" teacher with no account', (orgId) => g.prisma.teacher.create({
+        data: { organizationId: orgId, name: 'Deleted user', isActive: true },
+      })],
+      ['a "Deleted user" teacher on a live login', async (orgId) => {
+        const live = await g.prisma.account.create({
+          data: { organizationId: orgId, subject: `teacher@${DOMAIN}`, kind: 'teacher', status: 'active', isActive: true },
+        });
+        return g.prisma.teacher.create({ data: { organizationId: orgId, name: 'Deleted user', isActive: true, accountId: live.id } });
+      }],
       ['a family the command never makes', async (orgId) => {
         const owner = await g.prisma.staff.create({
           data: { organizationId: orgId, name: REVIEW_STAFF.supervisor.name, role: REVIEW_STAFF.supervisor.role, isActive: true },
@@ -165,6 +176,29 @@ describe('0. it writes only into a review organization, and never takes an accou
     expect(again.organizationId).toBe(first.organizationId);
   });
 
+  it('a teacher whose account was erased (kept as "Deleted user") is still the cohort, and the run goes on', async () => {
+    // Teacher erasure is not reachable through chat.erase_account here (the
+    // review child blocks it), so the state it leaves is set up directly:
+    // the row renamed "Deleted user", its login renamed erased:<id> and out of service.
+    const org = await g.prisma.organization.create({ data: { slug: REVIEW_ORG_SLUG, displayName: REVIEW_ORG_NAME } });
+    const erasedId = randomUUID();
+    await g.prisma.account.create({
+      data: {
+        id: erasedId, organizationId: org.id, subject: `erased:${erasedId}`, kind: 'teacher',
+        status: 'deactivated', isActive: false, deactivatedAt: new Date(),
+      },
+    });
+    const gone = await g.prisma.teacher.create({
+      data: { organizationId: org.id, name: 'Deleted user', isActive: false, accountId: erasedId },
+    });
+    const made = await provisionReviewCohort(g.prisma, opts);
+    expect(made.organizationId).toBe(org.id);
+    expect(made.teacher.teacherId).not.toBe(gone.id);
+    // The erased row is left as erasure left it.
+    const after = await g.prisma.teacher.findUniqueOrThrow({ where: { id: gone.id } });
+    expect([after.name, after.accountId, after.isActive]).toEqual(['Deleted user', erasedId, false]);
+  });
+
   it('refuses, and does not move, a review email that already belongs to another organization (SUBJECT_TAKEN)', async () => {
     const other = await g.prisma.organization.create({ data: { slug: 'review-spec-elsewhere', displayName: 'Elsewhere Academy' } });
     try {
@@ -182,6 +216,10 @@ describe('0. it writes only into a review organization, and never takes an accou
         expect([key, await g.prisma.contact.count({ where: { accountId: taken.id } })]).toEqual([key, 0]);
         expect([key, await g.prisma.teacher.count({ where: { accountId: taken.id } })]).toEqual([key, 0]);
         expect([key, await g.prisma.auditLog.count({ where: { action: REVIEW_AUDIT_ACTION, entityId: taken.id } })]).toEqual([key, 0]);
+        // The run stopped before the disposable parent: the review organization has no parent2 password.
+        expect([key, await g.prisma.accountCredential.count({
+          where: { account: { subject: `parent2@${DOMAIN}`, NOT: { organizationId: other.id } } },
+        })]).toEqual([key, 0]);
       }
     } finally {
       await g.prisma.account.deleteMany({ where: { organizationId: other.id } });
