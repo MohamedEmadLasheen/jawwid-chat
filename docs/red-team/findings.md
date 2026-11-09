@@ -32,10 +32,10 @@ test was run for this review (the machine rule), so the tests named are the
 ones that exist on `main` and run in CI, not results observed here. "PR" is the
 pull request that brought the fix to `main`.
 
-**Totals: 39 findings · 33 fixed or closed · 6 open** (RT-010, RT-014, RT-019,
-RT-029, RT-037, RT-038). Of the open six, RT-014 and RT-019 are partly fixed,
-RT-010 has only a documentation residual, and RT-038 is fixed in code but not
-formally closed.
+**Totals: 39 findings · 34 fixed or closed · 5 open** (RT-014, RT-019, RT-029,
+RT-037, RT-038). Of the open five, RT-014 and RT-019 are partly fixed, and
+RT-038 is fixed in code but not formally closed. RT-010 is closed by the
+engineering lead's decision (2026-11-09).
 
 | ID | Sev | Status 2026-11-09 | Code location on `main` | Fix commit · PR | Test on `main` |
 |---|---|---|---|---|---|
@@ -48,7 +48,7 @@ formally closed.
 | RT-007 | P1 | FIXED | `apps/api/src/communication/messages/message.service.ts:243` (`attachments.validate` per attachment) | `e0d4dca1` · PR #1 | `storage-and-integrity-attacks.spec.ts:51` "RT-007 (fixed)" |
 | RT-008 | P1 | FIXED | `message.service.ts:222-238` (origin forced to `USER` unless the actor is SYSTEM) | `46a08508` · PR #1 | `storage-and-integrity-attacks.spec.ts:102` "RT-008 (fixed)" |
 | RT-009 | P1 | FIXED (API revocations; residual RT-032 also closed) | `realtime.gateway.ts` per-recipient authorization at delivery; `confirmRevoked` | `a360ed32` · PR #38 | `test/integration/realtime-revocation.spec.ts` |
-| RT-010 | P1 | **OPEN — documentation residual only** | Prisma is `schemas = ["chat"]` (`apps/api/prisma/schema.prisma:18`); the owner's database decision is recorded (`docs/release/database-decision.md` §1: Chat owns its own database); the schema comment was corrected by `supabase/migrations/20260905091150_chat_application_roles.sql:51-54`. **What remains:** the header comment of `20260905090000_chat_foundation.sql:3-7` still says Chat lives inside the Core database. Applied migrations are not edited, so this can only be closed by a recorded decision to accept it (already proposed as D-9 in `docs/recovery/PHASE-0-DATABASE-RECONCILIATION.md`). | — | — |
+| RT-010 | P1 | **CLOSED by decision (engineering lead, 2026-11-09)** | Prisma is `schemas = ["chat"]` (`apps/api/prisma/schema.prisma:18`); the owner's database decision is recorded (`docs/release/database-decision.md` §1: Chat owns its own database); the schema comment was corrected by `supabase/migrations/20260905091150_chat_application_roles.sql:51-54`. **What remains:** the header comment of `20260905090000_chat_foundation.sql:3-7` still says Chat lives inside the Core database. Applied migrations are not edited. **Decision:** accepted as a historical comment. The schema and the later migration are authoritative, and nothing reads that comment. D-9 in `docs/recovery/PHASE-0-DATABASE-RECONCILIATION.md` is closed with it. | — | — |
 | RT-011 | P2 | FIXED | `apps/api/src/communication/conversations/conversation.service.ts:1655-1704` (staff list built from `visibleConversationIds`, the same scope as the per-conversation check, plus an organization filter) | `90a0f619` · PR #38 | `test/integration/org-scope-pd8.spec.ts:341` ("each staff member LISTS exactly what the oracle says"), `:365`, `:402`, `:436` |
 | RT-012 | P2 | FIXED | `apps/api/src/communication/contracts/dto.ts:111-122` (no `receipts` field) | `d3be2821` · PR #140 | `test/integration/pd037-message-receipts.spec.ts:81` |
 | RT-013 | P2 | FIXED | `apps/api/src/communication/outbox/outbox.worker.ts:96-104` (an internal `message.created` goes only to staff actor rooms) and `:196-201` (`message.updated` likewise); staff list `:520-528` | `e0d4dca1` · PR #1 | `test/integration/conversation-seat-pd035.spec.ts:455` (internal notes are delivered per staff actor, not to the room). No test drives a parent's socket for an internal note; the evidence for the parent side is the code path. |
@@ -164,7 +164,7 @@ a record. No gaps, no duplicates.
 
 > **Superseded 2026-11-09 (W16).** This tally and the notes below are history.
 > The current status of all 39 findings is the table at the top of this file:
-> 33 fixed or closed, 6 open (RT-010, RT-014, RT-019, RT-029, RT-037, RT-038).
+> 34 fixed or closed, 5 open (RT-014, RT-019, RT-029, RT-037, RT-038).
 
 > **Findings after RT-028 are not in the tally above** (it predates them):
 > RT-029 P2 OPEN · RT-030 P2 CLOSED 2026-10-12 · RT-031 P2 CLOSED 2026-10-14 ·
