@@ -9271,6 +9271,12 @@ abstract class L10n {
   /// **'This kind of message cannot be reported.'**
   String get reportErrorNotReportable;
 
+  /// LR-25: COMM.REPORT_NOT_REPORTABLE (400) for a PERSON report (the official account, a manager, the Super Admin). Points to Settings → Contact support, never claims it is a kind of message.
+  ///
+  /// In en, this message translates to:
+  /// **'This account can\'t be reported in the app. If you have a concern, send it through Settings → Contact support.'**
+  String get reportErrorNotReportablePerson;
+
   /// PD-57: COMMON.RATE_LIMITED (429).
   ///
   /// In en, this message translates to:
@@ -9442,7 +9448,7 @@ abstract class L10n {
   /// PD-57: COMM.BLOCK_NOT_ALLOWED (403): staff, a protected account, or yourself. DEV-CONFIRM #26: a protected person can be neither blocked nor reported, so this points to support, never to Report.
   ///
   /// In en, this message translates to:
-  /// **'This person can\'t be blocked. If you have a concern, please contact support.'**
+  /// **'This person can\'t be blocked. If you have a concern, send it through Settings → Contact support.'**
   String get blockErrorNotAllowed;
 
   /// DEV-CONFIRM #26: COMM.BLOCK_NOT_ALLOWED when the build has a support e-mail. A protected person (the official account, a manager, the Super Admin) can be neither blocked nor reported, so this points to support.
