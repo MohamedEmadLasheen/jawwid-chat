@@ -80,6 +80,21 @@ class MainActivity : FlutterFragmentActivity() {
     /** Registered only while a ring's window is open (see [policyTimer]). */
     private var screenOnReceiver: BroadcastReceiver? = null
 
+    /**
+     * Review of #561 (second round) P2-1: an unlock that did not go through our prompt (the
+     * shade, a notification tap, an under-display fingerprint) also ends the calls' hold on the
+     * lock screen, so a later relock mid-call shows the lock screen, never app content.
+     * ACTION_USER_PRESENT is sent only when the keyguard is actually dismissed.
+     */
+    private val userPresentReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (!keyguardLocked()) {
+                lockScreenCalls.unlocked()
+                applyLockScreenPolicy()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // A cold start from Answer or a tap on the ring: queued until Dart is ready.
@@ -93,6 +108,13 @@ class MainActivity : FlutterFragmentActivity() {
         // Rotation does not recreate this activity (manifest configChanges). A real
         // recreate detaches the engine, whose cleanup clears the tracker, so this
         // starts from nothing and fails closed: the lock screen comes back.
+        // A system broadcast: delivered to a not-exported receiver.
+        ContextCompat.registerReceiver(
+            this,
+            userPresentReceiver,
+            IntentFilter(Intent.ACTION_USER_PRESENT),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         applyLockScreenPolicy()
     }
 
@@ -215,6 +237,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onDestroy() {
         armRingWindowChecks(null)
+        unregisterReceiver(userPresentReceiver)
         super.onDestroy()
     }
 
