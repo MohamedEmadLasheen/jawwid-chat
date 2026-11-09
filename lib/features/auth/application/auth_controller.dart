@@ -188,6 +188,10 @@ class AuthController extends Notifier<AuthState> {
     // A previous account's sign-out still pending on this device goes first, so its session
     // (and push binding) is ended before the new one exists. Best effort, bounded, never
     // throws: it can delay a sign-in by a few seconds at most and never prevent one.
+    // Residual window (LR-46 P3-3): when it does not finish within that bound, the new account
+    // signs in -- and registers this device for push -- while the earlier session is still
+    // live on the server; the retry after the sign-in and the backoff close it. See
+    // [PendingSignOutRetrier.retryAfterSignIn].
     await _pendingSignOut?.flushBeforeSignIn();
 
     try {
@@ -202,6 +206,9 @@ class AuthController extends Notifier<AuthState> {
       // PD-58: `/me` and the token pair carry the same block; the pair's stands in only
       // when `/me` has none.
       final principal = fetched.legal == null && session.legal != null ? fetched.withLegal(session.legal) : fetched;
+      // Whatever the attempt above left pending is tried again now, in the background, and
+      // sent before the state change below starts the new account's push registration.
+      _pendingSignOut?.retryAfterSignIn();
       _adopt(principal);
       state = AuthAuthenticated(principal);
     } catch (thrown) {
@@ -262,7 +269,12 @@ class AuthController extends Notifier<AuthState> {
       _logger.warn(failureLog, data: {
         'kind': error is AppError ? error.kind.name : error.runtimeType.toString(),
       });
-      if (error is AppError && error.isTransient) outcome = SignOutOutcome.unreached;
+      // LR-46 P3-3: only a server VERDICT (a non-transient AppError: revoked, disabled, ...)
+      // means there is nothing left to end. Anything else -- a transient failure, or a throw
+      // that is not an AppError at all (a keychain error, a response that did not decode) --
+      // says nothing about whether the server heard, so the session is kept to retry. The
+      // retrier treats a refusal it then meets as "over", so a wrong guess costs one request.
+      if (error is! AppError || error.isTransient) outcome = SignOutOutcome.unreached;
     }
 
     final pending = _pendingSignOut;
