@@ -95,6 +95,8 @@ Precondition: `APNS_VOIP_ENABLED=true` in staging, iOS VoIP token registered (SB
 | SB-25 | Killed. **Decline** from the ring screen. | The caller sees "declined". The call ends for both (PD lifecycle: decline is terminal). |
 | SB-26 | Two calls. A second call arrives while one is active. | It is refused or shown as busy; the first call is not dropped. |
 | SB-27 | Do Not Disturb / Focus on | Behaviour follows the OS setting. Write down what happens. Not a FAIL unless the app crashes. |
+| SB-36 | Android 14+, app killed. In Settings > Apps > Jawwid, turn **full-screen notifications** off (LR-27). Call the phone, locked and then unlocked. | The call still rings as a heads-up notification with Answer and Decline (no full-screen screen). Answer works as in SB-21. `adb logcat -s JawwidPush` shows "full-screen intent not granted". The app's `fullScreenIntentAllowed` on `jawwid/call_native` returns false; turn the setting back on and it returns true. |
+| SB-37 | Android 14+, app killed. Call the phone and let it ring (LR-79). | `adb logcat -s JawwidPush` shows "posted" then, about 2 s later, "verified showing". If Android dropped the ring, it shows "missing after the post; re-posting once" and the ring appears once (never twice). Decline or Answer within 2 s of the ring: no ring comes back. Any missing ring is a FAIL. |
 
 Release-qa matches every SB-2x against the API log: `incoming_call` scheduled per participant, the provider's accepted response, the media-token issue, and the join.
 
