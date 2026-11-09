@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/call_native/call_presentation.dart';
@@ -232,14 +233,49 @@ void main() {
       });
     }
 
-    test('asks native whether the phone is locked', () async {
-      nativeAnswers((call) => call.method == 'isKeyguardLocked' ? true : null);
+    test('asks native whether the app is shown over the lock screen', () async {
+      // Review of #561, P1: not "is the phone locked" -- a locked phone with no call
+      // holding the lock screen is not shown over it, and must not be covered.
+      nativeAnswers((call) => call.method == 'isShownOverLockScreen' ? true : null);
       final presentation = PlatformCallPresentation();
       addTearDown(presentation.dispose);
       await presentation.start();
 
       expect(await presentation.isLocked(), isTrue);
-      expect(sentToNative.last.method, 'isKeyguardLocked');
+      expect(sentToNative.last.method, 'isShownOverLockScreen');
+    });
+
+    test('Android failing to answer counts as over the lock screen (fails closed)', () async {
+      // Review of #561, P3-4: native fails closed; so does Dart on Android.
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw PlatformException(code: 'error');
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isTrue);
+      // Still: a failed unlock is not an unlock.
+      expect(await presentation.requestUnlock(), isFalse);
+    });
+
+    test('elsewhere (iOS) a failure is never "locked": it has no Android lock-screen half', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw PlatformException(code: 'error');
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isFalse);
     });
 
     test('asks native to unlock, and reports the answer', () async {

@@ -134,9 +134,18 @@ class _CallPresenterState extends ConsumerState<CallPresenter> with WidgetsBindi
     _enforcing = true;
     try {
       final guard = ref.read(lockedCallGuardProvider.notifier);
-      // Unlocked after all (by the guard, or by the person): the cover lifts.
-      if (!await guard.refresh()) return;
-      if (!mounted || guard.leaving) return;
+      // An unlock prompt is up: its outcome decides first. Waited for, not given up on
+      // (review of #561, P3-6): cancelled with a route pushed meanwhile, the live call
+      // must still be put back, or the cover would hide its controls.
+      while (true) {
+        await guard.settled;
+        if (!mounted) return;
+        // Not over the lock screen after all (unlocked by the guard or the person, or no
+        // call holds the lock screen): the cover lifts.
+        if (!await guard.refresh()) return;
+        if (!mounted) return;
+        if (!guard.leaving) break;
+      }
       final router = ref.read(routerProvider);
       if (topRoutePath(router) == Routes.activeCall) return;
       // A call is up: it is the one screen over the lock screen. No call (a ring Dart has
@@ -180,7 +189,9 @@ class _CallPresenterState extends ConsumerState<CallPresenter> with WidgetsBindi
       });
     }
 
-    // LR-46: locked as last seen, and the call is not the route on top.
+    // LR-46: shown over the lock screen as last seen (native: locked AND a call holds the
+    // lock screen, never a locked phone alone -- review of #561, P1), and the call is not
+    // the route on top.
     final top = locked ? topRoutePath(router) : null;
     final covered = top != null && top != Routes.activeCall;
     if (covered) {

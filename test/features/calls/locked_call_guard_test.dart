@@ -3,9 +3,14 @@
 /// Android shows the app over the lock screen while a call from it rings or is in
 /// progress. The call route sits on top of whatever was open, so without a guard Back,
 /// Close or "Message" uncovered the chats on a locked phone. Here the phone's lock screen
-/// is a fake [DeviceKeyguard] (the call channel's `isKeyguardLocked`,
+/// is a fake [DeviceKeyguard] (the call channel's `isShownOverLockScreen`,
 /// `requestDismissKeyguard`, `returnToLockScreen`); the call controller, the presenter
 /// and the call route are the real ones, wired as `router.dart` wires them.
+///
+/// The fake's `locked` is what native answers: shown over the lock screen, which needs a
+/// locked phone AND a call holding the lock screen (review of #561, P1). As on a device, it
+/// turns false when the call ends (Dart sends `ongoingStop` and `dismiss`, and the lock
+/// screen comes back at once) and when the person unlocks at the prompt (P2-2).
 library;
 
 import 'dart:async';
@@ -24,6 +29,7 @@ import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/calls/application/call_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_media_providers.dart';
+import 'package:jawwid_chat/features/calls/application/locked_call_guard.dart';
 import 'package:jawwid_chat/features/calls/presentation/active_call_screen.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_presenter.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_route_screen.dart';
@@ -47,6 +53,10 @@ class FakeKeyguard implements DeviceKeyguard {
   /// Set to hold the next answer to [isLocked] until it is completed.
   Completer<bool>? hold;
 
+  /// Set to hold the next unlock prompt open until it is completed (true: unlocked).
+  /// Never completed: Android never answers.
+  Completer<bool>? holdUnlock;
+
   @override
   Future<bool> isLocked() async {
     final held = hold;
@@ -61,6 +71,13 @@ class FakeKeyguard implements DeviceKeyguard {
   Future<bool> requestUnlock() async {
     prompts++;
     routesAtPrompt.add(router == null ? null : topRoutePath(router!));
+    final held = holdUnlock;
+    if (held != null) {
+      holdUnlock = null;
+      final unlocked = await held.future;
+      if (unlocked) locked = false;
+      return unlocked;
+    }
     if (!locked) return true;
     if (grant) locked = false;
     return grant;
@@ -175,6 +192,22 @@ void main() {
     expect(callScreen(), findsOneWidget);
   }
 
+  /// The call ends over the lock screen, as on a device (review of #561, P3-7): Dart sends
+  /// `ongoingStop` and `dismiss`, so native no longer shows the app over the lock screen and
+  /// the lock screen is back at once. The finished call's screen is what the person finds
+  /// once they unlock.
+  Future<void> endedOverLockScreen(WidgetTester tester) async {
+    keyguard.locked = false;
+    await ended(tester);
+  }
+
+  /// The app comes back to the front (the person unlocked, or woke the phone).
+  Future<void> backInFront(WidgetTester tester) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+  }
+
   ProviderContainer container(WidgetTester tester) =>
       ProviderScope.containerOf(tester.element(find.byType(CallPresenter)));
 
@@ -215,6 +248,22 @@ void main() {
     });
   });
 
+  group('no call over the lock screen: never covered', () {
+    // Review of #561, P1. The phone was locked with no call, and is being unlocked; the app
+    // resumes while Android may still say "locked". Native answers whether the app is SHOWN
+    // over the lock screen, which needs a call holding it: no.
+    testWidgets('back in front with no call: no cover, no prompt', (tester) async {
+      await tester.pumpWidget(harness(locked: false));
+      await tester.pumpAndSettle();
+
+      await backInFront(tester);
+
+      expect(cover(), findsNothing);
+      expect(protectedChat().hitTestable(), findsOneWidget);
+      expect(keyguard.prompts, 0);
+    });
+  });
+
   group('locked phone: the call and nothing else', () {
     testWidgets('Back asks to unlock first; cancelled, the call stays', (tester) async {
       await ringing(tester, locked: true);
@@ -245,56 +294,76 @@ void main() {
       expect(cover(), findsNothing);
     });
 
-    testWidgets('Record voice message asks to unlock first; cancelled, no conversation is shown', (tester) async {
+    // Review of #561, P3-7: once the call ends, Android stops showing the app over the lock
+    // screen, so Close and Record voice message on the finished call are only reachable
+    // after the person unlocks. Then they ask nothing.
+
+    testWidgets('a call that ends over the lock screen: no prompt, nothing beneath is shown', (tester) async {
       await ringing(tester, locked: true);
-      await ended(tester);
+      await endedOverLockScreen(tester);
 
-      await tester.tap(find.text(en.callRecordVoice));
-      await tester.pumpAndSettle();
-
-      expect(keyguard.prompts, 1);
-      expect(keyguard.routesAtPrompt, [Routes.activeCall]);
-      expect(find.textContaining('chat conv_1'), findsNothing);
       expect(protectedChat(), findsNothing);
-      expect(callScreen(), findsOneWidget);
-      // The call is over: the app goes behind the lock screen. (The guard and the presenter
-      // may both ask; going behind it twice is the same as once.)
-      expect(keyguard.backToLockScreen, isPositive);
+      expect(cover(), findsNothing);
+      expect(keyguard.prompts, 0);
     });
 
-    testWidgets('Record voice message, unlocked at the prompt, opens the conversation', (tester) async {
+    testWidgets('after the call, once unlocked, Record voice message opens the conversation with no prompt',
+        (tester) async {
       await ringing(tester, locked: true);
-      await ended(tester);
-      keyguard.grant = true;
+      await endedOverLockScreen(tester);
+      // The person unlocks at the lock screen; the app comes back to the front.
+      await backInFront(tester);
 
       await tester.tap(find.text(en.callRecordVoice));
       await tester.pumpAndSettle();
 
-      expect(keyguard.prompts, 1);
-      expect(keyguard.routesAtPrompt, [Routes.activeCall]);
+      expect(keyguard.prompts, 0);
       expect(find.text('chat conv_1 voice=true'), findsOneWidget);
       expect(callScreen(), findsNothing);
     });
 
-    testWidgets('Close after the call asks to unlock; cancelled, the lock screen comes back', (tester) async {
+    testWidgets('after the call, Close asks native again rather than trust a stale "locked"', (tester) async {
       await ringing(tester, locked: true);
-      await ended(tester);
+      await endedOverLockScreen(tester);
 
+      // No resume check yet: the guard still remembers "locked", asks, and finds the app is
+      // no longer over the lock screen. No prompt, and back to what was underneath.
       await tester.tap(find.text(en.closeAction));
       await tester.pumpAndSettle();
 
-      expect(keyguard.prompts, 1);
-      expect(keyguard.routesAtPrompt, [Routes.activeCall]);
-      expect(protectedChat(), findsNothing);
-      expect(callScreen(), findsOneWidget);
-      expect(keyguard.backToLockScreen, isPositive);
+      expect(keyguard.prompts, 0);
+      expect(keyguard.backToLockScreen, 0);
+      expect(callScreen(), findsNothing);
+      expect(protectedChat(), findsOneWidget);
     });
 
-    testWidgets('a call that ends while locked never shows the previous route', (tester) async {
+    testWidgets('the call ends while the unlock prompt is up; cancelled, the app goes behind the lock screen',
+        (tester) async {
+      await ringing(tester, locked: true);
+      final prompt = Completer<bool>();
+      keyguard.holdUnlock = prompt;
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(keyguard.prompts, 1);
+
+      await endedOverLockScreen(tester);
+      prompt.complete(false);
+      await tester.pumpAndSettle();
+
+      // The call is over: nothing left on the call screen, so the lock screen comes back.
+      expect(keyguard.backToLockScreen, 1);
+      expect(protectedChat(), findsNothing);
+      expect(callScreen(), findsOneWidget);
+    });
+
+    testWidgets('a call that goes idle while still over the lock screen never shows the previous route',
+        (tester) async {
       await ringing(tester, locked: true);
       await ended(tester);
 
-      // The call screen goes idle without anyone leaving it (as on a dismiss elsewhere).
+      // Native still answers "over the lock screen" (defensive: its dismiss not processed
+      // yet) as the call screen goes idle without anyone leaving it.
       container(tester).read(callControllerProvider.notifier).dismiss();
       await tester.pumpAndSettle();
 
@@ -304,12 +373,68 @@ void main() {
 
       // Unlocked by the person later, and back in front: the finished call's route comes down.
       keyguard.locked = false;
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpAndSettle();
+      await backInFront(tester);
 
       expect(callScreen(), findsNothing);
       expect(protectedChat(), findsOneWidget);
+    });
+
+    testWidgets('an unlock prompt Android never answers gives up after a minute: Back works again',
+        (tester) async {
+      await ringing(tester, locked: true);
+      // Review of #561, P3-5: never completed.
+      keyguard.holdUnlock = Completer<bool>();
+      final guard = container(tester).read(lockedCallGuardProvider.notifier);
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(keyguard.prompts, 1);
+      expect(guard.leaving, isTrue);
+
+      await tester.pump(const Duration(seconds: 61));
+
+      // Given up: "not unlocked", so the call screen stays and nothing beneath shows.
+      expect(guard.leaving, isFalse);
+      expect(callScreen(), findsOneWidget);
+      expect(protectedChat(), findsNothing);
+
+      // And the guard is usable again.
+      keyguard.grant = true;
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(keyguard.prompts, 2);
+      expect(callScreen(), findsNothing);
+      expect(protectedChat(), findsOneWidget);
+    });
+
+    testWidgets('a route pushed while the unlock prompt is up: cancelled, the call is put back', (tester) async {
+      await ringing(tester, locked: true);
+      final prompt = Completer<bool>();
+      keyguard.holdUnlock = prompt;
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(keyguard.prompts, 1);
+
+      // Review of #561, P3-6: a deep link lands while the prompt is up.
+      unawaited(router.push('/chats/c9'));
+      await tester.pump();
+      await tester.pump();
+      expect(cover(), findsOneWidget);
+      // Still waiting on the prompt: nothing put back yet.
+      expect(topRoutePath(router), '/chats/c9');
+
+      prompt.complete(false);
+      await tester.pumpAndSettle();
+
+      // The put-back waited for the prompt instead of giving up: the live call is on top
+      // again, its controls reachable, and the cover gone.
+      expect(topRoutePath(router), Routes.activeCall);
+      expect(cover(), findsNothing);
+      expect(find.text('Mrs. Fatima').hitTestable(), findsOneWidget);
+      expect(find.text('chat c9 voice=false'), findsNothing);
+      expect(protectedChat(), findsNothing);
     });
 
     testWidgets('any other way off the call screen (a deep link) is covered and the call put back', (tester) async {
@@ -320,7 +445,8 @@ void main() {
       final answer = Completer<bool>();
       keyguard.hold = answer;
       unawaited(router.push('/chats/c9'));
-      await tester.pump();
+      // Review of #561, P3-8: ONE frame. The first frame with the pushed route already
+      // has the cover over it; no frame shows the route uncovered.
       await tester.pump();
 
       expect(cover(), findsOneWidget);

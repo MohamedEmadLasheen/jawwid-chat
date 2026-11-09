@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/call_native/call_native_providers.dart';
@@ -21,20 +23,33 @@ import 'call_controller.dart';
 ///  * Anything else that takes the app off the call screen is covered (CallPresenter) and
 ///    put back on the call.
 ///
-/// The state is the phone's lock as last seen: refreshed when a call screen is shown, when
-/// the app comes back to the front, and on every [leave] that finds it locked. Unlocked as
-/// last seen, everything is exactly as before: no prompt, no wait.
+/// The state is native's answer to "is the app shown over the lock screen" as last seen: a
+/// locked phone AND a call holding the lock screen, never a locked phone alone (review of
+/// #561, P1). Refreshed when a call screen is shown, when the app comes back to the front,
+/// and on every [leave] that finds it locked. Not over the lock screen as last seen,
+/// everything is exactly as before: no prompt, no wait. Once the person unlocks at the
+/// prompt, Android stops showing the app over the lock screen for the call (P2-2).
 class LockedCallGuard extends Notifier<bool> {
   @override
   bool build() => false;
 
   DeviceKeyguard get _keyguard => ref.read(deviceKeyguardProvider);
 
+  /// How long the unlock prompt may go unanswered before it counts as "not unlocked"
+  /// (review of #561, P3-5). Android always answers; if it ever did not, the guard would
+  /// stay [leaving] for good, and Back, Close and the end-of-call takedown would do nothing.
+  static const unlockTimeout = Duration(seconds: 60);
+
   bool _leaving = false;
+  Completer<void>? _left;
 
   /// True while [leave] waits on the lock screen: the call route is on its way out through
   /// the guard, and nothing else should take it down meanwhile.
   bool get leaving => _leaving;
+
+  /// Completes once no [leave] is in progress (at once if none is). Whoever stood back
+  /// while the guard was [leaving] waits on this to look again (review of #561, P3-6).
+  Future<void> get settled => _left?.future ?? Future<void>.value();
 
   /// Ask the phone whether it is locked, and remember the answer.
   Future<bool> refresh() async {
@@ -53,9 +68,10 @@ class LockedCallGuard extends Notifier<bool> {
       return true;
     }
     _leaving = true;
+    final left = _left = Completer<void>();
     try {
       if (await refresh()) {
-        final unlocked = await _keyguard.requestUnlock();
+        final unlocked = await _keyguard.requestUnlock().timeout(unlockTimeout, onTimeout: () => false);
         if (!unlocked) {
           // Cancelled or refused: nothing beneath the call is shown. A call that is over
           // has nothing left on the call screen, so the lock screen comes back instead.
@@ -68,6 +84,8 @@ class LockedCallGuard extends Notifier<bool> {
       return true;
     } finally {
       _leaving = false;
+      if (identical(_left, left)) _left = null;
+      left.complete();
     }
   }
 
@@ -81,5 +99,5 @@ class LockedCallGuard extends Notifier<bool> {
   }
 }
 
-/// See [LockedCallGuard]. True: the phone was locked when last asked.
+/// See [LockedCallGuard]. True: the app was shown over the lock screen when last asked.
 final lockedCallGuardProvider = NotifierProvider<LockedCallGuard, bool>(LockedCallGuard.new);

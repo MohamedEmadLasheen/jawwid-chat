@@ -136,4 +136,59 @@ class LockScreenCallTest {
         tracker.clear()
         assertFalse(tracker.showWhenLocked())
     }
+
+    // LR-46 review of #561, P1: "shown over the lock screen" is a locked phone AND a call
+    // holding the lock screen. A locked phone alone (no call, or the unlock still finishing)
+    // is not: the app is not over the lock screen then, and Dart must not cover it.
+
+    @Test
+    fun aLockedPhoneWithNoCallIsNotShownOverTheLockScreen() {
+        assertFalse(tracker.overLockScreen(keyguardLocked = true))
+        assertFalse(tracker.overLockScreen(keyguardLocked = false))
+    }
+
+    @Test
+    fun aRingOnALockedPhoneIsShownOverTheLockScreen() {
+        tracker.ringing("c1")
+        assertTrue(tracker.overLockScreen(keyguardLocked = true))
+        // Unlocked, the app is simply in front: nothing to guard.
+        assertFalse(tracker.overLockScreen(keyguardLocked = false))
+    }
+
+    @Test
+    fun aRingWhoseWindowIsOverNoLongerHoldsTheLockScreen() {
+        tracker.ringing("c1")
+        now += window
+        assertFalse(tracker.overLockScreen(keyguardLocked = true))
+    }
+
+    // P2-2: once the person unlocks from the call, no call keeps the app over the lock
+    // screen, so locking again shows the lock screen, not the app.
+
+    @Test
+    fun anUnlockEndsTheLockScreenPermissionForEveryCall() {
+        tracker.ringing("c1")
+        tracker.connected("c1")
+        tracker.ringing("c2")
+        tracker.unlocked()
+        assertFalse(tracker.showWhenLocked())
+        assertFalse(tracker.overLockScreen(keyguardLocked = true))
+        assertNull(tracker.msUntilRingWindowEnds())
+    }
+
+    @Test
+    fun aCallConnectedAfterTheUnlockDoesNotTakeTheLockScreenBack() {
+        tracker.ringing("c1")
+        tracker.unlocked()
+        tracker.connected("c1")
+        assertFalse(tracker.showWhenLocked())
+    }
+
+    @Test
+    fun aNewRingFromTheLockScreenAfterAnUnlockHoldsItAgain() {
+        tracker.ringing("c1")
+        tracker.unlocked()
+        tracker.ringing("c2")
+        assertTrue(tracker.overLockScreen(keyguardLocked = true))
+    }
 }

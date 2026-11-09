@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 
 import 'device_keyguard.dart';
@@ -234,15 +235,20 @@ class PlatformCallPresentation implements CallPresentation, DeviceKeyguard {
     }
   }
 
-  /// LR-46: is the phone's lock screen up? A platform that cannot say (iOS answers
-  /// notImplemented; no platform side) is not locked: nothing changes there.
+  /// LR-46: is the app shown over the phone's lock screen (locked, and a call holds the
+  /// lock screen)? A platform without the method (iOS answers notImplemented) or with no
+  /// platform side is not: nothing changes there. On Android any other failure fails
+  /// closed, as native does (review of #561, P3-4): the worst case is the call-only cover
+  /// until the next check, never the chats over a locked phone.
   @override
   Future<bool> isLocked() async {
     if (!_available) return false;
     try {
-      return await _channel.invokeMethod<bool>('isKeyguardLocked') ?? false;
-    } catch (_) {
+      return await _channel.invokeMethod<bool>('isShownOverLockScreen') ?? false;
+    } on MissingPluginException {
       return false;
+    } catch (_) {
+      return defaultTargetPlatform == TargetPlatform.android;
     }
   }
 

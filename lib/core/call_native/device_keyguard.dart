@@ -9,12 +9,15 @@
 /// platform with no such half (iOS, whose CallKit screen is the system's; a test; a
 /// browser) is never locked here, and everything stays as it was.
 abstract interface class DeviceKeyguard {
-  /// Whether the phone's lock screen is up (shown, or covered by the call screen).
-  /// False where the platform cannot say.
+  /// Whether the app is shown over the phone's lock screen: the phone is locked AND a call
+  /// holds the lock screen (review of #561, P1). A locked phone alone is not enough: with
+  /// no such call the app is not over the lock screen, and nothing may be covered.
+  /// False where the platform has no such half.
   Future<bool> isLocked();
 
   /// Ask the person to unlock (Android's own prompt). True once unlocked, or when the
-  /// phone was not locked; false on cancel or failure.
+  /// phone was not locked; false on cancel or failure. Once unlocked, Android stops
+  /// showing the app over the lock screen for the call (review of #561, P2-2).
   Future<bool> requestUnlock();
 
   /// The call is over and the phone still locked: go behind the lock screen, so what was
