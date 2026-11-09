@@ -32,7 +32,10 @@ import 'package:jawwid_chat/features/calls/application/call_media_providers.dart
 import 'package:jawwid_chat/features/calls/application/locked_call_guard.dart';
 import 'package:jawwid_chat/features/calls/presentation/active_call_screen.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_presenter.dart';
+import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_route_screen.dart';
+import 'package:jawwid_chat/features/rewards/application/reward_feed.dart';
+import 'package:jawwid_chat/features/rewards/presentation/reward_celebration.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
 import 'w7_call_fakes.dart';
@@ -87,6 +90,39 @@ class FakeKeyguard implements DeviceKeyguard {
   Future<void> returnToLockScreen() async => backToLockScreen++;
 }
 
+/// The app lock off: these tests are about the phone's lock screen, not the app's own.
+class _AppLockOff extends AppLockController {
+  @override
+  AppLockState build() => const AppLockState(phase: AppLockPhase.unlocked);
+}
+
+class _Chime implements RewardChime {
+  int plays = 0;
+  @override
+  Future<void> play(RewardCue cue) async => plays++;
+}
+
+class _SoundOn implements RewardSoundStore {
+  @override
+  Future<bool?> read() async => true;
+  @override
+  Future<void> write(bool on) async {}
+}
+
+/// `learner.reward_given`, as the server sends it to the family (PD-55).
+Map<String, Object?> _star(int stars) => {
+      'learnerId': 'learner-1',
+      'lessonId': 'lesson-1',
+      'eventId': 'event-$stars',
+      'kind': 'star',
+      'stickerKey': null,
+      'praiseKey': null,
+      'praiseText': null,
+      'stars': stars,
+      'badge': null,
+      'nextBadgeAt': null,
+    };
+
 void main() {
   late FakeCalls calls;
   late FakeRoom room;
@@ -94,6 +130,7 @@ void main() {
   late FakeKeyguard keyguard;
   late GoRouter router;
   late L10n en;
+  late _Chime chime;
 
   setUpAll(() async => en = await L10n.delegate.load(const Locale('en')));
 
@@ -109,8 +146,11 @@ void main() {
   Finder cover() => find.byKey(const ValueKey('locked-call-cover'));
   Finder callScreen() => find.byType(ActiveCallScreen);
 
-  Widget harness({required bool locked}) {
+  /// [rewards]: the reward celebration is mounted around the call presenter, as app.dart
+  /// mounts it (PD-55), with reward sounds on.
+  Widget harness({required bool locked, bool rewards = false}) {
     keyguard = FakeKeyguard(locked: locked);
+    chime = _Chime();
     router = GoRouter(
       initialLocation: '/somewhere',
       routes: [
@@ -158,6 +198,11 @@ void main() {
         microphonePermissionProvider.overrideWithValue(FakeMic()),
         audioRouteProvider.overrideWithValue(FakeAudioRoute()),
         deviceKeyguardProvider.overrideWithValue(keyguard),
+        if (rewards) ...[
+          appLockControllerProvider.overrideWith(_AppLockOff.new),
+          rewardChimeProvider.overrideWithValue(chime),
+          rewardSoundStoreProvider.overrideWithValue(_SoundOn()),
+        ],
       ],
       child: MaterialApp.router(
         routerConfig: router,
@@ -170,14 +215,17 @@ void main() {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        builder: (context, child) => CallPresenter(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) {
+          final presenter = CallPresenter(child: child ?? const SizedBox.shrink());
+          return rewards ? RewardCelebrationHost(child: presenter) : presenter;
+        },
       ),
     );
   }
 
   /// A call rings; its screen is pushed over the protected conversation.
-  Future<void> ringing(WidgetTester tester, {required bool locked}) async {
-    await tester.pumpWidget(harness(locked: locked));
+  Future<void> ringing(WidgetTester tester, {required bool locked, bool rewards = false}) async {
+    await tester.pumpWidget(harness(locked: locked, rewards: rewards));
     await tester.pumpAndSettle();
     socket.emit(CallEventNames.incoming, Frames.incoming(initiatorName: 'Mrs. Fatima'));
     await tester.pumpAndSettle();
@@ -460,6 +508,67 @@ void main() {
       expect(find.text('Mrs. Fatima').hitTestable(), findsOneWidget);
       expect(find.text('chat c9 voice=false'), findsNothing);
       expect(protectedChat(), findsNothing);
+    });
+  });
+
+  // LR-46 (#561 review, P3-9): the reward celebration plays over everything, a call included
+  // (PD-55), so it sits above the call presenter -- and over the lock screen it would draw
+  // app content over the call screen and over the cover.
+  group('a reward\'s celebration and the lock screen', () {
+    Finder celebration() => find.byKey(const ValueKey('reward-celebration'));
+
+    testWidgets('unlocked: it plays over the call screen, as before', (tester) async {
+      await ringing(tester, locked: false, rewards: true);
+
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      expect(callScreen(), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1);
+    });
+
+    testWidgets('over the lock screen: nothing drawn over the call or the cover; it plays once unlocked and back',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+      expect(container(tester).read(lockedCallGuardProvider), isTrue);
+
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsNothing);
+      expect(find.text(en.rewardStarLine(3)), findsNothing);
+
+      // Off the call screen another way: the cover, and still nothing over it.
+      final answer = Completer<bool>();
+      keyguard.hold = answer;
+      unawaited(router.push('/chats/c9'));
+      await tester.pump();
+      expect(cover(), findsOneWidget);
+      expect(celebration(), findsNothing);
+      answer.complete(true);
+      await tester.pumpAndSettle();
+      expect(topRoutePath(router), Routes.activeCall);
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0, reason: 'nothing heard over the lock screen');
+
+      // The person unlocks; the app comes back to the front.
+      keyguard.locked = false;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(container(tester).read(lockedCallGuardProvider), isFalse);
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1);
     });
   });
 }

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_lock/application/app_lock_controller.dart';
+import '../../calls/application/locked_call_guard.dart';
 import '../application/reward_feed.dart';
 import '../domain/rewards.dart';
 
@@ -22,6 +23,19 @@ import '../domain/rewards.dart';
 /// It sits outside the app lock (PD-23), so it says nothing while the lock covers
 /// the app or the privacy cover hides it: a reward that arrives then is not shown
 /// or heard -- not then, and not later -- and one already playing disappears.
+///
+/// LR-46 (#561 review, P3-9): it also sits above the call presenter, so over the
+/// phone's lock screen (Android shows the app there while a call from the lock
+/// screen rings or is in progress, `LockedCallGuard`) it would draw its line over
+/// the call screen and over the cover that hides the app: app content on a locked
+/// phone. So while the guard says the app is shown over the lock screen, nothing
+/// plays and one already playing disappears. A reward that arrives then is not
+/// lost, unlike under the app lock: a child answering a lesson call from the lock
+/// screen is the usual case, not the exception. The latest one is kept (it carries
+/// the lesson's newest tally) and plays, with its sound, once the guard says the
+/// app is no longer over the lock screen -- unlocked, and back in front -- unless
+/// the app lock covers the app by then, which drops it as above. Unlocked,
+/// nothing changes: it plays over everything, a call included.
 class RewardCelebrationHost extends ConsumerStatefulWidget {
   const RewardCelebrationHost({super.key, required this.child});
 
@@ -36,6 +50,9 @@ class RewardCelebrationHost extends ConsumerStatefulWidget {
 class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> with SingleTickerProviderStateMixin {
   late final AnimationController _burst = AnimationController(vsync: this, duration: RewardCelebrationHost.duration);
   ({int seq, RewardGiven reward})? _showing;
+
+  /// LR-46: the latest reward that arrived while the app was shown over the lock screen.
+  ({int seq, RewardGiven reward})? _pending;
 
   @override
   void initState() {
@@ -61,14 +78,36 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> w
     }, onError: (Object _) {});
   }
 
+  bool get _appLockHides {
+    final lock = ref.read(appLockControllerProvider);
+    return lock.covered || lock.obscured;
+  }
+
   @override
   Widget build(BuildContext context) {
     final lock = ref.watch(appLockControllerProvider);
-    final hidden = lock.covered || lock.obscured;
+    final overLockScreen = ref.watch(lockedCallGuardProvider);
+    final hidden = lock.covered || lock.obscured || overLockScreen;
     ref.listen(rewardFeedProvider, (previous, next) {
-      if (next == null || next.seq == previous?.seq) return;
-      if (ref.read(appLockControllerProvider).covered || ref.read(appLockControllerProvider).obscured) return;
+      if (next == null) {
+        // A new account's feed: nothing the last one heard is shown.
+        _pending = null;
+        return;
+      }
+      if (next.seq == previous?.seq) return;
+      if (_appLockHides) return;
+      if (ref.read(lockedCallGuardProvider)) {
+        _pending = next;
+        return;
+      }
       _celebrate(next);
+    });
+    ref.listen(lockedCallGuardProvider, (wasOver, isOver) {
+      if (isOver || wasOver != true) return;
+      final pending = _pending;
+      _pending = null;
+      if (pending == null || _appLockHides) return;
+      _celebrate(pending);
     });
     final showing = hidden ? null : _showing;
     return Stack(

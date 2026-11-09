@@ -13,6 +13,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
+import 'package:jawwid_chat/features/calls/application/locked_call_guard.dart';
 import 'package:jawwid_chat/features/rewards/application/reward_feed.dart';
 import 'package:jawwid_chat/features/rewards/data/rewards_repository.dart';
 import 'package:jawwid_chat/features/rewards/domain/rewards.dart';
@@ -39,6 +40,16 @@ class _Lock extends AppLockController {
   @override
   AppLockState build() => AppLockState(phase: initial);
   void set(AppLockPhase phase) => state = AppLockState(phase: phase);
+}
+
+/// LR-46: whether the app is shown over the phone's lock screen (a call from the lock
+/// screen), held where a test puts it. The real guard asks native; see locked_call_guard_test.
+class _OverLockScreen extends LockedCallGuard {
+  _OverLockScreen(this.initial);
+  final bool initial;
+  @override
+  bool build() => initial;
+  void set(bool over) => state = over;
 }
 
 class _SoundStore implements RewardSoundStore {
@@ -166,14 +177,17 @@ void main() {
     late SpySocket socket;
     late _Chime chime;
     late _Lock lock;
+    late _OverLockScreen guard;
 
-    List<Override> overrides({UserRole role = UserRole.parent, bool? sound, AppLockPhase phase = AppLockPhase.unlocked}) {
+    List<Override> overrides({UserRole role = UserRole.parent, bool? sound, AppLockPhase phase = AppLockPhase.unlocked, bool overLockScreen = false}) {
       socket = SpySocket();
       chime = _Chime();
       lock = _Lock(phase);
+      guard = _OverLockScreen(overLockScreen);
       final auth = ScriptedAuth(signedIn());
       return [
         appLockControllerProvider.overrideWith(() => lock),
+        lockedCallGuardProvider.overrideWith(() => guard),
         authControllerProvider.overrideWith(() => auth),
         currentRoleProvider.overrideWithValue(role),
         realtimeSocketProvider.overrideWithValue(socket),
@@ -230,6 +244,89 @@ void main() {
       expect(find.byKey(const ValueKey('reward-celebration')), findsNothing, reason: 'the lock hides one already playing');
       await tester.pump(const Duration(seconds: 3));
       await socket.close();
+    });
+
+    // LR-46 (#561 review, P3-9): the host sits above the call presenter, so over the phone's
+    // lock screen its line would draw over the call screen and the cover that hides the app.
+    group('over the phone\'s lock screen (a call from the lock screen)', () {
+      Finder line() => find.byKey(const ValueKey('reward-celebration'));
+
+      testWidgets('nothing drawn or heard; once unlocked, the latest one plays once, with its sound', (tester) async {
+        await tester.pumpWidget(_app(overrides(overLockScreen: true), screen(() {})));
+        await tester.pumpAndSettle();
+        final en = lookupL10n(const Locale('en'));
+
+        socket.emit(rewardGivenEvent, _payload(stars: 2));
+        socket.emit(rewardGivenEvent, _payload(stars: 3));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(line(), findsNothing);
+        expect(find.text(en.rewardStarLine(3)), findsNothing);
+        expect(find.byKey(const ValueKey('reward-confetti')), findsNothing);
+        await tester.pump(const Duration(seconds: 3));
+        expect(chime.plays, 0, reason: 'nothing is heard over the lock screen');
+
+        guard.set(false);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(line(), findsOneWidget);
+        expect(find.text(en.rewardStarLine(3)), findsOneWidget, reason: 'the latest one: the lesson\'s newest tally');
+        expect(find.text(en.rewardStarLine(2)), findsNothing);
+        await tester.pump(const Duration(seconds: 3));
+        expect(line(), findsNothing);
+        expect(chime.cues, [RewardCue.encouragement], reason: 'it plays once, with its sound');
+
+        // Not replayed by another round of the lock screen.
+        guard.set(true);
+        await tester.pump();
+        guard.set(false);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(line(), findsNothing);
+        expect(chime.plays, 1);
+        await socket.close();
+      });
+
+      testWidgets('one already playing disappears when the app comes over the lock screen', (tester) async {
+        await tester.pumpWidget(_app(overrides(), screen(() {})));
+        await tester.pumpAndSettle();
+        socket.emit(rewardGivenEvent, _payload());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(line(), findsOneWidget);
+
+        guard.set(true);
+        await tester.pump();
+        expect(line(), findsNothing);
+        expect(find.byKey(const ValueKey('reward-confetti')), findsNothing);
+        await tester.pump(const Duration(seconds: 3));
+        guard.set(false);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(line(), findsNothing, reason: 'its time ran out while hidden: not replayed');
+        await socket.close();
+      });
+
+      testWidgets('the app lock covering the app by then still drops it (PD-23)', (tester) async {
+        await tester.pumpWidget(_app(overrides(overLockScreen: true), screen(() {})));
+        await tester.pumpAndSettle();
+        socket.emit(rewardGivenEvent, _payload());
+        await tester.pump();
+
+        lock.set(AppLockPhase.locked);
+        await tester.pump();
+        guard.set(false);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(line(), findsNothing);
+
+        lock.set(AppLockPhase.unlocked);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 3));
+        expect(line(), findsNothing, reason: 'unlocking the app lock does not replay it');
+        expect(chime.plays, 0);
+        await socket.close();
+      });
     });
 
     testWidgets('a celebration says so; a malformed frame or another event shows nothing', (tester) async {
