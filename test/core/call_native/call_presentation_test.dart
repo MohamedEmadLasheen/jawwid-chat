@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/call_native/call_presentation.dart';
@@ -219,6 +220,107 @@ void main() {
 
       expect(await presentation.canUseFullScreenIntent(), isTrue);
       expect(await presentation.openFullScreenIntentSettings(), isFalse);
+      expect(sentToNative, isEmpty);
+    });
+  });
+
+  group('LR-46: the phone lock screen (Android)', () {
+    void nativeAnswers(Object? Function(MethodCall call) answer) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        sentToNative.add(call);
+        return answer(call);
+      });
+    }
+
+    test('asks native whether the app is shown over the lock screen', () async {
+      // Review of #561, P1: not "is the phone locked" -- a locked phone with no call
+      // holding the lock screen is not shown over it, and must not be covered.
+      nativeAnswers((call) => call.method == 'isShownOverLockScreen' ? true : null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isTrue);
+      expect(sentToNative.last.method, 'isShownOverLockScreen');
+    });
+
+    test('Android failing to answer counts as over the lock screen (fails closed)', () async {
+      // Review of #561, P3-4: native fails closed; so does Dart on Android.
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw PlatformException(code: 'error');
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isTrue);
+      // Still: a failed unlock is not an unlock.
+      expect(await presentation.requestUnlock(), isFalse);
+    });
+
+    test('elsewhere (iOS) a failure is never "locked": it has no Android lock-screen half', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw PlatformException(code: 'error');
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isFalse);
+    });
+
+    test('asks native to unlock, and reports the answer', () async {
+      var unlocked = false;
+      nativeAnswers((call) => call.method == 'requestDismissKeyguard' ? unlocked : null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.requestUnlock(), isFalse);
+      expect(sentToNative.last.method, 'requestDismissKeyguard');
+      unlocked = true;
+      expect(await presentation.requestUnlock(), isTrue);
+    });
+
+    test('returns to the lock screen through native', () async {
+      nativeAnswers((_) => null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      await presentation.returnToLockScreen();
+      expect(sentToNative.last.method, 'returnToLockScreen');
+    });
+
+    test('a failed unlock is not an unlock; a platform without the methods (iOS) is never locked', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw MissingPluginException();
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isFalse);
+      expect(await presentation.requestUnlock(), isFalse);
+      await presentation.returnToLockScreen();
+    });
+
+    test('before start nothing is asked, and nothing is locked', () async {
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+
+      expect(await presentation.isLocked(), isFalse);
       expect(sentToNative, isEmpty);
     });
   });
