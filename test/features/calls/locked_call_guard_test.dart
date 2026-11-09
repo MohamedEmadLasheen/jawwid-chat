@@ -259,6 +259,15 @@ void main() {
   ProviderContainer container(WidgetTester tester) =>
       ProviderScope.containerOf(tester.element(find.byType(CallPresenter)));
 
+  /// The guard asks native again while the app is behind the lock screen. A call's end
+  /// does not ask by itself (the guard keeps its last "over the lock screen" until it next
+  /// asks: on resume, on a leave, when a call screen is shown, when the call goes idle), so
+  /// this is what turns it false while the app is still behind (review of #563, P2).
+  Future<void> guardAsksAgain(WidgetTester tester) async {
+    await container(tester).read(lockedCallGuardProvider.notifier).refresh();
+    await tester.pump();
+  }
+
   group('unlocked phone: unchanged', () {
     testWidgets('Back leaves the call screen with no prompt', (tester) async {
       await ringing(tester, locked: false);
@@ -571,9 +580,10 @@ void main() {
       expect(chime.plays, 1);
     });
 
-    // Review of #563, P2: the guard is "shown over the lock screen", not "unlocked". A call that
-    // ends with the phone still locked turns it false while the lock screen is back and the app
-    // behind it: the kept reward must still wait until the app is back in front.
+    // Review of #563, P2: the guard is "shown over the lock screen", not "unlocked". After a call
+    // that ends with the phone still locked, the next time it asks native (here while the lock
+    // screen is back and the app behind it) it turns false: the kept reward must still wait
+    // until the app is back in front.
     testWidgets('a call that ends with the phone still locked: it waits until the app is back in front',
         (tester) async {
       await ringing(tester, locked: true, rewards: true);
@@ -586,6 +596,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await endedOverLockScreen(tester);
+      await guardAsksAgain(tester);
       await tester.pump(const Duration(seconds: 3));
       expect(container(tester).read(lockedCallGuardProvider), isFalse, reason: 'no longer shown over the lock screen');
       expect(celebration(), findsNothing);
@@ -614,6 +625,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await endedOverLockScreen(tester);
+      await guardAsksAgain(tester);
       expect(container(tester).read(lockedCallGuardProvider), isFalse);
 
       // The teacher gives the star a moment after hanging up.
