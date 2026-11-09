@@ -95,6 +95,7 @@ Each real merge of a stacked or conflicting PR still gets its own CI run and a d
 | **7c. LR-46 follow-ups** | #563 (on #561; celebration not over the lock screen), #564 (on #497; no database password in `ps`), #562 (Android 12+ transfer excluded) | | Low / Low / Low | main CI |
 | **7d. LR-46 P3 fixes** | #565 (on #528; review accounts write only into their own organization), #566 (on #498; **High: migration `20261109170000`**, deletion request checks the staff role in SQL) | | Low / High | main CI; #566 after #498 |
 | **7e. Follow-ups on main** | #567 (**High: migration `20261109180000`**, `chat.offboard_teacher` fails closed on NULL), #568 (test flake fix) | | High / Low | main CI |
+| **7f. LR-46 P3 fixes** | #569 (on #560; review logins never printed; Code Owner), #570 (on #537; token move inside the refresh transaction), #571 (on #540; pending sign-out retry; a retired token is never re-sent) | | Low / Medium / Medium | main CI |
 | **Excluded** | #553: duplicate of #524, do not merge | | | |
 | **Separate** | #503 (another session's PR; it shares `lib/l10n/*` with #449 and #498), #517 (Code Owner, `scripts/qa`), #543 (after #533, then retarget) | | Low / Low / Low | main CI |
 
