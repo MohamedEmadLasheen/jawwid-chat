@@ -56,10 +56,12 @@
 --       to "Deleted user", as every financial record of the erasure is.
 --   Payout account: kept while chat.teacher_payroll_open, with an
 --       erased_teacher_payroll task for the Teachers manager; the worker
---       (chat.erased_teacher_sweep) deletes it once the payroll is settled
---       (lead's decision on review, 2026-11-07: bank details are kept only
---       until the wages owed are paid). With no payroll open it goes at once,
---       as before.
+--       (chat.erased_teacher_sweep) deletes it once chat.teacher_payroll_open
+--       is false (lead's decision on review, 2026-11-07). That is a calendar
+--       rule, not a record of payment: no held lesson since the start of last
+--       month and no pay adjustment for last month or later. Nothing in the
+--       schema records that wages were paid; the task tells staff to pay
+--       before then. With no payroll open it goes at once, as before.
 --   Retention is unchanged: what the erasure keeps and deletes is 20261102210000's.
 --
 -- FAIL CLOSED: RLS on, no policy, no grant to any request role on either
@@ -69,6 +71,11 @@
 -- Idempotent (G-19). Rollback:
 -- db/rollback/20261107140000_chat_teacher_deletion_request.down.sql.
 -- =============================================================================
+
+-- The new foreign keys lock chat.account, chat.teacher, chat.staff,
+-- chat.learner and chat.organization against writes: never queue behind a
+-- long transaction while sign-ins and lesson writes pile up behind this one.
+set local lock_timeout = '5s';
 
 -- ---------------------------------------------------------------------------
 -- 1. chat.account_deletion_request

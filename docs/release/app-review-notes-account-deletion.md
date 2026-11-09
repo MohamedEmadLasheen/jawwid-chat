@@ -29,5 +29,17 @@ invoices, receipts, payroll rows and the audit log are kept, attributed to "Dele
 ## 3. Before submission (owner)
 
 - The teacher demo account should have a lesson ahead, so the reviewer can see the request flow;
-  the parent demo account shows immediate deletion. Deleting a demo account deletes it for good:
-  keep a spare.
+  the parent demo account shows immediate deletion. The review cohort's teacher always has one:
+  its child is assigned to it and has weekly lessons.
+- Deleting a demo account deletes it for good, and the demo teacher is **not** exempt from the
+  30-day deadline: App Review checks that promise, so it holds for this account as for any other.
+- **Repair is re-running the review cohort command** (`apps/api/src/cli/review-cohort.ts`) with the
+  same `--email-domain` and password files:
+  - a deleted parent account is created again and given back its seats in the family's chats;
+  - a deleted teacher account (erased by staff or at its deadline) is created again, and the child
+    is moved to it, as the Teachers manager moves a learner (`chat.transfer_learner`). The family
+    group seat and the lessons ahead follow, and the weekly times are set again;
+  - while a teacher's request is only pending, the account still signs in and nothing needs
+    repair. The reviewer can cancel it from the same screen.
+- No spare account is needed: re-run the command after a demo account is deleted, and before the
+  next submission.

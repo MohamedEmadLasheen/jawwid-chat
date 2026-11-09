@@ -172,6 +172,9 @@ void main() {
     final l10n = await open(tester, role: UserRole.teacher);
     expect(find.text(l10n.deleteAccountRequestIntro), findsOneWidget);
     expect(find.widgetWithText(FilledButton, l10n.deleteAccountRequestAction), findsOneWidget);
+    // A request is not "deleted now": what goes, goes with the account, within 30 days.
+    expect(find.text(l10n.deleteAccountGoesOnRequest), findsOneWidget);
+    expect(find.text(l10n.deleteAccountGoes), findsNothing);
 
     await tester.enterText(find.byKey(const ValueKey('delete-account-password')), 'my-password');
     await tester.ensureVisible(find.byKey(const ValueKey('delete-account-submit')));
@@ -218,6 +221,8 @@ void main() {
     repo.status_ = AccountDeletionStatus(immediate: true, deadlineIfRequested: _deadline);
     final l10n = await open(tester, role: UserRole.teacher);
     expect(find.text(l10n.deleteAccountRequestIntro), findsNothing);
+    expect(find.text(l10n.deleteAccountGoes), findsOneWidget);
+    expect(find.text(l10n.deleteAccountGoesOnRequest), findsNothing);
     await submit(tester, 'my-password');
     expect(repo.calls, ['my-password']);
     expect(signOuts, [true]);
@@ -232,6 +237,17 @@ void main() {
     // DEV-CONFIRM #31: the erasure states 7 years only for payments, invoices, receipts and the audit log.
     expect(l10n.deleteAccountKeptTeacher, isNot(contains('7')));
     expect((await L10n.delegate.load(const Locale('en'))).deleteAccountKeptTeacher, isNot(contains('7 years')));
+  });
+
+  testWidgets('in Arabic, a teacher\'s request form never says «يُحذف فورًا»', (tester) async {
+    repo.status_ = AccountDeletionStatus(immediate: false, deadlineIfRequested: _deadline);
+    final l10n = await open(tester, role: UserRole.teacher, locale: const Locale('ar'));
+    expect(find.text(l10n.deleteAccountGoesOnRequest), findsOneWidget);
+    expect(find.textContaining('يُحذف فورًا'), findsNothing);
+    expect(l10n.deleteAccountGoesOnRequest, contains('30'));
+    final en = await L10n.delegate.load(const Locale('en'));
+    expect(en.deleteAccountGoesOnRequest, isNot(contains('Deleted now')));
+    expect(en.deleteAccountGoesOnRequest, contains('30 days'));
   });
 
   testWidgets('reads in Arabic', (tester) async {

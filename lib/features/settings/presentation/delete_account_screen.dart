@@ -273,7 +273,11 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                     Text(l10n.deleteAccountRequestIntro, key: const ValueKey('delete-account-request-intro')),
                   ],
                   const SizedBox(height: Spacing.spacing5),
-                  Text(l10n.deleteAccountGoes, key: const ValueKey('delete-account-goes')),
+                  // A request is not "deleted now": what goes, goes with the account (O-3).
+                  Text(
+                    _asRequest ? l10n.deleteAccountGoesOnRequest : l10n.deleteAccountGoes,
+                    key: const ValueKey('delete-account-goes'),
+                  ),
                   const SizedBox(height: Spacing.spacing4),
                   Text(
                     isParent ? l10n.deleteAccountKeptParent : l10n.deleteAccountKeptTeacher,

@@ -5165,6 +5165,10 @@ class L10nEn extends L10n {
       'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.';
 
   @override
+  String get deleteAccountGoesOnRequest =>
+      'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.';
+
+  @override
   String get deleteAccountKeptParent =>
       'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.';
 

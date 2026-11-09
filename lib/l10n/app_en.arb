@@ -3461,6 +3461,8 @@
   "@deleteAccountIntro": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountGoes": "Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.",
   "@deleteAccountGoes": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
+  "deleteAccountGoesOnRequest": "Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.",
+  "@deleteAccountGoesOnRequest": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: what goes when the requested deletion happens (within 30 days), in place of deleteAccountGoes, which says deleted now."},
   "deleteAccountKeptParent": "Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.",
   "@deleteAccountKeptParent": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountKeptTeacher": "Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.",

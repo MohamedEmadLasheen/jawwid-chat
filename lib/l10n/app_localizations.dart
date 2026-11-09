@@ -8887,6 +8887,12 @@ abstract class L10n {
   /// **'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.'**
   String get deleteAccountGoes;
 
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: what goes when the requested deletion happens (within 30 days), in place of deleteAccountGoes, which says deleted now.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.'**
+  String get deleteAccountGoesOnRequest;
+
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
