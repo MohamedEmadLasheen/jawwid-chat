@@ -51,11 +51,29 @@ jobs:
   preflight:
     name: Preflight
     runs-on: ubuntu-latest
+    # actions: read is for the Deploy staging runs that recorded the API image
+    # digest (below). A job-level block replaces the workflow's, so the rest is
+    # repeated.
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    outputs:
+      api_digest: ${{ steps.image.outputs.digest }}
+    # Inputs reach the shell only through env, never through ${{ }} inside a
+    # script, so an input cannot inject shell.
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      CONFIRM: ${{ inputs.confirm }}
     steps:
       - name: Confirmation
         run: |
-          [ "${{ inputs.confirm }}" = "DEPLOY" ] || {
+          [ "$CONFIRM" = "DEPLOY" ] || {
             echo "::error::Confirmation text did not match. Nothing was deployed."
+            exit 1
+          }
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::image_tag must be a full lowercase 40-character commit SHA. Nothing was deployed."
             exit 1
           }
 
@@ -65,10 +83,53 @@ jobs:
         # Blocks deploying a commit that was never merged and never reviewed.
         run: |
           git fetch --depth=200 origin main
-          if ! git merge-base --is-ancestor "${{ inputs.image_tag }}" origin/main; then
-            echo "::error::${{ inputs.image_tag }} is not on main. Production deploys reviewed commits only."
+          if ! git merge-base --is-ancestor "$IMAGE_TAG" origin/main; then
+            echo "::error::$IMAGE_TAG is not on main. Production deploys reviewed commits only."
             exit 1
           fi
+
+      - name: The API image is the one recorded for this commit (by digest)
+        id: image
+        # LR-46 P2-2. Production deploys what staging built and tested; it never
+        # builds the API itself. A tag is a name anyone with packages:write can
+        # move, from any branch, so "the commit is on main" proves nothing about
+        # the IMAGE. api:<sha> is accepted only if it resolves to the digest that
+        # a run of deploy-staging.yml whose head_sha IS <sha> recorded when it
+        # pushed. Such a run executes the workflow file of that reviewed commit;
+        # a run with an edited file has a different head_sha (workflow_dispatch only: a pull_request run executes the merge commit's file, hence the event and branch filter). The deploy job
+        # checks the tag still resolves to this digest before the backup and
+        # again after the release. (Same check as review-cohort.yml.)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          digest="$(docker buildx imagetools inspect "$REPO:$IMAGE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')" \
+            || { echo "::error::$REPO:$IMAGE_TAG does not exist -- deploy this commit to staging first"; exit 1; }
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+            || { echo "::error::could not resolve $REPO:$IMAGE_TAG to a digest"; exit 1; }
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/runs?head_sha=$IMAGE_TAG&per_page=100" \
+            | jq -r --arg repo "$GITHUB_REPOSITORY" --arg sha "$IMAGE_TAG" \
+                '.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo
+                  and .event == "workflow_dispatch" and .head_branch == "main"
+                  and ((.path // "") | split("@")[0]) == ".github/workflows/deploy-staging.yml") | .id')" \
+            || { echo "::error::could not list the Deploy staging runs with the job token"; exit 1; }
+          found=""
+          for id in $runs; do
+            [[ "$id" =~ ^[0-9]+$ ]] || continue
+            d="$RUNNER_TEMP/api-image-digest/$id"
+            gh run download "$id" -R "$GITHUB_REPOSITORY" -n api-image-digest -D "$d" >/dev/null 2>&1 || continue
+            if [ "$(cat "$d/api-image-digest" 2>/dev/null || true)" = "$IMAGE_TAG $digest" ]; then found="$id"; break; fi
+          done
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          [ -n "$found" ] || {
+            echo "::error::$REPO:$IMAGE_TAG resolves to $digest, which no Deploy staging run at $IMAGE_TAG recorded. The tag was overwritten, or the record expired (90 days): dispatch Deploy staging from main while main's head is $IMAGE_TAG (or deploy a newer commit), then retry. Nothing was deployed."
+            exit 1
+          }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "API image $REPO@$digest, recorded by Deploy staging run $found"
 
   build-admin-web:
     name: Build the production Admin Web image
@@ -90,14 +151,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: The API image for this commit exists
-        # Production deploys what staging built and tested; it never builds the
-        # API itself. A tag staging never built stops here, before anything.
-        run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/api:${{ inputs.image_tag }}"
-          docker buildx imagetools inspect "$IMAGE" >/dev/null \
-            || { echo "::error::$IMAGE does not exist -- deploy this commit to staging first"; exit 1; }
 
       - name: Install Flutter for the teacher web portal (PD-28)
         # Pinned to the version pubspec.yaml is developed against, from
@@ -180,6 +233,24 @@ jobs:
           fi
           [ "$rc" -eq 0 ] || echo "Nothing was changed. Owner steps: docs/infrastructure/production-readiness.md"
           exit "$rc"
+
+      - name: The API tag still points at the verified image
+        # LR-46 P2-2. BEFORE the backup and the migrations: App Platform pulls
+        # api:<sha> by tag, so the tag must still resolve to the digest preflight
+        # verified. Checked again after the release.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          API_DIGEST: ${{ needs.preflight.outputs.api_digest }}
+        run: |
+          set -euo pipefail
+          [[ "$API_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::preflight did not hand over a verified digest. Nothing was changed."; exit 1; }
+          REPO="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          now="$(docker buildx imagetools inspect "$REPO:$IMAGE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')" || now=""
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          [ "$now" = "$API_DIGEST" ] || { echo "::error::$REPO:$IMAGE_TAG moved from the verified $API_DIGEST to ${now:-nothing}. Nothing was changed."; exit 1; }
+          echo "$REPO:$IMAGE_TAG is still $API_DIGEST"
 
       - name: Install doctl
         run: scripts/infra/install-doctl.sh
@@ -427,6 +498,25 @@ jobs:
           ADMIN_WEB_IMAGE_TAG: ${{ needs.build-admin-web.outputs.admin_web_tag }}
         run: scripts/infra/do-release.sh production "$RUNNER_TEMP/app-spec.yaml"
 
+      - name: The API tag did not move during the release
+        # LR-46 P2-2. App Platform resolved api:<sha> while the release ran; if
+        # the tag moved in that window the running image may not be the verified
+        # one. This cannot undo that, so it fails the run loudly: redeploy, and
+        # treat the moved tag as an incident.
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          API_DIGEST: ${{ needs.preflight.outputs.api_digest }}
+        run: |
+          set -euo pipefail
+          REPO="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          now="$(docker buildx imagetools inspect "$REPO:$IMAGE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')" || now=""
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          [ "$now" = "$API_DIGEST" ] || { echo "::error::$REPO:$IMAGE_TAG moved from the verified $API_DIGEST to ${now:-nothing} during the release. The running API may not be the verified image: redeploy."; exit 1; }
+          echo "$REPO:$IMAGE_TAG is still $API_DIGEST"
+
       - name: Smoke test
         if: success()
         run: |
@@ -435,16 +525,21 @@ jobs:
 
       - name: Record the release
         if: success()
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          API_DIGEST: ${{ needs.preflight.outputs.api_digest }}
+          LAUNCH_PHASE: ${{ vars.LAUNCH_PHASE }}
         run: |
           {
             echo "### Production release"
             echo ""
             echo "| field | value |"
             echo "|---|---|"
-            echo "| commit | \`${{ inputs.image_tag }}\` |"
-            echo "| run | ${{ github.run_number }} |"
-            echo "| deployed by | ${{ github.actor }} |"
-            echo "| launch phase | ${{ vars.LAUNCH_PHASE }} |"
+            echo "| commit | \`${IMAGE_TAG}\` |"
+            echo "| API image digest | \`${API_DIGEST}\` |"
+            echo "| run | ${GITHUB_RUN_NUMBER} |"
+            echo "| deployed by | ${GITHUB_ACTOR} |"
+            echo "| launch phase | ${LAUNCH_PHASE} |"
             echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
