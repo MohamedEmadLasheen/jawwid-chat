@@ -178,6 +178,22 @@ class FakeMic implements MicrophonePermission {
   }
 }
 
+/// The system Settings page, recorded rather than opened (LR-26).
+class FakeMicrophoneSettings implements MicrophoneSettings {
+  FakeMicrophoneSettings({this.canOpen = true});
+
+  @override
+  final bool canOpen;
+
+  int opens = 0;
+
+  @override
+  Future<bool> open() async {
+    opens++;
+    return canOpen;
+  }
+}
+
 /// An audio route with no device behind it.
 class FakeAudioRoute implements AudioRoute {
   FakeAudioRoute({this.canSwitch = true});
