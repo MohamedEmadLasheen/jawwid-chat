@@ -353,29 +353,66 @@ describe("PD-6 predicate — tenant isolation", () => {
   });
 
   it("cross-tenant data cannot satisfy the predicate even through a learner row", async () => {
-    // Attempt to bridge the tenants with a learner in org A pointing at org B's
-    // teacher. chat.enforce_same_organization() may refuse the row outright; if
-    // it does not, the predicate must still refuse the relationship.
-    let bridged = true;
-    try {
-      // The assignment gate is opened deliberately: this case is about TENANCY.
-      // Left closed, chat.guard_learner_assignment_change() refuses the row
-      // first and the test would pass without ever reaching the boundary it
-      // exists to prove.
-      await withAssignmentGate(
-        g.prisma,
-        `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
-         values ('${randomUUID()}'::uuid, '${ORG_A}'::uuid, '${w.familyOne}'::uuid,
-                 'learner_bridge', '${w.teacherB}'::uuid)`,
-      );
-    } catch {
-      bridged = false; // the database refused the row itself
-    }
+    // The bridge: a learner in org A (org A's family one) pointing at org B's
+    // teacher. With it stored, the ONLY thing between teacherB and parentOk is
+    // the organization term in chat.teacher_parent_authorized and in
+    // PrismaRelationshipService; without it, no learner joins teacherB to
+    // family one and both layers would refuse for the wrong reason.
+    const bridgeId = randomUUID();
+    const bridgeSql = `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
+         values ('${bridgeId}'::uuid, '${ORG_A}'::uuid, '${w.familyOne}'::uuid,
+                 'learner_bridge', '${w.teacherB}'::uuid)`;
 
-    await expectBothLayers(w.teacherB, w.parentOk, false);
-    // Recorded rather than asserted either way: both outcomes are safe, and
-    // which one happens is a property of the tenancy triggers, not of PD-6.
-    expect(typeof bridged).toBe("boolean");
+    // 1. RT-029 (20261109130000): written the ingestion way, the database
+    //    refuses the row for TENANCY. The assignment gate is opened
+    //    deliberately; left closed, chat.guard_learner_assignment_change()
+    //    refuses first (23001) and this would never reach the tenancy guard.
+    let refusal: { code: string; message: string } | null = null;
+    try {
+      await withAssignmentGate(g.prisma, bridgeSql);
+    } catch (e) {
+      const message = String((e as Error).message);
+      const code =
+        (e as { meta?: { code?: string } }).meta?.code ??
+        message.match(/Code: `(\w+)`/)?.[1] ??
+        "";
+      refusal = { code: String(code), message };
+    }
+    expect(refusal?.code).toBe("23514");
+    expect(refusal?.message).toMatch(/cross-organization reference/);
+
+    // 2. The trigger is a backstop, not the boundary: it can be bypassed (a
+    //    replica-mode writer, or a teacher's organization changed afterwards).
+    //    Store the bridge with every ordinary trigger off, as
+    //    rt032-revocation-journal.spec.ts does (the test connection is the
+    //    database owner, so it may set session_replication_role), and prove
+    //    BOTH layers still refuse on the organization term alone.
+    try {
+      await g.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+        await tx.$executeRawUnsafe(bridgeSql);
+      });
+      const stored = await g.prisma.learner.findUnique({ where: { id: bridgeId } });
+      expect({
+        organizationId: stored?.organizationId,
+        familyId: stored?.familyId,
+        teacherId: stored?.teacherId,
+      }).toEqual({
+        organizationId: ORG_A,
+        familyId: w.familyOne,
+        teacherId: w.teacherB,
+      });
+
+      await expectBothLayers(w.teacherB, w.parentOk, false);
+    } finally {
+      // Remove the bridge the same way it was written, so no guard on
+      // chat.learner can keep the ill-formed row alive past this case.
+      await g.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+        await tx.$executeRawUnsafe(`delete from chat.learner where id = '${bridgeId}'::uuid`);
+      });
+    }
+    expect(await g.prisma.learner.count({ where: { id: bridgeId } })).toBe(0);
   });
 });
 

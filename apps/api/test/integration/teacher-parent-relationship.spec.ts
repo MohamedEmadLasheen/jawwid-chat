@@ -161,13 +161,16 @@ describe('across organizations', () => {
       `insert into chat.teacher (id, organization_id, name, is_active)
        values ('${foreignTeacher}'::uuid, '${OTHER_ORG}'::uuid, 'teacher_foreign', true)`,
     );
-    // A learner in THIS organization taught by the foreign teacher: the
-    // relationship exists on paper and must still be refused.
-    await withAssignmentGate(
-      prisma,
-      `insert into chat.learner (id, family_id, name, teacher_id)
-       values ('${randomUUID()}'::uuid, '${s.familyId}'::uuid, 'learner_x', '${foreignTeacher}'::uuid)`,
-    );
+    // A learner in THIS organization taught by the foreign teacher. Since
+    // RT-029 (20261109130000) the database refuses the row itself; the
+    // relationship must still be refused either way.
+    await expect(
+      withAssignmentGate(
+        prisma,
+        `insert into chat.learner (id, family_id, name, teacher_id)
+         values ('${randomUUID()}'::uuid, '${s.familyId}'::uuid, 'learner_x', '${foreignTeacher}'::uuid)`,
+      ),
+    ).rejects.toThrow(/cross-organization reference/);
 
     expect(await authorized(foreignTeacher, s.parentId)).toBe(false);
   });
@@ -184,13 +187,16 @@ describe('across organizations', () => {
        values ('${foreignContact}'::uuid, '${OTHER_ORG}'::uuid, '${foreignFamily}'::uuid,
                'parent_foreign', 'primary_guardian', true, true)`,
     );
-    // A learner in the foreign family taught by OUR teacher.
-    await withAssignmentGate(
-      prisma,
-      `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
-       values ('${randomUUID()}'::uuid, '${OTHER_ORG}'::uuid, '${foreignFamily}'::uuid,
-               'learner_foreign', '${s.teacherId}'::uuid)`,
-    );
+    // A learner in the foreign family taught by OUR teacher: refused by the
+    // database since RT-029 (20261109130000).
+    await expect(
+      withAssignmentGate(
+        prisma,
+        `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
+         values ('${randomUUID()}'::uuid, '${OTHER_ORG}'::uuid, '${foreignFamily}'::uuid,
+                 'learner_foreign', '${s.teacherId}'::uuid)`,
+      ),
+    ).rejects.toThrow(/cross-organization reference/);
 
     expect(await authorized(s.teacherId, foreignContact)).toBe(false);
   });
