@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 16:10 Cairo (14:10 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 16:50 Cairo (14:50 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -149,6 +149,10 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W26 (database) | RT-029: a teacher cannot move to another organization while learners name them. **High: migration `20261109140000`**, stacked on #545 | #550 | **ACCEPT @ `c63d3c6c`**; CI running |
 | Builder W27 (database) | RT-029 parent side: `organization_id` is immutable on family, conversation and teacher (no legitimate path moves them; this also closes the parent/child race). **High: migration `20261109150000`**, stacked on #550 | #551 | **Two independent reviews, both ACCEPT @ `499b0725`** (database; breakage hunt with no code path or fixture broken); CI running |
 | Builder W28 (backend) | RT-014 follow-up: room syncs and the seat sweep lock member rows before the conversation (no deadlock with a send). Stacked on #546 | #552 | Review running |
+| Builder W29 (Android) | LR-27 (full-screen-intent permission denied on Android 14+: the ring still posts) and LR-79 (re-post a dropped CallStyle ring once). Stacked on #449, which owns `JawwidPush.kt` | — | Building (started 2026-11-09) |
+| Builder W30 (mobile) | LR-26: microphone denial is recoverable ("Open settings"). Stacked on #449. The l10n files will need a mechanical merge with #498 and #503 | — | Building |
+| Drafter W31 (store compliance) | LR-71 pre-audit: every console answer checked against `main` plus the accepted PRs. Docs only | — | Building |
+| Builder W32 (integration) | Merge rehearsal: every open PR merged in plan order on a throwaway branch, so CI tests the combined result and conflicts are resolved ahead of time. Found an unplanned semantic conflict, #528 × #498 (`review-cohort` assumed a teacher cannot be deleted) | — | Resolving; then push for CI. Never merged |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
