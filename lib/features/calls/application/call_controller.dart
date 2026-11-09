@@ -251,6 +251,16 @@ class CallController extends Notifier<CallUiState> {
   /// (Android) is up -- so it is started once and stopped once.
   final _ongoing = <String>{};
 
+  /// The last state set, kept so `ref.onDispose` can see which call was on
+  /// screen without reading `state` while the provider is being disposed.
+  CallUiState? _lastState;
+
+  @override
+  set state(CallUiState value) {
+    _lastState = value;
+    super.state = value;
+  }
+
   /// True while WE are taking the media down, so the `disconnected` snapshot that
   /// follows is not mistaken for a drop.
   bool _leavingMedia = false;
@@ -341,8 +351,10 @@ class CallController extends Notifier<CallUiState> {
       // double-release, so this is safe however we got here.
       unawaited(_media?.dispose());
       _media = null;
+      _releaseNative();
     });
 
+    _lastState = null;
     return CallUiState(canSwitchSpeaker: _audio?.canSwitch ?? false);
   }
 
@@ -864,6 +876,25 @@ class CallController extends Notifier<CallUiState> {
   void _dismissNative(String callId, CallDismissReason reason) {
     if (!_dismissed.add(callId)) return;
     unawaited(_native?.dismiss(callId: callId, reason: reason));
+  }
+
+  /// The controller is being torn down (sign-out, or a session or socket
+  /// rebuild) with a call possibly still on screen. The room is dropped, so the
+  /// native side must let go too: the ongoing-call service stops and Android
+  /// stops showing the app over the lock screen. A call already ended has had
+  /// both sent by [_goTerminal]; `_ongoing` and `_dismissed` keep this from
+  /// sending them twice.
+  void _releaseNative() {
+    for (final callId in _ongoing) {
+      unawaited(_native?.callFinished(callId: callId));
+    }
+    _ongoing.clear();
+    final last = _lastState;
+    final callId = last?.callId;
+    if (callId != null && last!.phase != CallUiPhase.ended) {
+      _dismissNative(callId, CallDismissReason.failed);
+    }
+    _lastState = null;
   }
 
   /// The one way into a terminal state.
