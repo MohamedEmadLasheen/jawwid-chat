@@ -10,8 +10,19 @@
 ///   * the microphone is asked BEFORE dialling and BEFORE answering, so a
 ///     refusal rings nobody and accepts nothing on the server;
 ///   * after a refusal the screen says what to do and offers Settings;
-///   * coming back from Settings with the microphone allowed, Try again
-///     answers / places / rejoins the SAME call rather than a new one.
+///   * with the microphone allowed WITHOUT THE APP RESTARTING (Android, or a
+///     permission granted from inside the app), Try again answers / places /
+///     rejoins the SAME call rather than a new one;
+///   * a call answered on another of this account's devices while this one
+///     was parked by the microphone ends here as answered elsewhere, and Try
+///     again then does nothing to the server;
+///   * the parked answer is forgotten when that call ends or is closed, so a
+///     later Try again on the same call never hangs at Connecting.
+///
+/// NOT MODELLED: iOS terminates the app when a permission is changed in
+/// Settings, so on iOS there is no call state to come back to. That path is
+/// a device check (`docs/qa/submission-device-test-plan.md`, SB-28), and the
+/// copy only promises "then try the call again".
 library;
 
 import 'package:flutter/material.dart';
@@ -22,13 +33,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/call_media/microphone_permission.dart';
+import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/calls/application/call_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_media_providers.dart';
+import 'package:jawwid_chat/features/calls/data/scheduled_call_repository.dart';
+import 'package:jawwid_chat/features/calls/domain/scheduled_call.dart';
 import 'package:jawwid_chat/features/calls/presentation/active_call_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
+import 'calls_page_fakes.dart';
 import 'w7_call_fakes.dart';
 
 void main() {
@@ -37,6 +52,7 @@ void main() {
   late FakeMic mic;
   late FakeMicrophoneSettings settings;
   late SpySocket socket;
+  late RecordingScheduled scheduled;
 
   List<Override> overrides({bool settingsCanOpen = true}) {
     calls = FakeCalls();
@@ -44,10 +60,12 @@ void main() {
     mic = FakeMic();
     settings = FakeMicrophoneSettings(canOpen: settingsCanOpen);
     socket = SpySocket();
+    scheduled = RecordingScheduled();
     addTearDown(socket.close);
     return [
       authControllerProvider.overrideWith(() => ScriptedAuth(signedIn())),
       callRepositoryProvider.overrideWithValue(calls),
+      scheduledCallRepositoryProvider.overrideWithValue(scheduled),
       realtimeSocketProvider.overrideWithValue(socket),
       realtimeTokenProvider.overrideWithValue(FixedTokens('token-A')),
       mediaRoomFactoryProvider.overrideWithValue(() => room),
@@ -113,13 +131,16 @@ void main() {
       expect(mic.calls, 3, reason: 'each Try again asks again');
     });
 
-    test('allowed in Settings, Try again places the call', () async {
+    test('allowed while the app stays alive (Android), Try again places the '
+        'call', () async {
       await ready();
       mic.access = MicrophoneAccess.denied;
       await startCall();
       expect(state().failure, CallUiFailure.microphone);
 
-      mic.access = MicrophoneAccess.granted; // back from Settings
+      // Android keeps the process when a permission is granted in Settings;
+      // iOS does not (SB-28), so there this state never comes back.
+      mic.access = MicrophoneAccess.granted;
       await controller().retry();
       await settle();
 
@@ -144,8 +165,8 @@ void main() {
       expect(room.connects, isEmpty);
     });
 
-    test('allowed in Settings, Try again ANSWERS the same call -- it does not '
-        'place a new one', () async {
+    test('allowed while the app stays alive (Android), Try again ANSWERS the '
+        'same call -- it does not place a new one', () async {
       await ready();
       await ring();
       mic.access = MicrophoneAccess.denied;
@@ -176,7 +197,7 @@ void main() {
       expect(calls.startCalls, isEmpty);
     });
 
-    test('the caller giving up while we are in Settings ends it here too',
+    test('the caller giving up while the microphone is refused ends it here too',
         () async {
       await ready();
       await ring();
@@ -211,6 +232,94 @@ void main() {
       expect(calls.startCalls, ['conv_1'], reason: 'no second call');
       expect(state().callId, 'call_1');
       expect(state().phase, CallUiPhase.live);
+    });
+
+    // Review P2-1 of #554.
+    test('parked by the microphone, then answered on another device: it ends '
+        'here as answered elsewhere, and Try again touches nothing', () async {
+      await ready();
+      await ring();
+      mic.access = MicrophoneAccess.denied;
+      await controller().accept();
+      await settle();
+      expect(state().phase, CallUiPhase.failed);
+      expect(state().failure, CallUiFailure.microphone);
+
+      // The same account's other phone picked it up.
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+
+      expect(state().phase, CallUiPhase.ended);
+      expect(state().outcome, CallOutcome.answered);
+      expect(state().failure, isNull);
+
+      mic.access = MicrophoneAccess.granted;
+      await controller().retry();
+      await settle();
+
+      expect(state().phase, CallUiPhase.ended);
+      expect(calls.acceptCalls, isEmpty, reason: 'never answers it here later');
+      expect(calls.tokenCalls, isEmpty, reason: 'never joins its media');
+      expect(calls.startCalls, isEmpty);
+      expect(calls.declineCalls, isEmpty);
+      expect(calls.endCalls, isEmpty);
+      expect(room.connects, isEmpty);
+    });
+
+    test('a failure after OUR OWN answer is not "answered elsewhere": the '
+        'echo of our accept leaves it alone', () async {
+      await ready();
+      await ring();
+      room.connectError = StateError('unreachable');
+      await controller().accept(); // accepted on the server; media fails
+      await settle();
+      expect(calls.acceptCalls, ['call_1']);
+      expect(state().phase, CallUiPhase.failed);
+
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+
+      expect(state().phase, CallUiPhase.failed, reason: 'still ours to retry');
+    });
+
+    // Review P3-1 of #554.
+    test('a parked answer is forgotten once that screen is closed: a later '
+        'Join of the same call, refused at the media and then allowed, '
+        'rejoins instead of hanging at Connecting', () async {
+      await ready();
+      await ring();
+      mic.access = MicrophoneAccess.denied;
+      await controller().accept();
+      await settle();
+      expect(state().failure, CallUiFailure.microphone);
+
+      controller().dismiss(); // Close
+      expect(state().phase, CallUiPhase.idle);
+
+      scheduled.joinAnswer = const ScheduledJoin(
+        callId: 'call_1',
+        conversationId: 'conv_1',
+        mode: ScheduledJoinMode.joined,
+      );
+      await controller().joinScheduled(
+        scheduledCallId: 'sc_1',
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      await settle();
+      expect(calls.acceptCalls, ['call_1']);
+      expect(state().phase, CallUiPhase.failed);
+      expect(state().failure, CallUiFailure.microphone);
+
+      mic.access = MicrophoneAccess.granted;
+      await controller().retry();
+      await settle();
+
+      expect(state().phase, CallUiPhase.live, reason: 'not stuck at Connecting');
+      expect(state().callId, 'call_1');
+      expect(calls.acceptCalls, ['call_1'], reason: 'already accepted once');
+      expect(calls.startCalls, isEmpty);
     });
   });
 
@@ -261,7 +370,7 @@ void main() {
       expect(find.text(l10n.callFailedMicrophone), findsOneWidget);
       expect(find.text(l10n.callMicrophoneSettingsHint), findsOneWidget);
       expect(find.byKey(openSettings), findsOneWidget);
-      expect(find.text(l10n.callOpenSettings), findsOneWidget);
+      expect(find.text(l10n.notificationPermissionAction), findsOneWidget);
       expect(find.text(l10n.retryAction), findsOneWidget);
 
       await tester.tap(find.byKey(openSettings));
@@ -269,8 +378,8 @@ void main() {
       expect(settings.opens, 1);
     });
 
-    testWidgets('back from Settings with the microphone allowed, Try again '
-        'places the call', (tester) async {
+    testWidgets('the microphone allowed while the app stays alive (Android), '
+        'Try again places the call', (tester) async {
       await tester.pumpWidget(harness());
       await tester.pump();
       final l10n = await L10n.delegate.load(const Locale('en'));
@@ -293,8 +402,8 @@ void main() {
       expect(find.byKey(openSettings), findsNothing);
     });
 
-    testWidgets('a refused answer explains; allowed later, Try again answers it',
-        (tester) async {
+    testWidgets('a refused answer explains; allowed while the app stays alive '
+        '(Android), Try again answers it', (tester) async {
       await tester.pumpWidget(harness());
       await tester.pump();
       final l10n = await L10n.delegate.load(const Locale('en'));
@@ -352,8 +461,22 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(ar.callMicrophoneSettingsHint), findsOneWidget);
-      expect(find.text(ar.callOpenSettings), findsOneWidget);
-      expect(find.text(en.callOpenSettings), findsNothing);
+      expect(find.text(ar.notificationPermissionAction), findsOneWidget);
+      expect(find.text(en.notificationPermissionAction), findsNothing);
+    });
+
+    // Review P2-2 / P3-2 of #554: honest on both platforms, and it names the
+    // PHONE's Settings, not the app's own settings screen.
+    testWidgets('the hint names the phone\'s Settings and promises only "try '
+        'the call again"', (tester) async {
+      final ar = await L10n.delegate.load(const Locale('ar'));
+      final en = await L10n.delegate.load(const Locale('en'));
+
+      expect(ar.callMicrophoneSettingsHint, contains('إعدادات الجهاز'));
+      expect(en.callMicrophoneSettingsHint, contains("your phone's Settings"));
+      expect(en.callMicrophoneSettingsHint, isNot(contains('tap Try again')),
+          reason: 'iOS restarts the app; there is no Try again to come back to');
+      expect(ar.callMicrophoneSettingsHint, isNot(contains('«إعادة المحاولة»')));
     });
 
     testWidgets('a network failure offers no Settings', (tester) async {

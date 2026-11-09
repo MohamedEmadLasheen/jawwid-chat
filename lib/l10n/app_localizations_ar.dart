@@ -382,10 +382,7 @@ class L10nAr extends L10n {
 
   @override
   String get callMicrophoneSettingsHint =>
-      'اسمح لجَوِّد باستخدام الميكروفون من الإعدادات، ثم اضغط «إعادة المحاولة».';
-
-  @override
-  String get callOpenSettings => 'فتح الإعدادات';
+      'اسمح لجَوِّد باستخدام الميكروفون من إعدادات الجهاز، ثم حاول الاتصال مرة أخرى.';
 
   @override
   String get callFailedNotAllowed => 'هذه المكالمة غير متاحة.';

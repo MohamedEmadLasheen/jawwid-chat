@@ -89,8 +89,13 @@ abstract interface class MicrophoneSettings {
 /// and is a dependency decision. Until then Android shows the instruction
 /// without the button. The web portal has no Settings page to open.
 ///
-/// WHAT IS NOT VERIFIED: that iOS opens the page. No device run was made for
-/// this change; the first proof is a QA build.
+/// iOS TERMINATES THE APP when a privacy permission is changed in Settings, so
+/// coming back is a fresh launch: the failed call screen is gone and the
+/// person calls again. Nothing here tries to restore it (no restart recovery).
+///
+/// WHAT IS NOT VERIFIED: that iOS opens the page, and whether a call still
+/// ringing reappears after the restart (LR-08). No device run was made for
+/// this change; the first proof is a QA build (SB-28).
 class PlatformMicrophoneSettings implements MicrophoneSettings {
   PlatformMicrophoneSettings({
     Future<bool> Function(Uri uri)? launch,

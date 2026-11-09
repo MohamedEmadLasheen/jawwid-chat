@@ -216,7 +216,10 @@ class _StatusLine extends StatelessWidget {
 
 /// LR-26: the way out of a refused microphone, so it never dead-ends. What to
 /// do, in words, and the button to Settings where the platform can open it.
-/// Try again (in the actions below) then answers, places or rejoins the call.
+/// The words promise only "then try the call again": on Android the app stays
+/// alive and Try again (in the actions below) answers, places or rejoins the
+/// call; iOS restarts the app when the permission changes, so there the person
+/// calls again (SB-28 in `docs/qa/submission-device-test-plan.md`).
 class _MicrophoneHelp extends ConsumerWidget {
   const _MicrophoneHelp();
 
@@ -242,7 +245,7 @@ class _MicrophoneHelp extends ConsumerWidget {
                 key: const ValueKey('call-open-settings'),
                 style: TextButton.styleFrom(foregroundColor: CallPalette.foreground),
                 icon: const Icon(Icons.settings),
-                label: Text(l10n.callOpenSettings),
+                label: Text(l10n.notificationPermissionAction),
                 onPressed: () => settings.open(),
               ),
             ),

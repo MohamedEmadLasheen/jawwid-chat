@@ -736,14 +736,8 @@ abstract class L10n {
   /// No description provided for @callMicrophoneSettingsHint.
   ///
   /// In en, this message translates to:
-  /// **'Allow microphone access for Jawwid in Settings, then tap Try again.'**
+  /// **'Allow the microphone for Jawwid in your phone\'s Settings, then try the call again.'**
   String get callMicrophoneSettingsHint;
-
-  /// No description provided for @callOpenSettings.
-  ///
-  /// In en, this message translates to:
-  /// **'Open settings'**
-  String get callOpenSettings;
 
   /// No description provided for @callFailedNotAllowed.
   ///
