@@ -50,8 +50,9 @@ issue them.
 
 Two of these are enforced mechanically rather than by discipline:
 
-- `scripts/infra/scan-secrets.sh` — runs in CI over the worktree, and over git
-  history for committed `.env` files only (see §7). Reports file and rule; never
+- `scripts/infra/scan-secrets.sh` — runs in CI over the worktree. Its history
+  rule (`.env` file names ever added) sees **no history in CI today**, because the
+  CI checkout is shallow (see §7). Reports file and rule; never
   prints the matching text, because echoing a leaked key into a CI log copies
   the leak into a second system. What it looks for is in §3.1.
 - `scripts/infra/check-web-env.sh` — refuses a web build whose `VITE_*`
@@ -246,15 +247,17 @@ project was provisioned, and what to repeat if it is ever rebuilt.
 - `scan-secrets.sh` is a tripwire covering this project's realistic failure
   modes, not a comprehensive scanner. Adding a managed scanner is worthwhile once
   the repository is hosted.
-- **The history scan checks `.env` file NAMES only.** CI (`.github/workflows/ci.yml`
-  → `scripts/qa/guards.sh secret-scan` → `scan-secrets.sh --history`) runs the
-  §3.1 content rules over the current worktree only; for history, rule 4 lists
-  `.env` files ever added. A Stripe key, private key or keystore committed in one
-  commit and deleted in the next is therefore invisible to CI, though it stays
-  in every clone. Closing this needs either the content rules run over
+- **CI checks no git history today.** CI (`.github/workflows/ci.yml` →
+  `scripts/qa/guards.sh secret-scan` → `scan-secrets.sh --history`) checks out with
+  `actions/checkout` and no `fetch-depth`, i.e. depth 1: only the tip commit exists
+  on the runner. The §3.1 content rules run over that worktree, and rule 4 (`.env`
+  file names ever added) sees only that one commit. So anything committed in one
+  commit and deleted in the next (a `.env`, a Stripe key, a private key, a
+  keystore) is invisible to CI, though it stays in every clone. Even with full
+  history, rule 4 checks `.env` file names only. Closing this needs either the content rules run over
   `git log -p` (slow on a large history; must still print only commit and rule)
-  or a managed history scanner as a CI step; the latter is a `.github/` change
-  that needs the Code Owner. Until then, after any suspected leak, scan history
+  or a managed history scanner as a CI step, and in either case `fetch-depth: 0` on
+  that job's checkout. Both are `.github/` changes that need the Code Owner. Until then, after any suspected leak, scan history
   by hand and follow §5 regardless of what CI says.
 - Binary files are not searched for content (`git grep -I`). Key and keystore
   files are caught by name instead (§3.1); a credential inside some other binary
