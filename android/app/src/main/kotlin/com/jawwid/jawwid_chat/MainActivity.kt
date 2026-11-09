@@ -182,6 +182,9 @@ class MainActivity : FlutterFragmentActivity() {
                     CallForegroundService.stop(applicationContext)
                     result.success(null)
                 }
+                // LR-27: false on Android 14+ when full-screen calls are not allowed (the ring is
+                // then a heads-up notification), so the app can ask the user to allow them.
+                "fullScreenIntentAllowed" -> result.success(JawwidPush.mayUseFullScreenIntent(applicationContext))
                 else -> result.notImplemented()
             }
         }
