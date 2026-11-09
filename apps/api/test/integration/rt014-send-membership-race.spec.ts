@@ -17,6 +17,9 @@
  *   - a recipient removed the same way is not given a receipt;
  *   - a removal that also locks the conversation row after its member row does
  *     not deadlock with the send;
+ *   - a writer that locks the conversation first (a room sync's member insert,
+ *     then a removal) does deadlock with it: Postgres cancels the send, which
+ *     runs once more from the start and is sent exactly once;
  *   - a send already past its locked checks is ordered BEFORE a removal, which
  *     waits for it;
  *   - control: ordinary sends are unchanged.
@@ -183,6 +186,56 @@ describe('RT-014 · a send and a concurrent membership removal', () => {
 
     const m = await sending;
     expect(await receiptHolders(m.id)).not.toContain(s.otherParentId);
+  });
+
+  it('a room sync that locks the conversation (a member insert) before removing someone deadlocks with the send: the send is cancelled, runs again, and is sent once', async () => {
+    const expected = await liveExcept(s.parentId, s.otherParentId);
+    const keyShared = deferred();
+    const removeNow = deferred();
+    const removed = deferred();
+    const commit = deferred();
+    const sync = other.$transaction(async (tx) => {
+      // Postgres cancels whichever waiter's deadlock check runs first. The
+      // send's runs after the default deadlock_timeout (1 s); the sync's is
+      // put far later, so the victim is always the send -- the case under test.
+      await tx.$executeRawUnsafe(`set local deadlock_timeout = '30s'`);
+      // The lock a conversation_member insert's foreign-key check takes on its
+      // conversation (department-room, trial-group and supervision syncs add
+      // a member before they remove one).
+      await tx.$queryRawUnsafe(`select 1 from chat.conversation where id = '${groupId}'::uuid for key share`);
+      keyShared.resolve();
+      await removeNow.promise;
+      await tx.$executeRawUnsafe(removeSql(s.otherParentId));
+      removed.resolve();
+      await commit.promise;
+    }, { timeout: 30_000 });
+    await keyShared.promise;
+
+    const clientMessageId = randomUUID();
+    const sending = g.messages.send({ conversationId: groupId, senderId: s.parentId, body: 'deadlocked once', clientMessageId });
+    // The send holds its FOR SHARE on the member rows and waits for the
+    // conversation row, which the sync's KEY SHARE blocks.
+    await waitUntil(async () => (await lockWaiters()) > 0, 'the send waits on the conversation row');
+    removeNow.resolve();
+    // The removal waits on the send's FOR SHARE: a cycle. It can only go
+    // through once the send's transaction is gone -- and that transaction
+    // cannot commit while it waits on the sync -- so reaching here means
+    // Postgres cancelled the send (40P01) and rolled it back.
+    await removed.promise;
+    commit.resolve();
+    await sync;
+
+    // Not a 500: the send ran again from the start and went through, once,
+    // on the membership the sync committed.
+    const m = await sending;
+    expect(await g.prisma.message.count({ where: { clientMessageId } })).toBe(1);
+    expect(await g.prisma.message.count({ where: { conversationId: groupId, body: 'deadlocked once' } })).toBe(1);
+    const holders = await receiptHolders(m.id);
+    expect(holders).not.toContain(s.otherParentId);
+    expect(holders).toEqual(expected);
+    expect(
+      (await g.prisma.conversationMember.findFirst({ where: { conversationId: groupId, actorId: s.otherParentId } }))?.leftAt,
+    ).not.toBeNull();
   });
 
   it('a send already past its locked checks is ordered BEFORE a removal, which waits for it', async () => {

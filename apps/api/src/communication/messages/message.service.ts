@@ -6,6 +6,7 @@ import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { ContentFilterService } from '../../platform/content-filter/content-filter.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
+import { retryOnTransactionConflict } from '../../platform/transaction-retry';
 import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import type {
@@ -214,7 +215,27 @@ export class MessageService {
   // Send
   // -------------------------------------------------------------------
 
+  /**
+   * RT-014: the send locks the conversation's member rows, then the
+   * conversation row. Some writers take them the other way round -- a room
+   * sync whose member insert takes KEY SHARE on the conversation (foreign-key
+   * check) before it removes someone, chat.erase_account, a seat sweep
+   * removing two seats of one conversation -- so the two can deadlock, and
+   * Postgres cancels one of them (40P01). When it cancels the send, the whole
+   * send runs once more from the start: the pre-check, then the transaction.
+   *
+   * Safe to repeat: the cancelled transaction is rolled back whole, and
+   * nothing before it writes. Nothing after it can raise a deadlock either
+   * (plain reads), so a retry never follows a committed message. And with a
+   * clientMessageId the retry's idempotency fast path, then the unique index,
+   * returns the one message rather than a second. A second deadlock is a
+   * retryable 503 (DATABASE_UNAVAILABLE), never a 500.
+   */
   async send(input: SendMessageInput): Promise<MessageDto> {
+    return retryOnTransactionConflict(() => this.sendOnce(input));
+  }
+
+  private async sendOnce(input: SendMessageInput): Promise<MessageDto> {
     const now = new Date();
     const actor = await this.conversations.requireActor(input.senderId);
     const conv = await this.conversations.requireConversation(input.conversationId);
@@ -339,10 +360,14 @@ export class MessageService {
       const created = await this.prisma.$transaction(async (tx) => {
         // RT-014: the membership this send is decided on is held until it
         // commits. FOR SHARE on every live member row of the conversation,
-        // taken BEFORE the conversation row: every removal path updates its
+        // taken BEFORE the conversation row: a plain removal updates its
         // member row first and only then takes the conversation row (the
         // announcement it posts locks it), so the opposite order would
-        // deadlock with them. Id order, as the delivery locks take the same
+        // deadlock with it. Writers that take a lock this send needs before
+        // they update a member row (a member insert's foreign-key KEY SHARE on
+        // the conversation, erase_account's account lock, a sweep removing two
+        // seats of one conversation) can still deadlock with it; `send`
+        // retries once for them. Id order, as the delivery locks take the same
         // rows (RT-009). A removal that committed first is skipped here (its
         // row no longer matches `left_at IS NULL` once re-checked); one that
         // arrives later waits for this commit, so the message is ordered
