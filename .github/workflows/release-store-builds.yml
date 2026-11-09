@@ -59,9 +59,11 @@ env:
   # SHA-256 of each release archive; a download that does not match is refused. The SHA-256 values
   # must be copied from the release (GitHub shows each asset's sha256 digest) by whoever bumps the
   # version; preflight refuses to start while either is not 64 hex digits.
-  AGE_VERSION: v1.2.1
-  AGE_SHA256_LINUX_AMD64: ''  # sha256 of age-v1.2.1-linux-amd64.tar.gz
-  AGE_SHA256_DARWIN_ARM64: '' # sha256 of age-v1.2.1-darwin-arm64.tar.gz
+  # age v1.3.2 (2026-08-29). The digests are the ones GitHub publishes for the release assets
+  # (gh api repos/FiloSottile/age/releases/tags/v1.3.2 --jq '.assets[].digest').
+  AGE_VERSION: v1.3.2
+  AGE_SHA256_LINUX_AMD64: 'cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10'
+  AGE_SHA256_DARWIN_ARM64: 'e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5'
 
 jobs:
   preflight:
