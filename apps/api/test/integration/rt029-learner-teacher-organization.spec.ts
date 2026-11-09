@@ -101,7 +101,9 @@ describe('the guard is installed, after the assignment gate', () => {
     expect(names).toEqual(expect.arrayContaining(['learner_assignment_is_guarded', 'learner_same_organization', 'learner_teacher_same_organization']));
     const def = rows.find((r) => r.tgname === 'learner_teacher_same_organization')!.def;
     expect(def).toMatch(/BEFORE INSERT OR UPDATE OF (organization_id, teacher_id|teacher_id, organization_id) ON chat\.learner/);
-    expect(def).toMatch(/FOR EACH ROW EXECUTE FUNCTION chat\.enforce_same_organization\('teacher', 'teacher_id'\)/);
+    // 20261109160000 replaced the shared invoker guard with a dedicated
+    // SECURITY DEFINER function (fails closed when the teacher is not visible).
+    expect(def).toMatch(/FOR EACH ROW EXECUTE FUNCTION chat\.enforce_learner_teacher_organization\(\)/);
     // BEFORE row triggers fire in name order: authority, then tenancy.
     expect(names.indexOf('learner_assignment_is_guarded')).toBeLessThan(names.indexOf('learner_teacher_same_organization'));
   });
@@ -158,7 +160,8 @@ describe('same-organization writes keep working', () => {
     expect(await refusal(() => db.$executeRawUnsafe(`update chat.learner set level = 'B1' where id = '${ids.learnerA}'::uuid`))).toBeNull();
   });
 
-  it('an unknown teacher is still refused by the foreign key, not silently accepted', async () => {
+  // Since 20261109160000 the guard refuses it first, with the same SQLSTATE as the foreign key.
+  it('an unknown teacher is still refused (23503), not silently accepted', async () => {
     const out = await refusal(gated(insertLearner(randomUUID(), ORG_A, ids.familyA, randomUUID())));
     expect(out?.code).toBe('23503');
   });
