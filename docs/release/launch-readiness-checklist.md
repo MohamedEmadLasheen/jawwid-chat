@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 04:22 Cairo (02:22 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 04:35 Cairo (02:35 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -115,13 +115,16 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W16 (security docs) | Red-team register re-verified on `main`: 34 of 39 fixed or closed (RT-010 closed by the lead's decision), 5 open (RT-014, RT-019, RT-029, RT-037, RT-038) | #539 | **ACCEPT @ `b7e5c3a4`** |
 | Builder W17 (security tooling) | The secret scan catches Stripe, DigitalOcean, Google, Meta and Sentry keys, SMTP and Redis URLs with a password, and key files by name. Documented gap: CI's shallow checkout means no history is scanned; closing it needs `fetch-depth: 0`, a Code Owner change | #538 | **ACCEPT @ `63025b5b`** |
 | Builder W18 (test) | A CI test that failed only between 01:00 and 02:00 UTC: an earlier make-up lesson double-booked the teacher. The API's refusal was correct; the test now steps to the teacher's next free half hour | #541 | **ACCEPT @ `e36dbe60`**, CI 30/30 |
+| Lead | LR-46: CI's secret scan sees the whole git history. The step deepens by SHA, so no `origin/*` refs appear for other steps | #542 | **ACCEPT @ `ccc3ed5b`** (the first version used `fetch-depth: 0`, whose side effect the review caught); **owner Code Owner approval needed** |
+| Builder W19 (infra) | LR-29: production component alerts (restarts, memory, CPU) on api and worker, through the spec generator; CI validates with `doctl` | #543 (into #533's branch) | **ACCEPT @ `b6dc2326`** |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
 1. **Owner merge approvals waiting.** Independently reviewed and accepted at the exact head, with CI green there (2026-11-09):
    - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541.
-   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow) and #528 (workflow; High: every run is a separate approval).
+   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history; CI finishing).
    - **Stacked on #449, follow once it merges:** #524, #529, #535, and #537 (High: migration; after #534).
+   - **Stacked on #533:** #543 (production alerts on api and worker; accepted).
    - **Older:** #497, #498, #449, #517.
    - **Merge-order notes:** #534 before #537. When #498 and #537 meet, the session lock goes inside #498's `run()` helper (noted on both PRs).
 2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
