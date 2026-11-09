@@ -250,11 +250,11 @@ class AuthController extends Notifier<AuthState> {
     _recordedPending = null;
     var outcome = SignOutOutcome.ended;
     try {
-      final repository = _repository;
-      if (repository is SignOutReporting) {
-        outcome = await repository.signOutReporting();
+      // SignOutReporting is not an AuthRepository subtype, so `is` would not promote.
+      if (_repository case final SignOutReporting reporting) {
+        outcome = await reporting.signOutReporting();
       } else {
-        await repository.signOut();
+        await _repository.signOut();
       }
     } catch (error) {
       // A failed sign-out call must not strand the user signed in locally -- whatever it

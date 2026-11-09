@@ -110,7 +110,7 @@ void main() {
       store: pending,
       server: repo,
       clock: () => t0,
-      timer: (_, __) => _NoTimer(),
+      timer: (_, _) => _NoTimer(),
       signInWait: const Duration(milliseconds: 50),
     );
     provider = NotifierProvider<AuthController, AuthState>(

@@ -219,7 +219,7 @@ class SecurePendingSignOutStore implements PendingSignOutStore {
       if (decoded is List) {
         return [
           for (final item in decoded)
-            if (PendingSignOut.fromJson(item) case final entry?) entry,
+            ?PendingSignOut.fromJson(item),
         ];
       }
     } on FormatException {
