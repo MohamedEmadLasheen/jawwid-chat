@@ -48,6 +48,29 @@ and #542 show BLOCKED only because they wait for the owner's Code Owner approval
   migrations in filename order, so order is not strictly required for correctness. Filename order keeps CI and any
   future staging ledger in step.
 
+## Full rehearsal (2026-11-09): the combined result passes CI
+
+Every open launch PR (37) was merged in this plan's order onto a throwaway branch,
+`claude/merge-rehearsal-2026-11-09` @ `4071771c`, which is never merged. CI run `42640097090` passed every job,
+including the four integration shards, G-19 migrations, the end-to-end smoke and Flutter. The conflicts it found and
+how each was resolved form the recipe for the real merges:
+
+| When merging | Conflict | Resolution |
+|---|---|---|
+| #522 after #531 | `store_submission_config_test.dart` | keep both tests |
+| **#498 after #528** (not in the earlier plan) | `cli/review-cohort.ts` header; `review-cohort.spec.ts` | Both behaviours hold (#528's disposable parent has no teacher). Header describes three cases; #498's new test expects **3** active logins, not 2, and checks the disposable parent is unchanged |
+| #498 after #497 | `API-CONTRACT.md` (both add §1.1c); `error-codes.md` | Terms keeps §1.1c (code cites it); account deletion becomes **§1.1d** |
+| #498 after #497 | PD-58 coverage test | add #498's two write routes to `apps/api/test/unit/legal/ungated-writes.ts` (cancel request; staff complete) and the "Never gated" list |
+| #449 after #497 | PD-58 coverage test | add `POST /me/feedback/:id/reply-seen` to `ungated-writes.ts` |
+| #498, #449 | `pd040-route-permissions.md` count | 600 after #498, 601 after #449 |
+| #535 after main | `native_call_bridge_test.dart` (both add group "N7") | keep LR-74's N7; rename #535's to N8 |
+| #529, #535 | device plan | keep SB-28 and SB-29 |
+| #537 after #534 | controller, spec | take #537's |
+| #537 after #498 | `account-deletion.service.ts` | the session lock goes at the top of #498's shared `run()` |
+| #545, #551 after #539 | `findings.md` | keep #539's rows; RT-029 gets both notes |
+
+Each real merge of a stacked or conflicting PR still gets its own CI run and a delta review at its new head.
+
 ## Batches
 
 | Batch | PRs, in merge order (head SHA) | Purpose | Risk | Verify afterwards |
@@ -62,6 +85,8 @@ and #542 show BLOCKED only because they wait for the owner's Code Owner approval
 | **6b. After #545** (High, one PR at a time) | #550 `bbebe272` (stacked on #545), then #551 `b1ee304f` (stacked on #550) | RT-029: a teacher cannot move organization while learners name them; `organization_id` immutable on family, conversation and teacher | **High: migrations `20261109140000`, `20261109150000`.** #551 had two independent reviews (database; breakage hunt over every write path and open PR) | after each: retarget to `main`, merge `main` in, CI, delta review, then main CI including G-19 |
 | **3b. After #546** | #552 `7ac19737` (stacked on #546) | RT-014 follow-up: room syncs and the seat sweep lock member rows before the conversation | Medium: concurrency; no migration | retarget, CI, delta review, then main CI with integration shards |
 | **4b. Store tooling** (Code Owner where `.github/` is touched) | #547 `66f9418f`, #548 `5349bf83`, #549 `6365275f` | signed store builds on GitHub runners (inert until secrets and owner approval exist); deploy inputs through env; store screenshots | #547 High (signing workflow; merging creates no key and runs nothing) | main CI green |
+| **7. New, after their bases** | #554 (LR-26, on #449), #555 and #556 (docs), #557 (LR-11 explain-first) | | Low / Low / Low / Medium | main CI |
+| **Excluded** | #553: duplicate of #524, do not merge | | | |
 | **Separate** | #503 (another session's PR; it shares `lib/l10n/*` with #449 and #498), #517 (Code Owner, `scripts/qa`), #543 (after #533, then retarget) | | Low / Low / Low | main CI |
 
 High-risk PRs are never batched together: batch 5 is one PR, and batch 6 merges one PR at a time with main CI checked
