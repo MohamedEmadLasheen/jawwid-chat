@@ -100,7 +100,7 @@ rest.
   their usage is the same as it will be at launch. No tester list, name or e-mail goes into this
   repository, a ticket or a chat log.
 
-### 3.4 What a tester must do (text the owner can send, in Arabic and English)
+### 3.4 What a tester must do (English draft; the Arabic version is to be prepared and approved by the owner before sending)
 
 1. On the phone, open the **opt-in link** with the Google account named in the invitation and tap
    **Become a tester**.
@@ -123,10 +123,10 @@ Day 0 is the day the requirement is detected (the first-upload day).
 |---|---|---|---|
 | 0 | Detect (§2). Create the track, tester list, promote the AAB, start rollout. Copy the opt-in link. | Send invitations to 16 to 20 staff and families with the §3.4 text. | Confirm which build (SHA, version code) is on the track; note it in the tracker. |
 | 1 | Check the track is live (Google's closed-test review done). Read the opted-in count. | Chase everyone who has not opted in. | Watch Sentry and the pre-launch report for crashes on the track build. |
-| 2 | Opted-in count must be **12 or more** today. If not, add more addresses and invite again. The 14 days are counted from when the count is at least 12 and stays there. | Add testers until 12 or more are in. | Triage any tester report; fix only blockers. |
+| 2 | Opted-in count must be **12 or more** today. If not, add more addresses and invite again. (UNVERIFIED: assume the 14 days count only from the first day at 12 or more; call that day **S**.) | Add testers until 12 or more are in. | Triage any tester report; fix only blockers. |
 | 3 to 13 | **Every day:** read the opted-in count on the Testers tab and write the date and count in the tracker. If it drops below 12, add testers the same day. | Short weekly check-in with testers: are they still using the app? | Collect feedback into a short list (what testers said, what was changed) for the application in §4. |
-| 14 | Confirm 14 consecutive days at 12 or more. Take a screenshot of the counter. | Thank the testers; tell them the app stays installed and keeps working. | Prepare the answers in §4 with the owner. |
-| 15 | **Apply for production access** (§4). | | |
+| S + 13 | Confirm 14 consecutive days at 12 or more (S is the first day at 12 or more; if that was day 2, this is day 15). Take a screenshot of the counter. | Thank the testers; tell them the app stays installed and keeps working. | Prepare the answers in §4 with the owner. |
+| S + 14 | **Apply for production access** (§4), and not before. | | |
 | 15 to ~22 | Wait for Google's answer (typically days; UNVERIFIED). If refused, read the reason, fix, and reapply; the 14 days may restart. | | Fix anything Google names. |
 | after approval | Production release, staged rollout (readiness review §6 step 6). | | Monitor crash-free sessions. |
 
@@ -138,8 +138,7 @@ reset rule; the readiness review D-2 says "the 14 days restart").
 ## 4. Applying for production access **[OWNER, Play Console]**
 
 After the 14 days, the Production page offers an application form (UNVERIFIED label: "Apply for
-production access"). From Google's published description, the form asks about the closed test in
-general terms. Prepare plain, true answers on these topics; do not invent numbers:
+production access"). **UNVERIFIED: Google's pages could not be read for this plan, so the topics below are a likely outline, not Google's form.** Prepare plain, true answers on these topics; do not invent numbers:
 
 - **About the test**: how many testers took part, how they were recruited, how long the test ran,
   and whether the testers represent the app's real audience (families and staff of the academy).
@@ -150,9 +149,8 @@ general terms. Prepare plain, true answers on these topics; do not invent number
 - **About the app**: a short description of what it does and who it is for, consistent with the
   listing (`listing-copy.md`) and the App content declarations (`play-declarations.md` §1).
 
-Google's reviewers read the answers together with the test data they already hold. Answers are
-reviewed by a person, and the response can take several days (UNVERIFIED). If the application is
-refused, Google gives a reason and the test can be continued or repeated and a new application filed.
+UNVERIFIED: how Google reviews the answers, how long it takes, and what a refusal contains. If the application is
+refused, plan to continue or repeat the test and apply again.
 Treat a refusal as a 14-day cost in the plan, not a stop.
 
 ## 5. Effect on the launch date
