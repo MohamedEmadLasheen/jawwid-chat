@@ -38,7 +38,9 @@ import '../domain/rewards.dart';
 /// lock covers the app by then, which drops it as above. Both are needed (review of
 /// #563, P2): the guard is "shown over the lock screen", not "unlocked", so a call
 /// that ends with the phone still locked turns it false while the app is behind
-/// the lock screen; the reward then waits for the app to come back to the front.
+/// the lock screen; the reward then waits for the app to come back to the front. The
+/// same holds for a reward that arrives while the app is not in front at all (one given
+/// a moment after such a call ended): it is kept and plays once the app is back.
 /// Unlocked, nothing changes: it plays over everything, a call included.
 class RewardCelebrationHost extends ConsumerStatefulWidget {
   const RewardCelebrationHost({super.key, required this.child});
@@ -56,7 +58,8 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost>
   late final AnimationController _burst = AnimationController(vsync: this, duration: RewardCelebrationHost.duration);
   ({int seq, RewardGiven reward})? _showing;
 
-  /// LR-46: the latest reward that arrived while the app was shown over the lock screen.
+  /// LR-46: the latest reward that arrived while the app was shown over the lock screen,
+  /// or was not in front.
   ({int seq, RewardGiven reward})? _pending;
 
   @override
@@ -75,8 +78,8 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost>
     super.dispose();
   }
 
-  /// Review of #563, P2: a kept reward whose guard turned false while the app was behind
-  /// the lock screen plays once the app is back in front.
+  /// Review of #563, P2: a kept reward (its guard turned false while the app was behind the
+  /// lock screen, or it arrived while the app was not in front) plays once the app is back.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || _pending == null) return;
@@ -131,8 +134,9 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost>
       }
       if (next.seq == previous?.seq) return;
       if (_appLockHides) return;
-      // One already waiting (over the lock screen, or behind it): this newer one waits instead.
-      if (ref.read(lockedCallGuardProvider) || _pending != null) {
+      // Over the lock screen, one already waiting, or the app behind (a call that ended with
+      // the phone still locked; review of #563 delta, P2): this one waits, the newest kept.
+      if (ref.read(lockedCallGuardProvider) || _pending != null || !_inFront) {
         _pending = next;
         return;
       }

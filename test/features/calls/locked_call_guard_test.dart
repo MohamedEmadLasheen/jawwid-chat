@@ -602,5 +602,102 @@ void main() {
       expect(celebration(), findsNothing);
       expect(chime.plays, 1, reason: 'it plays once, with its sound');
     });
+
+    // Review of #563 delta, P2: a reward that ARRIVES after the call ended with the phone still
+    // locked (the socket still alive, the guard already false, nothing kept) is not heard on the
+    // locked phone either: it waits for the app to come back to the front.
+    testWidgets('a reward that arrives after the call ended on a locked phone waits until the app is in front',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+
+      // The call ends; the lock screen is back and the app is behind it.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await endedOverLockScreen(tester);
+      expect(container(tester).read(lockedCallGuardProvider), isFalse);
+
+      // The teacher gives the star a moment after hanging up.
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0, reason: 'nothing heard on a locked phone');
+
+      // The person unlocks; the app comes back to the front.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1, reason: 'it plays once, with its sound');
+    });
+
+    // Review of #563, P3-3: one already playing when the app goes over the lock screen ends
+    // there; it does not come back part-way through when the app leaves the lock screen.
+    testWidgets('one playing when the app goes over the lock screen is stopped, not resumed later',
+        (tester) async {
+      await ringing(tester, locked: false, rewards: true);
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(chime.plays, 1);
+
+      final guard = container(tester).read(lockedCallGuardProvider.notifier);
+      keyguard.locked = true;
+      await guard.refresh();
+      await tester.pump();
+      expect(container(tester).read(lockedCallGuardProvider), isTrue);
+      expect(celebration(), findsNothing);
+
+      // Off the lock screen again well within the 2.5 s: the stopped one stays gone.
+      keyguard.locked = false;
+      await guard.refresh();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(container(tester).read(lockedCallGuardProvider), isFalse);
+      expect(celebration(), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1, reason: 'not heard a second time');
+    });
+
+    // Review of #563, P3: a newer reward that arrives while one is kept replaces it (it carries
+    // the lesson's newest tally); only the newer one plays, once.
+    testWidgets('a newer reward while one is kept and the app is behind the lock screen replaces it, played once',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsNothing);
+
+      // The call ends with the phone still locked; the app is behind the lock screen.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await endedOverLockScreen(tester);
+
+      socket.emit(rewardGivenEvent, _star(4));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(4)), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing, reason: 'the older one does not follow');
+      expect(chime.plays, 1, reason: 'played once');
+    });
   });
 }
