@@ -84,7 +84,9 @@ object JawwidPush {
         ensureChannels(context)
         if (isCall(data)) {
             showIncomingCall(context, data["callId"]!!, data["conversationId"], data["title"], data["body"])
-        } else if (!inForeground) {
+        } else {
+            // PD-32: its own rule decides, in front or not -- chat stays quiet while the app
+            // is open (already on screen), other kinds are drawn once (PushPayload.shouldDisplay).
             showMessage(context, data)
         }
     }
@@ -147,13 +149,34 @@ object JawwidPush {
         notify(context, notificationId(callId), builder)
     }
 
+    /**
+     * An ordinary notification (PD-32), drawn by the app because FCM sends data only.
+     *
+     *   - chat is not drawn while the app is open, where it is already on screen; every
+     *     other kind is drawn once, in any state, as iOS does ([PushPayload.shouldDisplay]);
+     *   - one per conversation for chat, one per delivery otherwise ([PushPayload.tag]),
+     *     so a repeated delivery replaces itself and never stacks a duplicate;
+     *   - the tap opens the exact item: an explicit intent carrying the allow-listed ids and
+     *     this install's nonce (MainActivity.handlePushTap);
+     *   - private on the lock screen: the public version names no one.
+     */
     private fun showMessage(context: Context, data: Map<String, String>) {
-        val title = data["title"]?.takeIf { it.isNotBlank() } ?: context.getString(R.string.app_name)
-        val body = data["body"]?.takeIf { it.isNotBlank() } ?: context.getString(R.string.message_new)
+        if (!PushPayload.shouldDisplay(data, inForeground)) return
+        val title = data["title"]?.takeIf { it.isNotBlank() }?.take(200) ?: context.getString(R.string.app_name)
+        val body = data["body"]?.takeIf { it.isNotBlank() }?.take(1000) ?: context.getString(R.string.message_new)
+        val tag = PushPayload.tag(data)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            action = PushBridge.ACTION_OPEN
+            // A distinct data URI per tag, so two notifications never share a PendingIntent.
+            setData(android.net.Uri.parse("jawwid-push://open/" + android.net.Uri.encode(tag)))
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            PushPayload.openExtras(data).forEach { (k, v) -> putExtra(k, v) }
+            putExtra(PushBridge.EXTRA_NONCE, PushBridge.nonce(context))
+        }
         val open = PendingIntent.getActivity(
             context,
-            0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            tag.hashCode(),
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
@@ -168,8 +191,27 @@ object JawwidPush {
             // unlike iOS: a message preview stays behind the unlock.
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicVersion(context, CHANNEL_MESSAGES, R.string.message_new))
-        // One per conversation: a second message replaces the first rather than stacking.
-        notify(context, (data["conversationId"] ?: data["notificationId"] ?: "jawwid").hashCode(), builder)
+        notifyTagged(context, tag, builder)
+    }
+
+    private fun notifyTagged(context: Context, tag: String, builder: NotificationCompat.Builder) {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return // the person said no; it is still in the app
+        try {
+            manager.notify(tag, MESSAGE_ID, builder.build())
+        } catch (e: SecurityException) {
+            android.util.Log.w(TAG, "notification refused", e)
+        } catch (e: IllegalArgumentException) {
+            // A malformed notification must never take the messaging service down (as notify() above).
+            android.util.Log.e(TAG, "notification malformed", e)
+        }
+    }
+
+    private const val MESSAGE_ID = 1
+
+    /** Sign-out (PD-32): this app's notifications leave the tray, a ringing call's included. */
+    fun clearMessages(context: Context) {
+        NotificationManagerCompat.from(context).cancelAll()
     }
 
     /** What the lock screen shows instead: the app's name and a generic line, nothing more. */
@@ -211,6 +253,9 @@ object JawwidPush {
                 .setAction(action)
                 .putExtra(EXTRA_CALL_ID, callId)
                 .putExtra(EXTRA_CONVERSATION_ID, conversationId)
+                // MainActivity is exported, so Answer/Open count only with this install's
+                // nonce (PushPayload.isTrustedTap), like a notification tap.
+                .putExtra(PushBridge.EXTRA_NONCE, PushBridge.nonce(context))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

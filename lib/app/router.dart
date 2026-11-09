@@ -14,6 +14,7 @@ import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/application/realtime_keeper.dart';
 import '../features/conversations/presentation/chats_screen.dart';
+import '../features/feedback/presentation/teacher_feedback_screen.dart';
 import '../features/lessons/presentation/child_schedule_screen.dart';
 import '../features/lessons/presentation/teacher_schedule_screen.dart';
 import '../features/materials/presentation/child_materials_screen.dart';
@@ -176,6 +177,11 @@ abstract final class Routes {
   /// PD-31: one child's weekly times and lessons for the next four weeks, read-only,
   /// with "Change lesson time". The family's own; the server decides.
   static String childSchedule(String learnerId) => '/children/$learnerId/schedule';
+
+  /// PD-32 amendment: one of the parent's own feedback items, with the administration's
+  /// reply -- where "The administration has replied to your feedback" opens. Parents only.
+  static const feedbackPrefix = '/feedback';
+  static String feedbackItem(String feedbackId) => '$feedbackPrefix/${Uri.encodeComponent(feedbackId)}';
 }
 
 /// The tab pages of the signed-in shell (the [ShellRoute] below), and the old address
@@ -421,6 +427,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         )),
       ),
       GoRoute(
+        path: '${Routes.feedbackPrefix}/:feedbackId',
+        pageBuilder: (context, state) => _page(state, FeedbackItemScreen(
+          feedbackId: state.pathParameters['feedbackId']!,
+        )),
+      ),
+      GoRoute(
         path: '/children/:learnerId/schedule',
         pageBuilder: (context, state) => _page(state, ChildScheduleScreen(
           learnerId: state.pathParameters['learnerId']!,
@@ -557,6 +569,8 @@ String? _redirect(Ref ref, String location) {
   // whom the server refuses on every one of them -- reaches none.
   final role = ref.read(currentRoleProvider);
   if (location == Routes.myProfile && role != UserRole.parent) return Routes.chats;
+  // PD-32: a feedback item is the parent's own; nobody else has one to open.
+  if (location.startsWith('${Routes.feedbackPrefix}/') && role != UserRole.parent) return Routes.chats;
   if ((location == Routes.teacherProfile || location == Routes.myLeave) && role != UserRole.teacher) {
     return Routes.chats;
   }

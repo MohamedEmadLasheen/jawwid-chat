@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-600 routes.
+601 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -325,6 +325,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/me/evaluations` | not for staff | `teacher-file/teacher-evaluation.controller.ts#TeacherEvaluationController.mine` |
 | GET | `/api/v1/me/feedback` | not for staff | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.mine` |
 | POST | `/api/v1/me/feedback` | not for staff | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.file` |
+| POST | `/api/v1/me/feedback/:id/reply-seen` | not for staff | `teacher-file/parent-feedback.controller.ts#ParentFeedbackController.replySeen` |
 | GET | `/api/v1/me/labels` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.labels` |
 | POST | `/api/v1/me/labels` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.createLabel` |
 | DELETE | `/api/v1/me/labels/:id` | chat.use | `communication/api/staff-tools.controller.ts#StaffToolsController.deleteLabel` |

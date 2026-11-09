@@ -54,6 +54,11 @@ class HttpFeedbackRepository implements FeedbackRepository {
     }
     return item;
   }
+
+  @override
+  Future<void> markReplySeen(String feedbackId) async {
+    await _client.post<Map<String, Object?>>('/me/feedback/${Uri.encodeComponent(feedbackId)}/reply-seen');
+  }
 }
 
 /// One `Item` of the contract; null when it is missing what the screen needs.
@@ -73,6 +78,8 @@ FeedbackItem? parseFeedbackItem(Map<String, Object?> row) {
     status: FeedbackStatus.fromWire(row['status']),
     response: _nonEmpty(row['response']),
     respondedAt: WireMappers.parseTime(row['respondedAt']),
+    // Unread only with a reply to read: a stray flag never shows a dot over nothing.
+    replyUnread: row['replyUnread'] == true && _nonEmpty(row['response']) != null,
     createdAt: createdAt,
   );
 }

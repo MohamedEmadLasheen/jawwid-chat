@@ -20,6 +20,14 @@ import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../con
  * are naturally so, and notifications dedupe on dedupe_key. A row is claimed
  * with a conditional update, so two workers never publish the same event twice.
  */
+/** PD-32 amendment: a FamilyFeedbackNoticePayload's `notice` -> its notification rule. */
+const FEEDBACK_NOTICE_RULES: Readonly<Record<string, string>> = {
+  replied: 'feedback_replied',
+  complaint_in_review: 'feedback_complaint_in_review',
+  complaint_resolved: 'feedback_complaint_resolved',
+  complaint_closed: 'feedback_complaint_closed',
+};
+
 @Injectable()
 export class OutboxWorker {
   private readonly log = new Logger(OutboxWorker.name);
@@ -142,6 +150,15 @@ export class OutboxWorker {
       case CommEvent.TEACHER_COMPLAINT_RECEIVED:
       case CommEvent.TEACHER_PRAISE_RECEIVED: {
         await this.deliverTeacherRecord(type, payload);
+        return;
+      }
+
+      /**
+       * PD-32 amendment: the administration answered a parent's feedback. To
+       * the parent who filed it, through the PD-34 pipeline. See deliverFeedbackNotice.
+       */
+      case CommEvent.FAMILY_FEEDBACK_NOTICE: {
+        await this.deliverFeedbackNotice(payload);
         return;
       }
 
@@ -869,6 +886,44 @@ export class OutboxWorker {
         scheduledAt: new Date(),
       });
     }
+  }
+
+  /**
+   * PD-32 amendment (owner, 2026-11-03). Told: the parent who filed the item,
+   * if still an active parent -- never the family's other parent, the teacher
+   * or staff. A Center entry that opens that one item (open_feedback) and a
+   * push, under the parent's own 'conversation' push switch and quiet hours
+   * (the pipeline's). Once per item, kind and parent (the dedupe key): a
+   * changed reply, a retried event, two staff racing to the first reply are
+   * one notification. Off when the rule is switched off. The text is generic.
+   * A failure here throws, and the outbox retries the event; the reply that
+   * caused it is already committed and is never undone.
+   */
+  private async deliverFeedbackNotice(payload: Record<string, unknown>): Promise<void> {
+    if (!this.pipeline) return;
+    const feedbackId = payload.feedbackId as string | undefined;
+    const contactId = payload.contactId as string | undefined;
+    const ruleKey = FEEDBACK_NOTICE_RULES[payload.notice as string];
+    if (!feedbackId || !contactId || !ruleKey) return;
+    const rule = await this.prisma.notificationRule.findUnique({ where: { key: ruleKey } });
+    if (!rule || !rule.enabled) return;
+    const recipient = await this.identity.resolveActor(contactId);
+    if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.CONTACT) return;
+    await this.pipeline.emit({
+      dedupeKey: `${ruleKey}:${feedbackId}:${contactId}`,
+      ruleKey,
+      eventType: ruleKey,
+      templateKey: rule.templateKey,
+      recipientId: contactId,
+      locale: recipient.locale,
+      priority: rule.priority,
+      respectQuietHours: rule.respectQuietHours,
+      push: rule.channel === 'push',
+      // The item's id only; the parent reads it through /me/feedback (PD-32 confinement: src/teacher-file).
+      subject: { type: 'feedback', id: feedbackId },
+      refs: { feedbackId },
+      scheduledAt: new Date(),
+    });
   }
 
   /**
