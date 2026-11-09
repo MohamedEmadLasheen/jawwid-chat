@@ -373,9 +373,9 @@ describe("PD-6 predicate — tenant isolation", () => {
     }
 
     await expectBothLayers(w.teacherB, w.parentOk, false);
-    // Recorded rather than asserted either way: both outcomes are safe, and
-    // which one happens is a property of the tenancy triggers, not of PD-6.
-    expect(typeof bridged).toBe("boolean");
+    // RT-029 (20261109130000): learner_teacher_same_organization now refuses
+    // the bridging row itself, so the database never stores it.
+    expect(bridged).toBe(false);
   });
 });
 
