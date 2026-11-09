@@ -36,8 +36,8 @@ laptop.
 
 It runs only through the **Review cohort** GitHub workflow. The workflow uses the API image already built for a
 commit on main, runs as the `production` GitHub Environment (so that Environment's required reviewers approve every
-run), and never prints a password or the database address: the repository is public, so anyone can read its run
-logs.
+run), and never prints a password, a review login or the database address: the repository is public, so anyone can
+read its run logs and summaries.
 
 Because it runs as the `production` Environment, every run also appears in that Environment's **deployment
 history**, next to the real deploys. A "Review cohort" entry there is this workflow, not a deploy: it changes only
@@ -80,8 +80,21 @@ the review organization's rows and deploys nothing.
      on main, the image does not exist, or the image is not the recorded one.
    - It writes the passwords to private (mode 600) files on the runner only for the run, and deletes them at the
      end even if the run fails.
-   - It prints ids and the three logins. The database's host:port/name is masked (the log shows `***` in its
-     place), and a password or the database URL is never printed.
+   - **It never prints the logins** (LR-46 P3-9). The repository is public, so its run logs and summaries are
+     too. The run log and summary show only how many review logins were provisioned (and how many were new), the
+     `app-review` organization, the commit and the image digest. The login domain is masked in the log (`***`),
+     including in any error message from the command, and the command's own output is reduced to counts before it
+     is printed. A domain containing a line break is refused before anything else, without printing it (a mask
+     covers one line). The database's host:port/name is masked the same way, and a password or the database URL is
+     never printed.
+   - **This only reduces exposure; it does not protect the accounts.** The login names (`parent`, `teacher`,
+     `parent2`) are written in this public repository, and the domain may be easy to guess (for example Jawwid's
+     own domain). Anyone who guesses it can still lock a review account with ten wrong passwords during store
+     review. The real protection is a login domain (or login names) that is hard to guess; which domain to use is
+     the owner's decision. If a review account is locked, re-running this workflow clears the lockout.
+   - **Where the logins are:** `parent@<domain>`, `teacher@<domain>` and `parent2@<domain>`, with the domain you
+     typed in step 4. Keep them, with the passwords, in your password manager and in the store review fields of
+     step 5. The run will not show them to you.
 5. Enter the logins and passwords **only** in App Store Connect (App Review Information → Sign-in required) and in
    Play Console (App content → App access, and Testing → Pre-launch report → Credentials). Never put them in the
    repository, a ticket, a chat or a log.
