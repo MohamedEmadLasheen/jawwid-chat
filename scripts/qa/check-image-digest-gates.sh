@@ -176,7 +176,7 @@ def check(t):
         P.append("deploy-staging: the record is not '<commit> <digest>'")
     if "imagetools inspect" in b:
         P.append("deploy-staging: the build re-reads the digest from the registry (the tag may have moved)")
-    if not re.search(r"uses: actions/upload-artifact@\S+\n        with:\n          name: api-image-digest\n", b):
+    if not re.search(r"uses: actions/upload-artifact@\S+(?: #[^\n]*)?\n        with:\n          name: api-image-digest\n", b):
         P.append("deploy-staging: the digest is not uploaded as the api-image-digest artifact")
     if "if-no-files-found: error" not in b:
         P.append("deploy-staging: a missing digest record would not fail the build")
