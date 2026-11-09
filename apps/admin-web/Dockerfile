@@ -56,6 +56,19 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # only the placeholder is copied and /teacher/ answers 404; the deploy workflows
 # always run it.
 COPY teacher-web/ /usr/share/nginx/html/teacher/
+# LR-04: the public legal pages, rendered and committed by
+# scripts/legal/legal_pages.py (docs/release/legal-pages-hosting.md, Option A).
+# While publication is switched off (docs/legal/publication.json) legal-web/
+# holds only .gitkeep: it is deleted, the then-empty directory is removed, and
+# nginx answers 404 at /legal/. The build REFUSES an image that would serve a
+# page still carrying a placeholder or a review marker (grep exit 0 = a match,
+# 2 = an error: both refuse; only 1, no match, builds). The generator and its
+# CI guard (scripts/qa/guards.sh web-env) check far more; this is the backstop.
+COPY legal-web/ /usr/share/nginx/html/legal/
+RUN set -eu; d=/usr/share/nginx/html/legal; rm -f "$d/.gitkeep"; rc=0; \
+    grep -rlF -e '{{' -e 'TO CONFIRM' -e 'legal review' -e 'Drafting note' -e 'مراجعة قانونية' "$d" || rc=$?; \
+    if [ "$rc" -ne 1 ]; then echo "refusing to serve unfinished legal pages under /legal/ (grep exit $rc)" >&2; exit 1; fi; \
+    rmdir "$d" 2>/dev/null || true
 
 # LIVEKIT_ORIGIN: the media server the call screen connects to (wss://...),
 # from the API's LIVEKIT_URL. Empty means calls cannot connect media.

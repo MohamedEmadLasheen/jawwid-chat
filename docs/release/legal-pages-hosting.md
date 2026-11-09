@@ -1,7 +1,7 @@
 # Where to serve the public legal pages (LR-04)
 
 **Draft, 2026-11-09. Builder W4.** A recommendation only: no hosting code, nginx change or workflow change is
-made by this document. The requirements are in `docs/legal/public-hosting-requirements.md` (R-1 to R-13);
+made by this document. **Updated 2026-11-10 (W52):** Option A is implemented, switched off (§3.2a). The requirements are in `docs/legal/public-hosting-requirements.md` (R-1 to R-13);
 the owner's open choices there are H-1 (host) and H-2 (paths). Everything here waits for the first
 production deploy (LR-01), as the account-deletion page already does.
 
@@ -108,6 +108,75 @@ The account-deletion **form** stays on the API: `https://api.chat.jawwid.com/api
 
 Risk: High for item 4 (the console's security headers live in the same file), Low for the rest. Review
 item 4 with `check-web-headers.sh` in CI.
+
+### 3.2a Implementation (W52, 2026-11-10)
+
+Items 1 to 4 of §3.2 are built; item 5 is partly built (see "Not done" below). The pages are **not
+published**: the switch below is off, so `/legal/` answers 404.
+
+**The switch.** `docs/legal/publication.json` holds the generator's config: `"publish"`, the base URL,
+and for each document its source, its path (§3.1), whether the language index lists it (`nav`; Staff
+Terms do not, H-4), whether it must carry the PD-48 paragraph (R-13) and, for the four acceptance
+documents, its `gate_key` (the `chat.legal_document_version.document_key`).
+
+| `publish` | `build` | What Admin Web serves at `/legal/` | The guard |
+|---|---|---|---|
+| `false` (today) | **Skipped** with a message; writes nothing | 404 for `/legal/` and everything under it. `apps/admin-web/legal-web/` holds only `.gitkeep`; the image deletes it and the empty directory, so there is nothing to serve, and no fallback | Fails if any page is in `legal-web/` |
+| `true` | Renders every page, or **refuses all of them** and writes nothing (below) | The committed pages | Fails if any committed page differs from what its source renders (R-7), if a file is not the generator's, or if any file carries a marker |
+
+The owner turns the switch on in the same PR that applies the confirmed values (`apply-confirmed-values.md`),
+after counsel's review, together with the output of `python3 -I scripts/legal/legal_pages.py build`.
+Turning it on early cannot publish anything unfinished: the build is refused.
+
+**Refusals (fail closed; one refused page stops the whole build).** In the source: `{{`, `TO CONFIRM`,
+`legal review`, `مراجعة قانونية`, `Drafting note`, `DRAFT`; front matter `status` other than
+`"Published"`; a version that is not a URL-safe name starting with a digit (`1.0`, `2026-12`, `v2`);
+an effective date that is not a real `YYYY-MM-DD`; Arabic and English disagreeing on version, date or
+document key; a gate document whose `document_key` is not its gate key; a changed or missing PD-48
+paragraph (R-13, against `pd048-lesson-audio-parent-notice.md`); a link to a `.md` file that is not
+published, or to anything but `https:`/`mailto:`; a code fence or a nested list. On the rendered page:
+the same markers, an internal ID (§5's regex, on the visible text), the version or effective date not
+shown (R-5), any script, event handler, inline style, iframe, image, form or object, and a directory
+without `index.html` (nginx would answer 403 instead of serving or 404). Drafting notes are refused, not
+silently dropped: `apply-confirmed-values.md` rule 5 deletes them in the source.
+
+**Pieces.**
+
+| Piece | File |
+|---|---|
+| Generator and guard (Python standard library only: no new dependency, no lockfile change; the repository's other guards already need `python3`) | `scripts/legal/legal_pages.py` (`build`, `check`) |
+| Publication manifest (print only) | `scripts/legal/publication-manifest.py` (`--json` for machine-readable) |
+| Tests (both switch states with fixture documents, every refusal, drift, the real nginx template and Dockerfile) | `scripts/legal/test_legal_pages.py`, fixtures in `scripts/legal/fixtures/` |
+| CI | `bash scripts/qa/guards.sh web-env` runs the tests, then `legal_pages.py check` (no new gate id) |
+| Output (committed) | `apps/admin-web/legal-web/{ar,en}/<path>/index.html`, `{ar,en}/index.html`, `index.html`, `legal.css`; for the four acceptance documents also `{ar,en}/<path>/<version>/index.html` |
+| Image | `apps/admin-web/Dockerfile`: copies `legal-web/` to `/legal/`, and refuses to build if a page still contains `{{`, `TO CONFIRM`, `legal review`, `Drafting note` or `مراجعة قانونية` |
+| nginx | `default.conf.template`: the two `map` entries, `location = /legal` (301) and `location /legal/ { try_files $uri $uri/index.html =404; }` exactly as item 4; `X-Robots-Tag` unchanged |
+
+**Pages.** One fixed template: `lang`/`dir` (`ar`/`rtl`, `en`/`ltr`), the title, a link to the language
+index and to the same page in the other language (a versioned page links to the same version), one local
+stylesheet, system fonts, no script. The body is the source as written (it already opens with the title
+and the version, effective date and language line). Links to sibling `*.md` files become the §3.1
+paths; bare `https://` addresses and e-mail addresses become links. The output is deterministic, so the
+same sources give the same bytes.
+
+**Publication manifest.** `python3 -I scripts/legal/publication-manifest.py` prints, per document and
+language, the version, effective date, the URL and the SHA-256 of the exact bytes served there; for the
+four acceptance documents also the versioned URL and its hash, and then the inputs of
+`chat.publish_legal_version` (`p_document_key`, `p_version`, `p_url_ar`, `p_url_en`,
+`p_content_sha256_ar`, `p_content_sha256_en`) as the migration `20261107110000_chat_pd058_terms.sql`
+expects them. `p_requires_reacceptance` and the time of `p_effective_at` are left to the owner. It
+connects to nothing and writes nothing, and it refuses while the switch is off or when the committed
+pages are stale. The hash is of the uncompressed file; nginx gzips only when the client asks, so check
+the live page with `curl -s <url> | sha256sum` (no `--compressed`).
+
+**Not done (outside this change's paths; for the lead):**
+- `scripts/infra/check-web-headers.sh` does not yet assert the `/legal/` policy (item 5): the CSP above,
+  `Cache-Control: no-cache`, HSTS, nosniff, `X-Robots-Tag`, the `/legal` → `/legal/` 301, and a 404 (not
+  the Admin Web app) for `/legal/` while unpublished and for `/legal/en/no-such-page` once published.
+  The static half is asserted by `legal_pages.py check` on the template; the live half needs that script.
+- `smoke.sh` fetching `/legal/ar/privacy` and `/legal/en/privacy` belongs with the first publication.
+- R-6 (a version history on every page) is not generated: only the Privacy Policy carries one, in its
+  text (§17.5). If every page needs one, it should be added to the sources or as a config field.
 
 ### 3.3 If the owner prefers the jawwid.com website (Option B)
 
