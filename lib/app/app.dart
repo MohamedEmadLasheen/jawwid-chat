@@ -88,7 +88,8 @@ class JawwidApp extends ConsumerWidget {
           // for teachers" screen in place of all of it -- calls included. A no-op on a phone.
           //
           // PD-55: a reward's celebration plays over all of it -- a call included --
-          // and never takes a tap (`reward_celebration.dart`).
+          // and never takes a tap (`reward_celebration.dart`). LR-46: not while the app is
+          // shown over the phone's lock screen for a call: it waits until unlocked.
           child: RewardCelebrationHost(
             child: WebPortalGate(
               child: CallPresenter(

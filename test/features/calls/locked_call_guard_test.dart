@@ -27,12 +27,15 @@ import 'package:jawwid_chat/core/call_native/call_native_providers.dart';
 import 'package:jawwid_chat/core/call_native/device_keyguard.dart';
 import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_media_providers.dart';
 import 'package:jawwid_chat/features/calls/application/locked_call_guard.dart';
 import 'package:jawwid_chat/features/calls/presentation/active_call_screen.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_presenter.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_route_screen.dart';
+import 'package:jawwid_chat/features/rewards/application/reward_feed.dart';
+import 'package:jawwid_chat/features/rewards/presentation/reward_celebration.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
 import 'w7_call_fakes.dart';
@@ -87,6 +90,39 @@ class FakeKeyguard implements DeviceKeyguard {
   Future<void> returnToLockScreen() async => backToLockScreen++;
 }
 
+/// The app lock off: these tests are about the phone's lock screen, not the app's own.
+class _AppLockOff extends AppLockController {
+  @override
+  AppLockState build() => const AppLockState(phase: AppLockPhase.unlocked);
+}
+
+class _Chime implements RewardChime {
+  int plays = 0;
+  @override
+  Future<void> play(RewardCue cue) async => plays++;
+}
+
+class _SoundOn implements RewardSoundStore {
+  @override
+  Future<bool?> read() async => true;
+  @override
+  Future<void> write(bool on) async {}
+}
+
+/// `learner.reward_given`, as the server sends it to the family (PD-55).
+Map<String, Object?> _star(int stars) => {
+      'learnerId': 'learner-1',
+      'lessonId': 'lesson-1',
+      'eventId': 'event-$stars',
+      'kind': 'star',
+      'stickerKey': null,
+      'praiseKey': null,
+      'praiseText': null,
+      'stars': stars,
+      'badge': null,
+      'nextBadgeAt': null,
+    };
+
 void main() {
   late FakeCalls calls;
   late FakeRoom room;
@@ -94,6 +130,7 @@ void main() {
   late FakeKeyguard keyguard;
   late GoRouter router;
   late L10n en;
+  late _Chime chime;
 
   setUpAll(() async => en = await L10n.delegate.load(const Locale('en')));
 
@@ -109,8 +146,11 @@ void main() {
   Finder cover() => find.byKey(const ValueKey('locked-call-cover'));
   Finder callScreen() => find.byType(ActiveCallScreen);
 
-  Widget harness({required bool locked}) {
+  /// [rewards]: the reward celebration is mounted around the call presenter, as app.dart
+  /// mounts it (PD-55), with reward sounds on.
+  Widget harness({required bool locked, bool rewards = false}) {
     keyguard = FakeKeyguard(locked: locked);
+    chime = _Chime();
     router = GoRouter(
       initialLocation: '/somewhere',
       routes: [
@@ -158,6 +198,11 @@ void main() {
         microphonePermissionProvider.overrideWithValue(FakeMic()),
         audioRouteProvider.overrideWithValue(FakeAudioRoute()),
         deviceKeyguardProvider.overrideWithValue(keyguard),
+        if (rewards) ...[
+          appLockControllerProvider.overrideWith(_AppLockOff.new),
+          rewardChimeProvider.overrideWithValue(chime),
+          rewardSoundStoreProvider.overrideWithValue(_SoundOn()),
+        ],
       ],
       child: MaterialApp.router(
         routerConfig: router,
@@ -170,14 +215,17 @@ void main() {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        builder: (context, child) => CallPresenter(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) {
+          final presenter = CallPresenter(child: child ?? const SizedBox.shrink());
+          return rewards ? RewardCelebrationHost(child: presenter) : presenter;
+        },
       ),
     );
   }
 
   /// A call rings; its screen is pushed over the protected conversation.
-  Future<void> ringing(WidgetTester tester, {required bool locked}) async {
-    await tester.pumpWidget(harness(locked: locked));
+  Future<void> ringing(WidgetTester tester, {required bool locked, bool rewards = false}) async {
+    await tester.pumpWidget(harness(locked: locked, rewards: rewards));
     await tester.pumpAndSettle();
     socket.emit(CallEventNames.incoming, Frames.incoming(initiatorName: 'Mrs. Fatima'));
     await tester.pumpAndSettle();
@@ -210,6 +258,15 @@ void main() {
 
   ProviderContainer container(WidgetTester tester) =>
       ProviderScope.containerOf(tester.element(find.byType(CallPresenter)));
+
+  /// The guard asks native again while the app is behind the lock screen. A call's end
+  /// does not ask by itself (the guard keeps its last "over the lock screen" until it next
+  /// asks: on resume, on a leave, when a call screen is shown, when the call goes idle), so
+  /// this is what turns it false while the app is still behind (review of #563, P2).
+  Future<void> guardAsksAgain(WidgetTester tester) async {
+    await container(tester).read(lockedCallGuardProvider.notifier).refresh();
+    await tester.pump();
+  }
 
   group('unlocked phone: unchanged', () {
     testWidgets('Back leaves the call screen with no prompt', (tester) async {
@@ -460,6 +517,199 @@ void main() {
       expect(find.text('Mrs. Fatima').hitTestable(), findsOneWidget);
       expect(find.text('chat c9 voice=false'), findsNothing);
       expect(protectedChat(), findsNothing);
+    });
+  });
+
+  // LR-46 (#561 review, P3-9): the reward celebration plays over everything, a call included
+  // (PD-55), so it sits above the call presenter -- and over the lock screen it would draw
+  // app content over the call screen and over the cover.
+  group('a reward\'s celebration and the lock screen', () {
+    Finder celebration() => find.byKey(const ValueKey('reward-celebration'));
+
+    testWidgets('unlocked: it plays over the call screen, as before', (tester) async {
+      await ringing(tester, locked: false, rewards: true);
+
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      expect(callScreen(), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1);
+    });
+
+    testWidgets('over the lock screen: nothing drawn over the call or the cover; it plays once unlocked and back',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+      expect(container(tester).read(lockedCallGuardProvider), isTrue);
+
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsNothing);
+      expect(find.text(en.rewardStarLine(3)), findsNothing);
+
+      // Off the call screen another way: the cover, and still nothing over it.
+      final answer = Completer<bool>();
+      keyguard.hold = answer;
+      unawaited(router.push('/chats/c9'));
+      await tester.pump();
+      expect(cover(), findsOneWidget);
+      expect(celebration(), findsNothing);
+      answer.complete(true);
+      await tester.pumpAndSettle();
+      expect(topRoutePath(router), Routes.activeCall);
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0, reason: 'nothing heard over the lock screen');
+
+      // The person unlocks; the app comes back to the front.
+      keyguard.locked = false;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(container(tester).read(lockedCallGuardProvider), isFalse);
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1);
+    });
+
+    // Review of #563, P2: the guard is "shown over the lock screen", not "unlocked". After a call
+    // that ends with the phone still locked, the next time it asks native (here while the lock
+    // screen is back and the app behind it) it turns false: the kept reward must still wait
+    // until the app is back in front.
+    testWidgets('a call that ends with the phone still locked: it waits until the app is back in front',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsNothing);
+
+      // The call ends; the lock screen is back and the app is behind it.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await endedOverLockScreen(tester);
+      await guardAsksAgain(tester);
+      await tester.pump(const Duration(seconds: 3));
+      expect(container(tester).read(lockedCallGuardProvider), isFalse, reason: 'no longer shown over the lock screen');
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0, reason: 'nothing heard on a locked phone');
+
+      // The person unlocks; the app comes back to the front.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1, reason: 'it plays once, with its sound');
+    });
+
+    // Review of #563 delta, P2: a reward that ARRIVES after the call ended with the phone still
+    // locked (the socket still alive, the guard already false, nothing kept) is not heard on the
+    // locked phone either: it waits for the app to come back to the front.
+    testWidgets('a reward that arrives after the call ended on a locked phone waits until the app is in front',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+
+      // The call ends; the lock screen is back and the app is behind it.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await endedOverLockScreen(tester);
+      await guardAsksAgain(tester);
+      expect(container(tester).read(lockedCallGuardProvider), isFalse);
+
+      // The teacher gives the star a moment after hanging up.
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0, reason: 'nothing heard on a locked phone');
+
+      // The person unlocks; the app comes back to the front.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1, reason: 'it plays once, with its sound');
+    });
+
+    // Review of #563, P3-3: one already playing when the app goes over the lock screen ends
+    // there; it does not come back part-way through when the app leaves the lock screen.
+    testWidgets('one playing when the app goes over the lock screen is stopped, not resumed later',
+        (tester) async {
+      await ringing(tester, locked: false, rewards: true);
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(chime.plays, 1);
+
+      final guard = container(tester).read(lockedCallGuardProvider.notifier);
+      keyguard.locked = true;
+      await guard.refresh();
+      await tester.pump();
+      expect(container(tester).read(lockedCallGuardProvider), isTrue);
+      expect(celebration(), findsNothing);
+
+      // Off the lock screen again well within the 2.5 s: the stopped one stays gone.
+      keyguard.locked = false;
+      await guard.refresh();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(container(tester).read(lockedCallGuardProvider), isFalse);
+      expect(celebration(), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1, reason: 'not heard a second time');
+    });
+
+    // Review of #563, P3: a newer reward that arrives while one is kept replaces it (it carries
+    // the lesson's newest tally); only the newer one plays, once.
+    testWidgets('a newer reward while one is kept and the app is behind the lock screen replaces it, played once',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsNothing);
+
+      // The call ends with the phone still locked; the app is behind the lock screen.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await endedOverLockScreen(tester);
+
+      socket.emit(rewardGivenEvent, _star(4));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(4)), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing, reason: 'the older one does not follow');
+      expect(chime.plays, 1, reason: 'played once');
     });
   });
 }
