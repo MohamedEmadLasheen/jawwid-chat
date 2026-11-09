@@ -35,6 +35,7 @@ import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
 import { CheckoutService } from '../../src/billing/checkout.service';
 import { PaymentLedger } from '../../src/billing/payment-ledger.service';
+import { TemplateService } from '@communication/notifications/template.service';
 import { OBJECT_STORAGE } from '../../src/platform/tokens';
 import type { ObjectStorage } from '../../src/communication/attachments/object-storage';
 
@@ -415,7 +416,21 @@ describe('PD-27 over HTTP', () => {
     expect(rejected.json.receipt).toMatchObject({ status: 'rejected', rejectReason: 'The amount on the receipt is unreadable' });
     const seen = await http(f.parent.subject, 'GET', '/me/billing');
     expect(seen.json.receipts.find((r: any) => r.id === pending.id)).toMatchObject({ status: 'rejected', rejectReason: 'The amount on the receipt is unreadable' });
-    expect(await g.prisma.notification.count({ where: { templateKey: 'payment_receipt_rejected', recipientId: f.parent.id } })).toBe(1);
+    expect(await g.prisma.notification.count({ where: { eventType: 'payment_receipt_rejected', recipientId: f.parent.id } })).toBe(1);
+    // The lock screen: what the push provider is given (the delivery row's
+    // template, rendered as the dispatcher renders it) names no amount and no
+    // reason -- the reason is a staff member's free text.
+    const delivery = await g.prisma.notification.findFirstOrThrow({ where: { eventType: 'payment_receipt_rejected', recipientId: f.parent.id } });
+    const templates = new TemplateService(g.prisma);
+    const pushText = await templates.render(delivery.templateKey, delivery.locale, delivery.variables as Record<string, unknown>);
+    expect(pushText).not.toBeNull();
+    expect(`${pushText!.title} ${pushText!.body}`).not.toMatch(/unreadable|\d/i);
+    // The Center entry (behind sign-in) still carries the amount and the reason.
+    const entry = await g.prisma.notificationItem.findUniqueOrThrow({ where: { dedupeKey: delivery.dedupeKey } });
+    expect(entry.templateKey).toBe('inbox.payment_receipt_rejected');
+    expect(entry.variables).toMatchObject({ reason: 'The amount on the receipt is unreadable', amount: expect.any(String) });
+    const inboxText = await templates.render(entry.templateKey, entry.locale, entry.variables as Record<string, unknown>);
+    expect(inboxText!.body).toContain('The amount on the receipt is unreadable');
   });
 
   it('voids and refunds: a cash mistake is voided (its invoice with it, the request owed again); a card payment is refunded through Stripe, once', async () => {

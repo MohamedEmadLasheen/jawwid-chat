@@ -7,6 +7,8 @@ import type { AuditService } from '../platform/audit.service';
 import { currentRequestOrigin } from '../platform/request-origin';
 import { NotificationService } from '../communication/notifications/notification.service';
 import { ReminderService } from '../communication/notifications/reminder.service';
+import { NotificationPipeline } from '../communication/notifications/notification-pipeline.service';
+import { lockScreenTemplate } from './lock-screen-push';
 import { formatMajor } from './money';
 import { dateOnly, day } from './validate';
 
@@ -109,6 +111,8 @@ export class PaymentLedger {
     // module always provides both, and without them no push is sent.
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly reminders?: ReminderService,
+    // Lock-screen names (lock-screen-push.ts). Without it every push is the generic one.
+    @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
   /** 32 random bytes, base64url: 43 characters, the whole capability of a link. */
@@ -367,7 +371,10 @@ export class PaymentLedger {
       for (const r of recipients) {
         await this.notifications.schedule({
           dedupeKey: `payment_received:${payment.id}:${r.id}`,
-          templateKey: 'payment_received',
+          // The amount and the invoice number stay in the Center entry
+          // (inbox.payment_received); the lock screen shows them only to
+          // someone who turned names on.
+          templateKey: await lockScreenTemplate(this.pipeline, r.id, 'payment_received'),
           eventType: 'payment_received',
           recipientId: r.id,
           locale: r.locale,
