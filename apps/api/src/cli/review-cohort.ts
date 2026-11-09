@@ -215,6 +215,7 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
   if (orgId === defaultOrg) {
     throw new ReviewCohortRefusal('ORGANIZATION', 'the review organization must not be the default organization');
   }
+  await assertOnlyReviewCohort(prisma, org);
 
   // --- synthetic staff, no account
   const staffRow = async (s: { name: string; role: string }) => {
@@ -458,6 +459,75 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
     parentDirectId: parentDirect.id,
     teacherDirectId: teacherDirect.id,
   };
+}
+
+/** The three logins, by the local part of their email, and the kind each must be. */
+const REVIEW_LOGIN_KINDS: Readonly<Record<string, string>> = { parent: 'family', teacher: 'teacher', parent2: 'family' };
+
+/**
+ * Fail closed on the organization found by slug (LR-46 P3-10). chat.organization
+ * has no kind or flag column to mark a review organization, so the slug alone
+ * is not trusted: before anything is written, the organization must carry the
+ * exact name this command gives it, and its logins, staff, teachers and
+ * families must be the review cohort's --
+ *   - accounts: only parent@ / teacher@ / parent2@ of the right kind (the
+ *     domain is checked by DOMAIN_CHANGED below), or an account a reviewer
+ *     deleted (PD-56 renames its subject `erased:<id>`);
+ *   - staff: only the three synthetic staff;
+ *   - teachers: only the review teacher, or a teacher whose account is erased
+ *     (erasure keeps the row and renames it "Deleted user");
+ *   - families: only the two review families, by name.
+ * Only those four are checked. Contacts, children, departments and
+ * conversations are not: someone who adds a contact or child by hand to a
+ * review family is not caught here. A real organization that happened to take
+ * the slug is refused, never written to.
+ *
+ * NOT_REVIEW_ORGANIZATION promises nothing was written; the refusals after
+ * it do not. DOMAIN_CHANGED, STAFF_ACCOUNT, SUBJECT_TAKEN and the others come
+ * later, after staff, departments and (for some) logins were already written
+ * in this organization. The check and the writes are not one transaction.
+ */
+async function assertOnlyReviewCohort(prisma: PrismaClient, org: { id: string; displayName: string }): Promise<void> {
+  const refuse = (what: string): never => {
+    throw new ReviewCohortRefusal(
+      'NOT_REVIEW_ORGANIZATION',
+      `the organization with slug "${REVIEW_ORG_SLUG}" ${what}; it is not the review organization this command made, so nothing was written. Investigate before running again`,
+    );
+  };
+  if (org.displayName !== REVIEW_ORG_NAME) refuse(`is not named "${REVIEW_ORG_NAME}"`);
+
+  const accounts = await prisma.account.findMany({ where: { organizationId: org.id }, select: { subject: true, kind: true } });
+  for (const a of accounts) {
+    if (a.subject.startsWith('erased:')) continue;
+    const at = a.subject.indexOf('@');
+    const local = at > 0 ? a.subject.slice(0, at) : '';
+    if (!Object.prototype.hasOwnProperty.call(REVIEW_LOGIN_KINDS, local) || REVIEW_LOGIN_KINDS[local] !== a.kind) {
+      refuse('has a login that is not a review account');
+    }
+  }
+
+  const staffNames = Object.values(REVIEW_STAFF).map((s) => `${s.role}\u0000${s.name}`);
+  const staff = await prisma.staff.findMany({ where: { organizationId: org.id }, select: { name: true, role: true } });
+  if (staff.some((s) => !staffNames.includes(`${s.role}\u0000${s.name}`))) refuse('has staff the review cohort does not have');
+
+  // A teacher row whose login was erased stays behind, renamed "Deleted user"
+  // (chat.erase_account). It is accepted by its erased account, never by that
+  // name, so a real organization cannot pass by naming people "Deleted user".
+  const teachers = await prisma.teacher.findMany({ where: { organizationId: org.id }, select: { name: true, accountId: true } });
+  const linked = teachers.flatMap((t) => (t.accountId ? [t.accountId] : []));
+  const erasedIds = new Set(
+    (await prisma.account.findMany({
+      where: { id: { in: linked }, organizationId: org.id, subject: { startsWith: 'erased:' } },
+      select: { id: true },
+    })).map((a) => a.id),
+  );
+  if (teachers.some((t) => t.name !== REVIEW_PEOPLE.teacher && !(t.accountId && erasedIds.has(t.accountId)))) {
+    refuse('has a teacher the review cohort does not have');
+  }
+
+  const familyNames: string[] = [REVIEW_PEOPLE.family, REVIEW_DELETION_PEOPLE.family];
+  const families = await prisma.family.findMany({ where: { organizationId: org.id }, select: { displayName: true } });
+  if (families.some((f) => !familyNames.includes(f.displayName))) refuse('has a family the review cohort does not have');
 }
 
 /** The family's live group for this child, created by the supervisor once; seats a re-created parent. */
