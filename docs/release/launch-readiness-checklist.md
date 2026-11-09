@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 01:58 Cairo (23:58 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 02:23 Cairo (00:23 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -111,6 +111,9 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Builder W12 (backend privacy) | LR-46: no child name, amount or free-text reason in a push that can show on the lock screen; the inbox keeps the details | #536 | **ACCEPT @ `7053582f`**; CI running |
 | Builder W13 (Android privacy) | LR-46: show over the lock screen only while a call rings or is in progress; released too when the call controller is torn down (stacked on #524) | #535 | **ACCEPT @ `5d7a23e5`** (two rounds); CI after the stack reaches main |
 | Builder W14 (backend security) | LR-46: each push token is tied to the session that registered it. Sign-out and revoke-all stop pushes; a token cannot be moved while its owner's session is live; sends skip dead sessions; account deletion takes the session lock first (no deadlock). **High: migration `20261109120000`** (stacked on #449; merges after #534; lock placement with #498 noted on both PRs) | #537 | **ACCEPT @ `9f360bda`** (three rounds); **owner approval needed (migration)** |
+| Builder W15 (Flutter auth) | LR-46 follow-up to #537: a sign-out the server never heard is retried (app start, connectivity, before sign-in); a refresh token is sent at most once, even across a crash | #540 | Accepted after a CHANGES round (P1: possible refresh reuse after a crash, fixed); the lead fixed a retry spin; delta review running |
+| Builder W16 (security docs) | Red-team register re-verified on `main`: 34 of 39 fixed or closed (RT-010 closed by the lead's decision), 5 open (RT-014, RT-019, RT-029, RT-037, RT-038) | #539 | **ACCEPT @ `b7e5c3a4`** |
+| Builder W17 (security tooling) | The secret scan catches Stripe, DigitalOcean, Google, Meta and Sentry keys, SMTP and Redis URLs with a password, and key files by name. Documented gap: CI's shallow checkout means no history is scanned; closing it needs `fetch-depth: 0`, a Code Owner change | #538 | **ACCEPT @ `63025b5b`** |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
 ### Next tasks (kept in order; the lead starts each one without being asked)
