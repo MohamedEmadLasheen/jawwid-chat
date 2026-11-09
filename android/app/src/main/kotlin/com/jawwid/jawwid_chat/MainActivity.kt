@@ -105,16 +105,19 @@ class MainActivity : FlutterFragmentActivity() {
             handleCallIntent(intent)
             handlePushTap(intent)
         }
-        // Rotation does not recreate this activity (manifest configChanges). A real
-        // recreate detaches the engine, whose cleanup clears the tracker, so this
-        // starts from nothing and fails closed: the lock screen comes back.
-        // A system broadcast: delivered to a not-exported receiver.
+        // USER_PRESENT comes from SystemUI, not system_server: below API 33 AndroidX's
+        // RECEIVER_NOT_EXPORTED is a signature permission SystemUI lacks, so it would never
+        // arrive. It is a protected broadcast (only the system sends it), and a forged one
+        // could only clear the hold when the phone is unlocked, the safe direction.
         ContextCompat.registerReceiver(
             this,
             userPresentReceiver,
             IntentFilter(Intent.ACTION_USER_PRESENT),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
+            ContextCompat.RECEIVER_EXPORTED,
         )
+        // Rotation does not recreate this activity (manifest configChanges). A real
+        // recreate detaches the engine, whose cleanup clears the tracker, so this
+        // starts from nothing and fails closed: the lock screen comes back.
         applyLockScreenPolicy()
     }
 
