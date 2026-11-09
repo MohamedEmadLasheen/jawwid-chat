@@ -538,6 +538,33 @@ void main() {
       expect(native.ongoing, isEmpty);
     });
 
+    // LR-26 x LR-74 (rehearsal merge of #554): Try again after a refused media
+    // join reconnects the SAME call, and that grant is the first one this call
+    // has seen -- so it is what starts the ongoing-call service.
+    test('N7i2. ...then allowed, Try again rejoins the same call and starts the service once', () async {
+      final container = await ready();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+
+      await joinStartedScheduled(container);
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+      prompt.complete(MicrophoneAccess.denied);
+      await settle();
+      expect(stateOf(container).failure, CallUiFailure.microphone);
+      expect(native.ongoing, isEmpty);
+
+      mic.pending = null;
+      mic.access = MicrophoneAccess.granted;
+      await controllerOf(container).retry();
+      await settle();
+
+      expect(stateOf(container).phase, CallUiPhase.live);
+      expect(stateOf(container).callId, 'call_1');
+      expect(calls.startCalls, isEmpty, reason: 'no second call');
+      expect(native.ongoing, ['start:call_1']);
+    });
+
     test('N7j. a session that goes away mid-call stops the ongoing-call service', () async {
       final container = await ready();
       await controllerOf(container).start(

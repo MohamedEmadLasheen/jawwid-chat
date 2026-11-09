@@ -381,6 +381,10 @@ class L10nAr extends L10n {
       'يحتاج جَوِّد إلى إذن الميكروفون لإجراء المكالمات.';
 
   @override
+  String get callMicrophoneSettingsHint =>
+      'اسمح لجَوِّد باستخدام الميكروفون من إعدادات الجهاز، ثم حاول الاتصال مرة أخرى.';
+
+  @override
   String get callFailedNotAllowed => 'هذه المكالمة غير متاحة.';
 
   @override
