@@ -23,10 +23,10 @@ PRD. Those are your calls and AI #1's work.
 > later as well. Use `findings.md` for the current status of every finding, not
 > the tables below.
 
-> **Re-verified 2026-11-09 (W16) on `main` @ `bc47d376`.** 33 of 39 findings are
-> fixed or closed. Open: RT-010 (documentation residual only), RT-014 (partial),
-> RT-019 (partial), RT-029, RT-037 (staging real-media test not run) and RT-038
-> (fixed in code; closed only with W5). The dated table at the top of
+> **Re-verified 2026-11-09 (W16) on `main` @ `bc47d376`.** 34 of 39 findings are
+> fixed or closed (RT-010 closed by the engineering lead's decision). Open: RT-014
+> (partial), RT-019 (partial), RT-029, RT-037 (staging real-media test not run) and
+> RT-038 (fixed in code; closed only with W5). The dated table at the top of
 > [`findings.md`](findings.md) has the code location, commit, PR and test for each.
 
 ## Where this stands
