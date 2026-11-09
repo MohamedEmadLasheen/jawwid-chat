@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 23:58 Cairo (21:58 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-10 00:15 Cairo (22:15 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -34,6 +34,36 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 - day 2: review accounts, store builds and the console forms;
 - day 3: device test plan on two phones;
 - day 4: fixes from device testing, final compliance and security audit, then the owner's go.
+
+### State on 2026-11-10 (lead; from a read-only audit of every open row against `main` @ `7cc7aab5`)
+
+**Merged since 2026-11-09, each at its reviewed head with `main` CI green afterwards:**
+
+| Batch | PRs |
+|---|---|
+| 1 | #521, #541, #532, #539, #527, #530, #525, #533 |
+| 2 | #526, #531, #538, #544 |
+| 2b | #522 |
+| Stage 0 | #547 |
+| 3 | #534, #536, #546, #540 |
+
+`main` = `7cc7aab5`, CI 15/15.
+
+**New facts that change the plan:**
+1. **#497 (API terms gate) makes production refuse to boot without four published legal versions.** Deploy 1 therefore runs from a `main` without #497. Then the legal versions are published, #497 merges, and deploy 2 follows.
+2. **The `production` Environment lacks the required variables `STORAGE_ENDPOINT` and `STORAGE_REGION`** (documented values `https://fra1.digitaloceanspaces.com`, `fra1`). The first deploy would fail without them. Everything else production requires is set; names were checked read-only.
+3. **iOS does not use Firebase** (direct APNs). No Firebase iOS app is needed.
+4. **The iOS distribution certificate and profile come from cloud signing on the first run.** They are not a separate owner step; the App Store Connect key's role is what matters.
+5. **The store build checks only the format of the legal URLs.** Hosted pages do not block the first internal or TestFlight build; `SUPPORT_EMAIL` (a real mailbox) does.
+6. **Play may refuse the first API upload of a new app.** A safe first-upload path that does not use the development Mac is an open design item in #572.
+
+**Stale rows now on `main`, awaiting device or archive proof (READY FOR VERIFICATION):**
+- LR-24 (#531)
+- LR-39 (#522)
+- LR-23 (#526 Sentry sessions off; archive report pending)
+- LR-29 (#533; #543 retargeted to `main`)
+
+**LR-41:** the wording options are on `main` (#532) and wait for the owner's choice.
 
 ### Two progress measures (2026-11-09; both re-counted from §4, neither inflated)
 
