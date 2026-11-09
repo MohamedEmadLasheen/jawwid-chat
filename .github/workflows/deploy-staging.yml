@@ -119,8 +119,8 @@ jobs:
         # commit <sha> can upload into a run whose head_sha is <sha>, so a
         # writer who edits this file on a branch records under the BRANCH's
         # commit, never under a reviewed one. 90 days is the longest a public
-        # repository keeps an artifact; an older commit is re-recorded by
-        # running this workflow on a ref that points at it.
+        # repository keeps an artifact. Only a dispatch from main counts, so a
+        # commit is recorded while it is main's head; for an older one, deploy a newer commit.
         if: inputs.image_tag == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

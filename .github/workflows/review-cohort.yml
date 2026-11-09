@@ -155,7 +155,7 @@ jobs:
         # api:<sha> is accepted only if it resolves to the digest that a run of
         # deploy-staging.yml whose head_sha IS <sha> recorded when it pushed.
         # Such a run executes the workflow file of that reviewed commit; a run
-        # with an edited file has a different head_sha. The provision job then
+        # with an edited file has a different head_sha (workflow_dispatch only: a pull_request run executes the merge commit's file, hence the event and branch filter). The provision job then
         # pulls BY DIGEST, so moving the tag after this step changes nothing.
         env:
           GH_TOKEN: ${{ github.token }}
@@ -183,7 +183,7 @@ jobs:
           done
           docker logout ghcr.io >/dev/null 2>&1 || true
           [ -n "$found" ] || {
-            echo "::error::$REPO:$IMAGE_TAG resolves to $digest, which no Deploy staging run at $IMAGE_TAG recorded. The tag was overwritten, or the record expired (90 days): run Deploy staging on a ref at $IMAGE_TAG, then retry."
+            echo "::error::$REPO:$IMAGE_TAG resolves to $digest, which no Deploy staging run at $IMAGE_TAG recorded. The tag was overwritten, or the record expired (90 days): dispatch Deploy staging from main while main's head is $IMAGE_TAG (or deploy a newer commit), then retry."
             exit 1
           }
           echo "image=$REPO@$digest" >> "$GITHUB_OUTPUT"
