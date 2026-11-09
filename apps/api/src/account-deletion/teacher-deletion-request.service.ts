@@ -135,9 +135,13 @@ export class TeacherDeletionRequestService {
    * clock ahead of the database's -- the database refuses before its own
    * deadline) is not taken again in this sweep, and a batch that completes
    * nothing ends it. The next sweep tries them again.
+   *
+   * Erasures run before reminders, and each reminder row is isolated: a
+   * failing reminder (the notification store down, a request cancelled
+   * between the select and the insert) never holds a deletion past its
+   * 30 days.
    */
   async sweep(now: Date = new Date()): Promise<{ reminded: number; erased: number; failed: number; payrollSettled: number; handoversSettled: number }> {
-    const reminded = await this.remind(now);
     let erased = 0;
     const failed: string[] = [];
     for (;;) {
@@ -159,6 +163,7 @@ export class TeacherDeletionRequestService {
       erased += done;
       if (due.length < SWEEP_BATCH || done === 0) break;
     }
+    const reminded = await this.remind(now);
     // What erasures left for later: payout accounts once the payroll is settled, learners handed over.
     const [settled] = await this.prisma.$queryRaw<Array<{ r: { payrollSettled?: number; handoversSettled?: number } }>>`
       SELECT chat.erased_teacher_sweep(${SWEEP_BATCH}::int) AS r`;
@@ -185,36 +190,49 @@ export class TeacherDeletionRequestService {
        LIMIT ${SWEEP_BATCH * 4}`;
     let sent = 0;
     for (const r of rows) {
-      // Only the latest day that has come: a worker down over day 21 does not send it late beside day 28.
-      const day: ReminderDay = now.getTime() >= r.requested_at.getTime() + 28 * DAY_MS ? 28 : 21;
-      const recipients = await this.reminderRecipients(r.id, r.organization_id, r.teacher_id);
-      const taskId = await this.taskOf(r.organization_id, r.id);
-      // Sent first, then marked: a crash in between re-sends, and the dedupe key absorbs it.
-      for (const recipientId of recipients) {
-        const recipient = await this.identity.resolveActor(recipientId);
-        if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.STAFF || recipient.organizationId !== r.organization_id) continue;
-        const rule = `teacher_deletion_day${day}`;
-        await this.pipeline.emit({
-          dedupeKey: `${rule}:${r.id}:${recipientId}`,
-          ruleKey: rule,
-          eventType: rule,
-          templateKey: rule,
-          recipientId,
-          locale: recipient.locale,
-          priority: day === 28 ? 'high' : 'normal',
-          subject: taskId ? { type: 'task', id: taskId } : null,
-          refs: { taskId: taskId ?? undefined },
-          variables: { deadlineAt: r.deadline_at.toISOString() },
-          scheduledAt: now,
-        });
+      try {
+        if (await this.remindOne(r, now)) sent += 1;
+      } catch (e) {
+        // Not marked, so the next sweep sends it again; the dedupe key absorbs a partial send.
+        this.log.warn(`deletion request ${r.id}: reminder not sent: ${(e as Error).name}`);
       }
-      const marked = await this.prisma.$executeRaw`
-        INSERT INTO chat.account_deletion_reminder (request_id, day)
-        SELECT ${r.id}::uuid, d FROM unnest(${day === 28 ? [21, 28] : [21]}::smallint[]) AS d
-        ON CONFLICT (request_id, day) DO NOTHING`;
-      if (marked > 0) sent += 1;
     }
     return sent;
+  }
+
+  /** One request's reminder: sent to each recipient, then marked. True when this call marked it. */
+  private async remindOne(
+    r: { id: string; organization_id: string; teacher_id: string; requested_at: Date; deadline_at: Date },
+    now: Date,
+  ): Promise<boolean> {
+    // Only the latest day that has come: a worker down over day 21 does not send it late beside day 28.
+    const day: ReminderDay = now.getTime() >= r.requested_at.getTime() + 28 * DAY_MS ? 28 : 21;
+    const recipients = await this.reminderRecipients(r.id, r.organization_id, r.teacher_id);
+    const taskId = await this.taskOf(r.organization_id, r.id);
+    // Sent first, then marked: a crash in between re-sends, and the dedupe key absorbs it.
+    for (const recipientId of recipients) {
+      const recipient = await this.identity.resolveActor(recipientId);
+      if (!recipient || !recipient.isActive || recipient.kind !== ActorKind.STAFF || recipient.organizationId !== r.organization_id) continue;
+      const rule = `teacher_deletion_day${day}`;
+      await this.pipeline.emit({
+        dedupeKey: `${rule}:${r.id}:${recipientId}`,
+        ruleKey: rule,
+        eventType: rule,
+        templateKey: rule,
+        recipientId,
+        locale: recipient.locale,
+        priority: day === 28 ? 'high' : 'normal',
+        subject: taskId ? { type: 'task', id: taskId } : null,
+        refs: { taskId: taskId ?? undefined },
+        variables: { deadlineAt: r.deadline_at.toISOString() },
+        scheduledAt: now,
+      });
+    }
+    const marked = await this.prisma.$executeRaw`
+      INSERT INTO chat.account_deletion_reminder (request_id, day)
+      SELECT ${r.id}::uuid, d FROM unnest(${day === 28 ? [21, 28] : [21]}::smallint[]) AS d
+      ON CONFLICT (request_id, day) DO NOTHING`;
+    return marked > 0;
   }
 
   /** The task's assignee as it stands, the Teachers manager (else the super admin), the teacher's supervisor. Once each. */
