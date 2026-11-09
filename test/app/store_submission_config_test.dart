@@ -86,15 +86,22 @@ void main() {
     expect(body, contains('desiredPushTypes = [.voIP]'));
     expect(body.indexOf('PKPushRegistry(queue:'), lessThan(body.indexOf('ensureEngine()')));
 
-    // Exactly one registry, and startRegistering does not make it.
+    // Exactly one registry, and registering for push does not make it.
     expect(RegExp(r'PKPushRegistry\(queue:').allMatches(delegate).length, 1);
+    // `start` (prompt) and LR-11's `register` (no prompt) both go through
+    // registerForPush, so a "Not now" or headless session still gets the VoIP token.
     final start = delegate.indexOf('private func startRegistering()');
     expect(start, isNonNegative);
-    final startEnd = delegate.indexOf('\n  }\n', start);
-    final startBody = delegate.substring(start, startEnd);
-    expect(startBody, isNot(contains('PKPushRegistry(')));
+    final startBody = delegate.substring(start, delegate.indexOf('\n  }\n', start));
+    expect(startBody, contains('registerForPush()'));
+    final register = delegate.indexOf('private func registerForPush()');
+    expect(register, isNonNegative);
+    final registerEnd = delegate.indexOf('\n  }\n', register);
+    final registerBody = delegate.substring(register, registerEnd);
+    expect(registerBody, isNot(contains('PKPushRegistry(')));
     // A token that arrived before Dart asked is handed over when it asks.
-    expect(startBody, contains('pushToken(for: .voIP)'));
+    expect(registerBody, contains('voipTokensWanted = true'));
+    expect(registerBody, contains('pushToken(for: .voIP)'));
   });
 
   test('a duplicate VoIP push is still reported to CallKit', () {

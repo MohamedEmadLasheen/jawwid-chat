@@ -65,9 +65,9 @@ import UIKit
   private var pushChannel: FlutterMethodChannel?
   private var voipRegistry: PKPushRegistry?
 
-  /// Whether Dart has asked for tokens (`start`). Until then the VoIP token stays
-  /// in the registry (`pushToken(for:)`) instead of going to a Dart that is not
-  /// listening for it yet; `startRegistering` reads and reports it.
+  /// Whether Dart has asked for tokens (`start` or `register`). Until then the VoIP
+  /// token stays in the registry (`pushToken(for:)`) instead of going to a Dart that
+  /// is not listening for it yet; `registerForPush` reads and reports it.
   private var voipTokensWanted = false
 
   /// Tokens that arrived before Flutter was listening. The platform hands them
@@ -359,7 +359,7 @@ extension AppDelegate: PKPushRegistryDelegate {
     didUpdate pushCredentials: PKPushCredentials,
     for type: PKPushType
   ) {
-    // Before a session asks, the registry keeps the token; `startRegistering` reports it.
+    // Before a session asks, the registry keeps the token; `registerForPush` reports it.
     guard type == .voIP, voipTokensWanted else { return }
     report(token: pushCredentials.token, kind: "voip")
   }
