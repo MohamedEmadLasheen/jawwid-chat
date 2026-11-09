@@ -93,6 +93,7 @@ Each real merge of a stacked or conflicting PR still gets its own CI run and a d
 | **7. New, after their bases** | #554 (LR-26, on #449), #555 and #556 (docs), #557 (LR-11 explain-first) | | Low / Low / Low / Medium | main CI |
 | **7b. LR-46 fixes, after their bases** | #561 (on #535), #560 (on #528, Code Owner), #559 (on #551, **High: migration `20261109160000`**), #558 (docs) | lock-screen call only; production runs a recorded image digest; organization guards fail closed | High for #559 and #560 | main CI after each |
 | **7c. LR-46 follow-ups** | #563 (on #561; celebration not over the lock screen), #564 (on #497; no database password in `ps`), #562 (Android 12+ transfer excluded) | | Low / Low / Low | main CI |
+| **7d. LR-46 P3 fixes** | #565 (on #528; review accounts write only into their own organization), #566 (on #498; **High: migration `20261109170000`**, deletion request checks the staff role in SQL) | | Low / High | main CI; #566 after #498 |
 | **Excluded** | #553: duplicate of #524, do not merge | | | |
 | **Separate** | #503 (another session's PR; it shares `lib/l10n/*` with #449 and #498), #517 (Code Owner, `scripts/qa`), #543 (after #533, then retarget) | | Low / Low / Low | main CI |
 
