@@ -22,6 +22,8 @@ credential). No credential, entity name, address or URL has been invented.
 | [google-data-safety.md](google-data-safety.md) | Play Console → App content → Data safety | Every data type, the Firebase Installations ID, Sentry, encryption in transit, deletion |
 | [age-rating.md](age-rating.md) | App Store Connect → Age Rating; Play → Content rating (IARC) | Apple's current questionnaire (incl. user-generated content, messaging, social media) and IARC |
 | [play-declarations.md](play-declarations.md) | Play Console → App content, Store settings | Target audience, App access (review instructions), ads, financial features, health, news, government, foreground service (and its video), full-screen intent, permissions, category, countries |
+| [review-notes.md](review-notes.md) | App Store Connect → App Review Information → Notes; Play → App access | The paste-ready review text (LR-09f): three review accounts, deletion, calls, the staff role, the payments choice (OA-12), and the byte count |
+| [ios-background-modes.md](ios-background-modes.md) | (App Review checks the app) | LR-24: each `UIBackgroundModes` entry, the code that uses it, and its justification. `remote-notification` has no use: remove it |
 | [listing-copy.md](listing-copy.md) | Both listings | Name, subtitle, short and full descriptions, keywords, what's new (Arabic first), screenshot sizes and shot list |
 
 ## Findings from the code (for the lead)
