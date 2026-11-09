@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post, Req, UseFilters } from '@nestjs/common';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { NotificationService } from '../notifications/notification.service';
+import type { AuthenticatedRequest } from '../../platform/auth/auth.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { SelfService } from '../../platform/permissions/route-access';
@@ -70,12 +71,20 @@ export class NotificationController {
    * input is built field by field from a whitelisted, type-checked body, and
    * `actorId` comes from the principal only. Nothing in the body is spread
    * (there is no global ValidationPipe, so this is the only shape check).
+   *
+   * LR-46: it is bound to the caller's CURRENT session, taken from the verified
+   * request as the actor is (never from the body), so signing that session out
+   * stops its pushes.
    */
   @SelfService()
   @Post('devices')
-  async register(@ActorId() actorId: string, @Body() body: unknown) {
+  async register(
+    @ActorId() actorId: string,
+    @Body() body: unknown,
+    @Req() request: Pick<AuthenticatedRequest, 'sessionId'>,
+  ) {
     const device = parseDeviceRegistration(body);
-    await this.notifications.registerDevice({ ...device, actorId });
+    await this.notifications.registerDevice({ ...device, actorId, sessionId: request.sessionId ?? null });
     return { ok: true };
   }
 
