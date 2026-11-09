@@ -81,11 +81,17 @@ the review organization's rows and deploys nothing.
    - It writes the passwords to private (mode 600) files on the runner only for the run, and deletes them at the
      end even if the run fails.
    - **It never prints the logins** (LR-46 P3-9). The repository is public, so its run logs and summaries are
-     too, and anyone who saw a login could lock it with ten wrong passwords during store review. The run log and
-     summary show only how many review logins were provisioned (and how many were new), the `app-review`
-     organization, the commit and the image digest. The login domain is masked in the log (`***`), including in
-     any error message from the command, and the command's own output is reduced to counts before it is printed.
-     The database's host:port/name is masked the same way, and a password or the database URL is never printed.
+     too. The run log and summary show only how many review logins were provisioned (and how many were new), the
+     `app-review` organization, the commit and the image digest. The login domain is masked in the log (`***`),
+     including in any error message from the command, and the command's own output is reduced to counts before it
+     is printed. A domain containing a line break is refused before anything else, without printing it (a mask
+     covers one line). The database's host:port/name is masked the same way, and a password or the database URL is
+     never printed.
+   - **This only reduces exposure; it does not protect the accounts.** The login names (`parent`, `teacher`,
+     `parent2`) are written in this public repository, and the domain may be easy to guess (for example Jawwid's
+     own domain). Anyone who guesses it can still lock a review account with ten wrong passwords during store
+     review. The real protection is a login domain (or login names) that is hard to guess; which domain to use is
+     the owner's decision. If a review account is locked, re-running this workflow clears the lockout.
    - **Where the logins are:** `parent@<domain>`, `teacher@<domain>` and `parent2@<domain>`, with the domain you
      typed in step 4. Keep them, with the passwords, in your password manager and in the store review fields of
      step 5. The run will not show them to you.

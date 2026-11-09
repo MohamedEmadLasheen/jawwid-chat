@@ -29,14 +29,20 @@
 #
 # LR-46 P3-9: the repository is public, and so are this workflow's logs and
 # run summaries. The review logins (parent@, teacher@, parent2@<domain>) are
-# never printed: anyone who saw them could lock the accounts with ten wrong
-# passwords during store review. The login domain is read from the event
-# payload, never placed in an env: block (GitHub prints a step's env values in
-# its log), and is registered with ::add-mask:: first thing in each job, so
-# the CLI's own output, which names the logins, shows *** in its place. The
-# CLI's stdout is also reduced to counts before it is printed. The summary
-# records counts, the organization slug, the commit and the image digest. The
-# owner keeps the logins in the store review notes and a password manager.
+# never printed. The login domain is read from the event payload, never placed
+# in an env: block or ${{ }} expression (GitHub prints a step's env values in
+# its log), is refused if it holds a line break (a mask covers one line), and
+# is registered with ::add-mask:: first thing in each job, so the CLI's own
+# output, which names the logins, shows *** in its place. The CLI's stdout is
+# also reduced to counts before it is printed. The summary records counts, the
+# organization slug, the commit and the image digest. The owner keeps the
+# logins in the store review notes and a password manager.
+# This only REDUCES exposure; it is not a defence. The three login names are
+# in this public source, and the domain may be guessable (for example
+# Jawwid's own), so anyone who guesses it can still lock the accounts with ten
+# wrong passwords during store review. The real protection is a review login
+# domain (or login names) that is hard to guess; choosing it is the owner's
+# decision (docs/release/review-accounts.md).
 #
 # No action is used at all, so there is nothing to pin: registry login, the
 # checks and the run are plain shell, gh and jq from the runner image.
@@ -96,9 +102,14 @@ jobs:
         # read from the event payload instead (LR-46 P3-9): an env: value is
         # printed in the step's log, and the domain names the review logins.
         # It is masked before anything else runs, and no message quotes it.
+        # A mask covers a single line, so a value with a line break is refused
+        # first, by a message that prints nothing of it.
         run: |
           EMAIL_DOMAIN="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
           CONFIRM_EMAIL_DOMAIN="$(jq -r '.inputs.confirm_email_domain // ""' "$GITHUB_EVENT_PATH")"
+          case "$EMAIL_DOMAIN$CONFIRM_EMAIL_DOMAIN" in
+            *$'\n'*|*$'\r'*) echo "::error::email_domain and confirm_email_domain must each be one line. Nothing was changed."; exit 1 ;;
+          esac
           [ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"
           [ -z "$CONFIRM_EMAIL_DOMAIN" ] || echo "::add-mask::$CONFIRM_EMAIL_DOMAIN"
           # The production Environment's branch restriction is the real gate
@@ -222,10 +233,15 @@ jobs:
     steps:
       - name: Mask the login domain
         # A mask is per job, so preflight's does not cover this one. First
-        # step, before the CLI (whose output names the logins) can print.
+        # step, before the CLI (whose output names the logins) can print. A
+        # value with a line break (preflight refuses it too) would be masked
+        # only up to the break, so it is refused here first, printing nothing.
         run: |
           d="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
           [ -n "$d" ] || { echo "::error::email_domain is empty"; exit 1; }
+          case "$d" in
+            *$'\n'*|*$'\r'*) echo "::error::email_domain must be one line. Nothing was changed."; exit 1 ;;
+          esac
           echo "::add-mask::$d"
           echo "The login domain is masked in this job's log."
 
