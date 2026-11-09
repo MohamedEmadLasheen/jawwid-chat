@@ -69,6 +69,7 @@ how each was resolved form the recipe for the real merges:
 | #537 after #498 | `account-deletion.service.ts` | the session lock goes at the top of #498's shared `run()` |
 | **#557 with #529** (whichever merges second) | `ios/Runner/AppDelegate.swift` registry lines | Put #529's `voipTokensWanted = true` and the stored `pushToken(for: .voIP)` report inside #557's `registerForPush` (NOT only in `startRegistering`), or iOS calls stop ringing after "Not now". Point #529's test in `store_submission_config_test.dart` at `registerForPush` |
 | #557 with #449 (and #524, #535) | `MainActivity.kt` push channel `when` block | keep both `start` and `register` cases; run a merge-tree check first |
+| **#554 after the #449 stack (#524, #535, #529, #537)** | `call_controller.dart`, `call_media_providers.dart`, `call_controller_test.dart`, device plan | `start()` keeps the shared LR-74 microphone question (`_askMicrophone()`); `_microphoneReady()` must go through `_askMicrophone()` too (no second concurrent prompt); `dismiss()` keeps the teardown, then clears the parked answer; keep both providers; rows SB-28, SB-29, SB-38. **Behaviour gap to fix in that merge:** `_retryMicrophone`'s reconnect must pass `onMicrophoneGranted` so the Android ongoing-call service starts (test N7i2), or a retried call can be cut off in the background |
 | #545, #551 after #539 | `findings.md` | keep #539's rows; RT-029 gets both notes |
 
 Each real merge of a stacked or conflicting PR still gets its own CI run and a delta review at its new head.
