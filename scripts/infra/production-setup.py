@@ -33,6 +33,7 @@ import re
 import secrets
 import subprocess
 import sys
+from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MANIFEST = os.path.join(ROOT, "infra", "env", "manifest.tsv")
@@ -184,14 +185,131 @@ def cmd_status() -> int:
     return 0 if not missing_now else 1
 
 
+# libpq URI query parameters that have a standard PG* environment variable.
+# Anything else is refused: dropping it silently could weaken the connection
+# (e.g. lose a TLS setting) without anyone noticing.
+#
+# `service` is refused on purpose even though PGSERVICE exists: libpq reads a
+# service file BEFORE the PG* variables, so a service file's `options=` would
+# beat PGOPTIONS and drop the read-only setting `legal` appends.
+PG_QUERY_ENV = {
+    "host": "PGHOST",
+    "hostaddr": "PGHOSTADDR",
+    "port": "PGPORT",
+    "dbname": "PGDATABASE",
+    "user": "PGUSER",
+    "password": "PGPASSWORD",
+    "options": "PGOPTIONS",
+    "application_name": "PGAPPNAME",
+    "connect_timeout": "PGCONNECT_TIMEOUT",
+    "sslmode": "PGSSLMODE",
+    "sslrootcert": "PGSSLROOTCERT",
+    "sslcert": "PGSSLCERT",
+    "sslkey": "PGSSLKEY",
+    "sslcrl": "PGSSLCRL",
+    "sslcrldir": "PGSSLCRLDIR",
+    "sslsni": "PGSSLSNI",
+    "sslcertmode": "PGSSLCERTMODE",
+    "sslnegotiation": "PGSSLNEGOTIATION",
+    "ssl_min_protocol_version": "PGSSLMINPROTOCOLVERSION",
+    "ssl_max_protocol_version": "PGSSLMAXPROTOCOLVERSION",
+    "require_auth": "PGREQUIREAUTH",
+    "channel_binding": "PGCHANNELBINDING",
+    "gssencmode": "PGGSSENCMODE",
+    "passfile": "PGPASSFILE",
+    "target_session_attrs": "PGTARGETSESSIONATTRS",
+    "load_balance_hosts": "PGLOADBALANCEHOSTS",
+}
+# libpq takes a comma-separated list in these; this tool connects to one host.
+PG_LIST_PARAMS = ("host", "hostaddr", "port")
+SEVERAL_HOSTS = "DATABASE_URL names several hosts or ports; give one host"
+PG_READ_ONLY = "-c default_transaction_read_only=on"
+
+
+def pg_env(url: str) -> dict[str, str]:
+    """A postgres:// URL as PG* environment variables, so psql gets no secret on its command line.
+
+    Raises ValueError with a message that never contains the URL, the password
+    or any other value taken from it (parameter NAMES only, and only when they
+    look like one).
+    """
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        raise ValueError("DATABASE_URL is not a valid URL (an invalid port, or brackets)") from None
+    if parts.scheme not in ("postgres", "postgresql"):
+        raise ValueError("DATABASE_URL must start with postgres:// or postgresql://")
+    if parts.fragment:
+        raise ValueError("DATABASE_URL has a #fragment, which libpq does not accept")
+    # Only the host part: a comma in the user name or password is legal. libpq
+    # splits the host list after decoding, so %2C counts as a comma too.
+    hostport = parts.netloc.rpartition("@")[2]
+    if "," in unquote(hostport):
+        raise ValueError(SEVERAL_HOSTS)
+    env: dict[str, str] = {}
+    # unquote, not unquote_plus: libpq decodes %XX only, never '+'.
+    if parts.username:
+        env["PGUSER"] = unquote(parts.username)
+    if parts.password is not None:
+        env["PGPASSWORD"] = unquote(parts.password)
+    # Host from the netloc itself: .hostname lowercases, which would corrupt a
+    # percent-encoded socket directory (postgresql://%2Fvar%2Frun%2Fpostgresql/db).
+    host = hostport[1:].partition("]")[0] if hostport.startswith("[") else hostport.partition(":")[0]
+    if host:
+        env["PGHOST"] = unquote(host)
+    if port is not None:
+        env["PGPORT"] = str(port)
+    dbname = unquote(parts.path[1:]) if parts.path.startswith("/") else ""
+    if dbname:
+        env["PGDATABASE"] = dbname
+    seen: set[str] = set()
+    for pair in parts.query.split("&") if parts.query else []:
+        raw_key, sep, raw_value = pair.partition("=")
+        key = unquote(raw_key)
+        if not sep:
+            # No name either: a pasted secret with no '=' would be the "name".
+            raise ValueError("DATABASE_URL has a query parameter with no value")
+        shown = key if re.fullmatch(r"[a-z_]{1,40}", key) else "an unreadable parameter"
+        if key not in PG_QUERY_ENV:
+            raise ValueError(f"DATABASE_URL query parameter {shown} has no PG* environment variable; "
+                             "remove it or set it some other way")
+        if key in seen:
+            raise ValueError(f"DATABASE_URL repeats the query parameter {shown}")
+        seen.add(key)
+        value = unquote(raw_value)
+        if key in PG_LIST_PARAMS and "," in value:
+            raise ValueError(SEVERAL_HOSTS)
+        env[PG_QUERY_ENV[key]] = value  # libpq: a query parameter overrides the URI part
+    return env
+
+
+def legal_conn_env(url: str) -> dict[str, str]:
+    """pg_env(url) with the session forced read-only.
+
+    The URL's own options are kept and the read-only setting is appended AFTER
+    them: the server applies -c settings in order, so the last one wins.
+    """
+    conn = pg_env(url)
+    conn["PGOPTIONS"] = f"{conn['PGOPTIONS']} {PG_READ_ONLY}" if conn.get("PGOPTIONS") else PG_READ_ONLY
+    return conn
+
+
 def cmd_legal() -> int:
     """Read-only: does each legal.current.<key> row name a published version? Prints names, never the URL."""
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         print("production-setup legal: set DATABASE_URL for the database to check (it is never printed)", file=sys.stderr)
         return 64
-    env = dict(os.environ, PGOPTIONS="-c default_transaction_read_only=on")
-    p = subprocess.run(["psql", "-X", "-v", "ON_ERROR_STOP=1", "-At", "-F", "\t", url, "-c", LEGAL_SQL],
+    try:
+        conn = legal_conn_env(url)
+    except ValueError as e:
+        print(f"production-setup legal: {e} (the URL is never printed)", file=sys.stderr)
+        return 64
+    # The connection goes through the environment, not argv, so `ps` never shows
+    # the URL or password. The session is always read-only (legal_conn_env).
+    env = {**os.environ, **conn}
+    p = subprocess.run(["psql", "-X", "-v", "ON_ERROR_STOP=1", "-At", "-F", "\t", "-c", LEGAL_SQL],
                        text=True, capture_output=True, check=False, env=env)
     if p.returncode != 0:
         print(f"production-setup legal: psql exited {p.returncode}", file=sys.stderr)  # stderr not echoed: it can quote the URL
