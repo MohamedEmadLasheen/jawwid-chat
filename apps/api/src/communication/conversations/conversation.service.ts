@@ -366,8 +366,12 @@ export class ConversationService {
     return { conversation, members: await this.membersOf(conversation.id, actor) };
   }
 
-  async liveMembersOf(conversationId: string): Promise<LiveMember[]> {
-    const rows = await this.prisma.conversationMember.findMany({
+  async liveMembersOf(
+    conversationId: string,
+    // RT-014: a send re-reads presence inside its transaction, under its locks.
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<LiveMember[]> {
+    const rows = await db.conversationMember.findMany({
       where: { conversationId, leftAt: null },
     });
     return Promise.all(
