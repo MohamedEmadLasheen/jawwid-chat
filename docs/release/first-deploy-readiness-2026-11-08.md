@@ -501,5 +501,9 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
 13. **Staging, before launch** (if Option B was chosen): §4 Option A steps 1-3, then the restore drill
     into staging (`production-readiness.md:58, 246`). Unblocks: LR-29.
 
+LR-29's monitoring part (uptime check on `/health/ready`, alert e-mail, the on-call person of OA-19,
+proposed component alerts) is in `docs/infrastructure/monitoring.md` §7; its steps come after the
+first production deploy and do not block it.
+
 Until LR-77 is fixed and items 7-10 are done, LR-01 stays open. Nothing in this list changes Core, Core's DNS records or
 any protected project.
