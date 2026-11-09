@@ -67,6 +67,8 @@ how each was resolved form the recipe for the real merges:
 | #529, #535 | device plan | keep SB-28 and SB-29 |
 | #537 after #534 | controller, spec | take #537's |
 | #537 after #498 | `account-deletion.service.ts` | the session lock goes at the top of #498's shared `run()` |
+| **#557 with #529** (whichever merges second) | `ios/Runner/AppDelegate.swift` registry lines | Put #529's `voipTokensWanted = true` and the stored `pushToken(for: .voIP)` report inside #557's `registerForPush` (NOT only in `startRegistering`), or iOS calls stop ringing after "Not now". Point #529's test in `store_submission_config_test.dart` at `registerForPush` |
+| #557 with #449 (and #524, #535) | `MainActivity.kt` push channel `when` block | keep both `start` and `register` cases; run a merge-tree check first |
 | #545, #551 after #539 | `findings.md` | keep #539's rows; RT-029 gets both notes |
 
 Each real merge of a stacked or conflicting PR still gets its own CI run and a delta review at its new head.
