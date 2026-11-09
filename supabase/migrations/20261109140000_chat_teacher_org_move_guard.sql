@@ -123,6 +123,10 @@ begin
 end;
 $$;
 
+-- A trigger fires regardless of EXECUTE; no request role may call it directly
+-- (definer-function-audit.spec.ts: only reviewed helpers are executable).
+revoke all on function chat.guard_teacher_organization_move() from public;
+
 comment on function chat.guard_teacher_organization_move() is
   'RT-029 (parent side): refuses moving a chat.teacher to another organization while '
   'any chat.learner naming the teacher is outside the new organization. Child side: '
