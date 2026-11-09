@@ -27,12 +27,12 @@ import 'package:jawwid_chat/core/call_native/call_native_providers.dart';
 import 'package:jawwid_chat/core/call_native/device_keyguard.dart';
 import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_controller.dart';
 import 'package:jawwid_chat/features/calls/application/call_media_providers.dart';
 import 'package:jawwid_chat/features/calls/application/locked_call_guard.dart';
 import 'package:jawwid_chat/features/calls/presentation/active_call_screen.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_presenter.dart';
-import 'package:jawwid_chat/features/app_lock/application/app_lock_controller.dart';
 import 'package:jawwid_chat/features/calls/presentation/call_route_screen.dart';
 import 'package:jawwid_chat/features/rewards/application/reward_feed.dart';
 import 'package:jawwid_chat/features/rewards/presentation/reward_celebration.dart';
@@ -569,6 +569,38 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
       expect(celebration(), findsNothing);
       expect(chime.plays, 1);
+    });
+
+    // Review of #563, P2: the guard is "shown over the lock screen", not "unlocked". A call that
+    // ends with the phone still locked turns it false while the lock screen is back and the app
+    // behind it: the kept reward must still wait until the app is back in front.
+    testWidgets('a call that ends with the phone still locked: it waits until the app is back in front',
+        (tester) async {
+      await ringing(tester, locked: true, rewards: true);
+      socket.emit(rewardGivenEvent, _star(3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsNothing);
+
+      // The call ends; the lock screen is back and the app is behind it.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await endedOverLockScreen(tester);
+      await tester.pump(const Duration(seconds: 3));
+      expect(container(tester).read(lockedCallGuardProvider), isFalse, reason: 'no longer shown over the lock screen');
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 0, reason: 'nothing heard on a locked phone');
+
+      // The person unlocks; the app comes back to the front.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(celebration(), findsOneWidget);
+      expect(find.text(en.rewardStarLine(3)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(celebration(), findsNothing);
+      expect(chime.plays, 1, reason: 'it plays once, with its sound');
     });
   });
 }

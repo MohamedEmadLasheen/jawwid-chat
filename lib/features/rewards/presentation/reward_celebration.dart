@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -33,9 +34,12 @@ import '../domain/rewards.dart';
 /// lost, unlike under the app lock: a child answering a lesson call from the lock
 /// screen is the usual case, not the exception. The latest one is kept (it carries
 /// the lesson's newest tally) and plays, with its sound, once the guard says the
-/// app is no longer over the lock screen -- unlocked, and back in front -- unless
-/// the app lock covers the app by then, which drops it as above. Unlocked,
-/// nothing changes: it plays over everything, a call included.
+/// app is no longer over the lock screen AND the app is in front -- unless the app
+/// lock covers the app by then, which drops it as above. Both are needed (review of
+/// #563, P2): the guard is "shown over the lock screen", not "unlocked", so a call
+/// that ends with the phone still locked turns it false while the app is behind
+/// the lock screen; the reward then waits for the app to come back to the front.
+/// Unlocked, nothing changes: it plays over everything, a call included.
 class RewardCelebrationHost extends ConsumerStatefulWidget {
   const RewardCelebrationHost({super.key, required this.child});
 
@@ -47,7 +51,8 @@ class RewardCelebrationHost extends ConsumerStatefulWidget {
   ConsumerState<RewardCelebrationHost> createState() => _RewardCelebrationHostState();
 }
 
-class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> with SingleTickerProviderStateMixin {
+class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _burst = AnimationController(vsync: this, duration: RewardCelebrationHost.duration);
   ({int seq, RewardGiven reward})? _showing;
 
@@ -57,6 +62,7 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> w
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _burst.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) setState(() => _showing = null);
     });
@@ -64,17 +70,45 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> w
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _burst.dispose();
     super.dispose();
+  }
+
+  /// Review of #563, P2: a kept reward whose guard turned false while the app was behind
+  /// the lock screen plays once the app is back in front.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || _pending == null) return;
+    // After the other observers: the app lock (a descendant, so told after this) decides
+    // whether it covers the app on resume first.
+    scheduleMicrotask(() {
+      if (!mounted || ref.read(lockedCallGuardProvider)) return;
+      _playPending();
+    });
+  }
+
+  /// The app is in front: no lifecycle report yet means it just started, in front.
+  bool get _inFront {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    return lifecycle == null || lifecycle == AppLifecycleState.resumed;
+  }
+
+  void _playPending() {
+    final pending = _pending;
+    _pending = null;
+    if (pending == null || _appLockHides) return;
+    _celebrate(pending);
   }
 
   void _celebrate(({int seq, RewardGiven reward}) next) {
     setState(() => _showing = next);
     _burst.forward(from: 0);
-    // The device's choice may still be loading on the very first reward: wait for it.
+    // The device's choice may still be loading on the very first reward: wait for it --
+    // and say nothing if the app went over the lock screen meanwhile (review of #563, P3-4).
     final chime = ref.read(rewardChimeProvider);
     ref.read(rewardSoundProvider.future).then((on) {
-      if (on) chime.play(RewardCue.of(next.reward));
+      if (on && mounted && !ref.read(lockedCallGuardProvider)) chime.play(RewardCue.of(next.reward));
     }, onError: (Object _) {});
   }
 
@@ -90,24 +124,34 @@ class _RewardCelebrationHostState extends ConsumerState<RewardCelebrationHost> w
     final hidden = lock.covered || lock.obscured || overLockScreen;
     ref.listen(rewardFeedProvider, (previous, next) {
       if (next == null) {
-        // A new account's feed: nothing the last one heard is shown.
+        // The feed was reset (a new account, or its socket rebuilt): nothing the last one
+        // heard is shown, a kept one included.
         _pending = null;
         return;
       }
       if (next.seq == previous?.seq) return;
       if (_appLockHides) return;
-      if (ref.read(lockedCallGuardProvider)) {
+      // One already waiting (over the lock screen, or behind it): this newer one waits instead.
+      if (ref.read(lockedCallGuardProvider) || _pending != null) {
         _pending = next;
         return;
       }
       _celebrate(next);
     });
     ref.listen(lockedCallGuardProvider, (wasOver, isOver) {
-      if (isOver || wasOver != true) return;
-      final pending = _pending;
-      _pending = null;
-      if (pending == null || _appLockHides) return;
-      _celebrate(pending);
+      if (isOver) {
+        // One already playing ends here: only hidden, it would come back part-way through
+        // if the app left the lock screen within its 2.5 s (review of #563, P3-3).
+        if (_showing != null) {
+          _burst.stop();
+          setState(() => _showing = null);
+        }
+        return;
+      }
+      if (wasOver != true) return;
+      // Not over the lock screen any more -- but maybe behind it (a call that ended with the
+      // phone still locked): then the kept reward waits for the app to come to the front.
+      if (_inFront) _playPending();
     });
     final showing = hidden ? null : _showing;
     return Stack(
