@@ -28,7 +28,7 @@ import { LessonModule } from '../../src/lessons/lesson.module';
 import { AdminModule } from '../../src/admin/admin.module';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
 import {
-  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_ORG_SLUG, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
+  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_ORG_NAME, REVIEW_ORG_SLUG, REVIEW_STAFF, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
 } from '../../src/cli/review-cohort';
 import { parseArgs, publicSummary } from '../../src/cli/provision-review-cohort';
 import { buildGraph, truncate } from './harness';
@@ -100,6 +100,95 @@ afterAll(async () => {
   await cleanup();
   await g.prisma.$disconnect();
 }, 60_000);
+
+// ===========================================================================
+describe('0. it writes only into a review organization, and never takes an account from another', () => {
+  // Each case starts and ends with no review organization, so section 1
+  // still begins from nothing.
+  beforeEach(cleanup);
+  afterEach(cleanup);
+
+  const refusalOf = (o: ReviewCohortOptions = opts) =>
+    provisionReviewCohort(g.prisma, o).then(() => null, (e: unknown) => {
+      if (!(e instanceof ReviewCohortRefusal)) throw e;
+      return e.code;
+    });
+
+  it('refuses an organization that has the slug but not the name it creates, and writes nothing into it', async () => {
+    const org = await g.prisma.organization.create({ data: { slug: REVIEW_ORG_SLUG, displayName: 'Al-Noor Academy' } });
+    expect(await refusalOf()).toBe('NOT_REVIEW_ORGANIZATION');
+    expect(await countsFor(org.id)).toEqual({});
+    expect((await g.prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).displayName).toBe('Al-Noor Academy');
+    expect(await g.prisma.account.count({ where: { subject: { endsWith: `@${DOMAIN}` } } })).toBe(0);
+  });
+
+  it('refuses the right slug and name when the organization holds anyone outside the review cohort', async () => {
+    const outsiders: Array<[string, (orgId: string) => Promise<unknown>]> = [
+      ['a staff login', (orgId) => g.prisma.account.create({
+        data: { organizationId: orgId, subject: 'owner@alnoor.example', kind: 'staff', status: 'active', isActive: true },
+      })],
+      ['a parent with another email', (orgId) => g.prisma.account.create({
+        data: { organizationId: orgId, subject: 'mother@alnoor.example', kind: 'family', status: 'active', isActive: true },
+      })],
+      ['a review email of the wrong kind', (orgId) => g.prisma.account.create({
+        data: { organizationId: orgId, subject: `teacher@${DOMAIN}`, kind: 'family', status: 'active', isActive: true },
+      })],
+      ['a member of staff the command never makes', (orgId) => g.prisma.staff.create({
+        data: { organizationId: orgId, name: 'Real Supervisor', role: 'admin', isActive: true },
+      })],
+      ['a teacher the command never makes', (orgId) => g.prisma.teacher.create({
+        data: { organizationId: orgId, name: 'Real Teacher', isActive: true },
+      })],
+      ['a family the command never makes', async (orgId) => {
+        const owner = await g.prisma.staff.create({
+          data: { organizationId: orgId, name: REVIEW_STAFF.supervisor.name, role: REVIEW_STAFF.supervisor.role, isActive: true },
+        });
+        return g.prisma.family.create({ data: { organizationId: orgId, displayName: 'Real family', ownerId: owner.id, language: 'en' } });
+      }],
+    ];
+    for (const [who, add] of outsiders) {
+      await cleanup();
+      const org = await g.prisma.organization.create({ data: { slug: REVIEW_ORG_SLUG, displayName: REVIEW_ORG_NAME } });
+      await add(org.id);
+      const before = await countsFor(org.id);
+      expect([who, await refusalOf()]).toEqual([who, 'NOT_REVIEW_ORGANIZATION']);
+      expect([who, await countsFor(org.id)]).toEqual([who, before]);
+      expect([who, await g.prisma.accountCredential.count({ where: { account: { organizationId: org.id } } })]).toEqual([who, 0]);
+    }
+  });
+
+  it('an organization it made itself, holding only the review cohort, is accepted again', async () => {
+    const first = await provisionReviewCohort(g.prisma, opts);
+    // A deleted (erased) parent stays behind as an erased account; that is still the cohort.
+    await g.prisma.$queryRaw`select chat.erase_account(${first.deletionParent.accountId}::uuid, 'review spec', '{}'::text[])`;
+    const again = await provisionReviewCohort(g.prisma, opts);
+    expect(again.organizationId).toBe(first.organizationId);
+  });
+
+  it('refuses, and does not move, a review email that already belongs to another organization (SUBJECT_TAKEN)', async () => {
+    const other = await g.prisma.organization.create({ data: { slug: 'review-spec-elsewhere', displayName: 'Elsewhere Academy' } });
+    try {
+      for (const [key, kind] of [['teacher', 'teacher'], ['parent', 'family'], ['parent2', 'family']] as const) {
+        await cleanup();
+        const subject = `${key}@${DOMAIN}`;
+        const taken = await g.prisma.account.create({
+          data: { organizationId: other.id, subject, kind, status: 'active', isActive: true },
+        });
+        expect([key, await refusalOf()]).toEqual([key, 'SUBJECT_TAKEN']);
+        const after = await g.prisma.account.findUniqueOrThrow({ where: { id: taken.id } });
+        // Not moved, not activated differently, not given a password, not seated anywhere.
+        expect([key, after.organizationId, after.subject, after.kind]).toEqual([key, other.id, subject, kind]);
+        expect([key, await g.prisma.accountCredential.count({ where: { accountId: taken.id } })]).toEqual([key, 0]);
+        expect([key, await g.prisma.contact.count({ where: { accountId: taken.id } })]).toEqual([key, 0]);
+        expect([key, await g.prisma.teacher.count({ where: { accountId: taken.id } })]).toEqual([key, 0]);
+        expect([key, await g.prisma.auditLog.count({ where: { action: REVIEW_AUDIT_ACTION, entityId: taken.id } })]).toEqual([key, 0]);
+      }
+    } finally {
+      await g.prisma.account.deleteMany({ where: { organizationId: other.id } });
+      await g.prisma.organization.delete({ where: { id: other.id } });
+    }
+  });
+});
 
 // ===========================================================================
 describe('1. what the command leaves in the database', () => {

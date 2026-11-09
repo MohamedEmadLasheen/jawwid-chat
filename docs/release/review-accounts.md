@@ -79,6 +79,26 @@ For local and CI testing the command itself is unchanged: `node dist/cli/provisi
 --deletion-parent-password-file <file>`, each file chmod 600. `--target` must match `DATABASE_URL`; outside local,
 test and CI it refuses without `--allow-non-local`; a password is never accepted on the command line.
 
+## It writes only into its own organization
+
+The organization is found by its slug `app-review`. The database has no column that marks an organization as the
+review one, so the slug alone is not trusted (LR-46 P3-10). Before it writes anything, the command checks that the
+organization with that slug:
+
+- is named exactly "Jawwid App Review", the name the command gives it when it creates it; and
+- holds nobody and nothing outside the review cohort: no login other than `parent@`, `teacher@` and `parent2@` of
+  the right kind (or a login a reviewer deleted), no staff other than the three synthetic ones, no teacher other
+  than "Hassan Mourad", and no family other than "Adel family" and "Hamdi family".
+
+If any of that fails, it stops with `NOT_REVIEW_ORGANIZATION` and writes nothing. That means a real organization
+took the slug, or someone added people to the review organization by hand. Investigate; do not rename or empty the
+organization to make the run pass.
+
+It also never takes an account from another organization. If `parent@<domain>`, `teacher@<domain>` or
+`parent2@<domain>` already belongs to any other organization, the run stops with `SUBJECT_TAKEN`. That account is
+left exactly as it was: not moved, no new password, and no seat in any review chat. Choose a domain no real account
+uses.
+
 ## Run it again
 
 Run the workflow again after every review, and whenever an account misbehaves. It is safe to repeat:
