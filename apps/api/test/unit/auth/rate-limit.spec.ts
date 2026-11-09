@@ -28,6 +28,7 @@ import {
   FakeRateLimitStore,
   withAuthEnv,
 } from './support/fake-db';
+import { NO_LEGAL_SERVICE } from './support/fake-legal';
 
 jest.setTimeout(60_000);
 
@@ -235,7 +236,7 @@ describe('the controller reserves before the password is verified', () => {
     db = new FakeDb();
     identity = new FakeIdentity();
     store = new FakeRateLimitStore();
-    controller = new AuthController(buildAuth(db, identity), new LoginRateLimiter(store));
+    controller = new AuthController(buildAuth(db, identity), new LoginRateLimiter(store), NO_LEGAL_SERVICE);
     const account = await db.addAccount({ subject: 'parent-rl' }, PASSWORD);
     identity.give(account.id, contactActor());
   });

@@ -4,6 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { LessonService } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { Requires } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * PD-9 / PD-11 lessons and their tickets. Every route is behind the global
@@ -73,24 +74,28 @@ export class LessonController {
   }
 
   @Requires('lessons.manage')
+  @RequiresLegal()
   @Post('lessons/:id/report')
   report(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.lessons.report(actorId, id, body ?? {});
   }
 
   @Requires('lessons.manage')
+  @RequiresLegal()
   @Post('lessons/:id/absence')
   absence(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.lessons.absence(actorId, id, body ?? {});
   }
 
   @Requires('lessons.manage')
+  @RequiresLegal()
   @Post('lessons/:id/apology')
   apology(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.lessons.apology(actorId, id, body ?? {});
   }
 
   @Requires('lessons.manage')
+  @RequiresLegal()
   @Post('lessons/:id/teacher-apology')
   teacherApology(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.lessons.teacherApology(actorId, id, body ?? {});
@@ -108,7 +113,9 @@ export class LessonController {
     return this.lessons.teacherNoShow(actorId, id, body ?? {});
   }
 
+  /** PD-58: the family's own words, as for the apology before the lesson. */
   @Requires('lessons.manage')
+  @RequiresLegal()
   @Post('lessons/:id/late-apology')
   lateApology(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.lessons.lateApology(actorId, id, body ?? {});

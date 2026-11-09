@@ -4,6 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import type { Actor } from '../platform/types';
 import { StaffProfileService } from './staff-profile.service';
 import { Requires, SelfService } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * `/staff-profiles` -- staff profiles, responsibilities, teams and the super
@@ -55,6 +56,7 @@ export class StaffProfileController {
 
   /** Job title, introduction, display name. Only the fields sent change. */
   @SelfService()
+  @RequiresLegal() // PD-58: the caller's profile text or photo, which others see (as /me/avatar).
   @Patch(':staffId')
   update(@CurrentActor() actor: Actor, @Param('staffId') staffId: string, @Body() body: Record<string, unknown>) {
     return this.profiles.updateProfile(actor, staffId, body && typeof body === 'object' ? body : {});
@@ -62,6 +64,7 @@ export class StaffProfileController {
 
   /** A signed PUT bound to type and size, under this profile's own prefix. */
   @SelfService()
+  @RequiresLegal() // PD-58: the caller's profile text or photo, which others see (as /me/avatar).
   @Post(':staffId/avatar/upload')
   avatarUpload(
     @CurrentActor() actor: Actor,
@@ -73,6 +76,7 @@ export class StaffProfileController {
 
   /** Commit an uploaded object as the photo, after its bytes are inspected. */
   @SelfService()
+  @RequiresLegal() // PD-58: the caller's profile text or photo, which others see (as /me/avatar).
   @Post(':staffId/avatar')
   avatarCommit(
     @CurrentActor() actor: Actor,
@@ -83,6 +87,7 @@ export class StaffProfileController {
   }
 
   @SelfService()
+  @RequiresLegal() // PD-58: the caller's profile text or photo, which others see (as /me/avatar).
   @Delete(':staffId/avatar')
   avatarRemove(@CurrentActor() actor: Actor, @Param('staffId') staffId: string) {
     return this.profiles.removeAvatar(actor, staffId);

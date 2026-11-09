@@ -14,6 +14,7 @@ import {
 } from './client-address';
 import { SelfService } from '../permissions/route-access';
 import { PermissionService } from '../permissions/permission.service';
+import { LegalService } from '../../legal/legal.service';
 
 interface LoginBody {
   username?: unknown;
@@ -49,6 +50,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly rateLimit: LoginRateLimiter,
+    private readonly legal: LegalService,
     @Optional() @Inject(CLIENT_ADDRESS_POLICY) addressPolicy?: ClientAddressPolicy,
   ) {
     // The fallback is for direct construction in unit tests. Under Nest the
@@ -96,7 +98,8 @@ export class AuthController {
     // success on purpose: otherwise an attacker holding one valid account could
     // reset their spray counter between bursts.
     await this.rateLimit.clearIdentifier(username);
-    return toTokenPairDto(pair);
+    // PD-58: what this account must still accept (UX; the gate is server-side).
+    return toTokenPairDto(pair, await this.legal.dtoFor(pair.accountId));
   }
 
   @Public()
@@ -111,7 +114,7 @@ export class AuthController {
     if (!token) throw new AuthError(AuthErrorCode.SESSION_REVOKED);
 
     const pair = await this.auth.refresh(token, { userAgent, ip });
-    return toTokenPairDto(pair);
+    return toTokenPairDto(pair, await this.legal.dtoFor(pair.accountId));
   }
 
   /**
@@ -142,15 +145,24 @@ export class AuthController {
  */
 @Controller('me')
 export class MeController {
-  constructor(private readonly access: PermissionService) {}
+  constructor(
+    private readonly access: PermissionService,
+    private readonly legal: LegalService,
+  ) {}
 
-  /** PD-40: with the caller's permission keys, so the Admin Web shows only the pages they may open. */
+  /**
+   * PD-40: with the caller's permission keys, so the Admin Web shows only the pages they may open.
+   * PD-58: with `legal.required`, the Terms of Use documents still to accept. Never gated itself.
+   */
   @SelfService()
   @Get()
   async me(@Req() request: AuthenticatedRequest): Promise<ActorDto> {
-    if (!request.actor) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
-    const { permissions } = await this.access.profileOf(request.actor);
-    return toActorDto(request.actor, [...permissions].sort());
+    if (!request.actor || !request.accountId) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+    const [{ permissions }, legal] = await Promise.all([
+      this.access.profileOf(request.actor),
+      this.legal.dtoFor(request.accountId),
+    ]);
+    return toActorDto(request.actor, legal, [...permissions].sort());
   }
 }
 
@@ -219,6 +231,7 @@ export class PasswordChangeController {
   constructor(
     private readonly auth: AuthService,
     private readonly rateLimit: LoginRateLimiter,
+    private readonly legal: LegalService,
     @Optional() @Inject(CLIENT_ADDRESS_POLICY) addressPolicy?: ClientAddressPolicy,
   ) {
     this.addressPolicy = addressPolicy ?? readClientAddressPolicy();
@@ -243,7 +256,7 @@ export class PasswordChangeController {
     // The answer is this session's successor (the old one was rotated): the client stores it.
     const pair = await this.auth.changePassword(accountId, sessionId, actorId, current, next, { userAgent, ip });
     await this.rateLimit.clearIdentifier(subject);
-    return toTokenPairDto(pair);
+    return toTokenPairDto(pair, await this.legal.dtoFor(accountId));
   }
 }
 

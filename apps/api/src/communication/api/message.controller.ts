@@ -6,6 +6,7 @@ import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { ReceiptState } from '../contracts/vocab';
 import { Requires } from '../../platform/permissions/route-access';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 @Controller('conversations/:conversationId/messages')
 @UseFilters(CommErrorFilter)
@@ -43,6 +44,7 @@ export class MessageController {
    * original message instead of creating a duplicate.
    */
   @Requires('chat.use')
+  @RequiresLegal()
   @Post()
   @RateLimited(ActionScope.MESSAGE_SEND)
   async send(
@@ -95,6 +97,7 @@ export class MessageController {
    * (the ordinary send decision); media are copied, never shared by key.
    */
   @Requires('chat.use')
+  @RequiresLegal()
   @Post('forward')
   // The same budget as a send: forwarding is sending, and a separate one would
   // be a second, unmetered way to flood a thread.
@@ -115,6 +118,7 @@ export class MessageController {
 
   /** Authorizes an upload before any object key exists. */
   @Requires('chat.use')
+  @RequiresLegal()
   @Post('attachments/authorize')
   @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   async authorizeUpload(
@@ -210,6 +214,7 @@ export class MessageController {
   }
 
   @Requires('chat.use')
+  @RequiresLegal()
   @Post(':messageId/reactions')
   async react(
     @ActorId() actorId: string,
@@ -271,6 +276,7 @@ export class MessageController {
    * side. See MessageService.edit for what may be edited.
    */
   @Requires('chat.use')
+  @RequiresLegal()
   @Patch(':messageId')
   async edit(
     @ActorId() actorId: string,

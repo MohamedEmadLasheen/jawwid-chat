@@ -14,6 +14,18 @@ Prerequisites: the commit is on `main`, CI is green, and it has been running on
 staging.
 
 1. Confirm what staging is running and that its smoke test passed.
+   - **PD-58 Terms of Use (from the first deploy that contains ENG-10).** The API
+     and the worker refuse to start in production unless the four
+     `chat.config` rows `legal.current.terms_family`, `legal.current.terms_teacher`,
+     `legal.current.terms_staff` and `legal.current.code_of_conduct` each name a
+     version published with `chat.publish_legal_version` (roadmap §7.3). Check,
+     read-only:
+     `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal` (exit 0
+     = all four set). **Release order:** ENG-11 (Flutter gate) and ENG-12 (Admin
+     Web gate) ship first; then the owner publishes the versions and sets the
+     rows; then this deploy. Setting the rows before the clients can show the
+     gate locks app users and staff out of messaging (403
+     `COMM.TERMS_NOT_ACCEPTED` with no screen to accept on). `docs/product/pd-registry/PD-58.md`.
 2. Actions → **Deploy production** → `image_tag` = the commit SHA, `confirm` = `DEPLOY`.
 3. Approve the `production` environment when prompted.
 4. The workflow then, in order: rebuilds the production Admin Web image

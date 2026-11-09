@@ -144,6 +144,49 @@ Text that a parent or a teacher writes for other people is checked against a wor
 - **Switch:** chat.config `moderation.content_filter.enabled` (default `true`; only a JSON `false` turns it off, read with the usual 30 s cache). No deploy is needed.
 - **Images** are not scanned. A reported image reaches the moderation queue as part of the report (PD-57).
 
+### 1.1c Terms of Use gate (PD-58, ENG-10)
+
+Every account accepts **two** documents: its kind's terms (`terms_family`, `terms_teacher` or `terms_staff`, by `chat.account.kind`) and the shared `code_of_conduct` (owner decision A-3, roadmap 2026-11-03 §7). The version in force is the owner's configuration (`chat.config` `legal.current.<documentKey>`, published with `chat.publish_legal_version`); no URL or version name is in the code. `apps/api/src/legal/`.
+
+**What "accepted" means (P-3).** For each document, take the version in force V. The account is accepted when it accepted the latest version at or before V that has `requires_reacceptance = true`, or any later version. Versions are ordered by `publish_seq`, the database's own publication order (migration `20261107130000`): never by `effective_at`, which the publisher supplies (a new version can no longer be backdated before its document's latest), nor by the version name. So a version published with `requires_reacceptance = false` (a typo fix) asks nobody who already accepted again; a new account still accepts V itself.
+
+**The `legal` block** (`GET /me`, the token pair, `POST /me/legal/accept`, and `GET /me/legal` plus `documents`):
+
+| `state` | Meaning | Client |
+|---|---|---|
+| `accepted` | nothing outstanding; `required: []`, `unavailable: []` | no gate |
+| `required` | `required` lists what to accept | show the gate |
+| `unavailable` | the server cannot decide: `unavailable` names the documents whose configuration is missing (production) or names an unpublished version. Gated routes answer 503 `COMM.LEGAL_NOT_CONFIGURED` | a "temporarily unavailable" notice; never treat as accepted |
+
+`unavailable` wins over `required`. Outside production a document with no `legal.current.<key>` row at all is not asked for (it appears in neither list), so local, test and CI work without configuration.
+
+| Method and path | Request | Response | Errors |
+|---|---|---|---|
+| `GET /me` | — | `ActorDto` gains `legal: {state, required: [{documentKey, version, urlAr, urlEn}], unavailable: [documentKey]}` (below) | — |
+| `POST /auth/login`, `POST /auth/refresh`, `POST /auth/password/change` | as before | the token pair gains `legal` at the top level and in `actor.legal` (same shape) | — |
+| `GET /me/legal` | — | `200 {state, required, unavailable, documents: [{documentKey, version, urlAr, urlEn, accepted, acceptedVersion, acceptedAt}]}`. `documents` is the kind's documents in force, terms first; `acceptedVersion` / `acceptedAt` (ISO 8601) are null when not accepted | — |
+| `POST /me/legal/accept` | `{documents: [{documentKey, version}], client, locale}`. `client`: `android` \| `ios` \| `web_portal` \| `admin_web`. `locale`: a BCP 47 tag (`ar`, `en`, `ar-EG`). **No other field**: the account is the token's, and a body naming one (`accountId`, ...) is 400 | `200 {legal: {state: 'accepted', required: [], unavailable: []}}` | `COMMON.VALIDATION` 400 (malformed, or any extra field), `COMM.LEGAL_WRONG_DOCUMENTS` 400, `COMM.LEGAL_VERSION_STALE` 409, `COMM.SUPPORT_SESSION_FORBIDDEN` 403 (support session), `COMM.LEGAL_NOT_CONFIGURED` 503 |
+| `GET /auth/signup/legal` (public) | — | `200 {required: [...]}`: the family terms and the Code of Conduct in force, for the PD-16 sign-up screen | `COMM.LEGAL_NOT_CONFIGURED` 503 |
+| `POST /auth/signup/verify` (PD-16) | gains `acceptLegal: [{documentKey, version}]`, `client`, `locale` | as before; the acceptance is recorded in the same transaction as the password, method `signup` | `COMM.LEGAL_REQUIRED` 400 without `acceptLegal`; `COMM.LEGAL_WRONG_DOCUMENTS` 400; `COMM.LEGAL_VERSION_STALE` 409 |
+
+- **Accept rules.** The documents must be the kind's own, without duplicates, at the version in force, and must include every outstanding one. Re-sending one already accepted is a no-op. Sign-up takes exactly the family set. Each acceptance is recorded once (`chat.accept_legal_documents`, method `gate` or `signup`, never chosen by the client), with the database's time.
+- **The gate.** A route marked `@RequiresLegal()` answers **403 `COMM.TERMS_NOT_ACCEPTED`** to any account (family, teacher or staff) with anything outstanding, `error.detail.required` listing it. The check runs after authentication and permissions and **before** the action rate limit (a refused request spends no budget). On this code the client refreshes `GET /me` (or `GET /me/legal`), shows the gate, accepts, and retries.
+- **LD-11.** `POST /reports` with `reason: 'child_safety'` is **always** accepted, with or without acceptance. Every other reason is gated. The rest of the body is validated as usual.
+- **Never gated:** every `GET`, `/auth/*`, `GET /me/legal`, `POST /me/legal/accept`, `/me/sessions/*`, `POST /me/account/delete`, the public `/account-deletion`, `/parent-notices/*`, settings, and every `@Public()` route (`PUT /storage/:objectKey` is authorized by its signed URL; the gate is where the URL is minted).
+- **Gated routes** (63). `apps/api/test/unit/legal/legal-coverage.spec.ts` lists every authenticated non-GET route and fails on any that is neither gated nor on `apps/api/test/unit/legal/ungated-writes.ts`, the explicit ungated list with one reason per route (268 today):
+  - messages: `POST /conversations/:id/messages`, `POST .../messages/forward`, `POST .../messages/attachments/authorize`, `PATCH .../messages/:messageId`, `POST .../messages/:messageId/reactions`;
+  - conversations: `POST /conversations/direct`, `/family-group`, `/student-group`;
+  - stories: `POST /stories`, `POST /stories/media`, `POST /stories/:id/publish`, `POST /certificates/:id/story`;
+  - feedback: `POST /me/feedback`, `POST /parent-feedback/:id/reply`;
+  - profiles: `PATCH /me/profile`, `PATCH /me/children/:learnerId`, the avatar writes (`POST /me/avatar/upload`, `POST|DELETE /me/avatar`, and the same under `/me/children/:learnerId/avatar`), `POST /me/teacher-profile`, `PATCH /me/teacher-profile/name`, the certificate writes under `/me/teacher-profile/certificates`;
+  - lessons: `POST /lessons/:id/report`, `/report/edit`, `/absence`, `/apology`, `/late-apology`, `/teacher-apology`; `POST /learners/:learnerId/rewards`;
+  - calls: `POST /calls`, `POST /calls/:id/accept`, `POST /calls/:id/token`, `POST /scheduled-calls` (its card's free-text title), `POST /scheduled-calls/:id/join`;
+  - staff profiles: `PATCH /staff-profiles/:staffId` and its avatar writes (`POST .../avatar/upload`, `POST|DELETE .../avatar`), `:staffId` including `me`;
+  - every whiteboard write (`/whiteboards/*`, `POST /teacher-boards/:id/copy`); `POST /me/billing/receipts/upload`;
+  - moderation: `POST /reports` (except `child_safety`), `POST /me/blocks`.
+- **Release order.** ENG-11 (Flutter) and ENG-12 (Admin Web) ship first; then the owner publishes the versions (`chat.publish_legal_version`) and sets the four `legal.current.*` rows; then the API with ENG-10 deploys. Rows set before the clients can show the gate lock app users and staff out of every gated route with no screen to accept on. Pre-deploy check: `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal` (`docs/infrastructure/production-runbook.md` §1).
+- **Fail closed (§7.3).** In production (`APP_ENV=production`) the API and the worker refuse to start when any of the four `legal.current.*` rows is missing, is not a JSON string, or names a version never published. Elsewhere a missing row is a warning and that document is not asked for; a row that names an unpublished version answers 503 `COMM.LEGAL_NOT_CONFIGURED` on gated routes everywhere. "No terms configured" never means "no terms required" in production.
+
 ### 1.2 Permission keys
 
 Canonical list (decision 8). Server-side evaluation only; `GET /me` returns the actor's keys for UX.
