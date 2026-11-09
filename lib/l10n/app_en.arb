@@ -3728,5 +3728,11 @@
   "signupLegalChanged": "The terms have changed. Please read them and agree again.",
   "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."},
   "legalLoadFailed": "We couldn't load the terms of use. Please try again.",
-  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."}
+  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."},
+  "notificationPermissionCallsNote": "So messages and calls appear while the app is closed.",
+  "@notificationPermissionCallsNote": {"description": "LR-11: second line of the explanation shown before the system notification prompt, under notificationPermissionBody."},
+  "notificationPermissionContinue": "Continue",
+  "@notificationPermissionContinue": {"description": "LR-11: the explanation's button that goes on to the system notification prompt."},
+  "notificationPermissionNotNow": "Not now",
+  "@notificationPermissionNotNow": {"description": "LR-11: the explanation's button that skips the system prompt; asked again at most once a day."}
 }

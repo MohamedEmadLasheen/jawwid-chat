@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart';
 import '../../app/providers.dart';
 import '../logging/redacting_logger.dart';
 import '../network/api_client.dart';
+import 'push_permission_explainer.dart';
 import 'push_tokens.dart';
 
 /// Registering this device's push tokens with the server (W8-W1).
@@ -54,7 +55,10 @@ class HttpPushRegistration implements PushRegistrationApi {
 ///
 /// ## What it does, and when
 ///
-/// * a session begins  -> ask the platform for tokens, register each one
+/// * a session begins  -> ask the platform for tokens (no prompt), register each
+///                        one. The notification PERMISSION is asked for only
+///                        once the LR-11 explanation is cleared
+///                        (`push_permission_explainer.dart`); tokens never wait
 /// * a token rotates   -> register the new one (the server upserts by token)
 /// * a session ends    -> retire what this device registered
 ///
@@ -84,13 +88,21 @@ class PushRegistrar {
     required PushTokens tokens,
     required PushRegistrationApi api,
     RedactingLogger logger = const RedactingLogger(),
+    Future<bool> Function()? clearToStart,
   })  : _tokens = tokens,
         _api = api,
-        _log = logger;
+        _log = logger,
+        _clearToStart = clearToStart;
 
   final PushTokens _tokens;
   final PushRegistrationApi _api;
   final RedactingLogger _log;
+
+  /// LR-11 explain-first: asked before the platform's `start`, which is what makes
+  /// the OS show its notification prompt. False means "not this session". Token
+  /// registration (`PushTokens.register`) never waits for it. Null (a test of the
+  /// registration alone) calls `start` straight away.
+  final Future<bool> Function()? _clearToStart;
 
   StreamSubscription<PushToken>? _sub;
 
@@ -100,12 +112,54 @@ class PushRegistrar {
 
   bool _started = false;
 
+  /// Bumped by every start and stop, so an answer that arrives after this session
+  /// ended (or restarted) does not ask the platform on its behalf.
+  int _generation = 0;
+
   /// Begin registering for the current session. Idempotent.
   Future<void> start() async {
     if (_started) return;
     _started = true;
+    final generation = ++_generation;
 
+    // Listening first, exactly as before: a token that arrives is registered
+    // whatever the explanation's answer.
     _sub = _tokens.tokens().listen(_onToken);
+
+    // LR-11: tokens are requested NOW, with no prompt, whether or not anyone ever
+    // answers the explanation -- a headless start (an engine woken by a push, no
+    // screen to explain on) and a "Not now" both still register this device.
+    // Only the notification PERMISSION waits for the explanation.
+    bool promptPossible;
+    try {
+      promptPossible = await _tokens.register();
+    } catch (_) {
+      promptPossible = true;
+    }
+    if (!_started || generation != _generation) return;
+
+    final gate = _clearToStart;
+    if (gate != null) {
+      if (!promptPossible) {
+        // Nothing for the OS to ask (Android before 13, already granted, iOS already
+        // answered): no explanation, and no `start`, because `register` did the rest.
+        return;
+      }
+      bool clear;
+      try {
+        clear = await gate();
+      } catch (_) {
+        // The explainer itself failed: push is not withheld over it. This is the
+        // behaviour before LR-11, and the OS still asks only once.
+        clear = true;
+      }
+      if (!_started || generation != _generation) return;
+      if (!clear) {
+        _log.info('push: notifications not now; the permission is not asked this session');
+        return;
+      }
+    }
+    // Register again AND ask for the notification permission: the system prompt.
     await _tokens.start();
   }
 
@@ -129,9 +183,13 @@ class PushRegistrar {
 
   /// Retire this device's tokens. Call while the session is still valid.
   Future<void> stop() async {
-    await _sub?.cancel();
+    // Marked stopped BEFORE the first await, so an explanation answered while
+    // this is still tearing down cannot start the platform for a dead session.
+    final sub = _sub;
     _sub = null;
     _started = false;
+    _generation++;
+    await sub?.cancel();
 
     final retiring = List<PushToken>.of(_registered);
     _registered.clear();
@@ -194,6 +252,9 @@ final pushRegistrarProvider = Provider<PushRegistrar?>((ref) {
     tokens: ref.watch(pushTokensProvider),
     api: api,
     logger: ref.watch(loggerProvider),
+    // LR-11: explain first. READ, not watched: the explanation opening and closing
+    // must never rebuild (and so retire) this session's registration.
+    clearToStart: ref.read(pushExplainerProvider.notifier).clearToStart,
   );
 
   // Registered BEFORE start, so a failure while starting still leaves something

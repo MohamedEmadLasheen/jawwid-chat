@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/push/push_permission_explainer.dart';
 import 'package:jawwid_chat/core/push/push_registration.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 
@@ -26,6 +27,9 @@ void main() {
       authControllerProvider.overrideWith(() => auth),
       pushTokensProvider.overrideWithValue(tokens),
       pushRegistrationApiProvider.overrideWithValue(api),
+      // Continue already pressed on this device (LR-11); the explanation's own
+      // launch-order cases are in `push_permission_explainer_test.dart`.
+      pushExplainerStoreProvider.overrideWithValue(FakePushExplainerStore(hasContinued: true)),
     ]);
     addTearDown(container.dispose);
     addTearDown(tokens.close);

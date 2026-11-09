@@ -5624,4 +5624,14 @@ class L10nEn extends L10n {
   @override
   String get legalLoadFailed =>
       'We couldn\'t load the terms of use. Please try again.';
+
+  @override
+  String get notificationPermissionCallsNote =>
+      'So messages and calls appear while the app is closed.';
+
+  @override
+  String get notificationPermissionContinue => 'Continue';
+
+  @override
+  String get notificationPermissionNotNow => 'Not now';
 }

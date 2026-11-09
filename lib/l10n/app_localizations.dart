@@ -9654,6 +9654,24 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'We couldn\'t load the terms of use. Please try again.'**
   String get legalLoadFailed;
+
+  /// LR-11: second line of the explanation shown before the system notification prompt, under notificationPermissionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'So messages and calls appear while the app is closed.'**
+  String get notificationPermissionCallsNote;
+
+  /// LR-11: the explanation's button that goes on to the system notification prompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get notificationPermissionContinue;
+
+  /// LR-11: the explanation's button that skips the system prompt; asked again at most once a day.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notificationPermissionNotNow;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

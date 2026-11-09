@@ -32,7 +32,10 @@ import io.flutter.plugin.common.MethodChannel
  * engine is running is kept (PushTokenStore) and reported on the next start.
  *
  * `start` is also where Android 13+'s POST_NOTIFICATIONS is asked for: after
- * sign-in, when a notification first matters, never at launch.
+ * sign-in, when a notification first matters, never at launch. `register` (LR-11)
+ * does everything `start` does except that request, and answers whether a prompt
+ * is still possible; Dart calls it at session start and `start` only after the
+ * in-app explanation's Continue.
  *
  * ## The call channel
  *
@@ -238,6 +241,8 @@ class MainActivity : FlutterFragmentActivity() {
                     startRegistering()
                     result.success(null)
                 }
+                // LR-11: the token without the prompt; answers whether `start` would prompt.
+                "register" -> result.success(registerForPush())
                 else -> result.notImplemented()
             }
         }
@@ -324,13 +329,22 @@ class MainActivity : FlutterFragmentActivity() {
      * Firebase app, and then reports nothing -- push is simply off on that build.
      */
     private fun startRegistering() {
-        JawwidPush.ensureChannels(applicationContext)
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (registerForPush() && Build.VERSION.SDK_INT >= 33) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST)
         }
-        if (FirebaseApp.getApps(applicationContext).isEmpty()) return
+    }
+
+    /**
+     * Everything [startRegistering] does EXCEPT ask for POST_NOTIFICATIONS (LR-11
+     * `register`): the app explains notifications first and asks through `start`
+     * only after Continue. Returns whether there is still a runtime prompt to show:
+     * false before Android 13 (no such prompt) and once the permission is granted.
+     */
+    private fun registerForPush(): Boolean {
+        JawwidPush.ensureChannels(applicationContext)
+        val promptPossible = Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (FirebaseApp.getApps(applicationContext).isEmpty()) return promptPossible
         PushTokenStore.load(applicationContext)?.let { reportToken(it) }
         try {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
@@ -342,6 +356,7 @@ class MainActivity : FlutterFragmentActivity() {
         } catch (e: IllegalStateException) {
             // Firebase present but not initialised for messaging: push stays off.
         }
+        return promptPossible
     }
 
     /**
