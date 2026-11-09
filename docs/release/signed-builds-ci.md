@@ -1,11 +1,20 @@
-# Signed store builds in GitHub Actions (LR-76, option (c))
+# Signed store builds in GitHub Actions, uploaded directly (LR-76 option (c), OT-2b)
 
 **Workflow:** `.github/workflows/release-store-builds.yml` ("Release store builds").
-**Risk:** High. The workflow will hold signing material. It is a Code Owner path: the owner approves the
-merge. **No key exists or is created by this change.** Creating each key below is a separate owner
-decision.
+**Risk:** High. The workflow holds signing material and can upload to both stores' **testing** channels.
+It is a Code Owner path: the owner approves the merge. **No key, account or cloud resource exists or is
+created by this change.** Creating each one in §3 is a separate owner decision.
 **Background:** `docs/release/signed-build-options.md` (option (c), the GitHub facts H1–H9) and
 `docs/release/signing-on-existing-mac.md` (C1: cloud signing with an App Store Connect key).
+
+**What changed in OT-2b.** The first version (#547) encrypted each build with `age` and left it as a
+GitHub artifact for the owner to upload by hand. That is gone: no build output is kept as a GitHub
+artifact any more. Instead, after the same checks and signature verification, the workflow uploads the
+debug symbols to Sentry and then the build itself, **only** to:
+- **Google Play: the internal testing track, as a draft release** (nobody receives it until a person
+  releases it in Play Console), signed in through **Workload Identity Federation** (no Google key exists);
+- **App Store Connect / TestFlight**, through `xcodebuild -exportArchive` with destination `upload`
+  (Apple cloud signing). Nothing is sent for App Review and nothing is released.
 
 ## 1. What it does
 
@@ -16,264 +25,359 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
 | `ref` | the full 40-character SHA of a commit **already on `main`** |
 | `platform` | `both`, `android` or `ios` |
 | `build_name` | the version users see, `x.y.z` (`BUILD_NAME`) |
-| `build_number` | a positive integer higher than the last upload (`BUILD_NUMBER`) |
-
-`build_name` is a fourth input beyond the brief's three: `scripts/mobile/build-store.sh` refuses to build
-without `BUILD_NAME` and does not use `pubspec.yaml`'s version.
+| `build_number` | a positive integer higher than the last upload to either store (`BUILD_NUMBER`) |
 
 1. **Preflight** (no Environment, no secrets; token permissions `contents: read` and `actions: read`):
    refuses unless
-   - the run started from `main`, `ref` is a full SHA that is an ancestor of `origin/main` (as
-     `deploy-production.yml` checks its tag), and the version inputs are well-formed;
-   - the workflow's pinned `age` SHA-256 values are filled in (§5.1);
-   - the `store-release` Environment, read through the API
-     (`GET /repos/{repo}/environments/store-release` and its `deployment-branch-policies`), has at least
-     one required reviewer, *Selected branches and tags* with exactly one rule, the branch `main`, and
-     "Allow administrators to bypass" **off** (`can_admins_bypass: false`). Anything it cannot read, or
-     does not recognise, is a refusal. Its summary lists the reviewers and the prevent-self-review setting.
+   - the run started from `main`, `ref` is a full SHA that is an ancestor of `origin/main`, and the
+     version inputs are well-formed;
+   - the `store-release` Environment, read through the API, has at least one required reviewer,
+     *Selected branches and tags* with exactly one rule, the branch `main`, and "Allow administrators to
+     bypass" **off**. Anything it cannot read, or does not recognise, is a refusal.
 
    A bad request, or an Environment that is missing or unprotected, fails before anyone is asked to
-   approve it, so no secret is ever released from an Environment that nobody guards.
-2. **Android** (`ubuntu-latest`, Environment `store-release`): waits for the owner's approval, then
-   - fails, naming each one, if any Android secret is missing, or `STORE_ARTIFACT_AGE_RECIPIENT` is not an
-     age public key;
-   - installs `age` (pinned version, download checked against its SHA-256);
-   - decodes the upload keystore into `RUNNER_TEMP` (mode 600) and checks that it opens with the password
-     and contains the alias; decodes `google-services.json` and checks it is for `com.jawwid.jawwid_chat`;
-   - writes `android/key.properties` and `android/app/google-services.json` (mode 600, git-ignored), where
-     `android/app/build.gradle.kts` looks for them;
-   - runs `scripts/mobile/build-store.sh android`, the same script and checks as a local store build;
-   - verifies the `.aab` with `jarsigner -verify`, and that `keytool -printcert -jarfile` shows exactly one
-     signer whose SHA-256 is the upload key's (and, if set, the pinned `ANDROID_UPLOAD_CERT_SHA256`);
-   - packs the `.aab` and its Dart symbols into one tar file, **encrypts it with `age` to your public key**,
-     and uploads only the encrypted file, as an artifact kept **1 day**;
-   - always deletes the keystore, `key.properties`, `google-services.json` and the unencrypted outputs,
-     even after a failure.
+   approve it.
+2. **Android** (`ubuntu-latest`, Environment `store-release`; the **only** job with `id-token: write`):
+   waits for the owner's approval, then
+   - checks out the build commit, and separately the upload helpers (`scripts/mobile/`) from the
+     workflow's **own** commit on `main`, so the helpers that talk to the stores are always the current,
+     CI-guarded ones even when an older commit is built;
+   - **before any build**, fails naming each one if a secret or variable of §3.6 is missing, or if
+     `PLAY_WIF_PROVIDER`, `PLAY_SERVICE_ACCOUNT`, `SENTRY_ORG`, `SENTRY_PROJECT` or `SENTRY_URL` is not in
+     its expected format;
+   - decodes the upload keystore and `google-services.json`, checks them, writes `android/key.properties`
+     (all mode 600, as before);
+   - runs `scripts/mobile/build-store.sh android`;
+   - verifies the `.aab` (`jarsigner -verify`; exactly one signer, the upload key; the optional
+     `ANDROID_UPLOAD_CERT_SHA256` pin) and writes its SHA-256 into the summary;
+   - installs **sentry-cli 3.8.2**, checked against its pinned SHA-256 (`scripts/mobile/install-sentry-cli.sh`),
+     and uploads the Dart symbols (and the R8 `mapping.txt`, if the build wrote one) to Sentry. This runs
+     **before** the store upload, so a broken Sentry setup stops the release rather than shipping a
+     build whose crashes cannot be read;
+   - signs in to Google with `google-github-actions/auth` (v3.0.0, pinned by SHA): GitHub's OIDC token
+     for this job is exchanged for a **15-minute** access token of the Play service account, scope
+     `androidpublisher` only, no credentials file written. The token is masked;
+   - runs `scripts/mobile/play-upload.sh`, which does `edits.insert` → `edits.bundles.upload` →
+     `edits.tracks.update` (track `internal`, one release `{versionCodes: [<build_number>], status:
+     "draft", name: "<build_name> (<build_number>)"}`) → `edits.commit`. It checks that Play read the
+     expected versionCode and the same SHA-256 as the verified file, and that the track answer is exactly
+     that one draft release. On any failure it deletes the edit (best effort) and exits non-zero: nothing
+     is published;
+   - always deletes the signing material, even after a failure.
 3. **iOS** (`macos-26`, Xcode 26 selected explicitly, Environment `store-release`): waits for approval, then
-   - fails, naming each one, if any iOS secret is missing, or `STORE_ARTIFACT_AGE_RECIPIENT` is not an age
-     public key;
-   - installs `age` (pinned version, download checked against its SHA-256);
-   - decodes the App Store Connect `.p8` key into `RUNNER_TEMP` (mode 600) and checks with
-     `openssl pkey -noout` that it parses as a private key (nothing is printed);
-   - runs `scripts/mobile/build-store.sh ios-config` (see §5): the same checks and `--dart-define` set as a
-     local store build, written into the Xcode project without building;
-   - `xcodebuild archive`, then `xcodebuild -exportArchive` (method `app-store-connect`, destination
-     `export`), both with `-allowProvisioningUpdates` and `-authenticationKeyPath/-ID/-IssuerID`, so Apple
-     **cloud-signs**; no `.p12` or provisioning profile is stored anywhere;
-   - verifies the `.ipa`: `codesign --verify --deep --strict`; a distribution certificate; team
-     `KX683HAR3Y`; `get-task-allow` false; `aps-environment` production; an App Store profile (no device
-     list); bundle id, version and build number; Dart symbols and dSYMs present;
-   - packs the `.ipa`, Dart symbols and dSYMs into one tar file, **encrypts it with `age` to your public
-     key**, and uploads only the encrypted file, as an artifact kept **1 day**;
-   - always deletes the `.p8`, the build logs and the unencrypted outputs.
+   - the same two checkouts and the same before-any-build check of its secrets and variables (§3.6);
+   - decodes the App Store Connect `.p8` key (mode 600) and checks it parses as a private key;
+   - runs `scripts/mobile/build-store.sh ios-config` (§5);
+   - `xcodebuild archive`, then `xcodebuild -exportArchive` to a **local** `.ipa` (method
+     `app-store-connect`, destination `export`), both with `-allowProvisioningUpdates` and
+     `-authenticationKeyPath/-ID/-IssuerID`, so Apple **cloud-signs**;
+   - verifies that `.ipa` exactly as before: `codesign --verify --deep --strict`; a distribution
+     certificate; team `KX683HAR3Y`; `get-task-allow` false; `aps-environment` production; an App Store
+     profile (no device list); bundle id, version and build number; Dart symbols and dSYMs present;
+   - installs sentry-cli (as above) and uploads the archive's dSYMs and the Dart symbols to Sentry;
+   - **uploads**: a second `xcodebuild -exportArchive` of the **same archive** with the same method, team
+     and signing style and destination `upload`, plus `uploadSymbols` true and
+     `manageAppVersionAndBuildNumber` false (Xcode must not change the version or build number). Apple
+     cloud-signs it again and sends it to App Store Connect, where it is processed for TestFlight;
+   - always deletes the `.p8`, the build logs and the outputs.
 
-Both signing jobs install Flutter **without** the shared cache (`cache: false`), so they never restore a
-cache written by another workflow.
+   *Why two exports.* `xcodebuild -exportArchive` cannot upload an `.ipa` that has already been exported;
+   it uploads only what it exports itself. The only other Apple command-line uploader is not used here
+   by decision. So the job verifies the local export, and the upload is a re-export of the same archive
+   with identical options except the destination. The app binary, entitlements source, team, bundle id
+   and version are the archive's in both; only the cloud signature is made a second time. The residual
+   risk (Apple signing the second export differently) is small and visible: App Store Connect rejects an
+   upload whose signature is not a valid App Store distribution signature.
 
-Each job's summary shows what was verified (for Android, the upload certificate's SHA-256).
+Both signing jobs install Flutter **without** the shared cache (`cache: false`). Every action is pinned
+to a full commit SHA. Inputs reach the shell only through `env`, never inside a `run` script.
 
 ## 2. What it does not do
 
-- It does **not** upload to Google Play or App Store Connect / TestFlight. The owner does that (§4).
-- It does **not** upload symbols to Sentry. Download the artifact and use `docs/mobile/store-builds.md`,
-  "Debug symbols", with your own Sentry token (no Sentry auth token is given to this workflow).
+- It does **not** publish anything to users or testers by itself. On Play the release is a **draft** on
+  the **internal** track; on Apple the build lands in App Store Connect/TestFlight and is never sent for
+  App Review or released. Any other track, status, staged release, review submission or release call is
+  refused by `scripts/qa/check-store-upload-guards.sh` (§5.2), which CI runs on every change.
+- It keeps **no build output as a GitHub artifact**.
 - It does **not** create, rotate or download any key, certificate or profile on its own behalf, except
-  what `xcodebuild -allowProvisioningUpdates` does in the Apple account (§6, risk 4).
-- It never runs on a pull request, a push, or another workflow's completion. Nobody may add such triggers.
+  what `xcodebuild -allowProvisioningUpdates` does in the Apple account (§6, risk 5).
+- It never runs on a pull request, a push, a schedule or another workflow's completion.
 - It does not tag the commit or record the release anywhere but the run summary.
 
-## 3. What the owner must create (only after approving each item)
+## 3. OWNER SETUP (each item only after you approve it)
+
+Do every step in a browser, or in **Google Cloud Shell** for the `gcloud` lines. **Never on the
+development Mac** (the machine rule). Replace `<…>` with your values.
 
 ### 3.1 The `store-release` Environment
 
 Settings → Environments → **New environment** → `store-release`. **If `store-release` is already in the
 list, open it and edit it instead**: GitHub creates an Environment by itself, with no protection at all,
-the first time any run names it, so an existing one proves nothing. Either way, confirm all of these
-before you paste in any secret:
+the first time any run names it, so an existing one proves nothing. Confirm all of these before you add
+any secret:
 - **Required reviewers:** yourself.
 - **Prevent self-review:** see "Who starts a run" below.
-- **Deployment branches and tags:** *Selected branches and tags* → add exactly one rule, the branch
-  `main` (no other rule, no wildcard).
+- **Deployment branches and tags:** *Selected branches and tags* → exactly one rule, the branch `main`.
 - **Deselect "Allow administrators to bypass configured protection rules".**
 
-The workflow's preflight reads these three settings and refuses to run without them (§1). That check
-is **UNVERIFIED** until the first run: GitHub's documentation says read access is enough for these
-endpoints and lists the fine-grained permission as "Actions: read", which is what the preflight job's
-token is given, but it was not run under the machine rule. If the first run stops with "Could not read
-the store-release Environment with the job token" although the Environment exists, the token cannot
-read it: check the three settings above by eye on the Environment's page, tell the lead, and the lead
-will propose a reviewed change to the check. Do not approve a run while that check fails.
-- Put every secret and variable below in **this Environment**, never in repository secrets. Anyone with
-  write access (including `jawwid-bot`, the account agent sessions use) can read repository secrets
-  through a workflow on their own branch (options paper H4); Environment secrets are released only after
-  your approval, and only to runs from `main`.
+The preflight reads these three settings and refuses to run without them. That check is **UNVERIFIED**
+until the first run (it was not run under the machine rule). If the first run stops with "Could not read
+the store-release Environment with the job token" although the Environment exists, check the settings by
+eye, tell the lead, and do not approve a run while that check fails.
 
-**Who starts a run** (options paper §4 (c)): with Prevent self-review **on**, you cannot approve a run you
-started, so a run is dispatched by `jawwid-bot` (asked by the lead) and approved by you. With it **off**,
-you may dispatch and approve yourself. The lead recommends **on**: an agent can then ask for a build but
-never approve one. Each platform job asks for approval separately; one review screen approves both.
+Put every secret and variable of §3.6 in **this Environment**, never in repository secrets: Environment
+secrets are released only after your approval, and only to runs from `main`.
 
-### 3.2 Environment secrets (names only; you paste every value yourself in the GitHub UI)
+**Who starts a run:** with Prevent self-review **on**, you cannot approve a run you started, so a run is
+dispatched by `jawwid-bot` (asked by the lead) and approved by you. The lead recommends **on**.
 
-| Secret | What it is |
-|---|---|
-| `ANDROID_UPLOAD_KEYSTORE_BASE64` | the upload keystore file, base64 on a single line (`base64 -i upload.jks` on a Mac, `base64 -w0 upload.jks` on Linux) |
-| `ANDROID_UPLOAD_KEYSTORE_PASSWORD` | its store password |
-| `ANDROID_UPLOAD_KEY_ALIAS` | the key's alias (`jawwid-upload` if made as in §3.4) |
-| `ANDROID_UPLOAD_KEY_PASSWORD` | the key's password (with a PKCS12 keystore, the same as the store password) |
-| `GOOGLE_SERVICES_JSON_BASE64` | Firebase `google-services.json` for `com.jawwid.jawwid_chat`, base64 on a single line |
-| `ASC_API_KEY_ID` | App Store Connect API key ID |
-| `ASC_API_ISSUER_ID` | the issuer ID shown above the keys list (a UUID) |
-| `ASC_API_KEY_P8_BASE64` | the downloaded `AuthKey_<ID>.p8`, base64 on a single line |
-| `SENTRY_DSN` | the app's Sentry DSN (compiled into the app; never printed) |
+### 3.2 (a) Google Cloud: Workload Identity Federation for the Play upload
 
-Use passwords of **letters and digits only**, and an alias of letters, digits, `.`, `_` or `-`: they are
-written into a Java properties file, and the workflow refuses anything else rather than escape it.
-Base64 on a single line keeps GitHub's log masking simple (it masks secret values line by line); a
-wrapped value still decodes, because line breaks are stripped first.
+No JSON key is ever created. GitHub proves who is asking with a short-lived OIDC token; Google accepts
+it only for this repository, the `store-release` Environment and `main`.
 
-### 3.3 Environment variables (not secret; the names `build-store.sh` reads)
+1. Create (or pick) a Google Cloud project, then in Cloud Shell:
+   ```sh
+   PROJECT_ID=<project id>
+   gcloud config set project "$PROJECT_ID"
+   PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+   # "Google Play Android Developer API", plus the APIs the token exchange uses.
+   gcloud services enable androidpublisher.googleapis.com iam.googleapis.com \
+     iamcredentials.googleapis.com sts.googleapis.com
+   ```
+2. A service account with **no IAM roles** (do not grant it any project role; Play permissions come only
+   from Play Console, step (b)):
+   ```sh
+   gcloud iam service-accounts create jawwid-play-upload \
+     --display-name="Jawwid Play internal upload (GitHub Actions)"
+   ```
+3. A Workload Identity Pool and an OIDC provider for GitHub, with the attribute mapping and the
+   **attribute condition** (the condition is the real lock: a token from any other repository,
+   Environment or branch is refused at the exchange):
+   ```sh
+   gcloud iam workload-identity-pools create github \
+     --location=global --display-name="GitHub Actions"
+   gcloud iam workload-identity-pools providers create-oidc jawwid-chat \
+     --location=global --workload-identity-pool=github \
+     --display-name="jawwid-chat store-release" \
+     --issuer-uri="https://token.actions.githubusercontent.com" \
+     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.environment=assertion.environment,attribute.ref=assertion.ref" \
+     --attribute-condition="assertion.repository=='MohamedEmadLasheen/jawwid-chat' && assertion.environment=='store-release' && assertion.ref=='refs/heads/main'"
+   ```
+4. Let identities from that repository impersonate the service account:
+   ```sh
+   gcloud iam service-accounts add-iam-policy-binding \
+     "jawwid-play-upload@$PROJECT_ID.iam.gserviceaccount.com" \
+     --role=roles/iam.workloadIdentityUser \
+     --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/MohamedEmadLasheen/jawwid-chat"
+   ```
+   The binding names only the repository; the Environment and branch are enforced by the provider's
+   condition (step 3), which every token must pass first.
+5. The two Environment **variables** (not secrets):
+   - `PLAY_WIF_PROVIDER` = `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/providers/jawwid-chat`
+   - `PLAY_SERVICE_ACCOUNT` = `jawwid-play-upload@<PROJECT_ID>.iam.gserviceaccount.com`
 
-`API_BASE_URL` (production host, ending `/api/v1`), `PRIVACY_POLICY_URL`, `TERMS_URL`, `SUPPORT_URL`,
-`SUPPORT_EMAIL`; optional `LESSONS_ORIGIN`, `SENTRY_ENVIRONMENT` (default `production`) and
-`ANDROID_UPLOAD_CERT_SHA256` (the upload certificate's SHA-256 as Play Console shows it; when set, a
-build signed by any other key fails). The script refuses staging, dev, IP and similar hosts.
+**UNVERIFIED:** that GitHub's OIDC token for a job with `environment: store-release` carries the
+`environment` claim used by the condition (GitHub documents it; not observed under the machine rule. If
+the first run fails at "Sign in to Google" with a condition or "unauthorized" error, this is the first
+thing to check). **UNVERIFIED:** that `roles/iam.workloadIdentityUser` alone lets the auth action mint
+an access token; if the error names `iam.serviceAccounts.getAccessToken`, also grant
+`roles/iam.serviceAccountTokenCreator` on the service account to the same `principalSet` (tell the lead
+first).
 
-**Required:** `STORE_ARTIFACT_AGE_RECIPIENT`, your age **public** key (`age1…`, §3.4). Every artifact is
-encrypted to it; without it nothing is built. It is a variable, not a secret: a public key reveals
-nothing, and the private half never leaves your trusted device.
+### 3.3 (b) Play Console
 
-### 3.4 How to make each secret, when you approve it
+1. Play Console → **Users and permissions** → **Invite new users** → the service account's e-mail
+   (`jawwid-play-upload@<PROJECT_ID>.iam.gserviceaccount.com`).
+2. **Account permissions: none.** Under **App permissions** → **Add app** → `com.jawwid.jawwid_chat` →
+   tick **only "Release apps to testing tracks"**. Invite.
+3. The app must exist in Play Console with the package `com.jawwid.jawwid_chat`.
 
-- **Android upload keystore.** On a **trusted device** (not a machine under the machine rule), with a JDK:
-  use the `keytool -genkeypair … -alias jawwid-upload …` line in `docs/mobile/android-release-signing.md`
-  (alias `jawwid-upload`, which then goes in `ANDROID_UPLOAD_KEY_ALIAS`). Keep the `.jks` and its
-  password in your password manager plus one offline encrypted copy (`signing-on-existing-mac.md` §6).
-  With Play App Signing (Google holds the app signing key), a lost or leaked upload key can be reset
-  (options paper G1, G2). Record its SHA-256
-  (`keytool -list -v -keystore jawwid-upload.jks -alias jawwid-upload`) as
-  `ANDROID_UPLOAD_CERT_SHA256`.
-- **`google-services.json`.** Firebase console → Project settings → Your apps → Android
-  (`com.jawwid.jawwid_chat`) → download.
-- **App Store Connect API key.** App Store Connect → Users and Access → Integrations → App Store Connect API
-  → Team Keys → generate. A team key needs Account Holder or Admin to create; its access level cannot be
-  changed afterwards, and the `.p8` downloads **once** (`signing-on-existing-mac.md` C3).
-  **Choose App Manager first** (the lowest role the Flutter docs name for automation, options paper G5).
-  Only if the first run fails with a permission error at archive or export, revoke it and make an
-  **Admin** key: an Admin key can do almost everything an Admin can, including managing users, so it is a
-  much bigger secret. Whether App Manager suffices for cloud signing is **UNVERIFIED** (§6).
-- Cloud signing for App Store distribution needs an Admin or Account Holder, or the "Access to Cloud
-  Managed Distribution Certificate" permission (C1, C2). Check this for the key's role if export fails.
-- **The artifact key (age).** On the **trusted device** where you will open the builds, install age
-  (`brew install age` on a Mac) and run `age-keygen -o jawwid-store-artifacts.agekey`. It prints
-  `Public key: age1…`: paste that line's `age1…` value into the Environment **variable**
-  `STORE_ARTIFACT_AGE_RECIPIENT`. The `.agekey` file is the private half: keep it on that device (mode
-  600) plus a copy in your password manager, and never put it in GitHub or on a machine under the
-  machine rule. Losing it only means re-running a build after making a new key; a leaked one only
-  exposes builds made while it was in use, so then make a new key and replace the variable.
+**UNVERIFIED:** that "Release apps to testing tracks" alone allows the edits flow on the internal track
+(it is the narrowest permission that names testing releases). **UNVERIFIED:** that Google requires the
+**first** bundle of a new app to be uploaded by hand in Play Console; if so, the job stops with
+`STOP: Google requires a first manual upload; do NOT do it from the development Mac; tell the lead`, and
+the lead arranges that first upload as a separate, owner-approved step (this workflow keeps no copy of the
+bundle). **UNVERIFIED:** that Play accepts only `draft` releases while the app has never been published
+(the workflow only ever sends `draft`, so this does not block it), and how a track update treats
+releases already on the internal track (a draft changes nothing for testers either way).
 
-## 4. Running it, and what the owner does with the result
+To release a draft to internal testers: Play Console → the app → Testing → Internal testing → the draft →
+review and release it.
+
+### 3.4 (c) Apple: App Store Connect
+
+1. App Store Connect → Users and Access → Integrations → App Store Connect API → **Team Keys** → generate
+   a key with access **App Manager**. The `.p8` downloads **once**. A team key needs Account Holder or
+   Admin to create, and its access level cannot be changed afterwards.
+2. The app record for bundle id `com.jawwid.jawwidChat` must exist in App Store Connect (My Apps → +);
+   an upload for an unknown app is refused.
+3. **For every version**, before it is ever submitted: the version page → **App Store Version Release** →
+   **"Manually release this version"**. Then even an approved version waits for a person to release it.
+4. TestFlight: an internal testing group with automatic distribution receives new builds when processing
+   finishes; turn automatic distribution off on the group if builds should wait for a person.
+
+**UNVERIFIED:** that an **App Manager** key is enough for cloud signing at archive and export (Apple's
+cloud-managed distribution certificate needs Admin, Account Holder or the "Access to Cloud Managed
+Distribution Certificate" permission). If the first run fails at archive or export with a permission
+error, revoke the key and make an **Admin** key; that is a much bigger secret (an Admin key can manage
+users), so tell the lead first.
+
+### 3.5 (d) Sentry
+
+1. A Sentry project for the app, slug **`jawwid-chat-app`** (platform Flutter). Its **DSN** goes in the
+   secret `SENTRY_DSN` (it is compiled into the app).
+2. An **organisation auth token** (Settings → Developer Settings → Organization Tokens), which can only
+   create releases and upload source maps and debug files; it goes in the secret `SENTRY_AUTH_TOKEN`.
+   Never a personal token.
+3. Variables: `SENTRY_ORG` = the organisation slug, `SENTRY_PROJECT` = `jawwid-chat-app`, and only for a
+   self-hosted Sentry `SENTRY_URL` = `https://<host>/`.
+
+**UNVERIFIED:** the sentry-cli 3.x command names `debug-files upload` and `upload-proguard` (the 2.x names,
+not re-read for 3.8.2 under the machine rule). If one has changed, the job fails at the symbols step,
+**before** any store upload.
+
+### 3.6 (e) The Environment's secrets and variables
+
+Secrets (you paste every value yourself in the GitHub UI):
+
+| Secret | Platform | What it is |
+|---|---|---|
+| `ANDROID_UPLOAD_KEYSTORE_BASE64` | Android | the upload keystore, base64 on one line (`base64 -i upload.jks` on a Mac) |
+| `ANDROID_UPLOAD_KEYSTORE_PASSWORD` | Android | its store password (letters and digits only) |
+| `ANDROID_UPLOAD_KEY_ALIAS` | Android | the key's alias (`jawwid-upload`) |
+| `ANDROID_UPLOAD_KEY_PASSWORD` | Android | the key's password (letters and digits only) |
+| `GOOGLE_SERVICES_JSON_BASE64` | Android | Firebase `google-services.json` for `com.jawwid.jawwid_chat`, base64 on one line |
+| `ASC_API_KEY_ID` | iOS | App Store Connect API key ID |
+| `ASC_API_ISSUER_ID` | iOS | the issuer ID shown above the keys list (a UUID) |
+| `ASC_API_KEY_P8_BASE64` | iOS | the downloaded `AuthKey_<ID>.p8`, base64 on one line |
+| `SENTRY_DSN` | both | the app's Sentry DSN |
+| `SENTRY_AUTH_TOKEN` | both | the Sentry organisation auth token (§3.5) |
+
+Variables (not secret):
+
+| Variable | Platform | Value |
+|---|---|---|
+| `API_BASE_URL`, `PRIVACY_POLICY_URL`, `TERMS_URL`, `SUPPORT_URL`, `SUPPORT_EMAIL` | both | what `scripts/mobile/build-store.sh` reads (`docs/mobile/store-builds.md`) |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | both | §3.5 |
+| `PLAY_WIF_PROVIDER`, `PLAY_SERVICE_ACCOUNT` | Android | §3.2 step 5 |
+| `LESSONS_ORIGIN`, `SENTRY_ENVIRONMENT`, `SENTRY_URL` | both, optional | lesson audio origin; Sentry environment (default `production`); self-hosted Sentry only |
+| `ANDROID_UPLOAD_CERT_SHA256` | Android, optional | the upload certificate's SHA-256 as Play Console shows it; any other signer then fails |
+
+`STORE_ARTIFACT_AGE_RECIPIENT` is no longer used; delete it from the Environment if it was created.
+
+How to make the keystore, `google-services.json` and the Apple key is unchanged from #547: see
+`docs/mobile/android-release-signing.md` (keystore on a trusted device, never the development Mac) and
+§3.4 above.
+
+## 4. Running it
 
 1. The lead (as `jawwid-bot`) dispatches the run from `main` with the commit, platform and version.
-2. You review the pending run (Actions → the run → **Review deployments**): check the commit, the
-   version and the Environment settings in the Preflight summary, then approve `store-release`.
-3. When it is green, download the artifact(s) to your trusted device **within 1 day** (they then
-   expire), and delete them from the run (the run page → Artifacts → the bin icon) once downloaded.
-4. **Decrypt on the trusted device.** GitHub delivers each artifact as a `.zip` holding one
-   `jawwid-<platform>-<version>+<build>.tar.age`:
-   ```sh
-   unzip android-aab-1.2.3-45.zip
-   age --decrypt -i ~/path/to/jawwid-store-artifacts.agekey \
-     -o jawwid-android-1.2.3+45.tar jawwid-android-1.2.3+45.tar.age
-   mkdir jawwid-android-1.2.3+45 && tar -xf jawwid-android-1.2.3+45.tar -C jawwid-android-1.2.3+45
-   ```
-   The folder then holds the `.aab` (or `.ipa`) and `symbols/`. If `age` says "no identity matched any of
-   the recipients", the build was encrypted to a different public key: compare the `age1…` value in the
-   job summary with your key file's `# public key:` line.
-5. **Android:** in Play Console → your app → Testing → Internal testing → Create new release → upload the
-   `.aab`. First compare the SHA-256 in the run summary with App integrity → Upload key certificate.
-6. **iOS:** upload the `.ipa` with Apple's **Transporter** app (Mac App Store), signed in with your Apple
-   ID; or `xcrun altool --upload-app -f <ipa> -t ios --apiKey <ID> --apiIssuer <issuer>` with a key file on
-   your own trusted machine (`altool`'s upload is **UNVERIFIED** on Xcode 26; Transporter is the safer
-   default). It then appears in App Store Connect → TestFlight after processing.
-7. Upload the symbols to Sentry (`docs/mobile/store-builds.md`, "Debug symbols"). Keep them for every
-   build you ship; the artifact copy expires.
+2. You review the pending run (Actions → the run → **Review deployments**): check the commit, the version
+   and the Environment settings in the Preflight summary, then approve `store-release`.
+3. When it is green:
+   - **Android:** Play Console → Testing → Internal testing shows a **draft** named
+     `<build_name> (<build_number>)`. Compare its SHA-256 and upload certificate with the run summary,
+     then release it to internal testers yourself.
+   - **iOS:** App Store Connect → TestFlight shows the build once Apple has processed it.
+   - **Sentry:** the symbols are already uploaded.
+4. The first runs should be `platform: android` (fully checkable) and then `platform: ios`, to settle the
+   UNVERIFIED points of §3 and §6.
 
-## 5. The change to `scripts/mobile/build-store.sh`
+## 5. The scripts, the guard and the tests
 
-A new target, `ios-config`, runs every existing check and then
-`flutter build ios --release --config-only` with the **same** `--build-name`, `--build-number`,
-`--split-debug-info` and `DEFINES` as `ios`. It writes them into `ios/Flutter/Generated.xcconfig`; the
-following `xcodebuild archive` compiles the Dart code with those values. It is needed because
-`flutter build ipa` cannot pass the App Store Connect key flags to `xcodebuild`, and without it the
-workflow would have to repeat the `--dart-define` list (as the unsigned readiness check does, "keep the
-two in step"). The `ios`, `android` and `check` targets are unchanged. A commit older than this change has
-no `ios-config`; the iOS job then stops with that message.
+- **`scripts/mobile/build-store.sh`** (unchanged here): `ios-config` runs every check and then
+  `flutter build ios --release --config-only` with the same version, symbols path and dart-defines as
+  `ios`; `xcodebuild archive` then compiles with those values. A commit older than `ios-config` stops the
+  iOS job with a clear message.
+- **`scripts/mobile/play-upload.sh`**: the Play edits flow above. The package
+  (`com.jawwid.jawwid_chat`), track (`internal`) and status (`draft`) are `readonly` constants; it refuses
+  to start if any `PLAY_*` variable other than `PLAY_ACCESS_TOKEN`, or `PACKAGE_NAME`, `TRACK`,
+  `RELEASE_STATUS` or `USER_FRACTION`, is set. The token comes from the environment only, is removed from
+  it before any other program starts, reaches curl on stdin (`-K -`), and is never printed; curl runs with
+  `-sS --fail-with-body`, and only HTTP status codes and Google's error status/reason codes are printed,
+  never headers or message text. A Google "package not found" style answer prints the STOP message (§3.3).
+- **`scripts/mobile/install-sentry-cli.sh`**: downloads sentry-cli 3.8.2
+  (`sentry-cli-Linux-x86_64` / `sentry-cli-Darwin-universal`) from its GitHub release and refuses it
+  unless its SHA-256 is the pinned one.
 
-`test/scripts/build_store_script_test.dart` holds this to account: `ios-config` is an accepted target; it
-refuses every bad value `ios` refuses, before Flutter is reached; and, run against a stand-in `flutter`
-that records its arguments, its `flutter build ios --config-only` call receives exactly the same version,
-symbols path and dart-defines as `ios`'s `flutter build ipa` call.
+### 5.1 Bumping sentry-cli
 
-### 5.1 The pinned `age` download
+Change `SENTRY_CLI_VERSION` and both SHA-256 values in `scripts/mobile/install-sentry-cli.sh` together,
+copying each asset's `sha256:` digest from `github.com/getsentry/sentry-cli/releases`. A download whose
+hash differs is refused.
 
-The workflow's top-level `env` pins `AGE_VERSION` and the SHA-256 of the two release archives it
-downloads (`age-<version>-linux-amd64.tar.gz` and `age-<version>-darwin-arm64.tar.gz`). A download whose
-hash differs is refused, and preflight refuses to start while either hash is not filled in. To fill in
-or bump them, copy each asset's `sha256:` digest from the release page on
-`github.com/FiloSottile/age/releases` (or `gh api repos/FiloSottile/age/releases/tags/<version>` →
-`assets[].digest`), and confirm it on a trusted device with `shasum -a 256 <file>`. This is a change to a
-Code Owner path, so it needs the owner's approval like any other change to the workflow.
+### 5.2 The guard: `scripts/qa/check-store-upload-guards.sh`
+
+Run by CI on every change, inside the `app-icons` gate of `scripts/qa/guards.sh` (the PD-56 store-build
+gate; no new gate id). Its `selftest` first proves every rule can fail, by mutating copies of the real
+files. It fails if:
+- the workflow has any trigger but `workflow_dispatch`;
+- any job but `android` has `id-token: write`, the workflow default permissions are not exactly
+  `contents: read`, or `write-all` appears;
+- `play-upload.sh`'s constants are not exactly `com.jawwid.jawwid_chat` / `internal` / `draft`, are
+  assigned more than once, read in or defaulted from anything, not used by its URLs and request body, or
+  its override refusal is gone;
+- any of `production`, `beta`, `alpha`, `rollout`, `completed`, `altool`, `iTMSTransporter`, `submit…`,
+  `appStoreVersionSubmissions`, `reviewSubmissions`, `releaseType` appears in the workflow or
+  `scripts/mobile/` (plus `inProgress`, `halted`, `userFraction` in `play-upload.sh`), except on three
+  listed workflow lines (the Sentry environment default, the `aps-environment` check, the Xcode selection
+  that skips pre-release Xcode) and the word `production` in `build-store.sh` (its production-host check);
+- `upload-artifact` appears;
+- an action is not pinned to a full commit SHA;
+- an expression (`${{ … }}`) is written inside a `run` block;
+- a script in `scripts/mobile/` other than `play-upload.sh` talks to the Play Developer API, or anything
+  calls the App Store Connect API directly.
+
+### 5.3 Tests
+
+`test/scripts/play_upload_script_test.dart` runs the real `play-upload.sh` with bash against a stand-in
+`curl` that records every call and answers like Google: the happy path makes exactly insert → upload →
+tracks.update (internal, draft, the right name and versionCode) → commit, each with the token on stdin;
+every override is refused before any call; the token never appears in the output, on a curl command line
+or in curl's environment; a failing upload, track update or commit deletes the edit and exits non-zero;
+a versionCode mismatch is refused; the "package not found" answer prints the STOP message. It also checks
+`install-sentry-cli.sh` refuses a download with the wrong SHA-256.
+`test/scripts/build_store_script_test.dart` still covers `build-store.sh`.
 
 ## 6. Risks and unverified points
 
-1. **Secrets in GitHub.** The keystore, its passwords and the `.p8` live in GitHub Environment secrets on a
-   public repository. Mitigations: Environment-only secrets, owner approval, `main` only, no admin
-   bypass (all three read back by preflight, which refuses the run otherwise), no PR triggers, every
-   action pinned to a full commit SHA (the same SHAs as `release-readiness.yml` in PR #523), `age` pinned
-   by version and SHA-256, `permissions: contents: read` (plus `actions: read` for preflight only, to read
-   the Environment), `persist-credentials: false`, no Flutter cache in the signing jobs. The preflight
-   check is a point-in-time read: GitHub itself enforces the reviewer and branch rule again when each
-   signing job starts.
-2. **Logs and artifacts are readable by any logged-in GitHub user** (options paper H8). Values are passed
-   through `env`, never echoed, and the scripts never use `set -x`. GitHub's redaction is not guaranteed
-   for **derived** values (H4): the `xcodebuild` log lists build settings, including the base64
-   dart-defines that contain the Sentry DSN, so that log is kept on the runner, only error lines are
-   printed, and it is deleted. The **artifacts** can be downloaded by anyone logged in, so each is
-   **encrypted with `age` to your public key** before upload; without your private key file the download
-   is useless (it would otherwise expose an unreleased build and its unobfuscated Dart symbols). No new
-   secret is needed for this. They are also kept only **1 day**, and §4 asks you to delete them once
-   downloaded. Uploading straight to Play internal testing / TestFlight instead is a separate, later owner
-   decision.
-3. **Code that runs with the secrets.** After approval, the workflow file from `main` runs the build
-   scripts, Gradle and its plugins, Swift packages, Flutter and pub packages **at the chosen commit**.
-   Anything merged to `main` can therefore see the secrets once a run is approved: review the commit you
-   approve, and keep `.github/workflows/` a Code Owner path.
-4. **Apple, UNVERIFIED until the first run:**
-   - that `xcodebuild` on Xcode 26 still cloud-signs with the WWDC21 flags (C1), and that no extra flag is
-     needed;
-   - that the **archive** step (development signing under `CODE_SIGN_STYLE` Automatic) succeeds on a
-     runner with no Apple account: `-allowProvisioningUpdates` may create an Apple Development
-     certificate and profile in the team, which may need a registered device or a higher key role;
-   - whether each run creates a **new development certificate** (the runner's keychain is thrown away). If
-     so they accumulate in Certificates, Identifiers & Profiles and can hit Apple's per-team limit; revoke
-     the CI-created ones periodically (revoking does not affect App Store apps, C4);
-   - that App Manager is enough (otherwise Admin, risk 1 grows);
-   - that `--split-debug-info`'s relative path is honoured through `--config-only` (the job fails clearly
-     if no Dart symbols appear).
-   The job is designed to fail with a clear error, and to upload nothing, if any of these do not hold.
+1. **Secrets in GitHub.** The keystore, its passwords, the `.p8` and the Sentry auth token live in
+   Environment secrets of a public repository. No Google key exists at all. Mitigations: Environment-only
+   secrets, owner approval, `main` only, no admin bypass (read back by preflight), manual trigger only,
+   every action pinned by SHA, inputs only through `env`, `persist-credentials: false`, no Flutter cache,
+   the guard of §5.2.
+2. **Google access.** `id-token: write` is on the Android job only. A Google token is minted only for a
+   job of this repository, in `store-release`, on `refs/heads/main` (the provider condition), after your
+   approval; it lives 15 minutes and carries only the `androidpublisher` scope. In Play Console the
+   service account can release to testing tracks only; the script can only make an internal draft.
+3. **Apple access.** The App Store Connect key can do whatever its role allows (App Manager can submit
+   for review and release versions in App Store Connect). The workflow never does: it only runs
+   `xcodebuild` archive/export, and the guard refuses any submission or release call. "Manually release
+   this version" (§3.4) is the second lock.
+4. **Logs.** Logs are readable by any logged-in GitHub user. Values pass through `env`, are never echoed,
+   and the scripts never use `set -x`. The `xcodebuild` logs (they list the base64 dart-defines that carry
+   the Sentry DSN) stay on the runner; only error lines are printed. `play-upload.sh` prints only status
+   codes. No build output is kept as an artifact.
+5. **Apple, UNVERIFIED until the first run:** that Xcode 26 still cloud-signs with the WWDC21 flags; that
+   the archive's development signing works on a runner with no Apple account (`-allowProvisioningUpdates`
+   may create development certificates that accumulate; revoke the CI-created ones periodically); that
+   App Manager is enough (§3.4); that `-exportArchive` with destination `upload` accepts the
+   `-authenticationKey*` flags and the `uploadSymbols` / `manageAppVersionAndBuildNumber` keys as used;
+   that `--split-debug-info` is honoured through `--config-only` (the job fails clearly if not).
    **If the iOS job fails:** read the printed `error:` lines; "No Accounts"/"not authorized" points to the
-   key's role or cloud-signing permission; "No profiles"/"requires a provisioning profile" points to
-   provisioning (registered device, App ID capabilities such as Push). Fix in the Apple account; do not
-   weaken the verification step.
-5. **Android:** the AAB is signed with the **upload** key; Google re-signs with the app signing key. A
-   wrong keystore is caught by the optional SHA-256 pin, and in any case by Play Console at upload.
-6. **Cost:** standard GitHub-hosted runners, including `macos-26`, are free for a public repository (H1;
-   the macOS wording is UNVERIFIED there). If the repository became private, macOS minutes are billed.
+   key's role; "No profiles"/"requires a provisioning profile" to provisioning; "already been uploaded" or
+   "bundle version" to a reused `build_number`. Fix it in the Apple account; never weaken the verification.
+6. **Google, UNVERIFIED until the first run:** the `environment` claim (§3.2), the token permission
+   (§3.2), the Play permission, the first-upload rule and draft-only behaviour (§3.3).
+7. **Code that runs with the secrets.** After approval, the build commit's build scripts, Gradle, Swift
+   packages, Flutter and pub packages run with the signing secrets in reach. Review the commit you approve.
+   The upload helpers come from the workflow's own commit (§1).
+8. **Cost:** standard GitHub-hosted runners, including `macos-26`, are free for a public repository (H1;
+   the macOS wording is UNVERIFIED there). The Google Cloud project, Workload Identity Federation and the
+   Play Developer API have no charge for this use (UNVERIFIED; check the project's billing page).
 
 ## 7. Not run locally
 
-This change was written under the machine rule: no workflow, script or build was run. CI and the first
-approved run are the evidence; the first run should be `platform: android` (fully verifiable) and then
-`platform: ios` to settle the unverified Apple points above. The first run also settles whether the
-job token can read the Environment's protection settings (§3.1).
+Written under the machine rule: no workflow, script, test or build was run. CI (the guard's selftest and
+check, and the Dart tests) and the first approved runs are the evidence.

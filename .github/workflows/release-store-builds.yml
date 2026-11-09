@@ -1,10 +1,15 @@
-# Signed store builds (LR-76, option (c) of docs/release/signed-build-options.md).
+# Signed store builds with direct upload (LR-76 option (c), OT-2b).
 #
-# MANUAL ONLY, and nothing leaves GitHub except as a short-lived, ENCRYPTED artifact: this workflow
-# builds a signed Android App Bundle and/or a signed iOS .ipa from a commit already on main, verifies
-# the signature, encrypts the files with `age` to the owner's public key, and uploads them for the
-# OWNER to decrypt on a trusted device and upload to Play internal testing / TestFlight by hand. It
-# never uploads to Google Play or App Store Connect itself.
+# MANUAL ONLY. From a commit already on main, this workflow builds a signed Android App Bundle
+# and/or a signed iOS app, verifies the signature, uploads the debug symbols to Sentry, and then
+# uploads the build straight to the store's TESTING channel and nowhere else:
+#   - Android: Google Play's INTERNAL testing track, as a DRAFT release (scripts/mobile/play-upload.sh;
+#     the package, track and status are constants there). Signed in to Google through Workload
+#     Identity Federation: no Google key is stored anywhere.
+#   - iOS: App Store Connect / TestFlight, through `xcodebuild -exportArchive` with destination
+#     `upload` (Apple cloud signing). Nothing is sent for App Review and nothing is released.
+# A person releases each build to testers, and later to the public, in Play Console and App Store
+# Connect. No build output is kept as a GitHub artifact.
 #
 # Every job that sees a secret runs in the `store-release` GitHub Environment: the owner is the
 # required reviewer, only `main` may deploy to it, and administrators may not bypass it. Preflight
@@ -13,16 +18,20 @@
 # referenced by name only and never printed.
 #
 # Environment secrets (store-release):
-#   ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_KEYSTORE_PASSWORD, ANDROID_UPLOAD_KEY_ALIAS,
-#   ANDROID_UPLOAD_KEY_PASSWORD, GOOGLE_SERVICES_JSON_BASE64,
-#   ASC_API_KEY_ID, ASC_API_ISSUER_ID, ASC_API_KEY_P8_BASE64, SENTRY_DSN
-# Environment variables (store-release), the names scripts/mobile/build-store.sh reads:
-#   API_BASE_URL, PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_URL, SUPPORT_EMAIL,
-#   LESSONS_ORIGIN (optional), SENTRY_ENVIRONMENT (optional, default production),
-#   ANDROID_UPLOAD_CERT_SHA256 (optional pin of the upload certificate's SHA-256),
-#   STORE_ARTIFACT_AGE_RECIPIENT (required: the owner's age PUBLIC key, age1...; not a secret)
+#   Android: ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_KEYSTORE_PASSWORD, ANDROID_UPLOAD_KEY_ALIAS,
+#            ANDROID_UPLOAD_KEY_PASSWORD, GOOGLE_SERVICES_JSON_BASE64, SENTRY_DSN, SENTRY_AUTH_TOKEN
+#   iOS:     ASC_API_KEY_ID, ASC_API_ISSUER_ID, ASC_API_KEY_P8_BASE64, SENTRY_DSN, SENTRY_AUTH_TOKEN
+# Environment variables (store-release), not secrets:
+#   both:    API_BASE_URL, PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_URL, SUPPORT_EMAIL (what
+#            scripts/mobile/build-store.sh reads), SENTRY_ORG, SENTRY_PROJECT,
+#            LESSONS_ORIGIN (optional), SENTRY_ENVIRONMENT (optional), SENTRY_URL (optional, https)
+#   Android: PLAY_WIF_PROVIDER, PLAY_SERVICE_ACCOUNT,
+#            ANDROID_UPLOAD_CERT_SHA256 (optional pin of the upload certificate's SHA-256)
 #
 # Never add pull_request, pull_request_target, workflow_run or push triggers to this file.
+# scripts/qa/check-store-upload-guards.sh (run by CI through scripts/qa/guards.sh) fails if this
+# file gains another trigger, an unpinned action, an expression inside a run block, a GitHub
+# artifact upload, a second job with id-token: write, or any other store channel or action.
 name: Release store builds
 
 on:
@@ -54,17 +63,6 @@ concurrency:
   group: release-store-builds
   cancel-in-progress: false
 
-env:
-  # `age` (https://github.com/FiloSottile/age) encrypts the artifacts. Pinned by version AND by the
-  # SHA-256 of each release archive; a download that does not match is refused. The SHA-256 values
-  # must be copied from the release (GitHub shows each asset's sha256 digest) by whoever bumps the
-  # version; preflight refuses to start while either is not 64 hex digits.
-  # age v1.3.2 (2026-08-29). The digests are the ones GitHub publishes for the release assets
-  # (gh api repos/FiloSottile/age/releases/tags/v1.3.2 --jq '.assets[].digest').
-  AGE_VERSION: v1.3.2
-  AGE_SHA256_LINUX_AMD64: 'cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10'
-  AGE_SHA256_DARWIN_ARM64: 'e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5'
-
 jobs:
   preflight:
     # No environment and no secrets: refuses a bad request before anyone is asked to approve it.
@@ -85,7 +83,7 @@ jobs:
           persist-credentials: false
       - id: verify
         name: The workflow runs from main, and the commit is on main
-        # Inputs reach the shell only through env, never through ${{ }} inside the script.
+        # Inputs reach the shell only through env, never through an expression inside the script.
         env:
           REF: ${{ inputs.ref }}
           BUILD_NAME: ${{ inputs.build_name }}
@@ -107,14 +105,8 @@ jobs:
             echo "| commit | \`$REF\` |"
             echo "| version | $BUILD_NAME+$BUILD_NUMBER |"
             echo "| requested by | $GITHUB_ACTOR |"
+            echo "| destination | Play internal testing (draft) / App Store Connect (TestFlight) |"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: The pinned age download is fully specified
-        run: |
-          rc=0
-          for v in AGE_SHA256_LINUX_AMD64 AGE_SHA256_DARWIN_ARM64; do
-            [[ "${!v}" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::$v (workflow env) is not a 64-hex-digit SHA-256 for age $AGE_VERSION; nothing can be encrypted, so nothing is built"; rc=1; }
-          done
-          exit "$rc"
       - name: The store-release Environment is protected (reviewer, main only, no admin bypass)
         # GitHub creates an Environment named by a job on first use, with NO protection. Refuse the run
         # unless the owner's three settings are in place, so secrets are never pasted into an
@@ -156,12 +148,20 @@ jobs:
           [ "$bad" -eq 0 ] || { echo "$manual"; exit 1; }
 
   android:
-    name: Signed Android App Bundle
+    name: Signed Android App Bundle, uploaded to Play internal testing as a draft
     needs: [preflight]
     if: inputs.platform == 'android' || inputs.platform == 'both'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: store-release
+    # id-token: write lets google-github-actions/auth exchange this job's GitHub OIDC token for a
+    # short-lived Google access token (Workload Identity Federation). Only this job has it; the
+    # Google side accepts the token only for this repository, the store-release Environment and
+    # refs/heads/main (docs/release/signed-builds-ci.md, owner setup). A job-level block replaces
+    # the workflow's, so contents: read is repeated.
+    permissions:
+      contents: read
+      id-token: write
     env:
       BUILD_NAME: ${{ inputs.build_name }}
       BUILD_NUMBER: ${{ inputs.build_number }}
@@ -170,15 +170,17 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
-      - name: Use the runner's preinstalled JDK 17
-        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      - name: Check out the upload helpers from this workflow's own commit
+        # The build commit may be older than the upload helpers; the helpers that talk to the
+        # stores are always the current, CI-guarded ones from main.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          flutter-version: 3.47.2
-          channel: stable
-          cache: false # a signing build never restores a cache another workflow wrote
-      - name: The Android secrets and the owner's age public key are present
-        # Booleans only: the secret values never enter this step.
+          ref: ${{ github.sha }}
+          path: release-tools
+          sparse-checkout: scripts/mobile
+          persist-credentials: false
+      - name: The Android secrets and variables are present and well-formed
+        # Before any build. Booleans only for secrets: their values never enter this step.
         env:
           HAS_KS: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 != '' }}
           HAS_KS_PASS: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD != '' }}
@@ -186,30 +188,46 @@ jobs:
           HAS_KEY_PASS: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD != '' }}
           HAS_GSJ: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 != '' }}
           HAS_DSN: ${{ secrets.SENTRY_DSN != '' }}
-          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+          HAS_SENTRY_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+          WIF_PROVIDER: ${{ vars.PLAY_WIF_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          V_SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          V_SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          V_SENTRY_URL: ${{ vars.SENTRY_URL }}
+          V_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          V_PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+          V_TERMS_URL: ${{ vars.TERMS_URL }}
+          V_SUPPORT_URL: ${{ vars.SUPPORT_URL }}
+          V_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
         run: |
           rc=0
+          missing() { echo "::error title=Missing $1::$2 is not set in the store-release Environment${3:+ ($3)}"; rc=1; }
           for pair in HAS_KS:ANDROID_UPLOAD_KEYSTORE_BASE64 HAS_KS_PASS:ANDROID_UPLOAD_KEYSTORE_PASSWORD \
                       HAS_ALIAS:ANDROID_UPLOAD_KEY_ALIAS HAS_KEY_PASS:ANDROID_UPLOAD_KEY_PASSWORD \
-                      HAS_GSJ:GOOGLE_SERVICES_JSON_BASE64 HAS_DSN:SENTRY_DSN; do
+                      HAS_GSJ:GOOGLE_SERVICES_JSON_BASE64 HAS_DSN:SENTRY_DSN HAS_SENTRY_TOKEN:SENTRY_AUTH_TOKEN; do
             flag="${pair%%:*}"
-            [ "${!flag}" = true ] || { echo "::error title=Missing secret::${pair#*:} is not set in the store-release Environment"; rc=1; }
+            [ "${!flag}" = true ] || missing secret "${pair#*:}"
           done
-          [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] \
-            || { echo "::error title=Missing variable::STORE_ARTIFACT_AGE_RECIPIENT is not set to an age public key (age1...) in the store-release Environment; the build would have nothing to be encrypted to"; rc=1; }
+          for v in API_BASE_URL PRIVACY_POLICY_URL TERMS_URL SUPPORT_URL SUPPORT_EMAIL; do
+            n="V_$v"; [ -n "${!n}" ] || missing variable "$v"
+          done
+          [[ "$WIF_PROVIDER" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+$ ]] \
+            || missing variable PLAY_WIF_PROVIDER "projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>"
+          [[ "$WIF_SERVICE_ACCOUNT" =~ ^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$ ]] \
+            || missing variable PLAY_SERVICE_ACCOUNT "<name>@<project>.iam.gserviceaccount.com"
+          [[ "$V_SENTRY_ORG" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || missing variable SENTRY_ORG "the organisation slug"
+          [[ "$V_SENTRY_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || missing variable SENTRY_PROJECT "the project slug"
+          [ -z "$V_SENTRY_URL" ] || [[ "$V_SENTRY_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] \
+            || missing variable SENTRY_URL "optional; if set, https://<host>/"
           [ "$rc" -eq 0 ] || echo "Nothing was built. Owner steps: docs/release/signed-builds-ci.md"
           exit "$rc"
-      - name: Install age (pinned version and SHA-256)
-        run: |
-          set -euo pipefail
-          d="$RUNNER_TEMP/age-install"; mkdir -p "$d"; f="$d/age.tar.gz"
-          curl -fsSL --proto '=https' --tlsv1.2 -o "$f" \
-            "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
-          echo "$AGE_SHA256_LINUX_AMD64  $f" | shasum -a 256 -c - \
-            || { echo "::error::the age $AGE_VERSION download does not match AGE_SHA256_LINUX_AMD64"; exit 1; }
-          tar -xzf "$f" -C "$d"
-          "$d/age/age" --version
-          echo "AGE=$d/age/age" >> "$GITHUB_ENV"
+      - name: Use the runner's preinstalled JDK 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: false # a signing build never restores a cache another workflow wrote
       - name: Write the upload keystore, key.properties and google-services.json (mode 600)
         # The keystore lives under RUNNER_TEMP. android/key.properties and android/app/google-services.json
         # must sit where the Gradle build looks for them (android/app/build.gradle.kts); they are
@@ -282,43 +300,70 @@ jobs:
             [ "$(norm "$signers")" = "$(norm "$PINNED_SHA256")" ] \
               || { echo "::error::the upload key in the secrets ($signers) is not the one pinned in ANDROID_UPLOAD_CERT_SHA256"; exit 1; }
           fi
-          mkdir -p "$RUNNER_TEMP/out/symbols"
-          cp "$AAB" "$RUNNER_TEMP/out/jawwid-$BUILD_NAME+$BUILD_NUMBER.aab"
-          cp -R "build/symbols/android/$BUILD_NAME+$BUILD_NUMBER" "$RUNNER_TEMP/out/symbols/dart"
           {
             echo "### Android App Bundle $BUILD_NAME+$BUILD_NUMBER"
             echo ""
             echo "- jarsigner: jar verified"
             echo "- upload certificate SHA-256: \`$signers\`${PINNED_SHA256:+ (matches the pinned value)}"
-            echo "- compare it with Play Console > App integrity > Upload key certificate before uploading"
+            echo "- App Bundle SHA-256: \`$(sha256sum "$AAB" | awk '{print $1}')\`"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Encrypt the App Bundle and its Dart symbols to the owner's age public key
-        # Artifacts are downloadable by any logged-in GitHub user; only the owner's age identity,
-        # which never comes near GitHub, can open this one.
-        env:
-          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+      - name: Install sentry-cli (pinned version and SHA-256)
         run: |
           set -euo pipefail
-          U="$RUNNER_TEMP/upload"; mkdir -p "$U"
-          ENC="$U/jawwid-android-$BUILD_NAME+$BUILD_NUMBER.tar.age"
-          tar -C "$RUNNER_TEMP/out" -cf - . | "$AGE" --encrypt -r "$RECIPIENT" -o "$ENC"
-          [ "$(head -c 21 "$ENC")" = "age-encryption.org/v1" ] || { echo "::error::$ENC is not an age file"; exit 1; }
-          echo "- artifact: \`$(basename "$ENC")\`, encrypted to \`$RECIPIENT\` (decrypt: docs/release/signed-builds-ci.md §4)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload the encrypted App Bundle and symbols (kept 1 day)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+          p="$(bash release-tools/scripts/mobile/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli")"
+          "$p" --version
+          echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"
+      - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
+        # docs/mobile/store-builds.md "Debug symbols": the Dart split-debug-info symbols, and the R8
+        # mapping file when the build wrote one. sentry-cli reads the token, organisation, project
+        # and (optional) server from the environment; the token is never on a command line.
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_URL: ${{ vars.SENTRY_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "$SENTRY_URL" ] || unset SENTRY_URL
+          SYM="build/symbols/android/$BUILD_NAME+$BUILD_NUMBER"
+          [ -n "$(ls -A "$SYM" 2>/dev/null)" ] || { echo "::error::no Dart symbols in $SYM (split-debug-info path not honoured)"; exit 1; }
+          "$SENTRY_CLI" debug-files upload "$SYM"
+          MAP=build/app/outputs/mapping/release/mapping.txt
+          if [ -f "$MAP" ]; then
+            "$SENTRY_CLI" upload-proguard "$MAP"
+            echo "- Sentry: Dart symbols and the R8 mapping file uploaded" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Sentry: Dart symbols uploaded (the build wrote no R8 mapping file)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - id: gauth
+        name: Sign in to Google with Workload Identity Federation (no stored key)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          name: android-aab-${{ inputs.build_name }}-${{ inputs.build_number }}
-          path: ${{ runner.temp }}/upload/
-          if-no-files-found: error
-          retention-days: 1
-      - name: Remove the signing material and the unencrypted outputs
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          access_token_lifetime: 900s
+          create_credentials_file: false
+      - name: Upload the App Bundle to Play internal testing as a draft release
+        # scripts/mobile/play-upload.sh: package, track (internal) and status (draft) are constants
+        # there. The token reaches it through env only; it never prints it.
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.gauth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$PLAY_ACCESS_TOKEN"
+          bash release-tools/scripts/mobile/play-upload.sh \
+            build/app/outputs/bundle/release/app-release.aab "$BUILD_NAME" "$BUILD_NUMBER"
+          echo "- Google Play: draft release '$BUILD_NAME ($BUILD_NUMBER)' on the internal testing track; release it to testers in Play Console" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the signing material and the build outputs
         if: always()
         run: |
           rm -f android/key.properties android/app/google-services.json
-          rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/jarsigner.txt" "$RUNNER_TEMP/out" "$RUNNER_TEMP/upload"
+          rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/jarsigner.txt" "$RUNNER_TEMP/sentry-cli"
 
   ios:
-    name: Signed iOS .ipa (cloud signing; UNVERIFIED until the first run)
+    name: Signed iOS app, uploaded to App Store Connect / TestFlight (cloud signing; UNVERIFIED until the first run)
     needs: [preflight]
     if: inputs.platform == 'ios' || inputs.platform == 'both'
     runs-on: macos-26
@@ -334,6 +379,46 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
+      - name: Check out the upload helpers from this workflow's own commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: release-tools
+          sparse-checkout: scripts/mobile
+          persist-credentials: false
+      - name: The iOS secrets and variables are present and well-formed
+        # Before any build. Booleans only for secrets: their values never enter this step.
+        env:
+          HAS_KEY_ID: ${{ secrets.ASC_API_KEY_ID != '' }}
+          HAS_ISSUER: ${{ secrets.ASC_API_ISSUER_ID != '' }}
+          HAS_P8: ${{ secrets.ASC_API_KEY_P8_BASE64 != '' }}
+          HAS_DSN: ${{ secrets.SENTRY_DSN != '' }}
+          HAS_SENTRY_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+          V_SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          V_SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          V_SENTRY_URL: ${{ vars.SENTRY_URL }}
+          V_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          V_PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+          V_TERMS_URL: ${{ vars.TERMS_URL }}
+          V_SUPPORT_URL: ${{ vars.SUPPORT_URL }}
+          V_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+        run: |
+          rc=0
+          missing() { echo "::error title=Missing $1::$2 is not set in the store-release Environment${3:+ ($3)}"; rc=1; }
+          for pair in HAS_KEY_ID:ASC_API_KEY_ID HAS_ISSUER:ASC_API_ISSUER_ID HAS_P8:ASC_API_KEY_P8_BASE64 \
+                      HAS_DSN:SENTRY_DSN HAS_SENTRY_TOKEN:SENTRY_AUTH_TOKEN; do
+            flag="${pair%%:*}"
+            [ "${!flag}" = true ] || missing secret "${pair#*:}"
+          done
+          for v in API_BASE_URL PRIVACY_POLICY_URL TERMS_URL SUPPORT_URL SUPPORT_EMAIL; do
+            n="V_$v"; [ -n "${!n}" ] || missing variable "$v"
+          done
+          [[ "$V_SENTRY_ORG" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || missing variable SENTRY_ORG "the organisation slug"
+          [[ "$V_SENTRY_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || missing variable SENTRY_PROJECT "the project slug"
+          [ -z "$V_SENTRY_URL" ] || [[ "$V_SENTRY_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] \
+            || missing variable SENTRY_URL "optional; if set, https://<host>/"
+          [ "$rc" -eq 0 ] || echo "Nothing was built. Owner steps: docs/release/signed-builds-ci.md"
+          exit "$rc"
       - name: Select Xcode 26 explicitly
         run: |
           x="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)"
@@ -345,36 +430,6 @@ jobs:
           flutter-version: 3.47.2
           channel: stable
           cache: false # a signing build never restores a cache another workflow wrote
-      - name: The iOS secrets and the owner's age public key are present
-        # Booleans only: the secret values never enter this step.
-        env:
-          HAS_KEY_ID: ${{ secrets.ASC_API_KEY_ID != '' }}
-          HAS_ISSUER: ${{ secrets.ASC_API_ISSUER_ID != '' }}
-          HAS_P8: ${{ secrets.ASC_API_KEY_P8_BASE64 != '' }}
-          HAS_DSN: ${{ secrets.SENTRY_DSN != '' }}
-          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
-        run: |
-          rc=0
-          for pair in HAS_KEY_ID:ASC_API_KEY_ID HAS_ISSUER:ASC_API_ISSUER_ID HAS_P8:ASC_API_KEY_P8_BASE64 HAS_DSN:SENTRY_DSN; do
-            flag="${pair%%:*}"
-            [ "${!flag}" = true ] || { echo "::error title=Missing secret::${pair#*:} is not set in the store-release Environment"; rc=1; }
-          done
-          [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] \
-            || { echo "::error title=Missing variable::STORE_ARTIFACT_AGE_RECIPIENT is not set to an age public key (age1...) in the store-release Environment; the build would have nothing to be encrypted to"; rc=1; }
-          [ "$rc" -eq 0 ] || echo "Nothing was built. Owner steps: docs/release/signed-builds-ci.md"
-          exit "$rc"
-      - name: Install age (pinned version and SHA-256)
-        run: |
-          set -euo pipefail
-          [ "$(uname -m)" = arm64 ] || { echo "::error::expected an Apple silicon runner for the darwin-arm64 age build, got $(uname -m)"; exit 1; }
-          d="$RUNNER_TEMP/age-install"; mkdir -p "$d"; f="$d/age.tar.gz"
-          curl -fsSL --proto '=https' --tlsv1.2 -o "$f" \
-            "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-darwin-arm64.tar.gz"
-          echo "$AGE_SHA256_DARWIN_ARM64  $f" | shasum -a 256 -c - \
-            || { echo "::error::the age $AGE_VERSION download does not match AGE_SHA256_DARWIN_ARM64"; exit 1; }
-          tar -xzf "$f" -C "$d"
-          "$d/age/age" --version
-          echo "AGE=$d/age/age" >> "$GITHUB_ENV"
       - name: This commit's build script can configure an iOS build for CI
         run: |
           grep -q 'ios-config' scripts/mobile/build-store.sh \
@@ -410,7 +465,7 @@ jobs:
           SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT || 'production' }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: bash scripts/mobile/build-store.sh ios-config
-      - name: Archive and export with cloud signing (UNVERIFIED flags; fails clearly)
+      - name: Archive, and export a local .ipa with cloud signing (UNVERIFIED flags; fails clearly)
         # WWDC21 "Distribute apps in Xcode with cloud signing": xcodebuild (Xcode 13+) signs in with an
         # App Store Connect key through -authenticationKeyPath/-authenticationKeyID/-authenticationKeyIssuerID
         # and "still requires allow provisioning updates". UNVERIFIED on Xcode 26: that the archive's
@@ -418,6 +473,8 @@ jobs:
         # key (Admin may be needed), and that no extra flag is required. The full xcodebuild log stays on
         # the runner: it lists build settings, including the base64 dart-defines that carry SENTRY_DSN.
         # Only error lines are printed, and never one that mentions DART_DEFINES.
+        # This export stays on the runner (destination export): it is what the next step verifies.
+        # The upload is a second export of the SAME archive, after verification and symbols.
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -447,11 +504,12 @@ jobs:
             <key>destination</key><string>export</string>
             <key>signingStyle</key><string>automatic</string>
             <key>teamID</key><string>$TEAM_ID</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
           </dict>
           </plist>
           PLIST
           plutil -lint "$B/ExportOptions.plist"
-          run_quiet "xcodebuild -exportArchive" "$B/export.log" \
+          run_quiet "xcodebuild -exportArchive (local)" "$B/export.log" \
             xcodebuild -quiet -exportArchive -archivePath "$B/Runner.xcarchive" \
               -exportOptionsPlist "$B/ExportOptions.plist" -exportPath "$B/export" "${AUTH[@]}"
       - name: Verify the .ipa is App Store signed, for this app and version
@@ -489,32 +547,66 @@ jobs:
           [ "$(get "$P" CFBundleVersion)" = "$BUILD_NUMBER" ] && rec PASS "build $BUILD_NUMBER" || rec FAIL "CFBundleVersion is not $BUILD_NUMBER"
           SYM="build/symbols/ios/$BUILD_NAME+$BUILD_NUMBER"
           [ -n "$(ls -A "$SYM" 2>/dev/null)" ] && rec PASS "Dart symbols in $SYM" || rec FAIL "no Dart symbols in $SYM (split-debug-info path not honoured)"
-          [ -d "$B/Runner.xcarchive/dSYMs" ] && rec PASS "dSYMs in the archive" || rec FAIL "no dSYMs in the archive"
+          [ -n "$(ls -A "$B/Runner.xcarchive/dSYMs" 2>/dev/null)" ] && rec PASS "dSYMs in the archive" || rec FAIL "no dSYMs in the archive"
           cat "$B/report.md" >> "$GITHUB_STEP_SUMMARY"
           [ "$bad" -eq 0 ] || { echo "::error::the .ipa failed verification; it is not uploaded"; exit 1; }
-          mkdir -p "$RUNNER_TEMP/out/symbols"
-          cp "${ipas[0]}" "$RUNNER_TEMP/out/jawwid-$BUILD_NAME+$BUILD_NUMBER.ipa"
-          cp -R "$SYM" "$RUNNER_TEMP/out/symbols/dart"
-          cp -R "$B/Runner.xcarchive/dSYMs" "$RUNNER_TEMP/out/symbols/dSYMs"
-      - name: Encrypt the .ipa and its symbols to the owner's age public key
-        # Artifacts are downloadable by any logged-in GitHub user; only the owner's age identity,
-        # which never comes near GitHub, can open this one.
-        env:
-          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+      - name: Install sentry-cli (pinned version and SHA-256)
         run: |
           set -euo pipefail
-          U="$RUNNER_TEMP/upload"; mkdir -p "$U"
-          ENC="$U/jawwid-ios-$BUILD_NAME+$BUILD_NUMBER.tar.age"
-          tar -C "$RUNNER_TEMP/out" -cf - . | "$AGE" --encrypt -r "$RECIPIENT" -o "$ENC"
-          [ "$(head -c 21 "$ENC")" = "age-encryption.org/v1" ] || { echo "::error::$ENC is not an age file"; exit 1; }
-          echo "- artifact: \`$(basename "$ENC")\`, encrypted to \`$RECIPIENT\` (decrypt: docs/release/signed-builds-ci.md §4)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload the encrypted .ipa and symbols (kept 1 day)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ios-ipa-${{ inputs.build_name }}-${{ inputs.build_number }}
-          path: ${{ runner.temp }}/upload/
-          if-no-files-found: error
-          retention-days: 1
-      - name: Remove the signing material, build logs and the unencrypted outputs
+          p="$(bash release-tools/scripts/mobile/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli")"
+          "$p" --version
+          echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"
+      - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
+        # docs/mobile/store-builds.md "Debug symbols": the archive's dSYMs and the Dart
+        # split-debug-info symbols. sentry-cli reads the token, organisation, project and (optional)
+        # server from the environment; the token is never on a command line.
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_URL: ${{ vars.SENTRY_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "$SENTRY_URL" ] || unset SENTRY_URL
+          "$SENTRY_CLI" debug-files upload "$RUNNER_TEMP/ios-build/Runner.xcarchive/dSYMs"
+          "$SENTRY_CLI" debug-files upload "build/symbols/ios/$BUILD_NAME+$BUILD_NUMBER"
+          echo "- Sentry: dSYMs and Dart symbols uploaded" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the verified archive to App Store Connect (destination upload; no review, no release)
+        # `xcodebuild -exportArchive` cannot upload an .ipa that was already exported, so the upload is
+        # a second export of the SAME archive with the same method, team and signing style, and
+        # destination `upload`: Apple cloud-signs it again and sends it to App Store Connect, where it
+        # is processed for TestFlight. Nothing here asks for App Review or releases a version.
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          B="$RUNNER_TEMP/ios-build"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH"
+                -authenticationKeyID "$ASC_API_KEY_ID" -authenticationKeyIssuerID "$ASC_API_ISSUER_ID")
+          cat > "$B/UploadOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$B/UploadOptions.plist"
+          if ! xcodebuild -quiet -exportArchive -archivePath "$B/Runner.xcarchive" \
+                 -exportOptionsPlist "$B/UploadOptions.plist" -exportPath "$B/upload" "${AUTH[@]}" > "$B/upload.log" 2>&1; then
+            grep -E 'error:|error -|\*\* .* FAILED \*\*|No profiles|No Accounts|not authorized|already been uploaded|bundle version' "$B/upload.log" \
+              | grep -v 'DART_DEFINES' | head -60 || true
+            echo "::error title=App Store Connect upload failed::see the lines above and docs/release/signed-builds-ci.md, 'If the iOS job fails'"
+            exit 1
+          fi
+          echo "- App Store Connect: build $BUILD_NAME ($BUILD_NUMBER) uploaded; it appears in TestFlight after Apple processes it" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the signing material, build logs and outputs
         if: always()
-        run: rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/ios-build" "$RUNNER_TEMP/out" "$RUNNER_TEMP/upload"
+        run: rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/ios-build" "$RUNNER_TEMP/sentry-cli"
