@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../design/tokens.dart';
 import '../application/call_controller.dart';
 import '../application/locked_call_guard.dart';
 
@@ -218,13 +219,17 @@ class _LockScreenCover extends StatelessWidget {
   const _LockScreenCover();
 
   @override
-  Widget build(BuildContext context) => const AbsorbPointer(
-        key: ValueKey('locked-call-cover'),
-        child: ColoredBox(
-          color: Colors.black,
-          child: Center(
-            child: Icon(Icons.lock, color: Colors.white54, size: 48, textDirection: TextDirection.ltr),
-          ),
+  Widget build(BuildContext context) {
+    final tokens = JawwidTokens.of(context);
+    return AbsorbPointer(
+      key: const ValueKey('locked-call-cover'),
+      child: ColoredBox(
+        color: tokens.colorMediaSurface,
+        child: Center(
+          child: Icon(Icons.lock,
+              color: tokens.colorMediaOnSurfaceMuted, size: 48, textDirection: TextDirection.ltr),
         ),
-      );
+      ),
+    );
+  }
 }
