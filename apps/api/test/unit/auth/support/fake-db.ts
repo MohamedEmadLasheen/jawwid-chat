@@ -265,6 +265,17 @@ export class FakeDb {
     updateMany: async (_args: { where: { sessionId: string }; data: { sessionId: string } }) => ({ count: 0 }),
   };
 
+  /**
+   * Raw SQL. The only raw statement the auth service issues is the row lock
+   * the LR-46 token move takes on the predecessor session (inside the
+   * successor's creating transaction). Locks mean nothing in a single-threaded
+   * fake: the ordering they buy is proven against the real database in
+   * test/integration/lr046-device-token-session.spec.ts.
+   */
+  async $queryRaw(_strings: TemplateStringsArray, ..._values: unknown[]): Promise<unknown[]> {
+    return [];
+  }
+
   // -- device -------------------------------------------------------------
   readonly device = {
     findFirst: async (args: {

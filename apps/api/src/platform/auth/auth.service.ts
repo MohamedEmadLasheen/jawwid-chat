@@ -423,7 +423,7 @@ export class AuthService {
   private async issue(
     account: { id: string; organizationId: string; subject: string },
     actor: Actor,
-    context: LoginContext & { deviceId?: string | null; chain?: LoginChain },
+    context: LoginContext & { deviceId?: string | null; chain?: LoginChain; successorOf?: string },
     reason: 'login' | 'refresh',
   ): Promise<TokenPair> {
     const config = this.config();
@@ -478,6 +478,11 @@ export class AuthService {
         },
         select: { id: true, createdAt: true },
       });
+
+      // LR-46: a rotation's push tokens move to the successor in THIS
+      // transaction, so the successor never exists without them and a failure
+      // from here on rolls back both.
+      if (context.successorOf) await this.devicePushTokensFollow(tx, context.successorOf, created.id);
 
       // API-CONTRACT §3.1: audit_log {action:'session.created', entity:'session',
       // entityId, actorId, reason:'login'}.
@@ -861,7 +866,15 @@ export class AuthService {
     // exists, so an interruption between them leaves the caller logged out
     // rather than holding two live sessions.
     await this.revoke(session.id, 'rotated', undefined, actor.actorId);
-    const pair = await this.issue(account, actor, { ...context, deviceId: session.deviceId, chain }, 'refresh');
+    // The successor takes this session's push tokens inside its own creating
+    // transaction (LR-46): a revocation can reach the successor only once it
+    // is committed, and by then the tokens are on it.
+    const pair = await this.issue(
+      account,
+      actor,
+      { ...context, deviceId: session.deviceId, chain, successorOf: session.id },
+      'refresh',
+    );
     // RT-009: rotation is the same login continuing, not a revocation. Sockets
     // bound to the retired session now also answer to its successor, so a
     // later logout of the successor still reaches them.
@@ -872,7 +885,6 @@ export class AuthService {
       where: { staffSessionId: session.id, endedAt: null },
       data: { staffSessionId: pair.sessionId },
     });
-    await this.devicePushTokensFollow(session.id, pair.sessionId);
     return pair;
   }
 
@@ -982,10 +994,21 @@ export class AuthService {
    * -- is the same sign-in continuing, so the trigger skips those two reasons
    * ('rotated', PASSWORD_ROTATED_REASON; the migration names both) and the
    * tokens move to the successor here, so that ending the successor still
-   * reaches them. Called after the successor exists.
+   * reaches them.
+   *
+   * Called by issue() INSIDE the transaction that creates the successor
+   * (review of #537, P3-2). It used to run after that commit, so a "revoke
+   * everything" (or a crash) in between left the tokens active on a retired
+   * session while the successor was revoked without them. Now no revocation
+   * can see the successor before the tokens are on it.
+   *
+   * Lock order: the session, then the token rows -- as a revocation (its
+   * UPDATE, then its trigger) and registerDevice take them. The successor row
+   * is held by its INSERT; the predecessor is locked here explicitly.
    */
-  private async devicePushTokensFollow(fromSessionId: string, toSessionId: string): Promise<void> {
-    await this.prisma.deviceToken.updateMany({
+  private async devicePushTokensFollow(tx: Tx, fromSessionId: string, toSessionId: string): Promise<void> {
+    await tx.$queryRaw`SELECT 1 FROM chat.session WHERE id = ${fromSessionId}::uuid FOR UPDATE`;
+    await tx.deviceToken.updateMany({
       where: { sessionId: fromSessionId },
       data: { sessionId: toSessionId },
     });
@@ -1238,14 +1261,19 @@ export class AuthService {
       client: kept.client === 'app' || kept.client === 'web' ? kept.client : null,
       remembered: kept.remembered,
     };
-    const pair = await this.issue(account, actor, { ...context, deviceId: kept.deviceId, chain }, 'refresh');
+    // LR-46: this device's push tokens move inside the successor's creating transaction, as on a refresh.
+    const pair = await this.issue(
+      account,
+      actor,
+      { ...context, deviceId: kept.deviceId, chain, successorOf: keepSessionId },
+      'refresh',
+    );
     this.revocation.sessionRotated(keepSessionId, pair.sessionId);
     // PD-21: a support session this staff member started follows their session, as on a refresh.
     await this.prisma.impersonationSession.updateMany({
       where: { staffSessionId: keepSessionId, endedAt: null },
       data: { staffSessionId: pair.sessionId },
     });
-    await this.devicePushTokensFollow(keepSessionId, pair.sessionId);
     // RT-009: the sockets of the other sessions, not this device's.
     if (ids.length > 0) this.revocation.disconnectSessions(ids);
     await this.revocation.confirmRevoked();

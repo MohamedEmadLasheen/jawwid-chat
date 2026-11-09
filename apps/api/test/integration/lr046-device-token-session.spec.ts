@@ -20,7 +20,11 @@
  *     is refused (401) and binds nothing, whichever commits first; the
  *     session is locked before the token row;
  *   - (review of #537) a push is never sent to a token whose bound session is
- *     no longer live (revoked or expired); an unbound row is still pushed to.
+ *     no longer live (revoked or expired); an unbound row is still pushed to;
+ *   - (review of #537, P3-2) a refresh moves the tokens in the same
+ *     transaction that creates the successor session: a "revoke everything"
+ *     racing it never leaves an active token on a revoked session, and a
+ *     failure after the successor is written rolls back both.
  *
  * Synthetic people only (G-20).
  */
@@ -527,5 +531,93 @@ describe('LR-46 (review of #537): a push is sent only to tokens whose session is
 
     const mine = new Set([liveToken, expiredToken, strandedToken, unboundToken]);
     expect(sent.filter((t) => mine.has(t)).sort()).toEqual([liveToken, unboundToken].sort());
+  });
+});
+
+/**
+ * A token row held FOR UPDATE by another transaction: whatever writes it next
+ * waits here until release() -- for a refresh, the moment between creating
+ * the successor session and moving the tokens onto it.
+ */
+async function heldTokenRow(token: string) {
+  const locked = deferred();
+  const release = deferred();
+  const done = writer.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(`select 1 from chat.device_token where token = $1 for update`, token);
+    locked.resolve();
+    await release.promise;
+  }, { timeout: 20_000 });
+  await locked.promise;
+  return { release: async () => { release.resolve(); await done; } };
+}
+
+/** Active tokens bound to a session that has been revoked: what must never exist. */
+const strandedActive = (token: string) =>
+  g.prisma.$queryRawUnsafe<Array<{ token: string }>>(
+    `select d.token
+       from chat.device_token d
+       join chat.session s on s.id = d.session_id
+      where d.token = $1 and d.is_active and s.revoked_at is not null`,
+    token,
+  );
+
+describe('LR-46 (review of #537, P3-2): a refresh moves the tokens in the transaction that creates the successor', () => {
+  it('a "revoke everything" racing a refresh never leaves an active token on a revoked session', async () => {
+    const parent = m.families[9]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+    expect((await register(phone.accessToken, token)).status).toBe(201);
+    const { accountId } = await g.prisma.session.findUniqueOrThrow({ where: { id: phone.sessionId } });
+
+    // The refresh reaches its token move and waits there.
+    const held = await heldTokenRow(token);
+    const refreshing = call(null, 'POST', '/auth/refresh', { refreshToken: phone.refreshToken });
+    await waitUntil(async () => (await lockWaiters()) > 0, 'the refresh is blocked on the token row');
+
+    // "Revoke everything" (refresh reuse, a suspension) lands in that gap.
+    // Before the fix the successor was already committed here: this revoked
+    // it (its trigger found no token on it yet), and the move then bound the
+    // still-active token to that revoked session.
+    await g.prisma.session.updateMany({
+      where: { accountId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: 'lr46: revoke everything' },
+    });
+    await held.release();
+
+    const renewed = asLogin(await refreshing);
+    expect(renewed.status).toBe(200);
+    expect(await strandedActive(token)).toEqual([]);
+    // The token is on the successor, and whatever ends the successor reaches it.
+    expect((await row(token)).sessionId).toBe(renewed.sessionId);
+    expect((await call(renewed.accessToken, 'POST', '/auth/logout')).status).toBe(200);
+    expect((await row(token)).isActive).toBe(false);
+  });
+
+  it('a failure after the successor is created rolls back both: no successor session, the token not moved', async () => {
+    const parent = m.families[10]!.parent;
+    const phone = await login(parent.subject, ios);
+    const token = newToken();
+    expect((await register(phone.accessToken, token)).status).toBe(201);
+    const { accountId } = await g.prisma.session.findUniqueOrThrow({ where: { id: phone.sessionId } });
+
+    // Make the token move itself fail, after the successor row is written: a
+    // temporary check pins this one token to its current session.
+    const pin = `lr46_p32_pin_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    await g.prisma.$executeRawUnsafe(
+      `alter table chat.device_token add constraint ${pin}
+         check (token <> '${token}' or session_id = '${phone.sessionId}'::uuid) not valid`,
+    );
+    let failed!: Awaited<ReturnType<typeof call>>;
+    try {
+      failed = await call(null, 'POST', '/auth/refresh', { refreshToken: phone.refreshToken });
+    } finally {
+      await g.prisma.$executeRawUnsafe(`alter table chat.device_token drop constraint if exists ${pin}`);
+    }
+
+    expect(failed.status).not.toBe(200);
+    // Before the fix the successor was committed on its own, live, while the
+    // token stayed behind on the retired session.
+    expect(await g.prisma.session.count({ where: { accountId, id: { not: phone.sessionId } } })).toBe(0);
+    expect(await row(token)).toMatchObject({ sessionId: phone.sessionId });
   });
 });
