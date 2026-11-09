@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../design/tokens.dart';
 import '../../features/conversations/application/conversations_controller.dart';
+import '../../features/notifications/presentation/push_permission_explainer_host.dart';
 import '../../features/profile/presentation/location_prompt_gate.dart';
 import '../../features/settings/data/parent_notice_repository.dart';
 import '../../features/settings/presentation/lesson_audio_notice_gate.dart';
@@ -157,9 +158,12 @@ class AppShell extends ConsumerWidget {
       // PD-48: a parent acknowledges the lesson-audio notice once, at the next sign-in --
       // from Phase 2, with the lessons ([kLessonAudioNoticeLive]).
       // PD-45: a parent whose family has no location is asked once (the server decides).
-      body: role != UserRole.parent
-          ? child
-          : LocationPromptGate(child: kLessonAudioNoticeLive ? LessonAudioNoticeGate(child: child) : child),
+      // LR-11: every role -- the notification explanation, before the system prompt.
+      body: PushPermissionExplainerHost(
+        child: role != UserRole.parent
+            ? child
+            : LocationPromptGate(child: kLessonAudioNoticeLive ? LessonAudioNoticeGate(child: child) : child),
+      ),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: tokens.colorBorderSubtle)),

@@ -1,0 +1,217 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// LR-11 (explain-first): the in-app explanation that comes BEFORE the system
+/// notification prompt.
+///
+/// The native `start` on the push channel is what makes the OS ask: Android 13+
+/// requests POST_NOTIFICATIONS and iOS requests notification authorization. Called
+/// cold, straight after sign-in, the person meets a system dialog with no idea why
+/// Jawwid wants it. So [PushRegistrar] asks [PushExplainer.clearToStart] first, and
+/// only a "Continue" on the explanation lets it call the platform.
+///
+/// ## What is remembered, and for whom
+///
+/// The channel exposes no permission status, so this keeps its own memory, on the
+/// DEVICE (`shared_preferences`, like the language and theme choices), never on the
+/// server:
+///
+///  * **Continue, once** -> never shown again on this device. The OS has asked by
+///    then and owns the answer; a second account signing in on the same phone is not
+///    shown it either, because the permission belongs to the app, not to the account.
+///  * **Not now** -> the platform is not asked for the rest of this session, and the
+///    explanation is not shown again for [pushExplainerSnooze]: the next app start or
+///    sign-in after that asks again. At most once a day.
+///
+/// An unreadable store means "never answered" (explain again), never "continued": the
+/// point of this is that the system prompt never comes first.
+///
+/// ## What it does NOT change
+///
+/// Who receives pushes, how tokens are registered or retired, and every server call
+/// stay exactly as they were; this only decides WHEN the platform is first asked.
+abstract interface class PushExplainerStore {
+  /// Whether anybody on this device pressed Continue.
+  Future<bool> continued();
+
+  Future<void> markContinued();
+
+  /// When "Not now" was last pressed on this device, or null.
+  Future<DateTime?> declinedAt();
+
+  Future<void> markDeclined(DateTime at);
+}
+
+class SharedPreferencesPushExplainerStore implements PushExplainerStore {
+  const SharedPreferencesPushExplainerStore();
+
+  static const _continuedKey = 'jawwid.push_explainer.continued';
+  static const _declinedKey = 'jawwid.push_explainer.declined_at';
+
+  @override
+  Future<bool> continued() async =>
+      (await SharedPreferences.getInstance()).getBool(_continuedKey) ?? false;
+
+  @override
+  Future<void> markContinued() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_continuedKey, true);
+    await prefs.remove(_declinedKey);
+  }
+
+  @override
+  Future<DateTime?> declinedAt() async {
+    final ms = (await SharedPreferences.getInstance()).getInt(_declinedKey);
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  }
+
+  @override
+  Future<void> markDeclined(DateTime at) async =>
+      (await SharedPreferences.getInstance()).setInt(_declinedKey, at.millisecondsSinceEpoch);
+}
+
+/// Holds the answers for a test, and can refuse to read or write.
+@visibleForTesting
+class FakePushExplainerStore implements PushExplainerStore {
+  FakePushExplainerStore({
+    this.hasContinued = false,
+    this.lastDeclined,
+    this.readThrows = false,
+    this.writeThrows = false,
+  });
+
+  bool hasContinued;
+  DateTime? lastDeclined;
+  bool readThrows;
+  bool writeThrows;
+
+  @override
+  Future<bool> continued() async {
+    if (readThrows) throw Exception('storage unavailable');
+    return hasContinued;
+  }
+
+  @override
+  Future<void> markContinued() async {
+    if (writeThrows) throw Exception('storage unavailable');
+    hasContinued = true;
+    lastDeclined = null;
+  }
+
+  @override
+  Future<DateTime?> declinedAt() async {
+    if (readThrows) throw Exception('storage unavailable');
+    return lastDeclined;
+  }
+
+  @override
+  Future<void> markDeclined(DateTime at) async {
+    if (writeThrows) throw Exception('storage unavailable');
+    lastDeclined = at;
+  }
+}
+
+final pushExplainerStoreProvider = Provider<PushExplainerStore>(
+  (ref) => const SharedPreferencesPushExplainerStore(),
+);
+
+/// The clock "Not now" is measured with. Overridden in tests.
+final pushExplainerClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// How long a "Not now" holds on this device: at most one explanation a day.
+const pushExplainerSnooze = Duration(hours: 24);
+
+/// Where the explanation is.
+enum PushExplainerPhase {
+  /// Nothing to show: never asked, already answered, or snoozed.
+  idle,
+
+  /// A session is waiting for an answer; the host shows the dialog when it may.
+  waiting,
+
+  /// A host has the dialog on screen.
+  onScreen,
+}
+
+/// The one question for this device, and its answer.
+///
+/// One question, however many sessions wait on it: if an account signs out with the
+/// dialog open and another signs in, both registrars wait on the same answer, and
+/// [PushRegistrar] lets only the live session act on it.
+class PushExplainer extends Notifier<PushExplainerPhase> {
+  Completer<bool>? _pending;
+
+  @override
+  PushExplainerPhase build() => PushExplainerPhase.idle;
+
+  DateTime _now() => ref.read(pushExplainerClockProvider)();
+
+  /// Resolves true when the platform may be asked now, false when it may not
+  /// (this session). Waits for the person's answer when one is needed.
+  Future<bool> clearToStart() async {
+    final store = ref.read(pushExplainerStoreProvider);
+    var continued = false;
+    DateTime? declined;
+    try {
+      continued = await store.continued();
+      declined = await store.declinedAt();
+    } catch (_) {
+      // Unreadable: treated as never answered. Explaining twice is harmless;
+      // a cold system prompt is what this exists to prevent.
+    }
+    if (!ref.mounted) return false;
+    if (continued) return true;
+    // `abs`: a clock set back must not snooze the question for a year.
+    if (declined != null && _now().difference(declined).abs() < pushExplainerSnooze) {
+      return false;
+    }
+
+    final pending = _pending ??= Completer<bool>();
+    if (state == PushExplainerPhase.idle) state = PushExplainerPhase.waiting;
+    return pending.future;
+  }
+
+  /// A host takes the screen. False when another host already has, or nothing is
+  /// waiting: a second dialog is never stacked on the first.
+  bool claim() {
+    if (state != PushExplainerPhase.waiting) return false;
+    state = PushExplainerPhase.onScreen;
+    return true;
+  }
+
+  /// The dialog went away without an answer (its screen was removed under it, a
+  /// sign-out). Still waiting: the next host to mount asks again.
+  void release() {
+    if (state == PushExplainerPhase.onScreen && _pending != null) {
+      state = PushExplainerPhase.waiting;
+    }
+  }
+
+  /// The person's answer: Continue ([proceed] true) or Not now. Persisted, then
+  /// handed to every waiting session. A second answer is ignored.
+  Future<void> answer({required bool proceed}) async {
+    final pending = _pending;
+    if (pending == null) return;
+    _pending = null;
+    state = PushExplainerPhase.idle;
+
+    final store = ref.read(pushExplainerStoreProvider);
+    try {
+      if (proceed) {
+        await store.markContinued();
+      } else {
+        await store.markDeclined(_now());
+      }
+    } catch (_) {
+      // Not remembered: the next app start explains again. This session still
+      // gets what the person chose.
+    }
+    pending.complete(proceed);
+  }
+}
+
+final pushExplainerProvider =
+    NotifierProvider<PushExplainer, PushExplainerPhase>(PushExplainer.new);

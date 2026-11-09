@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
+import 'package:jawwid_chat/core/push/push_permission_explainer.dart';
 import 'package:jawwid_chat/core/push/push_registration.dart';
 import 'package:jawwid_chat/core/push/push_tokens.dart';
 import 'package:jawwid_chat/core/storage/secure_token_store.dart';
@@ -131,6 +132,10 @@ void main() {
         authControllerProvider.overrideWith(() => auth),
         pushTokensProvider.overrideWithValue(tokens),
         pushRegistrationApiProvider.overrideWithValue(api),
+        // A device whose person already pressed Continue on the LR-11 explanation:
+        // these are about registration itself. The explanation's own cases are
+        // `push_permission_explainer_test.dart`.
+        pushExplainerStoreProvider.overrideWithValue(FakePushExplainerStore(hasContinued: true)),
       ],
     );
     addTearDown(container.dispose);
