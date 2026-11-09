@@ -95,7 +95,7 @@ abstract interface class MicrophoneSettings {
 ///
 /// WHAT IS NOT VERIFIED: that iOS opens the page, and whether a call still
 /// ringing reappears after the restart (LR-08). No device run was made for
-/// this change; the first proof is a QA build (SB-28).
+/// this change; the first proof is a QA build (SB-38).
 class PlatformMicrophoneSettings implements MicrophoneSettings {
   PlatformMicrophoneSettings({
     Future<bool> Function(Uri uri)? launch,

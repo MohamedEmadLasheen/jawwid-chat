@@ -21,7 +21,7 @@
 ///
 /// NOT MODELLED: iOS terminates the app when a permission is changed in
 /// Settings, so on iOS there is no call state to come back to. That path is
-/// a device check (`docs/qa/submission-device-test-plan.md`, SB-28), and the
+/// a device check (`docs/qa/submission-device-test-plan.md`, SB-38), and the
 /// copy only promises "then try the call again".
 library;
 
@@ -139,7 +139,7 @@ void main() {
       expect(state().failure, CallUiFailure.microphone);
 
       // Android keeps the process when a permission is granted in Settings;
-      // iOS does not (SB-28), so there this state never comes back.
+      // iOS does not (SB-38), so there this state never comes back.
       mic.access = MicrophoneAccess.granted;
       await controller().retry();
       await settle();

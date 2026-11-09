@@ -219,7 +219,7 @@ class _StatusLine extends StatelessWidget {
 /// The words promise only "then try the call again": on Android the app stays
 /// alive and Try again (in the actions below) answers, places or rejoins the
 /// call; iOS restarts the app when the permission changes, so there the person
-/// calls again (SB-28 in `docs/qa/submission-device-test-plan.md`).
+/// calls again (SB-38 in `docs/qa/submission-device-test-plan.md`).
 class _MicrophoneHelp extends ConsumerWidget {
   const _MicrophoneHelp();
 

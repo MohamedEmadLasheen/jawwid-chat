@@ -675,7 +675,7 @@ class CallController extends Notifier<CallUiState> {
   /// says nothing about the call. Typically the microphone has just been
   /// allowed while the app stayed alive (Android keeps the process; iOS
   /// TERMINATES the app when a permission is changed in Settings, so there
-  /// this state does not survive and the person calls again -- SB-28 in
+  /// this state does not survive and the person calls again -- SB-38 in
   /// `docs/qa/submission-device-test-plan.md`). If no call was placed yet,
   /// the new call below is the right one.
   /// If a call exists, it is the SAME call that is answered (a ring we did not
