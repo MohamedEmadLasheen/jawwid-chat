@@ -1,6 +1,6 @@
 # Signed store builds with direct upload (LR-76 option (c), OT-2b).
 #
-# MANUAL ONLY. From a commit already on main, this workflow builds a signed Android App Bundle
+# MANUAL ONLY. From the head of main (the commit it runs from), this workflow builds a signed Android App Bundle
 # and/or a signed iOS app, verifies the signature, uploads the debug symbols to Sentry, and then
 # uploads the build straight to the store's TESTING channel and nowhere else:
 #   - Android: Google Play's INTERNAL testing track, as a DRAFT release (scripts/mobile/play-upload.sh;
@@ -29,22 +29,24 @@
 #            LESSONS_ORIGIN (optional), SENTRY_ENVIRONMENT (optional), SENTRY_URL (optional, https)
 #   Android: PLAY_WIF_PROVIDER, PLAY_SERVICE_ACCOUNT,
 #            ANDROID_UPLOAD_CERT_SHA256 (optional pin of the upload certificate's SHA-256)
-#   iOS:     ASC_APP_APPLE_ID (the app's numeric Apple ID, for altool --upload-package)
+#   iOS:     ASC_APP_APPLE_ID (the app's numeric Apple ID, for altool --upload-package when that
+#            altool version requires it; always format-checked)
 #
 # Never add pull_request, pull_request_target, workflow_run or push triggers to this file.
 # scripts/qa/check-store-upload-guards.sh (run by CI through scripts/qa/guards.sh) fails if this
 # file gains another trigger, an unpinned action, an expression inside a run block, a GitHub
 # artifact upload, a second job with id-token: write or a Google sign-in outside the android job,
 # loses an identity assertion, uploads anything but the verified .ipa, runs xcrun or altool other
-# than on its pinned lines (upload modes only), lets sentry-cli see its
-# token other than through env or print its output, or any other store channel or action.
+# than on its pinned lines (upload modes only), builds any commit but main's head at dispatch, lets
+# sentry-cli see its token other than through env, print its output or read settings planted by an
+# earlier step, or any other store channel or action.
 name: Release store builds
 
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Full 40-character commit SHA to build. Must already be on main.'
+        description: 'Full 40-character commit SHA to build. Must be the head of main when the run is started.'
         required: true
         type: string
       platform:
@@ -109,6 +111,10 @@ jobs:
           [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::build_number must be a positive integer."; exit 1; }
           git cat-file -e "$REF^{commit}" 2>/dev/null || { echo "::error::$REF is not a commit in this repository."; exit 1; }
           git merge-base --is-ancestor "$REF" origin/main || { echo "::error::$REF is not on main. Store builds are made from reviewed, merged commits only."; exit 1; }
+          # The build commit's own code (Gradle, Flutter, pub and CocoaPods steps) runs in the android
+          # job, which can request the Google token (P2-1, docs/release/signed-builds-ci.md §6 risk 7).
+          # So only the reviewed head of main, the very commit this workflow file runs from, is built.
+          [ "$REF" = "$GITHUB_SHA" ] || { echo "::error::ref must be the head of main when the run was started (the workflow's own commit), not an older commit."; exit 1; }
           echo "sha=$REF" >> "$GITHUB_OUTPUT"
           {
             echo "### Store build request"
@@ -172,6 +178,11 @@ jobs:
     # this job signs in to Google. The Google provider accepts the token only when its claims are
     # repository_id 1362573850, repository_owner_id 183662661, ref refs/heads/main, environment
     # store-release and job_workflow_ref this file on main (docs/release/signed-builds-ci.md §3.2).
+    # RESIDUAL RISK (P2-1): the build runs in this same job, because the verified .aab cannot be
+    # handed to a separate upload job without a GitHub artifact or cache (both refused). Code from
+    # the build commit (Gradle, Flutter, pub packages) could therefore request the Google token
+    # itself. Preflight, and this job again, require that commit to be the head of main at
+    # dispatch: only reviewed, merged code ever runs here (docs/release/signed-builds-ci.md §6).
     # A job-level block replaces the workflow's, so contents: read is repeated.
     permissions:
       contents: read
@@ -195,14 +206,21 @@ jobs:
           ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
       - name: Check out the upload helpers from this workflow's own commit
-        # The build commit may be older than the upload helpers; the helpers that talk to the
-        # stores are always the current, CI-guarded ones from main.
+        # Preflight requires the build commit to be this workflow's own commit, so these are the same
+        # files; the helpers that talk to the stores are read from this second checkout so that they
+        # always come from the workflow's commit.
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.sha }}
           path: release-tools
           sparse-checkout: scripts/mobile
           persist-credentials: false
+      - name: The checked-out build commit is this workflow's own commit (the head of main at dispatch)
+        # Asserted again here, in the job that can request the Google token, before any of the
+        # commit's code runs (P2-1).
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] || { echo "::error::the checked-out build commit is not this workflow's own commit; nothing was built."; exit 1; }
       - name: The Android secrets and variables are present and well-formed
         # Before any build. Booleans only for secrets: their values never enter this step.
         env:
@@ -343,8 +361,11 @@ jobs:
         # them, of the token or of sentry-cli's configuration reaches the log:
         #   - sentry-cli reads the token, organisation, project and (optional) server from this env
         #     only, never from a command line; it logs at warn;
-        #   - it runs in an empty directory under RUNNER_TEMP with HOME pointed there, so no config
-        #     file from the checkout or the home directory is read;
+        #   - nothing an earlier step planted is read (P2-2): every SENTRY_* / SENTRYCLI_* variable
+        #     but the five set here, proxy, CA-bundle and dynamic-loader variables are unset (an
+        #     earlier step could have added them through GITHUB_ENV); .env loading is off; it runs in
+        #     a freshly created, empty directory that is also its HOME (removed and re-made, never
+        #     reused); and the step refuses to run if a .sentryclirc exists in any parent directory;
         #   - its output goes to a file that is never printed: one summary line per upload, and on a
         #     failure only sentry-cli's own "error:" lines, cut short;
         #   - that directory and build/symbols are deleted by the always-cleanup step.
@@ -357,8 +378,11 @@ jobs:
           SENTRY_NO_PROGRESS_BAR: '1'
         run: |
           set -euo pipefail
+          for v in $(compgen -e); do case "$v" in SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done
+          export SENTRY_LOAD_DOTENV=0
           [ -n "$SENTRY_URL" ] || unset SENTRY_URL
-          O="$RUNNER_TEMP/sentry-out"; mkdir -p "$O"; chmod 700 "$O"; cd "$O"
+          O="$RUNNER_TEMP/sentry-out"; rm -rf "$O"; mkdir -m 700 "$O"; cd "$O"
+          d="$O"; while [ "$d" != / ]; do d="$(dirname "$d")"; [ ! -e "$d/.sentryclirc" ] || { echo "::error::a planted Sentry settings file exists in $d; nothing was sent to Sentry."; exit 1; }; done
           sq() { # what, then the arguments
             local what="$1"; shift
             if HOME="$O" "$SENTRY_CLI" "$@" > "$O/sentry.log" 2>&1; then
@@ -632,8 +656,9 @@ jobs:
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the archive's dSYMs and the Dart
         # split-debug-info symbols, handled exactly as in the android job (token through env only,
-        # log level warn, empty working directory and HOME, output kept off the log, symbols and
-        # output deleted by the always-cleanup step). Symbols go to Sentry only.
+        # log level warn, planted SENTRY_* / proxy / loader variables unset, no .env, a freshly made
+        # empty working directory and HOME, no .sentryclirc in any parent, output kept off the log,
+        # symbols and output deleted by the always-cleanup step). Symbols go to Sentry only.
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
@@ -643,8 +668,11 @@ jobs:
           SENTRY_NO_PROGRESS_BAR: '1'
         run: |
           set -euo pipefail
+          for v in $(compgen -e); do case "$v" in SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done
+          export SENTRY_LOAD_DOTENV=0
           [ -n "$SENTRY_URL" ] || unset SENTRY_URL
-          O="$RUNNER_TEMP/sentry-out"; mkdir -p "$O"; chmod 700 "$O"; cd "$O"
+          O="$RUNNER_TEMP/sentry-out"; rm -rf "$O"; mkdir -m 700 "$O"; cd "$O"
+          d="$O"; while [ "$d" != / ]; do d="$(dirname "$d")"; [ ! -e "$d/.sentryclirc" ] || { echo "::error::a planted Sentry settings file exists in $d; nothing was sent to Sentry."; exit 1; }; done
           sq() { # what, then the arguments
             local what="$1"; shift
             if HOME="$O" "$SENTRY_CLI" "$@" > "$O/sentry.log" 2>&1; then
@@ -664,10 +692,11 @@ jobs:
         # right before the one upload command that runs. Apple's altool (shipped with Xcode) uploads
         # that file with the App Store Connect API key, in an upload mode only. Which uploader runs is
         # decided from altool's help text, never by trying one upload and then another:
-        #   1. altool --upload-package, if altool's help lists it, with the app's numeric Apple ID
-        #      (the ASC_APP_APPLE_ID variable) and the bundle id, version and build read from the
-        #      verified .ipa's own Info.plist;
-        #   2. else altool --upload-app (the older upload mode);
+        #   1. altool --upload-package "$VERIFIED_IPA" --type ios --apiKey --apiIssuer, if altool's
+        #      help lists it; and only if that help also names --apple-id, with the app's numeric
+        #      Apple ID (the ASC_APP_APPLE_ID variable) and --bundle-id / --bundle-version /
+        #      --bundle-short-version-string read from the verified .ipa's own Info.plist;
+        #   2. else altool --upload-app -f "$VERIFIED_IPA" -t ios (the older upload mode);
         #   3. else Apple's Transporter command-line tool, only if the runner has it (Xcode 14+ does
         #      not ship it, and Transporter.app is only in the Mac App Store);
         #   4. else the job fails and uploads nothing.
@@ -676,8 +705,9 @@ jobs:
         # pins every altool line). Success is the uploader's exit status 0 AND its own success line
         # ("No errors uploading" for altool); anything else fails closed and prints only the
         # uploader's error lines. Nothing here asks for App Review or releases a version.
-        # UNVERIFIED until the first run: the altool flags exactly as written below (whether
-        # --upload-package on Xcode 26 needs --apple-id and the --bundle-* flags, and accepts them),
+        # UNVERIFIED until the first run: every altool flag exactly as written below (whether
+        # --upload-package on Xcode 26 needs --apple-id and the --bundle-* flags, and whether its help
+        # naming --apple-id is the right signal for passing them),
         # that altool finds the key in ~/.appstoreconnect/private_keys, and the "No errors uploading"
         # wording. The full uploader log stays on the runner.
         env:
@@ -703,15 +733,23 @@ jobs:
           AH="$(xcrun altool --help 2>&1 || true)"
           rc=0
           if grep -qF -e '--upload-package' <<<"$AH"; then
-            HOW='upload-package'
             OK='No errors uploading'
-            [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
-            xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apple-id "$ASC_APP_APPLE_ID" --bundle-id "$VERIFIED_BUNDLE_ID" --bundle-version "$VERIFIED_BUILD" --bundle-short-version-string "$VERIFIED_VERSION" --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?
+            # The app's Apple ID and the bundle flags only if this altool's help names them (older
+            # altool versions require them with --upload-package); otherwise the plain form.
+            if grep -qF -e '--apple-id' <<<"$AH"; then
+              HOW='upload-package, with the Apple ID and bundle flags'
+              [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
+              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apple-id "$ASC_APP_APPLE_ID" --bundle-id "$VERIFIED_BUNDLE_ID" --bundle-version "$VERIFIED_BUILD" --bundle-short-version-string "$VERIFIED_VERSION" --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?
+            else
+              HOW='upload-package'
+              [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
+              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?
+            fi
           elif grep -qF -e '--upload-app' <<<"$AH"; then
             HOW='upload-app'
             OK='No errors uploading'
             [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
-            xcrun altool --upload-app -f "$VERIFIED_IPA" --type ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?
+            xcrun altool --upload-app -f "$VERIFIED_IPA" -t ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?
           else
             T="$(xcrun --find iTMSTransporter 2>/dev/null || true)"
             TA=/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter

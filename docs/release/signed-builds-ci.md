@@ -23,14 +23,15 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
 
 | Input | Meaning |
 |---|---|
-| `ref` | the full 40-character SHA of a commit **already on `main`** |
+| `ref` | the full 40-character SHA of **the head of `main`** when the run is started (the commit the workflow itself runs from; an older commit is refused, see §6 risk 7) |
 | `platform` | `both`, `android` or `ios` |
 | `build_name` | the version users see, `x.y.z` (`BUILD_NAME`) |
 | `build_number` | a positive integer higher than the last upload to either store (`BUILD_NUMBER`) |
 
 1. **Preflight** (no Environment, no secrets; token permissions `contents: read` and `actions: read`):
    refuses unless
-   - the run started from `main`, `ref` is a full SHA that is an ancestor of `origin/main`, and the
+   - the run started from `main`, `ref` is a full SHA that is an ancestor of `origin/main` **and equals
+     `GITHUB_SHA`** (the head of `main` at dispatch, the workflow's own commit: P2-1, §6 risk 7), and the
      version inputs are well-formed;
    - the run's own identity, read from the runner (not from any token), is exactly: repository id
      `1362573850`, owner id `183662661`, repository `MohamedEmadLasheen/jawwid-chat`, ref
@@ -47,8 +48,9 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
 2. **Android** (`ubuntu-latest`, Environment `store-release`; the **only** job with `id-token: write`):
    waits for the owner's approval, then
    - checks out the build commit, and separately the upload helpers (`scripts/mobile/`) from the
-     workflow's **own** commit on `main`, so the helpers that talk to the stores are always the current,
-     CI-guarded ones even when an older commit is built;
+     workflow's **own** commit on `main` (the same commit, since preflight requires it), then asserts
+     `git rev-parse HEAD` equals `GITHUB_SHA` **before any of the commit's code runs** and before the
+     Google sign-in;
    - **before any build**, fails naming each one if a secret or variable of §3.6 is missing, or if
      `PLAY_WIF_PROVIDER`, `PLAY_SERVICE_ACCOUNT`, `SENTRY_ORG`, `SENTRY_PROJECT` or `SENTRY_URL` is not in
      its expected format;
@@ -98,11 +100,12 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
      and the bundle id, version and build read from the verified `.ipa`'s own `Info.plist` are this
      app's. It then reads `xcrun altool --help` (nothing is uploaded to find out) and runs **one**
      uploader, chosen from that help text:
-     1. if it lists `--upload-package`: `xcrun altool --upload-package <that .ipa> --type ios
-        --apple-id <ASC_APP_APPLE_ID> --bundle-id <CFBundleIdentifier> --bundle-version <CFBundleVersion>
-        --bundle-short-version-string <CFBundleShortVersionString> --apiKey <ASC_API_KEY_ID>
-        --apiIssuer <ASC_API_ISSUER_ID>`;
-     2. else, if it lists `--upload-app`: `xcrun altool --upload-app -f <that .ipa> --type ios --apiKey …
+     1. if it lists `--upload-package`: `xcrun altool --upload-package <that .ipa> --type ios --apiKey
+        <ASC_API_KEY_ID> --apiIssuer <ASC_API_ISSUER_ID>`; and, **only if the same help text names
+        `--apple-id`** (altool versions that require it), with `--apple-id <ASC_APP_APPLE_ID> --bundle-id
+        <CFBundleIdentifier> --bundle-version <CFBundleVersion> --bundle-short-version-string
+        <CFBundleShortVersionString>` added, all three read from the verified `.ipa`'s `Info.plist`;
+     2. else, if it lists `--upload-app`: `xcrun altool --upload-app -f <that .ipa> -t ios --apiKey …
         --apiIssuer …`;
      3. else Apple's Transporter (`iTMSTransporter -m upload -assetFile <that .ipa> -apiKey … -apiIssuer …
         -v informational`), **only** if `xcrun --find` or an installed Transporter.app provides it;
@@ -130,9 +133,11 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
    (`--validate-app`, `--list-apps`, any notarization mode and every other mode are refused; §5.2).
    *Fail closed:* no uploader, a changed or writable `.ipa`, or an upload not reported as successful:
    the job fails, says so, and there is no fallback to a second export and no second upload attempt.
-   **UNVERIFIED until the first run** (not checked under the machine rule): the exact altool flags above,
-   in particular whether `--upload-package` on Xcode 26 needs `--apple-id` and the three `--bundle-*`
-   flags (they are passed in case it does) and accepts `--type ios`; that altool finds the key in
+   **UNVERIFIED until the first run** (not checked under the machine rule): **every altool flag above**
+   (`--upload-package`, `--upload-app`, `-f`, `--type`/`-t ios`, `--apiKey`, `--apiIssuer`,
+   `--apple-id`, `--bundle-id`, `--bundle-version`, `--bundle-short-version-string`, `--help`), in
+   particular whether `--upload-package` on Xcode 26 needs `--apple-id` and the three `--bundle-*` flags
+   and whether "the help names `--apple-id`" is the right signal for passing them; that altool finds the key in
    `~/.appstoreconnect/private_keys`; that `altool --help` lists the mode names as written; and the
    exact "No errors uploading" success wording. If any is wrong the job fails at the upload step with
    nothing uploaded (or, if the wording alone differs, after an upload that must be checked in App Store
@@ -147,8 +152,17 @@ else, and nothing of them, of the token or of sentry-cli's configuration reaches
   reads it from there); never `--auth-token`, never a command line, never echoed;
 - `SENTRY_LOG_LEVEL: warn` in every Sentry step; no `--log-level debug`/`trace`, no `set -x`, no
   `sentry-cli info`/`login`/config print, no `.sentryclirc`;
-- sentry-cli runs in an empty `$RUNNER_TEMP/sentry-out` with `HOME` pointed there, so no config file
-  from the checkout or the home directory is read;
+- sentry-cli reads **nothing an earlier step planted** (P2-2). Before the first upload the Sentry step
+  unsets every `SENTRY_*`/`SENTRYCLI_*` variable except the five it sets itself (an earlier step, such
+  as the build, could have added `SENTRY_PROPERTIES` or similar through `GITHUB_ENV`), and the proxy
+  (`*_proxy`, `*_PROXY`), CA-bundle (`SSL_CERT_*`, `CURL_CA_BUNDLE`) and dynamic-loader (`LD_*`,
+  `DYLD_*`) variables; sets `SENTRY_LOAD_DOTENV=0` so no `.env` file is read (sentry-cli's documented
+  switch; UNVERIFIED on 3.8.2, and harmless if ignored since the directory is empty); **removes and
+  re-creates** `$RUNNER_TEMP/sentry-out` (mode 700, never reused, so nothing can be waiting in it) and
+  makes it both sentry-cli's working directory and its `HOME`; and refuses to run if a `.sentryclirc`
+  exists in any parent directory of it (sentry-cli may look for one upwards from its working
+  directory). These close the planted-file paths; they cannot stop code that is still running from an
+  earlier step on the same runner (§6 risk 7);
 - only `debug-files upload` and `upload-proguard` are run (no source bundles, no source maps), through a
   helper that keeps sentry-cli's output in a file and prints one summary line ("Sentry: Dart symbols
   uploaded"); on a failure it prints at most five of sentry-cli's own `error:` lines, cut to 200
@@ -312,7 +326,8 @@ review and release it.
 2. The app record for bundle id `com.jawwid.jawwidChat` must exist in App Store Connect (My Apps → +);
    an upload for an unknown app is refused. Its numeric **Apple ID** (the app → App Information →
    General Information → Apple ID) goes in the Environment **variable** `ASC_APP_APPLE_ID` (not a
-   secret; altool's `--upload-package` names the app by it).
+   secret; altool versions whose `--upload-package` requires `--apple-id` name the app by it). It is
+   always required and format-checked (digits only), so a run never stops late for want of it.
 3. **For every version**, before it is ever submitted: the version page → **App Store Version Release** →
    **"Manually release this version"**. Then even an approved version waits for a person to release it.
 4. TestFlight: an internal testing group with automatic distribution receives new builds when processing
@@ -384,7 +399,8 @@ How to make the keystore, `google-services.json` and the Apple key is unchanged 
 
 ## 4. Running it
 
-1. The lead (as `jawwid-bot`) dispatches the run from `main` with the commit, platform and version.
+1. The lead (as `jawwid-bot`) dispatches the run from `main` with the commit (the **current head** of
+   `main`; if `main` moves before the dispatch, use the new head), platform and version.
 2. You review the pending run (Actions → the run → **Review deployments**): check the commit, the version
    and the Environment settings in the Preflight summary, then approve `store-release`.
 3. When it is green:
@@ -445,10 +461,10 @@ files. It fails if:
 - a script in `scripts/mobile/` other than `play-upload.sh` talks to the Play Developer API, or anything
   calls the App Store Connect API directly;
 - **R1:** there is more than one `-exportArchive`, an export with destination `upload`, `uploadSymbols`
-  not exactly once and false; `altool` on any code line but its three pinned ones (`xcrun altool
-  --help`, and the `--upload-package` and `--upload-app` uploads of `"$VERIFIED_IPA"` with exactly the
-  flags of §1), so every other altool mode (`--validate-app`, `--list-apps`, notarization, …) is
-  refused; `xcrun` on any other line; `altool` or `xcrun` in `scripts/mobile/`; `iTMSTransporter` named
+  not exactly once and false; `altool` on any code line but its four pinned ones (`xcrun altool
+  --help`, the two `--upload-package` uploads of `"$VERIFIED_IPA"` (with and without `--apple-id` and
+  the bundle flags) and the `--upload-app` upload of it, with exactly the flags of §1), so every other
+  altool mode (`--validate-app`, `--list-apps`, any `--notarize…`, …) is refused; `xcrun` on any other line; `altool` or `xcrun` in `scripts/mobile/`; `iTMSTransporter` named
   anywhere but the two lines that find it, or a Transporter mode other than `-m upload`; anything but
   exactly one line per uploader, all in the `ios` job, each uploading `"$VERIFIED_IPA"` and each
   **immediately** preceded by the SHA-256 re-check; the verification step not recording
@@ -466,7 +482,15 @@ files. It fails if:
   appears; sentry-cli is called other than through the output-capturing helper, or the helper runs
   anything but `debug-files upload`/`upload-proguard` on one path; a Sentry step lacks
   `SENTRY_LOG_LEVEL: warn`; or an always-cleanup does not delete `build/symbols` and
-  `$RUNNER_TEMP/sentry-out`.
+  `$RUNNER_TEMP/sentry-out`;
+- **P2-2:** a Sentry step does not, before its first upload, unset the planted variables (its pinned
+  `compgen -e` line), set `SENTRY_LOAD_DOTENV=0`, remove and re-create `$RUNNER_TEMP/sentry-out` (its
+  pinned `rm -rf … mkdir -m 700 … cd` line) and refuse a `.sentryclirc` in a parent directory (its
+  pinned line, the only place that file name may appear); or `SENTRY_PROPERTIES`, `SENTRY_CONFIG`,
+  `SENTRY_DOTENV…`, `SENTRYCLI_…` or `SENTRY_LOAD_DOTENV` other than `=0` appears;
+- **P2-1:** preflight does not refuse a `ref` other than `GITHUB_SHA` before it outputs the commit, or
+  the `android` job does not assert `git rev-parse HEAD` equals `GITHUB_SHA` before the build and the
+  Google sign-in.
 
 Each rule has at least one mutation in the selftest.
 
@@ -523,8 +547,29 @@ and never commits. It also checks
    never weaken the verification.
 6. **Google, UNVERIFIED until the first run:** the `environment` claim (§3.2), the token permission
    (§3.2), the Play permission, the first-upload rule and draft-only behaviour (§3.3).
-7. **Code that runs with the secrets.** After approval, the build commit's build scripts, Gradle, Swift
-   packages, Flutter and pub packages run with the signing secrets in reach. Review the commit you approve.
+7. **Code that runs with the secrets, and with the Google token (P2-1, RESIDUAL).** After approval, the
+   build commit's build scripts, Gradle, Swift packages, CocoaPods, Flutter and pub packages run with the
+   signing secrets in reach. In the `android` job they also run in the job that has `id-token: write`:
+   any step of that job can ask GitHub for the job's OIDC token (the runner gives every step the request
+   URL and token) and exchange it at Google exactly as the sign-in step does, so **build-time code from
+   the build commit could obtain a 30-minute Play token** and could also change what later steps of the
+   job run (for example through `GITHUB_ENV`/`GITHUB_PATH`, or a process left running). The Play service
+   account can still only act on testing tracks (§3.3).
+
+   *Why the build and the upload share a job.* The safe split would be a build job without `id-token`
+   and a separate `android-upload` job (Environment `store-release`, `id-token: write` only there) that
+   never checks out or runs the build commit's code. But the upload job needs the verified `.aab`, and
+   the only ways GitHub hands a file from one job to another are artifacts and caches, both refused
+   here (no build output is kept on GitHub; a cache can be written by other workflows). Signing in
+   **before** the build does not help either: the token would then sit in the job while the build runs.
+   So no clean separation exists today.
+
+   *What limits it.* Preflight requires `ref` to equal `GITHUB_SHA`, i.e. the **head of `main` at
+   dispatch**, the very commit the workflow file runs from, and the `android` job asserts its checkout is
+   that commit before any of its code runs. So only code that is already on `main`, reviewed and merged
+   under its Code Owner rules, ever runs with the token; an older commit (built with code that the
+   current guards and reviews never saw) cannot be selected. The owner's approval of each run is the
+   second lock. The guard (§5.2, P2-1) keeps both checks. Review the head of `main` before you approve.
    The upload helpers come from the workflow's own commit (§1).
 8. **Cost:** standard GitHub-hosted runners, including `macos-26`, are free for a public repository (H1;
    the macOS wording is UNVERIFIED there). The Google Cloud project, Workload Identity Federation and the
@@ -537,8 +582,13 @@ and never commits. It also checks
    `upload-proguard`), so Java/Kotlin frames are de-obfuscated with the mapping files this workflow
    already uploads (§3.5). It changes the Android build files, so it is its own reviewed change.
 2. **altool flags (R1).** After the first iOS run, record which uploader ran (the run summary names it)
-   and which of the UNVERIFIED points in §1 held; trim the `--upload-package` flags to what Xcode 26
+   and which of the UNVERIFIED points in §1 held; keep only the `--upload-package` form Xcode 26
    actually needs, in the workflow and the guard together.
+3. **Separate Android upload job (P2-1).** If a way appears to hand the verified `.aab` to a second job
+   without a GitHub artifact or cache (for example a short-lived, owner-approved private store the
+   upload job reads by its SHA-256), move the Google sign-in and `play-upload.sh` into an
+   `android-upload` job that never checks out the build commit, and drop `id-token: write` from the
+   build job.
 
 ## 8. Not run locally
 

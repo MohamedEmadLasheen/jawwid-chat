@@ -25,7 +25,8 @@
 #     anything calls the App Store Connect API directly;
 #   - (R1) the iOS upload is not the exact verified .ipa: more than one exportArchive, an export
 #     with destination upload, uploadSymbols not false; altool on any line but its pinned help,
-#     --upload-package and --upload-app lines (so no other altool mode), xcrun on any other line,
+#     two --upload-package lines (with and without --apple-id and the bundle flags) and
+#     --upload-app line (so no other altool mode, no notarization), xcrun on any other line,
 #     altool or xcrun in scripts/mobile; Transporter named outside its listed lines or in a mode
 #     other than `-m upload`; anything but exactly one line per uploader, each uploading
 #     "$VERIFIED_IPA" and each IMMEDIATELY preceded by the SHA-256 re-check; the .ipa not made
@@ -38,7 +39,14 @@
 #     log level, set -x, a sentry-cli subcommand other than --version / debug-files upload /
 #     upload-proguard, a sentry-cli call whose output is not captured, a source upload flag or a
 #     sentry config file; a Sentry step without SENTRY_LOG_LEVEL: warn; or an always-cleanup that
-#     does not delete build/symbols and $RUNNER_TEMP/sentry-out.
+#     does not delete build/symbols and $RUNNER_TEMP/sentry-out;
+#   - (P2-2) a Sentry step that, before its first upload, does not unset every other SENTRY_*,
+#     proxy, CA-bundle and loader variable, turn .env loading off, remove and re-make its empty
+#     working directory (also its HOME), and refuse a .sentryclirc in any parent directory; or
+#     SENTRY_PROPERTIES / SENTRY_CONFIG / SENTRY_DOTENV* / SENTRYCLI_* named anywhere;
+#   - (P2-1) preflight does not require the build commit to be $GITHUB_SHA (main's head at
+#     dispatch), or the android job does not assert its checkout is that commit before the build
+#     and the Google sign-in.
 #
 # Python 3 (standard library only), run isolated. If python3 is missing this FAILS, never passes.
 set -uo pipefail
@@ -348,6 +356,32 @@ def check_identity(text, errors):
             errors.append(f'{WORKFLOW}: the {ID_TOKEN_JOB} job signs in to Google before asserting its identity (R2)')
 
 
+# P2-1: the build commit's code runs in the job that can request the Google token (the .aab cannot
+# reach a separate upload job without a GitHub artifact or cache). So only the head of main at
+# dispatch is built: preflight requires ref == GITHUB_SHA, and the android job asserts the checkout
+# is that commit before the build and before the Google sign-in.
+BUILD_IS_HEAD_PREFLIGHT = r'^\s*\[ "\$REF" = "\$GITHUB_SHA" \] \|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$'
+BUILD_IS_HEAD_ANDROID = r'^\s*\[ "\$\(git rev-parse HEAD\)" = "\$GITHUB_SHA" \] \|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$'
+ANDROID_BUILD = r'^\s*run: bash scripts/mobile/build-store\.sh android\s*$'
+
+
+def check_build_commit(text, errors):
+    jobs = job_bodies(text)
+    pre = jobs.get('preflight', [])
+    pre_check = first(pre, BUILD_IS_HEAD_PREFLIGHT)
+    pre_out = first(pre, r'^\s*echo "sha=\$REF" >> "\$GITHUB_OUTPUT"\s*$')
+    if pre_check is None or pre_out is None or pre_check > pre_out:
+        errors.append(f'{WORKFLOW}: preflight must refuse a ref other than the head of main at dispatch '
+                      f'([ "$REF" = "$GITHUB_SHA" ]) before it outputs the sha (P2-1)')
+    body = jobs.get(ID_TOKEN_JOB, [])
+    check = first(body, BUILD_IS_HEAD_ANDROID)
+    build = first(body, ANDROID_BUILD)
+    auth = first(body, AUTH_ACTION)
+    if check is None or build is None or auth is None or check > build or check > auth:
+        errors.append(f'{WORKFLOW}: the {ID_TOKEN_JOB} job must assert the checked-out commit is $GITHUB_SHA '
+                      f'before the build and before the Google sign-in (P2-1)')
+
+
 # R1: one export; the exact verified .ipa is what is uploaded, by altool in an upload mode
 # (--upload-package, else --upload-app) or, failing both, by Transporter. Every altool, xcrun and
 # "$T" line is pinned; each upload line is immediately preceded by the SHA-256 re-check.
@@ -364,11 +398,14 @@ ALTOOL_PACKAGE = (r'^\s*xcrun altool --upload-package "\$VERIFIED_IPA" --type io
                   r'--bundle-id "\$VERIFIED_BUNDLE_ID" --bundle-version "\$VERIFIED_BUILD" '
                   r'--bundle-short-version-string "\$VERIFIED_VERSION" --apiKey "\$ASC_API_KEY_ID" '
                   r'--apiIssuer "\$ASC_API_ISSUER_ID"' + UPLOAD_LOG)
-ALTOOL_APP = (r'^\s*xcrun altool --upload-app -f "\$VERIFIED_IPA" --type ios --apiKey "\$ASC_API_KEY_ID" '
+ALTOOL_PACKAGE_PLAIN = (r'^\s*xcrun altool --upload-package "\$VERIFIED_IPA" --type ios --apiKey "\$ASC_API_KEY_ID" '
+                        r'--apiIssuer "\$ASC_API_ISSUER_ID"' + UPLOAD_LOG)
+ALTOOL_APP = (r'^\s*xcrun altool --upload-app -f "\$VERIFIED_IPA" -t ios --apiKey "\$ASC_API_KEY_ID" '
               r'--apiIssuer "\$ASC_API_ISSUER_ID"' + UPLOAD_LOG)
-UPLOADS = [('altool --upload-package', ALTOOL_PACKAGE), ('altool --upload-app', ALTOOL_APP),
+UPLOADS = [('altool --upload-package (with --apple-id and the bundle flags)', ALTOOL_PACKAGE),
+           ('altool --upload-package', ALTOOL_PACKAGE_PLAIN), ('altool --upload-app', ALTOOL_APP),
            ('Transporter', TRANSPORTER_INVOKE)]
-ALTOOL_LINES = [ALTOOL_HELP, ALTOOL_PACKAGE, ALTOOL_APP]
+ALTOOL_LINES = [ALTOOL_HELP, ALTOOL_PACKAGE, ALTOOL_PACKAGE_PLAIN, ALTOOL_APP]
 XCRUN_LINES = ALTOOL_LINES + [TRANSPORTER_LINES[0]]
 # Success is exit status 0 AND the uploader's own success line: "No errors uploading" for both
 # altool modes (UNVERIFIED wording, docs/release/signed-builds-ci.md), "uploaded successfully" for
@@ -452,12 +489,33 @@ SENTRY_TOKEN_LINES = [
     r"^\s*HAS_SENTRY_TOKEN: \$\{\{ secrets\.SENTRY_AUTH_TOKEN != '' \}\}\s*$",
     r'^\s*(HAS_[A-Z_]+:[A-Z0-9_]+ )*HAS_SENTRY_TOKEN:SENTRY_AUTH_TOKEN; do\s*$',
 ]
+# P2-2: nothing an earlier step planted (a .sentryclirc in a parent directory, a reused output
+# directory, SENTRY_* / proxy / CA / loader variables added through GITHUB_ENV, a .env file) is
+# read by sentry-cli. Each pinned line is in every Sentry step, before its first upload.
+SENTRY_SCRUB_TEXT = ('for v in $(compgen -e); do case "$v" in SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | '
+                     'SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | '
+                     'SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done')
+SENTRY_SCRUB = r'^\s*' + re.escape(SENTRY_SCRUB_TEXT) + r'\s*$'
+SENTRY_TOKEN_LINES.append(SENTRY_SCRUB)
+SENTRY_NO_DOTENV = r'^\s*export SENTRY_LOAD_DOTENV=0\s*$'
+SENTRY_FRESH_DIR = r'^\s*' + re.escape('O="$RUNNER_TEMP/sentry-out"; rm -rf "$O"; mkdir -m 700 "$O"; cd "$O"') + r'\s*$'
+SENTRY_RC_CHECK = (r'^\s*' + re.escape('d="$O"; while [ "$d" != / ]; do d="$(dirname "$d")"; '
+                                       '[ ! -e "$d/.sentryclirc" ] || { echo "::error::')
+                   + r'[^"]*' + re.escape('"; exit 1; }; done') + r'\s*$')
+SENTRY_ISOLATION = [
+    ('unset every planted SENTRY_*, proxy, CA-bundle and loader variable', SENTRY_SCRUB),
+    ('turn .env loading off', SENTRY_NO_DOTENV),
+    ('run in a freshly made, empty directory (removed and re-made, never reused)', SENTRY_FRESH_DIR),
+    ('refuse a .sentryclirc in any parent directory', SENTRY_RC_CHECK),
+]
 SENTRY_BANNED = [
     ('an auth-token flag (the token goes through SENTRY_AUTH_TOKEN only)', r'auth-token'),
     ('a debug or trace log level', r'(log-level|log_level|SENTRY_LOG_LEVEL)\W{1,3}(debug|trace)'),
     ('shell tracing', r'\bset\s+-[a-z]*x|\bxtrace\b|\bbash\s+-[a-z]*x\b'),
     ('a source upload', r'include-sources|sourcemaps|source-bundle|bundle-sources|bundle-jvm'),
     ('a sentry-cli config file or config print', r'sentryclirc|sentry-cli\W+(info|login|config)\b|\$SENTRY_CLI"?\s+(info|login|config)\b'),
+    ('a sentry-cli properties, config or dotenv setting (P2-2)', r'SENTRY_PROPERTIES|SENTRY_CONFIG|SENTRY_DOTENV|SENTRYCLI_'),
+    ('.env loading not off (P2-2)', r'SENTRY_LOAD_DOTENV(?!=0\s*$)'),
 ]
 SENTRY_HELPER = r'^\s*if HOME="\$O" "\$SENTRY_CLI" "\$@" > "\$O/sentry\.log" 2>&1; then\s*$'
 SENTRY_CALL = r'^\s*sq "[^"$]+" (debug-files upload|upload-proguard) "[^"]+"\s*$'
@@ -468,6 +526,9 @@ def check_sentry(files, errors):
         if path != WORKFLOW and not path.startswith(MOBILE + '/'):
             continue
         for n, l in code_lines(text):
+            # The one pinned line that looks for a planted .sentryclirc names the file to refuse it.
+            if path == WORKFLOW and re.match(SENTRY_RC_CHECK, l):
+                continue
             for what, rx in SENTRY_BANNED:
                 if re.search(rx, l, re.I):
                     errors.append(f'{path}:{n}: {what} (R3)')
@@ -491,6 +552,12 @@ def check_sentry(files, errors):
         levels = [n for n, l in body if re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l)]
         if len(levels) != len(tokens):
             errors.append(f'{WORKFLOW}: every Sentry step in the {job} job must set SENTRY_LOG_LEVEL: warn (R3)')
+        calls = [n for n, l in body if re.match(SENTRY_CALL, l)]
+        for what, rx in SENTRY_ISOLATION:
+            at = [n for n, l in body if re.match(rx, l)]
+            if len(at) != len(tokens) or (calls and (not at or at[0] > calls[0])):
+                errors.append(f'{WORKFLOW}: every Sentry step in the {job} job must {what}, before its first '
+                              f'upload (P2-2)')
         always = first(body, r'^\s*if: always\(\)\s*$')
         cleanup = [l for n, l in body if always is not None and n > always]
         for what, rx in (('build/symbols', r'rm -rf .*\bbuild/symbols\b'), ('$RUNNER_TEMP/sentry-out', r'rm -rf .*"\$RUNNER_TEMP/sentry-out"')):
@@ -524,6 +591,7 @@ def check(files):
     else:
         check_workflow(files[WORKFLOW], errors)
         check_identity(files[WORKFLOW], errors)
+        check_build_commit(files[WORKFLOW], errors)
         check_ios_upload(files[WORKFLOW], errors)
     check_sentry(files, errors)
     if PLAY not in files:
@@ -563,6 +631,9 @@ SYM_CALL = '          sq "Dart symbols" debug-files upload "$SYM"\n'
 SHA_LINE = '[ "$(shasum -a 256 "$VERIFIED_IPA" | awk \'{print $1}\')" = "$VERIFIED_IPA_SHA256" ]'
 AH_LINE = '          AH="$(xcrun altool --help 2>&1 || true)"\n'
 ALTOOL_APP_START = '            xcrun altool --upload-app'
+ALTOOL_PLAIN_START = '              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apiKey'
+BUILD_HEAD_LINE = ('          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] || { echo "::error::the checked-out build commit '
+                   'is not this workflow\'s own commit; nothing was built."; exit 1; }\n')
 AUTH_STEP = '      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0\n'
 
 
@@ -588,8 +659,13 @@ def mutations_r123():
         ('altool --list-apps', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun altool --list-apps --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/apps.txt" 2>&1 || true\n')),
         ('altool found through a variable', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          A="$(xcrun --find altool)"\n')),
         ('another tool through xcrun', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun stapler validate "$VERIFIED_IPA" || true\n')),
-        ('a second altool upload', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          ' + SHA_LINE + ' || { echo "::error::x"; exit 1; }\n          xcrun altool --upload-app -f "$VERIFIED_IPA" --type ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?\n')),
+        ('a second altool upload', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          ' + SHA_LINE + ' || { echo "::error::x"; exit 1; }\n          xcrun altool --upload-app -f "$VERIFIED_IPA" -t ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?\n')),
         ('altool --upload-package of another file', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA"', '--upload-package "$B/export/Runner.ipa"')),
+        ('plain altool --upload-package of another file', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA" --type ios --apiKey', '--upload-package "$B/export/Runner.ipa" --type ios --apiKey')),
+        ('plain altool --upload-package with an extra flag', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA" --type ios --apiKey', '--upload-package "$VERIFIED_IPA" --type ios --validate --apiKey')),
+        ('plain altool --upload-package removed', W, lambda t: replaced(t, ALTOOL_PLAIN_START, '              : plain-upload-gone "$VERIFIED_IPA" --type ios')),
+        ('the SHA-256 re-check not right before the plain --upload-package', W, lambda t: replaced(t, ALTOOL_PLAIN_START, '              cp "$B/export/other.ipa" "$VERIFIED_IPA" || true\n' + ALTOOL_PLAIN_START)),
+        ('altool --upload-app with notarization', W, lambda t: replaced(t, '-f "$VERIFIED_IPA" -t ios --apiKey', '-f "$VERIFIED_IPA" -t ios --notarize --apiKey')),
         ('altool --upload-app of another file', W, lambda t: replaced(t, '--upload-app -f "$VERIFIED_IPA"', '--upload-app -f "$B/check/Runner.ipa"')),
         ('altool --upload-package with a bundle id not read from the .ipa', W, lambda t: replaced(t, '--bundle-id "$VERIFIED_BUNDLE_ID"', '--bundle-id "$BUNDLE_ID"')),
         ('altool --upload-package removed', W, lambda t: replaced(t, '            xcrun altool --upload-package', '            : altool-free')),
@@ -620,6 +696,25 @@ def mutations_r123():
         ('android symbols not cleaned up', W, lambda t: replaced(t, '          rm -rf "$RUNNER_TEMP/sentry-out" build/symbols build/app/outputs\n', '          rm -rf build/app/outputs\n')),
         ('ios Sentry output not cleaned up', W, lambda t: replaced(t, '          rm -rf "$RUNNER_TEMP/sentry-out" build/symbols\n', '          rm -rf build/symbols\n')),
         ('the Sentry token in a mobile script', 'scripts/mobile/zz-selftest.sh', lambda t: 'curl -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" https://sentry.io/\n'),
+        # P2-2: sentry-cli reads nothing an earlier step planted.
+        ('the Sentry output directory reused (mkdir -p)', W, lambda t: replaced(t, 'rm -rf "$O"; mkdir -m 700 "$O"; cd "$O"', 'mkdir -p "$O"; cd "$O"')),
+        ('the Sentry working directory in the checkout', W, lambda t: replaced(t, 'O="$RUNNER_TEMP/sentry-out"; rm -rf', 'O="$GITHUB_WORKSPACE"; rm -rf')),
+        ('planted SENTRY_* variables kept', W, lambda t: replaced(t, ') : ;; SENTRY* | *_proxy', ') : ;; *_proxy')),
+        ('another SENTRY_* variable allowed through', W, lambda t: replaced(t, 'SENTRY_NO_PROGRESS_BAR) : ;;', 'SENTRY_NO_PROGRESS_BAR | SENTRY_PROPERTIES) : ;;')),
+        ('the variable scrub removed', W, lambda t: replaced(t, '          ' + SENTRY_SCRUB_TEXT + '\n', '')),
+        ('the variable scrub after the first upload', W, lambda t: replaced(replaced(t, '          ' + SENTRY_SCRUB_TEXT + '\n', ''), SYM_CALL, SYM_CALL + '          ' + SENTRY_SCRUB_TEXT + '\n')),
+        ('.env loading left on', W, lambda t: replaced(t, 'export SENTRY_LOAD_DOTENV=0', 'export SENTRY_LOAD_DOTENV=1')),
+        ('.env loading not turned off', W, lambda t: replaced(t, '          export SENTRY_LOAD_DOTENV=0\n', '')),
+        ('a properties file for sentry-cli', W, lambda t: replaced(t, '          O="$RUNNER_TEMP/sentry-out"', '          export SENTRY_PROPERTIES="$GITHUB_WORKSPACE/sentry.properties"\n          O="$RUNNER_TEMP/sentry-out"')),
+        ('the parent .sentryclirc check removed', W, lambda t: replaced(t, '[ ! -e "$d/.sentryclirc" ] ||', 'true ||')),
+        ('HOME not the empty directory', W, lambda t: replaced(t, 'if HOME="$O" "$SENTRY_CLI"', 'if "$SENTRY_CLI"')),
+        # P2-1: only the head of main at dispatch is built in the job that can request the token.
+        ('preflight accepts an older commit on main', W, lambda t: replaced(t, '[ "$REF" = "$GITHUB_SHA" ]', '[ -n "$GITHUB_SHA" ]')),
+        ('android does not assert the build commit', W, lambda t: replaced(t, '[ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ]', '[ -n "$GITHUB_SHA" ]')),
+        ('android asserts the build commit after the build', W, lambda t: replaced(
+            replaced(t, BUILD_HEAD_LINE, ''),
+            '      - name: Verify the App Bundle is signed with the upload key\n',
+            '      - name: late\n        run: |\n' + BUILD_HEAD_LINE + '      - name: Verify the App Bundle is signed with the upload key\n')),
     ]
     for what, old, new in IDENTITY_MUTATIONS:
         m.append((f'preflight without the {what} assertion', W, lambda t, o=old, n=new: replaced(t, o, n)))
@@ -682,7 +777,8 @@ def main(mode):
         print('store upload guards: workflow_dispatch only; id-token only in android; Play upload fixed to '
               'com.jawwid.jawwid_chat / internal / draft; no other channel or action; no artifacts; actions pinned; '
               'no expression in a run block; iOS uploads the verified .ipa only, altool in upload modes only (R1); identity asserted, Google '
-              'sign-in only in android (R2); Sentry token env-only, output captured, symbols cleaned up (R3)')
+              'sign-in only in android (R2); Sentry token env-only, output captured, symbols cleaned up (R3); '
+              'sentry-cli reads no planted settings (P2-2); only main\'s head at dispatch is built (P2-1)')
         return 0
     base = check(files)
     if base:
