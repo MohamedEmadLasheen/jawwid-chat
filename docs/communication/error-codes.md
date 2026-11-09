@@ -241,6 +241,15 @@ the token pair and `GET /me/legal` answer 200 with `legal.state: 'unavailable'`
 `COMM.LEGAL_NOT_CONFIGURED` (503). The gated routes and the payloads are in
 `docs/contracts/API-CONTRACT.md` §1.1c.
 
+## Account deletion (PD-56, O-3)
+
+Source: `apps/api/src/platform/auth/auth.errors.ts`. API-CONTRACT §1.1d.
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `AUTH.DELETION_REQUEST_NOT_PENDING` | 409 | `POST /me/account/deletion-request/cancel` with no pending request: never made, already cancelled, or completed. Refresh `GET /me/account/deletion`; never retry. |
+| ~~`AUTH.TEACHER_DELETION_BLOCKED`~~ | — | **Retired (O-3, 2026-11-07).** A teacher with a lesson, a student or payroll still open is no longer refused: `POST /me/account/delete` answers `{ deleted: false, request }` and the account is deleted within 30 days. The database keeps the words `TEACHER_DELETION_BLOCKED` only inside `chat.erase_account`'s own gate, which the API turns into a request and never answers. |
+
 ## Client guidance
 
 - **Never retry** a BR-1 or role denial: it is a rule, not a transient failure.

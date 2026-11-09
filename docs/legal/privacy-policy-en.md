@@ -492,9 +492,9 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 ### 10.4 Teachers
 
-10.4.1 A teacher cannot delete their account while any of these is still open: a future lesson, an assigned student, or this month's or last month's payroll. The teacher is asked to contact the Academy so that their students can be moved and payroll completed.
+10.4.1 A teacher who still has a future lesson, an assigned student, or this month's or last month's payroll open can request deletion in the app (Settings → Delete account) or on the web page in section 10.1.2. The app shows the date by which the account will be deleted. The Academy then moves the teacher's students and completes their payroll, and the account is deleted within 30 days of the request at the latest, even if something is still open. Until then the teacher can cancel the request in the app. If this month's or last month's payroll is still open when the account is deleted, we keep the teacher's bank details (payout account) until neither month has any of their lessons on record or any change to their pay. In practice, that is the end of the month after the last month with such a lesson or pay change. We then delete the bank details automatically. We do not wait for a record that the wages were paid, because our systems do not record that; our staff are given a task to pay any wages owed before then [legal review]. A teacher with nothing open is deleted at once.
 
-10.4.2 When a teacher's account is deleted, we delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account, and the Teachers department manager is told.
+10.4.2 When a teacher's account is deleted, we delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account (the payout account at the time set out in section 10.4.1), and the Teachers department manager is told.
 
 10.4.3 Pay and supervision records are kept (section 10.3). The whiteboards of a teacher who has left are deleted 12 months after the teacher leaves.
 

@@ -8887,6 +8887,12 @@ abstract class L10n {
   /// **'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.'**
   String get deleteAccountGoes;
 
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: what goes when the requested deletion happens (within 30 days), in place of deleteAccountGoes, which says deleted now.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.'**
+  String get deleteAccountGoesOnRequest;
+
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
@@ -8896,7 +8902,7 @@ abstract class L10n {
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
-  /// **'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
+  /// **'Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
   String get deleteAccountKeptTeacher;
 
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
@@ -8941,11 +8947,71 @@ abstract class L10n {
   /// **'Your account has been deleted.'**
   String get deleteAccountDone;
 
-  /// PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet.
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
   ///
   /// In en, this message translates to:
-  /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
-  String get deleteAccountTeacherBlocked;
+  /// **'You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.'**
+  String get deleteAccountRequestIntro;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Request account deletion'**
+  String get deleteAccountRequestAction;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by {date} at the latest. You can cancel the request until then.'**
+  String deleteAccountRequestConfirm(String date);
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deletion request is recorded.'**
+  String get deleteAccountRequested;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion requested'**
+  String get deleteAccountRequestStatusTitle;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested on {requested}; your account will be deleted by {deadline}.'**
+  String deleteAccountRequestStatus(String requested, String deadline);
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel request'**
+  String get deleteAccountRequestCancel;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel your deletion request? Your account stays as it is.'**
+  String get deleteAccountRequestCancelConfirm;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the request'**
+  String get deleteAccountRequestKeep;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deletion request was cancelled.'**
+  String get deleteAccountRequestCancelled;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be cancelled. Try again.'**
+  String get deleteAccountRequestCancelFailed;
 
   /// PD-45 PR-4: the Location row of the parent's own profile.
   ///

@@ -17,6 +17,8 @@ import { TeacherOnboardingController } from './teacher-onboarding.controller';
 import { TeacherOnboardingService } from './teacher-onboarding.service';
 import { TeacherRecordsController } from './teacher-records.controller';
 import { TeacherRecordsService } from './teacher-records.service';
+import { AccountDeletionModule } from '../account-deletion/account-deletion.module';
+import { TeacherDeletionRequestController } from './teacher-deletion-request.controller';
 
 /**
  * PD-10: the administration-only Teacher File. The only module that may read
@@ -35,8 +37,9 @@ import { TeacherRecordsService } from './teacher-records.service';
   // LessonModule: PD-11's bonus ticket, which a reward with its amount extends
   // (PD-26). Nothing under LessonModule or SupervisionModule imports this
   // module, so no cycle.
-  imports: [CommunicationModule, SupervisionModule, LessonModule, AuthModule],
-  controllers: [TeacherFileController, TeacherSupervisionController, ParentFeedbackController, TeacherEvaluationController, TeacherOnboardingController, TeacherRecordsController],
+  // AccountDeletionModule (PD-56 O-3): the Teacher File's "Close and delete account".
+  imports: [CommunicationModule, SupervisionModule, LessonModule, AuthModule, AccountDeletionModule],
+  controllers: [TeacherFileController, TeacherSupervisionController, ParentFeedbackController, TeacherEvaluationController, TeacherOnboardingController, TeacherRecordsController, TeacherDeletionRequestController],
   providers: [
     TeacherFileService,
     TeacherPayrollService,

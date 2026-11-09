@@ -243,6 +243,31 @@ export const T = {
     ar: 'تعذّر إرسال الرمز بالبريد. اطلب من مدير قسم المعلمين إرساله.',
   },
 
+  // PD-56 O-3: the teacher asked to delete their account (deleted by the deadline whatever happens)
+  deletionRequested: { en: 'Deletion requested', ar: 'طُلب حذف الحساب' },
+  deletionRequestedBody: {
+    en: 'This teacher asked on {requested} to delete their account. Close their lessons and payroll: the account is deleted automatically on {deadline}.',
+    ar: 'طلب هذا المعلم في {requested} حذف حسابه. أغلق حصصه ورواتبه، فالحساب يُحذف تلقائيًا في {deadline}.',
+  },
+  deletionStillOpen: { en: 'Still open: {items}.', ar: 'ما زال مفتوحًا: {items}.' },
+  deletionLessonsAhead: { en: '{n} lessons ahead', ar: 'حصص قادمة: {n}' },
+  deletionStudentsAssigned: { en: '{n} students assigned', ar: 'طلاب مسندون: {n}' },
+  deletionPayrollOpen: { en: 'payroll of this or last month', ar: 'رواتب هذا الشهر أو الشهر الماضي' },
+  deletionNothingOpen: { en: 'Nothing is open any more.', ar: 'لم يعد شيء مفتوحًا.' },
+  closeAndDelete: { en: 'Close and delete account', ar: 'إغلاق الحساب وحذفه' },
+  closeAndDeleteTitle: { en: 'Close and delete {name}’s account', ar: 'إغلاق حساب {name} وحذفه' },
+  closeAndDeleteHint: {
+    en: 'The account is deleted now, as the teacher asked: their name becomes “Deleted user”, their sign-in, contact details, profile and payout account go, and every session ends. Payroll rows, payments and the history are kept. This cannot be undone.',
+    ar: 'يُحذف الحساب الآن كما طلب المعلم: يصير اسمه «مستخدم محذوف»، ويُحذف حساب دخوله وبيانات تواصله وملفه المهني وحساب صرف مستحقاته، وتنتهي كل جلساته. وتبقى سجلات الرواتب والمدفوعات والسجل. لا يمكن التراجع عن ذلك.',
+  },
+  closeAndDeleteLeft: {
+    en: 'Still on this teacher: lessons ahead stay on “Deleted user” and students stay assigned until you move them. You will get a task to do so.',
+    ar: 'ما زال على هذا المعلم: تبقى الحصص القادمة باسم «مستخدم محذوف» ويبقى الطلاب مسندين حتى تنقلهم، وستصلك مهمة بذلك.',
+  },
+  closeAndDeleteConfirm: { en: 'I understand that this deletes the account and cannot be undone', ar: 'أفهم أن هذا يحذف الحساب ولا يمكن التراجع عنه' },
+  closingAndDeleting: { en: 'Deleting…', ar: 'جارٍ الحذف…' },
+  deletionNoLongerPending: { en: 'This request is no longer pending. Reload the file.', ar: 'لم يعد هذا الطلب معلّقًا. أعد تحميل الملف.' },
+
   // PD-43 PR-1b: offboarding, reactivation and the set-up checklist
   offboard: { en: 'Offboard', ar: 'إنهاء العمل' },
   offboardTitle: { en: 'Offboard {name}', ar: 'إنهاء عمل {name}' },

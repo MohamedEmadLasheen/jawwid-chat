@@ -64,9 +64,19 @@ import { insertLearnerWithTeacherForQa } from './qa-teacher-assignment';
  *   - a parent account a reviewer deleted (PD-56 erases it in place and frees
  *     the email; the family and child stay) is created again and given its
  *     seats back -- either parent, and the disposable one is expected to be
- *     deleted after every review. The teacher account cannot be deleted while
- *     the child is assigned to it (TEACHER_DELETION_BLOCKED), so it never
- *     needs this.
+ *     deleted after every review;
+ *   - a teacher account a reviewer deleted is created again too. With the
+ *     child assigned, deleting it is a REQUEST (PD-56 O-3), and the account is
+ *     erased in place within 30 days -- by staff, or by the worker at the
+ *     deadline -- with the child left on the erased "Deleted user". The next
+ *     run creates the teacher again and moves the child to it
+ *     (chat.transfer_learner, as the Teachers manager): the family group seat
+ *     and the lessons ahead follow, and the weekly times are set again. The
+ *     review teacher is NOT kept out of the deadline: the 30-day promise App
+ *     Review checks holds for this account as for any other. While a request
+ *     is only pending, the account still signs in and nothing needs repair.
+ *     The disposable parent's child has no teacher, so a teacher deletion
+ *     never touches the disposable family.
  *
  * Synthetic people only (G-20). Passwords are hashed here and never stored,
  * returned or printed.
@@ -370,10 +380,16 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
     });
     learner = await prisma.learner.findUniqueOrThrow({ where: { id: learnerId } });
   } else if (learner.teacherId !== teacher.id) {
-    // Unreachable through the app: a teacher with an assigned child cannot
-    // delete their account (chat.erase_account, TEACHER_DELETION_BLOCKED), so
-    // the review teacher is never re-created. Refuse rather than guess.
-    throw new ReviewCohortRefusal('TEACHER_CHANGED', "the review child's teacher is not the teacher review account; investigate");
+    // The one way this happens through the app: a reviewer asked to delete the
+    // teacher account (PD-56 O-3), and it was erased by staff or at its 30-day
+    // deadline. The child stays assigned to the erased teacher ("Deleted user")
+    // and the login above was created again. The child moves to the new
+    // teacher, as a Teachers manager moves a learner (chat.transfer_learner:
+    // the family group's seat and the lessons ahead follow; the erasure's
+    // learner_needs_teacher task then settles itself). Anything else -- a
+    // child whose teacher is someone live -- is refused rather than guessed.
+    await moveChildFromErasedTeacher(prisma, orgId, learner.id, learner.teacherId, teacher.id, teachersManagerId);
+    learner = await prisma.learner.findUniqueOrThrow({ where: { id: learner.id } });
   }
   await orgStructure.assignSupervisor(operationsManagerId, learner.id, { supervisorId, reason: WHY });
 
@@ -458,6 +474,38 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
     parentDirectId: parentDirect.id,
     teacherDirectId: teacherDirect.id,
   };
+}
+
+/**
+ * The review child's teacher account was erased (a deletion request completed
+ * by staff or at its deadline): the child moves to the re-created teacher.
+ * Only from an ERASED teacher of the review organization -- a live one is
+ * refused (TEACHER_CHANGED), never moved.
+ */
+async function moveChildFromErasedTeacher(
+  prisma: PrismaClient,
+  orgId: string,
+  learnerId: string,
+  fromTeacherId: string | null,
+  toTeacherId: string,
+  teachersManagerId: string,
+): Promise<void> {
+  const from = fromTeacherId
+    ? await prisma.teacher.findUnique({ where: { id: fromTeacherId }, select: { organizationId: true, accountId: true } })
+    : null;
+  const fromAccount = from?.accountId
+    ? await prisma.account.findUnique({ where: { id: from.accountId }, select: { subject: true } })
+    : null;
+  if (!from || from.organizationId !== orgId || !fromAccount?.subject.startsWith('erased:')) {
+    throw new ReviewCohortRefusal('TEACHER_CHANGED', "the review child's teacher is not the teacher review account; investigate");
+  }
+  // The guarded writer of chat.learner.teacher_id (PD-11), acting as the
+  // synthetic Teachers manager: the child's groups and lessons ahead move with it.
+  await prisma.$queryRaw`
+    SELECT count(*)::int AS n
+      FROM chat.transfer_learner(${learnerId}::uuid, ${toTeacherId}::uuid, 'teacher_leaving',
+                                 'review cohort: the teacher review account was deleted and created again',
+                                 null, ${teachersManagerId}::uuid)`;
 }
 
 /** The family's live group for this child, created by the supervisor once; seats a re-created parent. */

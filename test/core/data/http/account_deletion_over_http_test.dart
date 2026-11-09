@@ -70,15 +70,58 @@ void main() {
     expect((await s.store.read())?.refreshToken, 'refresh-1');
   });
 
-  test('a teacher still with lessons, students or payroll: the 409 keeps its code and the session', () async {
-    server.on('POST', '/me/account/delete', [Reply.commError(409, 'AUTH.TEACHER_DELETION_BLOCKED')]);
+  test('a teacher still with lessons, students or payroll: a request, not a refusal (O-3); the session stays', () async {
+    server.on('POST', '/me/account/delete', [
+      const Reply.ok({
+        'deleted': false,
+        'request': {
+          'id': 'r-1',
+          'state': 'pending',
+          'requestedAt': '2026-11-07T10:00:00.000Z',
+          'deadlineAt': '2026-12-07T10:00:00.000Z',
+          'openItems': ['future_lessons'],
+          'completedAt': null,
+          'completedVia': null,
+          'cancelledAt': null,
+        },
+      }),
+    ]);
+    final s = stack();
+    await seed(s.store);
+    final outcome = await s.repo.deleteAccount(password: 'my-password');
+    expect(outcome.deleted, isFalse);
+    expect(outcome.request?.isPending, isTrue);
+    expect(outcome.request?.deadlineAt, DateTime.utc(2026, 12, 7, 10));
+    expect((await s.store.read())?.refreshToken, 'refresh-1');
+  });
+
+  test('GET /me/account/deletion and POST /me/account/deletion-request/cancel', () async {
+    server.on('GET', '/me/account/deletion', [
+      const Reply.ok({'kind': 'teacher', 'immediate': false, 'openItems': ['open_payroll'], 'request': null, 'deadlineIfRequested': '2026-12-07T10:00:00.000Z'}),
+    ]);
+    server.on('POST', '/me/account/deletion-request/cancel', [
+      const Reply.ok({
+        'request': {'id': 'r-1', 'state': 'cancelled', 'requestedAt': '2026-11-07T10:00:00.000Z', 'deadlineAt': '2026-12-07T10:00:00.000Z', 'cancelledAt': '2026-11-08T10:00:00.000Z'},
+      }),
+    ]);
+    final s = stack();
+    await seed(s.store);
+    final status = await s.repo.status();
+    expect(status.immediate, isFalse);
+    expect(status.request, isNull);
+    expect(status.deadlineIfRequested, DateTime.utc(2026, 12, 7, 10));
+    final cancelled = await s.repo.cancelRequest();
+    expect(cancelled.state, 'cancelled');
+    expect(cancelled.isPending, isFalse);
+  });
+
+  test('cancelling with none pending keeps its code', () async {
+    server.on('POST', '/me/account/deletion-request/cancel', [Reply.commError(409, 'AUTH.DELETION_REQUEST_NOT_PENDING')]);
     final s = stack();
     await seed(s.store);
     await expectLater(
-      s.repo.deleteAccount(password: 'my-password'),
-      throwsA(isA<AppError>().having((e) => e.code, 'code', 'AUTH.TEACHER_DELETION_BLOCKED')),
+      s.repo.cancelRequest(),
+      throwsA(isA<AppError>().having((e) => e.code, 'code', 'AUTH.DELETION_REQUEST_NOT_PENDING')),
     );
-    expect(server.countOf('POST', '/auth/refresh'), 0);
-    expect((await s.store.read())?.refreshToken, 'refresh-1');
   });
 }
