@@ -108,6 +108,8 @@ class PendingSignOut {
     required this.createdAt,
     required this.attempts,
     this.notBefore,
+    this.offlineFailures = 0,
+    this.refreshStartedAt,
   });
 
   final AuthSession session;
@@ -115,17 +117,39 @@ class PendingSignOut {
   /// When the sign-out was made. A server session outlives no more than thirty days.
   final DateTime createdAt;
 
-  /// Server sign-out attempts made so far, the original one included.
+  /// Server sign-out attempts made so far, the original one included. Only attempts that may
+  /// have reached the server count: a phone that is offline does not use the entry up.
   final int attempts;
 
   /// The next attempt is not due before this (backoff). Null: due now.
   final DateTime? notBefore;
 
-  PendingSignOut copyWith({AuthSession? session, int? attempts, DateTime? notBefore}) => PendingSignOut(
+  /// Attempts that provably never left the phone (no connection). They lengthen the backoff
+  /// but never count toward the attempt ceiling; the age limit is their backstop.
+  final int offlineFailures;
+
+  /// Set, and persisted, BEFORE `POST /auth/refresh` is sent with [session]'s refresh token.
+  /// An entry read back with it set may hold a token the server has already rotated, so it is
+  /// never refreshed again (presenting a rotated token revokes every session on the account).
+  final DateTime? refreshStartedAt;
+
+  /// [refreshStartedAt] is kept unless [clearRefreshStarted] (or a new [session] -- a
+  /// successor -- which never carries the old marker).
+  PendingSignOut copyWith({
+    AuthSession? session,
+    int? attempts,
+    DateTime? notBefore,
+    int? offlineFailures,
+    DateTime? refreshStartedAt,
+    bool clearRefreshStarted = false,
+  }) =>
+      PendingSignOut(
         session: session ?? this.session,
         createdAt: createdAt,
         attempts: attempts ?? this.attempts,
         notBefore: notBefore ?? this.notBefore,
+        offlineFailures: offlineFailures ?? this.offlineFailures,
+        refreshStartedAt: clearRefreshStarted || session != null ? null : refreshStartedAt ?? this.refreshStartedAt,
       );
 
   Map<String, Object?> toJson() => {
@@ -135,6 +159,8 @@ class PendingSignOut {
         'createdAt': createdAt.toIso8601String(),
         'attempts': attempts,
         if (notBefore != null) 'notBefore': notBefore!.toIso8601String(),
+        if (offlineFailures != 0) 'offline': offlineFailures,
+        if (refreshStartedAt != null) 'refreshStartedAt': refreshStartedAt!.toIso8601String(),
       };
 
   /// Null for anything unreadable: a corrupt entry is dropped, never carried forward.
@@ -146,19 +172,27 @@ class PendingSignOut {
     final createdAt = DateTime.tryParse('${json['createdAt']}');
     final attempts = json['attempts'];
     final notBefore = json['notBefore'];
+    final offline = json['offline'] ?? 0;
+    final rawRefreshStarted = json['refreshStartedAt'];
+    final refreshStartedAt = rawRefreshStarted == null ? null : DateTime.tryParse('$rawRefreshStarted');
     if (refresh is! String || refresh.isEmpty || access is! String) return null;
-    if (expiresAt == null || createdAt == null || attempts is! int) return null;
+    if (expiresAt == null || createdAt == null || attempts is! int || offline is! int) return null;
+    // A marker that cannot be read must not be read as "no refresh was started": dropped.
+    if (rawRefreshStarted != null && refreshStartedAt == null) return null;
     return PendingSignOut(
       session: AuthSession(accessToken: access, refreshToken: refresh, accessTokenExpiresAt: expiresAt),
       createdAt: createdAt,
       attempts: attempts,
       notBefore: notBefore is String ? DateTime.tryParse(notBefore) : null,
+      offlineFailures: offline,
+      refreshStartedAt: refreshStartedAt,
     );
   }
 
   /// Never include token material in diagnostics.
   @override
-  String toString() => 'PendingSignOut(createdAt: $createdAt, attempts: $attempts, notBefore: $notBefore)';
+  String toString() => 'PendingSignOut(createdAt: $createdAt, attempts: $attempts, offline: $offlineFailures, '
+      'notBefore: $notBefore, refreshStartedAt: $refreshStartedAt)';
 }
 
 /// Where pending sign-outs live. The whole list is one value, written in one write.

@@ -193,6 +193,8 @@ List<Override> _httpOverrides() {
       : PendingSignOutRetrier(
           store: SecurePendingSignOutStore(),
           server: auth,
+          // Read only to compare: an entry holding the live session's token is never sent.
+          liveTokens: tokenStore,
           reconnected: Connectivity()
               .onConnectivityChanged
               .where((results) => results.any((result) => result != ConnectivityResult.none))

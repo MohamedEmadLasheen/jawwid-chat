@@ -24,24 +24,39 @@ import '../../../shared/models/auth.dart';
 ///
 /// * a 2xx from `POST /auth/logout`;
 /// * a 401 (or any other refusal a retry would not change): the session is already over;
-/// * [maxAttempts] failed attempts, or an entry older than a server session can live.
+/// * [maxAttempts] failed attempts that may have reached the server, or an entry older than a
+///   server session can live. A request that provably never left the phone (no connection)
+///   does not count toward [maxAttempts]: a phone offline for a day must not abandon the
+///   sign-out before it can be sent. It only lengthens the backoff, and the age limit is the
+///   backstop.
 ///
 /// ## The refresh, and why it is careful
 ///
 /// After fifteen minutes the stored access token has expired, and the logout needs a fresh
 /// one: one `POST /auth/refresh` with the pending refresh token. That ROTATES, and presenting
 /// a rotated token again is read by the API as theft and revokes every session on the
-/// account. So: the successor is persisted BEFORE the logout is sent, and a refresh that may
-/// have reached the server without an answer arriving (anything but [AppError.neverReachedServer])
-/// is never presented again -- the entry is dropped instead. This session is never the live
-/// one, and these calls go over the public transport, so the single refresh authority of the
-/// live session (`StoredTokenProvider`) is untouched.
+/// account. So a refresh token is presented at most once, whatever happens to the app:
+///
+/// * a marker ([PendingSignOut.refreshStartedAt]) is persisted on the entry BEFORE the
+///   refresh is sent, and the refresh is sent only if that write succeeded;
+/// * an entry read back with the marker set -- the app was killed, or the keychain refused to
+///   save the answer -- is never refreshed again: it is logged out with its access token while
+///   that is still valid, and otherwise dropped;
+/// * the marker is lifted only when the refresh provably never reached the server
+///   ([AppError.neverReachedServer]); any other failure drops the entry;
+/// * the successor replaces the entry (without a marker) before its logout is sent.
+///
+/// An entry holding the live session's refresh token ([liveTokens]: a sign-out whose local
+/// clear failed) is dropped unsent: that token belongs to `StoredTokenProvider`, the single
+/// refresh authority of the live session, and two holders refreshing it is a reuse. Every
+/// other call goes over the public transport, so that authority is untouched.
 ///
 /// Never logs a token: entries print without them, and only error kinds are logged.
 class PendingSignOutRetrier {
   PendingSignOutRetrier({
     required PendingSignOutStore store,
     required SignOutServer server,
+    TokenStore? liveTokens,
     Stream<void>? reconnected,
     DateTime Function()? clock,
     Timer Function(Duration delay, void Function() callback)? timer,
@@ -54,6 +69,7 @@ class PendingSignOutRetrier {
     this.signInWait = const Duration(seconds: 3),
   })  : _store = store,
         _server = server,
+        _liveTokens = liveTokens,
         _reconnected = reconnected,
         _clock = clock ?? DateTime.now,
         _timer = timer ?? Timer.new,
@@ -63,12 +79,16 @@ class PendingSignOutRetrier {
 
   final PendingSignOutStore _store;
   final SignOutServer _server;
+
+  /// The live session's store, read only to compare refresh tokens. Null: nothing to compare.
+  final TokenStore? _liveTokens;
   final Stream<void>? _reconnected;
   final DateTime Function() _clock;
   final Timer Function(Duration, void Function()) _timer;
   final RedactingLogger _logger;
 
-  /// Attempts before giving up, the original sign-out included.
+  /// Attempts that may have reached the server before giving up, the original sign-out
+  /// included. Attempts that never left the phone are not counted.
   final int maxAttempts;
 
   /// The delay after the first failure; it doubles after each, up to [maxDelay].
@@ -103,11 +123,14 @@ class PendingSignOutRetrier {
     unawaited(flush());
   }
 
+  /// Stops the triggers. A later [start] (a rebuilt controller) starts them again.
   Future<void> dispose() async {
+    _started = false;
     _due?.cancel();
     _due = null;
-    await _reconnects?.cancel();
+    final reconnects = _reconnects;
     _reconnects = null;
+    await reconnects?.cancel();
   }
 
   /// Records [session] as signed out locally but not on the server. The sign-out that just
@@ -165,40 +188,96 @@ class PendingSignOutRetrier {
     await _schedule();
   }
 
+  /// Removes the entry for [refreshToken], if any: the caller found that the session it
+  /// recorded is still the live one after all (its local clear failed). Never throws.
+  Future<void> withdraw(String refreshToken) => _guard('withdraw', () => _removeTokens({refreshToken}));
+
   Future<void> _attempt(PendingSignOut entry) async {
     final stored = entry.session;
+
+    switch (await _isLive(stored.refreshToken)) {
+      case true:
+        _logger.info('pending sign-out holds the live session: dropped unsent');
+        return _remove(entry);
+      case null:
+        return; // The live store did not answer: not this time, and not counted.
+      case false:
+        break;
+    }
+
     if (stored.accessToken.isNotEmpty && !stored.isExpired(_clock())) {
       switch (await _logout(stored.accessToken)) {
         case _Verdict.over:
           return _remove(entry);
         case _Verdict.unreached:
-          return _failed(entry);
+          return _failed(entry, reached: true);
+        case _Verdict.offline:
+          return _failed(entry, reached: false);
         case _Verdict.expired:
-          break; // Answered by the refresh below.
+          break; // Answered by the refresh below, unless one was already started.
       }
+    }
+
+    if (entry.refreshStartedAt != null) {
+      // A refresh with this token was sent and its answer never saved: the server may have
+      // rotated it. Presenting it again would revoke every session on the account.
+      _logger.info('pending sign-out dropped: its refresh may already have been used');
+      return _remove(entry);
+    }
+
+    // The marker first, and the refresh only if the marker is safely stored.
+    final marked = entry.copyWith(refreshStartedAt: _clock());
+    try {
+      await _mark(entry, marked);
+    } catch (error) {
+      _logger.warn('pending sign-out refresh not started', data: {'type': error.runtimeType.toString()});
+      return;
     }
 
     final AuthSession renewed;
     try {
       renewed = await _server.refresh(stored.refreshToken);
     } catch (error) {
-      if (error is AppError && error.neverReachedServer) return _failed(entry);
+      if (error is AppError && error.neverReachedServer) {
+        // Provably never arrived: the token was not rotated, so the marker can be lifted.
+        return _failed(marked, reached: false, clearRefreshStarted: true);
+      }
       // A refusal (401: the session is over), or an answer that may have been lost after the
       // server rotated the token. Either way this token must not be presented again.
       _logger.info('pending sign-out ended by refresh answer', data: {'kind': _kindOf(error)});
-      return _remove(entry);
+      return _remove(marked);
     }
 
-    // The successor first: from here the old refresh token is retired server-side.
-    final successor = entry.copyWith(session: renewed);
-    await _replace(entry, successor);
+    // The successor (unmarked: never presented) replaces the entry before its logout is
+    // sent. If the keychain refuses, the stored entry keeps the marker, so the retired token
+    // is never refreshed again; the logout below is still sent with the token in hand.
+    final successor = marked.copyWith(session: renewed);
+    try {
+      await _replace(marked, successor);
+    } catch (error) {
+      _logger.warn('pending sign-out successor not saved', data: {'type': error.runtimeType.toString()});
+    }
 
     switch (await _logout(renewed.accessToken)) {
       case _Verdict.over:
       case _Verdict.expired: // A token minted a moment ago refused as expired: nothing to fix.
-        return _remove(successor);
+        return _removeTokens({stored.refreshToken, renewed.refreshToken});
       case _Verdict.unreached:
-        return _failed(successor);
+        return _failed(successor, reached: true);
+      case _Verdict.offline:
+        return _failed(successor, reached: false);
+    }
+  }
+
+  /// True when [refreshToken] is the live session's; null when the live store did not answer.
+  Future<bool?> _isLive(String refreshToken) async {
+    final live = _liveTokens;
+    if (live == null) return false;
+    try {
+      return (await live.read())?.refreshToken == refreshToken;
+    } catch (error) {
+      _logger.warn('pending sign-out could not read the live session', data: {'type': error.runtimeType.toString()});
+      return null;
     }
   }
 
@@ -208,6 +287,7 @@ class PendingSignOutRetrier {
       return _Verdict.over;
     } on AppError catch (error) {
       if (error.isRefreshable) return _Verdict.expired;
+      if (error.neverReachedServer) return _Verdict.offline;
       if (error.isTransient) return _Verdict.unreached;
       // Revoked, disabled, locked, forbidden, not found: the same answer every time.
       return _Verdict.over;
@@ -217,25 +297,50 @@ class PendingSignOutRetrier {
     }
   }
 
-  Future<void> _failed(PendingSignOut entry) async {
-    final attempts = entry.attempts + 1;
-    if (attempts >= maxAttempts) {
+  /// A failed attempt. Only one that may have [reached] the server counts toward
+  /// [maxAttempts]; either kind lengthens the backoff.
+  Future<void> _failed(PendingSignOut entry, {required bool reached, bool clearRefreshStarted = false}) async {
+    final attempts = reached ? entry.attempts + 1 : entry.attempts;
+    final offline = reached ? entry.offlineFailures : entry.offlineFailures + 1;
+    if (reached && attempts >= maxAttempts) {
       _logger.warn('pending sign-out abandoned', data: {'attempts': attempts});
       return _remove(entry);
     }
-    await _replace(entry, entry.copyWith(attempts: attempts, notBefore: _clock().add(_delayAfter(attempts))));
+    await _replace(
+      entry,
+      entry.copyWith(
+        attempts: attempts,
+        offlineFailures: offline,
+        notBefore: _clock().add(_delayAfter(attempts + offline)),
+        clearRefreshStarted: clearRefreshStarted,
+      ),
+    );
   }
 
-  /// baseDelay, 2x, 4x ... capped at [maxDelay].
-  Duration _delayAfter(int attempts) {
-    final factor = math.pow(2, math.max(0, attempts - 1)).toInt();
+  /// baseDelay, 2x, 4x ... capped at [maxDelay]. The exponent is bounded so a month of
+  /// offline failures cannot overflow it.
+  Duration _delayAfter(int failures) {
+    final factor = 1 << math.min(20, math.max(0, failures - 1));
     final delay = baseDelay * factor;
     return delay > maxDelay ? maxDelay : delay;
   }
 
-  Future<void> _remove(PendingSignOut entry) => _mutate((entries) => [
+  /// Writes [marked] over [entry], and throws unless the entry was there to be marked: a
+  /// refresh is never sent on the strength of a marker that was not stored.
+  Future<void> _mark(PendingSignOut entry, PendingSignOut marked) async {
+    var found = false;
+    await _mutate((entries) {
+      found = entries.any((e) => e.session.refreshToken == entry.session.refreshToken);
+      return [for (final e in entries) e.session.refreshToken == entry.session.refreshToken ? marked : e];
+    });
+    if (!found) throw StateError('pending sign-out entry gone');
+  }
+
+  Future<void> _remove(PendingSignOut entry) => _removeTokens({entry.session.refreshToken});
+
+  Future<void> _removeTokens(Set<String> refreshTokens) => _mutate((entries) => [
         for (final e in entries)
-          if (e.session.refreshToken != entry.session.refreshToken) e,
+          if (!refreshTokens.contains(e.session.refreshToken)) e,
       ]);
 
   Future<void> _replace(PendingSignOut old, PendingSignOut next) => _mutate((entries) => [
@@ -281,6 +386,11 @@ enum _Verdict {
   /// The access token was refused as expired: a refresh may answer it.
   expired,
 
-  /// No verdict: try again later.
+  /// No verdict, and the request may have reached the server (a 5xx, a read timeout): try
+  /// again later; counts toward the attempt ceiling.
   unreached,
+
+  /// The request provably never left the phone ([AppError.neverReachedServer]): try again
+  /// later; not counted.
+  offline,
 }

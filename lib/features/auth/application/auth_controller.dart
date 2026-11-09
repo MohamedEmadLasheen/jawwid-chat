@@ -70,6 +70,10 @@ class AuthController extends Notifier<AuthState> {
   /// Null where there is nothing to keep it in (the PD-28 browser, the fixture build).
   final PendingSignOutRetrier? _pendingSignOut;
 
+  /// The refresh token [_endServerSession] just handed to [_pendingSignOut], until the local
+  /// clear that follows it has run. Never logged.
+  String? _recordedPending;
+
   /// The identity refresh a TERMS_NOT_ACCEPTED refusal asked for, while it is out.
   Future<void>? _termsCheck;
 
@@ -243,6 +247,7 @@ class AuthController extends Notifier<AuthState> {
   /// blocks the local sign-out. When the server gave no verdict (offline, a 5xx), the session
   /// is handed to [_pendingSignOut] BEFORE the tokens are cleared, to be ended later.
   Future<void> _endServerSession(String failureLog) async {
+    _recordedPending = null;
     var outcome = SignOutOutcome.ended;
     try {
       final repository = _repository;
@@ -266,7 +271,10 @@ class AuthController extends Notifier<AuthState> {
       // Read AFTER the call: an expired access token was renewed (rotated) on the way, and
       // only the successor is still worth anything.
       final session = await _tokens.read();
-      if (session != null) await pending.add(session);
+      if (session != null) {
+        await pending.add(session);
+        _recordedPending = session.refreshToken;
+      }
     } catch (error) {
       _logger.warn('pending sign-out not recorded', data: {'type': error.runtimeType.toString()});
     }
@@ -403,8 +411,23 @@ class AuthController extends Notifier<AuthState> {
     unawaited(_revocationWatch?.cancel());
     _revocationWatch = null;
 
+    final recorded = _recordedPending;
+    _recordedPending = null;
+    try {
+      await _tokens.clear();
+    } catch (error) {
+      _logger.warn('session cleanup step failed', data: {
+        'step': 'tokens',
+        'type': error.runtimeType.toString(),
+      });
+      // The live store still holds the session just recorded as pending. Two holders of one
+      // refresh token -- the next launch's restore and the retrier -- would each refresh it,
+      // and the second is a reuse that revokes every session on the account. The live store
+      // keeps it; the pending entry goes.
+      if (recorded != null) await _pendingSignOut?.withdraw(recorded);
+    }
+
     for (final (step, run) in [
-      ('tokens', _tokens.clear),
       ('local data', _clearLocalData),
       ('principal', _onSessionCleared ?? () async {}),
     ]) {

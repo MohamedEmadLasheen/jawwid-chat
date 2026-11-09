@@ -37,8 +37,15 @@ class _Repo implements AuthRepository, SignOutReporting, SignOutServer {
     );
   }
 
+  /// When set, `/me` refuses with it.
+  AppError? currentUserError;
+
   @override
-  Future<AuthUser> currentUser() async => const AuthUser(id: 'u1', displayName: 'ولي أمر', role: UserRole.parent);
+  Future<AuthUser> currentUser() async {
+    final error = currentUserError;
+    if (error != null) throw error;
+    return const AuthUser(id: 'u1', displayName: 'ولي أمر', role: UserRole.parent);
+  }
 
   @override
   Future<AuthSession> refresh(String refreshToken) async {
@@ -63,6 +70,12 @@ class _Repo implements AuthRepository, SignOutReporting, SignOutServer {
     final error = logoutError;
     if (error != null) throw error;
   }
+}
+
+/// A keychain that refuses to delete the live session.
+class _StuckTokens extends InMemoryTokenStore {
+  @override
+  Future<void> clear() async => throw StateError('keychain refused the delete');
 }
 
 class _NoTimer implements Timer {
@@ -193,7 +206,48 @@ void main() {
     await controller().signIn(username: 'parent', password: 'secret');
 
     expect(container.read(provider), isA<AuthAuthenticated>());
-    expect((await pending.read()).single.attempts, 2);
+    final kept = (await pending.read()).single;
+    expect(kept.attempts, 1, reason: 'offline: not counted toward the ceiling');
+    expect(kept.offlineFailures, 1);
+  });
+
+  test('a token clear that fails withdraws the pending entry: one holder per refresh token', () async {
+    tokens = _StuckTokens();
+    await signedIn();
+    repo.outcome = SignOutOutcome.unreached;
+
+    await controller().signOut();
+
+    expect(container.read(provider), isA<AuthSignedOut>());
+    expect((await tokens.read())!.refreshToken, 'refresh-new', reason: 'the keychain refused the delete');
+    expect(await pending.read(), isEmpty, reason: 'the live store keeps it; the retrier must not refresh it too');
+  });
+
+  test('a principal refused at sign-in, server unreached: its session is left pending', () async {
+    repo.currentUserError = const AppError(AppErrorKind.forbidden, code: AuthFailures.roleNotSupported);
+    repo.outcome = SignOutOutcome.unreached;
+
+    await controller().signIn(username: 'staff', password: 'secret');
+
+    expect(container.read(provider), isA<AuthSignedOut>());
+    expect(await tokens.read(), isNull);
+    expect((await pending.read()).single.session.refreshToken, 'refresh-new');
+  });
+
+  test('a principal refused at restore, server unreached: its session is left pending', () async {
+    await tokens.write(AuthSession(
+      accessToken: 'access-stored',
+      refreshToken: 'refresh-stored',
+      accessTokenExpiresAt: t0.add(const Duration(minutes: 10)),
+    ));
+    repo.currentUserError = const AppError(AppErrorKind.forbidden, code: AuthFailures.usesAdminWeb);
+    repo.outcome = SignOutOutcome.unreached;
+
+    await controller().restore();
+
+    expect(container.read(provider), isA<AuthSignedOut>());
+    expect(await tokens.read(), isNull);
+    expect((await pending.read()).single.session.refreshToken, 'refresh-stored');
   });
 
   test('a hung flush never blocks the sign-in beyond its bound', () async {
