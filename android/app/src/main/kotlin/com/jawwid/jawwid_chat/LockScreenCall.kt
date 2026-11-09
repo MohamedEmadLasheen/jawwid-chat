@@ -57,5 +57,20 @@ object LockScreenCall {
             calls.entries.removeAll { (_, e) -> !shouldShowWhenLocked(e.connected, now - e.since, ringWindowMs) }
             return calls.isNotEmpty()
         }
+
+        /**
+         * LR-46 P3-4: how long until [showWhenLocked] can change on its own, which is when the
+         * first unanswered ring's window ends. Null when nothing will: no ring, or only
+         * connected calls (those end with Dart's `ongoingStop`/`dismiss`). MainActivity re-checks
+         * at that moment, so a ring whose end never reached it (no lifecycle event, no channel
+         * call) cannot keep the app over the lock screen past its window. Never negative: a
+         * window already over answers 0, re-check now.
+         */
+        fun msUntilRingWindowEnds(): Long? {
+            val now = clock()
+            return calls.values
+                .filter { !it.connected }
+                .minOfOrNull { (ringWindowMs - (now - it.since)).coerceAtLeast(0L) }
+        }
     }
 }

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'device_keyguard.dart';
+
 /// What the person did on the system call screen, or what the system reported.
 ///
 /// These are INTENTIONS, not transitions. Nothing here says a call is ringing,
@@ -119,8 +121,9 @@ abstract interface class CallPresentation {
   Future<void> callFinished({required String callId});
 }
 
-/// The platform implementation, over one method channel.
-class PlatformCallPresentation implements CallPresentation {
+/// The platform implementation, over one method channel. It also speaks the
+/// lock-screen half ([DeviceKeyguard], LR-46) on the same channel.
+class PlatformCallPresentation implements CallPresentation, DeviceKeyguard {
   PlatformCallPresentation({MethodChannel? channel})
       : _channel = channel ?? const MethodChannel(channelName);
 
@@ -230,6 +233,33 @@ class PlatformCallPresentation implements CallPresentation {
       return false;
     }
   }
+
+  /// LR-46: is the phone's lock screen up? A platform that cannot say (iOS answers
+  /// notImplemented; no platform side) is not locked: nothing changes there.
+  @override
+  Future<bool> isLocked() async {
+    if (!_available) return false;
+    try {
+      return await _channel.invokeMethod<bool>('isKeyguardLocked') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// LR-46: Android's own unlock prompt. Any failure is "not unlocked": the person
+  /// stays on the call screen.
+  @override
+  Future<bool> requestUnlock() async {
+    if (!_available) return true;
+    try {
+      return await _channel.invokeMethod<bool>('requestDismissKeyguard') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> returnToLockScreen() => _quietly('returnToLockScreen', const {});
 
   /// A platform without the ongoing-call half (iOS, which has CallKit) answers
   /// notImplemented; that is not a failure of the call.

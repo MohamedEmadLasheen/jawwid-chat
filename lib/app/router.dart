@@ -8,7 +8,7 @@ import '../core/crash/crash_reporting.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/billing/presentation/my_payments_screen.dart';
-import '../features/calls/presentation/active_call_screen.dart';
+import '../features/calls/presentation/call_route_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/application/realtime_keeper.dart';
@@ -240,6 +240,19 @@ void openConversationFromCall(
   }
 }
 
+/// Take the call route off the top: Back, or Close on a call that is over.
+///
+/// Only if it is still the one on top. On a locked phone this runs after the unlock
+/// prompt (LR-46), by when CallPresenter may already have taken it down; popping again
+/// would pop whatever was beneath the call.
+void leaveCallRoute(GoRouter router) {
+  if (topRoutePath(router) == Routes.activeCall && router.canPop()) router.pop();
+}
+
+/// The path of the route on top, or null before the router has one.
+String? topRoutePath(GoRouter router) =>
+    router.routerDelegate.currentConfiguration.isEmpty ? null : router.state.uri.path;
+
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = _AuthRefresh(ref);
   ref.onDispose(notifier.dispose);
@@ -330,23 +343,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         )),
       ),
       // W7. Pushed on top of everything, with no tab highlighted: a call takes the
-      // screen while it lasts. Leaving it returns to whatever was underneath.
+      // screen while it lasts. Leaving it returns to whatever was underneath -- on a
+      // locked phone only once unlocked (LR-46, CallRouteScreen).
       GoRoute(
         path: Routes.activeCall,
         // The page it has always had (no transition, no swipe-back), stated rather than
         // changed: the call UI is W7, closed, and whether an edge swipe may leave a live
         // call is a call-UI decision, not a navigation default.
-        pageBuilder: (context, state) => _still(state, ActiveCallScreen(
-          onLeave: () {
-            if (context.canPop()) context.pop();
-          },
-          onOpenConversation: (conversationId, {required recordVoice}) =>
-              openConversationFromCall(
-                GoRouter.of(context),
-                conversationId,
-                recordVoice: recordVoice,
-              ),
-        )),
+        pageBuilder: (context, state) {
+          final router = GoRouter.of(context);
+          return _still(state, CallRouteScreen(
+            onLeave: () => leaveCallRoute(router),
+            onOpenConversation: (conversationId, {required recordVoice}) =>
+                openConversationFromCall(
+                  router,
+                  conversationId,
+                  recordVoice: recordVoice,
+                ),
+          ));
+        },
       ),
       GoRoute(
         path: Routes.myAccount,

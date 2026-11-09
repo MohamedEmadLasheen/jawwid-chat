@@ -223,6 +223,72 @@ void main() {
     });
   });
 
+  group('LR-46: the phone lock screen (Android)', () {
+    void nativeAnswers(Object? Function(MethodCall call) answer) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        sentToNative.add(call);
+        return answer(call);
+      });
+    }
+
+    test('asks native whether the phone is locked', () async {
+      nativeAnswers((call) => call.method == 'isKeyguardLocked' ? true : null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isTrue);
+      expect(sentToNative.last.method, 'isKeyguardLocked');
+    });
+
+    test('asks native to unlock, and reports the answer', () async {
+      var unlocked = false;
+      nativeAnswers((call) => call.method == 'requestDismissKeyguard' ? unlocked : null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.requestUnlock(), isFalse);
+      expect(sentToNative.last.method, 'requestDismissKeyguard');
+      unlocked = true;
+      expect(await presentation.requestUnlock(), isTrue);
+    });
+
+    test('returns to the lock screen through native', () async {
+      nativeAnswers((_) => null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      await presentation.returnToLockScreen();
+      expect(sentToNative.last.method, 'returnToLockScreen');
+    });
+
+    test('a failed unlock is not an unlock; a platform without the methods (iOS) is never locked', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw MissingPluginException();
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.isLocked(), isFalse);
+      expect(await presentation.requestUnlock(), isFalse);
+      await presentation.returnToLockScreen();
+    });
+
+    test('before start nothing is asked, and nothing is locked', () async {
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+
+      expect(await presentation.isLocked(), isFalse);
+      expect(sentToNative, isEmpty);
+    });
+  });
+
   group('a build with no platform side', () {
     test('the seam is inert rather than throwing', () async {
       // A fixture build, or a platform W8-W3 has not reached. Nothing can have

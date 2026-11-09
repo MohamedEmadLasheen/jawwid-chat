@@ -1,12 +1,15 @@
 package com.jawwid.jawwid_chat
 
 import android.Manifest
+import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
@@ -51,6 +54,10 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
     private var channel: MethodChannel? = null
     private var callChannel: MethodChannel? = null
+
+    /** LR-46 P3-4: re-applies the lock-screen policy when a ring's window ends. */
+    private val policyTimer = Handler(Looper.getMainLooper())
+    private val policyTick = Runnable { applyLockScreenPolicy() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,6 +128,10 @@ class MainActivity : FlutterFragmentActivity() {
     @Suppress("DEPRECATION")
     private fun applyLockScreenPolicy() {
         val show = lockScreenCalls.showWhenLocked()
+        // LR-46 P3-4: re-check when the first unanswered ring's window ends, so the permission
+        // cannot outlive the ring when no lifecycle event or channel call comes to reset it.
+        policyTimer.removeCallbacks(policyTick)
+        lockScreenCalls.msUntilRingWindowEnds()?.let { policyTimer.postDelayed(policyTick, it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(show)
             setTurnScreenOn(show)
@@ -147,6 +158,63 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onStop() {
         applyLockScreenPolicy()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        policyTimer.removeCallbacks(policyTick)
+        super.onDestroy()
+    }
+
+    /** Fails closed: a phone that cannot say is treated as locked. Every phone has the service. */
+    private fun keyguardLocked(): Boolean =
+        (getSystemService(KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked ?: true
+
+    /**
+     * LR-46 P2-1: over the lock screen the app is the call and nothing else. Dart calls this
+     * before anything takes it off the call screen (Back, leave, open the conversation); the
+     * person unlocks (PIN, pattern, fingerprint), and only on success does Dart navigate.
+     * Answers true when the phone is not locked, false on cancel or error. Answered once.
+     * Activity.requestDismissKeyguard is API 26, this app's minSdk.
+     */
+    private fun requestDismissKeyguard(result: MethodChannel.Result) {
+        val keyguard = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+        if (keyguard == null) {
+            result.success(false)
+            return
+        }
+        if (!keyguard.isKeyguardLocked) {
+            result.success(true)
+            return
+        }
+        var answered = false
+        fun answer(unlocked: Boolean) = runOnUiThread {
+            if (!answered) {
+                answered = true
+                result.success(unlocked)
+            }
+        }
+        try {
+            keyguard.requestDismissKeyguard(
+                this,
+                object : KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() = answer(true)
+                    override fun onDismissCancelled() = answer(false)
+                    override fun onDismissError() = answer(false)
+                },
+            )
+        } catch (e: RuntimeException) {
+            // Refused (not shown over the lock screen, finishing): stay on the call screen.
+            answer(false)
+        }
+    }
+
+    /**
+     * LR-46 P2-1: the call is over and the phone is still locked: go behind the lock screen
+     * rather than show what was open before the call. A no-op on an unlocked phone.
+     */
+    private fun returnToLockScreen() {
+        applyLockScreenPolicy()
+        if (keyguardLocked()) moveTaskToBack(true)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -228,6 +296,13 @@ class MainActivity : FlutterFragmentActivity() {
                 // LR-27: may a ring take over the screen (Android 14+), and the screen to allow it.
                 "canUseFullScreenIntent" -> result.success(JawwidPush.canUseFullScreenIntent(applicationContext))
                 "openFullScreenIntentSettings" -> result.success(openFullScreenIntentSettings())
+                // LR-46 P2-1: over the lock screen the app is call-only (device_keyguard.dart).
+                "isKeyguardLocked" -> result.success(keyguardLocked())
+                "requestDismissKeyguard" -> requestDismissKeyguard(result)
+                "returnToLockScreen" -> {
+                    returnToLockScreen()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

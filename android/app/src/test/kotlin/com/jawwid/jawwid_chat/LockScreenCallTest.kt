@@ -1,6 +1,8 @@
 package com.jawwid.jawwid_chat
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -80,6 +82,50 @@ class LockScreenCallTest {
         tracker.ringing("c1")
         now += 2 * window
         assertTrue(tracker.showWhenLocked())
+    }
+
+    // LR-46 P3-4: the re-check timer at the ring window's end.
+
+    @Test
+    fun noRingNeedsNoTimer() {
+        assertNull(tracker.msUntilRingWindowEnds())
+    }
+
+    @Test
+    fun aRingIsReCheckedWhenItsWindowEnds() {
+        tracker.ringing("c1")
+        assertEquals(window, tracker.msUntilRingWindowEnds())
+        now += 30_000L
+        assertEquals(window - 30_000L, tracker.msUntilRingWindowEnds())
+        // The timer fires at the end: the window is over, and the app leaves the lock screen.
+        now += window - 30_000L
+        assertEquals(0L, tracker.msUntilRingWindowEnds())
+        assertFalse(tracker.showWhenLocked())
+        assertNull(tracker.msUntilRingWindowEnds())
+    }
+
+    @Test
+    fun aConnectedCallNeedsNoTimer() {
+        tracker.ringing("c1")
+        tracker.connected("c1")
+        assertNull(tracker.msUntilRingWindowEnds())
+    }
+
+    @Test
+    fun theEarliestRingSetsTheTimer() {
+        tracker.ringing("c1")
+        now += 10_000L
+        tracker.ringing("c2")
+        assertEquals(window - 10_000L, tracker.msUntilRingWindowEnds())
+        tracker.ended("c1")
+        assertEquals(window, tracker.msUntilRingWindowEnds())
+    }
+
+    @Test
+    fun aWindowAlreadyOverIsReCheckedAtOnce() {
+        tracker.ringing("c1")
+        now += 2 * window
+        assertEquals(0L, tracker.msUntilRingWindowEnds())
     }
 
     @Test
