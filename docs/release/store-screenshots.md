@@ -9,8 +9,9 @@ and English, **without a server and without real people** (LR-10). The shot list
 | The test that drives the real app and takes the shots | `integration_test/store_screenshots_test.dart` |
 | The synthetic people, chats, calls and lessons | `integration_test/screenshot_fixtures.dart` |
 | The fakes the app runs on (no server, no microphone, no CallKit) | `integration_test/screenshot_fakes.dart` |
-| The host side that saves each PNG | `test_driver/integration_test.dart` |
-| The script: simulator / emulator, status bar (see the checklist: probably not in the captures), size check, JPEG copies | `scripts/mobile/screenshots/capture.sh` |
+| The device side of the capture handshake (the test waits on each screen while the host captures it) | `integration_test/host_capture.dart` |
+| The host side: captures each screen with the platform tool, or saves the in-app fallback | `test_driver/integration_test.dart` |
+| The script: simulator / emulator, clean status bar, size check, capture report, JPEG copies | `scripts/mobile/screenshots/capture.sh` |
 
 ## 1. What the run does
 
@@ -21,11 +22,32 @@ first, then English), it:
 
 1. signs in as a returning user, so there is no sign-in screen and no first-run App lock offer;
 2. fixes the app language (`localeOverrideProvider`) and the light theme;
-3. moves through the screens with the app's own router and calls `takeScreenshot` on each one;
+3. moves through the screens with the app's own router and, on each one, waits while the host captures the **whole
+   device screen, system status bar included**, with the platform tool (§1.1);
 4. for the call, sends the frame the server sends when the teacher starts the lesson call in the family group
    (`call.incoming`), and the parent answers it. The call joins a silent fake room, not LiveKit.
 
 Every language is a separate test, so each starts from a clean app.
+
+### 1.1 How each shot is captured
+
+`integration_test`'s own `takeScreenshot` copies only the app's view (iOS: the app's windows; Android: the
+FlutterView). The status bar is drawn by the system outside that view, so it would be missing. The shots are therefore
+taken on the host by the platform tool, which captures the whole screen:
+
+- **iOS:** `xcrun simctl io <udid> screenshot --type=png <file>`, after `simctl status_bar override` (9:41).
+- **Android:** `adb -s <serial> exec-out screencap -p`, with System UI demo mode on (09:41).
+
+The test and the host driver coordinate over a VM service extension (`ext.jawwid.storeShots`, described in
+`integration_test/host_capture.dart`): when a screen has settled, the test publishes its name and stops drawing; the
+driver, which long-polls for it, runs the tool on this run's device, writes the PNG (to a `.part` file, renamed only
+when it is a valid PNG), and tells the test it is done.
+
+**Fallback.** If the platform capture fails, or no answer comes within 60 seconds, the test takes the in-app
+screenshot instead (no status bar) and the driver saves that. Each platform folder has `capture-methods.txt`
+(`<file>` tab `platform` or `in-app`), and the script ends by printing how many shots the platform tool took and
+**which ones, if any, used the fallback**. The run does not fail on a fallback, but those files have no status bar:
+retake or crop them before upload.
 
 ## 2. The shots
 
@@ -83,7 +105,7 @@ side is 320 to 3840 px, and the long side is at most twice the short side. Play 
 for at least 1080 px on the short side to be eligible for its recommendations. 1080 × 1920 meets all of these. The
 1080 × 2400 of a modern Pixel would not, because its long side is more than twice the short side.
 
-**Transparency.** The device returns PNGs with an alpha channel, which both stores refuse. The script therefore also
+**Transparency.** The PNGs may carry an alpha channel, which both stores refuse. The script therefore also
 writes **JPEG copies (quality 100, no alpha) under `upload/`**. Upload those.
 
 ## 4. How to run
@@ -101,15 +123,22 @@ bash scripts/mobile/screenshots/capture.sh android
 ```
 
 - **Output:** `build/store_screenshots/<UTC timestamp>/` (not committed). It holds `ios/` or `android/` with
-  `ar/` and `en/` PNGs, plus `upload/` with the JPEG copies. Set `JAWWID_SCREENSHOT_DIR` to choose the folder.
+  `ar/` and `en/` PNGs and `capture-methods.txt` (§1.1), plus `upload/` with the JPEG copies. Set
+  `JAWWID_SCREENSHOT_DIR` to choose the folder.
 - **What the script does:**
   - **iOS:** creates its own simulator, sets it to light mode, sets Apple's clean status bar (9:41, full signal, full
-    battery), runs the test, checks the PNGs, then deletes the simulator.
+    battery), runs the test with each shot captured by `simctl io … screenshot` on that simulator, checks the PNGs,
+    reports the capture method, then deletes the simulator.
   - **Android:** creates the `jawwid_shots` AVD once (profile `pixel`), boots it on console port 5580 (headless), and
     checks the size is 1080x1920. It turns on System UI demo mode (09:41, full battery and Wi-Fi, no notification
-    icons), runs the test, checks the PNGs, and stops **only that emulator, by its serial**.
-- **It fails** if a shot is missing (fewer than 20), if a shot has the wrong size, or if the test fails.
-- By hand, on a device that is already running (no status bar or size handling):
+    icons), runs the test with each shot captured by `adb -s emulator-5580 exec-out screencap -p`, checks the PNGs,
+    reports the capture method, and stops **only that emulator, by its serial**.
+  - The platform captures run only against the device the script created, and write only inside the output folder.
+    Nothing else is started, stopped or deleted.
+- **It fails** if a shot is missing (fewer than 20), if a shot has the wrong size, or if the test fails. It **warns**
+  (does not fail) for each shot that used the in-app fallback.
+- By hand, on a device that is already running (no status bar setup, no size check, and **in-app capture only**,
+  because the driver captures with the platform tool only when the script tells it which device to use):
   `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/store_screenshots_test.dart -d <device>`.
 - `flutter test` does **not** run this (it lives outside `test/`). `flutter analyze` does check it.
 
@@ -137,11 +166,10 @@ Wiring this into CI is a `.github/` change and needs a Code Owner PR. The propos
       crop it out (listing-copy §9.2).
 - [ ] **No debug banner, no keyboard, no system dialog** (microphone, notifications) and no CallKit screen over the
       app.
-- [ ] **The top strip:** these captures most likely show **no status bar**. The `integration_test` screenshot copies only
-      the app's own view (iOS: the app's windows; Android: the FlutterView), and the status bar is drawn by the system in a
-      separate window, so the clean-status-bar steps in the script probably have no effect. Before upload, look at the
-      top of each image: if it is an empty strip, either crop it or wait for the follow-up that captures with
-      `xcrun simctl io <udid> screenshot` / `adb exec-out screencap -p`, which includes the system status bar.
+- [ ] **The status bar:** every shot shows the clean system status bar (**9:41**, full signal and battery, no
+      notification icons). The script's last lines say how many shots the platform tool captured; if it lists any
+      **in-app fallback** shots (also in `<platform>/capture-methods.txt`), those have an empty strip instead of a
+      status bar: run again, or crop them. On Android, the bottom navigation bar is in the image too, as on a phone.
 - [ ] **The call shot (07)** shows the teacher's name and a running timer, not "Connecting…".
 - [ ] **The Delete account shot (06)** shows the screen as a user meets it, with no error message.
 - [ ] **Sizes:** the script's check passed (1320 × 2868 for iOS, 1080 × 1920 for Android). Upload the **JPEG copies

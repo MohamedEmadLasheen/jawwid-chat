@@ -45,6 +45,7 @@ import 'package:jawwid_chat/features/whiteboards/data/whiteboards_repository.dar
 import 'package:jawwid_chat/shared/models/user_role.dart';
 import 'package:jawwid_chat/shared/utils/western_digits.dart';
 
+import 'host_capture.dart';
 import 'screenshot_fakes.dart';
 import 'screenshot_fixtures.dart';
 
@@ -55,6 +56,9 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   // DD-09 / RQA-F3, as lib/main.dart: Western digits everywhere.
   useWesternDigits();
+  // The host driver captures each screen with the platform tool (status bar
+  // included); see host_capture.dart.
+  HostCapture.instance.register();
 
   final platform = Platform.isIOS ? 'ios' : 'android';
 
@@ -214,12 +218,17 @@ class _Run {
     }
   }
 
-  /// Saved by the driver as `<platform>/<lang>/<name>.png`.
+  /// Saved by the driver as `<platform>/<lang>/<name>.png`: captured on the host
+  /// by the platform tool (the whole screen, status bar included) while the test
+  /// waits here; the in-app screenshot (the app's view only, no status bar) only
+  /// if that capture fails. The driver records which one was used.
   Future<void> shot(String name, {Duration settleFor = const Duration(seconds: 2)}) async {
     // No caret and no keyboard in a store screenshot.
     FocusManager.instance.primaryFocus?.unfocus();
     await settle(settleFor);
-    await binding.takeScreenshot('$platform/$lang/$name');
+    final id = '$platform/$lang/$name';
+    if (await HostCapture.instance.capture(id)) return;
+    await binding.takeScreenshot(id);
   }
 
   /// The frame the server sends when the teacher starts the lesson call in the

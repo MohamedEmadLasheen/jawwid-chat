@@ -8,6 +8,11 @@
 # Output: $JAWWID_SCREENSHOT_DIR (default build/store_screenshots/<UTC timestamp>), as
 #   <platform>/<ar|en>/<NN>_<screen>.png   -- 10 shots per language, 20 per platform.
 # The run fails if any PNG is missing or not the expected size.
+# Each PNG is the whole device screen, captured by `xcrun simctl io ... screenshot` /
+# `adb exec-out screencap -p` while the test waits on that screen, so the clean
+# status bar set below is in the image. If that capture fails the in-app screenshot
+# (no status bar) is used instead; <platform>/capture-methods.txt and the end of the
+# run say which files that happened to.
 #
 # It creates its OWN device and removes / stops only that device:
 #   ios      a new simulator named jawwid-shots-<pid>, deleted at the end.
@@ -51,12 +56,37 @@ EXPECTED_PER_PLATFORM=20
 
 "$FLUTTER" pub get
 
-drive() { # device id
+# Each shot is captured by the platform tool (whole screen, status bar included):
+# the test waits on each screen and the driver (test_driver/integration_test.dart)
+# runs simctl / screencap on THIS run's device, then lets the test go on. If that
+# capture fails, the test falls back to integration_test's in-app screenshot (no
+# status bar). <platform>/capture-methods.txt records which one each file used.
+drive() { # platform device-id [adb]
+  local platform="$1" device="$2"
+  mkdir -p "$OUT/$platform"
+  : >"$OUT/$platform/capture-methods.txt"
+  JAWWID_SHOT_TOOL="$platform" JAWWID_SHOT_DEVICE="$device" JAWWID_ADB="${3:-}" \
   "$FLUTTER" drive \
     --no-pub \
     --driver=test_driver/integration_test.dart \
     --target=integration_test/store_screenshots_test.dart \
-    -d "$1"
+    -d "$device"
+}
+
+# Says, per file, how it was captured (the last line for a name wins: a late
+# platform capture can be overwritten by the fallback). Warns, without failing,
+# about any in-app fallback, because those have no system status bar.
+report_methods() { # platform
+  local manifest="$OUT/$1/capture-methods.txt" platform_n fallback
+  [ -s "$manifest" ] || { echo "capture: WARNING: no capture record in $manifest" >&2; return 0; }
+  platform_n="$(awk -F'\t' '{m[$1]=$2} END {n=0; for (k in m) if (m[k]=="platform") n++; print n}' "$manifest")"
+  fallback="$(awk -F'\t' '{m[$1]=$2} END {for (k in m) if (m[k]!="platform") print k}' "$manifest" | sort)"
+  echo "capture: $platform_n shots captured by the platform tool (status bar included)"
+  if [ -n "$fallback" ]; then
+    echo "capture: WARNING: these used the in-app fallback and have NO system status bar:" >&2
+    # shellcheck disable=SC2086  # one name per word; names are [A-Za-z0-9_/-] only
+    printf '  %s\n' $fallback >&2
+  fi
 }
 
 check_shots() { # dir width height
@@ -113,8 +143,9 @@ capture_ios() {
     --dataNetwork wifi --wifiMode active --wifiBars 3 \
     --cellularMode active --cellularBars 4 \
     --batteryState charged --batteryLevel 100
-  drive "$udid"
+  drive ios "$udid"
   check_shots "$OUT/ios" "${IOS_EXPECT_WIDTH:-1320}" "${IOS_EXPECT_HEIGHT:-2868}"
+  report_methods ios
   export_jpeg ios
 }
 
@@ -171,8 +202,9 @@ capture_android() {
   "${sh[@]}" am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null
   "${sh[@]}" cmd uimode night no >/dev/null || true
 
-  drive "$serial"
+  drive android "$serial" "$adb"
   check_shots "$OUT/android" 1080 1920
+  report_methods android
   export_jpeg android
 }
 
