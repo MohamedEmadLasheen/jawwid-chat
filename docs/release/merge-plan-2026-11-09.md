@@ -92,6 +92,7 @@ Each real merge of a stacked or conflicting PR still gets its own CI run and a d
 | **4b. Store tooling** (Code Owner where `.github/` is touched) | #547 `66f9418f`, #548 `5349bf83`, #549 `6365275f` | signed store builds on GitHub runners (inert until secrets and owner approval exist); deploy inputs through env; store screenshots | #547 High (signing workflow; merging creates no key and runs nothing) | main CI green |
 | **7. New, after their bases** | #554 (LR-26, on #449), #555 and #556 (docs), #557 (LR-11 explain-first) | | Low / Low / Low / Medium | main CI |
 | **7b. LR-46 fixes, after their bases** | #561 (on #535), #560 (on #528, Code Owner), #559 (on #551, **High: migration `20261109160000`**), #558 (docs) | lock-screen call only; production runs a recorded image digest; organization guards fail closed | High for #559 and #560 | main CI after each |
+| **7c. LR-46 follow-ups** | #563 (on #561; celebration not over the lock screen), #564 (on #497; no database password in `ps`), #562 (Android 12+ transfer excluded) | | Low / Low / Low | main CI |
 | **Excluded** | #553: duplicate of #524, do not merge | | | |
 | **Separate** | #503 (another session's PR; it shares `lib/l10n/*` with #449 and #498), #517 (Code Owner, `scripts/qa`), #543 (after #533, then retarget) | | Low / Low / Low | main CI |
 
