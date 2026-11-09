@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-09 05:25 Cairo (03:25 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-09 10:40 Cairo (08:40 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -34,6 +34,27 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 - day 2: review accounts, store builds and the console forms;
 - day 3: device test plan on two phones;
 - day 4: fixes from device testing, final compliance and security audit, then the owner's go.
+
+### Two progress measures (2026-11-09; both re-counted from §4, neither inflated)
+
+| Measure | Count of 93 applicable | % | What it counts |
+|---|---|---|---|
+| **Verified launch progress** | **17** | **18 %** | Items marked COMPLETED AND VERIFIED: merged on `main` **and** proven with evidence (§6). Unchanged since 2026-11-08, because nothing has merged since #516 and #518. |
+| **Engineering implementation progress** | **53** | **57 %** | Items where no engineering work is left: the code, configuration or document exists on `main` or in an independently accepted, CI-green PR. Of these, 33 (35 %) are on `main` (the 17 verified plus 16 READY FOR VERIFICATION) and 20 (22 %) are in accepted open PRs waiting for merge approval. |
+
+**Why they differ.** An item reaches "verified" only after three things happen:
+1. **It merges.** 20 items' work sits in accepted PRs (merge plan: `docs/release/merge-plan-2026-11-09.md`).
+2. **It is proven where it matters.** Many items can only be proven on a live server (LR-01 has never run), on signed store builds (LR-76, OT-2b), or on real phones (LR-08).
+3. **The owner acts.** Some need a decision, credentials or a console entry (§5).
+
+**The 40 items not yet engineering-complete:**
+- **Mostly blocked on the owner or on production:** signing, deploy, consoles, legal facts, devices, store review data.
+- **Engineering work still open:**
+  - #498 and #449, under re-review;
+  - LR-26 and the LR-27 in-app prompt, which wait for the `lib/l10n` PRs to merge;
+  - LR-41 and the PARENT-016 wording, to be applied once the owner picks from #532;
+  - the final LR-46 and LR-71 sign-offs on the release candidate;
+  - LR-33 enforcement after production logs.
 
 ### Status counts (every requirement in §4)
 
@@ -128,7 +149,8 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
    - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history).
    - **Stacked on #449, follow once it merges:** #524, #529, #535, and #537 (High: migration; after #534).
    - **Stacked on #533:** #543 (production alerts on api and worker; accepted).
-   - **Older:** #497, #498, #449, #517.
+   - **Older:** #497 (ready), #517 (ready, Code Owner). **Not ready:** #449 (no review ACCEPT had been posted; full review running) and #498 (no ACCEPT; its P2-1 fix was uncommitted, now `557a877d` with tests; full re-review running).
+   - **Batches and order:** `docs/release/merge-plan-2026-11-09.md`.
    - **Merge-order notes:** #534 before #537. When #498 and #537 meet, the session lock goes inside #498's `run()` helper (noted on both PRs).
 2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
 3. **OT-2b** (the owner's signing decision): turn the chosen option into a step-by-step handoff.
