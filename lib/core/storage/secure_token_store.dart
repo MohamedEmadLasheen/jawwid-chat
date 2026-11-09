@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../shared/models/auth.dart';
@@ -93,6 +95,125 @@ class InMemoryTokenStore implements TokenStore {
 
   @override
   Future<void> clear() async => _session = null;
+}
+
+/// LR-46 follow-up: a session the user signed out of while the server could not be reached.
+///
+/// The user is signed out locally at once; this is only what is needed to end the session on
+/// the server later (`POST /auth/logout`, after a `POST /auth/refresh` when the access token
+/// has expired). Kept in the Keychain / Keystore beside the live session, never anywhere else.
+class PendingSignOut {
+  const PendingSignOut({
+    required this.session,
+    required this.createdAt,
+    required this.attempts,
+    this.notBefore,
+  });
+
+  final AuthSession session;
+
+  /// When the sign-out was made. A server session outlives no more than thirty days.
+  final DateTime createdAt;
+
+  /// Server sign-out attempts made so far, the original one included.
+  final int attempts;
+
+  /// The next attempt is not due before this (backoff). Null: due now.
+  final DateTime? notBefore;
+
+  PendingSignOut copyWith({AuthSession? session, int? attempts, DateTime? notBefore}) => PendingSignOut(
+        session: session ?? this.session,
+        createdAt: createdAt,
+        attempts: attempts ?? this.attempts,
+        notBefore: notBefore ?? this.notBefore,
+      );
+
+  Map<String, Object?> toJson() => {
+        'refresh': session.refreshToken,
+        'access': session.accessToken,
+        'accessExpiresAt': session.accessTokenExpiresAt.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
+        'attempts': attempts,
+        if (notBefore != null) 'notBefore': notBefore!.toIso8601String(),
+      };
+
+  /// Null for anything unreadable: a corrupt entry is dropped, never carried forward.
+  static PendingSignOut? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final refresh = json['refresh'];
+    final access = json['access'];
+    final expiresAt = DateTime.tryParse('${json['accessExpiresAt']}');
+    final createdAt = DateTime.tryParse('${json['createdAt']}');
+    final attempts = json['attempts'];
+    final notBefore = json['notBefore'];
+    if (refresh is! String || refresh.isEmpty || access is! String) return null;
+    if (expiresAt == null || createdAt == null || attempts is! int) return null;
+    return PendingSignOut(
+      session: AuthSession(accessToken: access, refreshToken: refresh, accessTokenExpiresAt: expiresAt),
+      createdAt: createdAt,
+      attempts: attempts,
+      notBefore: notBefore is String ? DateTime.tryParse(notBefore) : null,
+    );
+  }
+
+  /// Never include token material in diagnostics.
+  @override
+  String toString() => 'PendingSignOut(createdAt: $createdAt, attempts: $attempts, notBefore: $notBefore)';
+}
+
+/// Where pending sign-outs live. The whole list is one value, written in one write.
+abstract interface class PendingSignOutStore {
+  Future<List<PendingSignOut>> read();
+
+  /// An empty list removes the entry.
+  Future<void> write(List<PendingSignOut> entries);
+}
+
+class SecurePendingSignOutStore implements PendingSignOutStore {
+  SecurePendingSignOutStore({FlutterSecureStorage? storage}) : _storage = storage ?? _keychain;
+
+  static const _key = 'jawwid.pending_sign_out';
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<List<PendingSignOut>> read() async {
+    final raw = await _storage.read(key: _key);
+    if (raw == null) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return [
+          for (final item in decoded)
+            if (PendingSignOut.fromJson(item) case final entry?) entry,
+        ];
+      }
+    } on FormatException {
+      // Corrupt: dropped below.
+    }
+    await _storage.delete(key: _key);
+    return const [];
+  }
+
+  @override
+  Future<void> write(List<PendingSignOut> entries) async {
+    if (entries.isEmpty) {
+      await _storage.delete(key: _key);
+      return;
+    }
+    await _storage.write(key: _key, value: jsonEncode([for (final e in entries) e.toJson()]));
+  }
+}
+
+/// In-memory store for tests. Never used in a release build.
+class InMemoryPendingSignOutStore implements PendingSignOutStore {
+  List<PendingSignOut> _entries = const [];
+
+  @override
+  Future<List<PendingSignOut>> read() async => _entries;
+
+  @override
+  Future<void> write(List<PendingSignOut> entries) async => _entries = List.unmodifiable(entries);
 }
 
 /// PD-37: the keychain for anything else this app must keep as carefully as

@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -39,6 +40,7 @@ import '../core/storage/secure_token_store.dart';
 import '../core/storage/token_store_factory.dart';
 import '../core/time/time_zone_api.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/auth/application/pending_sign_out.dart';
 import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
@@ -182,6 +184,20 @@ List<Override> _httpOverrides() {
 
   client = buildApiClient(config: config, tokens: tokens, onTermsNotAccepted: legal.refused);
   final drafts = platformDraftStore();
+
+  // LR-46 follow-up: a sign-out made offline is ended on the server later (app start,
+  // connectivity back, backoff, before a new sign-in). Phone only: the PD-28 browser portal
+  // keeps its tokens under its own rules (BrowserTokenStore) and has no push binding.
+  final pendingSignOut = tokenStore is BrowserTokenStore
+      ? null
+      : PendingSignOutRetrier(
+          store: SecurePendingSignOutStore(),
+          server: auth,
+          reconnected: Connectivity()
+              .onConnectivityChanged
+              .where((results) => results.any((result) => result != ConnectivityResult.none))
+              .map((_) {}),
+        );
 
   return [
     // The language choice survives a restart (see PersistedLocaleController).
@@ -384,6 +400,7 @@ List<Override> _httpOverrides() {
         onSessionCleared: session.clear,
         termination: termination,
         legal: legal,
+        pendingSignOut: pendingSignOut,
       ),
     ),
   ];
