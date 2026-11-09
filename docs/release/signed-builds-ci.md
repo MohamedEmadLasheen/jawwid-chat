@@ -14,8 +14,8 @@ debug symbols to Sentry and then the build itself, **only** to:
 - **Google Play: the internal testing track, as a draft release** (nobody receives it until a person
   releases it in Play Console), signed in through **Workload Identity Federation** (no Google key exists);
 - **App Store Connect / TestFlight**: one cloud-signed export to a local `.ipa`, which is verified and
-  hashed; Apple's Transporter (`iTMSTransporter`) then uploads **that exact file** after its SHA-256 is
-  checked again. Nothing is sent for App Review and nothing is released.
+  hashed; Apple's `altool` then uploads **that exact file**, in an upload mode only, after its SHA-256
+  is checked again. Nothing is sent for App Review and nothing is released.
 
 ## 1. What it does
 
@@ -65,14 +65,17 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
      checkout and long before the Google sign-in;
    - signs in to Google with `google-github-actions/auth` (v3.0.0, pinned by SHA; the only Google sign-in
      in the workflow): GitHub's OIDC token
-     for this job is exchanged for a **15-minute** access token of the Play service account, scope
+     for this job is exchanged for a **30-minute** access token of the Play service account, scope
      `androidpublisher` only, no credentials file written. The token is masked;
    - runs `scripts/mobile/play-upload.sh`, which does `edits.insert` → `edits.bundles.upload` →
      `edits.tracks.update` (track `internal`, one release `{versionCodes: [<build_number>], status:
      "draft", name: "<build_name> (<build_number>)"}`) → `edits.commit`. It checks that Play read the
-     expected versionCode and the same SHA-256 as the verified file, and that the track answer is exactly
-     that one draft release. On any failure it deletes the edit (best effort) and exits non-zero: nothing
-     is published;
+     expected versionCode and the same SHA-256 as the verified file, and that the track answer is safe to
+     commit: exactly one release is that draft (versionCodes exactly `[<build_number>]`), no other
+     release carries that versionCode, and every release in the answer is either a draft or a
+     `completed` one (an earlier internal release Play may list beside it), so none is `inProgress`,
+     `halted` or of an unknown status. On any failure it deletes the edit (best effort) and exits
+     non-zero: nothing is published;
    - always deletes the signing material, even after a failure.
 3. **iOS** (`macos-26`, Xcode 26 selected explicitly, Environment `store-release`): waits for approval, then
    - the same two checkouts and the same before-any-build check of its secrets and variables (§3.6);
@@ -89,31 +92,51 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
      `CDHash`) of the app and of every framework and extension inside it, makes the `.ipa` read-only, and
      records its **SHA-256** (all shown in the run summary). Any missing value fails the job;
    - installs sentry-cli (as above) and uploads the archive's dSYMs and the Dart symbols to Sentry;
-   - **uploads the verified file itself**: re-computes the `.ipa`'s SHA-256 and refuses unless it equals
-     the recorded one, then runs Apple's Transporter, `iTMSTransporter -m upload -assetFile <that .ipa>
-     -apiKey <ASC_API_KEY_ID> -apiIssuer <ASC_API_ISSUER_ID> -v informational`, with the `.p8` copied to
-     `~/.appstoreconnect/private_keys/AuthKey_<id>.p8` (mode 600) for that step only. Transporter is found
-     with `xcrun --find iTMSTransporter`, else at
-     `/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter`. The job succeeds only if
-     Transporter exits 0 **and** reports the package "uploaded successfully" with no `ERROR ITMS-` line;
-     only those result lines are printed, the full log stays on the runner;
+   - **uploads the verified file itself** with Apple's `altool` (shipped with Xcode), the `.p8` copied to
+     `~/.appstoreconnect/private_keys/AuthKey_<id>.p8` (mode 600) for that step only, where altool looks
+     for it. The step first refuses unless the `.ipa` is still read-only, `ASC_APP_APPLE_ID` is numeric,
+     and the bundle id, version and build read from the verified `.ipa`'s own `Info.plist` are this
+     app's. It then reads `xcrun altool --help` (nothing is uploaded to find out) and runs **one**
+     uploader, chosen from that help text:
+     1. if it lists `--upload-package`: `xcrun altool --upload-package <that .ipa> --type ios
+        --apple-id <ASC_APP_APPLE_ID> --bundle-id <CFBundleIdentifier> --bundle-version <CFBundleVersion>
+        --bundle-short-version-string <CFBundleShortVersionString> --apiKey <ASC_API_KEY_ID>
+        --apiIssuer <ASC_API_ISSUER_ID>`;
+     2. else, if it lists `--upload-app`: `xcrun altool --upload-app -f <that .ipa> --type ios --apiKey …
+        --apiIssuer …`;
+     3. else Apple's Transporter (`iTMSTransporter -m upload -assetFile <that .ipa> -apiKey … -apiIssuer …
+        -v informational`), **only** if `xcrun --find` or an installed Transporter.app provides it;
+     4. else the job stops with "No uploader on this runner" and uploads nothing.
+
+     On the line **immediately before** whichever upload command runs, the `.ipa`'s SHA-256 is
+     re-computed and the step refuses unless it equals the recorded one. The job succeeds only if the
+     uploader exits 0 **and** prints its own success line ("No errors uploading" for altool, "uploaded
+     successfully" for Transporter) with no `*** Error` / `ERROR ITMS-` line. On anything else it fails
+     closed and prints only the uploader's error lines (cut to 300 characters, never a line naming the
+     key folder); the full log stays on the runner;
    - always deletes the `.p8` (both copies), the symbols, the build logs and the outputs.
 
-   *Why one export and Transporter (owner requirement R1).* The build Apple receives must be the build
+   *Why one export and altool (owner requirement R1).* The build Apple receives must be the build
    that was verified. A second `xcodebuild -exportArchive` with destination `upload` (the first OT-2b
    design) signs the app **again** in Apple's cloud and sends it in the same command, so its signature
    and cdhashes can never be compared with the verified ones before they leave the runner; it is removed
    and the guard refuses it. Instead there is one export, and the bytes uploaded are the bytes verified:
    the SHA-256 of the whole `.ipa` is checked immediately before the upload, which covers every
-   executable, `Info.plist`, entitlement and cdhash inside it. `altool` stays banned.
-   *Fail closed:* if Transporter is not on the runner, the job stops with "No Transporter on this runner"
-   and uploads nothing; there is no fallback to a second export. *UNVERIFIED until the first run* (not
-   checked under the machine rule): that `xcrun` or Transporter.app provides `iTMSTransporter` on the
-   `macos-26` image (it may only ship with Transporter.app, which the image may not have), the flags
-   `-m upload`, `-assetFile`, `-apiKey`, `-apiIssuer`, `-v informational`, whether an `-assetDescription`
-   is needed for an `.ipa`, that `~/.appstoreconnect/private_keys` is searched for the key, and the exact
-   "uploaded successfully" wording. If any is wrong the job fails at the upload step with nothing
-   uploaded; tell the lead (§6, risk 5).
+   executable, `Info.plist`, entitlement and cdhash inside it. *Why altool and not Transporter first:*
+   Apple's standalone Transporter download is gone, Transporter.app is only in the Mac App Store and is
+   not on GitHub's runners, and `iTMSTransporter` has not shipped with Xcode since Xcode 14, so a
+   Transporter-only upload could never run on `macos-26`. `altool` ships with Xcode and uploads a given
+   file as it is. It is allowed **only** in its two upload modes, on lines the guard pins exactly
+   (`--validate-app`, `--list-apps`, any notarization mode and every other mode are refused; §5.2).
+   *Fail closed:* no uploader, a changed or writable `.ipa`, or an upload not reported as successful:
+   the job fails, says so, and there is no fallback to a second export and no second upload attempt.
+   **UNVERIFIED until the first run** (not checked under the machine rule): the exact altool flags above,
+   in particular whether `--upload-package` on Xcode 26 needs `--apple-id` and the three `--bundle-*`
+   flags (they are passed in case it does) and accepts `--type ios`; that altool finds the key in
+   `~/.appstoreconnect/private_keys`; that `altool --help` lists the mode names as written; and the
+   exact "No errors uploading" success wording. If any is wrong the job fails at the upload step with
+   nothing uploaded (or, if the wording alone differs, after an upload that must be checked in App Store
+   Connect before any re-run); tell the lead (§6, risk 5).
 
 Both signing jobs install Flutter **without** the shared cache (`cache: false`). Every action is pinned
 to a full commit SHA. Inputs reach the shell only through `env`, never inside a `run` script.
@@ -287,7 +310,9 @@ review and release it.
    a key with access **App Manager**. The `.p8` downloads **once**. A team key needs Account Holder or
    Admin to create, and its access level cannot be changed afterwards.
 2. The app record for bundle id `com.jawwid.jawwidChat` must exist in App Store Connect (My Apps → +);
-   an upload for an unknown app is refused.
+   an upload for an unknown app is refused. Its numeric **Apple ID** (the app → App Information →
+   General Information → Apple ID) goes in the Environment **variable** `ASC_APP_APPLE_ID` (not a
+   secret; altool's `--upload-package` names the app by it).
 3. **For every version**, before it is ever submitted: the version page → **App Store Version Release** →
    **"Manually release this version"**. Then even an approved version waits for a person to release it.
 4. TestFlight: an internal testing group with automatic distribution receives new builds when processing
@@ -309,9 +334,19 @@ users), so tell the lead first.
 3. Variables: `SENTRY_ORG` = the organisation slug, `SENTRY_PROJECT` = `jawwid-chat-app`, and only for a
    self-hosted Sentry `SENTRY_URL` = `https://<host>/`.
 
-**UNVERIFIED:** the sentry-cli 3.x command names `debug-files upload` and `upload-proguard` (the 2.x names,
-not re-read for 3.8.2 under the machine rule). If one has changed, the job fails at the symbols step,
-**before** any store upload.
+**Checked against the sentry-cli 3.0 release notes:** `upload-proguard` still exists in 3.x (3.0 removed
+only its `--app-id`, `--version`, `--version-code`, `--android-manifest` and `--platform` arguments, none
+of which the workflow passes, and made chunked upload the default); `debug-files upload` is unchanged.
+The pinned 3.8.2 SHA-256 values match the digests GitHub shows for the release assets. If a command
+still fails, the job stops at the symbols step, **before** any store upload.
+
+**Known gap: Java/Kotlin stack frames are not de-obfuscated yet.** Sentry matches an Android event to its
+R8 mapping file by a ProGuard UUID that the app must declare (the `io.sentry.proguard-uuid` manifest
+entry, which the Sentry Android Gradle plugin writes at build time). The app does not declare one today,
+so Java/Kotlin frames in Android crash reports stay obfuscated even though the mapping is uploaded. The
+mapping upload is kept, so the files are already in Sentry. Dart frames (the split-debug-info symbols)
+and iOS frames (dSYMs) are not affected. The fix changes the Android build files and is a follow-up
+(§7), not part of this change.
 
 ### 3.6 (e) The Environment's secrets and variables
 
@@ -337,6 +372,7 @@ Variables (not secret):
 | `API_BASE_URL`, `PRIVACY_POLICY_URL`, `TERMS_URL`, `SUPPORT_URL`, `SUPPORT_EMAIL` | both | what `scripts/mobile/build-store.sh` reads (`docs/mobile/store-builds.md`) |
 | `SENTRY_ORG`, `SENTRY_PROJECT` | both | §3.5 |
 | `PLAY_WIF_PROVIDER`, `PLAY_SERVICE_ACCOUNT` | Android | §3.2 step 5 |
+| `ASC_APP_APPLE_ID` | iOS | the app's numeric Apple ID (§3.4 step 2); checked to be digits only before any build |
 | `LESSONS_ORIGIN`, `SENTRY_ENVIRONMENT`, `SENTRY_URL` | both, optional | lesson audio origin; Sentry environment (default `production`); self-hosted Sentry only |
 | `ANDROID_UPLOAD_CERT_SHA256` | Android, optional | the upload certificate's SHA-256 as Play Console shows it; any other signer then fails |
 
@@ -393,24 +429,33 @@ files. It fails if:
   `contents: read`, or `write-all` appears;
 - `play-upload.sh`'s constants are not exactly `com.jawwid.jawwid_chat` / `internal` / `draft`, are
   assigned more than once, read in or defaulted from anything, not used by its URLs and request body, or
-  its override refusal is gone;
-- any of `production`, `beta`, `alpha`, `rollout`, `completed`, `altool`, `iTMSTransporter`, `submit…`,
-  `appStoreVersionSubmissions`, `reviewSubmissions`, `releaseType` appears in the workflow or
-  `scripts/mobile/` (plus `inProgress`, `halted`, `userFraction` in `play-upload.sh`), except on the
-  listed workflow lines (the Sentry environment default, the `aps-environment` check, the Xcode selection
-  that skips pre-release Xcode, and the three lines that find Transporter) and the word `production` in
-  `build-store.sh` (its production-host check);
+  its override refusal is gone; or its track-answer check (exactly one draft of exactly
+  `[versionCode]`, no other release carrying it, every release a draft or `completed`) is not on its
+  pinned lines;
+- any of `production`, `beta`, `alpha`, `rollout`, `completed`, notarization (`notarize`/`notarise`,
+  `notarytool`), `iTMSTransporter`, `submit…`, `appStoreVersionSubmissions`, `reviewSubmissions`,
+  `releaseType` appears in the workflow or `scripts/mobile/` (plus `inProgress`, `halted`,
+  `userFraction` in `play-upload.sh`), except on the listed lines (the Sentry environment default, the
+  `aps-environment` check, the Xcode selection that skips pre-release Xcode, the two lines that find
+  Transporter, the one `play-upload.sh` line that accepts an earlier `completed` release) and the word
+  `production` in `build-store.sh` (its production-host check);
 - `upload-artifact` appears;
 - an action is not pinned to a full commit SHA;
 - an expression (`${{ … }}`) is written inside a `run` block;
 - a script in `scripts/mobile/` other than `play-upload.sh` talks to the Play Developer API, or anything
   calls the App Store Connect API directly;
 - **R1:** there is more than one `-exportArchive`, an export with destination `upload`, `uploadSymbols`
-  not exactly once and false, `iTMSTransporter` named anywhere but the three lines that find it, a
-  Transporter mode other than `-m upload`, more than one Transporter call or a call that uploads
-  anything but `"$VERIFIED_IPA"`, the verification step not recording `VERIFIED_IPA_SHA256`, the SHA-256
-  re-check missing or after the upload, or the iOS always-cleanup not deleting the key copied for
-  Transporter (`altool` stays banned with the store words above);
+  not exactly once and false; `altool` on any code line but its three pinned ones (`xcrun altool
+  --help`, and the `--upload-package` and `--upload-app` uploads of `"$VERIFIED_IPA"` with exactly the
+  flags of §1), so every other altool mode (`--validate-app`, `--list-apps`, notarization, …) is
+  refused; `xcrun` on any other line; `altool` or `xcrun` in `scripts/mobile/`; `iTMSTransporter` named
+  anywhere but the two lines that find it, or a Transporter mode other than `-m upload`; anything but
+  exactly one line per uploader, all in the `ios` job, each uploading `"$VERIFIED_IPA"` and each
+  **immediately** preceded by the SHA-256 re-check; the verification step not recording
+  `VERIFIED_IPA_SHA256` or not making the `.ipa` read-only, or the upload step not checking it is still
+  read-only before the uploads; success not requiring exit status 0 **and** the uploader's success line
+  (`No errors uploading` for both altool modes, `uploaded successfully` for Transporter); or the iOS
+  always-cleanup not deleting the key copied for the uploader;
 - **R2:** `google-github-actions/auth` appears anywhere but once in the `android` job, or before that
   job's identity assertions; `preflight` or `android` does not assert the repository id `1362573850`,
   owner id `183662661`, repository, `refs/heads/main` and the workflow ref; `android` or `ios` is not in
@@ -432,7 +477,11 @@ Each rule has at least one mutation in the selftest.
 tracks.update (internal, draft, the right name and versionCode) → commit, each with the token on stdin;
 every override is refused before any call; the token never appears in the output, on a curl command line
 or in curl's environment; a failing upload, track update or commit deletes the edit and exits non-zero;
-a versionCode mismatch is refused; the "package not found" answer prints the STOP message. It also checks
+a versionCode mismatch is refused; the "package not found" answer prints the STOP message; a track answer
+with an earlier `completed` release beside the draft is accepted and committed, while one with an
+`inProgress`, `halted` or unknown-status release, a `completed` release carrying the same versionCode,
+a second draft of it, a draft with extra versionCodes, no draft of ours or another track deletes the edit
+and never commits. It also checks
 `install-sentry-cli.sh` refuses a download with the wrong SHA-256.
 `test/scripts/build_store_script_test.dart` still covers `build-store.sh`.
 
@@ -446,14 +495,15 @@ a versionCode mismatch is refused; the "package not found" answer prints the STO
 2. **Google access.** `id-token: write` is on the Android job only, and only it signs in. A Google token
    is minted only for a job of the repository with id `1362573850` (owner id `183662661`), in
    `store-release`, on `refs/heads/main`, running this workflow file from `main` (the provider condition,
-   §3.2), after your approval; it lives 15 minutes and carries only the `androidpublisher` scope. In Play Console the
+   §3.2), after your approval; it lives 30 minutes (room for a large bundle upload) and carries only the `androidpublisher` scope. In Play Console the
    service account can release to testing tracks only; the script can only make an internal draft.
 3. **Apple access.** The App Store Connect key can do whatever its role allows (App Manager can submit
    for review and release versions in App Store Connect). The workflow never does: it only runs
-   `xcodebuild` archive/export and Transporter in upload mode, and the guard refuses any submission or
-   release call and any other Transporter mode. "Manually release this version" (§3.4) is the second lock.
+   `xcodebuild` archive/export and altool (or, failing it, Transporter) in an upload mode, and the guard
+   refuses any submission or release call and any other altool or Transporter mode. "Manually release
+   this version" (§3.4) is the second lock.
 4. **Logs.** Logs are readable by any logged-in GitHub user. Values pass through `env`, are never echoed,
-   and the scripts never use `set -x`. The `xcodebuild` and Transporter logs (the former lists the base64
+   and the scripts never use `set -x`. The `xcodebuild` and uploader logs (the former lists the base64
    dart-defines that carry the Sentry DSN) stay on the runner; only error/result lines are printed.
    sentry-cli's output is never printed (§1, "Sentry and the log"). `play-upload.sh` prints only status
    codes. No build output is kept as an artifact.
@@ -461,14 +511,13 @@ a versionCode mismatch is refused; the "package not found" answer prints the STO
    the archive's development signing works on a runner with no Apple account (`-allowProvisioningUpdates`
    may create development certificates that accumulate; revoke the CI-created ones periodically); that
    App Manager is enough (§3.4); that `--split-debug-info` is honoured through `--config-only` (the job
-   fails clearly if not); and everything about Transporter listed in §1 ("Why one export and
-   Transporter"). **Residual gap of R1:** the equivalence is proven up to the moment Transporter reads
-   the file (SHA-256 checked immediately before); what Apple stores after processing is not read back,
-   because nothing in the workflow may call the App Store Connect API. **If Transporter is missing on
-   `macos-26`**, the iOS job cannot upload at all until the lead proposes, and you approve, a way to
-   upload that same `.ipa` (for example Apple's App Store Connect "build uploads" API, which would need a
-   new, reviewed script and a guard change); a second export is not an option under R1.
-   **If the iOS job fails:** read the printed `error:` / `ERROR ITMS-` lines; "No Accounts"/"not
+   fails clearly if not); and everything about altool listed in §1 ("Why one export and altool").
+   **Residual gap of R1:** the equivalence is proven up to the moment the uploader reads the file
+   (SHA-256 checked on the line before); what Apple stores after processing is not read back, because
+   nothing in the workflow may call the App Store Connect API. **If altool's flags are wrong on
+   `macos-26`**, the job fails at the upload step and the lead corrects the pinned line (a reviewed
+   workflow and guard change); a second export is not an option under R1.
+   **If the iOS job fails:** read the printed `*** Error` / `error:` / `ERROR ITMS-` lines; "No Accounts"/"not
    authorized" points to the key's role; "No profiles"/"requires a provisioning profile" to provisioning;
    "already been uploaded" or "bundle version" to a reused `build_number`. Fix it in the Apple account;
    never weaken the verification.
@@ -481,7 +530,17 @@ a versionCode mismatch is refused; the "package not found" answer prints the STO
    the macOS wording is UNVERIFIED there). The Google Cloud project, Workload Identity Federation and the
    Play Developer API have no charge for this use (UNVERIFIED; check the project's billing page).
 
-## 7. Not run locally
+## 7. Follow-up items
+
+1. **Android de-obfuscation in Sentry (P2-3).** Make the app declare `io.sentry.proguard-uuid` (add the
+   Sentry Android Gradle plugin, or write the same UUID into the manifest and pass it to
+   `upload-proguard`), so Java/Kotlin frames are de-obfuscated with the mapping files this workflow
+   already uploads (§3.5). It changes the Android build files, so it is its own reviewed change.
+2. **altool flags (R1).** After the first iOS run, record which uploader ran (the run summary names it)
+   and which of the UNVERIFIED points in §1 held; trim the `--upload-package` flags to what Xcode 26
+   actually needs, in the workflow and the guard together.
+
+## 8. Not run locally
 
 Written under the machine rule: no workflow, script, test or build was run. CI (the guard's selftest and
 check, and the Dart tests) and the first approved runs are the evidence.

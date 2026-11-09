@@ -61,7 +61,10 @@ all passed through the environment:
 
 - Android: `sentry-cli debug-files upload build/symbols/android/<BUILD_NAME>+<BUILD_NUMBER>`, and
   `sentry-cli upload-proguard build/app/outputs/mapping/release/mapping.txt` when the R8 mapping file
-  exists (the 3.x command names are UNVERIFIED; a wrong one fails the job before any upload);
+  exists (both commands checked against the sentry-cli 3.0 release notes). Until the app declares
+  `io.sentry.proguard-uuid` (Sentry Android Gradle plugin; a follow-up in
+  `docs/release/signed-builds-ci.md` §7), Sentry cannot match the mapping to an event, so Java/Kotlin
+  frames stay obfuscated; Dart frames are not affected;
 - iOS: `sentry-cli debug-files upload` on the archive's `dSYMs` and on
   `build/symbols/ios/<BUILD_NAME>+<BUILD_NUMBER>`.
 

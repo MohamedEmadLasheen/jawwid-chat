@@ -178,10 +178,17 @@ jq -n --arg track "$TRACK" --arg status "$RELEASE_STATUS" --arg name "$RELEASE_N
   '{track: $track, releases: [{name: $name, versionCodes: [$code], status: $status}]}' > "$W/track-request.json"
 call PUT "$API/$PACKAGE_NAME/edits/$EDIT_ID/tracks/$TRACK" "$W/track.json" "$W/track-request.json" application/json \
   || failed "edits.tracks.update" "$W/track.json"
-jq -e --arg track "$TRACK" --arg status "$RELEASE_STATUS" --arg code "$BUILD_NUMBER" \
-  '.track == $track and (.releases | length) == 1 and .releases[0].status == $status
-   and ((.releases[0].versionCodes // []) | map(tostring)) == [$code]' "$W/track.json" > /dev/null 2>&1 \
-  || { err "edits.tracks.update: Play's answer is not exactly one $RELEASE_STATUS release of versionCode $BUILD_NUMBER on $TRACK"; exit 1; }
+# Play may answer with the track's other releases too (an earlier, finished internal release).
+# Accepted only if: exactly one release is ours (status draft, versionCodes exactly [code]); no other
+# release carries this versionCode; and every release is either a draft or a finished one, so none
+# is staged, paused or of a status this script does not know. Anything else: the edit is deleted.
+jq -e --arg track "$TRACK" --arg status "$RELEASE_STATUS" --arg code "$BUILD_NUMBER" '
+  def codes: (.versionCodes // []) | map(tostring);
+  .track == $track
+  and ([.releases[]? | select(.status == $status and codes == [$code])] | length) == 1
+  and ([.releases[]? | select(codes | any(.[]; . == $code))] | length) == 1
+  and all(.releases[]?; .status == $status or .status == "completed")' "$W/track.json" > /dev/null 2>&1 \
+  || { err "edits.tracks.update: Play's answer is not one $RELEASE_STATUS release of versionCode $BUILD_NUMBER on $TRACK with every other release finished and not carrying it"; exit 1; }
 say "edits.tracks.update: HTTP $HTTP_CODE, track $TRACK, status $RELEASE_STATUS, name '$RELEASE_NAME'"
 
 # ---- 4. edits.commit ---------------------------------------------------------------------------

@@ -7,7 +7,10 @@
 //   - every override of the package, track or status is refused before any call;
 //   - the token never appears in the output;
 //   - a failing step deletes the edit, exits non-zero and never commits;
-//   - Google's "package not found" answer for an app with no upload yet prints the STOP message.
+//   - Google's "package not found" answer for an app with no upload yet prints the STOP message;
+//   - the track answer is accepted with an earlier finished release beside our draft, and refused
+//     (edit deleted, never committed) when any release is staged or paused, when another release
+//     carries our versionCode, or when our draft is not there.
 // scripts/mobile/install-sentry-cli.sh refuses a download that does not match its pinned SHA-256.
 //
 // Needs bash and jq on PATH (both on the CI runners).
@@ -82,7 +85,10 @@ case "$step" in
     if command -v sha256sum > /dev/null 2>&1; then sha="$(sha256sum "$data" | awk '{print $1}')"
     else sha="$(shasum -a 256 "$data" | awk '{print $1}')"; fi
     answer 200 "{\"versionCode\":${FAKE_VERSION_CODE:-45},\"sha1\":\"x\",\"sha256\":\"$sha\"}" ;;
-  track) cp "$data" "$FAKE_DIR/track-body.json"; answer 200 "$(cat "$data")" ;;
+  track)
+    cp "$data" "$FAKE_DIR/track-body.json"
+    if [ -n "${FAKE_TRACK_ANSWER_FILE:-}" ]; then answer 200 "$(cat "$FAKE_TRACK_ANSWER_FILE")"
+    else answer 200 "$(cat "$data")"; fi ;;
   commit) answer 200 '{"id":"0123456789"}' ;;
   delete) answer 204 '' ;;
   *) answer 404 '{"error":{"code":404,"status":"NOT_FOUND"}}'; exit 22 ;;
@@ -278,6 +284,117 @@ void main() {
     expect(atUpload.result.stderr, contains(_stop));
     expect(atUpload.steps, ['insert', 'upload', 'delete']);
     expectNoToken(atUpload);
+  });
+
+  Map<String, Object> ourDraft() => {
+        'name': '1.2.3 (45)',
+        'versionCodes': ['45'],
+        'status': 'draft',
+      };
+
+  _Run runWithTrackAnswer(Map<String, Object> answer) {
+    for (final f in tmp.listSync().whereType<File>()) {
+      if (f.path.endsWith('.log') || f.path.contains('/auth.')) f.deleteSync();
+    }
+    final file = File('${tmp.path}/track-answer.json')..writeAsStringSync(jsonEncode(answer));
+    return run(env: {'FAKE_TRACK_ANSWER_FILE': file.path});
+  }
+
+  test('track answer with an earlier completed release beside our draft: accepted and committed', () {
+    final r = runWithTrackAnswer({
+      'track': 'internal',
+      'releases': [
+        {
+          'name': '1.2.2 (44)',
+          'versionCodes': ['44'],
+          'status': 'completed',
+        },
+        ourDraft(),
+      ],
+    });
+    expect(r.result.exitCode, 0, reason: r.out);
+    expect(r.steps, ['insert', 'upload', 'track', 'commit']);
+    expectNoToken(r);
+  });
+
+  test('track answer that is not safe to commit: the edit is deleted, never committed', () {
+    final cases = <String, Map<String, Object>>{
+      'an inProgress release beside our draft': {
+        'track': 'internal',
+        'releases': [
+          {
+            'versionCodes': ['44'],
+            'status': 'inProgress',
+            'userFraction': 0.1,
+          },
+          ourDraft(),
+        ],
+      },
+      'a halted release beside our draft': {
+        'track': 'internal',
+        'releases': [
+          {
+            'versionCodes': ['44'],
+            'status': 'halted',
+          },
+          ourDraft(),
+        ],
+      },
+      'a completed release that carries our versionCode': {
+        'track': 'internal',
+        'releases': [
+          {
+            'versionCodes': ['45'],
+            'status': 'completed',
+          },
+          ourDraft(),
+        ],
+      },
+      'a release of an unknown status beside our draft': {
+        'track': 'internal',
+        'releases': [
+          {
+            'versionCodes': ['44'],
+            'status': 'statusUnspecified',
+          },
+          ourDraft(),
+        ],
+      },
+      'our versionCode as a second draft': {
+        'track': 'internal',
+        'releases': [ourDraft(), ourDraft()],
+      },
+      'our draft carries another versionCode too': {
+        'track': 'internal',
+        'releases': [
+          {
+            'versionCodes': ['45', '46'],
+            'status': 'draft',
+          },
+        ],
+      },
+      'no draft of ours, only a completed release': {
+        'track': 'internal',
+        'releases': [
+          {
+            'versionCodes': ['44'],
+            'status': 'completed',
+          },
+        ],
+      },
+      'another track': {
+        'track': 'qa',
+        'releases': [ourDraft()],
+      },
+    };
+    for (final e in cases.entries) {
+      final r = runWithTrackAnswer(e.value);
+      expect(r.result.exitCode, isNot(0), reason: e.key);
+      expect(r.steps, ['insert', 'upload', 'track', 'delete'], reason: e.key);
+      expect(r.result.stderr, contains('edits.tracks.update'), reason: e.key);
+      expect(r.result.stderr, contains('deleted'), reason: e.key);
+      expectNoToken(r);
+    }
   });
 
   test('the package, track and status are readonly constants in the script', () {

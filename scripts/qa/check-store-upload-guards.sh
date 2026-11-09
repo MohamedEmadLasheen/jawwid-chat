@@ -11,10 +11,12 @@
 #     but contents: read, or write-all appears);
 #   - scripts/mobile/play-upload.sh's package, track or status constants are not exactly
 #     com.jawwid.jawwid_chat / internal / draft, are assigned more than once, are read from
-#     anywhere, are not what its URLs and request body use, or its override refusal is gone;
+#     anywhere, are not what its URLs and request body use, or its override refusal is gone; or its
+#     track-answer check (one draft of exactly [versionCode], no other release carrying it, every
+#     release a draft or a finished one) is not on its pinned lines;
 #   - a store channel or action word appears in the workflow or scripts/mobile (production, beta,
-#     alpha, rollout, completed, the old Apple upload tool, submit..., the App Store review and
-#     release-type API names), outside the few lines listed in ALLOW below;
+#     alpha, rollout, completed, notarization, the Transporter binary name, submit..., the App Store
+#     review and release-type API names), outside the few lines listed in ALLOW below;
 #   - a GitHub artifact upload appears;
 #   - any action is not pinned to a full commit SHA;
 #   - an expression (an input or anything else) is written inside a run block: inputs reach the
@@ -22,9 +24,13 @@
 #   - a script in scripts/mobile other than play-upload.sh talks to the Play Developer API, or
 #     anything calls the App Store Connect API directly;
 #   - (R1) the iOS upload is not the exact verified .ipa: more than one exportArchive, an export
-#     with destination upload, uploadSymbols not false, Apple's Transporter named outside its three
-#     listed lines, a Transporter mode other than `-m upload`, an upload of any file but
-#     "$VERIFIED_IPA", or the SHA-256 re-check of that file missing or after the upload;
+#     with destination upload, uploadSymbols not false; altool on any line but its pinned help,
+#     --upload-package and --upload-app lines (so no other altool mode), xcrun on any other line,
+#     altool or xcrun in scripts/mobile; Transporter named outside its listed lines or in a mode
+#     other than `-m upload`; anything but exactly one line per uploader, each uploading
+#     "$VERIFIED_IPA" and each IMMEDIATELY preceded by the SHA-256 re-check; the .ipa not made
+#     read-only, or not checked still read-only before the upload; success not requiring exit 0
+#     AND the uploader's own success line ("No errors uploading" for altool);
 #   - (R2) the Google sign-in (google-github-actions/auth) is anywhere but once in the android job,
 #     after that job's identity check; preflight or android does not assert the repository id,
 #     owner id, repository, ref and workflow ref; android or ios is not in store-release;
@@ -66,7 +72,9 @@ WORDS = [
     ('alpha', r'\balpha\b'),
     ('rollout', r'\brollout'),
     ('completed', r'\bcompleted\b'),
-    ('altool', r'\baltool\b'),
+    # altool is checked by check_ios_upload (only its pinned upload and help lines); notarization
+    # is never a store-upload step.
+    ('notarize', r'notari[sz]|notarytool'),
     ('iTMSTransporter', r'itmstransporter'),
     ('submit', r'\bsubmit'),
     ('appStoreVersionSubmissions', r'appstoreversionsubmissions'),
@@ -88,16 +96,28 @@ ALLOW = [
     (WORKFLOW, 'production', r'^\s*\[ "\$\(get "\$B/entitlements\.plist" aps-environment\)" = production \] && rec PASS "aps-environment production" \|\| rec FAIL "aps-environment is not production"\s*$'),
     # Xcode selection skips pre-release Xcode installs.
     (WORKFLOW, 'beta', r'^\s*x="\$\(ls -d /Applications/Xcode_26\*\.app 2>/dev/null \| grep -vi beta \| sort -V \| tail -1\)"\s*$'),
-    # R1: finding Apple's Transporter, which uploads the verified .ipa itself (never altool). It is
+    # R1: finding Apple's Transporter, the last fallback after altool's two upload modes. It is
     # invoked as "$T" on one line, checked by check_ios_upload.
     (WORKFLOW, 'iTMSTransporter', r'^\s*T="\$\(xcrun --find iTMSTransporter 2>/dev/null \|\| true\)"\s*$'),
     (WORKFLOW, 'iTMSTransporter', r'^\s*TA=/Applications/Transporter\.app/Contents/itms/bin/iTMSTransporter\s*$'),
-    (WORKFLOW, 'iTMSTransporter', r'^\s*\[ -n "\$T" \] \|\| \{ echo "::error title=No Transporter on this runner::xcrun iTMSTransporter and Transporter\.app were not found\. Nothing was uploaded\. The verified \.ipa is uploaded byte for byte or not at all \(no second export, no other uploader\); tell the lead\."; exit 1; \}\s*$'),
+    # P2-1: play-upload.sh accepts a track answer whose other releases are finished ones only. This
+    # one line, exactly, may name that status.
+    (PLAY, 'completed', r'^  and all\(\.releases\[\]\?; \.status == \$status or \.status == "completed"\)\' "\$W/track\.json" > /dev/null 2>&1 \\$'),
     # The build script refuses non-production API hosts and names the Sentry environment; it
     # never talks to a store (no Play API, checked below).
     ('scripts/mobile/build-store.sh', 'production', None),
 ]
 
+PLAY_TRACK_ANSWER = [
+    ('exactly one draft release of exactly [versionCode]',
+     r'^  and \(\[\.releases\[\]\? \| select\(\.status == \$status and codes == \[\$code\]\)\] \| length\) == 1$'),
+    ('no other release carrying the versionCode',
+     r'^  and \(\[\.releases\[\]\? \| select\(codes \| any\(\.\[\]; \. == \$code\)\)\] \| length\) == 1$'),
+    ('every release a draft or a finished one',
+     r'^  and all\(\.releases\[\]\?; \.status == \$status or \.status == "completed"\)\' "\$W/track\.json" > /dev/null 2>&1 \\$'),
+    ('the versionCodes of a release, as strings',
+     r'^  def codes: \(\.versionCodes // \[\]\) \| map\(tostring\);$'),
+]
 PLAY_CONSTANTS = {
     'PACKAGE_NAME': 'com.jawwid.jawwid_chat',
     'TRACK': 'internal',
@@ -251,6 +271,11 @@ def check_play(text, errors):
     for m in re.finditer(r'\$(?:UPLOAD_)?API/(\S*)', text):
         if not m.group(1).startswith('$PACKAGE_NAME/'):
             errors.append(f'{PLAY}: a Play API URL that does not use $PACKAGE_NAME')
+    # P2-1: the track answer is committed only if it holds our one draft, no other release carries
+    # this versionCode, and every release is a draft or a finished one (none staged or paused).
+    for what, rx in PLAY_TRACK_ANSWER:
+        if len(re.findall(rx, text, re.M)) != 1:
+            errors.append(f'{PLAY}: the track answer check must require {what}, on its one pinned line')
     for arg, const in (('status', 'RELEASE_STATUS'), ('track', 'TRACK')):
         for m in re.finditer(r'--arg %s (\S+)' % arg, text):
             if m.group(1) != '"$%s"' % const:
@@ -323,20 +348,72 @@ def check_identity(text, errors):
             errors.append(f'{WORKFLOW}: the {ID_TOKEN_JOB} job signs in to Google before asserting its identity (R2)')
 
 
-# R1: one export; the exact verified .ipa is what Transporter uploads.
+# R1: one export; the exact verified .ipa is what is uploaded, by altool in an upload mode
+# (--upload-package, else --upload-app) or, failing both, by Transporter. Every altool, xcrun and
+# "$T" line is pinned; each upload line is immediately preceded by the SHA-256 re-check.
 TRANSPORTER_LINES = [
     r'^\s*T="\$\(xcrun --find iTMSTransporter 2>/dev/null \|\| true\)"\s*$',
     r'^\s*\[ -n "\$T" \] \|\| \[ ! -x "\$TA" \] \|\| T="\$TA"\s*$',
-    r'^\s*\[ -n "\$T" \] \|\| \{ echo "::error title=No Transporter on this runner::[^"]*"; exit 1; \}\s*$',
+    r'^\s*\[ -n "\$T" \] \|\| \{ echo "::error title=No uploader on this runner::[^"]*"; exit 1; \}\s*$',
 ]
-TRANSPORTER_INVOKE = (r'^\s*if ! "\$T" -m upload -assetFile "\$VERIFIED_IPA" -apiKey "\$ASC_API_KEY_ID" '
-                      r'-apiIssuer "\$ASC_API_ISSUER_ID" -v informational > "\$B/transporter\.log" 2>&1; then\s*$')
+UPLOAD_LOG = r' > "\$B/upload\.log" 2>&1 \|\| rc=\$\?\s*$'
+TRANSPORTER_INVOKE = (r'^\s*"\$T" -m upload -assetFile "\$VERIFIED_IPA" -apiKey "\$ASC_API_KEY_ID" '
+                      r'-apiIssuer "\$ASC_API_ISSUER_ID" -v informational' + UPLOAD_LOG)
+ALTOOL_HELP = r'^\s*AH="\$\(xcrun altool --help 2>&1 \|\| true\)"\s*$'
+ALTOOL_PACKAGE = (r'^\s*xcrun altool --upload-package "\$VERIFIED_IPA" --type ios --apple-id "\$ASC_APP_APPLE_ID" '
+                  r'--bundle-id "\$VERIFIED_BUNDLE_ID" --bundle-version "\$VERIFIED_BUILD" '
+                  r'--bundle-short-version-string "\$VERIFIED_VERSION" --apiKey "\$ASC_API_KEY_ID" '
+                  r'--apiIssuer "\$ASC_API_ISSUER_ID"' + UPLOAD_LOG)
+ALTOOL_APP = (r'^\s*xcrun altool --upload-app -f "\$VERIFIED_IPA" --type ios --apiKey "\$ASC_API_KEY_ID" '
+              r'--apiIssuer "\$ASC_API_ISSUER_ID"' + UPLOAD_LOG)
+UPLOADS = [('altool --upload-package', ALTOOL_PACKAGE), ('altool --upload-app', ALTOOL_APP),
+           ('Transporter', TRANSPORTER_INVOKE)]
+ALTOOL_LINES = [ALTOOL_HELP, ALTOOL_PACKAGE, ALTOOL_APP]
+XCRUN_LINES = ALTOOL_LINES + [TRANSPORTER_LINES[0]]
+# Success is exit status 0 AND the uploader's own success line: "No errors uploading" for both
+# altool modes (UNVERIFIED wording, docs/release/signed-builds-ci.md), "uploaded successfully" for
+# Transporter.
+OK_ALTOOL = r"^\s*OK='No errors uploading'\s*$"
+OK_TRANSPORTER = r"^\s*OK='uploaded successfully'\s*$"
+UPLOAD_SUCCESS = r'^\s*if \[ "\$rc" -ne 0 \] \|\| ! grep -qF "\$OK" "\$B/upload\.log" \\\s*$'
 SHA_RECHECK = (r'^\s*\[ "\$\(shasum -a 256 "\$VERIFIED_IPA" \| awk \'\{print \$1\}\'\)" = "\$VERIFIED_IPA_SHA256" \] '
                r'\|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$')
+STEP_NAME = r'^\s*(-\s+)?name\s*:'
 
 
 def check_ios_upload(text, errors):
     code = code_lines(text)
+    for n, l in code:
+        if re.match(STEP_NAME, l):
+            continue
+        if re.search(r'\baltool\b', l, re.I) and not any(re.match(rx, l) for rx in ALTOOL_LINES):
+            errors.append(f'{WORKFLOW}:{n}: altool used other than on its pinned lines (help, --upload-package or '
+                          f'--upload-app of "$VERIFIED_IPA"): no other mode (R1)')
+        if re.search(r'\bxcrun\b', l) and not any(re.match(rx, l) for rx in XCRUN_LINES):
+            errors.append(f'{WORKFLOW}:{n}: xcrun used other than on its pinned lines (R1)')
+    for what, rx in [('altool help', ALTOOL_HELP)] + UPLOADS:
+        found = [n for n, l in code if re.match(rx, l)]
+        if len(found) != 1:
+            errors.append(f'{WORKFLOW}: expected exactly one {what} line, found lines {found} (R1)')
+    ios_code = [(n, l) for n, l in job_bodies(text).get('ios', []) if l.strip() and not l.strip().startswith('#')]
+    upload_lines = []
+    for i, (n, l) in enumerate(ios_code):
+        for what, rx in UPLOADS:
+            if re.match(rx, l):
+                upload_lines.append(n)
+                if i == 0 or not re.match(SHA_RECHECK, ios_code[i - 1][1]):
+                    errors.append(f'{WORKFLOW}:{n}: the {what} upload is not immediately preceded by the SHA-256 '
+                                  f're-check of the verified .ipa (R1)')
+    if len(upload_lines) != len(UPLOADS):
+        errors.append(f'{WORKFLOW}: the uploads of the verified .ipa must all be in the ios job (R1)')
+    oks = [n for n, l in code if re.match(r'^\s*OK=', l)]
+    if len([n for n, l in code if re.match(OK_ALTOOL, l)]) != 2 \
+            or len([n for n, l in code if re.match(OK_TRANSPORTER, l)]) != 1 or len(oks) != 3:
+        errors.append(f'{WORKFLOW}: each altool upload must expect "No errors uploading" and Transporter '
+                      f'"uploaded successfully", and nothing else (R1)')
+    success = [n for n, l in ios_code if re.match(UPLOAD_SUCCESS, l)]
+    if len(success) != 1 or not upload_lines or success[0] < max(upload_lines):
+        errors.append(f'{WORKFLOW}: the upload must fail unless the uploader exits 0 AND prints its success line (R1)')
     exports = [n for n, l in code if '-exportArchive' in l]
     if len(exports) != 1:
         errors.append(f'{WORKFLOW}: expected exactly one -exportArchive (the verified local export), found lines {exports} (R1)')
@@ -353,25 +430,20 @@ def check_ios_upload(text, errors):
         for m in re.finditer(r'(?:^|\s)-m\s*(\S+)', l):
             if m.group(1) != 'upload':
                 errors.append(f'{WORKFLOW}:{n}: Transporter mode `-m {m.group(1)}`: only `-m upload` is allowed (R1)')
-    invokes = []
     for n, l in code:
-        if not re.search(r'\$T\b', l):
-            continue
-        if re.match(TRANSPORTER_INVOKE, l):
-            invokes.append(n)
-        elif not any(re.match(rx, l) for rx in TRANSPORTER_LINES):
+        if re.search(r'\$T\b', l) and not re.match(TRANSPORTER_INVOKE, l) \
+                and not any(re.match(rx, l) for rx in TRANSPORTER_LINES):
             errors.append(f'{WORKFLOW}:{n}: Transporter used other than to upload "$VERIFIED_IPA" once (R1)')
-    if len(invokes) != 1:
-        errors.append(f'{WORKFLOW}: expected exactly one Transporter upload of "$VERIFIED_IPA", found {len(invokes)} (R1)')
     ios = job_bodies(text).get('ios', [])
-    recheck = first(ios, SHA_RECHECK)
-    if recheck is None or not invokes or recheck > invokes[0]:
-        errors.append(f'{WORKFLOW}: the ios job must re-check the verified .ipa\'s SHA-256 right before the upload (R1)')
     if first(ios, r'^\s*echo "VERIFIED_IPA_SHA256=\$sha" >> "\$GITHUB_ENV"\s*$') is None:
         errors.append(f'{WORKFLOW}: the verification step must record VERIFIED_IPA_SHA256 (R1)')
+    made_ro = first(ios, r'^\s*chmod a-w "\$IPA"\s*$')
+    still_ro = first(ios, r'^\s*\[ ! -w "\$VERIFIED_IPA" \] \|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$')
+    if made_ro is None or still_ro is None or not upload_lines or still_ro > min(upload_lines):
+        errors.append(f'{WORKFLOW}: the verified .ipa must be made read-only and checked still read-only before the upload (R1)')
     always = first(ios, r'^\s*if: always\(\)\s*$')
     if always is None or not any(n > always and re.search(r'rm -f .*\.appstoreconnect/private_keys/', l) for n, l in ios):
-        errors.append(f'{WORKFLOW}: the ios always-cleanup must delete the key copied for Transporter (R1)')
+        errors.append(f'{WORKFLOW}: the ios always-cleanup must delete the key copied for the uploader (R1)')
 
 
 # R3: Sentry gets the token only through env, prints nothing it was given, and leaves nothing behind.
@@ -437,6 +509,8 @@ def check_words(files, errors):
                               for p, w, lr in ALLOW)
                 if not allowed:
                     errors.append(f'{path}:{n}: `{word}` must not appear here (store channel or action)')
+            if path.startswith(MOBILE + '/') and re.search(r'\baltool\b|\bxcrun\b', line, re.I):
+                errors.append(f'{path}:{n}: altool and xcrun belong only on the workflow\'s pinned upload lines (R1)')
             if path != PLAY and path.startswith(MOBILE + '/') and re.search(r'androidpublisher', line, re.I):
                 errors.append(f'{path}:{n}: only {PLAY} may talk to the Play Developer API')
             if re.search(r'api\.appstoreconnect\.apple\.com', line, re.I):
@@ -487,6 +561,8 @@ IDENTITY_MUTATIONS = [
 ]
 SYM_CALL = '          sq "Dart symbols" debug-files upload "$SYM"\n'
 SHA_LINE = '[ "$(shasum -a 256 "$VERIFIED_IPA" | awk \'{print $1}\')" = "$VERIFIED_IPA_SHA256" ]'
+AH_LINE = '          AH="$(xcrun altool --help 2>&1 || true)"\n'
+ALTOOL_APP_START = '            xcrun altool --upload-app'
 AUTH_STEP = '      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0\n'
 
 
@@ -494,15 +570,33 @@ def mutations_r123():
     W = WORKFLOW
     m = [
         # R1
-        ('a second export', W, lambda t: replaced(t, '          T="$(xcrun --find', '          xcodebuild -exportArchive -archivePath "$B/Runner.xcarchive" -exportPath "$B/upload"\n          T="$(xcrun --find')),
+        ('a second export', W, lambda t: replaced(t, AH_LINE, '          xcodebuild -exportArchive -archivePath "$B/Runner.xcarchive" -exportPath "$B/upload"\n' + AH_LINE)),
         ('an export with destination upload', W, lambda t: replaced(t, '<key>destination</key><string>export</string>', '<key>destination</key><string>upload</string>')),
         ('symbols uploaded to Apple', W, lambda t: replaced(t, '<key>uploadSymbols</key><false/>', '<key>uploadSymbols</key><true/>')),
         ('another Transporter mode', W, lambda t: replaced(t, '"$T" -m upload', '"$T" -m lookupMetadata')),
-        ('a second Transporter call', W, lambda t: replaced(t, '          if ! "$T" -m upload', '          "$T" -m upload -assetFile "$VERIFIED_IPA"\n          if ! "$T" -m upload')),
-        ('an upload of another file', W, lambda t: replaced(t, '-assetFile "$VERIFIED_IPA"', '-assetFile "$B/export/Runner.ipa"')),
+        ('a second Transporter call', W, lambda t: replaced(t, '            "$T" -m upload -assetFile', '            "$T" -m upload -assetFile "$VERIFIED_IPA"\n            "$T" -m upload -assetFile')),
+        ('a Transporter upload of another file', W, lambda t: replaced(t, '-assetFile "$VERIFIED_IPA"', '-assetFile "$B/export/Runner.ipa"')),
         ('the SHA-256 re-check removed', W, lambda t: replaced(t, SHA_LINE, '[ -n "$VERIFIED_IPA_SHA256" ]')),
+        ('the SHA-256 re-check not right before an upload', W, lambda t: replaced(t, ALTOOL_APP_START, '            cp "$B/export/other.ipa" "$VERIFIED_IPA" || true\n' + ALTOOL_APP_START)),
         ('the SHA-256 not recorded', W, lambda t: replaced(t, 'echo "VERIFIED_IPA_SHA256=$sha"', 'echo "VERIFIED_IPA_SHA=$sha"')),
-        ('the Transporter key left behind', W, lambda t: replaced(t, '|| rm -f "$HOME/.appstoreconnect/private_keys/', '|| echo "$HOME/.appstoreconnect/keys/')),
+        ('the .ipa not made read-only', W, lambda t: replaced(t, '          chmod a-w "$IPA"\n', '')),
+        ('the read-only check before the upload removed', W, lambda t: replaced(t, '[ ! -w "$VERIFIED_IPA" ] ||', '[ -f "$VERIFIED_IPA" ] ||')),
+        ('the uploader key left behind', W, lambda t: replaced(t, '|| rm -f "$HOME/.appstoreconnect/private_keys/', '|| echo "$HOME/.appstoreconnect/keys/')),
+        # R1, altool: upload modes of the verified .ipa only.
+        ('altool --validate-app', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun altool --validate-app -f "$VERIFIED_IPA" --type ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"\n')),
+        ('altool --notarize-app', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun altool --notarize-app -f "$VERIFIED_IPA" --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"\n')),
+        ('altool --list-apps', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun altool --list-apps --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/apps.txt" 2>&1 || true\n')),
+        ('altool found through a variable', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          A="$(xcrun --find altool)"\n')),
+        ('another tool through xcrun', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun stapler validate "$VERIFIED_IPA" || true\n')),
+        ('a second altool upload', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          ' + SHA_LINE + ' || { echo "::error::x"; exit 1; }\n          xcrun altool --upload-app -f "$VERIFIED_IPA" --type ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?\n')),
+        ('altool --upload-package of another file', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA"', '--upload-package "$B/export/Runner.ipa"')),
+        ('altool --upload-app of another file', W, lambda t: replaced(t, '--upload-app -f "$VERIFIED_IPA"', '--upload-app -f "$B/check/Runner.ipa"')),
+        ('altool --upload-package with a bundle id not read from the .ipa', W, lambda t: replaced(t, '--bundle-id "$VERIFIED_BUNDLE_ID"', '--bundle-id "$BUNDLE_ID"')),
+        ('altool --upload-package removed', W, lambda t: replaced(t, '            xcrun altool --upload-package', '            : altool-free')),
+        ('altool success wording not required', W, lambda t: replaced(t, "OK='No errors uploading'", "OK=''")),
+        ('the success line not checked', W, lambda t: replaced(t, '! grep -qF "$OK" "$B/upload.log"', '! true')),
+        ('the upload exit status not checked', W, lambda t: replaced(t, 'if [ "$rc" -ne 0 ] || ! grep -qF', 'if ! grep -qF')),
+        ('altool in a mobile script', 'scripts/mobile/zz-selftest.sh', lambda t: 'xcrun altool --upload-app -f x.ipa --type ios\n'),
         # R2
         ('a Google sign-in in the ios job', W, lambda t: replaced(t, '      - name: Select Xcode 26 explicitly\n', AUTH_STEP + '      - name: Select Xcode 26 explicitly\n')),
         ('a second Google sign-in in android', W, lambda t: replaced(t, '      - name: Upload the App Bundle to Play internal testing as a draft release\n', AUTH_STEP + '      - name: Upload the App Bundle to Play internal testing as a draft release\n')),
@@ -555,6 +649,10 @@ def mutations():
         ('a status not bound to the constant', P, lambda t: replaced(t, '--arg status "$RELEASE_STATUS"', '--arg status "${STATUS:-draft}"')),
         ('the override refusal removed', P, lambda t: replaced(t, 'PLAY_*) overrides=', 'PLAY_*) ignored=')),
         ('a staged-release fraction in the Play script', P, lambda t: t + '\n# userFraction 0.1\n'),
+        ('the track answer check lets a staged release through', P, lambda t: replaced(t, 'or .status == "completed")', 'or .status == "completed" or .status == "inProgress")')),
+        ('the track answer check accepts any status', P, lambda t: replaced(t, '  and all(.releases[]?; .status == $status or .status == "completed")', '  and true')),
+        ('the track answer check lets another release carry the code', P, lambda t: replaced(t, '  and ([.releases[]? | select(codes | any(.[]; . == $code))] | length) == 1\n', '')),
+        ('the track answer check without our one draft', P, lambda t: replaced(t, 'select(.status == $status and codes == [$code])] | length) == 1', 'select(.status == $status)] | length) >= 1')),
         ('an artifact upload step', W, lambda t: t + '      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n'),
         ('an unpinned action', W, lambda t: replaced(t, 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683', 'actions/checkout@v4')),
         ('an action pinned to a short SHA', W, lambda t: replaced(t, 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683', 'actions/checkout@11bd719')),
@@ -583,7 +681,7 @@ def main(mode):
             return 1
         print('store upload guards: workflow_dispatch only; id-token only in android; Play upload fixed to '
               'com.jawwid.jawwid_chat / internal / draft; no other channel or action; no artifacts; actions pinned; '
-              'no expression in a run block; iOS uploads the verified .ipa only (R1); identity asserted, Google '
+              'no expression in a run block; iOS uploads the verified .ipa only, altool in upload modes only (R1); identity asserted, Google '
               'sign-in only in android (R2); Sentry token env-only, output captured, symbols cleaned up (R3)')
         return 0
     base = check(files)
