@@ -188,6 +188,10 @@ def cmd_status() -> int:
 # libpq URI query parameters that have a standard PG* environment variable.
 # Anything else is refused: dropping it silently could weaken the connection
 # (e.g. lose a TLS setting) without anyone noticing.
+#
+# `service` is refused on purpose even though PGSERVICE exists: libpq reads a
+# service file BEFORE the PG* variables, so a service file's `options=` would
+# beat PGOPTIONS and drop the read-only setting `legal` appends.
 PG_QUERY_ENV = {
     "host": "PGHOST",
     "hostaddr": "PGHOSTADDR",
@@ -203,10 +207,23 @@ PG_QUERY_ENV = {
     "sslcert": "PGSSLCERT",
     "sslkey": "PGSSLKEY",
     "sslcrl": "PGSSLCRL",
+    "sslcrldir": "PGSSLCRLDIR",
+    "sslsni": "PGSSLSNI",
+    "sslcertmode": "PGSSLCERTMODE",
+    "sslnegotiation": "PGSSLNEGOTIATION",
+    "ssl_min_protocol_version": "PGSSLMINPROTOCOLVERSION",
+    "ssl_max_protocol_version": "PGSSLMAXPROTOCOLVERSION",
+    "require_auth": "PGREQUIREAUTH",
     "channel_binding": "PGCHANNELBINDING",
     "gssencmode": "PGGSSENCMODE",
+    "passfile": "PGPASSFILE",
     "target_session_attrs": "PGTARGETSESSIONATTRS",
+    "load_balance_hosts": "PGLOADBALANCEHOSTS",
 }
+# libpq takes a comma-separated list in these; this tool connects to one host.
+PG_LIST_PARAMS = ("host", "hostaddr", "port")
+SEVERAL_HOSTS = "DATABASE_URL names several hosts or ports; give one host"
+PG_READ_ONLY = "-c default_transaction_read_only=on"
 
 
 def pg_env(url: str) -> dict[str, str]:
@@ -225,8 +242,11 @@ def pg_env(url: str) -> dict[str, str]:
         raise ValueError("DATABASE_URL must start with postgres:// or postgresql://")
     if parts.fragment:
         raise ValueError("DATABASE_URL has a #fragment, which libpq does not accept")
-    if "," in parts.netloc:
-        raise ValueError("DATABASE_URL names several hosts; give one host")
+    # Only the host part: a comma in the user name or password is legal. libpq
+    # splits the host list after decoding, so %2C counts as a comma too.
+    hostport = parts.netloc.rpartition("@")[2]
+    if "," in unquote(hostport):
+        raise ValueError(SEVERAL_HOSTS)
     env: dict[str, str] = {}
     # unquote, not unquote_plus: libpq decodes %XX only, never '+'.
     if parts.username:
@@ -235,7 +255,6 @@ def pg_env(url: str) -> dict[str, str]:
         env["PGPASSWORD"] = unquote(parts.password)
     # Host from the netloc itself: .hostname lowercases, which would corrupt a
     # percent-encoded socket directory (postgresql://%2Fvar%2Frun%2Fpostgresql/db).
-    hostport = parts.netloc.rpartition("@")[2]
     host = hostport[1:].partition("]")[0] if hostport.startswith("[") else hostport.partition(":")[0]
     if host:
         env["PGHOST"] = unquote(host)
@@ -248,17 +267,32 @@ def pg_env(url: str) -> dict[str, str]:
     for pair in parts.query.split("&") if parts.query else []:
         raw_key, sep, raw_value = pair.partition("=")
         key = unquote(raw_key)
-        shown = key if re.fullmatch(r"[a-z_]{1,40}", key) else "an unreadable parameter"
         if not sep:
-            raise ValueError(f"DATABASE_URL query parameter {shown} has no value")
+            # No name either: a pasted secret with no '=' would be the "name".
+            raise ValueError("DATABASE_URL has a query parameter with no value")
+        shown = key if re.fullmatch(r"[a-z_]{1,40}", key) else "an unreadable parameter"
         if key not in PG_QUERY_ENV:
             raise ValueError(f"DATABASE_URL query parameter {shown} has no PG* environment variable; "
                              "remove it or set it some other way")
         if key in seen:
             raise ValueError(f"DATABASE_URL repeats the query parameter {shown}")
         seen.add(key)
-        env[PG_QUERY_ENV[key]] = unquote(raw_value)  # libpq: a query parameter overrides the URI part
+        value = unquote(raw_value)
+        if key in PG_LIST_PARAMS and "," in value:
+            raise ValueError(SEVERAL_HOSTS)
+        env[PG_QUERY_ENV[key]] = value  # libpq: a query parameter overrides the URI part
     return env
+
+
+def legal_conn_env(url: str) -> dict[str, str]:
+    """pg_env(url) with the session forced read-only.
+
+    The URL's own options are kept and the read-only setting is appended AFTER
+    them: the server applies -c settings in order, so the last one wins.
+    """
+    conn = pg_env(url)
+    conn["PGOPTIONS"] = f"{conn['PGOPTIONS']} {PG_READ_ONLY}" if conn.get("PGOPTIONS") else PG_READ_ONLY
+    return conn
 
 
 def cmd_legal() -> int:
@@ -268,15 +302,12 @@ def cmd_legal() -> int:
         print("production-setup legal: set DATABASE_URL for the database to check (it is never printed)", file=sys.stderr)
         return 64
     try:
-        conn = pg_env(url)
+        conn = legal_conn_env(url)
     except ValueError as e:
         print(f"production-setup legal: {e} (the URL is never printed)", file=sys.stderr)
         return 64
     # The connection goes through the environment, not argv, so `ps` never shows
-    # the URL or password. The session is always read-only; options from the URL
-    # are kept and the read-only setting is appended so it wins.
-    read_only = "-c default_transaction_read_only=on"
-    conn["PGOPTIONS"] = f"{conn['PGOPTIONS']} {read_only}" if conn.get("PGOPTIONS") else read_only
+    # the URL or password. The session is always read-only (legal_conn_env).
     env = {**os.environ, **conn}
     p = subprocess.run(["psql", "-X", "-v", "ON_ERROR_STOP=1", "-At", "-F", "\t", "-c", LEGAL_SQL],
                        text=True, capture_output=True, check=False, env=env)
