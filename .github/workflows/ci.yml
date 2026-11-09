@@ -35,10 +35,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The secret scan's history rule (scan-secrets.sh --history) needs the
-          # whole history; the default depth of 1 showed it only the tip commit.
-          fetch-depth: 0
 
       # Every step below is ONE call into scripts/qa/guards.sh, which holds the
       # patterns, exclusions and commands. Developers run the identical gates
@@ -75,7 +71,13 @@ jobs:
       # material anywhere; these catch this project's specific failure modes.
 
       - name: Secret scan — worktree and history
-        run: bash scripts/qa/guards.sh secret-scan
+        # The history rule (scan-secrets.sh --history) needs the commits behind this
+        # one; the checkout is shallow. Deepen by this commit's SHA only: no
+        # refs/remotes/origin/* are created, so steps that look for origin/main
+        # (the lessons approvals diff) behave exactly as before.
+        run: |
+          git fetch --no-tags --unshallow origin "$GITHUB_SHA" || git fetch --no-tags --depth=2147483647 origin "$GITHUB_SHA"
+          bash scripts/qa/guards.sh secret-scan
 
       - name: Server secrets must not be reachable from a client bundle
         run: bash scripts/qa/guards.sh web-env
