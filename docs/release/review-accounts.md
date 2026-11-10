@@ -27,8 +27,11 @@ laptop.
   bypasses the code.
 - **Lessons.** Three 30-minute lessons a week, on Monday, Wednesday and Friday at 16:00 Cairo time. The worker keeps
   creating the upcoming ones for as long as the schedule stands.
-- **No payments.** The children have no subscription, so the payment lock never applies (PD-30) and there is nothing
-  to pay.
+- **No payments, and nothing to pay.** The review data follows the recommended default for OA-12: **no in-app payment
+  step for review**. The command creates no lesson package, instalment, payment request or invoice for either family,
+  so the parents' payments tab ("Subscriptions" today) shows no amount due and no Pay button, and the payment lock
+  never applies (PD-30). The test checks this in the database and over `GET /me/billing`, the route that tab reads.
+  The review notes below say so.
 - **No lesson content yet.** There are no past lessons or lesson reports, because those need the owner to approve
   the content. The sample messages are everyday academy talk.
 
@@ -139,7 +142,8 @@ is harmless.
 > child's supervisor and teacher, and a direct chat with the supervisor. The teacher account is that child's teacher.
 > The two accounts can message each other in the family group. To test account deletion, please use the third
 > account (parent2), which exists for that purpose; deleting it does not affect the other two. All people and data
-> in these accounts are fictional. Deleting an account in the app takes effect immediately.
+> in these accounts are fictional. Deleting an account in the app takes effect immediately. The review families have
+> nothing to pay, so the payments tab shows no amount due.
 
 ## Still open (owner)
 
@@ -147,9 +151,16 @@ These need an owner decision before the review data is complete (LR-05, LR-09f):
 
 - **Past lessons and lesson reports.** There are none yet. They need the owner's approval of the report content,
   which may name surahs, and then a follow-up PR.
-- **Something payable (OA-12).** The review children have no subscription, so a reviewer has nothing to pay and
-  cannot reach the pay sheet (found in #507). The owner must decide what the review family may be billed for, and
-  how, before a follow-up PR adds it.
+- **Something payable (OA-12).** Still the owner's decision. The review data follows the recommended default (no
+  in-app payment step for review): a reviewer has nothing to pay and cannot reach the pay sheet (found in #507).
+  If the owner chooses the alternative (an open lesson-package request, so a reviewer can reach Pay), a follow-up
+  PR must add it to the command, change the test above, and change the review notes. The owner must also decide
+  what the review family may be billed for, and how.
+- **Payment instructions elsewhere still point to Pay.** These still send the reviewer to "Amount due → Pay":
+  `app-review-notes-payments.md` §4 and §5, and the Play instructions in `store-console/play-declarations.md` §2.
+  `app-review-notes-payments.md` §6 item 2 and `store-console/README.md` (item 8) also still recommend an open
+  request. Under the default, the payments paragraph must say instead that the review family has nothing to pay
+  (Option B in the store review notes, LR-09f). A follow-up must align those files: this change may not edit them.
 - **An exception to OD-04.** In Chat, only Core's assignment ingestion may set a child's teacher. Ingestion does not
   exist yet, so the command sets the teacher of its one taught synthetic child (Yahya; the deletion-test child has
   no teacher) through the same stand-in the QA seed uses,
