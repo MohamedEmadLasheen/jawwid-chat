@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-10 15:50 Cairo (13:50 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-10 16:16 Cairo (14:16 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -213,12 +213,12 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 - #553 is a duplicate of #524. **Do not merge.**
 
 **C. In progress (engineering).**
-- #549 (screenshots): the capture script moved out of `scripts/mobile/` (`489e8cf0`) to clear #572's guard. Delta review and CI running.
-- #587 (one family per paid lesson call): accepted at `00190099`. W67b is fixing three P2s (live calls, review-notes wording, real class-group tests).
-- #588 (iOS push collapse id): **CHANGES**, a P1: the key must include the event type. W68b is fixing it.
-- #589 (whiteboard test race, found on #577's CI): under review.
+- #549 (screenshots): the capture script moved out of `scripts/mobile/` to clear #572's guard. **ACCEPT @ `489e8cf0`, 14/14.**
+- #587 (one family per paid lesson call): ACCEPT @ `6f137f08` (live calls are now corrected by the existing sweep and the join webhook). W67c is fixing three more P2s: rejoin with an old token, telling the removed guardian why, and a partial index (migration slot `20261110100000`).
+- #588 (iOS push collapse id): the P1 fix (key = event type + chat, shared rule for #449) **ACCEPT @ `0c3df378`**; CI running.
+- #589 (whiteboard test race, found on #577's CI): **ACCEPT @ `e83fd707`, 14/14.**
 - W70 (notification permission status and Open settings, stacked on #557): building.
-- Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. CI re-running at `0aec87f1` after the #549 fix.
+- Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. **CI green at `0aec87f1`** (run 42827668730) after the #549 fix.
 - Draft #578 (OA-12 Option B docs) stays a draft.
 
 **D. Waiting for the owner's approval.** Every merge (Part 1 of the Owner Action Pack: A3, A4, A13, the Stripe batch, the docs batch and the high-risk stacks), the review-accounts production run, and the first deploy (OT-3).
