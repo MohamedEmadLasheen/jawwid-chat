@@ -217,9 +217,10 @@ Use only the review cohort (`docs/release/review-accounts.md`): fictional parent
 - **No photo of any child or real person.** Avatars show initials. No cartoon children.
 - **No Quran text in a screenshot** unless the academy's qualified reviewer has checked it (Quran data is a
   Code Owner path; religious content needs qualified approval). Shot 7 must not show a surah's text.
-- **No "Subscriptions" / «الاشتراكات» on screen.** Today the parent's payment tab is called
-  "Subscriptions" (`lib/app/router.dart:140-142`). Take shot 5 (and any shot showing the bottom bar) only
-  after the tab is renamed to lesson-package wording `[OWNER DECISION: LR-15]`, or crop the bottom bar out.
+- **No "Subscriptions" / «الاشتراكات» on screen.** LR-15 renamed the parent's payment tab to
+  "Packages" / «الباقات» (`tabSubscriptions` in `lib/l10n/app_en.arb` and `app_ar.arb`; the key and the
+  `/subscriptions` route keep their old names). Take shot 5 (and any shot showing the bottom bar) only
+  from a build that has the rename, or crop the bottom bar out.
 - A clean status bar (full battery, signal, a neutral time such as 9:41), no debug banner, a release build
   against the production backend.
 - Captions are optional. If used, they repeat only claims from §5.3.
@@ -230,5 +231,5 @@ Use only the review cohort (`docs/release/review-accounts.md`): fictional parent
 - [ ] Every `{{...}}` URL is live in both languages (LR-04).
 - [ ] Card payment is live at launch, or the card sentence is removed (LR-34).
 - [ ] Teacher deletion works in the app (LR-03), or "Delete your account … at any time" is reworded.
-- [ ] The payment tab no longer says "Subscriptions" (LR-15).
+- [ ] The submitted build's payment tab says "Packages" / «الباقات», not "Subscriptions" (LR-15).
 - [ ] A second person reads §5 against the app on a phone.

@@ -42,7 +42,7 @@ paragraph (§2.1).
 | The supervisor has no login, so nobody answers a call in the parent's direct chat with the supervisor | `review-accounts.md` ("Synthetic staff with no login") |
 | On iPhone, a call rings through CallKit while the app is closed | `ios/Runner/AppDelegate.swift:215-235`; `ios/Runner/CallKitBridge.swift:174`. **Only if** production sets `APNS_VOIP_ENABLED=true` (`apps/api/src/communication/notifications/push.provider.selector.ts:51-67`, default off). See §4 |
 | The call's audio continues in the background | iOS `UIBackgroundModes` `audio` (`ios/Runner/Info.plist:48-50`); Android `CallForegroundService` (`android/app/src/main/AndroidManifest.xml:72-76`). **Not verified on a device** (see `ios-background-modes.md`) |
-| Parent tab names: "Subscriptions" and "Amount due", then "Pay" | `lib/app/shells/app_shell.dart:108`, `:119`; `app_en.arb:1747` (`tabSubscriptions`), `:2064` (`billingAmountDueTitle`), `:2068` (`billingPay`) |
+| Parent tab names: "Packages" (LR-15; was "Subscriptions") and "Amount due", then "Pay" | `lib/app/shells/app_shell.dart:108`, `:119`; `app_en.arb:1747` (`tabSubscriptions`), `:2064` (`billingAmountDueTitle`), `:2068` (`billingPay`) |
 
 ### Apple Guideline 2.5.19 (staff features)
 
@@ -105,7 +105,7 @@ with "by card" only if production has Stripe configured (LR-34). Otherwise use t
 version.
 
 ```text
-PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold; everything else in the app is free. Under Guideline 3.1.3(d) Person-to-Person Services, a parent pays a lesson package by card (Stripe Checkout, opened in the browser) or by bank transfer with a receipt upload. To see it: parent account > Subscriptions tab > Amount due > Pay.
+PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold; everything else in the app is free. Under Guideline 3.1.3(d) Person-to-Person Services, a parent pays a lesson package by card (Stripe Checkout, opened in the browser) or by bank transfer with a receipt upload. To see it: parent account > Packages tab > Amount due > Pay.
 ```
 
 Bank transfer only (no Stripe in production): replace "by card (Stripe Checkout, opened in the browser)
@@ -116,15 +116,16 @@ to confirm".
 payments").
 
 ```text
-PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold. Under Guideline 3.1.3(d) Person-to-Person Services, parents pay for lesson packages outside in-app purchase. The review family has nothing to pay, so the Subscriptions tab shows no amount due.
+PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold. Under Guideline 3.1.3(d) Person-to-Person Services, parents pay for lesson packages outside in-app purchase. The review family has nothing to pay, so the Packages tab shows no amount due.
 ```
 
 Notes for the owner:
-- **The tab name.** "Subscriptions" is today's name (`tabSubscriptions`). LR-15 recommends renaming it
-  to lesson-package wording, so use whatever name the submitted build shows. LR-15 also notes that
-  "Subscriptions" may read as an auto-renewing subscription under 3.1.2.
+- **The tab name.** LR-15 renamed the tab from "Subscriptions" to "Packages" / «الباقات» (the value of
+  `tabSubscriptions`; the key and the `/subscriptions` route keep their names), because "Subscriptions"
+  may read as an auto-renewing subscription under 3.1.2. A build from before the rename still says
+  "Subscriptions": use whatever name the submitted build shows.
 - **`app-review-notes-payments.md` §4 gives a different path:** "Settings → Payments → Amount due → Pay".
-  `/settings/payments` is retired and now forwards to the Subscriptions tab (`lib/app/router.dart:136-142`).
+  `/settings/payments` is retired and now forwards to the Packages tab (`lib/app/router.dart:136-142`).
   So that path no longer matches the screens, and the text above uses the tab instead. Correct §4 there
   when the owner chooses.
 - **Option B is weaker evidence.** The reviewer cannot see the pay sheet's "Live one-to-one Quran
@@ -176,7 +177,7 @@ Account deletion: use the Deletion test account. Settings > Delete account > pas
 ```
 
 `[PAYMENTS SENTENCE]` (OA-12, the same choice as §2.1):
-- **Option A:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid by card on Stripe's page or by bank transfer under the 1:1 online paid services rule. Parent account > Subscriptions tab > Amount due > Pay.`
+- **Option A:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid by card on Stripe's page or by bank transfer under the 1:1 online paid services rule. Parent account > Packages tab > Amount due > Pay.`
 - **Option B:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid outside Google Play Billing under the 1:1 online paid services rule. The review family has nothing to pay.`
 
 `{{ACCOUNT_DELETION_URL}}` is not a credential. It is the LR-04 web deletion page that Play's account

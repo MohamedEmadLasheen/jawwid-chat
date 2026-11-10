@@ -782,7 +782,7 @@ class L10nEn extends L10n {
   String get childLevelLabel => 'Level';
 
   @override
-  String get childSubscriptionLabel => 'Subscription';
+  String get childSubscriptionLabel => 'Lesson package';
 
   @override
   String get childScheduleLabel => 'Schedule';
@@ -1997,10 +1997,10 @@ class L10nEn extends L10n {
       'The student did not attend the trial lesson.';
 
   @override
-  String get cardTrialSubscribedTitle => 'The student has subscribed.';
+  String get cardTrialSubscribedTitle => 'The student has enrolled.';
 
   @override
-  String get cardTrialNotSubscribedTitle => 'The student did not subscribe.';
+  String get cardTrialNotSubscribedTitle => 'The student did not enrol.';
 
   @override
   String get cardTrialLevel => 'Level';
@@ -2837,7 +2837,7 @@ class L10nEn extends L10n {
 
   @override
   String get signupEmailIntro =>
-      'Enter the e-mail address you gave the academy when you subscribed.';
+      'Enter the e-mail address you gave the academy when you enrolled.';
 
   @override
   String get signupEmailLabel => 'E-mail';
@@ -3212,7 +3212,7 @@ class L10nEn extends L10n {
   String get tabPayments => 'Payments';
 
   @override
-  String get tabSubscriptions => 'Subscriptions';
+  String get tabSubscriptions => 'Packages';
 
   @override
   String subscriptionMonthCount(int months) {
@@ -3242,7 +3242,7 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get subscriptionNone => 'No subscription yet';
+  String get subscriptionNone => 'No lesson package yet';
 
   @override
   String subscriptionLessonsLeft(int count) {
@@ -3272,7 +3272,7 @@ class L10nEn extends L10n {
   String get subscriptionStateOpen => 'Active';
 
   @override
-  String get subscriptionStateGrace => 'Renewal due';
+  String get subscriptionStateGrace => 'Next package due';
 
   @override
   String get subscriptionStateLocked => 'Paused';
@@ -3286,10 +3286,10 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get subscriptionRequestRenewal => 'Request renewal';
+  String get subscriptionRequestRenewal => 'Request the next package';
 
   @override
-  String get subscriptionRenewalRequested => 'Renewal requested';
+  String get subscriptionRenewalRequested => 'Next package requested';
 
   @override
   String get lockBannerTitle => 'New lessons are paused';
@@ -3314,7 +3314,7 @@ class L10nEn extends L10n {
       'The chat stays open, and lessons already booked go ahead.';
 
   @override
-  String get lockBannerOpenSubscriptions => 'Go to Subscriptions';
+  String get lockBannerOpenSubscriptions => 'Go to Packages';
 
   @override
   String reportLessonOf(int number, int total) {
@@ -3344,7 +3344,7 @@ class L10nEn extends L10n {
 
   @override
   String get cardSubscriptionLockedHint =>
-      'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.';
+      'Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.';
 
   @override
   String get cardSubscriptionUnlockedTitle => 'New lessons are back on';

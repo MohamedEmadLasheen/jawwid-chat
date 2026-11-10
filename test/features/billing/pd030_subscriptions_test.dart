@@ -17,9 +17,12 @@ import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/parent_billing.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
-/// PD-30 on the parent's side: the Subscriptions tab, and a card per child above the
+/// PD-30 on the parent's side: the Packages tab, and a card per child above the
 /// family's payments -- the plan with its lessons, what is left, the grace lessons, and
-/// a locked child's reason with Pay or Request renewal. Never an exception.
+/// a locked child's reason with Pay or Request the next package. Never an exception.
+///
+/// LR-15: nothing a parent reads here says "subscription" or "renewal" (Apple 3.1.2 reads
+/// those as an auto-renewing subscription; these are packages of live lessons, 3.1.3(d)).
 void main() {
   Widget localized(Widget home, {Locale locale = const Locale('en')}) => MaterialApp(
         locale: locale,
@@ -53,12 +56,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(Shells.forRole(UserRole.parent).map((d) => d.route), ['/chats', '/calls', '/subscriptions', '/settings']);
-      expect(find.text('Subscriptions'), findsOneWidget);
+      expect(find.text('Packages'), findsOneWidget);
+      expect(find.text('Subscriptions'), findsNothing);
       expect(find.text('Payments'), findsNothing);
       expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 2);
     });
 
-    testWidgets('in Arabic it is الاشتراكات', (tester) async {
+    testWidgets('in Arabic it is الباقات', (tester) async {
       final backend = FakeBackend(role: UserRole.parent);
       addTearDown(backend.dispose);
       await tester.pumpWidget(ProviderScope(
@@ -73,7 +77,8 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
-      expect(find.text('الاشتراكات'), findsOneWidget);
+      expect(find.text('الباقات'), findsOneWidget);
+      expect(find.textContaining('اشتراك'), findsNothing);
     });
 
     testWidgets('a teacher gets no Subscriptions tab, and Sales keeps its Payments', (tester) async {
@@ -86,7 +91,7 @@ void main() {
         addTearDown(backend.dispose);
         await tester.pumpWidget(shell(role, backend));
         await tester.pumpAndSettle();
-        expect(find.text('Subscriptions'), findsNothing, reason: role.name);
+        expect(find.text('Packages'), findsNothing, reason: role.name);
       }
       expect(find.text('Payments'), findsOneWidget);
     });
@@ -247,7 +252,7 @@ void main() {
       await tester.pumpWidget(app(_Billing(billing)));
       await tester.pumpAndSettle();
 
-      expect(find.text('Subscriptions'), findsOneWidget);
+      expect(find.text('Packages'), findsOneWidget);
       expect(within('subscription-card-k1', find.text('Adam')), findsOneWidget);
       expect(within('subscription-plan-k1', find.text('3 Months — 24 Lessons')), findsOneWidget);
       expect(within('subscription-left-k1', find.text('5 lessons left')), findsOneWidget);
@@ -265,7 +270,7 @@ void main() {
       await tester.pumpWidget(app(_Billing(ParentBilling(today: DateTime(2026, 10, 26), planMonths: 3, subscriptions: const [none]))));
       await tester.pumpAndSettle();
 
-      expect(within('subscription-plan-k9', find.text('No subscription yet')), findsOneWidget);
+      expect(within('subscription-plan-k9', find.text('No lesson package yet')), findsOneWidget);
       expect(find.byKey(const ValueKey('subscription-state-k9')), findsNothing);
       expect(within('subscription-card-k9', find.text('Active')), findsNothing);
       expect(within('subscription-card-k9', find.text('فعّال')), findsNothing);
@@ -277,7 +282,7 @@ void main() {
       await tester.pumpWidget(app(_Billing(ParentBilling(today: DateTime(2026, 10, 26), planMonths: 3, subscriptions: [none, billing.subscriptions.first])), locale: const Locale('ar')));
       await tester.pumpAndSettle();
 
-      expect(within('subscription-plan-k9', find.text('لا يوجد اشتراك بعد')), findsOneWidget);
+      expect(within('subscription-plan-k9', find.text('لا توجد باقة دروس بعد')), findsOneWidget);
       expect(find.byKey(const ValueKey('subscription-state-k9')), findsNothing);
       expect(within('subscription-state-k1', find.text('فعّال')), findsOneWidget);
     });
@@ -290,7 +295,7 @@ void main() {
       expect(within('subscription-plan-k2', find.text('1 Month — 8 Lessons')), findsOneWidget);
       expect(within('subscription-grace-k2', find.text('2 grace lessons left')), findsOneWidget);
       expect(within('subscription-grace-k3', find.text('1 grace lesson left')), findsOneWidget);
-      expect(within('subscription-state-k2', find.text('Renewal due')), findsOneWidget);
+      expect(within('subscription-state-k2', find.text('Next package due')), findsOneWidget);
       // Grace is not locked: nothing to pay or renew from the card yet.
       expect(find.byKey(const ValueKey('subscription-pay-k2')), findsNothing);
       expect(find.byKey(const ValueKey('subscription-renew-k2')), findsNothing);
@@ -332,7 +337,7 @@ void main() {
 
       expect(repo.renewals, ['k5']);
       expect(find.byKey(const ValueKey('subscription-renew-k5')), findsNothing);
-      expect(within('subscription-renewal-requested-k5', find.text('Renewal requested')), findsOneWidget);
+      expect(within('subscription-renewal-requested-k5', find.text('Next package requested')), findsOneWidget);
     });
 
     testWidgets('a second request the same day (409 SUBSCRIPTION_STATE) reads as requested', (tester) async {
@@ -346,7 +351,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(SnackBar), findsNothing);
-      expect(within('subscription-renewal-requested-k5', find.text('Renewal requested')), findsOneWidget);
+      expect(within('subscription-renewal-requested-k5', find.text('Next package requested')), findsOneWidget);
     });
 
     testWidgets('already requested today: said from the start, nothing to tap', (tester) async {
@@ -369,9 +374,9 @@ void main() {
         find.descendant(of: find.byKey(const ValueKey('subscription-renewal-requested-k5')), matching: find.byWidgetPredicate((w) => w is ButtonStyleButton), matchRoot: true),
       );
       expect(requested.onPressed, isNull);
-      expect(find.text('Renewal requested'), findsOneWidget);
-      // No subscription on record.
-      expect(within('subscription-plan-k5', find.text('No subscription yet')), findsOneWidget);
+      expect(find.text('Next package requested'), findsOneWidget);
+      // No lesson package on record.
+      expect(within('subscription-plan-k5', find.text('No lesson package yet')), findsOneWidget);
     });
 
     testWidgets('nothing about an exception is ever drawn', (tester) async {
@@ -386,14 +391,34 @@ void main() {
       await tester.pumpWidget(app(_Billing(billing), locale: const Locale('ar')));
       await tester.pumpAndSettle();
 
-      expect(find.text('الاشتراكات'), findsOneWidget);
+      expect(find.text('الباقات'), findsOneWidget);
       expect(within('subscription-plan-k1', find.text('3 أشهر — 24 حصة')), findsOneWidget);
       expect(within('subscription-left-k1', find.text('بقيت 5 حصص')), findsOneWidget);
       expect(within('subscription-plan-k2', find.text('شهر واحد — 8 حصص')), findsOneWidget);
       expect(within('subscription-grace-k2', find.text('تبقّت حصتا سماح')), findsOneWidget);
       expect(within('subscription-grace-k3', find.text('تبقّت حصة سماح واحدة')), findsOneWidget);
       expect(within('subscription-card-k4', find.text('انتهت الحصص')), findsOneWidget);
-      expect(within('subscription-card-k5', find.text('طلب التجديد')), findsOneWidget);
+      expect(within('subscription-card-k5', find.text('طلب الباقة التالية')), findsOneWidget);
+      expect(within('subscription-state-k2', find.text('بانتظار الباقة التالية')), findsOneWidget);
+      // LR-15: no «اشتراك» and no «تجديد» anywhere on the screen.
+      expect(find.textContaining(RegExp('اشتراك|تجديد')), findsNothing);
+    });
+
+    testWidgets('LR-15: in English, no "subscription" and no "renew" on the parent\'s screen', (tester) async {
+      tall(tester);
+      // The instalment's label comes from the server; leave it out of this check.
+      final quiet = ParentBilling(
+        today: billing.today,
+        planMonths: billing.planMonths,
+        subscriptions: billing.subscriptions,
+      );
+      await tester.pumpWidget(app(_Billing(quiet)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Packages'), findsOneWidget);
+      expect(within('subscription-state-k2', find.text('Next package due')), findsOneWidget);
+      expect(within('subscription-renew-k5', find.text('Request the next package')), findsOneWidget);
+      expect(find.textContaining(RegExp('[Ss]ubscri|[Rr]enew')), findsNothing);
     });
 
     testWidgets('opened at a child (the locked banner): that card is outlined', (tester) async {
