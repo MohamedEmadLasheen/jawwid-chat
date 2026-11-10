@@ -22,6 +22,7 @@ import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 import { childSubscriptions, forParent } from './subscription-reads';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+import { inReviewMode, reviewDemoBankAccount, reviewDemoRequest } from './review-mode';
 
 /**
  * ADMIN-007: a family's billing settings (method, currency, plan) as one
@@ -651,16 +652,28 @@ export class BillingService {
   async mine(actorId: string) {
     const { contact } = await this.requireParent(actorId);
     const today = todayIn(await this.timeZone());
+    // OA-12: an App Review organization's parent never reads the real bank
+    // account (it is not even fetched) and sees one synthetic amount due.
+    const review = await inReviewMode(this.prisma, contact.organizationId);
     const [family, billing, rows, money, bank] = await Promise.all([
-      this.prisma.family.findUniqueOrThrow({ where: { id: contact.familyId }, select: { subscriptionPlanMonths: true } }),
+      this.prisma.family.findUniqueOrThrow({ where: { id: contact.familyId }, select: { subscriptionPlanMonths: true, language: true } }),
       this.prisma.familyBilling.findUnique({ where: { familyId: contact.familyId } }),
       this.prisma.familyInstalment.findMany({
         where: { familyId: contact.familyId, organizationId: contact.organizationId, voidedAt: null },
         orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       }),
       this.reads.forFamily(contact.familyId, contact.organizationId, { actorId, staff: false }),
-      this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
+      review ? Promise.resolve(null) : this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
     ]);
+    if (review) {
+      const lang = family.language === 'en' ? 'en' : 'ar';
+      const first = await this.prisma.learner.findFirst({
+        where: { familyId: contact.familyId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, name: true },
+      });
+      money.requests = [reviewDemoRequest(lang, first), ...money.requests];
+    }
     const packages = await loadPackageFacts(this.prisma, { instalments: rows });
     const payable = (i: FamilyInstalment) => isInstalmentPayableInApp(i, packages);
     const subscriptions = await this.subscriptionsForParent(contact.familyId, rows.filter(payable), money.requests);
@@ -706,9 +719,12 @@ export class BillingService {
       requests: money.requests,
       invoices: money.invoices,
       receipts: money.receipts,
-      bankAccount: parseBankAccount(bank?.value),
-      cardAvailable: this.stripe.checkoutAvailable,
+      bankAccount: review ? reviewDemoBankAccount(family.language === 'en' ? 'en' : 'ar') : parseBankAccount(bank?.value),
+      // Review mode: the card option opens the demo page, never Stripe.
+      cardAvailable: review ? true : this.stripe.checkoutAvailable,
       subscriptions,
+      // Only in review mode: a public family's answer is unchanged.
+      ...(review ? { reviewMode: true as const } : {}),
     };
   }
 

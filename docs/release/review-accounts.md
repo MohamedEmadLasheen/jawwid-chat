@@ -22,10 +22,54 @@ The test is `apps/api/test/integration/review-cohort.spec.ts`.
   bypasses the code.
 - **Lessons.** Three 30-minute lessons a week, on Monday, Wednesday and Friday at 16:00 Cairo time. The worker keeps
   creating the upcoming ones for as long as the schedule stands.
-- **No payments.** The child has no subscription, so the payment lock never applies (PD-30) and there is nothing to
-  pay.
+- **No real payments (OA-12, owner decision 2026-11-10).** The child has no subscription, so the payment lock never
+  applies (PD-30). Once the review organization is listed in the review payment mode (next section), the parent sees a
+  demo amount due and can open the pay sheet, but the server makes every payment a demo: nothing can be paid, sent
+  or stored.
 - **No lesson content yet.** There are no past lessons or lesson reports, because those need the owner to approve
   the content. The sample messages are everyday academy talk.
+
+## Review payment mode (OA-12)
+
+**Owner decision (2026-11-10).** Reviewers never see Jawwid's real bank details, cannot make a real bank transfer,
+and cannot upload or store a real receipt. No real charge, invoice, payment request, payment obligation or staff task
+is created for a review account. Public families are not affected. The server enforces all of this; hiding buttons
+in the app is only a courtesy. The code is `apps/api/src/billing/review-mode.ts`.
+
+**The switch.** One `chat.config` row:
+
+| Key | Value | Example |
+|---|---|---|
+| `review.sandbox_organization_ids` | A JSON **array** of organization ids (uuid strings) | `["3f0c…-…"]` (the "Jawwid App Review" organization's id) |
+
+- **No route writes it.** `/billing/settings` writes only `billing.bank_account` and `billing.invoice_issuer`, and
+  there is no generic config route. The review-cohort command will set it, in a separate, owner-approved change and
+  run. That change should *add* the review organization's id to the array (keeping any id already there), never
+  replace the array, and print the value it wrote.
+- **Absent:** no organization is in review mode.
+- **Malformed** (not an array, or any entry that is not a uuid) **or unreadable:** treated as "no review
+  organization", so every family behaves as a real one, and the API logs an error. A mistake in this row can only
+  make the review account behave like a real one. It can never make a real family see the demo.
+- It is read on every request, so a change applies at once, without a restart.
+
+**What a parent of a review organization gets:**
+
+| Where | Behaviour |
+|---|---|
+| `GET /me/billing` | `reviewMode: true`. One synthetic amount due, never stored: "Lesson package (demo): 8 live one-to-one lessons", USD 80.00, for the family's first child, under the fixed id `00000000-0000-4000-8000-0000000a99e1`. Demo bank details ("Demo bank details for App Review: no transfer is possible", no IBAN, no SWIFT). The real `billing.bank_account` is not even read. `cardAvailable: true` |
+| Pay by card (app, `POST /me/billing/checkout`) | Answers `/api/v1/pay/review-demo` (with `?lang=ar` or `?lang=en`), a static page (the same strict CSP as the pay link page) that explains, in Arabic and English, that the live app opens Stripe's secure checkout here and that the review account cannot pay. Stripe is never called. No `payment_checkout` row, no Stripe customer, no payment request |
+| Pay link (`/pay/:token`) of a review family's request | Demo bank details; "Pay by card" goes to the same demo page, never Stripe |
+| Bank transfer: `POST /me/billing/receipts/upload` and `POST /me/billing/receipts` | Refused: 403 `COMM.BILLING_DENIED` with `error.detail.reviewMode = true`, before anything is signed, stored or written. The app shows a notice on the bank-transfer page and turns Send off |
+
+The test is `apps/api/test/integration/review-payment-mode.spec.ts`. It counts the rows in the payment, receipt,
+checkout, invoice, Stripe customer, audit, task, notification and outbox tables before and after, and they must not
+change.
+
+**Not covered here (other modules):** "Request renewal" (`POST /me/subscriptions/:learnerId/renewal-request`,
+`apps/api/src/subscriptions/`) still records a renewal request and may make a task inside the review organization,
+whose staff are all synthetic and have no login. No real staff member sees it, but it is a write. The demo amount due makes the child's card
+show "Pay" rather than "Request renewal", so a reviewer is unlikely to reach it. A follow-up can refuse it with the
+same `inReviewMode` check.
 
 ## Run it (the owner, against the backend the store build uses)
 
@@ -77,6 +121,10 @@ is harmless.
 > fictional. Deleting an account in the app takes effect immediately.
 
 ## Still open (owner)
+
+- **Switch on the review payment mode.** Approve the review-cohort command change that writes
+  `review.sandbox_organization_ids` (section "Review payment mode"), and run it on the production backend. Until then
+  the review family sees no amount due, and the store notes must use the "nothing to pay" text.
 
 - **An exception to OD-04.** In Chat, only Core's assignment ingestion may set a child's teacher. Ingestion does not
   exist yet, so the command sets the teacher of its one synthetic child through the same stand-in the QA seed uses,
