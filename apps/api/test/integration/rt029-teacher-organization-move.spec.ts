@@ -9,6 +9,14 @@
  * teacher_org_move_keeps_learners refuses that with check_violation (23514),
  * in chat.enforce_same_organization's "cross-organization reference" wording.
  *
+ * 20261109150000_chat_org_moves_guarded then made chat.teacher.organization_id
+ * immutable after insert (trigger teacher_org_immutable, which fires first).
+ * This guard stays in place beneath it and is what returns if that migration
+ * is rolled back, so it keeps its own tests: every move below runs in one
+ * transaction with teacher_org_immutable disabled for that transaction only
+ * (DDL is transactional: a refused move rolls the disable back with it). The
+ * immutability itself is tested in rt029-organization-immutable.spec.ts.
+ *
  * Its own two organizations and rows, removed by id afterwards. Synthetic data
  * only (G-16).
  */
@@ -46,6 +54,18 @@ const orgOf = async (teacherId: string) =>
   (await db.$queryRawUnsafe<Array<{ o: string }>>(`select organization_id::text as o from chat.teacher where id = '${teacherId}'::uuid`))[0]?.o ?? null;
 const moveTeacher = (teacherId: string, org: string) =>
   `update chat.teacher set organization_id = '${org}'::uuid where id = '${teacherId}'::uuid`;
+/**
+ * Runs `sql` with only teacher_org_immutable (20261109150000) switched off, in
+ * one transaction, optionally behind the assignment-ingestion gate. Every
+ * other trigger, this file's guard included, stays on.
+ */
+const beneathImmutability = (sql: string, opts: { gate?: boolean } = {}) => () =>
+  db.$transaction([
+    ...(opts.gate ? [db.$executeRawUnsafe(`select set_config('chat.syncing_assignment', 'on', true)`)] : []),
+    db.$executeRawUnsafe(`alter table chat.teacher disable trigger teacher_org_immutable`),
+    db.$executeRawUnsafe(sql),
+    db.$executeRawUnsafe(`alter table chat.teacher enable trigger teacher_org_immutable`),
+  ]);
 
 beforeAll(async () => {
   for (const [org, slug] of [[ORG_A, 'a'], [ORG_B, 'b']] as const) {
@@ -96,27 +116,46 @@ describe('the guard is installed', () => {
   });
 });
 
+describe('with organization immutability in place, no teacher moves at all', () => {
+  it('a teacher with no learners is refused as immutable (20261109150000), and stays put', async () => {
+    const out = await refusal(exec(moveTeacher(ids.teacherWithoutLearner, ORG_B)));
+    expect(out?.code).toBe('23514');
+    expect(out?.message).toMatch(/organization_id is immutable/);
+    expect(await orgOf(ids.teacherWithoutLearner)).toBe(ORG_A);
+  });
+
+  it('the immutability trigger is back on after a refused move beneath it', async () => {
+    await refusal(beneathImmutability(moveTeacher(ids.teacherWithLearner, ORG_B)));
+    const [{ enabled }] = await db.$queryRawUnsafe<Array<{ enabled: string }>>(
+      `select tgenabled::text as enabled from pg_trigger
+        where tgrelid = 'chat.teacher'::regclass and tgname = 'teacher_org_immutable'`,
+    );
+    expect(enabled).toBe('O');
+  });
+});
+
 describe('a teacher with learners cannot move to another organization', () => {
   it('is refused with check_violation, and the teacher stays in their organization', async () => {
-    const out = await refusal(exec(moveTeacher(ids.teacherWithLearner, ORG_B)));
+    const out = await refusal(beneathImmutability(moveTeacher(ids.teacherWithLearner, ORG_B)));
     expect(out?.code).toBe('23514');
     expect(out?.message).toMatch(/cross-organization reference: chat\.teacher .* would move to organization .*chat\.learner/);
     expect(await orgOf(ids.teacherWithLearner)).toBe(ORG_A);
   });
 
   it('is refused on the assignment-ingestion path too (the gate opens assignment, not tenancy)', async () => {
-    const out = await refusal(() => withAssignmentGate(db, moveTeacher(ids.teacherWithLearner, ORG_B)));
+    const out = await refusal(beneathImmutability(moveTeacher(ids.teacherWithLearner, ORG_B), { gate: true }));
     expect(out?.code).toBe('23514');
+    expect(out?.message).toMatch(/cross-organization reference/);
     expect(await orgOf(ids.teacherWithLearner)).toBe(ORG_A);
   });
 });
 
-describe('moves and updates that leave no learner across the boundary keep working', () => {
+describe('beneath immutability, moves and updates that leave no learner across the boundary pass this guard', () => {
   it('a teacher with no learners moves to another organization', async () => {
-    expect(await refusal(exec(moveTeacher(ids.teacherWithoutLearner, ORG_B)))).toBeNull();
+    expect(await refusal(beneathImmutability(moveTeacher(ids.teacherWithoutLearner, ORG_B)))).toBeNull();
     expect(await orgOf(ids.teacherWithoutLearner)).toBe(ORG_B);
     // And back again.
-    expect(await refusal(exec(moveTeacher(ids.teacherWithoutLearner, ORG_A)))).toBeNull();
+    expect(await refusal(beneathImmutability(moveTeacher(ids.teacherWithoutLearner, ORG_A)))).toBeNull();
     expect(await orgOf(ids.teacherWithoutLearner)).toBe(ORG_A);
   });
 
@@ -132,7 +171,7 @@ describe('moves and updates that leave no learner across the boundary keep worki
 
   it('once the learner no longer names the teacher, the teacher may move', async () => {
     expect(await refusal(() => withAssignmentGate(db, `update chat.learner set teacher_id = null where id = '${ids.learnerA}'::uuid`))).toBeNull();
-    expect(await refusal(exec(moveTeacher(ids.teacherWithLearner, ORG_B)))).toBeNull();
+    expect(await refusal(beneathImmutability(moveTeacher(ids.teacherWithLearner, ORG_B)))).toBeNull();
     expect(await orgOf(ids.teacherWithLearner)).toBe(ORG_B);
   });
 });
