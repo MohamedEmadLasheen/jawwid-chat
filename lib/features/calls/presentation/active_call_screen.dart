@@ -176,6 +176,11 @@ class _StatusLine extends StatelessWidget {
       CallUiPhase.failed => switch (state.failure) {
         CallUiFailure.microphone => l10n.callFailedMicrophone,
         CallUiFailure.notAllowed => l10n.callFailedNotAllowed,
+        // OA-12: the starter may be a teacher or staff member -- neutral words;
+        // a guardian answering another child's lesson call hears why.
+        CallUiFailure.oneLearnerLesson => state.direction == CallDirection.outgoing
+            ? l10n.callFailedOneLearnerLessonStart
+            : l10n.callFailedOneLearnerLesson,
         CallUiFailure.network || null => l10n.callFailedNetwork,
       },
     };
@@ -260,9 +265,13 @@ class _MicrophoneHelp extends ConsumerWidget {
 /// `missed` is *"No answer"* to the caller and *"Missed call"* to the callee.
 /// *"Declined"* is plain and neutral in both directions, never "rejected"
 /// (`screens/call.md` §3).
-String endedText(L10n l10n, CallUiState state) =>
-    // CHATSCHED-013: a drop nobody came back from says so, whatever the outcome.
-    state.endReason == CallEndReason.connectionLost ? l10n.callEndedConnectionLost : _outcomeText(l10n, state);
+String endedText(L10n l10n, CallUiState state) => switch (state.endReason) {
+      // CHATSCHED-013: a drop nobody came back from says so, whatever the outcome.
+      CallEndReason.connectionLost => l10n.callEndedConnectionLost,
+      // OA-12: the server took this guardian off another child's lesson call.
+      CallEndReason.oneLearnerLesson => l10n.callFailedOneLearnerLesson,
+      _ => _outcomeText(l10n, state),
+    };
 
 String _outcomeText(L10n l10n, CallUiState state) => switch (state.outcome) {
   CallOutcome.answered => l10n.callOutcomeAnswered,

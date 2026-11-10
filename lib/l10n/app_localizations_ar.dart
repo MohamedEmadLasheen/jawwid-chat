@@ -388,6 +388,14 @@ class L10nAr extends L10n {
   String get callFailedNotAllowed => 'هذه المكالمة غير متاحة.';
 
   @override
+  String get callFailedOneLearnerLesson =>
+      'هذا الدرس لطالب واحد، ولكل طفل آخر درسه الخاص.';
+
+  @override
+  String get callFailedOneLearnerLessonStart =>
+      'أثناء الدرس تكون المكالمة لطالب واحد فقط.';
+
+  @override
   String get callFailedNetwork =>
       'تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.';
 

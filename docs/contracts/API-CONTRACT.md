@@ -1584,7 +1584,7 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 | `call.accepted` | `{ callId, conversationId, actorId }` | conversation room | **`accept`** — the HTTP answer, an APPLICATION act. |
 | `call.declined` | `{ callId, conversationId, actorId }` | conversation room | `decline` |
 | `call.participant_joined` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only** (`MediaPresenceService`) — MEDIA presence, something observed in the room. **Never `accept`.** |
-| `call.participant_left` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only.** Records a departure; does **not** end the call. |
+| `call.participant_left` | `{ callId, conversationId, actorId, reason? }` | conversation room; with `reason`, each participant's actor room | **`POST /livekit/webhook`**, records a departure; does **not** end the call. **OA-12:** with `reason: "one_learner_lesson"` the server took that guardian off a lesson call (`CallService.separateLessonLearners`); the call goes on for everyone else. |
 | `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | conversation room | `end`, the ring-timeout sweep, and `decline` (terminal since 2026-09-27) |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | actor room | **nobody** — `in_app` channel is a no-op in `deliver()`. Phase 1 decides. |
 | **`session.revoked`** (Phase 1, new) | `{ sessionId }` | actor room, then the session's sockets are disconnected | `DELETE /me/sessions/:id`, refresh-reuse detection |

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { Call, CallParticipant, Conversation, ConversationMember } from '@prisma/client';
@@ -7,16 +7,18 @@ import { AuthorizationService, CallIntent } from '../../platform/authorization.s
 import type { Decision } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_ROOM_CONTROL, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
+import { realtimeMetrics } from '../../platform/realtime-metrics';
 import { actorRefKey, type IdentityService, type ResolvedActors } from '../../platform/identity.service';
 import type { AuditService } from '../../platform/audit.service';
 import type { MediaTokenIssuer } from './media-token';
+import type { MediaRoomControl } from './media-room-control';
 import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { blockersAmong } from '../../platform/blocks';
-import { CallEndReason, CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
+import { ActorKind, CallEndReason, CallOutcome, CallParticipantLeftReason, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -84,6 +86,13 @@ export const LESSON_CALL_EARLY_MINUTES = 15;
 /** ...until this many minutes after it ends. */
 export const LESSON_CALL_LATE_MINUTES = 15;
 
+/** OA-12: a lesson call seats one learner (CallService.lessonFamiliesOn). */
+const ONE_LEARNER_REFUSAL = {
+  allowed: false,
+  code: CommErrorCode.LESSON_ONE_LEARNER,
+  reason: 'this lesson is for one student; another child joins their own lesson',
+} as const satisfies Decision;
+
 /**
  * A keyset cursor: the last row's `started_at` and `id`, opaque to the client.
  *
@@ -124,6 +133,10 @@ export class CallService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(MEDIA_TOKEN_ISSUER) private readonly media: MediaTokenIssuer,
+    // OA-12: takes a second family's guardian out of a lesson call's media
+    // room (separateLessonLearners). Optional only for tests that build the
+    // service without it; the application always provides LiveKitRoomControl.
+    @Optional() @Inject(MEDIA_ROOM_CONTROL) private readonly rooms?: MediaRoomControl,
   ) {}
 
   /**
@@ -262,6 +275,238 @@ export class CallService {
   }
 
   /**
+   * OA-12 (docs/release/app-review-notes-payments.md): ONE LEARNER PER PAID
+   * LESSON CALL. Payments outside store billing rest on Apple 3.1.3(d) and
+   * Google Play's 1:1 rule: a live service between a teacher and ONE learner.
+   *
+   * The lesson already names one learner and a teacher cannot hold two lessons
+   * at once (lesson_teacher_is_never_double_booked). The call is the gap: it
+   * carries no lesson id. So, the same way isLessonCall ties a call to a lesson,
+   * a call is a LESSON CALL while one of its teachers has a lesson on (from
+   * LESSON_CALL_EARLY before the start to LESSON_CALL_LATE after the end, not
+   * cancelled, moved or voided) AND it seats that lesson's family.
+   *
+   * A child has no account: on a call a learner is present through their
+   * family's guardians. A lesson call that also seats a guardian of ANOTHER
+   * family seats another learner, and is refused. The lesson's own parents, the
+   * teacher and staff are never refused; a family's own conversations (siblings
+   * included) hold one family and are unaffected; outside every window nothing
+   * changes. Only a class group may span families in the database. Refused at
+   * start, answer and media token (below); a call already live when the window
+   * opens is corrected by separateLessonLearners.
+   *
+   * "Paid": every lesson counts. Lessons are what families pay for (in-app
+   * payability names lesson packages only), a lesson row carries no package
+   * link, and a trial is held to the same rule -- so it fails closed. A trial
+   * names a prospect, not a learner, and has no family on a call to compare.
+   */
+  private async lessonFamiliesOn(teacherIds: string[], organizationId: string, now: Date): Promise<Set<string>> {
+    if (teacherIds.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<Array<{ family_id: string }>>`
+      SELECT DISTINCT ln.family_id::text AS family_id
+        FROM chat.lesson l
+        JOIN chat.learner ln ON ln.id = l.learner_id
+       WHERE l.teacher_id = ANY(${teacherIds}::uuid[])
+         AND l.organization_id = ${organizationId}::uuid
+         AND (l.outcome IS NULL OR l.outcome = 'held')
+         AND ${now}::timestamptz BETWEEN l.starts_at - ${LESSON_CALL_EARLY_MINUTES} * interval '1 minute'
+                                     AND l.ends_at + ${LESSON_CALL_LATE_MINUTES} * interval '1 minute'`;
+    return new Set(rows.map((r) => r.family_id));
+  }
+
+  /**
+   * OA-12, on START: the families whose guardians the call would seat. Refused
+   * when one of them has a lesson on with a teacher the call seats, and the call
+   * seats any other family too. Null when the call may go ahead.
+   */
+  private async oneLearnerAtStart(conv: Conversation, participants: Actor[], now: Date): Promise<Decision | null> {
+    const families = new Set(
+      participants.flatMap((a) => (a.kind === ActorKind.CONTACT && a.familyId ? [a.familyId] : [])),
+    );
+    if (families.size < 2) return null;
+    const teacherIds = participants.filter((a) => a.kind === ActorKind.TEACHER).map((a) => a.actorId);
+    const lessonFamilies = await this.lessonFamiliesOn(teacherIds, conv.organizationId, now);
+    return [...families].some((f) => lessonFamilies.has(f)) ? ONE_LEARNER_REFUSAL : null;
+  }
+
+  /**
+   * OA-12, on JOIN (answering, or a media token): a guardian is refused when a
+   * teacher on the call has a lesson on for ANOTHER family that the call seats.
+   * Only a guardian is ever refused; the lesson's own family never is.
+   */
+  private async oneLearnerAtJoin(
+    actor: Actor,
+    call: Call & { participants: CallParticipant[] },
+    participantActors: Actor[],
+    now: Date,
+  ): Promise<void> {
+    if (actor.kind !== ActorKind.CONTACT || !actor.familyId) return;
+    const seated = new Set(call.participants.filter((p) => p.leftAt === null).map((p) => p.actorId));
+    const otherFamilies = new Set(
+      participantActors.flatMap((a) =>
+        a.kind === ActorKind.CONTACT && a.familyId && a.familyId !== actor.familyId && seated.has(a.actorId)
+          ? [a.familyId]
+          : [],
+      ),
+    );
+    if (otherFamilies.size === 0) return;
+    const teacherIds = participantActors.filter((a) => a.kind === ActorKind.TEACHER).map((a) => a.actorId);
+    const lessonFamilies = await this.lessonFamiliesOn(teacherIds, call.organizationId, now);
+    if ([...otherFamilies].some((f) => lessonFamilies.has(f))) {
+      throw new CommError(ONE_LEARNER_REFUSAL.code, ONE_LEARNER_REFUSAL.reason);
+    }
+  }
+
+  /**
+   * OA-12, on a call ALREADY LIVE when a lesson window opens. Start, answer and
+   * token time are not enough: a guardian connected before the window stays in
+   * the LiveKit room whatever happens to their token. So whenever the server
+   * next looks at a call -- the worker's call sweep (every pass), and LiveKit's
+   * participant_joined webhook for that one room -- a guardian of another
+   * family is taken out of the room (MediaRoomControl.removeParticipant, as for
+   * a deactivation) and off the call (`left_at`, the participant transition
+   * end() and decline() already write; authorizeJoin then refuses them).
+   *
+   * Which family keeps the call: the one whose lesson, with a teacher on the
+   * call, is in its window and who has a guardian still on it. If two are (a
+   * teacher's back-to-back lessons, whose windows overlap), the lesson under
+   * way now wins, else the later one. Every other family's guardian is taken
+   * off. The lesson's family, the teacher and staff are never touched; a call
+   * that seats one family is never touched.
+   *
+   * The room first, then the row: a removal that fails leaves `left_at` empty,
+   * so the next pass tries again (and the webhook answers 503 so LiveKit
+   * redelivers). Without a media control plane only the row is written. The
+   * row and `call.participant_left` (reason one_learner_lesson) are one
+   * transaction, so the call's participants -- the removed guardian first,
+   * whose app then says why instead of "connection lost" -- are told exactly
+   * once, and only of a removal that happened.
+   *
+   * Two query shapes, each with its index: one room (the webhook) by the
+   * unique `room_name`; every live call (the sweep) by the partial
+   * `call_live_idx` (status <> 'ended'). A single query with an optional room
+   * could be planned generically and use neither.
+   */
+  async separateLessonLearners(
+    opts: { roomName?: string; now?: Date; limit?: number } = {},
+  ): Promise<{ removed: number; failed: number }> {
+    const now = opts.now ?? new Date();
+    const limit = opts.limit ?? 200;
+    const liveCalls =
+      opts.roomName === undefined
+        ? Prisma.sql`c.status <> 'ended'`
+        : Prisma.sql`c.room_name = ${opts.roomName}::text AND c.status <> 'ended'`;
+    const seats = await this.prisma.$queryRaw<
+      Array<{ call_id: string; conversation_id: string; room_name: string; actor_id: string }>
+    >`
+      WITH live AS (
+        SELECT c.id, c.room_name, c.organization_id, c.conversation_id
+          FROM chat.call c
+         WHERE ${liveCalls}
+      ),
+      seated AS (
+        SELECT cp.call_id, cp.actor_id, ct.family_id
+          FROM live
+          JOIN chat.call_participant cp ON cp.call_id = live.id
+          JOIN chat.contact ct ON ct.id = cp.actor_id
+         WHERE cp.actor_kind = 'contact' AND cp.left_at IS NULL
+      ),
+      lesson_family AS (
+        SELECT DISTINCT ON (live.id) live.id AS call_id, ln.family_id
+          FROM live
+          JOIN chat.call_participant tp ON tp.call_id = live.id AND tp.actor_kind = 'teacher'
+          JOIN chat.lesson l ON l.teacher_id = tp.actor_id AND l.organization_id = live.organization_id
+          JOIN chat.learner ln ON ln.id = l.learner_id
+         WHERE (l.outcome IS NULL OR l.outcome = 'held')
+           AND ${now}::timestamptz BETWEEN l.starts_at - ${LESSON_CALL_EARLY_MINUTES} * interval '1 minute'
+                                       AND l.ends_at + ${LESSON_CALL_LATE_MINUTES} * interval '1 minute'
+           AND EXISTS (SELECT 1 FROM seated s WHERE s.call_id = live.id AND s.family_id = ln.family_id)
+         ORDER BY live.id,
+                  (${now}::timestamptz >= l.starts_at AND ${now}::timestamptz < l.ends_at) DESC,
+                  l.starts_at DESC
+      )
+      SELECT s.call_id::text AS call_id, live.conversation_id::text AS conversation_id,
+             live.room_name, s.actor_id::text AS actor_id
+        FROM lesson_family f
+        JOIN live ON live.id = f.call_id
+        JOIN seated s ON s.call_id = f.call_id AND s.family_id <> f.family_id
+       LIMIT ${limit}`;
+
+    let removed = 0;
+    let failed = 0;
+    for (const seat of seats) {
+      try {
+        if (this.rooms && (await this.rooms.removeParticipant(seat.room_name, seat.actor_id)) === 'removed') {
+          realtimeMetrics.mediaParticipantsRemoved++;
+        }
+      } catch (e) {
+        failed++;
+        realtimeMetrics.mediaRemovalFailed++;
+        this.log.warn(`OA-12: another family's guardian could not be taken out of a lesson call room (${(e as Error).name}); retried on the next pass`);
+        continue;
+      }
+      removed += await this.prisma.$transaction(async (tx) => {
+        const n = await tx.$executeRaw`
+          UPDATE chat.call_participant cp
+             SET left_at = now()
+           WHERE cp.call_id = ${seat.call_id}::uuid
+             AND cp.actor_id = ${seat.actor_id}::uuid
+             AND cp.left_at IS NULL
+             AND EXISTS (SELECT 1 FROM chat.call c WHERE c.id = cp.call_id AND c.status <> 'ended')`;
+        if (n > 0) {
+          await this.outbox.enqueue(tx, CommEvent.CALL_PARTICIPANT_LEFT, {
+            callId: seat.call_id,
+            conversationId: seat.conversation_id,
+            actorId: seat.actor_id,
+            reason: CallParticipantLeftReason.ONE_LEARNER_LESSON,
+          });
+        }
+        return n;
+      });
+    }
+    if (removed > 0) this.log.log(`OA-12: took ${removed} guardian(s) of another family off lesson call(s)`);
+    return { removed, failed };
+  }
+
+  /**
+   * OA-12, on LiveKit's participant_joined: an identity whose seat on this
+   * live call already has `left_at` is taken out of the room again.
+   *
+   * WHY ANY `left_at`, NOT ONLY THIS RULE'S. Nothing re-seats a participant:
+   * no path clears `left_at` on a call (authorizeJoin refuses a new token with
+   * LESSON_ONE_LEARNER or CALL_PARTICIPANT_LEFT; presence writes only the
+   * media_* columns). A participant who has left a call that is still live
+   * therefore holds no token issued since they left, and a join by them is an
+   * older token reused -- a guardian taken off a lesson call reconnecting
+   * within the token's few minutes, which LiveKit would not end when it
+   * expires. (Hang-up, decline and the sweeps write `left_at` only as they END
+   * the call, which is never "live".) A legitimately seated participant has
+   * `left_at` empty and is never touched.
+   *
+   * 'removed' after a removal; 'seated' when there is nothing to undo. A
+   * removal that fails throws, and the webhook answers 503 so LiveKit
+   * redelivers. Nothing is announced: the departure was announced when it was
+   * written.
+   */
+  async removeReturningParticipant(roomName: string, identity: string): Promise<'removed' | 'seated'> {
+    if (!this.rooms || !isUuid(identity)) return 'seated';
+    const [left] = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT cp.id::text AS id
+        FROM chat.call c
+        JOIN chat.call_participant cp ON cp.call_id = c.id
+       WHERE c.room_name = ${roomName}::text
+         AND c.status <> 'ended'
+         AND cp.actor_id = ${identity}::uuid
+         AND cp.left_at IS NOT NULL`;
+    if (!left) return 'seated';
+    if ((await this.rooms.removeParticipant(roomName, identity)) === 'removed') {
+      realtimeMetrics.mediaParticipantsRemoved++;
+    }
+    this.log.warn('OA-12: a participant who had left a live call came back with an older media token; taken out again');
+    return 'removed';
+  }
+
+  /**
    * The BR-1 call triggers' refusal, as the COMM.* code the application would
    * have given. Null for anything else, which stays a 500.
    *
@@ -382,6 +627,12 @@ export class CallService {
         participantActors,
         callType,
       };
+    }
+    // OA-12: one learner per paid lesson call. Asked here, so callCapability
+    // and start() agree.
+    if (seat.allowed) {
+      const refusal = await this.oneLearnerAtStart(conv, participantActors, now);
+      if (refusal) return { decision: refusal, participantActors, callType };
     }
     return { decision: seat, participantActors, callType };
   }
@@ -640,7 +891,7 @@ export class CallService {
    * leave time onto a finished call and make its history wrong.
    */
   async decline(callId: string, actorId: string): Promise<void> {
-    const { actor, call } = await this.authorizeJoin(callId, actorId);
+    const { actor, call } = await this.authorizeJoin(callId, actorId, { takesSeat: false });
 
     await this.prisma.$transaction(async (tx) => {
       const { status } = await this.lockCall(tx, callId);
@@ -1289,7 +1540,7 @@ export class CallService {
    * mint a media token. "Is a participant" and "is still on the call" are
    * different questions; this asks the second.
    */
-  private async authorizeJoin(callId: string, actorId: string) {
+  private async authorizeJoin(callId: string, actorId: string, opts: { takesSeat: boolean } = { takesSeat: true }) {
     const now = new Date();
     const actor = await this.conversations.requireActor(actorId);
 
@@ -1320,6 +1571,10 @@ export class CallService {
       );
     }
     if (participant.leftAt !== null) {
+      // OA-12: a guardian taken off a lesson call by the one-learner rule is
+      // told so while the lesson window is open, so their app's rejoin shows
+      // why instead of ending as "connection lost". Otherwise: they left.
+      if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, await this.participantActorsOf(call), now);
       throw new CommError(
         CommErrorCode.CALL_PARTICIPANT_LEFT,
         'this participant has already left the call',
@@ -1330,11 +1585,11 @@ export class CallService {
     const conv = await this.conversations.requireConversation(call.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const participantActors: Actor[] = [];
-    for (const p of call.participants) {
-      const a = await this.identity.resolveActor(p.actorId);
-      if (a) participantActors.push(a);
-    }
+    const participantActors = await this.participantActorsOf(call);
+
+    // OA-12: one learner per paid lesson call. Answering and media take a seat;
+    // declining does not, so a refused guardian can still turn the ring down.
+    if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, participantActors, now);
 
     const family = conv.familyId
       ? await this.prisma.family.findUnique({
@@ -1359,6 +1614,16 @@ export class CallService {
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     return { actor, call, participant, conv, membership };
+  }
+
+  /** Every participant of the call, resolved (one that no longer resolves is left out). */
+  private async participantActorsOf(call: { participants: CallParticipant[] }): Promise<Actor[]> {
+    const participantActors: Actor[] = [];
+    for (const p of call.participants) {
+      const a = await this.identity.resolveActor(p.actorId);
+      if (a) participantActors.push(a);
+    }
+    return participantActors;
   }
 
   /**

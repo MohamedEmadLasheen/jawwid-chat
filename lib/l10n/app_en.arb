@@ -179,6 +179,8 @@
   "callFailedMicrophone": "Jawwid needs microphone access to make calls.",
   "callMicrophoneSettingsHint": "Allow the microphone for Jawwid in your phone's Settings, then try the call again.",
   "callFailedNotAllowed": "This call is not available.",
+  "callFailedOneLearnerLesson": "This lesson is for one student. Every other child has their own lesson.",
+  "callFailedOneLearnerLessonStart": "During a lesson, a call is for one student only.",
   "callFailedNetwork": "The call could not connect. Check your connection and try again.",
   "callOutgoing": "Calling…",
   "callEnded": "Call ended",

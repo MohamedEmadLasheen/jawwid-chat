@@ -344,9 +344,23 @@ describe("7/8. media presence is not faked from an HTTP accept", () => {
       /\.enqueue\(/.test(readFileSync(`${root}/${file}`, "utf8")),
     );
 
-    expect(emitters).toEqual([
+    // OA-12 adds exactly ONE other emitter, and only of participant_left: the
+    // server ITSELF took a participant off a lesson call (it removed them from
+    // the media room, so it observed the departure it caused). That event
+    // always carries a `reason`, which is what separates it from presence.
+    expect(emitters.sort()).toEqual([
+      "src/communication/calls/call.service.ts",
       "src/communication/calls/media-presence.service.ts",
     ]);
+    const service = readFileSync(
+      `${root}/src/communication/calls/call.service.ts`,
+      "utf8",
+    );
+    expect(service).not.toMatch(/CommEvent\.CALL_PARTICIPANT_JOINED/);
+    expect(service.match(/CommEvent\.CALL_PARTICIPANT_LEFT/g)).toHaveLength(1);
+    expect(service).toMatch(
+      /enqueue\(tx, CommEvent\.CALL_PARTICIPANT_LEFT, \{[^}]*reason: CallParticipantLeftReason\.ONE_LEARNER_LESSON/,
+    );
   });
 });
 
@@ -721,6 +735,31 @@ describe("10/11/12. routing is the security boundary", () => {
 
     expect(deliveries).toHaveLength(1);
     expect(deliveries[0].room).toBe(room.conversation(conversationId));
+  });
+
+  it("OA-12: a participant the server took off the call is told in their own room, and so is every other participant", async () => {
+    // A participant_left WITH a reason is not presence: the server removed
+    // them. The removed person is a participant of the call (their row stays)
+    // and must hear why, whether or not they still watch the conversation.
+    const { conversationId, callId } = await directCall();
+    await drain();
+
+    await g.prisma.outboxEvent.create({
+      data: {
+        type: CommEvent.CALL_PARTICIPANT_LEFT,
+        payload: { callId, conversationId, actorId: s.parentId, reason: "one_learner_lesson" },
+        status: "pending",
+      },
+    });
+
+    const deliveries = (await drain()).filter(
+      (d) => d.event === CommEvent.CALL_PARTICIPANT_LEFT,
+    );
+
+    expect(new Set(deliveries.map((d) => d.room))).toEqual(directCallRooms());
+    for (const d of deliveries) {
+      expect(d.payload).toMatchObject({ actorId: s.parentId, reason: "one_learner_lesson" });
+    }
   });
 
   it("the payload carries only what a client needs, and no media handle", async () => {
