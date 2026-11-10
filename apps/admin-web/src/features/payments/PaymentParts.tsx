@@ -304,6 +304,17 @@ export function PaymentList({
   )
 }
 
+/**
+ * W61 S4: what a refund did -- money went back, the lessons the payment bought stay
+ * credited (no automatic lesson reversal; product decision). Staff read it beside the
+ * payment so a refund is never taken to have removed lessons.
+ */
+export function RefundKeepsLessons({ amountMinor, currency, as: Tag = 'span' }: { amountMinor: number; currency: string; as?: 'span' | 'p' }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  return <Tag className="tf-muted">{tx(PAY.refundedLessonsStay, { amount: formatMoney(amountMinor, currency, locale) })}</Tag>
+}
+
 function PaymentItem({ payment: p, onVoid, onRefund }: { payment: Payment; onVoid?: () => void; onRefund?: () => void }) {
   const tx = useCopy()
   const { locale, date } = useI18n()
@@ -315,7 +326,7 @@ function PaymentItem({ payment: p, onVoid, onRefund }: { payment: Payment; onVoi
           {tx(METHOD[p.method])}
         </Badge>
         <span className="pf-amount">{money(p.amountMinor)}</span>
-        {p.refundedMinor > 0 && <span className="tf-muted">{tx(PAY.refunded, { amount: money(p.refundedMinor) })}</span>}
+        {p.refundedMinor > 0 && <RefundKeepsLessons amountMinor={p.refundedMinor} currency={p.currency} />}
       </div>
       <div className="pf-entry__meta">
         <span>{tx(PAY.paidOnLine, { date: formatDay(p.paidOn, locale) })}</span>

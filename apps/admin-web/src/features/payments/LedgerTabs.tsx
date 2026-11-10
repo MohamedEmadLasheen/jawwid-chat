@@ -51,7 +51,7 @@ import {
   useTransaction,
   useTransactions,
 } from './hooks'
-import { Field, InvoiceDownloadButton, RequestStatusBadge, ServerError } from './PaymentParts'
+import { Field, InvoiceDownloadButton, RefundKeepsLessons, RequestStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
 /**
@@ -493,6 +493,7 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             </>
           )}
         </dl>
+        {p.refundedMinor > 0 && <RefundKeepsLessons as="p" amountMinor={p.refundedMinor} currency={p.currency} />}
       </Section>
 
       {p.stripe && (

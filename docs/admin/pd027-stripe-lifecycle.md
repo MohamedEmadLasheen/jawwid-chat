@@ -183,6 +183,32 @@ payment holds the new data, unless exported first).
   `payment.refund_failed_at_stripe` names the payment and refund, and the API logs an error. Admin shows
   the outcome in Stripe events. Follow-up: a reversal entry on `chat.payment_refund` (forward-only, with a
   reason) that the totals subtract.
+- **A refund does not take lessons back (W61 S4).** A refund gives money back; the lesson package the
+  payment credited stays credited. There is no automatic lesson reversal (product decision; out of
+  scope). So staff are not misled, Admin shows "Refunded <amount>; the lesson package stays credited"
+  (Arabic: "تم استرداد <amount>، وتبقى حصص الباقة مضافة كما هي") on a refunded payment in the
+  Transactions detail and in the parent profile's payments. Removing lessons after a refund is a manual
+  staff action.
+
+## 4a. A card while a bank-transfer receipt is waiting (W61 S2)
+
+A parent who has sent a transfer receipt and then pays by card may be charged twice. A receipt is not money
+until the academy approves it, so it never lowers what a request still owes. Instead:
+
+- **Notice.** When a request has receipts with status `pending` (in its currency), the app's pay sheet and
+  the `/pay` page say: "A transfer receipt for this request is waiting for the academy to check. Paying by
+  card too may charge you twice." (Arabic, the pay sheet: "يوجد إيصال تحويل لهذا الطلب بانتظار مراجعة
+  الأكاديمية. إن دفعت بالبطاقة أيضًا فقد يُخصم المبلغ مرتين."; the `/pay` page addresses the family in
+  the plural, as the rest of that page does.)
+- **Part covered.** Card is still allowed, for the whole remaining amount, with the notice.
+- **All covered** (pending receipts ≥ what is left). `CheckoutService.open` refuses with
+  `409 COMM.BILLING_STATE` and `error.detail = { reason: "receipt_pending", pendingMinor, remainingMinor }`;
+  no Stripe page is opened. The app's pay sheet disables the card option and adds "Card payment will be
+  available again if the academy cannot confirm the transfer."; it also tells this refusal apart from "no
+  longer open" when it arrives from the server. The `/pay` page shows no card button.
+- A rejected receipt stops counting at once; an approved one becomes a payment (and so lowers what is left).
+- The app reads pending receipts from `GET /me/billing`'s `receipts` (no new field). The `/pay` page reads
+  them per request (`pendingReceiptMinor`, `payments-read.service.ts`).
 
 ## 5. Operations: setup, deploy, verify, roll back
 
@@ -317,3 +343,6 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
+| W61 S2: card refused when pending receipts cover what is left (app and `/pay`), allowed when they cover part; rejected or other-currency receipts do not count | `apps/api/test/integration/w61-pending-receipt-http.spec.ts`, `test/unit/billing/w61-pay-page-receipt.spec.ts` |
+| W61 S2: the pay sheet notice in English and Arabic; card disabled when covered; the server's receipt_pending refusal said in the sheet | `test/features/billing/w61_pending_receipt_test.dart` |
+| W61 S4: "the lesson package stays credited" on a refunded payment (Transactions detail, parent profile), English and Arabic | `Ledger.test.tsx`, `apps/admin-web/src/features/profiles/ProfilePayments.test.tsx` |

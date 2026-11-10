@@ -299,6 +299,35 @@ describe('Payments > Transactions', () => {
     expect(within(dialog).queryByRole('button', { name: 'Reconcile with Stripe' })).not.toBeInTheDocument()
   })
 
+  it('W61 S4: a refunded payment says the lesson package stays credited (a refund removes no lessons), in English and Arabic', async () => {
+    serve()
+    on('GET', /\/payments\/p-1$/, () => json(detail({ canReconcile: false })))
+    const view = renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).getByText(/^Refunded AED\s200\.00; the lesson package stays credited$/)).toBeInTheDocument()
+    view.unmount()
+
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions', locale: 'ar' })
+    const arTable = await screen.findByRole('table', { name: 'المعاملات' })
+    await userEvent.click(within(arTable).getByText('Family Alpha'))
+    const arDialog = await screen.findByRole('dialog')
+    expect(within(arDialog).getByText(/^تم استرداد .*200\.00.*، وتبقى حصص الباقة مضافة كما هي$/)).toBeInTheDocument()
+  })
+
+  it('W61 S4: a payment with no refund shows no refund marker', async () => {
+    serve()
+    on('GET', /\/payments\/p-1$/, () =>
+      json(detail({ canReconcile: false, refunds: [], payment: { ...transaction(), voided: null, paymentMethodType: 'card' } })),
+    )
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).queryByText(/the lesson package stays credited/)).not.toBeInTheDocument()
+  })
+
   it('Reconcile with Stripe shows Chat’s and Stripe’s numbers when they differ, and the refunds recorded', async () => {
     serve({ canReconcile: true })
     on('GET', /\/payments\/p-1$/, () => json(detail()))

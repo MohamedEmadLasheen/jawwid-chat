@@ -266,6 +266,22 @@ describe('PD-27 on the Parent Profile', () => {
     expect(within(timeline).getByText(/^paid .*400\.00 · remaining .*600\.00$/)).toBeInTheDocument()
   })
 
+  it('W61 S4: a refunded payment says the lesson package stays credited; one without a refund does not', async () => {
+    const card = payment({ id: 'pay-2', method: 'card', amountMinor: 80000, refundedMinor: 30000, recordedBy: null, reference: null })
+    serve(billing({ payments: [payment(), card] }))
+    const view = renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1' })
+    const received = await screen.findByRole('region', { name: 'Payments received' })
+    const [cash, refunded] = within(received).getAllByRole('listitem')
+    expect(within(refunded!).getByText(/^Refunded AED\s300\.00; the lesson package stays credited$/)).toBeInTheDocument()
+    expect(within(cash!).queryByText(/the lesson package stays credited/)).not.toBeInTheDocument()
+    view.unmount()
+
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1', locale: 'ar' })
+    const arReceived = await screen.findByRole('region', { name: 'الدفعات المستلمة' })
+    const arCard = within(arReceived).getAllByRole('listitem')[1]!
+    expect(within(arCard).getByText(/^تم استرداد .*300\.00.*، وتبقى حصص الباقة مضافة كما هي$/)).toBeInTheDocument()
+  })
+
   it('reads in Arabic, right to left', async () => {
     serve(billing())
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/parents/p-1', locale: 'ar' })

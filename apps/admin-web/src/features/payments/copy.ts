@@ -204,6 +204,8 @@ export const PAY = {
   recordedByLine: { en: 'recorded by {name}', ar: 'سجّله {name}' },
   byStripe: { en: 'confirmed by Stripe', ar: 'أكّده Stripe' },
   refunded: { en: 'refunded {amount}', ar: 'مُسترد {amount}' },
+  /** W61 S4: a refund gives money back and never takes lessons back (product decision: no automatic lesson reversal). */
+  refundedLessonsStay: { en: 'Refunded {amount}; the lesson package stays credited', ar: 'تم استرداد {amount}، وتبقى حصص الباقة مضافة كما هي' },
   invoiceNo: { en: 'Invoice {number}', ar: 'فاتورة {number}' },
   voidedLine: { en: 'Voided by {name}: {reason}', ar: 'ألغاه {name}: {reason}' },
   refundLine: { en: 'Refund {amount}, {date} ({source}): {reason}', ar: 'استرداد {amount}، {date} ({source}): {reason}' },
