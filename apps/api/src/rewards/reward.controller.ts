@@ -4,6 +4,7 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { NotForStaff, Requires } from '../platform/permissions/route-access';
 import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { GiveRewardInput, RewardService } from './reward.service';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * PD-55: a teacher's rewards during a lesson. A teacher's own surface: staff
@@ -33,7 +34,9 @@ export class RewardController {
     return this.rewards.forLesson(actorId, lessonId);
   }
 
+  /** PD-58: a reward may carry the teacher's own praise text, which the family sees. */
   @NotForStaff()
+  @RequiresLegal()
   @Post('learners/:learnerId/rewards')
   @HttpCode(201)
   @RateLimited(ActionScope.REWARD_GIVE)

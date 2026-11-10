@@ -14,6 +14,7 @@ import { SUBSCRIPTION_LOCK } from '../../platform/tokens';
 import type { SubscriptionLockReader } from '../../platform/subscription-lock';
 import type { Actor } from '../../platform/types';
 import { Requires } from '../../platform/permissions/route-access';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 @Controller('conversations')
 @UseFilters(CommErrorFilter)
@@ -117,6 +118,7 @@ export class ConversationController {
    * selects the other party; it asserts nothing about them.
    */
   @Requires('chat.use')
+  @RequiresLegal()
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {
     const conv = await this.conversations.getOrCreateDirect(actorId, body.withActorId);
@@ -138,6 +140,7 @@ export class ConversationController {
    * database; see ConversationService.createFamilyGroup.
    */
   @Requires('chat.manage')
+  @RequiresLegal()
   @Post('family-group')
   async familyGroup(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     const conv = await this.conversations.createFamilyGroup(actorId, body ?? {});
@@ -149,6 +152,7 @@ export class ConversationController {
 
   /** The official group for a learner, created from Core relationships. */
   @Requires('chat.manage')
+  @RequiresLegal()
   @Post('student-group')
   async studentGroup(@ActorId() actorId: string, @Body() body: { learnerId: string }) {
     const conv = await this.conversations.ensureStudentGroup(body.learnerId, actorId);

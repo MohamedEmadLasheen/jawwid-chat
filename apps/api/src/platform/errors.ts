@@ -679,6 +679,27 @@ export enum CommErrorCode {
    * committed. 503 with Retry-After; retry the same request.
    */
   DATABASE_UNAVAILABLE = 'COMM.DATABASE_UNAVAILABLE',
+
+  // --- PD-58 Terms of Use (roadmap 2026-11-03 §7.4) ---
+  /**
+   * 403. The caller has not accepted the current version of its kind's terms
+   * and of the Code of Conduct, and the route creates content others see.
+   * `detail.required` lists what to accept ({documentKey, version, urlAr,
+   * urlEn}); accept with POST /me/legal/accept, then retry.
+   */
+  TERMS_NOT_ACCEPTED = 'COMM.TERMS_NOT_ACCEPTED',
+  /** 409. A version accepted is no longer the current one: reload GET /me and accept what it lists. */
+  LEGAL_VERSION_STALE = 'COMM.LEGAL_VERSION_STALE',
+  /** 400. The documents accepted are not exactly this account kind's terms plus the Code of Conduct. */
+  LEGAL_WRONG_DOCUMENTS = 'COMM.LEGAL_WRONG_DOCUMENTS',
+  /** 400. PD-16 sign-up without `acceptLegal` (the family terms and the Code of Conduct). */
+  LEGAL_REQUIRED = 'COMM.LEGAL_REQUIRED',
+  /**
+   * 503. The owner's `legal.current.*` configuration is missing (production) or
+   * names a version that was never published (anywhere). An operator fixes it;
+   * nothing the caller can do. Never answered as "no terms required".
+   */
+  LEGAL_NOT_CONFIGURED = 'COMM.LEGAL_NOT_CONFIGURED',
 }
 
 export class CommError extends Error {

@@ -3,6 +3,7 @@ import { ParentProfileService } from '../profile/parent-profile.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { NotForStaff } from '../../platform/permissions/route-access';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 /**
  * The signed-in parent's own profile, and their children's.
@@ -41,6 +42,7 @@ export class ParentProfileController {
 
   /** Save the caller's own name and/or About. */
   @NotForStaff()
+  @RequiresLegal()
   @Patch('profile')
   async updateProfile(
     @ActorId() actorId: string,
@@ -53,6 +55,7 @@ export class ParentProfileController {
 
   /** Save one child's name and/or About. The server decides whose child it is. */
   @NotForStaff()
+  @RequiresLegal()
   @Patch('children/:learnerId')
   async updateChild(
     @ActorId() actorId: string,

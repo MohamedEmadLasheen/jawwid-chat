@@ -6,6 +6,7 @@
   python3 -I scripts/infra/production-setup.py generate         # create the random app secrets (never printed)
   python3 -I scripts/infra/production-setup.py ask NAME [NAME…] # paste a value you hold (secrets: hidden prompt; plain settings: stored as variables)
   python3 -I scripts/infra/production-setup.py file NAME PATH   # a multi-line secret from a file (.p8, .json)
+  DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal  # read-only: the PD-58 legal.current.* rows in the database
 
 The owner runs it, on their own machine, with `gh` signed in as the repository
 owner. It writes ONLY through `gh variable set` / `gh secret set`. It never
@@ -37,6 +38,20 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MANIFEST = os.path.join(ROOT, "infra", "env", "manifest.tsv")
 WORKFLOW = os.path.join(ROOT, ".github", "workflows", "deploy-production.yml")
 ENV = "production"
+
+# PD-58 (roadmap §7.3): the API refuses to start in production unless each of
+# these chat.config rows names a version published with chat.publish_legal_version.
+LEGAL_DOCUMENTS = ("terms_family", "terms_teacher", "terms_staff", "code_of_conduct")
+LEGAL_SQL = (
+    "select d.key, (c.key is not null), "
+    "coalesce(case when jsonb_typeof(c.value) = 'string' then c.value #>> '{}' end, ''), "
+    "(l.version is not null) "
+    "from unnest(array['" + "','".join(LEGAL_DOCUMENTS) + "']) with ordinality as d(key, n) "
+    "left join chat.config c on c.key = 'legal.current.' || d.key "
+    "left join chat.legal_document_version l on l.document_key = d.key "
+    "and jsonb_typeof(c.value) = 'string' and l.version = c.value #>> '{}' "
+    "order by d.n"
+)
 
 # Read by jobs WITHOUT a GitHub Environment (preflight, build-admin-web), so
 # they must be REPOSITORY variables; the staging four build the image the
@@ -164,7 +179,40 @@ def cmd_status() -> int:
     print(f"missing before the first deploy: {len(missing_now)}" + (f" ({', '.join(missing_now)})" if missing_now else ""))
     if missing_later:
         print("set after the first deploy: " + ", ".join(missing_later))
+    print("database (not GitHub): PD-58 needs the four legal.current.* rows before the API deploys; "
+          "check them with `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal`")
     return 0 if not missing_now else 1
+
+
+def cmd_legal() -> int:
+    """Read-only: does each legal.current.<key> row name a published version? Prints names, never the URL."""
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
+        print("production-setup legal: set DATABASE_URL for the database to check (it is never printed)", file=sys.stderr)
+        return 64
+    env = dict(os.environ, PGOPTIONS="-c default_transaction_read_only=on")
+    p = subprocess.run(["psql", "-X", "-v", "ON_ERROR_STOP=1", "-At", "-F", "\t", url, "-c", LEGAL_SQL],
+                       text=True, capture_output=True, check=False, env=env)
+    if p.returncode != 0:
+        print(f"production-setup legal: psql exited {p.returncode}", file=sys.stderr)  # stderr not echoed: it can quote the URL
+        return 1
+    problems = 0
+    for line in p.stdout.splitlines():
+        key, configured, version, published = line.split("\t")
+        name = f"legal.current.{key}"
+        if configured != "t":
+            state, problems = "MISSING", problems + 1
+        elif not version:
+            state, problems = "NOT A VERSION NAME (a JSON string)", problems + 1
+        elif published != "t":
+            state, problems = f"names {version!r}, which was never published", problems + 1
+        else:
+            state = f"set: {version!r}"
+        print(f"{name:34} {state}")
+    if problems:
+        print(f"{problems} of {len(LEGAL_DOCUMENTS)} missing: production refuses to start (PD-58, roadmap §7.3). "
+              "Release order: ENG-11 and ENG-12 first, then publish and set these rows, then deploy the API.")
+    return 0 if problems == 0 else 1
 
 
 def cmd_fixed() -> int:
@@ -226,6 +274,8 @@ def main(argv: list[str]) -> int:
     mode, rest = argv[0], argv[1:]
     if mode == "status" and not rest:
         return cmd_status()
+    if mode == "legal" and not rest:
+        return cmd_legal()
     if mode == "fixed" and not rest:
         return cmd_fixed()
     if mode == "generate" and rest in ([], ["--rotate"]):
