@@ -76,15 +76,13 @@ enum CallUiFailure {
   /// A transport or media failure. Retryable.
   network,
 
-  /// OA-12: the server refused because this is another child's paid lesson
-  /// call ([lessonOneLearnerCode]). Says so plainly, so a parent knows their
-  /// own child joins their own lesson, rather than "not available".
+  /// OA-12: the server refused because a lesson call seats one learner
+  /// ([WireErrors.lessonOneLearner]). Says so plainly rather than "not
+  /// available": to whoever started the call in neutral words, and to a
+  /// guardian answering another child's lesson call, that every child has
+  /// their own lesson.
   oneLearnerLesson,
 }
-
-/// OA-12: one learner per paid lesson call. Mirrors
-/// `CommErrorCode.LESSON_ONE_LEARNER` in `apps/api/src/platform/errors.ts`.
-const lessonOneLearnerCode = 'COMM.LESSON_ONE_LEARNER';
 
 /// Everything the call interface renders, in one value.
 class CallUiState {
@@ -1017,7 +1015,7 @@ class CallController extends Notifier<CallUiState> {
         next = next.copyWith(phase: CallUiPhase.live, clearFailure: true);
 
       case CallMediaPhase.failed:
-        final failure = snapshot.refusalCode == lessonOneLearnerCode
+        final failure = snapshot.refusalCode == WireErrors.lessonOneLearner
             ? CallUiFailure.oneLearnerLesson
             : _classifyMedia(snapshot.failure);
         if (_rejoining && _rejoinFoundCallOver(snapshot)) {
@@ -1104,7 +1102,7 @@ class CallController extends Notifier<CallUiState> {
   CallUiFailure _classify(Object error) {
     if (error is! AppError) return CallUiFailure.network;
     final code = error.code;
-    if (code == lessonOneLearnerCode) return CallUiFailure.oneLearnerLesson;
+    if (code == WireErrors.lessonOneLearner) return CallUiFailure.oneLearnerLesson;
     if (code != null && _notAllowedCodes.contains(code)) {
       return CallUiFailure.notAllowed;
     }

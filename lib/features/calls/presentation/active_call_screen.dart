@@ -175,7 +175,11 @@ class _StatusLine extends StatelessWidget {
       CallUiPhase.failed => switch (state.failure) {
         CallUiFailure.microphone => l10n.callFailedMicrophone,
         CallUiFailure.notAllowed => l10n.callFailedNotAllowed,
-        CallUiFailure.oneLearnerLesson => l10n.callFailedOneLearnerLesson,
+        // OA-12: the starter may be a teacher or staff member -- neutral words;
+        // a guardian answering another child's lesson call hears why.
+        CallUiFailure.oneLearnerLesson => state.direction == CallDirection.outgoing
+            ? l10n.callFailedOneLearnerLessonStart
+            : l10n.callFailedOneLearnerLesson,
         CallUiFailure.network || null => l10n.callFailedNetwork,
       },
     };

@@ -385,7 +385,11 @@ class L10nAr extends L10n {
 
   @override
   String get callFailedOneLearnerLesson =>
-      'هذا الدرس لطالب واحد. يمكن لأي طفل آخر أن ينضم إلى درسه الخاص.';
+      'هذا الدرس لطالب واحد، ولكل طفل آخر درسه الخاص.';
+
+  @override
+  String get callFailedOneLearnerLessonStart =>
+      'أثناء الدرس تكون المكالمة لطالب واحد فقط.';
 
   @override
   String get callFailedNetwork =>

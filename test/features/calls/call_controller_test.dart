@@ -905,7 +905,7 @@ void main() {
 
     test('OA-12: another child\'s paid lesson call is its own failure, not "not available"', () async {
       final container = await ready();
-      calls.startError = refusal(lessonOneLearnerCode);
+      calls.startError = refusal(WireErrors.lessonOneLearner);
 
       await controllerOf(container).start(
         conversationId: 'conv_1',

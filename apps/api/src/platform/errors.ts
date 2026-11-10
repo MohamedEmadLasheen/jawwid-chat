@@ -674,7 +674,9 @@ export enum CommErrorCode {
    * lesson's family may not also seat a guardian of another family -- another
    * learner. Refused on start (and in the call capability) and when that
    * guardian answers or asks for media. The lesson's own parents, the teacher
-   * and staff are never refused it. 403; not retried.
+   * and staff are never refused it. 403; not retried. (A call already live
+   * when the window opens is corrected by CallService.separateLessonLearners,
+   * which sends no code.)
    */
   LESSON_ONE_LEARNER = 'COMM.LESSON_ONE_LEARNER',
   /**

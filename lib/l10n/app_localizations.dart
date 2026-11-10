@@ -742,8 +742,14 @@ abstract class L10n {
   /// No description provided for @callFailedOneLearnerLesson.
   ///
   /// In en, this message translates to:
-  /// **'This lesson is for one student. Another child can join their own lesson.'**
+  /// **'This lesson is for one student. Every other child has their own lesson.'**
   String get callFailedOneLearnerLesson;
+
+  /// No description provided for @callFailedOneLearnerLessonStart.
+  ///
+  /// In en, this message translates to:
+  /// **'During a lesson, a call is for one student only.'**
+  String get callFailedOneLearnerLessonStart;
 
   /// No description provided for @callFailedNetwork.
   ///

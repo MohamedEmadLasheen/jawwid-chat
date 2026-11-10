@@ -242,14 +242,16 @@ void main() {
       expect(find.text(l10n.callSendMessageInstead), findsOneWidget);
     });
 
-    // OA-12: one learner per paid lesson call. The server refuses another
-    // child's guardian with COMM.LESSON_ONE_LEARNER; the screen says why in
-    // plain words, never the code.
-    testWidgets('another child\'s lesson call says it is for one student (English)',
+    // OA-12: one learner per paid lesson call. The server refuses with
+    // COMM.LESSON_ONE_LEARNER; the screen says why in plain words, never the
+    // code. Whoever STARTS the call may be a teacher or staff member, so the
+    // starter reads a neutral line; the guardian ANSWERING another child's
+    // lesson call reads that their child has their own lesson.
+    testWidgets('starting a lesson call that would seat two learners says so neutrally (English)',
         (tester) async {
       await tester.pumpWidget(harness());
       await tester.pump();
-      calls.startError = refusal(lessonOneLearnerCode);
+      calls.startError = refusal(WireErrors.lessonOneLearner);
       final l10n = await L10n.delegate.load(const Locale('en'));
 
       await controllerOf(tester).start(
@@ -259,20 +261,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('This lesson is for one student. Another child can join their own lesson.'),
-        findsOneWidget,
-      );
+      expect(find.text('During a lesson, a call is for one student only.'), findsOneWidget);
+      expect(find.text(l10n.callFailedOneLearnerLesson), findsNothing);
       expect(find.text(l10n.callFailedNotAllowed), findsNothing);
       expect(find.textContaining('COMM.'), findsNothing);
       expect(find.text(l10n.callSendMessageInstead), findsOneWidget);
     });
 
-    testWidgets('another child\'s lesson call says it is for one student (Arabic)',
+    testWidgets('starting a lesson call that would seat two learners says so neutrally (Arabic)',
         (tester) async {
       await tester.pumpWidget(harness(locale: const Locale('ar')));
       await tester.pump();
-      calls.startError = refusal(lessonOneLearnerCode);
+      calls.startError = refusal(WireErrors.lessonOneLearner);
 
       await controllerOf(tester).start(
         conversationId: 'conv_1',
@@ -281,23 +281,31 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('هذا الدرس لطالب واحد. يمكن لأي طفل آخر أن ينضم إلى درسه الخاص.'),
-        findsOneWidget,
-      );
+      expect(find.text('أثناء الدرس تكون المكالمة لطالب واحد فقط.'), findsOneWidget);
       expect(find.textContaining('COMM.'), findsNothing);
     });
 
-    testWidgets('answering another child\'s lesson call shows the same sentence',
+    testWidgets('answering another child\'s lesson call says it is for one student (English)',
         (tester) async {
       await pumpIncoming(tester, isGroup: true);
-      calls.acceptError = refusal(lessonOneLearnerCode);
+      calls.acceptError = refusal(WireErrors.lessonOneLearner);
       final l10n = await L10n.delegate.load(const Locale('en'));
 
       await controllerOf(tester).accept();
       await tester.pumpAndSettle();
 
-      expect(find.text(l10n.callFailedOneLearnerLesson), findsOneWidget);
+      expect(
+        find.text('This lesson is for one student. Every other child has their own lesson.'),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.callFailedOneLearnerLessonStart), findsNothing);
+      expect(find.textContaining('COMM.'), findsNothing);
+    });
+
+    testWidgets('the Arabic sentence for another child\'s lesson call', (tester) async {
+      final l10n = await L10n.delegate.load(const Locale('ar'));
+      expect(l10n.callFailedOneLearnerLesson, 'هذا الدرس لطالب واحد، ولكل طفل آخر درسه الخاص.');
+      expect(l10n.callFailedOneLearnerLessonStart, 'أثناء الدرس تكون المكالمة لطالب واحد فقط.');
     });
 
     testWidgets(

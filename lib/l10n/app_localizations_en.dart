@@ -377,7 +377,11 @@ class L10nEn extends L10n {
 
   @override
   String get callFailedOneLearnerLesson =>
-      'This lesson is for one student. Another child can join their own lesson.';
+      'This lesson is for one student. Every other child has their own lesson.';
+
+  @override
+  String get callFailedOneLearnerLessonStart =>
+      'During a lesson, a call is for one student only.';
 
   @override
   String get callFailedNetwork =>

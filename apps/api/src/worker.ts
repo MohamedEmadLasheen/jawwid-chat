@@ -432,6 +432,14 @@ async function bootstrap(): Promise<void> {
       } catch (e) {
         report(log, 'call sweep', 'calls.endInterrupted', e);
       }
+      // OA-12: a call already live when a lesson window opens keeps one
+      // learner -- another family's guardian is taken out of the room and off
+      // the call. Removals that fail stay unwritten and are retried next pass.
+      try {
+        await calls.separateLessonLearners();
+      } catch (e) {
+        report(log, 'call sweep', 'calls.separateLessonLearners', e);
+      }
     }
 
     // Lessons from regular times, their reminders and (hourly, inside the

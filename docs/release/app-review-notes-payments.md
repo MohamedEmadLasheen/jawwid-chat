@@ -39,9 +39,24 @@ Sources: <https://developer.apple.com/app-store/review/guidelines/#other-purchas
 | Anything refused above | — | The app shows no Pay for it. Card checkout and bank-transfer receipts refuse it with `409 COMM.PAYMENT_NOT_IN_APP`, checked before anything is written; a refused receipt's file is deleted. Staff can still collect it outside the app (web pay link, cash). Admin Web marks it "Not payable in the app", and its forms explain why. | `assertPayableInApp` and `assertInstalmentPayableInApp` in `parent-payments.service.ts`; `amountsDue` in `lib/features/billing/domain/amount_due.dart` |
 | Any purpose added later | — | **No**, until classified in `in-app-payability.ts` (fails closed, server and app) | the same |
 | Group classes | — | Not sold. A `Lesson` has exactly one `learner_id` and one `teacher_id` (`schema.prisma`), so a paid lesson cannot have two learners. Group chats (`class_group`, `student_group`) are chats, never priced. | the schema |
-| Lesson calls | The live call a lesson is held on | One learner per call: while a lesson is in its call window (15 minutes either side), the server refuses to start, answer or join a call with that lesson's teacher and family that would also seat a guardian of another family (`COMM.LESSON_ONE_LEARNER`); the app says "This lesson is for one student. Another child can join their own lesson." | `CallService` in `apps/api/src/communication/calls/call.service.ts`; `apps/api/test/integration/lesson-one-learner-call.spec.ts` |
+| Lesson calls | The live call a lesson is held on | No other family's guardian may be seated on a call with the lesson's teacher and family during the lesson's call window (15 minutes either side). The server refuses to start such a call, and refuses that guardian's answer and media token (`COMM.LESSON_ONE_LEARNER`). A call already live when the window opens is corrected the next time the server checks it (the call sweep, every few seconds, and every media join): the other family's guardian is taken out of the media room and off the call. Limits are listed under the table. | `CallService` (`oneLearnerAtStart`, `oneLearnerAtJoin`, `separateLessonLearners`) in `apps/api/src/communication/calls/call.service.ts`; `apps/api/src/worker.ts`; `livekit-webhook.controller.ts`; `apps/api/test/integration/lesson-one-learner-call.spec.ts` |
 | Materials, games, lesson audio | Free | Not sold, not part of any package | (no price or SKU exists) |
 | Lesson recording | None | No LiveKit egress or call recording exists | `test/app/store_payments_policy_test.dart`, `in-app-payability.spec.ts` |
+
+**Limits of the lesson-call rule (OA-12), stated plainly.**
+
+- **The server sees families, not children.** A child has no account; a learner is on a call
+  through their family's guardians. So the rule is "no other family's guardian", not "one child":
+  during sibling A's lesson, the teacher may still call the family group that covers siblings A
+  and B, and both may be in the room. That family's guardians are the lesson's guardians.
+- **A call already live when the window opens is corrected within one sweep pass** (5 seconds by
+  default, `CALL_SWEEP_INTERVAL_MS`), or at once if someone joins the room. Until then, the other
+  family's guardian is still connected. A guardian the media server cannot remove (unreachable)
+  stays on until a later pass succeeds.
+- **Every lesson counts**, trials included where they name a learner. A lesson that was cancelled,
+  moved or voided opens no window.
+- Today no call can seat two families: only a `class_group` may span families in the database,
+  and the API cannot create one yet. The rule guards that future case.
 
 **What the parent reads.** The pay sheet and the Stripe Checkout page both say, in the family's
 language:
