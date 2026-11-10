@@ -129,6 +129,12 @@ Each real merge of a stacked or conflicting PR still gets its own CI run and a d
   - Everything else merged with no conflicts. #587's migration `20261110100000` is the latest and unique.
 - **Order:** #587, #588 and #589 can join any batch after their bases. #590 goes after #557. **#591 goes last of all.**
 
+## Rehearsal round 5 (2026-11-10): round 4 plus the post-LR-46 heads of #581, #584 and #587; CI passes
+
+- **What it is:** the throwaway branch `claude/merge-rehearsal-5-2026-11-10`, never merged: round 4 (`7aa84850`) plus #581 `8c613f23`, #584 `8fc61aa6` and #587 `6f0dd902`.
+- **CI:** run 42890829350 is green at `ee97c148`.
+- **Recipe:** in `docs/admin/pd027-stripe-lifecycle.md` (the operations log table), keep every row from both sides: #580's dispute rows and #581's `checkout_closed_unconfirmed` and "a cancelled request's page … left open" rows. Use #580's fuller `ignored_not_chat` and `refund_deferred` wording. Nothing else conflicted.
+
 ## Batches
 
 | Batch | PRs, in merge order (head SHA) | Purpose | Risk | Verify afterwards |
