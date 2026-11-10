@@ -2,7 +2,9 @@
 # LR-07c: make the Android UPLOAD keystore for Google Play, once.
 #
 # Run BY THE OWNER ONLY, in a dedicated standard macOS user (not the development user), in an empty
-# folder. Never by CI, never by an agent. Instructions: docs/release/android-upload-key.md.
+# folder. Never by CI, never by an agent, never inside a project folder or a git checkout (it refuses
+# a folder with .git in it or any parent, or a path containing /dev/ or /Documents/jawwid).
+# Instructions: docs/release/android-upload-key.md.
 #
 #   bash make-upload-key.sh                      # asks for the password twice (hidden)
 #   <password manager CLI> | bash make-upload-key.sh   # or reads ONE line from stdin
@@ -37,6 +39,29 @@ trap cleanup EXIT
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
   fail "refusing to run in CI: only the owner runs this, on a trusted Mac user"
 fi
+
+# Never inside a project folder or a git checkout: the key must not sit next to code that agents and
+# tools read. Checked on both the logical and the physical path (a symlinked folder counts), with
+# case-insensitive matching (macOS file names are).
+check_folder() {
+  local dir="$1" d
+  shopt -s nocasematch
+  if [[ "$dir/" == */dev/* || "$dir/" == */documents/jawwid* ]]; then
+    shopt -u nocasematch
+    fail "refusing to run in $dir: it looks like a project area (/dev/ or /Documents/jawwid). Use an empty folder such as ~/upload-key in the dedicated user."
+  fi
+  shopt -u nocasematch
+  d="$dir"
+  while :; do
+    if [ -e "$d/.git" ] || [ -L "$d/.git" ]; then
+      fail "refusing to run in $dir: $d is a git checkout. Use an empty folder such as ~/upload-key in the dedicated user."
+    fi
+    [ -n "$d" ] && [ "$d" != / ] || break
+    d="${d%/*}"
+  done
+}
+check_folder "$PWD"
+check_folder "$(pwd -P)"
 if [ -e "$KEYSTORE" ] || [ -L "$KEYSTORE" ]; then
   fail "$PWD/$KEYSTORE already exists; refusing to overwrite it. Use an empty folder."
 fi

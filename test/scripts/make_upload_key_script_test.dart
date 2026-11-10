@@ -49,9 +49,10 @@ void main() {
 
   File keystore() => File('${work.path}/jawwid-upload.jks');
 
-  Future<({int code, String out, String err})> run(String stdin, {Map<String, String> env = const {}}) async {
+  Future<({int code, String out, String err})> run(String stdin,
+      {Map<String, String> env = const {}, Directory? dir}) async {
     final p = await Process.start('bash', [script],
-        workingDirectory: work.path,
+        workingDirectory: (dir ?? work).path,
         environment: {
           'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin',
           'KEYTOOL': keytool.path,
@@ -201,6 +202,48 @@ void main() {
     expect('${p.stdout}${p.stderr}', isNot(contains(password)));
     expect(argvLog.existsSync(), isFalse);
     expect(keystore().existsSync(), isFalse);
+  });
+
+  test('refuses a git checkout: .git (dir or file) in the folder or in any parent', () async {
+    Future<void> expectRefused(Directory dir, String why) async {
+      final r = await run('$password\n', dir: dir);
+      expect(r.code, isNot(0), reason: why);
+      expect(r.err, contains('git checkout'), reason: why);
+      expect('${r.out}${r.err}', isNot(contains(password)), reason: why);
+      expect(File('${dir.path}/jawwid-upload.jks').existsSync(), isFalse, reason: why);
+      expect(argvLog.existsSync(), isFalse, reason: why);
+    }
+
+    // A worktree has a .git FILE in its root.
+    final dotGitFile = File('${work.path}/.git')..writeAsStringSync('gitdir: /elsewhere\n');
+    await expectRefused(work, '.git file in the folder');
+    dotGitFile.deleteSync();
+
+    // A normal clone has a .git DIRECTORY, here two levels above the folder.
+    Directory('${tmp.path}/.git').createSync();
+    final nested = Directory('${work.path}/a/b')..createSync(recursive: true);
+    await expectRefused(nested, '.git directory in a parent');
+    await expectRefused(work, '.git directory in the parent');
+  });
+
+  test('refuses a project area: a path containing /dev/ or /Documents/jawwid', () async {
+    for (final rel in ['dev', 'dev/upload-key', 'x/DEV/y', 'Documents/jawwid', 'Documents/jawwid-chat/k']) {
+      final dir = Directory('${tmp.path}/$rel')..createSync(recursive: true);
+      final r = await run('$password\n', dir: dir);
+      expect(r.code, isNot(0), reason: rel);
+      expect(r.err, contains('project area'), reason: rel);
+      expect('${r.out}${r.err}', isNot(contains(password)), reason: rel);
+      expect(File('${dir.path}/jawwid-upload.jks').existsSync(), isFalse, reason: rel);
+    }
+    expect(argvLog.existsSync(), isFalse);
+
+    // Look-alikes that are not project areas still work.
+    for (final rel in ['devices', 'Documents/notes']) {
+      final dir = Directory('${tmp.path}/$rel')..createSync(recursive: true);
+      final r = await run('$password\n', dir: dir);
+      expect(r.code, 0, reason: '$rel: ${r.err}');
+      expect(File('${dir.path}/jawwid-upload.jks').existsSync(), isTrue, reason: rel);
+    }
   });
 
   test('a fingerprint that cannot be read is a failure, not a wrong value', () async {

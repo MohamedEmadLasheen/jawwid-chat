@@ -14,11 +14,14 @@ leaked upload key can be reset in Play Console, but treat it as a secret all the
 
 1. On your Mac, create a **dedicated standard user** (System Settings → Users & Groups → Add User,
    type *Standard*, not Administrator). Log in to it. Do not use the development user: nothing from
-   its shell, tools or agents should be present when the key is made.
+   its shell, tools or agents should be present when the key is made. (While keytool runs, the
+   password is in its environment, which other processes of the same macOS user can read.)
 2. Install a JDK in that user if `keytool -help` does not work (for example the Temurin installer
    from adoptium.net).
 3. Copy `scripts/mobile/make-upload-key.sh` from a reviewed commit on `main` into an **empty folder**
-   in that user, for example `~/upload-key/`. Read it: it is short.
+   in that user, for example `~/upload-key/`. Read it: it is short. Never run it inside a project
+   folder or a git checkout: the script refuses a folder that has a `.git` in it or in any parent
+   folder, and any path containing `/dev/` or `/Documents/jawwid`.
 4. Make the password in your password manager: **letters and digits only** (A-Z, a-z, 0-9), **at least
    16 characters**; prefer 32. The CI workflow writes it into a Java properties file and refuses
    anything else.
@@ -42,6 +45,8 @@ The script:
 - refuses a password that is not letters and digits only, or is shorter than 16 characters, and a
   typed password whose two entries differ;
 - refuses to run in CI and refuses any command-line argument (the password is never accepted there);
+- refuses to run inside a git checkout (a `.git` in the folder or any parent) or a project area (a
+  path containing `/dev/` or `/Documents/jawwid`);
 - runs `keytool -genkeypair -keystore jawwid-upload.jks -storetype PKCS12 -alias jawwid-upload
   -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Jawwid LLC upload key, O=Jawwid LLC"`
   (no personal names in the certificate);
@@ -95,6 +100,6 @@ Then clear the clipboard (copy any harmless text).
 `test/scripts/make_upload_key_script_test.dart` runs the script against a stand-in `keytool` that
 records its arguments and environment (no real key is made). It checks that the script refuses to
 overwrite a keystore (file or symlink), refuses weak or invalid passwords and extra stdin, refuses CI and
-arguments, never prints the password or the base64, passes the password via the environment and never
+arguments, refuses a git checkout or project folder, never prints the password or the base64, passes the password via the environment and never
 argv, sets mode 600, and prints the fingerprint line. The hidden two-prompt path needs a terminal and is
 checked only by reading the script.
