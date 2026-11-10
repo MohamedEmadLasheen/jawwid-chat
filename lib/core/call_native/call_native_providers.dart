@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'call_presentation.dart';
+import 'device_keyguard.dart';
 
 /// The system call screen for this build (W8-W3).
 ///
@@ -21,4 +22,13 @@ final callPresentationProvider = Provider<CallPresentation?>((ref) {
   final presentation = PlatformCallPresentation();
   ref.onDispose(presentation.dispose);
   return presentation;
+});
+
+/// LR-46 P2-1: the phone's lock screen, spoken on the same channel as the call screen.
+/// Where the presentation has no lock-screen half (a browser, a test fake), there is no
+/// lock screen to respect and everything stays as it was.
+final deviceKeyguardProvider = Provider<DeviceKeyguard>((ref) {
+  final presentation = ref.watch(callPresentationProvider);
+  if (presentation case final DeviceKeyguard keyguard) return keyguard;
+  return const NoDeviceKeyguard();
 });

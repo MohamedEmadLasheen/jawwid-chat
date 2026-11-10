@@ -52,10 +52,45 @@ object LockScreenCall {
             calls.clear()
         }
 
+        /**
+         * LR-46 (review of #561, P2-2): the person unlocked from the call screen. Nothing needs
+         * the lock screen any more, so no call keeps the app over it: locking the phone again
+         * mid-call shows the lock screen, not the app (whose last frame may be the chats). A
+         * call connected afterwards is not re-admitted ([connected] only keeps a known call);
+         * only a new trusted call intent ([ringing]) grants it again.
+         */
+        fun unlocked() {
+            calls.clear()
+        }
+
         fun showWhenLocked(): Boolean {
             val now = clock()
             calls.entries.removeAll { (_, e) -> !shouldShowWhenLocked(e.connected, now - e.since, ringWindowMs) }
             return calls.isNotEmpty()
+        }
+
+        /**
+         * LR-46 (review of #561, P1): is the app shown over the lock screen? Only when the phone
+         * is locked AND a call holds the lock screen. A locked phone alone is not enough: with
+         * no such call the app is not over the lock screen (it is behind it, or the unlock is
+         * still finishing), and Dart's call-only cover must not appear. This is what the call
+         * channel's `isShownOverLockScreen` answers.
+         */
+        fun overLockScreen(keyguardLocked: Boolean): Boolean = keyguardLocked && showWhenLocked()
+
+        /**
+         * LR-46 P3-4: how long until [showWhenLocked] can change on its own, which is when the
+         * first unanswered ring's window ends. Null when nothing will: no ring, or only
+         * connected calls (those end with Dart's `ongoingStop`/`dismiss`). MainActivity re-checks
+         * at that moment, so a ring whose end never reached it (no lifecycle event, no channel
+         * call) cannot keep the app over the lock screen past its window. Never negative: a
+         * window already over answers 0, re-check now.
+         */
+        fun msUntilRingWindowEnds(): Long? {
+            val now = clock()
+            return calls.values
+                .filter { !it.connected }
+                .minOfOrNull { (ringWindowMs - (now - it.since)).coerceAtLeast(0L) }
         }
     }
 }
