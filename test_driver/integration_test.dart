@@ -7,7 +7,7 @@
 ///   driver captures the whole device screen with the platform tool --
 ///   `xcrun simctl io <udid> screenshot` or `adb -s <serial> exec-out screencap -p`
 ///   -- and tells the test it is done. This includes the system status bar.
-///   `scripts/mobile/screenshots/capture.sh` turns it on by setting
+///   `scripts/store-screenshots/capture.sh` turns it on by setting
 ///   `JAWWID_SHOT_TOOL` (`ios` | `android`), `JAWWID_SHOT_DEVICE` (the simulator
 ///   UDID or the emulator serial) and, for Android, `JAWWID_ADB`.
 /// * **in-app** (fallback): if the platform capture fails, or those variables are

@@ -8,7 +8,7 @@
 ///
 /// This is NOT part of `flutter test` (it lives outside `test/`). It runs on a
 /// simulator or emulator through `flutter drive`, which saves each screenshot on
-/// the host -- see `scripts/mobile/screenshots/` and
+/// the host -- see `scripts/store-screenshots/` and
 /// `docs/release/store-screenshots.md`.
 ///
 /// Each language is a separate test, so a run starts every language from a clean

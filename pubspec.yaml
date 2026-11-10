@@ -136,7 +136,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   # LR-09j: the store screenshots (integration_test/, test_driver/,
-  # scripts/mobile/screenshots/). Part of the Flutter SDK, like flutter_test:
+  # scripts/store-screenshots/). Part of the Flutter SDK, like flutter_test:
   # no version to pick and no third-party code. Never in a release build.
   integration_test:
     sdk: flutter
