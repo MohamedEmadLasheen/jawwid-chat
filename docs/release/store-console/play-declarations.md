@@ -5,6 +5,13 @@
 #505). §1, §2, §4, §8 and §9 are unchanged from the draft written at `cf731af2`; their open answers are
 listed in §10. Paths are relative to the repository root, cited as `file:line`.
 
+**LR-71 pre-audit fixes, 2026-11-10:** §5, §6, §7 and §10 re-checked against the launch candidate
+`claude/merge-rehearsal-3-2026-11-10` @ `0aec87f1`, which this file now describes (it is merged after the launch
+PRs): #524 (full-screen check), LR-11 (notification permission explained first) and #526 are in it. The
+`AndroidManifest.xml`, `JawwidPush.kt`, `MainActivity.kt` and `call_presentation.dart` citations in those
+sections are **lines as of the launch candidate**. The "Subscriptions" tab name (§2) is unchanged: LR-15 is
+a separate decision.
+
 **Where it goes:** Play Console → the app → **Policy and programs → App content**, unless a row says otherwise.
 
 **Re-read before submitting.** Google's live help pages could not be read from this machine when this was
@@ -110,10 +117,10 @@ Notes for the owner:
 
 **What the app does:** during a call or live lesson, `CallForegroundService` keeps the microphone working
 when the person leaves the app or locks the screen, with an ongoing "call in progress" notification and
-a Hang up button handled by `CallActionReceiver` (`android/app/src/main/AndroidManifest.xml:24-29`, `:73-80`).
+a Hang up button handled by `CallActionReceiver` (`android/app/src/main/AndroidManifest.xml:24-29`, `:78-85`).
 
 **Microphone only (launch item LR-14, done in #505).** The service declares
-`android:foregroundServiceType="microphone"` (`AndroidManifest.xml:73-76`) and starts with
+`android:foregroundServiceType="microphone"` (`AndroidManifest.xml:78-81`) and starts with
 `FOREGROUND_SERVICE_TYPE_MICROPHONE` only (`android/app/src/main/kotlin/com/jawwid/jawwid_chat/CallForegroundService.kt:54`, `:67`).
 The manifest asks only for `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE` (`:28-29`);
 `phoneCall`, `FOREGROUND_SERVICE_PHONE_CALL` and `MANAGE_OWN_CALLS` are gone, because the app has no
@@ -142,28 +149,28 @@ No real person's face, name or child in the video; use the review accounts.
 
 ## 6. Full-screen intent (Play Console → App content → Full-screen intent)
 
-**Launch item LR-09i. TRUE ONLY AFTER #524 MERGES** (LR-27, stacked on #449). Updated 2026-11-09 from
-#524's branch `claude/lr79-ring-repost`. Do not submit a build without #524: on `main` the app never asks
-whether it may use full-screen intents.
+**Launch item LR-09i. Done: #524 (LR-27) is in the launch candidate.** Updated 2026-11-09 from #524's branch
+`claude/lr79-ring-repost`; re-checked on the launch candidate 2026-11-10. A build without #524 would never ask
+whether it may use full-screen intents, so submit only a build that contains it.
 
-**What the app does (with #524):**
+**What the app does:**
 - An incoming call rings over the lock screen while the app is closed, like a phone call
-  (`android/app/src/main/AndroidManifest.xml:18-23` on `main`). The ring is a `CallStyle` incoming-call
+  (`android/app/src/main/AndroidManifest.xml:18-23`). The ring is a `CallStyle` incoming-call
   notification with Answer and Decline. `JawwidPush` posts it from an FCM data message
-  (`AndroidManifest.xml:64-71`).
+  (`AndroidManifest.xml:69-76`).
 - **On Android 14 and later**, the app asks the system whether it may still use full-screen intents
   (`NotificationManager.canUseFullScreenIntent()`):
-  - #524 `JawwidPush.kt:180-188` (`canUseFullScreenIntent`);
+  - `JawwidPush.kt:180-184` (`canUseFullScreenIntent`);
   - `RingCheck.kt:69-70`: below Android 14 the answer is always yes.
 - **When the permission is denied**, the call still rings, as a heads-up notification with Answer and
-  Decline. The app logs (Logcat only) that the ring was heads-up only (#524 `JawwidPush.kt:167-169`). The intent is
-  always attached (`:153-161`), because Android refuses to build a `CallStyle` notification without one.
+  Decline. The app logs (Logcat only) that the ring was heads-up only (`JawwidPush.kt:167-168`). The intent is
+  always attached (`:157-161`), because Android refuses to build a `CallStyle` notification without one.
   Android itself turns the request into a heads-up notification.
 - Dart can ask the same question and can open the system setting
   (`Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`, with the app's notification settings as the
   fallback):
-  - #524 `MainActivity.kt:186-187`, `:257`;
-  - `lib/core/call_native/call_presentation.dart:214-228`.
+  - `MainActivity.kt:395-396`, `:475-478`;
+  - `lib/core/call_native/call_presentation.dart:218-232`.
 
   **No screen calls them yet.** #524's description lists the in-app prompt as a follow-up that needs new
   Arabic and English strings. So do not tell Google that the app *offers* the setting.
@@ -195,7 +202,7 @@ except the two above (foreground service, full-screen intent).
 |---|---|---|---|
 | `INTERNET` | `:6` | Every API call, chat and call | Install (normal) |
 | `RECORD_AUDIO` | `:9` | Voice messages, video sound, calls and lessons | When the user first records or joins a call, never at launch (`:7-8`) |
-| `POST_NOTIFICATIONS` | `:13` | Messages and call rings (Android 13+) | When a notification first matters, not at launch (`:10-12`). Launch item LR-11 notes that `main` still asks right after sign-in; fix before submitting |
+| `POST_NOTIFICATIONS` | `:13` | Messages and call rings (Android 13+) | When a notification first matters, not at launch (`:10-12`). LR-11 is done in the launch candidate: the app registers without prompting, and the system prompt comes only after an explanation the user continues from (`MainActivity.kt:40-44`, `:501-530`; `lib/core/push/push_permission_explainer.dart`; `lib/features/notifications/presentation/push_permission_explainer_host.dart`) |
 | `USE_BIOMETRIC` | `:17` | Optional app lock with face or fingerprint | When the user turns on app lock |
 | `USE_FULL_SCREEN_INTENT` | `:23` | Incoming-call screen | §6 |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE` | `:28-29` | Ongoing calls | §5 |
@@ -215,7 +222,8 @@ The other plugins read declare nothing new beyond the app's own manifest (`recor
 
 Not requested: location, contacts, SMS, call log, camera as a permission (the system camera and photo
 picker are used: `lib/core/media/media_picker.dart`), `READ_MEDIA_*`, all-files access,
-`QUERY_ALL_PACKAGES`, accessibility. `allowBackup="false"` (`:37`). Check the merged manifest of the
+`QUERY_ALL_PACKAGES`, accessibility. `allowBackup="false"` (`:41`), with `dataExtractionRules` excluding
+every domain from backup and device transfer on Android 12+ (`:42`; `res/xml/data_extraction_rules.xml`). Check the merged manifest of the
 release AAB for permissions that plugins add (release audit WP-6) and add any to this table.
 
 ## 8. Store settings (Play Console → Grow → Store presence → Store settings)
@@ -239,8 +247,8 @@ trader details verified. Google Play Age Signals and US state laws apply only wh
 ## 10. Open items (LR-71)
 
 Each answer below stays as drafted until its owner decides. Nothing here changes an answer. The
-Data safety items (payment info, religious beliefs, and Sentry session tracking, decided off in #526
-pending merge) are in `google-data-safety.md` §6.
+Data safety items (payment info, religious beliefs, and Sentry session tracking, now off: #526, in the
+launch candidate) are in `google-data-safety.md` §6.
 
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|

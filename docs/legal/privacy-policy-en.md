@@ -62,7 +62,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 > - **No advertising, no analytics, no tracking.** We do not use advertising identifiers, GPS or device location, or cookies. We never sell personal data (sections 4.15 and 11.6).
 > - **Teachers never see your contact details, location or payments.** Teachers and parents talk only in groups where academy staff are present.
 > - **Your country and region** are typed by you, used for three stated purposes, and shared with no third party (section 4.3).
-> - **Card details** are entered on our payment provider's page. We never see your card number. The provider does receive your child's name in the payment description (section 4.11).
+> - **Card details** are entered on our payment provider's page. We never see your card number. We do not send your child's name to the provider (section 4.11).
 > - **Staff support sessions** let an authorised staff member see the app as you see it, for at most 60 minutes, with a written reason and a permanent log. You are not notified today (section 9).
 > - **Deleting your account** is immediate. Some records are kept, for example the messages you sent (shown as "Deleted user"), your children's records, and financial records (section 10).
 > - **Your data is hosted in Frankfurt, Germany.** Some service providers are in other countries, including the United States (section 11).
@@ -192,9 +192,9 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 4.11.2 **Card payments.** Card payments are made on the hosted payment page of our card-payment provider, Stripe. **You enter your card details, e-mail address and billing details directly with Stripe. We never see or store your card number.** We keep only the reference numbers Stripe gives us for the payment, the payment intent and any refund.
 
-4.11.3 **What Stripe receives from us:** the amount; the currency; a line-item name made of the product name **and your child's name**; a description of the lesson period (for example "live one-to-one"); our internal reference numbers for the payment request; and the page language.
+4.11.3 **What Stripe receives from us:** the amount; the currency; a line-item name, which is the name the Academy gave the payment request (we do not add your child's name); a description of the lesson period (for example "live one-to-one"); our internal reference numbers for the payment request; and the page language.
 
-> **Drafting note (remove before publication):** The child's name in the Stripe line item is the only place a child's name reaches a third party. Whether to keep it (and disclose it, as above) or remove it is owner decision LD-8. If it is removed, delete "and your child's name" in clause 4.11.3 and the matching text in sections 6 and 11.
+> **Drafting note (remove before publication):** LD-8 is done in the code (PR #580): the Stripe line item is the payment request's label only (`apps/api/src/billing/checkout.service.ts`, `checkoutProductName`, lines 120-131 as of the launch candidate), so clause 4.11.3, the summary, clause 6.7 and the section 11 table no longer say the child's name is sent. The label is typed by staff: staff must not type a child's name into it. If #580 is not in the published build, restore the earlier wording.
 
 ### 4.12 Device and push information
 
@@ -303,7 +303,7 @@ The child's date of birth or stated age is seen by the parent and authorised sta
 
 6.6 **Who cannot see it.** Other parents and other families never see a child's information, except a certificate Story that the Parent agreed to publish (section 4.7.3). Teachers never see the parent's phone number, e-mail address, location or the family's payments; they see only their own students' student profiles.
 
-6.7 **The child's name at the payment provider.** Our card-payment provider receives the child's name as part of the description of a lesson-package payment (section 4.11.3).
+6.7 **The child's name at the payment provider.** We do not send the child's name to our card-payment provider when a lesson package is paid by card (section 4.11.3).
 
 6.8 **How we protect it.** The safeguards in section 12 apply, together with these:
 
@@ -582,7 +582,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 | LiveKit Cloud | Service provider | Live audio streams; internal account number; display name in the call; room name; join and leave times. No recording | Audio calls and live lessons | [TO CONFIRM] |
 | Apple Push Notification service | Service provider | Device token; notification title and text | Notifications and call rings on iPhone and iPad | United States / global |
 | Google Firebase Cloud Messaging | Service provider | Device token; notification title, text and data | Notifications and call rings on Android | Global |
-| Stripe | Service provider for the payment; independent controller for its own legal duties [legal review] | Amount; currency; line item with the product name and the child's name; lesson period; our reference numbers; page language. The card details, e-mail and billing details you enter on its page | Card payments and refunds | United States / Ireland [TO CONFIRM] |
+| Stripe | Service provider for the payment; independent controller for its own legal duties [legal review] | Amount; currency; line item with the name the Academy gave the payment request (not the child's name); lesson period; our reference numbers; page language. The card details, e-mail and billing details you enter on its page | Card payments and refunds | United States / Ireland [TO CONFIRM] |
 | Sentry | Service provider | Error and crash details; hashed account number; device model and operating system; names of the screens visited before a crash. No names, e-mails, IP addresses or message contents | Fixing errors and crashes | [TO CONFIRM] |
 | Our speech provider | Service provider | Only the text of our lessons. No personal data | Lesson pronunciation audio (section 14) | [TO CONFIRM] |
 | Our e-mail delivery provider | Service provider | E-mail address and one-time code | Account recovery and password reset | [TO CONFIRM] |
