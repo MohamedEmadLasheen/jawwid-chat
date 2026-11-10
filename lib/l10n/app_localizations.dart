@@ -9708,6 +9708,30 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.'**
   String get billingReviewModeTransferNotice;
+
+  /// LR-11b: Settings row title for the phone's own notification permission (separate from the in-app notification preferences row).
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications on this device'**
+  String get notificationDeviceTitle;
+
+  /// LR-11b: Settings row subtitle when the phone allows Jawwid's notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get notificationDeviceOn;
+
+  /// LR-11b: Settings row subtitle when the phone does not allow Jawwid's notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get notificationDeviceOff;
+
+  /// LR-11b: Settings row action while the app may still ask for the permission (first ask via the explanation, or Android 13+ after one refusal).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get notificationDeviceAllow;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

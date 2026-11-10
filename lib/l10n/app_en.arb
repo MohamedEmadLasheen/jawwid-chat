@@ -3748,5 +3748,13 @@
   "billingReviewModeNotice": "App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.",
   "@billingReviewModeNotice": {"description": "OA-12: top of the pay sheet for the App Review demo family (GET /me/billing reviewMode). The server makes card a demo page and refuses receipts."},
   "billingReviewModeTransferNotice": "App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.",
-  "@billingReviewModeTransferNotice": {"description": "OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode)."}
+  "@billingReviewModeTransferNotice": {"description": "OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode)."},
+  "notificationDeviceTitle": "Notifications on this device",
+  "@notificationDeviceTitle": {"description": "LR-11b: Settings row title for the phone's own notification permission (separate from the in-app notification preferences row)."},
+  "notificationDeviceOn": "On",
+  "@notificationDeviceOn": {"description": "LR-11b: Settings row subtitle when the phone allows Jawwid's notifications."},
+  "notificationDeviceOff": "Off",
+  "@notificationDeviceOff": {"description": "LR-11b: Settings row subtitle when the phone does not allow Jawwid's notifications."},
+  "notificationDeviceAllow": "Allow",
+  "@notificationDeviceAllow": {"description": "LR-11b: Settings row action while the app may still ask for the permission (first ask via the explanation, or Android 13+ after one refusal)."}
 }

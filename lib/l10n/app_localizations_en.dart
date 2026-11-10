@@ -5658,4 +5658,16 @@ class L10nEn extends L10n {
   @override
   String get billingReviewModeTransferNotice =>
       'App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.';
+
+  @override
+  String get notificationDeviceTitle => 'Notifications on this device';
+
+  @override
+  String get notificationDeviceOn => 'On';
+
+  @override
+  String get notificationDeviceOff => 'Off';
+
+  @override
+  String get notificationDeviceAllow => 'Allow';
 }

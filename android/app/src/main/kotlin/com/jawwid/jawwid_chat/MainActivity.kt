@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -16,6 +17,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
@@ -41,7 +43,8 @@ import io.flutter.plugin.common.MethodChannel
  * sign-in, when a notification first matters, never at launch. `register` (LR-11)
  * does everything `start` does except that request, and answers whether a prompt
  * is still possible; Dart calls it at session start and `start` only after the
- * in-app explanation's Continue.
+ * in-app explanation's Continue. `permissionStatus` and `openNotificationSettings`
+ * (LR-11b) back the Settings row "Notifications on this device".
  *
  * ## The call channel
  *
@@ -413,6 +416,9 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 // LR-11: the token without the prompt; answers whether `start` would prompt.
                 "register" -> result.success(registerForPush())
+                // LR-11b: the status the Settings row shows, and its way back.
+                "permissionStatus" -> result.success(notificationPermissionStatus())
+                "openNotificationSettings" -> result.success(openNotificationSettings())
                 else -> result.notImplemented()
             }
         }
@@ -499,21 +505,79 @@ class MainActivity : FlutterFragmentActivity() {
      * Firebase app, and then reports nothing -- push is simply off on that build.
      */
     private fun startRegistering() {
-        if (registerForPush() && Build.VERSION.SDK_INT >= 33) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST)
+        registerForPush()
+        if (Build.VERSION.SDK_INT < 33) return
+        // Never asked, or refused once and the OS will still ask (LR-11b: the Settings
+        // row's Allow). Blocked or granted: the OS would show nothing.
+        val status = notificationPermissionStatus()
+        if (status != STATUS_NOT_DETERMINED && status != STATUS_DENIED) return
+        permissionPrefs().edit().putBoolean(PREF_REQUESTED, true).apply()
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST)
+    }
+
+    /**
+     * LR-11b: this app's notification permission, as the Settings row shows it.
+     *
+     *  * `granted`: notifications are allowed (and not switched off in Settings).
+     *  * `notDetermined`: Android 13+, never asked.
+     *  * `denied`: Android 13+, refused once; the OS will still show its prompt.
+     *  * `blocked`: only Settings can turn them on (switched off there, before
+     *    Android 13 where there is no prompt, or refused a second time).
+     *
+     * Android does not say "never asked" itself: a permission never requested and
+     * one refused twice both read "not granted, no rationale". So the first request
+     * is remembered here (PREF_REQUESTED). Dismissing the very first prompt without
+     * answering reads as `blocked`; the row then opens Settings, which still works.
+     */
+    private fun notificationPermissionStatus(): String {
+        val enabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
+        if (Build.VERSION.SDK_INT < 33) return if (enabled) STATUS_GRANTED else STATUS_BLOCKED
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) return if (enabled) STATUS_GRANTED else STATUS_BLOCKED
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.POST_NOTIFICATIONS)) {
+            return STATUS_DENIED
         }
+        return if (permissionPrefs().getBoolean(PREF_REQUESTED, false)) STATUS_BLOCKED else STATUS_NOT_DETERMINED
+    }
+
+    private fun permissionPrefs() = getSharedPreferences(PERMISSION_PREFS, MODE_PRIVATE)
+
+    /**
+     * LR-11b "Open settings": this app's notification settings, where the person
+     * can turn them on (or off). App info, then Settings, are the fallbacks for a
+     * phone without that screen. Returns whether anything opened; never throws.
+     */
+    private fun openNotificationSettings(): Boolean {
+        val candidates = listOf(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
+            Intent(Settings.ACTION_SETTINGS),
+        )
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return true
+            } catch (e: ActivityNotFoundException) {
+                // This phone has no such screen; try the next one.
+            } catch (e: SecurityException) {
+                // Some vendors guard a screen; try the next one.
+            }
+        }
+        return false
     }
 
     /**
      * Everything [startRegistering] does EXCEPT ask for POST_NOTIFICATIONS (LR-11
      * `register`): the app explains notifications first and asks through `start`
-     * only after Continue. Returns whether there is still a runtime prompt to show:
-     * false before Android 13 (no such prompt) and once the permission is granted.
+     * only after Continue. Returns whether the FIRST prompt is still to come: only
+     * when the permission has never been asked (Android 13+). After a refusal it is
+     * false, so a session start never asks again at launch; asking again is the
+     * Settings row's Allow (LR-11b).
      */
     private fun registerForPush(): Boolean {
         JawwidPush.ensureChannels(applicationContext)
-        val promptPossible = Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        val promptPossible = notificationPermissionStatus() == STATUS_NOT_DETERMINED
         if (FirebaseApp.getApps(applicationContext).isEmpty()) return promptPossible
         PushTokenStore.load(applicationContext)?.let { reportToken(it) }
         try {
@@ -545,6 +609,16 @@ class MainActivity : FlutterFragmentActivity() {
         private const val CHANNEL_NAME = "jawwid/push_tokens"
 
         private const val NOTIFICATION_PERMISSION_REQUEST = 4601
+
+        /** LR-11b: the statuses `notification_permission.dart` parses. */
+        private const val STATUS_GRANTED = "granted"
+        private const val STATUS_NOT_DETERMINED = "notDetermined"
+        private const val STATUS_DENIED = "denied"
+        private const val STATUS_BLOCKED = "blocked"
+
+        /** Whether POST_NOTIFICATIONS was ever requested on this install. */
+        private const val PERMISSION_PREFS = "jawwid_notification_permission"
+        private const val PREF_REQUESTED = "requested"
 
         /** The activity whose engine is live, for a token rotated by JawwidMessagingService. */
         @Volatile

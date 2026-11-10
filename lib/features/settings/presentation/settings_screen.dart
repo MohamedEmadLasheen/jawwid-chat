@@ -19,6 +19,7 @@ import '../../app_lock/application/app_lock_controller.dart';
 import '../../app_lock/data/device_security_settings.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
 import '../../app_lock/presentation/unlock_platform.dart';
+import '../../notifications/presentation/notification_permission_tile.dart';
 import '../../profile/presentation/profile_photos_section.dart';
 import '../../rewards/application/reward_feed.dart';
 import '../application/theme_mode_controller.dart';
@@ -250,6 +251,9 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(Routes.notificationSettings),
           ),
+          // LR-11b: the phone's own notification permission: On / Off, then Allow or
+          // Open settings. Hidden on the web portal.
+          const NotificationPermissionTile(),
           // PD-55: the reward celebration's chime, per device. On for a family by
           // default, off for a teacher; the phone's silent mode silences it anyway.
           SwitchListTile(

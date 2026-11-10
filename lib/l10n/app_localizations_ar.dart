@@ -5744,4 +5744,16 @@ class L10nAr extends L10n {
   @override
   String get billingReviewModeTransferNotice =>
       'حساب تجريبي لمراجعة المتجر: هذه البيانات البنكية ليست حقيقية. لا يمكن إجراء أي تحويل ولا إرسال أي إيصال من هذا الحساب.';
+
+  @override
+  String get notificationDeviceTitle => 'الإشعارات على هذا الجهاز';
+
+  @override
+  String get notificationDeviceOn => 'مفعّلة';
+
+  @override
+  String get notificationDeviceOff => 'معطّلة';
+
+  @override
+  String get notificationDeviceAllow => 'اسمح';
 }
