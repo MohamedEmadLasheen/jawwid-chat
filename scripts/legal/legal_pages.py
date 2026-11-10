@@ -66,8 +66,11 @@ SLUG_RE = re.compile(r'[a-z0-9-]+(/[a-z0-9-]+)*')
 # R-11 (public-hosting-requirements.md §3 and §5). Checked on the source AND on the rendered page.
 MARKERS = [
     (re.compile(r'\{\{'), 'a {{PLACEHOLDER}}'),
-    (re.compile(r'TO CONFIRM', re.I), 'a [TO CONFIRM] marker'),
-    (re.compile(r'legal review', re.I), 'a [legal review] marker'),
+    # The markers' own forms only: plain prose such as "ask you to confirm the request" must publish.
+    (re.compile(r'TO CONFIRM'), 'a [TO CONFIRM] marker'),
+    (re.compile(r'\[\s*to confirm', re.I), 'a [TO CONFIRM] marker'),
+    (re.compile(r'LEGAL REVIEW'), 'a [legal review] marker'),
+    (re.compile(r'\[\s*legal review', re.I), 'a [legal review] marker'),
     (re.compile(r'مراجعة قانونية'), 'a [مراجعة قانونية] marker'),
     (re.compile(r'drafting note', re.I), 'a drafting note'),
     (re.compile(r'\bDRAFT\b'), 'DRAFT'),

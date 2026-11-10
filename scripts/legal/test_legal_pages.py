@@ -405,6 +405,17 @@ class Refusals(Site):
         self.edit('docs/legal/sample-support-en.md', 'By e-mail', 'By e-mail [to confirm]')
         self.assertRefused('[TO CONFIRM]')
 
+    def test_ordinary_prose_is_not_a_marker(self):
+        # privacy-policy-en.md: "We may ask you to confirm the request ..."; and "subject to legal review" prose.
+        self.edit('docs/legal/sample-support-en.md', 'By e-mail', 'We may ask you to confirm the request, subject to legal review. By e-mail')
+        rc, out = run(lp.build, self.root)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn('REFUSED', out)
+
+    def test_bracketed_legal_review_in_lower_case(self):
+        self.edit('docs/legal/sample-support-en.md', 'By e-mail', 'By e-mail [legal review - LD-17]')
+        self.assertRefused('[legal review]')
+
     def test_tight_nested_unordered_list(self):
         # "  - sub" directly under "- item" (no blank line) must not be merged into the parent item.
         self.edit('docs/legal/sample-terms-en.md', '- First point\n', '- First point\n  - A sub-clause\n')
