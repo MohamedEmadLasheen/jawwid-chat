@@ -114,6 +114,8 @@ export interface ReviewCohortOptions {
 
 export interface ReviewCohortManifest {
   organizationId: string;
+  /** chat.config review.sandbox_organization_ids as this run left it (it contains organizationId). */
+  reviewModeOrganizationIds: string[];
   parent: { subject: string; accountId: string; contactId: string; created: boolean };
   teacher: { subject: string; accountId: string; teacherId: string; created: boolean };
   /** The disposable parent: its own family, child and 1:1 with the supervisor. */
@@ -195,12 +197,12 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
   const messages = new MessageService(db, authz, conversations, outbox, config, attachments, audit, identity);
   // No payment lock: the review child has no subscription, and a child with
   // none is never locked (chat.compute_learner_access, PD-30).
-  // Nothing payable. OA-12 is an open owner decision: the current state is
-  // Option B (nothing payable for review) until the owner decides; Option A
-  // would add a payable request to the cohort. This command writes no lesson
-  // package, instalment, payment request or invoice, so neither review parent
-  // has an amount due. Option A needs the test and the review notes changed
-  // with it (docs/release/review-accounts.md, "Still open").
+  // Nothing payable is WRITTEN (OA-12, owner decision 2026-11-10): this command
+  // writes no lesson package, instalment, payment request or invoice. It lists
+  // the review organization in the App Review payment mode instead
+  // (ensureReviewPaymentMode), so GET /me/billing shows the reviewer one
+  // synthetic, never-stored demo amount due and every payment is a demo
+  // (billing/review-mode.ts).
   const lessons = new LessonService(db, authz, conversations, outbox, config, audit);
   // Reminders are the worker's (scheduleDueReminders); the schedule written
   // here sends none, so any use is a bug in this command.
@@ -222,6 +224,9 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
     throw new ReviewCohortRefusal('ORGANIZATION', 'the review organization must not be the default organization');
   }
   await assertOnlyReviewCohort(prisma, org);
+
+  // --- the App Review payment mode (OA-12), only now that the guard passed
+  const reviewModeOrganizationIds = await ensureReviewPaymentMode(prisma, orgId);
 
   // --- synthetic staff, no account
   const staffRow = async (s: { name: string; role: string }) => {
@@ -449,6 +454,7 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
 
   return {
     organizationId: orgId,
+    reviewModeOrganizationIds,
     parent: { ...parentLogin, contactId: contact.id },
     teacher: { ...teacherLogin, teacherId: teacher.id },
     deletionParent: {
@@ -534,6 +540,58 @@ async function assertOnlyReviewCohort(prisma: PrismaClient, org: { id: string; d
   const familyNames: string[] = [REVIEW_PEOPLE.family, REVIEW_DELETION_PEOPLE.family];
   const families = await prisma.family.findMany({ where: { organizationId: org.id }, select: { displayName: true } });
   if (families.some((f) => !familyNames.includes(f.displayName))) refuse('has a family the review cohort does not have');
+}
+
+/**
+ * The chat.config key of the App Review payment mode (OA-12). It must equal
+ * REVIEW_ORGANIZATIONS_KEY in src/billing/review-mode.ts, which reads it:
+ * a JSON array of organization uuids.
+ */
+export const REVIEW_MODE_CONFIG_KEY = 'review.sandbox_organization_ids';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Lists the review organization in the App Review payment mode (OA-12): makes
+ * chat.config review.sandbox_organization_ids contain orgId. Called only
+ * after assertOnlyReviewCohort passed, so a refused organization is never
+ * listed.
+ *
+ *   - Adds, never replaces: every id already in the array stays, as written.
+ *   - Idempotent: an id already there (in any letter case) writes nothing, so
+ *     a second run leaves the row, and its updated_at, as they were.
+ *   - Touches no other config key.
+ *   - A value that is there but is not an array of uuids is refused
+ *     (REVIEW_MODE_CONFIG), never overwritten: someone wrote it by hand, and
+ *     the API already treats it as "no review organization" (public behaviour).
+ *
+ * The read-modify-write is one transaction under a transaction-scoped
+ * advisory lock on the key, so two runs cannot each add to a stale copy (a
+ * row lock cannot cover the row's first insert). The cohort's other writes
+ * are not in a transaction of their own (see assertOnlyReviewCohort), so this
+ * cannot share one with them; it comes first, and a later refusal leaves the
+ * organization listed -- a listed organization is only ever more restricted.
+ */
+async function ensureReviewPaymentMode(prisma: PrismaClient, orgId: string): Promise<string[]> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`config:${REVIEW_MODE_CONFIG_KEY}`}, 0))`;
+    const row = await tx.config.findUnique({ where: { key: REVIEW_MODE_CONFIG_KEY } });
+    let ids: string[] = [];
+    if (row) {
+      const value: unknown = row.value;
+      if (!Array.isArray(value) || !value.every((v) => typeof v === 'string' && UUID_RE.test(v))) {
+        throw new ReviewCohortRefusal(
+          'REVIEW_MODE_CONFIG',
+          `chat.config ${REVIEW_MODE_CONFIG_KEY} is not a JSON array of organization ids; it was left as it is. Investigate before running again`,
+        );
+      }
+      ids = value as string[];
+    }
+    if (ids.some((id) => id.toLowerCase() === orgId.toLowerCase())) return ids;
+    const next = [...ids, orgId];
+    if (row) await tx.config.update({ where: { key: REVIEW_MODE_CONFIG_KEY }, data: { value: next } });
+    else await tx.config.create({ data: { key: REVIEW_MODE_CONFIG_KEY, value: next } });
+    return next;
+  });
 }
 
 /** The family's live group for this child, created by the supervisor once; seats a re-created parent. */

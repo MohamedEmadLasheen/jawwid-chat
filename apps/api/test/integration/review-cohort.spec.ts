@@ -1,6 +1,11 @@
 /**
  * App Store / Google Play review accounts (src/cli/review-cohort.ts).
  *
+ * Section 0 also checks the App Review payment mode switch (OA-12): the
+ * command adds its own organization to chat.config
+ * review.sandbox_organization_ids, keeps any id already there, writes it once,
+ * and never for a refused organization.
+ *
  * Section 1 checks the database the command leaves behind: three logins and
  * only three (a parent, a teacher, and a disposable parent for the deletion
  * test with its own family), in their own organization, staff with no login,
@@ -30,7 +35,7 @@ import { AdminModule } from '../../src/admin/admin.module';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
 import { BillingModule } from '../../src/billing/billing.module';
 import {
-  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_ORG_NAME, REVIEW_ORG_SLUG, REVIEW_STAFF, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
+  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_MODE_CONFIG_KEY, REVIEW_ORG_NAME, REVIEW_ORG_SLUG, REVIEW_STAFF, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
 } from '../../src/cli/review-cohort';
 import { parseArgs, publicSummary } from '../../src/cli/provision-review-cohort';
 import { buildGraph, truncate } from './harness';
@@ -56,8 +61,15 @@ let opts: ReviewCohortOptions;
 let m: ReviewCohortManifest;
 let defaultOrg: string;
 
+/** The review payment mode's config row as the suite found it, given back at the end. */
+let configBefore: { value: unknown; scope: string } | null = null;
+const reviewModeIds = async () =>
+  (await g.prisma.config.findUnique({ where: { key: REVIEW_MODE_CONFIG_KEY } }))?.value ?? null;
+
 async function cleanup() {
   await truncate(g.prisma);
+  // truncate() does not empty chat.config; the key names organizations deleted below.
+  await g.prisma.config.deleteMany({ where: { key: REVIEW_MODE_CONFIG_KEY } });
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}' or organization_id in (select id from chat.organization where slug = '${REVIEW_ORG_SLUG}')`);
   // Push tokens are stamped with the review organization (registerDevice) and
   // are not among the tables truncate() empties.
@@ -85,6 +97,8 @@ async function countsFor(organizationId: string): Promise<Record<string, number>
 
 beforeAll(async () => {
   await g.prisma.$connect();
+  const saved = await g.prisma.config.findUnique({ where: { key: REVIEW_MODE_CONFIG_KEY } });
+  configBefore = saved && { value: saved.value, scope: saved.scope };
   await cleanup();
   defaultOrg = (await g.prisma.$queryRaw<{ id: string }[]>`select chat.default_organization_id()::text as id`)[0].id;
   opts = {
@@ -100,6 +114,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanup();
+  if (configBefore) {
+    await g.prisma.config.create({
+      data: { key: REVIEW_MODE_CONFIG_KEY, value: configBefore.value as object, scope: configBefore.scope },
+    });
+  }
   await g.prisma.$disconnect();
 }, 60_000);
 
@@ -122,6 +141,18 @@ describe('0. it writes only into a review organization, and never takes an accou
     expect(await countsFor(org.id)).toEqual({});
     expect((await g.prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).displayName).toBe('Al-Noor Academy');
     expect(await g.prisma.account.count({ where: { subject: { endsWith: `@${DOMAIN}` } } })).toBe(0);
+    // Nor listed in the App Review payment mode.
+    expect(await reviewModeIds()).toBeNull();
+  });
+
+  it('a refused organization is not added to the review payment mode, and the ids already there stay', async () => {
+    const elsewhere = randomUUID();
+    await g.prisma.config.create({ data: { key: REVIEW_MODE_CONFIG_KEY, value: [elsewhere] } });
+    const before = await g.prisma.config.findUniqueOrThrow({ where: { key: REVIEW_MODE_CONFIG_KEY } });
+    await g.prisma.organization.create({ data: { slug: REVIEW_ORG_SLUG, displayName: 'Al-Noor Academy' } });
+    expect(await refusalOf()).toBe('NOT_REVIEW_ORGANIZATION');
+    const after = await g.prisma.config.findUniqueOrThrow({ where: { key: REVIEW_MODE_CONFIG_KEY } });
+    expect([after.value, after.updatedAt]).toEqual([[elsewhere], before.updatedAt]);
   });
 
   it('refuses the right slug and name when the organization holds anyone outside the review cohort', async () => {
@@ -166,6 +197,55 @@ describe('0. it writes only into a review organization, and never takes an accou
       expect([who, await refusalOf()]).toEqual([who, 'NOT_REVIEW_ORGANIZATION']);
       expect([who, await countsFor(org.id)]).toEqual([who, before]);
       expect([who, await g.prisma.accountCredential.count({ where: { account: { organizationId: org.id } } })]).toEqual([who, 0]);
+      expect([who, await reviewModeIds()]).toEqual([who, null]);
+    }
+  });
+
+  it('switches on the review payment mode for its own organization: exactly its id, and no other config key', async () => {
+    const otherKeys = async () => (await g.prisma.config.findMany({
+      where: { NOT: { key: REVIEW_MODE_CONFIG_KEY } }, orderBy: { key: 'asc' },
+    })).map((c) => [c.key, c.value, c.scope, c.updatedAt.toISOString()]);
+    const othersBefore = await otherKeys();
+    const made = await provisionReviewCohort(g.prisma, opts);
+    expect(await reviewModeIds()).toEqual([made.organizationId]);
+    expect(made.reviewModeOrganizationIds).toEqual([made.organizationId]);
+    expect(await otherKeys()).toEqual(othersBefore);
+    // Still nothing payable written: the reviewer sees the API's synthetic demo item instead.
+    expect(await g.prisma.paymentRequest.count({
+      where: { familyId: { in: [made.familyId, made.deletionParent.familyId] } },
+    })).toBe(0);
+
+    // A second run leaves the row exactly as it was (not even rewritten).
+    const row = await g.prisma.config.findUniqueOrThrow({ where: { key: REVIEW_MODE_CONFIG_KEY } });
+    const again = await provisionReviewCohort(g.prisma, opts);
+    const after = await g.prisma.config.findUniqueOrThrow({ where: { key: REVIEW_MODE_CONFIG_KEY } });
+    expect([after.value, after.updatedAt]).toEqual([[made.organizationId], row.updatedAt]);
+    expect(again.reviewModeOrganizationIds).toEqual([made.organizationId]);
+    expect(await otherKeys()).toEqual(othersBefore);
+  });
+
+  it('adds its id beside the ids already listed, never removing one, and never twice', async () => {
+    const elsewhere = randomUUID();
+    await g.prisma.config.create({ data: { key: REVIEW_MODE_CONFIG_KEY, value: [elsewhere] } });
+    const made = await provisionReviewCohort(g.prisma, opts);
+    expect(await reviewModeIds()).toEqual([elsewhere, made.organizationId]);
+    await provisionReviewCohort(g.prisma, opts);
+    expect(await reviewModeIds()).toEqual([elsewhere, made.organizationId]);
+  });
+
+  it('an id already listed in upper case counts as listed: nothing is added', async () => {
+    const org = await g.prisma.organization.create({ data: { slug: REVIEW_ORG_SLUG, displayName: REVIEW_ORG_NAME } });
+    await g.prisma.config.create({ data: { key: REVIEW_MODE_CONFIG_KEY, value: [org.id.toUpperCase()] } });
+    await provisionReviewCohort(g.prisma, opts);
+    expect(await reviewModeIds()).toEqual([org.id.toUpperCase()]);
+  });
+
+  it('refuses (REVIEW_MODE_CONFIG), and leaves alone, a value that is not an array of organization ids', async () => {
+    for (const bad of [{ ids: [] }, 'not-a-list', ['not-a-uuid'], [42]] as const) {
+      await cleanup();
+      await g.prisma.config.create({ data: { key: REVIEW_MODE_CONFIG_KEY, value: bad as never } });
+      expect([bad, await refusalOf()]).toEqual([bad, 'REVIEW_MODE_CONFIG']);
+      expect([bad, await reviewModeIds()]).toEqual([bad, bad]);
     }
   });
 
@@ -355,11 +435,10 @@ describe('1. what the command leaves in the database', () => {
     expect(state).toBe('open');
   });
 
-  it('nothing payable: no package, instalment, payment request or invoice for either review family (OA-12 current state)', async () => {
-    // Pins the current state: OA-12 is an open owner decision, and until the
-    // owner decides, the review cohort is Option B (nothing payable for
-    // review; docs/release/review-accounts.md, "No payments"). If OA-12 picks
-    // Option A (a payable request in the cohort), this test changes with it.
+  it('nothing payable: no package, instalment, payment request or invoice for either review family (OA-12)', async () => {
+    // OA-12 (owner, 2026-11-10): the reviewer reaches the pay sheet through
+    // the API's synthetic demo item (review payment mode), never through a
+    // stored request; the command writes nothing payable.
     const familyId = { in: [m.familyId, m.deletionParent.familyId] };
     expect({
       packages: await g.prisma.learnerSubscription.count({ where: { familyId } }),
@@ -631,19 +710,26 @@ describe('2. over HTTP, as a store reviewer', () => {
     }
   });
 
-  it('neither parent has an amount due on the payments tab (OA-12 current state: Option B, nothing payable for review)', async () => {
+  it('neither parent has a real amount due on the payments tab (OA-12: only the API\'s synthetic demo item, never a stored one)', async () => {
     // GET /me/billing is what the app's payments tab reads; its "Amount due"
-    // lists only open requests and unpaid instalments (amount_due.dart).
-    // Changes with the test above if OA-12 picks Option A.
+    // lists open requests and unpaid instalments (amount_due.dart). The
+    // command writes nothing payable; with the App Review payment mode
+    // (billing/review-mode.ts) the API adds one synthetic, never-stored item
+    // under this fixed id, so that one is allowed and nothing else is.
+    const REVIEW_DEMO_REQUEST_ID = '00000000-0000-4000-8000-0000000a99e1';
     for (const who of ['parent', 'parent2'] as const) {
       const r = await as(who, 'GET', '/me/billing');
       expect([who, r.status]).toEqual([who, 200]);
       // One row per child, subscription or not; each review family has one child.
       const subscriptions = r.json.subscriptions as Array<{ hasOpenPayment?: boolean }>;
       expect([who, Array.isArray(subscriptions), subscriptions?.length]).toEqual([who, true, 1]);
-      expect([who, r.json.instalments, r.json.requests, subscriptions.some((s) => s.hasOpenPayment === true)])
-        .toEqual([who, [], [], false]);
+      const requests = r.json.requests as Array<{ id: string }>;
+      // Something to pay only because of the demo item, never otherwise.
+      const demo = requests.some((q) => q.id === REVIEW_DEMO_REQUEST_ID);
+      expect([who, r.json.instalments, requests.filter((q) => q.id !== REVIEW_DEMO_REQUEST_ID), subscriptions.some((s) => s.hasOpenPayment === true)])
+        .toEqual([who, [], [], demo]);
     }
+    expect(await g.prisma.paymentRequest.count({ where: { id: REVIEW_DEMO_REQUEST_ID } })).toBe(0);
   });
 
   it('every admin route refuses all three accounts', async () => {
