@@ -128,7 +128,7 @@ describe('what a review account is shown', () => {
 
   it('the demo page: both languages, the requested one first, no script, no form, no link out', () => {
     const en = renderReviewDemoPage('en', 'n0nce');
-    expect(en).toContain("In the live app this opens Stripe's secure checkout page in the browser to pay this lesson package by card. The review account cannot make a payment.");
+    expect(en).toContain("In the live app this opens Stripe&#39;s secure checkout page in the browser to pay this lesson package by card. The review account cannot make a payment.");
     expect(en).toContain('لا يمكن لحساب المراجعة إجراء أي دفع.');
     expect(en.indexOf('lang="en" dir="ltr"')).toBeLessThan(en.indexOf('lang="ar" dir="rtl"'));
     const ar = renderReviewDemoPage('ar', 'n0nce');
