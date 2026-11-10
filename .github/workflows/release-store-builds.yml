@@ -703,12 +703,12 @@ jobs:
         # No second export (Apple would sign it again, and that signature could not be compared with
         # the verified one before it is sent), no other uploader and no other altool mode (the guard
         # pins every altool line). Success is the uploader's exit status 0 AND its own success line
-        # ("No errors uploading" for altool); anything else fails closed and prints only the
+        # ("No errors uploading" or "UPLOAD SUCCEEDED" for altool); anything else fails closed and prints only the
         # uploader's error lines. Nothing here asks for App Review or releases a version.
         # UNVERIFIED until the first run: every altool flag exactly as written below (whether
         # --upload-package on Xcode 26 needs --apple-id and the --bundle-* flags, and whether its help
         # naming --apple-id is the right signal for passing them),
-        # that altool finds the key in ~/.appstoreconnect/private_keys, and the "No errors uploading"
+        # that altool finds the key in ~/.appstoreconnect/private_keys, and the "No errors uploading"/"UPLOAD SUCCEEDED"
         # wording. The full uploader log stays on the runner.
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
@@ -733,7 +733,7 @@ jobs:
           AH="$(xcrun altool --help 2>&1 || true)"
           rc=0
           if grep -qF -e '--upload-package' <<<"$AH"; then
-            OK='No errors uploading'
+            OK='No errors uploading|UPLOAD SUCCEEDED'
             # The app's Apple ID and the bundle flags only if this altool's help names them (older
             # altool versions require them with --upload-package); otherwise the plain form.
             if grep -qF -e '--apple-id' <<<"$AH"; then
@@ -747,7 +747,7 @@ jobs:
             fi
           elif grep -qF -e '--upload-app' <<<"$AH"; then
             HOW='upload-app'
-            OK='No errors uploading'
+            OK='No errors uploading|UPLOAD SUCCEEDED'
             [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
             xcrun altool --upload-app -f "$VERIFIED_IPA" -t ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?
           else
@@ -763,7 +763,7 @@ jobs:
           # Only the uploader's own error lines, cut short; never a line naming the key's folder.
           show() { grep -E '\*\*\* Error|ERROR ITMS-|\[ERROR\]|[Ee]rror:|were not uploaded|could not be uploaded|not authorized|already been uploaded|bundle version' "$B/upload.log" | grep -v 'private_keys' | cut -c1-300 | head -40 || true; }
           # Exit status 0 is not enough: the uploader must also print its success line, and no error.
-          if [ "$rc" -ne 0 ] || ! grep -qF "$OK" "$B/upload.log" \
+          if [ "$rc" -ne 0 ] || ! grep -qE "$OK" "$B/upload.log" \
              || grep -qE '\*\*\* Error|ERROR ITMS-|were not uploaded|could not be uploaded' "$B/upload.log"; then
             show
             echo "::error title=App Store Connect upload not confirmed::$HOW exited $rc or did not report success. Look in App Store Connect before any re-run: if the build is there, a re-run needs a new build_number. See docs/release/signed-builds-ci.md, 'If the iOS job fails'."

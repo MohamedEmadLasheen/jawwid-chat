@@ -113,7 +113,7 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
 
      On the line **immediately before** whichever upload command runs, the `.ipa`'s SHA-256 is
      re-computed and the step refuses unless it equals the recorded one. The job succeeds only if the
-     uploader exits 0 **and** prints its own success line ("No errors uploading" for altool, "uploaded
+     uploader exits 0 **and** prints its own success line ("No errors uploading", or "UPLOAD SUCCEEDED" on newer Xcode, for altool, "uploaded
      successfully" for Transporter) with no `*** Error` / `ERROR ITMS-` line. On anything else it fails
      closed and prints only the uploader's error lines (cut to 300 characters, never a line naming the
      key folder); the full log stays on the runner;
@@ -139,7 +139,7 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
    particular whether `--upload-package` on Xcode 26 needs `--apple-id` and the three `--bundle-*` flags
    and whether "the help names `--apple-id`" is the right signal for passing them; that altool finds the key in
    `~/.appstoreconnect/private_keys`; that `altool --help` lists the mode names as written; and the
-   exact "No errors uploading" success wording. If any is wrong the job fails at the upload step with
+   exact success wording ("No errors uploading" or "UPLOAD SUCCEEDED"). If any is wrong the job fails at the upload step with
    nothing uploaded (or, if the wording alone differs, after an upload that must be checked in App Store
    Connect before any re-run); tell the lead (§6, risk 5).
 
@@ -470,7 +470,7 @@ files. It fails if:
   **immediately** preceded by the SHA-256 re-check; the verification step not recording
   `VERIFIED_IPA_SHA256` or not making the `.ipa` read-only, or the upload step not checking it is still
   read-only before the uploads; success not requiring exit status 0 **and** the uploader's success line
-  (`No errors uploading` for both altool modes, `uploaded successfully` for Transporter); or the iOS
+  (`No errors uploading` or `UPLOAD SUCCEEDED` for both altool modes, `uploaded successfully` for Transporter); or the iOS
   always-cleanup not deleting the key copied for the uploader;
 - **R2:** `google-github-actions/auth` appears anywhere but once in the `android` job, or before that
   job's identity assertions; `preflight` or `android` does not assert the repository id `1362573850`,
@@ -594,3 +594,6 @@ and never commits. It also checks
 
 Written under the machine rule: no workflow, script, test or build was run. CI (the guard's selftest and
 check, and the Dart tests) and the first approved runs are the evidence.
+
+
+**First-run note (iOS).** If the first iOS upload fails with an altool error about `--apple-id` or a `--bundle-*` flag, do not re-run. Tell the lead; the fix is to change the rule that decides whether those flags are passed (today: when `altool --help` names `--apple-id`).

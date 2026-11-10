@@ -31,7 +31,7 @@
 #     other than `-m upload`; anything but exactly one line per uploader, each uploading
 #     "$VERIFIED_IPA" and each IMMEDIATELY preceded by the SHA-256 re-check; the .ipa not made
 #     read-only, or not checked still read-only before the upload; success not requiring exit 0
-#     AND the uploader's own success line ("No errors uploading" for altool);
+#     AND the uploader's own success line ("No errors uploading" or "UPLOAD SUCCEEDED" for altool);
 #   - (R2) the Google sign-in (google-github-actions/auth) is anywhere but once in the android job,
 #     after that job's identity check; preflight or android does not assert the repository id,
 #     owner id, repository, ref and workflow ref; android or ios is not in store-release;
@@ -410,7 +410,7 @@ XCRUN_LINES = ALTOOL_LINES + [TRANSPORTER_LINES[0]]
 # Success is exit status 0 AND the uploader's own success line: "No errors uploading" for both
 # altool modes (UNVERIFIED wording, docs/release/signed-builds-ci.md), "uploaded successfully" for
 # Transporter.
-OK_ALTOOL = r"^\s*OK='No errors uploading'\s*$"
+OK_ALTOOL = r"^\s*OK='No errors uploading\|UPLOAD SUCCEEDED'\s*$"
 OK_TRANSPORTER = r"^\s*OK='uploaded successfully'\s*$"
 UPLOAD_SUCCESS = r'^\s*if \[ "\$rc" -ne 0 \] \|\| ! grep -qF "\$OK" "\$B/upload\.log" \\\s*$'
 SHA_RECHECK = (r'^\s*\[ "\$\(shasum -a 256 "\$VERIFIED_IPA" \| awk \'\{print \$1\}\'\)" = "\$VERIFIED_IPA_SHA256" \] '
@@ -446,7 +446,7 @@ def check_ios_upload(text, errors):
     oks = [n for n, l in code if re.match(r'^\s*OK=', l)]
     if len([n for n, l in code if re.match(OK_ALTOOL, l)]) != 2 \
             or len([n for n, l in code if re.match(OK_TRANSPORTER, l)]) != 1 or len(oks) != 3:
-        errors.append(f'{WORKFLOW}: each altool upload must expect "No errors uploading" and Transporter '
+        errors.append(f'{WORKFLOW}: each altool upload must expect "No errors uploading|UPLOAD SUCCEEDED" and Transporter '
                       f'"uploaded successfully", and nothing else (R1)')
     success = [n for n, l in ios_code if re.match(UPLOAD_SUCCESS, l)]
     if len(success) != 1 or not upload_lines or success[0] < max(upload_lines):
@@ -669,7 +669,7 @@ def mutations_r123():
         ('altool --upload-app of another file', W, lambda t: replaced(t, '--upload-app -f "$VERIFIED_IPA"', '--upload-app -f "$B/check/Runner.ipa"')),
         ('altool --upload-package with a bundle id not read from the .ipa', W, lambda t: replaced(t, '--bundle-id "$VERIFIED_BUNDLE_ID"', '--bundle-id "$BUNDLE_ID"')),
         ('altool --upload-package removed', W, lambda t: replaced(t, '            xcrun altool --upload-package', '            : altool-free')),
-        ('altool success wording not required', W, lambda t: replaced(t, "OK='No errors uploading'", "OK=''")),
+        ('altool success wording not required', W, lambda t: replaced(t, "OK='No errors uploading|UPLOAD SUCCEEDED'", "OK=''")),
         ('the success line not checked', W, lambda t: replaced(t, '! grep -qF "$OK" "$B/upload.log"', '! true')),
         ('the upload exit status not checked', W, lambda t: replaced(t, 'if [ "$rc" -ne 0 ] || ! grep -qF', 'if ! grep -qF')),
         ('altool in a mobile script', 'scripts/mobile/zz-selftest.sh', lambda t: 'xcrun altool --upload-app -f x.ipa --type ios\n'),
