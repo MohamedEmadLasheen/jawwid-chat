@@ -59,6 +59,8 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
    - runs `scripts/mobile/build-store.sh android`;
    - verifies the `.aab` (`jarsigner -verify`; exactly one signer, the upload key; the optional
      `ANDROID_UPLOAD_CERT_SHA256` pin) and writes its SHA-256 into the summary;
+   - reads the **release evidence** from that signed `.aab` (target/min SDK, 16 KB alignment, no `AD_ID`;
+     §1a) and fails the job, before Sentry and Play, if any check fails;
    - installs **sentry-cli 3.8.2**, checked against its pinned SHA-256 (`scripts/mobile/install-sentry-cli.sh`),
      and uploads the Dart symbols (and the R8 `mapping.txt`, if the build wrote one) to Sentry. This runs
      **before** the store upload, so a broken Sentry setup stops the release rather than shipping a
@@ -93,6 +95,9 @@ Started by hand (`workflow_dispatch`) from `main`, with four inputs:
      It then records the CodeDirectory hash (`codesign -d -vvv`: `CandidateCDHashFull sha256`, else
      `CDHash`) of the app and of every framework and extension inside it, makes the `.ipa` read-only, and
      records its **SHA-256** (all shown in the run summary). Any missing value fails the job;
+   - reads the **release evidence** from that signed `.ipa` (Xcode 26 / iOS 26 SDK stamp, privacy
+     manifest and required-reason APIs, encryption flag, background modes; §1a) and fails the job, before
+     Sentry and App Store Connect, if any check fails;
    - installs sentry-cli (as above) and uploads the archive's dSYMs and the Dart symbols to Sentry;
    - **uploads the verified file itself** with Apple's `altool` (shipped with Xcode), the `.p8` copied to
      `~/.appstoreconnect/private_keys/AuthKey_<id>.p8` (mode 600) for that step only, where altool looks
@@ -172,6 +177,46 @@ else, and nothing of them, of the token or of sentry-cli's configuration reaches
   `build/app/outputs`, which holds the mapping file), even after a failure.
 
 The guard (§5.2) fails CI if any of these is broken.
+
+## 1a. Release evidence from the signed artifacts (W56: LR-50, LR-51, LR-52, LR-58, LR-73)
+
+The release-readiness workflow of #523 proves these points on a throwaway, unsigned or
+throwaway-signed build. This workflow proves them again on the **signed bytes it is about to upload**,
+so the evidence in the run summary is about the build the stores receive. One read-only step per job,
+right after the signature verification and **before** the Sentry upload, the Google sign-in and every
+store upload, runs `scripts/mobile/verify-store-artifact.sh` (from the workflow's own commit, like the
+other helpers). Any failed check fails the job there: nothing is sent to Sentry or to a store. The step
+appends a table (check, expected, found, PASS/FAIL/INFO) to the run summary; it holds only the checked
+values, never a file's contents, a secret or a log.
+
+| Item | Android, read from the signed `.aab` | iOS, read from the signed `.ipa` |
+|---|---|---|
+| LR-50 | `targetSdkVersion` **36** and `minSdkVersion` **26**, from the bundle's own manifest (`bundletool dump manifest --xpath`), plus the package, `versionName` and `versionCode` = the run's inputs | |
+| LR-51 | every `LOAD` segment of every **64-bit** native library (`arm64-v8a`, `x86_64`, and any ABI not known to be 32-bit) aligned to at least **16 KB** (`readelf -lW`, `p_align` ≥ 16384), read straight from `base/lib/` of the bundle; `arm64-v8a/libflutter.so` and `libapp.so` present. 32-bit libraries are listed as INFO, not failed (Play's rule covers 64-bit ABIs only) | |
+| Data safety | no `com.google.android.gms.permission.AD_ID` in `uses-permission` or `uses-permission-sdk-23` (the drafted declaration says no Advertising ID; `docs/release/store-console/google-data-safety.md` O-4). The answer is trusted only if the same dump lists `android.permission.INTERNET` | |
+| LR-52 | | `DTXcode` ≥ **2600** (Xcode 26) and `DTSDKName` `iphoneos26[.x]` (iOS 26 SDK), from the app's `Info.plist` |
+| Export | | `ITSAppUsesNonExemptEncryption` **false** |
+| Calls | | `UIBackgroundModes` exactly **`audio` and `voip`** (no other mode, no repeat) |
+| LR-58 | | `PrivacyInfo.xcprivacy` at the app's root, `plutil -lint` clean, `NSPrivacyTracking` false, and the required-reason APIs declared with their reasons: UserDefaults `CA92.1`, FileTimestamp `C617.1`, SystemBootTime `35F9.1`; every declared category has at least one reason |
+| LR-73 | | the manifest's collected data types are exactly those of `ios/Runner/PrivacyInfo.xcprivacy` in the build commit (none dropped or added by the build) |
+
+Details:
+- **bundletool 1.18.3**, the version of #523, is downloaded by `scripts/mobile/install-bundletool.sh`
+  and refused unless its SHA-256 is the pinned one (the digest GitHub publishes for that release asset,
+  the same pin as #523). It only reads the bundle (`dump manifest`); it is never given the keystore.
+- The `.ipa` is unpacked again, into a fresh `$RUNNER_TEMP/ios-build/evidence`, after its SHA-256 is
+  checked against the recorded one, so the evidence is about the exact file that is uploaded. The
+  always-cleanup step deletes it with the rest of `ios-build`.
+- **Zip alignment (LR-51)** is not checked here: Play builds the device APKs from the bundle, and the
+  page alignment of their stored libraries is Play's doing. #523's `zipalign -P 16` check on a universal
+  APK remains the evidence for the build configuration.
+- The helper's expected values (`36`, `26`, `16384`, `AD_ID`, `2600`, `iphoneos26`, `audio voip`) are
+  `readonly` constants the guard pins (§5.2); a Dart test keeps its required-reason list and background
+  modes equal to `ios/Runner/PrivacyInfo.xcprivacy` and `ios/Runner/Info.plist`.
+- **UNVERIFIED until the first run** (machine rule): that `bundletool dump manifest --xpath` prints one
+  value per line for the permission query, as written; that the bundle's manifest carries `uses-sdk`
+  (AGP writes it); and that `plutil -extract <key path> raw` reads array items by index on `macos-26`.
+  If any is wrong the step fails with a FAIL row and nothing is uploaded; tell the lead.
 
 ## 2. What it does not do
 
@@ -428,6 +473,14 @@ How to make the keystore, `google-services.json` and the Apple key is unchanged 
 - **`scripts/mobile/install-sentry-cli.sh`**: downloads sentry-cli 3.8.2
   (`sentry-cli-Linux-x86_64` / `sentry-cli-Darwin-universal`) from its GitHub release and refuses it
   unless its SHA-256 is the pinned one.
+- **`scripts/mobile/verify-store-artifact.sh`** (W56): the release evidence of §1a. `android <aab>
+  <bundletool.jar> <x.y.z> <build number>` or `ios <Runner.app> <source PrivacyInfo.xcprivacy>`; prints
+  the Markdown table, exits 1 if any check fails, 2 on bad arguments. Alignment values are checked to be
+  numbers before any arithmetic, so nothing read from a library is ever evaluated.
+- **`scripts/mobile/install-bundletool.sh`** (W56): downloads bundletool 1.18.3 from its GitHub release
+  and refuses it unless its SHA-256 is the pinned one. To bump it, change `BUNDLETOOL_VERSION` and
+  `BUNDLETOOL_SHA256` together, copying the asset's `sha256:` digest from
+  `github.com/google/bundletool/releases`.
 
 ### 5.1 Bumping sentry-cli
 
@@ -490,7 +543,19 @@ files. It fails if:
   `SENTRY_DOTENV…`, `SENTRYCLI_…` or `SENTRY_LOAD_DOTENV` other than `=0` appears;
 - **P2-1:** preflight does not refuse a `ref` other than `GITHUB_SHA` before it outputs the commit, or
   the `android` job does not assert `git rev-parse HEAD` equals `GITHUB_SHA` before the build and the
-  Google sign-in.
+  Google sign-in;
+- **W56 (release evidence):** the `verify-store-artifact.sh` call is not on its pinned line exactly once
+  in each of `android` and `ios`; it runs before the signature verification (`jarsigner -verify` /
+  the recorded `VERIFIED_IPA_SHA256`) or after the first Sentry upload, the Google sign-in, the Play
+  upload, `altool --help` or any `.ipa` upload; its step has an `if:` or `continue-on-error`, does not
+  start from `rc=0`, lets `rc` be overwritten, has no `[ "$rc" -eq 0 ] || { …; exit 1; }` after the
+  call, or does not write to the step summary; the Android step does not take bundletool from
+  `install-bundletool.sh` (`BT="$(bash release-tools/scripts/mobile/install-bundletool.sh …)"`); that
+  script loses its pinned 64-hex SHA-256 or its refusal line; the helper's `readonly` expectations
+  (package, `TARGET_SDK='36'`, `MIN_SDK='26'`, `PAGE_BYTES='16384'`, the `AD_ID` name,
+  `DTXCODE_MIN='2600'`, the `iphoneos26` pattern, `BACKGROUND_MODES='audio voip'`) change or are
+  reassigned, a FAIL row no longer sets the failure flag, the flag is reset, or the exit is not
+  `exit "$bad"`; or `continue-on-error` appears anywhere in the workflow.
 
 Each rule has at least one mutation in the selftest.
 
@@ -508,6 +573,17 @@ a second draft of it, a draft with extra versionCodes, no draft of ours or anoth
 and never commits. It also checks
 `install-sentry-cli.sh` refuses a download with the wrong SHA-256.
 `test/scripts/build_store_script_test.dart` still covers `build-store.sh`.
+`test/scripts/verify_store_artifact_script_test.dart` (W56) runs the real `verify-store-artifact.sh`
+against stand-in `java` (bundletool's `dump manifest`), `unzip`, `readelf` and `plutil`: a good bundle and
+a good app pass with every row PASS; each failure of §1a (target or min SDK, package, versionCode,
+`AD_ID` in either permission element, a permission dump without `INTERNET`, a 64-bit or unknown-ABI
+library below 16 KB, no 64-bit library, no arm64 `libapp.so`, an unreadable library, bundletool failing;
+an old `DTXcode` or SDK, a simulator SDK, the encryption flag missing or true, an extra, missing or
+repeated background mode, no or a broken privacy manifest, tracking, a missing category or reason, an
+entry without a reason, a collected type dropped or added) exits 1 with that row FAIL; a 32-bit library
+below 16 KB is INFO only; an alignment value written as shell arithmetic is never evaluated; bad
+arguments exit 2. It also keeps the helper's required-reason list and background modes equal to
+`ios/Runner`, and checks `install-bundletool.sh` refuses a wrong SHA-256 and a non-empty directory.
 
 ## 6. Risks and unverified points
 
