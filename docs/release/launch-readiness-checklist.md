@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-10 11:12 Cairo (09:12 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-10 12:33 Cairo (10:33 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -427,7 +427,7 @@ Questions go to the owner one at a time, in this order.
 | # | What we need from you | Recommendation | Deadline | What it blocks |
 |---|---|---|---|---|
 | OA-11 | The target audience | Account holders 18+; not Kids; no child imagery | Mon 9 Nov | LR-10, LR-09c, LR-09e, LR-09j |
-| OA-12 | Payments:<br>• the wording of the "Subscriptions" tab;<br>• one learner per paid lesson call;<br>• disclosing Core's monthly charges;<br>• the trial;<br>• live Stripe at launch;<br>• whether the app shows the Stripe link at all on Play | Rename the tab to lesson-package wording; guard one learner per call; disclose the charges; on Play, consider paying on the web only | Tue 10 Nov | LR-15, LR-34 |
+| OA-12 | Payments:<br>• the wording of the "Subscriptions" tab;<br>• one learner per paid lesson call;<br>• disclosing Core's monthly charges;<br>• the trial;<br>• live Stripe at launch;<br>• whether the app shows the Stripe link at all on Play | Rename the tab to lesson-package wording; guard one learner per call; disclose the charges; on Play, consider paying on the web only | Tue 10 Nov | LR-15, LR-34<br>**OWNER DECISION 2026-11-10 (reviewer payments):**<br>• Never show Jawwid's real bank details to Apple or Google reviewers.<br>• No review flow may lead to a real bank transfer or a real financial obligation.<br>• Reviewers get a review-only payment mode, enforced on the server for the review organization: no real bank details, no receipt upload, no Stripe charge, invoice, obligation or staff task.<br>• Public users are unaffected.<br>• Being built as reviewable PRs; enabling it in production needs a separate approval. |
 | OA-13 | Approve the word list (LD-12), the report reasons (N-4) and the conduct warning | Approve after reading | Tue 10 Nov | LR-16 |
 | OA-14 | Account deletion for staff who sign into the app | A closure request, like the one for teachers | Tue 10 Nov | LR-20 |
 | OA-15 | The closed-account state (P-6): build it, or have counsel soften the wording | Build it (needs your approval: High) | Wed 11 Nov | LR-31 |
