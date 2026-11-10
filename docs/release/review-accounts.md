@@ -223,7 +223,9 @@ Run the workflow again after every review, and whenever an account misbehaves. I
 - **It restores a deleted parent account**, either parent. Deleting an account in the app erases the login at once.
   The family and the child stay. The command creates the parent again with the same email and gives it back its
   place: the family group for `parent`, a new 1:1 with the supervisor for `parent2`.
-- **The teacher account cannot be deleted** while a child is assigned to it, so it never needs restoring.
+- **It restores a deleted teacher account.** With a child assigned, deleting the teacher is a request: the account
+  keeps working and is deleted within 30 days (by staff, or automatically at the deadline). The next run creates
+  the teacher again and moves the child back to it.
 - **Run one copy at a time.** Two runs at once could create duplicate rows. The workflow never runs two at once: it
   holds a second run as pending until the first one ends. GitHub keeps only one pending run, so a third run cancels
   the pending second one (nothing is changed by a cancelled pending run). Start the next run after the last one ends.

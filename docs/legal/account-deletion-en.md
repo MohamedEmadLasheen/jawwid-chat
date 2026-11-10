@@ -25,13 +25,13 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 1.4 Parents and teachers can delete their own accounts. A staff account is closed by the Academy when the staff member leaves.
 
-1.5 **Teachers:** a teacher cannot delete their account while a future lesson, an assigned student, or this month's or last month's payroll is still open. The app and the form tell you so. Contact the Academy at {{SUPPORT_EMAIL}} so that your students can be moved and your payroll completed.
+1.5 **Teachers:** if you are a teacher and still have a future lesson, an assigned student, or this month's or last month's payroll open, you request deletion in the same two places. In the app, the same screen offers "Request account deletion"; after your password, the app shows the date by which your account will be deleted, and you confirm. On the web form, you are told that date after you submit. The Academy then moves your students and completes your payroll, and your account is deleted within 30 days of the request at the latest, even if something is still open. Until then your account works as usual, and you can cancel the request in the app (Settings → Delete account → "Cancel request"). If you have nothing open, your account is deleted at once.
 
 1.6 Deletion is final and cannot be undone.
 
 ## 2. What is deleted at once
 
-2.1 Deletion takes effect immediately. We delete:
+2.1 Deletion takes effect immediately; after a teacher's request (clause 1.5), it takes effect when the request is completed, at the latest on the date shown. We delete:
 
 (a) your sign-in name, your password, your devices, your push tokens, any pending reset codes and your own notifications; you are signed out everywhere;
 
@@ -43,7 +43,7 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 (e) any block you made, and any block made against you.
 
-2.2 For a teacher, we also delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account.
+2.2 For a teacher, we also delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account (the payout account at the time set out in section 10.4.1 of the Privacy Policy).
 
 ## 3. What is kept, and for how long
 
@@ -73,4 +73,4 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 4.3 **Language.** This page is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails [legal review — LD-17].
 
-> **Drafting note (remove before publication):** This is the static information page for the Google Play "Delete account URL" (Data safety) and Apple's optional User Privacy Choices URL. It names the app as listed and the developer, gives the steps, and lists what is deleted and what is kept, as Google Play requires; the form itself is the API page `GET /api/v1/account-deletion` (`apps/api/src/account-deletion/`), which this page links to through {{ACCOUNT_DELETION_URL}}. Every fact above is from Privacy Policy §10 and must change with it; one addition: "recorded violations and suspensions" in the teacher row is from `data-inventory-and-retention-matrix.md` (Teacher employment records: discipline and pay records kept), which the policy's "supervision records" (§10.4.3) covers but does not name. Three points must be settled before publication: (1) the retention periods marked LD-6 and LD-7, because Google Play asks for the retention period of kept data; (2) teacher deletion: launch item LR-03 (PR #498) turns the teacher block into a deletion request; when it merges, clause 1.5 must describe that instead; (3) the "7 years" has no recorded legal basis yet (L-6).
+> **Drafting note (remove before publication):** This is the static information page for the Google Play "Delete account URL" (Data safety) and Apple's optional User Privacy Choices URL. It names the app as listed and the developer, gives the steps, and lists what is deleted and what is kept, as Google Play requires; the form itself is the API page `GET /api/v1/account-deletion` (`apps/api/src/account-deletion/`), which this page links to through {{ACCOUNT_DELETION_URL}}. Every fact above is from Privacy Policy §10 and must change with it; one addition: "recorded violations and suspensions" in the teacher row is from `data-inventory-and-retention-matrix.md` (Teacher employment records: discipline and pay records kept), which the policy's "supervision records" (§10.4.3) covers but does not name. Three points must be settled before publication: (1) the retention periods marked LD-6 and LD-7, because Google Play asks for the retention period of kept data; (2) teacher deletion: done (LR-71, after LR-03 / PR #498): clause 1.5 describes the deletion request as the code does (`apps/api/src/account-deletion/account-deletion.controller.ts`, `account-deletion-page.ts`, `lib/features/settings/presentation/delete_account_screen.dart`), and clause 2.2 follows Privacy Policy §10.4.2; (3) the "7 years" has no recorded legal basis yet (L-6).
