@@ -355,10 +355,11 @@ describe('1. what the command leaves in the database', () => {
     expect(state).toBe('open');
   });
 
-  it('nothing payable: no package, instalment, payment request or invoice for either review family (OA-12 default)', async () => {
-    // The recommended default for OA-12 is no in-app payment step for review:
-    // a reviewer sees no amount due, and the review notes say so
-    // (docs/release/review-accounts.md, "No payments").
+  it('nothing payable: no package, instalment, payment request or invoice for either review family (OA-12 current state)', async () => {
+    // Pins the current state: OA-12 is an open owner decision, and until the
+    // owner decides, the review cohort is Option B (nothing payable for
+    // review; docs/release/review-accounts.md, "No payments"). If OA-12 picks
+    // Option A (a payable request in the cohort), this test changes with it.
     const familyId = { in: [m.familyId, m.deletionParent.familyId] };
     expect({
       packages: await g.prisma.learnerSubscription.count({ where: { familyId } }),
@@ -630,13 +631,16 @@ describe('2. over HTTP, as a store reviewer', () => {
     }
   });
 
-  it("neither parent has an amount due on the payments tab (OA-12 default: no in-app payment step for review)", async () => {
+  it('neither parent has an amount due on the payments tab (OA-12 current state: Option B, nothing payable for review)', async () => {
     // GET /me/billing is what the app's payments tab reads; its "Amount due"
     // lists only open requests and unpaid instalments (amount_due.dart).
+    // Changes with the test above if OA-12 picks Option A.
     for (const who of ['parent', 'parent2'] as const) {
       const r = await as(who, 'GET', '/me/billing');
       expect([who, r.status]).toEqual([who, 200]);
-      const subscriptions = (r.json.subscriptions ?? []) as Array<{ hasOpenPayment?: boolean }>;
+      // One row per child, subscription or not; each review family has one child.
+      const subscriptions = r.json.subscriptions as Array<{ hasOpenPayment?: boolean }>;
+      expect([who, Array.isArray(subscriptions), subscriptions?.length]).toEqual([who, true, 1]);
       expect([who, r.json.instalments, r.json.requests, subscriptions.some((s) => s.hasOpenPayment === true)])
         .toEqual([who, [], [], false]);
     }
