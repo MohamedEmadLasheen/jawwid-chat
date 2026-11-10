@@ -7,6 +7,7 @@
 import Stripe from 'stripe';
 import {
   StripeSdkGateway,
+  checkoutCreateParams,
   type CheckoutInput,
   type CheckoutSession,
   type PaymentIntentFacts,
@@ -32,7 +33,8 @@ export class FakeStripe implements StripeGateway {
   readonly reads: string[] = [];
   /** The next read (retrieve / facts / list / find) fails, as Stripe being unreachable does. */
   failNextRead: Error | null = null;
-  readonly sessions = new Map<string, CheckoutSession & { input: CheckoutInput }>();
+  /** Each session's create call exactly as the production gateway would send it to Stripe (checkoutCreateParams). */
+  readonly sessions = new Map<string, CheckoutSession & { input: CheckoutInput; params: Stripe.Checkout.SessionCreateParams }>();
   readonly refunds: Array<{ id: string; paymentIntentId: string; amountMinor: number }> = [];
   /** Every refund CALL, as real Stripe sees it (a replayed idempotency key is a call but no new refund). */
   readonly refundCalls: Array<{ paymentIntentId: string; amountMinor: number; idempotencyKey: string; metadata: Record<string, string> }> = [];
@@ -53,6 +55,7 @@ export class FakeStripe implements StripeGateway {
       throw e;
     }
     const id = `cs_test_${++this.n}_${input.requestId.slice(0, 8)}`;
+    const params = checkoutCreateParams(input);
     const session = {
       id,
       url: `https://checkout.stripe.com/c/pay/${id}`,
@@ -61,10 +64,11 @@ export class FakeStripe implements StripeGateway {
       amountTotal: input.amountMinor,
       currency: input.currency,
       paymentIntentId: null,
-      metadata: { paymentRequestId: input.requestId, organizationId: input.organizationId },
+      metadata: { ...(params.metadata as Record<string, string>) },
       expiresAt: input.expiresAt,
       customerId: input.customerId ?? null,
       input,
+      params,
     };
     this.sessions.set(id, session);
     return session;
@@ -283,6 +287,33 @@ export class FakeStripe implements StripeGateway {
       livemode: false,
       created: Math.floor(Date.now() / 1000),
       data: { object: { id: refundId, object: 'refund', amount: amountMinor, payment_intent: paymentIntentId, status: 'succeeded', reason: 'requested_by_customer', metadata } },
+    });
+  }
+
+  /** A charge.dispute.* event (a chargeback) on a payment intent and its charge. */
+  disputeEvent(
+    type: 'created' | 'updated' | 'closed' | 'funds_withdrawn' | 'funds_reinstated',
+    paymentIntentId: string | null,
+    opts: { disputeId?: string; chargeId?: string; amountMinor?: number; currency?: string; status?: string; reason?: string; eventId?: string } = {},
+  ) {
+    return this.signedEvent({
+      id: opts.eventId ?? `evt_test_${++this.n}`,
+      object: 'event',
+      type: `charge.dispute.${type}`,
+      livemode: false,
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: opts.disputeId ?? `du_T${++this.n}`,
+          object: 'dispute',
+          amount: opts.amountMinor ?? 120000,
+          currency: (opts.currency ?? 'aed').toLowerCase(),
+          charge: opts.chargeId ?? (paymentIntentId ? `ch_${paymentIntentId.slice(3)}` : `ch_TForeign${this.n}`),
+          payment_intent: paymentIntentId,
+          status: opts.status ?? (type === 'closed' ? 'lost' : 'needs_response'),
+          reason: opts.reason ?? 'fraudulent',
+        },
+      },
     });
   }
 

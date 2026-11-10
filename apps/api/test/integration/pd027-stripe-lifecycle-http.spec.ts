@@ -21,7 +21,7 @@
  * Synthetic people only (G-20).
  */
 import { randomUUID } from 'node:crypto';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type Redis from 'ioredis';
 import { PlatformModule } from '@platform/platform.module';
@@ -563,6 +563,114 @@ describe('Stripe Billing events (invoices, subscriptions) change nothing', () =>
     expect((await webhook(ev)).json.outcome).toBe('ignored_not_chat');
     expect(await g.prisma.payment.count()).toBe(before);
     expect(await g.prisma.stripeEvent.findUnique({ where: { id: JSON.parse(ev.body).id } })).toMatchObject({ outcome: 'ignored_not_chat', organizationId: null });
+  });
+});
+
+describe('S3 + S6: Chat marks its own Stripe objects, and puts no child\'s name on them', () => {
+  it('the Checkout Session and its payment intent carry system jawwid-chat; the line item is the request\'s label, never the child\'s name', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const sessionId = await payByCard(tokenOf(request.link));
+    const { params, input } = stripe.sessions.get(sessionId)!;
+
+    expect(params.metadata).toEqual({ system: 'jawwid-chat', paymentRequestId: request.id, organizationId: orgId });
+    expect(params.payment_intent_data?.metadata).toEqual({ system: 'jawwid-chat', paymentRequestId: request.id, organizationId: orgId });
+
+    // The request does know the child (the ledger keeps it); Stripe is not told.
+    const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.childName).toBe(child.name);
+    const surname = child.name.split(' ').slice(1).join(' ');
+    expect(surname.length).toBeGreaterThan(0);
+    expect(input.productName).toBe('Quran — renewal');
+    expect(params.line_items?.[0]?.price_data?.product_data?.name).toBe('Quran — renewal');
+    expect(JSON.stringify(params)).not.toContain(surname);
+    expect(JSON.stringify(params)).not.toContain(child.name);
+  });
+});
+
+describe('disputes (M2): flagged and audited; the money ledger is never changed', () => {
+  it('each dispute event on a recorded payment has its outcome and one audit row; redelivery is a duplicate; the payment, refunds and package stand', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const sessionId = await payByCard(tokenOf(request.link));
+    const session = stripe.complete(sessionId);
+    expect((await webhook(stripe.completedEvent(session))).json.outcome).toBe('recorded');
+    const before = await g.prisma.payment.findUniqueOrThrow({ where: { stripeCheckoutSessionId: sessionId } });
+    const pi = session.paymentIntentId!;
+    const errors = jest.spyOn(Logger.prototype, 'error');
+
+    const disputeId = 'du_TDisputeOne1';
+    const opened = stripe.disputeEvent('created', pi, { disputeId });
+    expect((await webhook(opened)).json.outcome).toBe('dispute_opened');
+    expect((await webhook(opened)).json.outcome).toBe('duplicate');
+    expect((await webhook(stripe.disputeEvent('updated', pi, { disputeId, status: 'under_review' }))).json.outcome).toBe('dispute_updated');
+    expect((await webhook(stripe.disputeEvent('funds_withdrawn', pi, { disputeId, status: 'under_review' }))).json.outcome).toBe('dispute_funds_withdrawn');
+    expect((await webhook(stripe.disputeEvent('closed', pi, { disputeId, status: 'won' }))).json.outcome).toBe('dispute_closed_won');
+    expect((await webhook(stripe.disputeEvent('funds_reinstated', pi, { disputeId, status: 'won' }))).json.outcome).toBe('dispute_funds_reinstated');
+
+    // Matched by the charge when Stripe sends no payment intent.
+    expect(before.stripeChargeId).toMatch(/^ch_/);
+    const byCharge = stripe.disputeEvent('created', null, { disputeId: 'du_TDisputeTwo2', chargeId: before.stripeChargeId! });
+    expect((await webhook(byCharge)).json.outcome).toBe('dispute_opened');
+    expect((await webhook(stripe.disputeEvent('closed', null, { disputeId: 'du_TDisputeTwo2', chargeId: before.stripeChargeId!, status: 'lost' }))).json.outcome).toBe('dispute_closed_lost');
+
+    // One audit row per event, naming the payment and the dispute (codes only).
+    const audits = await g.prisma.auditLog.findMany({ where: { action: { startsWith: 'payment.dispute_' }, entityId: f.id }, orderBy: { createdAt: 'asc' } });
+    expect(audits.map((a) => a.action)).toEqual([
+      'payment.dispute_opened', 'payment.dispute_updated', 'payment.dispute_funds_withdrawn', 'payment.dispute_closed', 'payment.dispute_funds_reinstated',
+      'payment.dispute_opened', 'payment.dispute_closed',
+    ]);
+    expect(audits[0]!.after).toMatchObject({ paymentId: before.id, requestId: request.id, disputeId, paymentIntentId: pi, amountMinor: 120000, currency: 'AED', stripeReason: 'fraudulent' });
+    expect(audits[3]!.after).toMatchObject({ stripeStatus: 'won', outcome: 'dispute_closed_won' });
+
+    // The webhook log attributes them to the academy and the payment.
+    const ev = await g.prisma.stripeEvent.findUniqueOrThrow({ where: { id: JSON.parse(opened.body).id } });
+    expect(ev).toMatchObject({ type: 'charge.dispute.created', outcome: 'dispute_opened', organizationId: orgId, objectId: disputeId, paymentIntentId: pi });
+    const log = await http(m.operationsManager.subject, 'GET', '/stripe/events?outcome=dispute_opened&type=charge.dispute.');
+    expect(log.json.items.map((e: any) => e.id)).toContain(ev.id);
+
+    // Error level for a new dispute and for money withdrawn; not for the rest.
+    const lines = errors.mock.calls.map((c) => String(c[0]));
+    expect(lines.filter((l) => l.includes('dispute_opened'))).toHaveLength(2);
+    expect(lines.filter((l) => l.includes('dispute_funds_withdrawn'))).toHaveLength(1);
+    expect(lines.some((l) => l.includes('dispute_updated') || l.includes('dispute_closed_') || l.includes('dispute_funds_reinstated'))).toBe(false);
+
+    // Flag only: the ledger is exactly as it was.
+    const after = await g.prisma.payment.findUniqueOrThrow({ where: { id: before.id } });
+    expect(after).toEqual(before);
+    expect(await g.prisma.paymentRefund.count({ where: { paymentId: before.id } })).toBe(0);
+    expect(await g.prisma.learnerSubscription.count({ where: { requestId: request.id, voidedAt: null } })).toBe(1);
+    expect((await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } })).paidAt).not.toBeNull();
+    const list = await http(m.superAdmin.subject, 'GET', `/payments?familyId=${f.id}`);
+    expect(list.json.items.find((x: any) => x.id === before.id)).toMatchObject({ status: 'standing', refundedMinor: 0 });
+  });
+
+  it('a dispute, refund or charge.refunded on a payment Chat did not take is not_chat: nothing audited, nothing recorded, unattributed', async () => {
+    const foreign = 'pi_TOtherSystem42';
+    const auditsBefore = await g.prisma.auditLog.count({ where: { action: { startsWith: 'payment.' } } });
+    const refundsBefore = await g.prisma.paymentRefund.count();
+
+    const events = [
+      stripe.disputeEvent('created', foreign, { disputeId: 'du_TForeignOne1' }),
+      stripe.disputeEvent('funds_withdrawn', foreign, { disputeId: 'du_TForeignOne1' }),
+      stripe.disputeEvent('created', null, { disputeId: 'du_TForeignTwo2', chargeId: 'ch_TOtherSystemCharge' }),
+      stripe.refundEvent(foreign, 're_TForeignRefund1', 5000),
+      stripe.chargeRefundedEvent(foreign),
+    ];
+    for (const e of events) {
+      expect((await webhook(e)).json.outcome).toBe('not_chat');
+      expect(await g.prisma.stripeEvent.findUniqueOrThrow({ where: { id: JSON.parse(e.body).id } })).toMatchObject({ outcome: 'not_chat', organizationId: null });
+    }
+    expect(await g.prisma.auditLog.count({ where: { action: { startsWith: 'payment.' } } })).toBe(auditsBefore);
+    expect(await g.prisma.paymentRefund.count()).toBe(refundsBefore);
+    // Never chased by the reconciler: it syncs refund_deferred only.
+    expect(await g.prisma.stripeEvent.count({ where: { paymentIntentId: foreign, outcome: 'refund_deferred' } })).toBe(0);
+  });
+
+  it('a refund Chat cannot classify (Stripe unreachable) is kept as refund_deferred, never dropped', async () => {
+    stripe.failNextRead = Object.assign(new Error('connect ETIMEDOUT'), { type: 'StripeConnectionError' });
+    const e = stripe.refundEvent('pi_TUnclassified7', 're_TUnclassified7', 1000);
+    expect((await webhook(e)).json.outcome).toBe('refund_deferred');
   });
 });
 
