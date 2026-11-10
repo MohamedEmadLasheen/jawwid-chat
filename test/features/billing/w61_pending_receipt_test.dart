@@ -154,6 +154,18 @@ void main() {
       expect(within('pay-sheet-error', find.text('$enNotice $enPaused')), findsOneWidget);
       expect(find.byKey(const ValueKey('pay-by-card')), findsOneWidget, reason: 'the sheet stays open');
       expect(find.text(lookupL10n(const Locale('en')).billingNoLongerOpen), findsNothing);
+      // After the refusal the card cannot be tapped again (no repeat refused requests).
+      expect(cardOption(tester).onTap, isNull);
+      expect(repo.checkouts, 1);
+    });
+
+    testWidgets('no card offered (Stripe off): no notice about a card', (tester) async {
+      repo.answer = billing(receipts: [receipt('a', 'r1', 300000)], cardAvailable: false);
+      await openSheet(tester, 'r:r1');
+      expect(find.byKey(const ValueKey('pay-by-card')), findsNothing);
+      expect(find.byKey(const ValueKey('pay-sheet-receipt-pending')), findsNothing);
+      expect(find.textContaining(enNotice), findsNothing);
+      expect(find.byKey(const ValueKey('pay-by-bank-transfer')), findsOneWidget);
     });
   });
 }
@@ -169,10 +181,10 @@ PaymentReceipt receipt(String id, String requestId, int amountMinor, {ReceiptSta
       transferredOn: DateTime(2026, 10, 20),
     );
 
-ParentBilling billing({List<PaymentReceipt> receipts = const []}) => ParentBilling(
+ParentBilling billing({List<PaymentReceipt> receipts = const [], bool cardAvailable = true}) => ParentBilling(
       today: DateTime(2026, 11, 2),
       currency: 'AED',
-      cardAvailable: true,
+      cardAvailable: cardAvailable,
       instalments: [
         BillingInstalment(
           id: 'i2',

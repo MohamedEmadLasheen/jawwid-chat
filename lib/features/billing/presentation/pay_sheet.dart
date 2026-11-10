@@ -92,6 +92,10 @@ class _PaySheetState extends ConsumerState<PaySheet> {
   var _busy = false;
   String? _error;
 
+  /// W61 S2: the server refused the card because waiting receipts cover what is left
+  /// (`receipt_pending`), though [PaySheet.item] read none: the card stays disabled.
+  var _receiptRefused = false;
+
   /// Open a Stripe Checkout for what is still owed, in the external browser. An
   /// instalment is named by its id (the server makes or reuses its request).
   Future<void> _card() async {
@@ -124,6 +128,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
       if (appError.code == BillingErrors.state && appError.detail?['reason'] == receiptPendingReason) {
         setState(() {
           _busy = false;
+          _receiptRefused = true;
           _error = '${l10n.billingReceiptPendingNotice} ${l10n.billingReceiptPendingCardPaused}';
         });
         return;
@@ -201,7 +206,8 @@ class _PaySheetState extends ConsumerState<PaySheet> {
             ],
             // W61 S2: a transfer receipt is waiting for the academy -- a card too may charge
             // twice. When the receipts cover what is left, the card waits for their decision.
-            if (item.receiptPending) ...[
+            // Said only where a card is offered.
+            if (widget.cardAvailable && item.receiptPending) ...[
               ReceiptPendingNotice(key: const ValueKey('pay-sheet-receipt-pending'), coversRemaining: item.receiptCoversRemaining),
               const SizedBox(height: Spacing.spacing3),
             ],
@@ -211,7 +217,7 @@ class _PaySheetState extends ConsumerState<PaySheet> {
                 icon: Icons.credit_card,
                 title: l10n.billingPayByCard,
                 subtitle: l10n.billingPayByCardHint,
-                onTap: _busy || item.receiptCoversRemaining ? null : _card,
+                onTap: _busy || _receiptRefused || item.receiptCoversRemaining ? null : _card,
                 trailing: _busy
                     ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : null,

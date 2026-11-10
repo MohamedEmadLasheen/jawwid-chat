@@ -47,4 +47,13 @@ describe('W61 S2: the /pay page with a transfer receipt waiting', () => {
     expect(renderPayPage(model({ status: 'paid', pendingReceiptMinor: 50000 }), 'en', ctx)).not.toContain(NOTICE_EN);
     expect(renderPayPage(model({ checkout: 'success', pendingReceiptMinor: 50000 }), 'en', ctx)).not.toContain(NOTICE_EN);
   });
+
+  it('no card offered (Stripe off): no notice about a card, in either language', () => {
+    const en = renderPayPage(model({ cardAvailable: false, pendingReceiptMinor: 120000 }), 'en', ctx);
+    expect(en).not.toContain(NOTICE_EN);
+    expect(en).not.toContain(PAUSED_EN);
+    expect(en).not.toContain('/checkout');
+    const ar = renderPayPage(model({ cardAvailable: false, pendingReceiptMinor: 50000 }), 'ar', ctx);
+    expect(ar).not.toContain(NOTICE_AR);
+  });
 });

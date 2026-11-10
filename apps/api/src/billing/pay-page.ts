@@ -154,7 +154,8 @@ export function renderPayPage(m: PayPageModel, lang: PayLang, ctx: { token: stri
   if (m.status === 'open' && !confirming && m.cardFailure) notice += note('warn', e(cardFailureText(m.cardFailure, lang)));
   const payable = m.status === 'open' && !confirming;
   // W61 S2: a transfer receipt is waiting; when it covers the rest, the card waits for its decision.
-  const pending = payable ? m.pendingReceiptMinor ?? 0 : 0;
+  // Said only where a card would be offered.
+  const pending = payable && m.cardAvailable ? m.pendingReceiptMinor ?? 0 : 0;
   const receiptCovers = pending > 0 && pending >= m.remainingMinor;
   if (pending > 0) notice += note('warn', e(receiptCovers ? `${t.receiptPending} ${t.receiptCardPaused}` : t.receiptPending));
   if (m.error) notice += note('warn', e(m.error));
