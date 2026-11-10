@@ -39,7 +39,10 @@
 # loses an identity assertion, uploads anything but the verified .ipa, runs xcrun or altool other
 # than on its pinned lines (upload modes only), builds any commit but main's head at dispatch, lets
 # sentry-cli see its token other than through env, print its output or read settings planted by an
-# earlier step, or any other store channel or action.
+# earlier step, or any other store channel or action; or if the release evidence check
+# (scripts/mobile/verify-store-artifact.sh: target/min SDK, 16 KB alignment, AD_ID, Xcode/SDK stamp,
+# privacy manifest, encryption flag, background modes) stops running on each signed artifact, failing
+# the job, before anything leaves the runner (docs/release/signed-builds-ci.md §1a).
 name: Release store builds
 
 on:
@@ -349,6 +352,20 @@ jobs:
             echo "- upload certificate SHA-256: \`$signers\`${PINNED_SHA256:+ (matches the pinned value)}"
             echo "- App Bundle SHA-256: \`$(sha256sum "$AAB" | awk '{print $1}')\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Release evidence from the signed App Bundle (LR-50, LR-51, Data safety; a failure stops the run before Sentry and Play)
+        # Read-only: scripts/mobile/verify-store-artifact.sh reads the signed .aab's own manifest with
+        # bundletool (pinned version and SHA-256, scripts/mobile/install-bundletool.sh) and every native
+        # library with readelf: targetSdk 36, minSdk 26, 16 KB alignment of the 64-bit libraries, no
+        # AD_ID. It writes only the checked values to the summary; any failed check fails the job here.
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          BT="$(bash release-tools/scripts/mobile/install-bundletool.sh "$RUNNER_TEMP/bundletool")"
+          rc=0
+          out="$(bash release-tools/scripts/mobile/verify-store-artifact.sh android "$AAB" "$BT" "$BUILD_NAME" "$BUILD_NUMBER")" || rc=$?
+          printf '%s\n' "$out"
+          { echo ""; printf '%s\n' "$out"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$rc" -eq 0 ] || { echo "::error::the signed App Bundle failed its release evidence checks; nothing was uploaded."; exit 1; }
       - name: Install sentry-cli (pinned version and SHA-256)
         run: |
           set -euo pipefail
@@ -647,6 +664,26 @@ jobs:
           echo "VERIFIED_BUNDLE_ID=$(get "$P" CFBundleIdentifier)" >> "$GITHUB_ENV"
           echo "VERIFIED_VERSION=$(get "$P" CFBundleShortVersionString)" >> "$GITHUB_ENV"
           echo "VERIFIED_BUILD=$(get "$P" CFBundleVersion)" >> "$GITHUB_ENV"
+      - name: Release evidence from the signed .ipa (LR-52, LR-58, LR-73; a failure stops the run before Sentry and App Store Connect)
+        # Read-only: the verified .ipa (its SHA-256 checked again) is unpacked into a fresh directory, and
+        # scripts/mobile/verify-store-artifact.sh reads the app's Info.plist and PrivacyInfo.xcprivacy
+        # with plutil: DTXcode / DTSDKName (Xcode 26, iOS 26 SDK), ITSAppUsesNonExemptEncryption false,
+        # UIBackgroundModes exactly audio and voip, the privacy manifest present with its required-reason
+        # APIs and the collected data types of ios/Runner/PrivacyInfo.xcprivacy. It writes only the
+        # checked values to the summary; any failed check fails the job here.
+        run: |
+          set -euo pipefail
+          B="$RUNNER_TEMP/ios-build"
+          [ -n "${VERIFIED_IPA:-}" ] && [ -f "$VERIFIED_IPA" ] || { echo "::error::no verified .ipa; nothing was uploaded."; exit 1; }
+          [ "$(shasum -a 256 "$VERIFIED_IPA" | awk '{print $1}')" = "$VERIFIED_IPA_SHA256" ] || { echo "::error::the .ipa is not the one verified (SHA-256 differs); nothing was uploaded."; exit 1; }
+          E="$B/evidence"; rm -rf "$E"; mkdir -p "$E"; ditto -x -k "$VERIFIED_IPA" "$E"
+          apps=("$E"/Payload/*.app)
+          [ "${#apps[@]}" -eq 1 ] && [ -d "${apps[0]}" ] || { echo "::error::expected exactly one .app inside the verified .ipa; nothing was uploaded."; exit 1; }
+          rc=0
+          out="$(bash release-tools/scripts/mobile/verify-store-artifact.sh ios "${apps[0]}" ios/Runner/PrivacyInfo.xcprivacy)" || rc=$?
+          printf '%s\n' "$out"
+          { echo ""; printf '%s\n' "$out"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$rc" -eq 0 ] || { echo "::error::the signed .ipa failed its release evidence checks; nothing was uploaded."; exit 1; }
       - name: Install sentry-cli (pinned version and SHA-256)
         run: |
           set -euo pipefail
