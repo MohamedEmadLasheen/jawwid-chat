@@ -250,13 +250,24 @@ class SwitchOn(Site):
         os.makedirs(old)
         with open(os.path.join(old, 'index.html'), 'w', encoding='utf-8') as f:
             f.write(self.page('en/terms/1.0/index.html'))
+        self.record('en/terms/0.9/index.html')
         rc, out = run(lp.check, self.root)
         self.assertEqual(rc, 0, out)
         with open(os.path.join(old, 'index.html'), 'a', encoding='utf-8') as f:
             f.write('{{ENTITY_NAME}}')
+        self.record('en/terms/0.9/index.html')
         rc, out = run(lp.check, self.root)
         self.assertEqual(rc, 1)
         self.assertIn('en/terms/0.9/index.html: contains a {{PLACEHOLDER}}', out)
+
+    def record(self, rel):
+        """Add a page's current hash to the ledger, as if it had been published earlier."""
+        with open(self.path(lp.LEDGER_PATH), encoding='utf-8') as f:
+            data = json.load(f)
+        with open(self.path(CONFIG['output_dir'], rel), 'rb') as f:
+            data['pages'][rel] = hashlib.sha256(f.read()).hexdigest()
+        with open(self.path(lp.LEDGER_PATH), 'w', encoding='utf-8') as f:
+            json.dump(data, f)
 
     def test_build_never_deletes_existing_files(self):
         keep = self.path(CONFIG['output_dir'], 'en/terms/0.9')
@@ -382,6 +393,169 @@ class Refusals(Site):
     def test_version_missing_from_the_page(self):
         self.edit('docs/legal/sample-support-en.md', '**Version** 1.0 · **Effective** 2026-12-01', '**Version**')
         self.assertRefused('does not show its')
+
+    def test_short_version_hidden_inside_the_date_is_not_shown(self):
+        # Version "1" occurs inside "2026-12-01"; that must not count as showing the version (R-5).
+        for lang in ('ar', 'en'):
+            self.edit(f'docs/legal/sample-support-{lang}.md', 'version: "1.0"', 'version: "1"')
+        self.edit('docs/legal/sample-support-en.md', '**Version** 1.0 · ', '')
+        self.assertRefused("does not show its version '1'")
+
+    def test_to_confirm_in_lower_case(self):
+        self.edit('docs/legal/sample-support-en.md', 'By e-mail', 'By e-mail [to confirm]')
+        self.assertRefused('[TO CONFIRM]')
+
+    def test_tight_nested_unordered_list(self):
+        # "  - sub" directly under "- item" (no blank line) must not be merged into the parent item.
+        self.edit('docs/legal/sample-terms-en.md', '- First point\n', '- First point\n  - A sub-clause\n')
+        self.assertRefused('nested lists are not supported')
+
+    def test_tight_nested_ordered_list(self):
+        self.edit('docs/legal/sample-terms-en.md', '1. Step one\n', '1. Step one\n   1. A sub-step\n')
+        self.assertRefused('nested lists are not supported')
+
+    def test_tight_nested_list_after_a_continuation_line(self):
+        self.edit('docs/legal/sample-terms-en.md', '  continued on the next line\n',
+                  '  continued on the next line\n  - A sub-clause\n')
+        self.assertRefused('nested lists are not supported')
+
+    def test_separated_nested_list(self):
+        self.edit('docs/legal/sample-terms-en.md', '- First point\n', '- First point\n\n  - A sub-clause\n')
+        self.assertRefused('nested lists are not supported')
+
+    def test_indented_list_under_a_paragraph(self):
+        self.edit('docs/legal/sample-support-en.md', 'Write to help@example.com',
+                  'Write to help@example.com\n  - or by post')
+        self.assertRefused('nested lists are not supported')
+
+
+class Immutable(Site):
+    """A versioned page (<slug>/<version>/index.html) is what the terms gate recorded: once committed it
+    never changes. A change needs a new version; the old version stays, byte for byte (LR-02d, R-12)."""
+
+    VERSIONED = ('ar/terms/1.0/index.html', 'en/terms/1.0/index.html')
+
+    def build(self):
+        rc, out = run(lp.build, self.root)
+        self.assertEqual(rc, 0, out)
+        return out
+
+    def ledger(self):
+        with open(self.path(lp.LEDGER_PATH), encoding='utf-8') as f:
+            return json.load(f)['pages']
+
+    def sha(self, rel):
+        with open(self.path(CONFIG['output_dir'], rel), 'rb') as f:
+            return hashlib.sha256(f.read()).hexdigest()
+
+    def assertBuildRefusesAndKeepsTheBytes(self, why):
+        before = {rel: self.page(rel) for rel in self.output()}
+        ledger = self.ledger()
+        rc, out = run(lp.build, self.root)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('REFUSED', out)
+        self.assertIn(why, out)
+        self.assertEqual({rel: self.page(rel) for rel in self.output()}, before)
+        self.assertEqual(self.ledger(), ledger)
+
+    def test_build_records_the_versioned_hashes(self):
+        self.build()
+        self.assertEqual(self.ledger(), {rel: self.sha(rel) for rel in self.VERSIONED})
+        rc, out = run(lp.check, self.root)
+        self.assertEqual(rc, 0, out)
+        out = self.build()
+        self.assertIn('(0 changed)', out)
+
+    def test_source_change_without_a_version_bump_is_refused(self):
+        self.build()
+        self.edit('docs/legal/sample-terms-en.md', 'Step two', 'Step two, reworded')
+        self.assertBuildRefusesAndKeepsTheBytes('en/terms/1.0/index.html: already published')
+
+    def test_label_change_without_a_version_bump_is_refused(self):
+        self.build()
+        self.config(labels={**CONFIG['labels'], 'ar': {**CONFIG['labels']['ar'], 'all_documents': 'الوثائق'}})
+        self.assertBuildRefusesAndKeepsTheBytes('ar/terms/1.0/index.html: already published')
+
+    def test_link_target_change_without_a_version_bump_is_refused(self):
+        self.build()
+        docs = [dict(d) for d in CONFIG['documents']]
+        docs[1]['slug'] = 'help'
+        self.config(documents=docs)
+        self.assertBuildRefusesAndKeepsTheBytes('en/terms/1.0/index.html: already published')
+
+    def test_an_unrecorded_committed_versioned_page_is_not_overwritten(self):
+        os.makedirs(self.path(CONFIG['output_dir'], 'en/terms/1.0'))
+        with open(self.path(CONFIG['output_dir'], 'en/terms/1.0/index.html'), 'w') as f:
+            f.write('<p>committed earlier</p>')
+        rc, out = run(lp.build, self.root)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('en/terms/1.0/index.html: already committed', out)
+        self.assertEqual(self.page('en/terms/1.0/index.html'), '<p>committed earlier</p>')
+        self.assertFalse(os.path.exists(self.path(lp.LEDGER_PATH)))
+
+    def test_a_version_bump_publishes_the_new_version_and_keeps_the_old(self):
+        self.build()
+        old = {rel: self.sha(rel) for rel in self.VERSIONED}
+        for lang in ('ar', 'en'):
+            self.edit(f'docs/legal/sample-terms-{lang}.md', 'version: "1.0"', 'version: "1.1"')
+            self.edit(f'docs/legal/sample-terms-{lang}.md', '1.0', '1.1')
+        self.edit('docs/legal/sample-terms-en.md', 'Step two', 'Step two, reworded')
+        self.build()
+        self.assertEqual({rel: self.sha(rel) for rel in self.VERSIONED}, old)
+        ledger = self.ledger()
+        self.assertEqual({k: ledger[k] for k in self.VERSIONED}, old)
+        self.assertEqual(ledger['en/terms/1.1/index.html'], self.sha('en/terms/1.1/index.html'))
+        rc, out = run(lp.check, self.root)
+        self.assertEqual(rc, 0, out)
+
+    def test_check_fails_when_a_versioned_page_was_deleted_and_rebuilt(self):
+        self.build()
+        self.edit('docs/legal/sample-terms-en.md', 'Step two', 'Step two, reworded')
+        os.remove(self.path(CONFIG['output_dir'], 'en/terms/1.0/index.html'))
+        # The ledger stops even a rebuild of a deleted page...
+        self.assertBuildRefusesAndKeepsTheBytes('en/terms/1.0/index.html: already published')
+        # ...and a hand-made copy of the new render is caught by check.
+        cfg = json.loads(json.dumps(CONFIG))
+        with open(self.path(CONFIG['output_dir'], 'en/terms/1.0/index.html'), 'wb') as f:
+            f.write(lp.render_site(self.root, cfg)['en/terms/1.0/index.html'])
+        rc, out = run(lp.check, self.root)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('en/terms/1.0/index.html: changed after publication', out)
+
+    def test_check_fails_on_a_changed_or_removed_archived_version(self):
+        self.build()
+        for lang in ('ar', 'en'):
+            self.edit(f'docs/legal/sample-terms-{lang}.md', 'version: "1.0"', 'version: "1.1"')
+            self.edit(f'docs/legal/sample-terms-{lang}.md', '1.0', '1.1')
+        self.build()
+        with open(self.path(CONFIG['output_dir'], 'en/terms/1.0/index.html'), 'a') as f:
+            f.write('<!-- edit -->')
+        os.remove(self.path(CONFIG['output_dir'], 'ar/terms/1.0/index.html'))
+        rc, out = run(lp.check, self.root)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('en/terms/1.0/index.html: changed after publication', out)
+        self.assertIn('ar/terms/1.0/index.html: published, but missing', out)
+
+    def test_check_fails_on_an_unrecorded_versioned_page(self):
+        self.build()
+        old = self.path(CONFIG['output_dir'], 'en/terms/0.9')
+        os.makedirs(old)
+        with open(os.path.join(old, 'index.html'), 'w', encoding='utf-8') as f:
+            f.write(self.page('en/terms/1.0/index.html'))
+        rc, out = run(lp.check, self.root)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('en/terms/0.9/index.html: not recorded in', out)
+
+    def test_check_fails_when_the_ledger_is_edited(self):
+        self.build()
+        with open(self.path(lp.LEDGER_PATH), encoding='utf-8') as f:
+            data = json.load(f)
+        data['pages']['en/terms/1.0/index.html'] = '0' * 64
+        with open(self.path(lp.LEDGER_PATH), 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        rc, out = run(lp.check, self.root)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('en/terms/1.0/index.html: changed after publication', out)
 
 
 class Serving(Site):

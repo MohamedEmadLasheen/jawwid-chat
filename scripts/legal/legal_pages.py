@@ -17,6 +17,12 @@ THE SWITCH. docs/legal/publication.json `"publish"`:
          the PD-48 paragraph is byte-identical where it belongs (R-13). One failure refuses the whole
          build and nothing is written. `check` re-renders and fails on any difference from the
          committed pages (R-7), and on a marker in any file under legal-web/.
+         VERSIONED PAGES ARE IMMUTABLE. <lang>/<slug>/<version>/index.html is what the terms gate
+         recorded (chat.publish_legal_version p_content_sha256_*). `build` records its SHA-256 in
+         docs/legal/published-versions.json (commit it with the pages) and REFUSES to rewrite a
+         versioned page that is recorded or already committed: a changed source, label or link target
+         needs a new version. `check` fails on any versioned page that is unrecorded, differs from its
+         recorded hash, or is missing (R-12).
 Either way `check` also asserts the nginx template and the Dockerfile still serve /legal/ fail-closed.
 
 Deterministic: no clock, no environment, sorted output; the same sources give the same bytes, so the
@@ -24,9 +30,10 @@ SHA-256 printed by scripts/legal/publication-manifest.py is the hash of the byte
 
 Standard library only (no new dependency): the sources use a small Markdown subset (headings,
 paragraphs, `-`/`1.` lists, pipe tables, blockquotes, **bold**, *italic*, `code`, links, bare https
-URLs and e-mail addresses). Anything outside it that could change meaning (code fences, nested lists)
-is refused rather than guessed. All text is HTML-escaped; the pages carry no script, no inline style,
-no third-party resource (R-9) and work under `default-src 'none'; style-src 'self'`.
+URLs and e-mail addresses). Anything outside it that could change meaning (code fences, nested lists,
+tight or separated by a blank line) is refused rather than guessed. All text is HTML-escaped; the
+pages carry no script, no inline style, no third-party resource (R-9) and work under
+`default-src 'none'; style-src 'self'`.
 """
 import datetime
 import hashlib
@@ -40,6 +47,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 CONFIG_PATH = 'docs/legal/publication.json'
 NGINX_TEMPLATE = 'apps/admin-web/infra-nginx/default.conf.template'
 DOCKERFILE = 'apps/admin-web/Dockerfile'
+# The SHA-256 of every versioned page ever built (<lang>/<slug>/<version>/index.html). Written by
+# `build`, committed with the pages, never edited by hand. A versioned page is the text the terms
+# gate recorded (chat.publish_legal_version p_content_sha256_*), so once it exists it never changes.
+LEDGER_PATH = 'docs/legal/published-versions.json'
+LEDGER_KEY = re.compile(r'(ar|en)/[a-z0-9-]+(/[a-z0-9-]+)*/v?[0-9][0-9A-Za-z.-]{0,62}/index\.html')
 LANGS = ('ar', 'en')
 DIRECTION = {'ar': 'rtl', 'en': 'ltr'}
 OTHER = {'ar': 'en', 'en': 'ar'}
@@ -54,7 +66,7 @@ SLUG_RE = re.compile(r'[a-z0-9-]+(/[a-z0-9-]+)*')
 # R-11 (public-hosting-requirements.md §3 and §5). Checked on the source AND on the rendered page.
 MARKERS = [
     (re.compile(r'\{\{'), 'a {{PLACEHOLDER}}'),
-    (re.compile(r'TO CONFIRM'), 'a [TO CONFIRM] marker'),
+    (re.compile(r'TO CONFIRM', re.I), 'a [TO CONFIRM] marker'),
     (re.compile(r'legal review', re.I), 'a [legal review] marker'),
     (re.compile(r'مراجعة قانونية'), 'a [مراجعة قانونية] marker'),
     (re.compile(r'drafting note', re.I), 'a drafting note'),
@@ -278,9 +290,15 @@ def is_table(lines, i):
     return lines[i].startswith('|') and i + 1 < len(lines) and TABLE_SEP.fullmatch(lines[i + 1]) is not None
 
 
+def nested_item(line):
+    """An indented list item: a nested list (refused), never a continuation of the line above."""
+    return line[:1] in (' ', '\t') and (UL.fullmatch(line.strip()) or OL.fullmatch(line.strip())) is not None
+
+
 def starts_block(lines, i):
     line = lines[i]
-    return (not line.strip() or HEADING.fullmatch(line) is not None or RULE.fullmatch(line) is not None
+    return (not line.strip() or nested_item(line) or HEADING.fullmatch(line) is not None
+            or RULE.fullmatch(line) is not None
             or line.startswith('>') or UL.fullmatch(line) is not None or OL.fullmatch(line) is not None
             or is_table(lines, i) or line.startswith('```') or line.startswith('~~~'))
 
@@ -305,7 +323,7 @@ def blocks(lines, ctx):
             continue
         if line.startswith('```') or line.startswith('~~~'):
             raise Refused(f'{ctx["rel"]}: code fences are not supported on a published page')
-        if line[:1] in (' ', '\t') and (UL.fullmatch(line.strip()) or OL.fullmatch(line.strip())):
+        if nested_item(line):
             raise Refused(f'{ctx["rel"]}: nested lists are not supported on a published page')
         m = HEADING.fullmatch(line)
         if m:
@@ -354,13 +372,13 @@ def blocks(lines, ctx):
                 while i < n and lines[i].strip() and not starts_block(lines, i):
                     text.append(lines[i].strip())
                     i += 1
-                if i < n and lines[i][:1] in (' ', '\t') and lines[i].strip() and (
-                        UL.fullmatch(lines[i].strip()) or OL.fullmatch(lines[i].strip())):
-                    raise Refused(f'{ctx["rel"]}: nested lists are not supported on a published page')
-                items.append(inline(' '.join(text), ctx))
+                # Tight ("  - sub" right under the item) or after a blank line: both refused.
                 j = i
                 while j < n and not lines[j].strip():
                     j += 1
+                if j < n and nested_item(lines[j]):
+                    raise Refused(f'{ctx["rel"]}: nested lists are not supported on a published page')
+                items.append(inline(' '.join(text), ctx))
                 if j < n and list_rx.fullmatch(lines[j]):
                     i = j
             if list_rx is UL:
@@ -461,7 +479,8 @@ def render_site(root, cfg):
                 data = page(lang, title, nav, body, alt)
                 text = visible_text(data)
                 for key in ('version', 'effective_date'):
-                    if fm[key] not in text:
+                    # As a whole token: version "1" inside "2026-12-01" does not count.
+                    if not re.search(rf'(?<![\w.-]){re.escape(fm[key])}(?![\w-]|\.\w)', text):
                         raise Refused(f'{src["rel"]}: the page does not show its {key} {fm[key]!r} (R-5)')
                 rel = url_path(lang, doc['slug'], version)[len('/legal/'):] + '/index.html'
                 if rel in files:
@@ -519,6 +538,82 @@ def skipped_message(cfg):
             f'(docs/legal/apply-confirmed-values.md).')
 
 
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def load_ledger(root):
+    """The published versioned pages (relative path -> SHA-256). Absent = nothing published yet."""
+    try:
+        with open(os.path.join(root, LEDGER_PATH), encoding='utf-8') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    pages = data.get('pages') if isinstance(data, dict) else None
+    if not isinstance(pages, dict) or not all(
+            isinstance(k, str) and LEDGER_KEY.fullmatch(k) and isinstance(v, str)
+            and re.fullmatch(r'[0-9a-f]{64}', v) for k, v in pages.items()):
+        raise Refused(f'{LEDGER_PATH}: not understood (expected {{"pages": {{"<lang>/<slug>/<version>/'
+                      'index.html": "<sha256>"}})')
+    return pages
+
+
+def write_ledger(root, pages):
+    data = {
+        '_comment': 'Written by scripts/legal/legal_pages.py build; never edit by hand. The SHA-256 of '
+                    'every versioned legal page ever published (LR-02d, R-12). Such a page never '
+                    'changes and is never removed: a change to its text needs a new version.',
+        'pages': dict(sorted(pages.items())),
+    }
+    with open(os.path.join(root, LEDGER_PATH), 'w', encoding='utf-8') as f:
+        f.write(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+
+
+def immutability_problems(root, cfg, files, ledger):
+    """`build` must never rewrite a versioned page that is already published or committed."""
+    versioned = versioned_pages(cfg)
+    base = os.path.join(root, cfg['output_dir'])
+    problems = []
+    for rel in sorted(files):
+        if not versioned.fullmatch(rel):
+            continue
+        if rel in ledger:
+            if ledger[rel] != sha256(files[rel]):
+                problems.append(f'{rel}: already published (SHA-256 {ledger[rel]} in {LEDGER_PATH}) '
+                                'and would change. Its source, a label or a linked page changed '
+                                'without a version bump: give the document a new version')
+            continue
+        try:
+            with open(os.path.join(base, *rel.split('/')), 'rb') as f:
+                committed = f.read()
+        except FileNotFoundError:
+            continue
+        if committed != files[rel]:
+            problems.append(f'{rel}: already committed with other bytes and not in {LEDGER_PATH}; '
+                            'a versioned page is never rewritten: give the document a new version')
+    return problems
+
+
+def ledger_problems(root, cfg, on_disk):
+    """`check`: every committed versioned page is recorded, unchanged, and still there (R-12)."""
+    ledger = load_ledger(root)
+    versioned = versioned_pages(cfg)
+    out_dir = cfg['output_dir']
+    problems = []
+    for rel, digest in sorted(ledger.items()):
+        if rel not in on_disk:
+            problems.append(f'{out_dir}/{rel}: published, but missing (R-12: a published version is '
+                            'never removed)')
+        elif sha256(on_disk[rel]) != digest:
+            problems.append(f'{out_dir}/{rel}: changed after publication (its SHA-256 is not the one in '
+                            f'{LEDGER_PATH}); publish a new version instead')
+    for rel in sorted(on_disk):
+        if versioned.fullmatch(rel) and rel not in ledger:
+            problems.append(f'{out_dir}/{rel}: not recorded in {LEDGER_PATH}; run '
+                            'scripts/legal/legal_pages.py build and commit the ledger')
+    return problems
+
+
 def build(root=ROOT):
     cfg = load_config(root)
     if not cfg['publish']:
@@ -526,6 +621,10 @@ def build(root=ROOT):
         return 0
     try:
         files = render_site(root, cfg)
+        ledger = load_ledger(root)
+        problems = immutability_problems(root, cfg, files, ledger)
+        if problems:
+            raise Refused('\n'.join(problems))
     except Refused as e:
         print('legal pages: REFUSED. Nothing was written:\n' + str(e))
         return 1
@@ -543,6 +642,11 @@ def build(root=ROOT):
         with open(path, 'wb') as f:
             f.write(files[rel])
         written += 1
+    versioned = versioned_pages(cfg)
+    recorded = dict(ledger)
+    recorded.update({rel: sha256(data) for rel, data in files.items() if versioned.fullmatch(rel)})
+    if recorded != ledger or not os.path.isfile(os.path.join(root, LEDGER_PATH)):
+        write_ledger(root, recorded)
     print(f'legal pages: {len(files)} files rendered into {cfg["output_dir"]}/ ({written} changed)')
     return 0
 
@@ -628,13 +732,18 @@ def check(root=ROOT):
                 elif on_disk[rel] != files[rel]:
                     problems.append(f'{cfg["output_dir"]}/{rel}: differs from its source (R-7); '
                                     'run scripts/legal/legal_pages.py build')
-            archived = archived_pages(cfg, files)
+            versioned = versioned_pages(cfg)
             for rel in sorted(set(on_disk) - set(files)):
-                if not archived.fullmatch(rel):
+                if not versioned.fullmatch(rel):
                     problems.append(f'{cfg["output_dir"]}/{rel}: not produced by the generator')
+        try:
+            problems += ledger_problems(root, cfg, on_disk)
+        except Refused as e:
+            problems.append(str(e))
         for rel in sorted(on_disk):
             problems += [f'{cfg["output_dir"]}/{p}' for p in page_problems(rel, on_disk[rel])]
-        state = 'publication is on; every committed page is what its source renders'
+        state = ('publication is on; every committed page is what its source renders, and every '
+                 'versioned page is byte-identical to its recorded publication')
     if problems:
         print('legal pages: FAIL\n' + '\n'.join(problems))
         return 1
@@ -642,8 +751,9 @@ def check(root=ROOT):
     return 0
 
 
-def archived_pages(cfg, files):
-    """R-12: earlier versions of an acceptance document stay published under …/<slug>/<version>/."""
+def versioned_pages(cfg):
+    """The versioned pages of the acceptance documents, …/<slug>/<version>/index.html: the current
+    version and every earlier one (R-12: they stay published, byte for byte; see LEDGER_PATH)."""
     slugs = '|'.join(re.escape(e['slug']) for e in cfg['documents'] if e.get('gate_key')) or '(?!)'
     return re.compile(rf'(ar|en)/({slugs})/{VERSION_RE.pattern}/index\.html')
 
@@ -666,6 +776,14 @@ def manifest(root=ROOT, as_json=False):
     if stale:
         print('publication manifest: REFUSED. The committed pages differ from their sources; run '
               'scripts/legal/legal_pages.py build and commit first:\n' + '\n'.join(stale))
+        return 1
+    try:
+        unrecorded = ledger_problems(root, cfg, on_disk)
+    except Refused as e:
+        unrecorded = [str(e)]
+    if unrecorded:
+        print('publication manifest: REFUSED. The versioned pages do not match '
+              f'{LEDGER_PATH}:\n' + '\n'.join(unrecorded))
         return 1
     base = cfg['base_url'].rstrip('/')
     rows, gate = [], []

@@ -134,11 +134,20 @@ Turning it on early cannot publish anything unfinished: the build is refused.
 an effective date that is not a real `YYYY-MM-DD`; Arabic and English disagreeing on version, date or
 document key; a gate document whose `document_key` is not its gate key; a changed or missing PD-48
 paragraph (R-13, against `pd048-lesson-audio-parent-notice.md`); a link to a `.md` file that is not
-published, or to anything but `https:`/`mailto:`; a code fence or a nested list. On the rendered page:
+published, or to anything but `https:`/`mailto:`; a code fence or a nested list (an indented `-`/`1.`
+item, whether directly under its parent or after a blank line). On the rendered page:
 the same markers, an internal ID (§5's regex, on the visible text), the version or effective date not
 shown (R-5), any script, event handler, inline style, iframe, image, form or object, and a directory
 without `index.html` (nginx would answer 403 instead of serving or 404). Drafting notes are refused, not
 silently dropped: `apply-confirmed-values.md` rule 5 deletes them in the source.
+
+**Versioned pages never change (LR-02d, R-12).** `{lang}/<path>/<version>/index.html` is the text the
+terms gate records (`p_content_sha256_*`). `build` writes the SHA-256 of every versioned page into
+`docs/legal/published-versions.json` (commit it with the pages; never edit it by hand) and refuses, writing
+nothing, if a versioned page that is recorded or already committed would get other bytes: a change to the
+source, a label in `publication.json` or a linked page's path needs a new version, and the old version
+stays. `check` fails if a committed versioned page is not recorded, differs from its recorded hash, or a
+recorded page is missing; the manifest refuses in the same cases.
 
 **Pieces.**
 
@@ -148,7 +157,7 @@ silently dropped: `apply-confirmed-values.md` rule 5 deletes them in the source.
 | Publication manifest (print only) | `scripts/legal/publication-manifest.py` (`--json` for machine-readable) |
 | Tests (both switch states with fixture documents, every refusal, drift, the real nginx template and Dockerfile) | `scripts/legal/test_legal_pages.py`, fixtures in `scripts/legal/fixtures/` |
 | CI | `bash scripts/qa/guards.sh web-env` runs the tests, then `legal_pages.py check` (no new gate id) |
-| Output (committed) | `apps/admin-web/legal-web/{ar,en}/<path>/index.html`, `{ar,en}/index.html`, `index.html`, `legal.css`; for the four acceptance documents also `{ar,en}/<path>/<version>/index.html` |
+| Output (committed) | `apps/admin-web/legal-web/{ar,en}/<path>/index.html`, `{ar,en}/index.html`, `index.html`, `legal.css`; for the four acceptance documents also `{ar,en}/<path>/<version>/index.html`, whose hashes go to `docs/legal/published-versions.json` |
 | Image | `apps/admin-web/Dockerfile`: copies `legal-web/` to `/legal/`, and refuses to build if a page still contains `{{`, `TO CONFIRM`, `legal review`, `Drafting note` or `مراجعة قانونية` |
 | nginx | `default.conf.template`: the two `map` entries, `location = /legal` (301) and `location /legal/ { try_files $uri $uri/index.html =404; }` exactly as item 4; `X-Robots-Tag` unchanged |
 
