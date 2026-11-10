@@ -97,12 +97,21 @@ import UIKit
     )
     self.pushChannel = pushChannel
     pushChannel.setMethodCallHandler { [weak self] call, result in
-      guard call.method == "start" else {
+      switch call.method {
+      case "start":
+        self?.startRegistering()
+        result(nil)
+      case "register":
+        // LR-11: tokens without the prompt. Answers whether `start` could still
+        // show iOS's notification prompt (only while it has never been answered).
+        self?.registerForPush()
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+          let promptPossible = settings.authorizationStatus == .notDetermined
+          DispatchQueue.main.async { result(promptPossible) }
+        }
+      default:
         result(FlutterMethodNotImplemented)
-        return
       }
-      self?.startRegistering()
-      result(nil)
     }
 
     callKit.attach(messenger: engine.binaryMessenger)
@@ -127,6 +136,13 @@ import UIKit
   /// need no such authorization.
   private func startRegistering() {
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    registerForPush()
+  }
+
+  /// Both tokens, and NO authorization prompt (LR-11 `register`): the app explains
+  /// notifications first and asks through `start` only after Continue. Neither token
+  /// needs the authorization, and PushKit calls ring without it.
+  private func registerForPush() {
     DispatchQueue.main.async {
       UIApplication.shared.registerForRemoteNotifications()
     }

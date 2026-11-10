@@ -5654,4 +5654,14 @@ class L10nAr extends L10n {
   @override
   String get legalLoadFailed =>
       'تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get notificationPermissionCallsNote =>
+      'لتظهر الرسائل والمكالمات والتطبيق مغلق.';
+
+  @override
+  String get notificationPermissionContinue => 'متابعة';
+
+  @override
+  String get notificationPermissionNotNow => 'ليس الآن';
 }
