@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-10 10:29 Cairo (08:29 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-10 11:12 Cairo (09:12 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -64,6 +64,17 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 - LR-29 (#533; #543 retargeted to `main`)
 
 **LR-41:** the wording options are on `main` (#532) and wait for the owner's choice.
+
+### Open launch PRs on 2026-11-10 (each reviewed by an independent reviewer)
+
+| Area | PRs |
+|---|---|
+| Store builds and uploads (OT-2b direct upload with WIF) | #572 (Code Owner, High), #577 artifact evidence, #576 upload-key script |
+| Stripe at launch (owner decision, LR-34) | #579 config guard, #580 disputes and Core hygiene, #581 overpayment flag and lock, #583 pending-receipt warning, #584 card pause switch, #582 launch runbook |
+| Legal and docs | #573 legal pages (switched off until no placeholder remains), #574 release-doc truth, #555, #556, #558, #578 (draft, OA-12 Option B only) |
+| Review accounts | #575 (nothing payable today) on #565 |
+
+The owner's consolidated action list is kept outside the repository (Owner Action Pack, 2026-11-10).
 
 ### Two progress measures (2026-11-09; both re-counted from §4, neither inflated)
 
