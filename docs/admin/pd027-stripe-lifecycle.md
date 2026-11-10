@@ -210,8 +210,27 @@ looked up at Stripe and expired. An attempt is marked `expired` only on Stripe's
 succeeded, or a fresh look-up shows it `expired` (or `complete`, which is recorded as paid). If Stripe cannot
 be reached for the look-up, or the expire fails and the page still shows `open` (or cannot be looked up
 again), the attempt stays `open` in Chat, no new page is created, and the parent gets the usual **503
-`COMM.PAYMENTS_UNAVAILABLE`** ("pay by bank transfer"); the next tap tries again. A transient Stripe error is
-never turned into a local state change. The claim is released on every path.
+`COMM.PAYMENTS_UNAVAILABLE`** ("pay by bank transfer"); the next tap tries again. Such a tap creates no
+session, so the hourly cap (`MAX_CHECKOUTS_PER_HOUR`, 10 sessions per request) does not count it: during a
+Stripe outage each tap costs one or two Stripe look-ups and nothing more. A transient Stripe error is never
+turned into a local state change. The claim is released on every path.
+
+**A page Stripe cannot be asked about (W76b).** Stripe never takes a payment on a Checkout Session after its
+`expires_at`. So when the look-up fails (Stripe no longer has the session, for example after the key or mode
+changed, or Stripe is down) **and** the attempt's own `expires_at` passed more than **1 hour** ago
+(`UNCONFIRMED_CLOSE_MARGIN_MS`: room for clock skew and a payment submitted in the page's last seconds), the
+attempt is marked `expired` and an audit row `payment.checkout_closed_unconfirmed` is written with the request,
+the session, its expiry and the Stripe error category. The tap then goes on and opens one new page. Before that
+point the tap is still refused (503): a failed look-up on a page that may still be payable never closes it.
+The reconciler applies the same rule on every pass, so such an attempt is cleared without anyone tapping. If the
+page was in fact paid, its webhook still records the payment (it finds the attempt by session id, whatever its
+status).
+
+**After a cancel.** Cancelling a request expires its open pages at Stripe. A row is marked `expired` only when
+the expire call succeeded, a look-up after a failed expire shows the page `expired`, or (as above) Stripe cannot
+be asked and the page's expiry is over an hour past. Otherwise the row stays `open` and an error is logged
+(`a cancelled request's page …`): the page may still be payable, the reconciler keeps asking Stripe, and a
+payment that does come is recorded and flagged as an overpayment (M3). The cancel itself never fails on this.
 
 ## 4. Not done, on purpose
 
@@ -331,6 +350,8 @@ key, a card number or Stripe's error message. Errors go to Sentry, as before.
 | `stripe reconcile: a paid checkout had no webhook; recorded from Stripe` (warn) | A webhook was lost | Occasional is fine; frequent means check the endpoint's events and delivery |
 | `stripe reconcile: payment … differs from Stripe` (warn) | Chat and Stripe disagree after reconciling | Open the payment in Admin and reconcile; escalate if it stays out of sync |
 | `payment.stripe_mismatch` in `chat.audit_log`, outcome `mismatch` | Paid amount or currency differs from what Chat asked | Investigate. It was never recorded as a payment. |
+| `payment.checkout_closed_unconfirmed` in `chat.audit_log` | Stripe could not be asked about a card page over an hour past its expiry; it was marked expired | Occasional (Stripe down): fine. Many: check the key and mode (`STRIPE_SECRET_KEY`) |
+| `a cancelled request's page … left open` (error) | A cancelled request's Stripe page could not be expired | Check it in the Stripe Dashboard; a payment that comes is flagged as an overpayment |
 | outcome `ignored_not_chat` (warn) | Stripe Billing is in use on the account | Nothing in Chat; ask who set it up |
 | outcome `refund_deferred` older than an hour | A refund for a payment Chat never recorded | Admin → Stripe events; find the payment intent in Stripe |
 | `stripe customer not created` / `paying as a guest` (warn) | Customers scope missing, or a customer was deleted | Fix the key scopes |
@@ -367,6 +388,7 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Ledger filters, totals, paging, detail; family scope; parents, teachers, unauthenticated refused; another family's request refused; webhook-log tenancy | › the transaction ledger |
 | Overpayment (M3): bank transfer then a late card webhook, and an instalment paid in cash while the card paid it, are recorded, flagged, staff told, the transaction marked; an owed payment is never flagged | `pd027-overpayment-checkout-lock.spec.ts` › M3 |
 | One payable session (S1): two concurrent opens (service and HTTP) create one Stripe session, the other tap gets 409 `CHECKOUT_OPENING`; eight opens on a 3-connection pool leave an unrelated query fast; a claim lost before or during Stripe creates nothing or hands nothing out; an already-recorded session answers the same page, no 500 | same › S1 |
+| Fail closed (LR-46 P2-1, W76b): an earlier page Stripe cannot confirm closed gives 503 and no new page; one Stripe cannot find and over an hour past its expiry is marked expired (audited) by a tap or the reconciler; after a cancel, a failed expire leaves the row open | same › LR-46 |
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
