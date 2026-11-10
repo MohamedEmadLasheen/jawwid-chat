@@ -8,6 +8,9 @@
 5. A teacher never sees payment details, overdue instalments or the family's financial status:
    only that new bookings are paused and the chat stays open.
 6. The Arabic parent button is «عرض الاشتراكات».
+   > Note (2026-11-10): LR-15 (OA-12 D2, PR #593) proposes «عرض الباقات» ("Go to Packages") instead, so that no
+   > "subscription" wording appears in the app. If the owner approves PR #593, that wording supersedes
+   > this one; until then this decision stands.
 
 The subscription lock is not switched on in production until the app update is released and the
 owner explicitly approves production activation.
@@ -90,7 +93,7 @@ The title stays "Jawwid" / "جَوِّد".
 | Second line, EN | This group is paused for now. | The chat stays open, and lessons already booked go ahead. |
 | Second line, AR | هذه المجموعة متوقفة مؤقتًا. | المحادثة تبقى مفتوحة، والحصص المحجوزة مسبقًا تُقام في موعدها. |
 | Button (parent only), EN | Go to Subscriptions | (unchanged) |
-| Button (parent only), AR | الذهاب إلى الاشتراكات | عرض الاشتراكات (owner, decision 6) |
+| Button (parent only), AR | الذهاب إلى الاشتراكات | عرض الاشتراكات (owner, decision 6; superseded by «عرض الباقات» (LR-15) once the owner approves PR #593) |
 
 ## 6. Banner in Admin Web's chat (staff)
 

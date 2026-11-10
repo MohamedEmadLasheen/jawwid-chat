@@ -2883,7 +2883,7 @@ class L10nAr extends L10n {
 
   @override
   String get signupEmailIntro =>
-      'أدخل البريد الإلكتروني الذي سجّلته لدى الأكاديمية عند التسجيل.';
+      'أدخل البريد الإلكتروني الذي سجّلته عند التحاقكم بالأكاديمية.';
 
   @override
   String get signupEmailLabel => 'البريد الإلكتروني';
@@ -3306,7 +3306,7 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get subscriptionNone => 'لا توجد باقة دروس بعد';
+  String get subscriptionNone => 'لا توجد باقة حصص بعد';
 
   @override
   String subscriptionLessonsLeft(int count) {

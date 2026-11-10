@@ -282,7 +282,7 @@ void main() {
       await tester.pumpWidget(app(_Billing(ParentBilling(today: DateTime(2026, 10, 26), planMonths: 3, subscriptions: [none, billing.subscriptions.first])), locale: const Locale('ar')));
       await tester.pumpAndSettle();
 
-      expect(within('subscription-plan-k9', find.text('لا توجد باقة دروس بعد')), findsOneWidget);
+      expect(within('subscription-plan-k9', find.text('لا توجد باقة حصص بعد')), findsOneWidget);
       expect(find.byKey(const ValueKey('subscription-state-k9')), findsNothing);
       expect(within('subscription-state-k1', find.text('فعّال')), findsOneWidget);
     });
