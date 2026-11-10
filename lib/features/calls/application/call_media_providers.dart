@@ -49,6 +49,11 @@ final callMicrophoneProvider = Provider<MicrophonePermission>(
   (ref) => SharedMicrophonePermission(ref.watch(microphonePermissionProvider)),
 );
 
+/// LR-26: the way to this app's Settings page after a refused microphone.
+final microphoneSettingsProvider = Provider<MicrophoneSettings>(
+  (ref) => PlatformMicrophoneSettings(),
+);
+
 /// Where call audio comes out (W7's own seam — see [AudioRoute]).
 final audioRouteProvider = Provider<AudioRoute>((ref) => LiveKitAudioRoute());
 

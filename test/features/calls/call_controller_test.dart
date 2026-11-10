@@ -216,15 +216,15 @@ void main() {
       expect(state.callId, 'call_1');
       expect(state.peerLabel, 'Mr. Ahmed');
       expect(room.connects, isEmpty);
-      // LR-74: the microphone is asked BEFORE dialling (while the caller is in
-      // front), and that is all -- nothing is joined.
+      // LR-74 / LR-26: the microphone is asked once, BEFORE dialling (while the
+      // caller is in front), and that is all -- a question, not a join.
       expect(mic.calls, 1);
     });
 
     test('A5. the callee answering is what joins media', () async {
       final container = await liveOutgoing();
 
-      // Once before dialling (LR-74), and once by W4 BEFORE the room (A4).
+      // Once before dialling (LR-74, LR-26), and once by W4 BEFORE the room (A4).
       expect(mic.calls, 2);
       expect(room.connects, hasLength(1));
       expect(calls.tokenCalls, ['call_1']);

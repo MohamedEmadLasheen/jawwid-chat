@@ -538,6 +538,29 @@ void main() {
       expect(native.ongoing, isEmpty);
     });
 
+    test('N7k. Try again after that refusal (LR-26) starts the service on the grant, '
+        'or Android could cut the retried call off in the background', () async {
+      final container = await ready();
+      final prompt = Completer<MicrophoneAccess>();
+      mic.pending = prompt;
+
+      await joinStartedScheduled(container);
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await settle();
+      prompt.complete(MicrophoneAccess.denied);
+      await settle();
+      expect(stateOf(container).failure, CallUiFailure.microphone);
+      expect(native.ongoing, isEmpty);
+
+      // Allowed in Settings without the app restarting (Android): Try again
+      // rejoins the same call through the media client it already has.
+      mic.pending = null;
+      mic.access = MicrophoneAccess.granted;
+      await controllerOf(container).retry();
+      await settle();
+      expect(native.ongoing, ['start:call_1']);
+    });
+
     test('N7j. a session that goes away mid-call stops the ongoing-call service', () async {
       final container = await ready();
       await controllerOf(container).start(
