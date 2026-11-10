@@ -3,9 +3,8 @@
  * database- and HTTP-backed proofs are in
  * test/integration/review-payment-mode.spec.ts.
  */
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { CommErrorCode } from '../../../src/platform/errors';
+import { CommError, CommErrorCode } from '../../../src/platform/errors';
+import { renderPayPage, type PayPageModel } from '../../../src/billing/pay-page';
 import {
   REVIEW_DEMO_REQUEST_ID,
   REVIEW_ORGANIZATIONS_KEY,
@@ -13,6 +12,7 @@ import {
   isReviewOrganization,
   parseReviewOrganizationIds,
   readReviewOrganizationIds,
+  refuseReviewOrganizationStaff,
   renderReviewDemoPage,
   reviewDemoBankAccount,
   reviewDemoRequest,
@@ -65,11 +65,17 @@ describe('reading chat.config', () => {
     expect(await inReviewMode(configWith(undefined), ORG)).toBe(false);
   });
 
-  it('malformed or unreadable: nobody (public behaviour)', async () => {
+  it('malformed: nobody (public behaviour)', async () => {
     expect(await inReviewMode(configWith({ ids: [ORG] }), ORG)).toBe(false);
     expect(await inReviewMode(configWith([ORG, 'nope']), ORG)).toBe(false);
-    const broken = { config: { findUnique: jest.fn(async () => { throw new Error('connection reset'); }) } };
-    expect(await inReviewMode(broken, ORG)).toBe(false);
+  });
+
+  it('a failed read propagates (the request fails), never public behaviour', async () => {
+    const reset = new Error('connection reset');
+    const broken = { config: { findUnique: jest.fn(async () => { throw reset; }) } };
+    await expect(readReviewOrganizationIds(broken)).rejects.toBe(reset);
+    await expect(inReviewMode(broken, ORG)).rejects.toBe(reset);
+    await expect(refuseReviewOrganizationStaff(broken, ORG)).rejects.toBe(reset);
   });
 
   it('no organization id: never review mode, and no read', async () => {
@@ -134,11 +140,44 @@ describe('what a review account is shown', () => {
   });
 });
 
-describe('the key is never written by a route', () => {
-  it('the billing settings service never names it (the HTTP proof is in the integration suite)', () => {
-    // /billing/settings writes only billing.bank_account and billing.invoice_issuer;
-    // the review-cohort command (owner-approved, separate) is the only writer.
-    const settings = readFileSync(join(__dirname, '../../../src/billing/payments.service.ts'), 'utf8');
-    expect(settings).not.toContain(REVIEW_ORGANIZATIONS_KEY);
+describe('the staff guard', () => {
+  it('refuses an actor of a review organization with the review refusal', async () => {
+    const err = await refuseReviewOrganizationStaff(configWith([ORG]), ORG.toUpperCase()).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CommError);
+    expect(err).toMatchObject({ code: CommErrorCode.BILLING_DENIED, status: 403, detail: { reviewMode: true } });
+  });
+
+  it('lets every other organization through: another listed, absent, malformed, no organization', async () => {
+    for (const value of [[OTHER], [], undefined, { ids: [ORG] }, [ORG, 'nope']]) {
+      await expect(refuseReviewOrganizationStaff(configWith(value), ORG)).resolves.toBeUndefined();
+    }
+    await expect(refuseReviewOrganizationStaff(configWith([ORG]), null)).resolves.toBeUndefined();
+  });
+});
+
+describe('the /pay page bank block', () => {
+  const model = (over: Partial<PayPageModel> = {}): PayPageModel => ({
+    status: 'open', payerName: 'Family', childFirstName: 'Adam', label: 'Lesson package', purpose: 'subscription',
+    planMonths: 1, periodStart: null, periodEnd: null, amountMinor: 8000, paidMinor: 0, remainingMinor: 8000,
+    currency: 'USD', expiresAt: '2026-12-01T00:00:00.000Z', bankAccount: null, cardAvailable: true, checkout: null, error: null, ...over,
+  });
+  const ctx = { token: 'T'.repeat(43), nonce: 'n0nce' };
+  const EN_RECEIPT = 'After transferring, send a photo of the receipt';
+  const AR_RECEIPT = 'بعد التحويل أرسل صورة الإيصال';
+
+  it('review mode: the demo details, and no "send the receipt" instruction (no receipt can be sent)', () => {
+    const en = renderPayPage(model({ bankAccount: reviewDemoBankAccount('en'), reviewMode: true }), 'en', ctx);
+    expect(en).toContain('Demo bank details for App Review: no transfer is possible');
+    expect(en).not.toContain(EN_RECEIPT);
+    const ar = renderPayPage(model({ bankAccount: reviewDemoBankAccount('ar'), reviewMode: true }), 'ar', ctx);
+    expect(ar).toContain('لا يمكن إرسال إيصال');
+    expect(ar).not.toContain(AR_RECEIPT);
+  });
+
+  it('public: the instruction is still there', () => {
+    const bank = { bankName: 'Bank', accountName: 'Academy', iban: 'AE070331234567890123456', accountNumber: null, swift: null, note: null };
+    expect(renderPayPage(model({ bankAccount: bank }), 'en', ctx)).toContain(EN_RECEIPT);
+    expect(renderPayPage(model({ bankAccount: bank }), 'ar', ctx)).toContain(AR_RECEIPT);
+    expect(renderPayPage(model({ bankAccount: bank, reviewMode: false }), 'en', ctx)).toContain(EN_RECEIPT);
   });
 });

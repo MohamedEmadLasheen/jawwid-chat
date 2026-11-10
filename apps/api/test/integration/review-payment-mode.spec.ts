@@ -33,6 +33,7 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { BillingModule } from '../../src/billing/billing.module';
 import { ParentRecordModule } from '../../src/parent-profile/parent-record.module';
+import { SubscriptionModule } from '../../src/subscriptions/subscription.module';
 import { STRIPE_GATEWAY } from '../../src/billing/stripe.gateway';
 import { REVIEW_DEMO_REQUEST_ID, REVIEW_ORGANIZATIONS_KEY } from '../../src/billing/review-mode';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
@@ -115,7 +116,12 @@ async function writeCounts() {
            (SELECT count(*) FROM chat.audit_log)        AS audit_log,
            (SELECT count(*) FROM chat.work_task)        AS work_task,
            (SELECT count(*) FROM chat.notification)     AS notification,
-           (SELECT count(*) FROM chat.outbox_event)     AS outbox_event`);
+           (SELECT count(*) FROM chat.outbox_event)     AS outbox_event,
+           (SELECT count(*) FROM chat.renewal_request)  AS renewal_request,
+           (SELECT count(*) FROM chat.message)          AS message,
+           (SELECT count(*) FROM chat.message_card)     AS message_card,
+           (SELECT count(*) FROM chat.work_task_package_episode) AS work_task_package_episode,
+           (SELECT count(*) FROM chat.config)           AS config`);
   return Object.fromEntries(Object.entries(row!).map(([k, v]) => [k, Number(v)]));
 }
 
@@ -158,7 +164,7 @@ beforeAll(async () => {
 
   process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
-    imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, BillingModule, ParentRecordModule],
+    imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, BillingModule, ParentRecordModule, SubscriptionModule],
   })
     .overrideProvider(STRIPE_GATEWAY)
     .useValue(stripe)
@@ -203,16 +209,53 @@ afterAll(async () => {
 });
 
 describe('OA-12: the App Review payment mode', () => {
-  it('the key is not writable through the billing settings route', async () => {
-    await setReviewOrganizations(undefined);
-    const tried = await http(m.superAdmin.subject, 'POST', '/billing/settings', {
+  it('the key is not writable through the billing settings route: neither created nor changed', async () => {
+    const attempt = {
       [REVIEW_ORGANIZATIONS_KEY]: [orgId],
       reviewSandboxOrganizationIds: [orgId],
       review: { sandbox_organization_ids: [orgId] },
-    });
-    expect(tried.status).toBeLessThan(500);
+      key: REVIEW_ORGANIZATIONS_KEY,
+      value: [orgId],
+    };
+    const configRows = async () =>
+      (await g.prisma.config.findMany({ orderBy: { key: 'asc' } })).map((r) => [r.key, JSON.stringify(r.value)]);
+
+    // Absent: a settings write that also carries the key (a real, accepted change
+    // of the bank account) stores the bank account and nothing else.
+    await setReviewOrganizations(undefined);
+    const before = await configRows();
+    const tried = await http(m.superAdmin.subject, 'POST', '/billing/settings', { ...attempt, bankAccount: REAL_BANK });
+    expect(tried.status).toBe(201);
     expect(await g.prisma.config.findUnique({ where: { key: REVIEW_ORGANIZATIONS_KEY } })).toBeNull();
+    expect(await configRows()).toEqual(before);
     expect(JSON.stringify(tried.json)).not.toContain(REVIEW_ORGANIZATIONS_KEY);
+
+    // Present (listing another organization): the same attempt leaves its value exactly as it was.
+    const other = randomUUID();
+    await setReviewOrganizations([other]);
+    const withKey = await configRows();
+    const again = await http(m.superAdmin.subject, 'POST', '/billing/settings', { ...attempt, bankAccount: REAL_BANK });
+    expect(again.status).toBe(201);
+    expect((await g.prisma.config.findUnique({ where: { key: REVIEW_ORGANIZATIONS_KEY } }))?.value).toEqual([other]);
+    expect(await configRows()).toEqual(withKey);
+    await setReviewOrganizations(undefined);
+  });
+
+  it('public organizations: staff money routes, the settings and the renewal request are untouched', async () => {
+    await setReviewOrganizations([randomUUID()]);
+    const settings = await http(m.superAdmin.subject, 'GET', '/billing/settings');
+    expect(settings.status).toBe(200);
+    expect(settings.json.bankAccount).toMatchObject({ iban: REAL_BANK.iban });
+    // Unknown ids reach the lookup (404), not a review refusal.
+    expect((await http(m.salesManager.subject, 'POST', `/payment-receipts/${randomUUID()}/approve`, {})).code).toBe(CommErrorCode.BILLING_NOT_FOUND);
+    expect((await http(m.salesManager.subject, 'POST', `/instalments/${randomUUID()}/payment`, { paidOn: '2026-11-01' })).code).toBe(CommErrorCode.BILLING_NOT_FOUND);
+    expect((await http(m.superAdmin.subject, 'POST', `/payments/${randomUUID()}/refunds`, { amountMinor: 1000, reason: 'x' })).code).toBe(CommErrorCode.BILLING_NOT_FOUND);
+    // A public parent's renewal request is written as before.
+    const child = m.families[0]!.children[0]!;
+    const renewal = await http(m.families[0]!.parent.subject, 'POST', `/me/subscriptions/${child.id}/renewal-request`);
+    expect(renewal.status).toBe(201);
+    expect(await g.prisma.renewalRequest.count({ where: { learnerId: child.id } })).toBe(1);
+    await setReviewOrganizations(undefined);
   });
 
   it('public organizations: /me/billing byte for byte the same with the key absent, listing another organization, or malformed', async () => {
@@ -251,6 +294,8 @@ describe('OA-12: the App Review payment mode', () => {
     const html = await page.text();
     expect(html).toContain(REAL_BANK.iban);
     expect(html).not.toContain('App Review');
+    const en = await (await fetch(`${base}/pay/${token}?lang=en`)).text();
+    expect(en).toContain('After transferring, send a photo of the receipt');
     await setReviewOrganizations(undefined);
   });
 
@@ -325,7 +370,10 @@ describe('OA-12: the App Review payment mode', () => {
       expect(page.status).toBe(200);
       const html = await page.text();
       expect(html).toContain('Demo bank details for App Review: no transfer is possible');
+      expect(html).not.toContain('After transferring, send a photo of the receipt');
       expectNoRealBank(html, 'pay link page');
+      const ar = await (await fetch(`${base}/pay/${token}?lang=ar`)).text();
+      expect(ar).not.toContain('بعد التحويل أرسل صورة الإيصال');
 
       const r = await fetch(`${base}/pay/${token}/checkout?lang=en`, { method: 'POST', redirect: 'manual' });
       expect(r.status).toBe(303);
@@ -352,14 +400,44 @@ describe('OA-12: the App Review payment mode', () => {
       }
     });
 
+    it('the renewal request is refused with reviewMode: no renewal request, audit row, chat card or staff task', async () => {
+      const f = m.families[1]!;
+      const child = f.children[0]!;
+      const r = await http(f.parent.subject, 'POST', `/me/subscriptions/${child.id}/renewal-request`);
+      expect(r.status).toBe(403);
+      expect(r.code).toBe(CommErrorCode.BILLING_DENIED);
+      expect(r.json.error?.detail).toEqual({ reviewMode: true });
+      expect(await g.prisma.renewalRequest.count({ where: { learnerId: child.id } })).toBe(0);
+      expect(await writeCounts()).toEqual(counts);
+    });
+
+    it('staff of the review organization: every money write and the settings are refused, before any lookup', async () => {
+      const f = m.families[0]!;
+      const child = f.children[0]!;
+      const refused: Array<[string, string, string, unknown?]> = [
+        [m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, { purpose: 'other', label: 'x', amountMinor: 1000, currency: 'AED' }],
+        [m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, { instalmentId: randomUUID() }],
+        [m.salesManager.subject, 'POST', `/payment-requests/${requestId}/cancel`, { reason: 'x' }],
+        [m.salesManager.subject, 'POST', `/families/${f.id}/instalments`, { label: 'Fees', amountMinor: 50000, currency: 'AED', firstDueDate: '2026-11-01', learnerId: child.id }],
+        [m.salesManager.subject, 'POST', `/families/${f.id}/payments`, { method: 'cash', amountMinor: 1000, paidOn: '2026-11-01', requestId }],
+        [m.salesManager.subject, 'POST', `/instalments/${randomUUID()}/payment`, { paidOn: '2026-11-01' }],
+        [m.salesManager.subject, 'POST', `/payment-receipts/${randomUUID()}/approve`, {}],
+        [m.superAdmin.subject, 'POST', `/families/${f.id}/payment-requests`, { purpose: 'other', label: 'x', amountMinor: 1000, currency: 'AED' }],
+        [m.superAdmin.subject, 'POST', `/families/${f.id}/payments`, { method: 'bank_transfer', amountMinor: 1000, paidOn: '2026-11-01' }],
+        [m.superAdmin.subject, 'POST', `/payments/${randomUUID()}/refunds`, { amountMinor: 1000, reason: 'x' }],
+        [m.superAdmin.subject, 'GET', '/billing/settings'],
+        [m.superAdmin.subject, 'POST', '/billing/settings', { bankAccount: REAL_BANK }],
+      ];
+      for (const [who, method, path, body] of refused) {
+        const r = await http(who, method, path, body);
+        expect([method, path, r.status, r.code, r.json.error?.detail]).toEqual([method, path, 403, CommErrorCode.BILLING_DENIED, { reviewMode: true }]);
+        expectNoRealBank(r.text, `${method} ${path}`);
+      }
+    });
+
     it('nothing was written anywhere, and Stripe was never called', async () => {
       expect(await writeCounts()).toEqual(counts);
       expect(stripeCalls()).toEqual(calls);
-    });
-
-    it('staff still read the real settings (only the parent side is a demo)', async () => {
-      const settings = await http(m.superAdmin.subject, 'GET', '/billing/settings');
-      expect(settings.json.bankAccount).toMatchObject({ iban: REAL_BANK.iban });
     });
   });
 });

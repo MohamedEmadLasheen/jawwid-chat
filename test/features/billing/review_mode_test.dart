@@ -60,6 +60,7 @@ void main() {
   ParentBilling reviewBilling() => ParentBilling(
         today: DateTime(2026, 11, 10),
         cardAvailable: true,
+        reviewMode: true,
         bankAccount: demoBank,
         requests: [demo()],
       );
@@ -137,10 +138,14 @@ void main() {
       'حساب تجريبي لمراجعة المتجر: هذه البيانات البنكية ليست حقيقية. لا يمكن إجراء أي تحويل ولا إرسال أي إيصال من هذا الحساب.';
 
   group('detection', () {
-    test('review mode only with the server\'s synthetic demo item', () {
+    test('review mode is the server\'s reviewMode flag, not the demo item\'s id', () {
       expect(isReviewMode(reviewBilling()), isTrue);
       expect(isReviewMode(publicBilling()), isFalse);
       expect(isReviewMode(ParentBilling.empty), isFalse);
+      // The flag alone decides: the demo id without the flag is not review mode,
+      // and the flag without the demo item still is.
+      expect(isReviewMode(ParentBilling(cardAvailable: true, requests: [demo()])), isFalse);
+      expect(isReviewMode(const ParentBilling(reviewMode: true)), isTrue);
     });
 
     test('the server\'s refusal is recognised by its code AND its reviewMode detail', () {

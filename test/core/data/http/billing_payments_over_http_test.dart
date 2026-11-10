@@ -311,6 +311,17 @@ void main() {
     expect(b.cardAvailable, isFalse, reason: 'only a literal true offers a card');
   });
 
+  test('OA-12: reviewMode is only a literal true; absent (every public family) or anything else is not', () async {
+    server.on('GET', '/me/billing', [
+      const Reply.ok({'instalments': <Object?>[], 'cardAvailable': true, 'reviewMode': true}),
+      const Reply.ok({'instalments': <Object?>[], 'cardAvailable': true}),
+      const Reply.ok({'instalments': <Object?>[], 'reviewMode': 'true'}),
+    ]);
+    expect((await repository().myBilling()).reviewMode, isTrue);
+    expect((await repository().myBilling()).reviewMode, isFalse);
+    expect((await repository().myBilling()).reviewMode, isFalse);
+  });
+
   group('POST /me/billing/checkout', () {
     test('a request is named by requestId; the answer is the Checkout URL', () async {
       server.on('POST', '/me/billing/checkout', [const Reply.ok({'url': 'https://checkout.stripe.com/c/pay/cs_1'})]);

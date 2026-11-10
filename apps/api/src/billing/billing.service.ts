@@ -22,7 +22,7 @@ import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 import { childSubscriptions, forParent } from './subscription-reads';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
-import { inReviewMode, reviewDemoBankAccount, reviewDemoRequest } from './review-mode';
+import { inReviewMode, refuseReviewOrganizationStaff, reviewDemoBankAccount, reviewDemoRequest } from './review-mode';
 
 /**
  * ADMIN-007: a family's billing settings (method, currency, plan) as one
@@ -875,6 +875,10 @@ export class BillingService {
     if (!access.canRecord) {
       throw new CommError(CommErrorCode.BILLING_DENIED, 'payments are recorded by the Operations and Sales departments');
     }
+    // OA-12: no money is ever requested, recorded, invoiced or split into
+    // instalments for an App Review organization, whoever signs in (every staff
+    // money write passes here; the actor's organization is the target family's).
+    await refuseReviewOrganizationStaff(this.prisma, actor.organizationId);
     return { actor, access };
   }
 

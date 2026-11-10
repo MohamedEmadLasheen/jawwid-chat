@@ -121,6 +121,7 @@ export class PayLinkController {
       checkout,
       error: null,
       cardFailure: failure?.code ?? null,
+      ...(review ? { reviewMode: true } : {}),
     };
   }
 

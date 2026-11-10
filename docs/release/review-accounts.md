@@ -47,8 +47,9 @@ in the app is only a courtesy. The code is `apps/api/src/billing/review-mode.ts`
   run. That change should *add* the review organization's id to the array (keeping any id already there), never
   replace the array, and print the value it wrote.
 - **Absent:** no organization is in review mode.
-- **Malformed** (not an array, or any entry that is not a uuid) **or unreadable:** treated as "no review
-  organization", so every family behaves as a real one, and the API logs an error. A mistake in this row can only
+- **Malformed** (not an array, or any entry that is not a uuid): treated as "no review
+  organization", so every family behaves as a real one, and the API logs an error. **Unreadable** (the
+  database read fails): the request fails with 500; it never falls back to public behaviour. A mistake in this row can only
   make the review account behave like a real one. It can never make a real family see the demo.
 - It is read on every request, so a change applies at once, without a restart.
 
@@ -58,18 +59,22 @@ in the app is only a courtesy. The code is `apps/api/src/billing/review-mode.ts`
 |---|---|
 | `GET /me/billing` | `reviewMode: true`. One synthetic amount due, never stored: "Lesson package (demo): 8 live one-to-one lessons", USD 80.00, for the family's first child, under the fixed id `00000000-0000-4000-8000-0000000a99e1`. Demo bank details ("Demo bank details for App Review: no transfer is possible", no IBAN, no SWIFT). The real `billing.bank_account` is not even read. `cardAvailable: true` |
 | Pay by card (app, `POST /me/billing/checkout`) | Answers `/api/v1/pay/review-demo` (with `?lang=ar` or `?lang=en`), a static page (the same strict CSP as the pay link page) that explains, in Arabic and English, that the live app opens Stripe's secure checkout here and that the review account cannot pay. Stripe is never called. No `payment_checkout` row, no Stripe customer, no payment request |
-| Pay link (`/pay/:token`) of a review family's request | Demo bank details; "Pay by card" goes to the same demo page, never Stripe |
+| Pay link (`/pay/:token`) of a review family's request | Demo bank details, without the "send a photo of the receipt" line; "Pay by card" goes to the same demo page, never Stripe |
 | Bank transfer: `POST /me/billing/receipts/upload` and `POST /me/billing/receipts` | Refused: 403 `COMM.BILLING_DENIED` with `error.detail.reviewMode = true`, before anything is signed, stored or written. The app shows a notice on the bank-transfer page and turns Send off |
+| Request renewal (`POST /me/subscriptions/:learnerId/renewal-request`) | Refused the same way, before anything is looked up: no renewal request, audit row, chat card or staff task |
+
+**Staff of a review organization** (insurance; the rule no longer depends on that organization having no staff
+logins): every staff money write (payment requests and their cancellation, instalments, recorded payments and
+voids, receipt decisions, trial payment requests, a family's billing settings, lesson-package voids: everything
+behind `BillingService.requireRecorder`), refunds, and `GET`/`POST /billing/settings` are refused the same way. Staff reach only
+their own organization's families, so this covers every review family too.
+
+**A failed read** of the key (a database error, not a malformed value) fails the request (500). It never falls back to
+public behaviour, so a database hiccup cannot show a review account the real bank details or let it write.
 
 The test is `apps/api/test/integration/review-payment-mode.spec.ts`. It counts the rows in the payment, receipt,
-checkout, invoice, Stripe customer, audit, task, notification and outbox tables before and after, and they must not
-change.
-
-**Not covered here (other modules):** "Request renewal" (`POST /me/subscriptions/:learnerId/renewal-request`,
-`apps/api/src/subscriptions/`) still records a renewal request and may make a task inside the review organization,
-whose staff are all synthetic and have no login. No real staff member sees it, but it is a write. The demo amount due makes the child's card
-show "Pay" rather than "Request renewal", so a reviewer is unlikely to reach it. A follow-up can refuse it with the
-same `inReviewMode` check.
+checkout, invoice, Stripe customer, audit, task, renewal request, message, card, notification, outbox and config
+tables before and after, and they must not change.
 
 ## Run it (the owner, against the backend the store build uses)
 

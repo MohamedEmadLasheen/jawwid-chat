@@ -29,10 +29,18 @@ import { escapeHtml, type PayLang } from './pay-page';
  * this module). No route writes it: /billing/settings writes only
  * billing.bank_account and billing.invoice_issuer (payments.service.ts setSettings).
  *
- * Unreadable or malformed (not an array of uuids) is "no review organization":
- * public behaviour, and an error in the log. A typo in the key can therefore
- * only ever make a review account behave like a real one -- never a real
- * family behave like a demo.
+ * Malformed (not an array of uuids) is "no review organization": public
+ * behaviour, and an error in the log. A typo in the key can therefore only
+ * ever make a review account behave like a real one -- never a real family
+ * behave like a demo. A failed READ is different: it propagates (the request
+ * answers 500), so a database hiccup can never fall back to public behaviour
+ * for a review account.
+ *
+ * Staff side (insurance, not only "the review organization has no staff
+ * logins"): every staff money write (BillingService.requireRecorder), refunds,
+ * and the payment settings, read or written, are refused for an actor of a review
+ * organization -- staff only ever reach their own organization's families, so
+ * that also covers every review family (refuseReviewOrganizationStaff).
  */
 export const REVIEW_ORGANIZATIONS_KEY = 'review.sandbox_organization_ids';
 
@@ -68,15 +76,14 @@ export function isReviewOrganization(organizationId: string | null | undefined, 
   return parseReviewOrganizationIds(configValue)?.has(organizationId.toLowerCase()) ?? false;
 }
 
-/** The review organizations as chat.config holds them now; empty (and logged) when unreadable. */
+/**
+ * The review organizations as chat.config holds them now. A failed read is NOT
+ * caught: the request fails (500) rather than serve a review account the real
+ * bank details or a write -- a request whose database is failing fails anyway.
+ * Absent is empty; malformed is empty and logged.
+ */
 export async function readReviewOrganizationIds(db: ConfigReader): Promise<ReadonlySet<string>> {
-  let row: { value: unknown } | null;
-  try {
-    row = await db.config.findUnique({ where: { key: REVIEW_ORGANIZATIONS_KEY } });
-  } catch (e) {
-    log.error(`${REVIEW_ORGANIZATIONS_KEY} could not be read (${(e as Error)?.name ?? 'error'}); no organization is in review mode`);
-    return NONE;
-  }
+  const row = await db.config.findUnique({ where: { key: REVIEW_ORGANIZATIONS_KEY } });
   if (!row) return NONE;
   const ids = parseReviewOrganizationIds(row.value);
   if (!ids) {
@@ -100,6 +107,17 @@ export function reviewModeRefusal(): CommError {
     403,
     { reviewMode: true },
   );
+}
+
+/**
+ * The one staff guard: refuses (reviewModeRefusal) when the staff member
+ * belongs to a review organization. Staff reach only their own organization's
+ * families (requireFamily, requireRequest, requireReceipt filter on it), so
+ * the target family of any staff write is in the actor's organization; this
+ * refuses both "a review-org actor" and "a review family" at once.
+ */
+export async function refuseReviewOrganizationStaff(db: ConfigReader, organizationId: string | null | undefined): Promise<void> {
+  if (await inReviewMode(db, organizationId)) throw reviewModeRefusal();
 }
 
 /** Where a review account's card payment goes instead of Stripe. */
