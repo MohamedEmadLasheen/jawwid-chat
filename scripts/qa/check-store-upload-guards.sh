@@ -693,6 +693,11 @@ def mutations_r123():
         ('a Sentry step without its log level', W, lambda t: replaced(t, '          SENTRY_LOG_LEVEL: warn\n', '')),
         ('a log level set after the scrub loop on its line', W,
          lambda t: replaced(t, SENTRY_SCRUB_TEXT, SENTRY_SCRUB_TEXT + '; export SENTRY_LOG_LEVEL="$L"')),
+        # The review's bypass of a prefix-only exemption: a SECOND line that starts like the scrub loop.
+        ('a second scrub-like line that sets a log level', W,
+         lambda t: replaced(t, SENTRY_SCRUB_TEXT, SENTRY_SCRUB_TEXT
+                            + '\n          for v in $(compgen -e); do case "$v" in X) : ;; esac; done; '
+                            + 'export SENTRY_LOG_LEVEL=$(echo debug)')),
         ('--log-level trace', W, lambda t: replaced(t, SYM_CALL, '          sq "Dart symbols" debug-files upload --log-level=trace "$SYM"\n')),
         ('sentry-cli info', W, lambda t: replaced(t, SYM_CALL, '          sq "config" info\n' + SYM_CALL)),
         ('sentry-cli output printed', W, lambda t: replaced(t, SYM_CALL, '          "$SENTRY_CLI" debug-files upload "$SYM"\n')),
