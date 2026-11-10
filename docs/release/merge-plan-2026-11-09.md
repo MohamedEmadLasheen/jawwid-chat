@@ -76,6 +76,49 @@ how each was resolved form the recipe for the real merges:
 
 Each real merge of a stacked or conflicting PR still gets its own CI run and a delta review at its new head.
 
+## Rehearsal round 3 (2026-11-10): 51 PRs, the combined result passes CI
+
+- **What it is:** the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged. It was built from `main` `7cc7aab5` and merged every open launch PR at its current head, including the Stripe PRs #579–#585, the review-mode PRs #585/#586, the store PRs #572/#576/#577 and #548.
+- **CI:** run 42827668730 is green at `0aec87f1`.
+- **The one CI failure, fixed:** the first run (42816428836) failed the guards. #549's simulator screenshot script sat in `scripts/mobile/`, which #572's store-upload guard scans. #549 now keeps it in `scripts/store-screenshots/`, ACCEPT @ `489e8cf0`. #572 was not changed.
+- **Independent review of the resolutions:** SOUND, with no P1 or P2 findings (kept outside the repo).
+- **Order for the real merges:** follow the batches below. In `checkout.service.ts`, `open()` must end up as: review mode → Stripe configured → card pause → payable → hourly limit → #581 claim → (fresh request, payable, already paid, pending receipt) → Stripe.
+
+### Conflict recipes from round 3
+#### Per merge
+**Clean, no conflicts:** #552 (a fast-forward, so it has no "rehearsal3: merge" commit of its own), #571, #523, #542, #548, #549, #555, #556, #558, #562, #567, #568, #574, #543, #503, #517, #576, #572, #577, #573, #557, #579, #580, #581, #582, #569, #565, #564, #566, #524, #561, #570, #550.
+
+| Merge | Conflict | Resolution and why |
+|---|---|---|
+| #583 | `Ledger.test.tsx`; `pd027-stripe-lifecycle.md` | Kept both sides' tests: the overpaid tests (#581) close, then the four W61 refund tests follow. In the doc, kept the W59 bullets and added the W61 S4 bullet and section 4a. The receipt check landed (no conflict) inside #581's claimed section, after "already paid", because it needs the fresh `remaining` amount. |
+| #584 | `checkout.service.ts` imports | Kept both imports. `open()` now runs in this order: review mode → Stripe configured → card pause → payable → hourly limit → #581 claim → (fresh request, payable, already paid, pending receipt) → Stripe. #580's dispute and metadata code is untouched. |
+| #585 | `billing.service.ts`, `pay-link.controller.ts`, `pay-page.ts`, `payments.service.ts`, 5 l10n files | Review mode is checked first everywhere: `cardAvailable: review ? true : <Stripe configured and not paused>`. The pay link keeps `pendingReceiptMinor` and `reviewMode`, the 3-argument `model()` call, and the rule that a pending-receipt refusal shows no error line. `setSettings` refuses a review organization's staff before checking `cardPaused`. l10n: kept all three LR-11 keys plus both OA-12 keys. |
+| #528 | `review-accounts.md` | Kept #585's "Review payment mode" section and #528's workflow "Run it" steps. Dropped #528's "Something payable" open item because #585 records the owner's OA-12 decision. |
+| #560 | `deploy-production.yml`, `deploy-staging.yml` | Took #560's version. Its job-level env, SHA check and image-digest check supersede #548. I removed #548's step-level env lines, which repeated the job-level ones. The result is identical to #560's files. |
+| #575, #586 | `review-accounts.md` | #586's demo-payment wording wins. #585's section stays, with "will set it" changed to "sets it (next section)". #586's "run again after #585 is deployed" and store-notes items replace the old "Switch on" item. |
+| #497 | `pd040-route-permissions.md` | Count set to 597 (I counted the table rows). |
+| #498 | `review-cohort.ts`, `review-cohort.spec.ts`, `error-codes.md`, `API-CONTRACT.md` | Kept #565/#586's org guard and payment-mode switch, plus #498's `moveChildFromErasedTeacher`, with a combined header. Terms keeps §1.1c; account deletion becomes **§1.1d** (the error-codes row cites it too). Spec: the teacher-erasure test now expects **3** active logins and checks the disposable parent is unchanged, per the earlier recipe. |
+| #449 | `pd040` count | 602, which matches the 602 rows. |
+| #535 | `native_call_bridge_test.dart` | Kept LR-74's N7 group and renamed #535's group to N8 (N8a–N8d). |
+| #563 | `lib/app/app.dart` (comment only) | Kept both the LR-46 sentence and the PD-58 line. |
+| #529 | device test plan | Kept rows SB-28, SB-29, SB-39 and SB-46. `AppDelegate.swift` merged by itself and already matches the recipe: `voipTokensWanted` and the stored token are inside `registerForPush`. |
+| #537 | `notification.controller.ts`, `device-registration.spec.ts`, `account-deletion.service.ts` | Took #537's controller and spec; `main`'s copy was exactly #534's. The session lock now sits at the top of #498's shared `run()` transaction, so it covers every erasure path. |
+| #554 | `call_controller.dart`, `call_media_providers.dart`, `call_controller_test.dart`, device plan | `start()` keeps `_askMicrophone()`. `_microphoneReady()` now goes through `_askMicrophone()`, so there is one shared prompt. `dismiss()` tears down and then clears the parked answer. Both providers are kept. Row SB-38 added. |
+| #545, #551, #559 | `findings.md` | Kept #539's RT-010 and RT-029 rows. The RT-029 row gets all three "fix in review" notes. |
+
+#### Extra edits beyond the conflict markers
+1. `ungated-writes.ts`: added `POST /me/account/deletion-request/cancel` and `POST /teacher-files/:teacherId/deletion-request/complete` (#498), and `POST /me/feedback/:id/reply-seen` (#449). In `API-CONTRACT.md`, added cancel to the "Never gated" list and changed "(268 today)" to "(273 today)", which is the real count.
+2. `review-cohort.spec.ts` section 3 ("a child moved to a live teacher is refused"): with #565's org guard, the made-up "Live Other Teacher" would now be refused earlier, with NOT_REVIEW_ORGANIZATION instead of the expected TEACHER_CHANGED. That teacher now uses the review teacher's name but has no login, so the test still exercises #498's TEACHER_CHANGED path. The `REVIEW_PEOPLE` import was added for it.
+3. `store_submission_config_test.dart`: the VoIP-token check now looks at `registerForPush` (recipe), and also checks `voipTokensWanted = true`.
+4. `call_controller.dart` `_retryMicrophone`: the reconnect now passes `onMicrophoneGranted`, so Android's ongoing-call service starts on a retried call. This is the behaviour gap the recipe names. New test **N7k** in `native_call_bridge_test.dart` covers it; the "N7i2" test the recipe cites is not in any PR.
+
+#### Checks done by reading
+- The 10 migrations have unique timestamps, and the 4 migration files with conflicts were docs-only, so no migration SQL was changed. The only function defined twice is `complete_account_deletion_request`, by #498 and then #566, which is stacked on #498.
+- The ARB files and generated files each have 1600 keys, with no duplicates and none missing between Arabic and English.
+- MainActivity keeps both `start` and `register`.
+- Nothing still uses sqflite after #503 removed it.
+
+
 ## Batches
 
 | Batch | PRs, in merge order (head SHA) | Purpose | Risk | Verify afterwards |
