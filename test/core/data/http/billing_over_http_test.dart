@@ -143,6 +143,8 @@ void main() {
     expect(billing.receipts, isEmpty);
     expect(billing.bankAccount, isNull);
     expect(billing.cardAvailable, isFalse);
+    // OA-12: absent means a public family.
+    expect(billing.reviewMode, isFalse);
     expect(billing.instalments.single.paidMinor, isNull);
     expect(billing.instalments.single.partial, isFalse);
     expect(billing.instalments.single.owedMinor, 100);

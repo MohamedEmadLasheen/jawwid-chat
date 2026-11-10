@@ -5585,4 +5585,12 @@ class L10nEn extends L10n {
 
   @override
   String get notificationPermissionNotNow => 'Not now';
+
+  @override
+  String get billingReviewModeNotice =>
+      'App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.';
+
+  @override
+  String get billingReviewModeTransferNotice =>
+      'App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.';
 }

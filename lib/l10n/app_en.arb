@@ -3711,5 +3711,9 @@
   "notificationPermissionContinue": "Continue",
   "@notificationPermissionContinue": {"description": "LR-11: the explanation's button that goes on to the system notification prompt."},
   "notificationPermissionNotNow": "Not now",
-  "@notificationPermissionNotNow": {"description": "LR-11: the explanation's button that skips the system prompt; asked again at most once a day."}
+  "@notificationPermissionNotNow": {"description": "LR-11: the explanation's button that skips the system prompt; asked again at most once a day."},
+  "billingReviewModeNotice": "App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.",
+  "@billingReviewModeNotice": {"description": "OA-12: top of the pay sheet for the App Review demo family (GET /me/billing reviewMode). The server makes card a demo page and refuses receipts."},
+  "billingReviewModeTransferNotice": "App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.",
+  "@billingReviewModeTransferNotice": {"description": "OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode)."}
 }

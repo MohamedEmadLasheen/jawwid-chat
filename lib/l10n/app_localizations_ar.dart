@@ -5672,4 +5672,12 @@ class L10nAr extends L10n {
 
   @override
   String get notificationPermissionNotNow => 'ليس الآن';
+
+  @override
+  String get billingReviewModeNotice =>
+      'حساب تجريبي لمراجعة المتجر: لا يمكن إجراء أي دفع حقيقي. خيار البطاقة يفتح صفحة تشرح الدفع الفعلي بالبطاقة، والتحويل البنكي يعرض بيانات تجريبية فقط.';
+
+  @override
+  String get billingReviewModeTransferNotice =>
+      'حساب تجريبي لمراجعة المتجر: هذه البيانات البنكية ليست حقيقية. لا يمكن إجراء أي تحويل ولا إرسال أي إيصال من هذا الحساب.';
 }

@@ -22,6 +22,7 @@ import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
 import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
 import { WEBHOOK_REFUND_REASON, assertReplay, isLockTimeout, isoDay, lockIdempotencyKey, tryLockIdempotencyKey } from './idempotency';
 import { formatMajor, minorDigits } from './money';
+import { refuseReviewOrganizationStaff } from './review-mode';
 import type { TrialFormPayer } from '../new-students/new-students.service';
 import {
   dateOnly,
@@ -678,7 +679,9 @@ export class PaymentsService {
   // ------------------------------------------------------------------
 
   async settings(actorId: string) {
-    const { access } = await this.billing.requireReader(actorId);
+    const { actor, access } = await this.billing.requireReader(actorId);
+    // OA-12: the real bank account is never read for an App Review organization.
+    await refuseReviewOrganizationStaff(this.prisma, actor.organizationId);
     return this.presentSettings(access.canAssign);
   }
 
@@ -690,6 +693,8 @@ export class PaymentsService {
   async setSettings(actorId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.billing.requireReader(actorId);
     if (!access.canAssign) throw new CommError(CommErrorCode.BILLING_DENIED, 'payment settings are set by the super admin or the Operations Manager');
+    // OA-12 first: an App Review organization's staff change no payment setting (the card switch included).
+    await refuseReviewOrganizationStaff(this.prisma, actor.organizationId);
     if ('cardPaused' in body && typeof body.cardPaused !== 'boolean') throw invalid('cardPaused: true or false');
     const cardPaused = typeof body.cardPaused === 'boolean' ? body.cardPaused : undefined;
     // Only the switch: no settings row for the other keys (they were not sent).
@@ -842,6 +847,8 @@ export class PaymentsService {
     if (!access.canVerify) {
       throw new CommError(CommErrorCode.BILLING_DENIED, 'refunds are made by the super admin or the Operations Manager');
     }
+    // OA-12: no money goes out (no Stripe refund) for an App Review organization either.
+    await refuseReviewOrganizationStaff(this.prisma, actor.organizationId);
     return { actor, access };
   }
 
