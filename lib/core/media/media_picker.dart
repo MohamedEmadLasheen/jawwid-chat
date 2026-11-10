@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart' as selector;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
@@ -39,6 +39,42 @@ class MediaPickException implements Exception {
       ? 'MediaPickException($reason)'
       : 'MediaPickException($reason): $detail';
 }
+
+/// The file picker's type filter. Mirrors the backend's `file` allow-list (text/csv is NOT on it).
+@visibleForTesting
+const documentTypeGroup = selector.XTypeGroup(
+  label: 'documents',
+  extensions: <String>[
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'ppt',
+    'pptx',
+    'txt',
+  ],
+  mimeTypes: <String>[
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+  ],
+  uniformTypeIdentifiers: <String>[
+    'com.adobe.pdf',
+    'com.microsoft.word.doc',
+    'org.openxmlformats.wordprocessingml.document',
+    'com.microsoft.excel.xls',
+    'org.openxmlformats.spreadsheetml.sheet',
+    'com.microsoft.powerpoint.ppt',
+    'org.openxmlformats.presentationml.presentation',
+    'public.plain-text',
+  ],
+);
 
 /// The camera, photo and file seam.
 ///
@@ -196,42 +232,7 @@ class PluginMediaPicker implements MediaPicker {
           // Mirrors the backend's `file` allow-list. The picker refusing an
           // unsupported type up front is better than an upload the server
           // rejects after the user has waited for it.
-          selector.XTypeGroup(
-            label: 'documents',
-            extensions: <String>[
-              'pdf',
-              'doc',
-              'docx',
-              'xls',
-              'xlsx',
-              'ppt',
-              'pptx',
-              'txt',
-              'csv',
-            ],
-            mimeTypes: <String>[
-              'application/pdf',
-              'application/msword',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              'application/vnd.ms-excel',
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-              'application/vnd.ms-powerpoint',
-              'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-              'text/plain',
-              'text/csv',
-            ],
-            uniformTypeIdentifiers: <String>[
-              'com.adobe.pdf',
-              'com.microsoft.word.doc',
-              'org.openxmlformats.wordprocessingml.document',
-              'com.microsoft.excel.xls',
-              'org.openxmlformats.spreadsheetml.sheet',
-              'com.microsoft.powerpoint.ppt',
-              'org.openxmlformats.presentationml.presentation',
-              'public.plain-text',
-              'public.comma-separated-values-text',
-            ],
-          ),
+          documentTypeGroup,
         ],
       );
     } on Exception catch (error) {
@@ -324,7 +325,6 @@ class PluginMediaPicker implements MediaPicker {
       '.heic' => 'image/heic',
       '.pdf' => 'application/pdf',
       '.txt' => 'text/plain',
-      '.csv' => 'text/csv',
       '.doc' => 'application/msword',
       '.docx' =>
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
