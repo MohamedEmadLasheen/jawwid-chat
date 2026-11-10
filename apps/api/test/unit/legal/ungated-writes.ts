@@ -148,6 +148,7 @@ export const UNGATED_WRITES: Readonly<Record<string, string>> = {
   'POST /me/billing/checkout': 'a parent’s own payment or receipt; only staff read it',
   'POST /me/billing/receipts': 'a parent’s own payment or receipt; only staff read it',
   'DELETE /me/blocks/:id': 'unblocking removes the caller’s own block; removing is never gated',
+  'POST /me/feedback/:id/reply-seen': 'marks a staff reply to the caller’s own feedback as seen; adds no content',
   'POST /me/labels': 'chat labels are private to the staff member who made them',
   'DELETE /me/labels/:id': 'chat labels are private to the staff member who made them',
   'PATCH /me/labels/:id': 'chat labels are private to the staff member who made them',

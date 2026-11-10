@@ -245,6 +245,30 @@ describe('FCM', () => {
     } as Response);
   }
 
+  // Merged with store blocker S-05 (#408, now on main): a CALL push carries its title and
+  // body too (the Android ring draws its text from them) and keeps its 45 s TTL. What PD-32
+  // requires of an ordinary push is unchanged: its rendered text in the data, no TTL.
+  it('PD-32 amendment: an ordinary push carries its title and body in its data (the app draws it); so does a call, for its ring', async () => {
+    replyWith(200, {});
+    const provider = new FcmPushProvider(config, auth as never);
+    const ordinary = message({
+      title: 'Jawwid',
+      body: 'The administration has replied to your feedback.',
+      data: { eventType: 'feedback_replied', notificationId: 'n_2', actionKind: 'open_feedback', feedbackId: 'f-1' },
+    });
+    await provider.send(ordinary);
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(sent.message.data).toEqual({ ...ordinary.data, title: 'Jawwid', body: 'The administration has replied to your feedback.' });
+    expect(sent.message).not.toHaveProperty('notification');
+    expect(sent.message.android).toEqual({ priority: 'high' });
+
+    await provider.send(message());
+    const call = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
+    expect(call.message.data).toEqual({ ...message().data, title: message().title, body: message().body });
+    expect(call.message.android.ttl).toBe(FCM_CALL_TTL);
+    expect(call.message).not.toHaveProperty('notification');
+  });
+
   it('a 200 is a success, sent data-only with high priority', async () => {
     replyWith(200, {});
     const provider = new FcmPushProvider(config, auth as never);

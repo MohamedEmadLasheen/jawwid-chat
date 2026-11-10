@@ -60,13 +60,36 @@ class MainActivity : FlutterFragmentActivity() {
         // NOT on a recreate (rotation, process restore) or a launch from recents: the
         // intent is the one already handled, and replaying it would answer again.
         val fromHistory = (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
-        if (savedInstanceState == null && !fromHistory) handleCallIntent(intent)
+        if (savedInstanceState == null && !fromHistory) {
+            handleCallIntent(intent)
+            handlePushTap(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleCallIntent(intent)
+        handlePushTap(intent)
+    }
+
+    /**
+     * PD-32: a tap on an ordinary notification (JawwidPush.showMessage).
+     *
+     * The launcher activity is exported, so any app can start it with any extras. A tap
+     * counts only when it carries this install's nonce, which no other app can know, and
+     * only the allow-listed, id-shaped keys pass ([PushPayload.fromTap]). Calls never come
+     * this way: they have their own intents (handleCallIntent). Held by [PushBridge] until
+     * Dart listens on `jawwid/push_opens`; Dart then routes it.
+     */
+    private fun handlePushTap(intent: Intent?) {
+        if (intent?.action != PushBridge.ACTION_OPEN) return
+        val extras = intent.extras ?: return
+        val raw = PushPayload.OPEN_KEYS.mapNotNull { k -> extras.getString(k)?.let { k to it } }.toMap()
+        val open = PushPayload.fromTap(raw, extras.getString(PushBridge.EXTRA_NONCE), PushBridge.nonce(this)) ?: return
+        // Consumed: a configuration change re-delivering this intent must not open it twice.
+        intent.action = Intent.ACTION_MAIN
+        PushBridge.open(open)
     }
 
     /**
@@ -77,6 +100,9 @@ class MainActivity : FlutterFragmentActivity() {
     private fun handleCallIntent(intent: Intent?) {
         val action = intent?.action ?: return
         if (action != JawwidPush.ACTION_ANSWER && action != JawwidPush.ACTION_OPEN_CALL) return
+        // Another app can start this exported activity with these actions and any call id;
+        // only the ring this app drew carries the install's nonce (as a notification tap does).
+        if (!PushPayload.isTrustedTap(intent.getStringExtra(PushBridge.EXTRA_NONCE), PushBridge.nonce(this))) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -105,6 +131,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         callChannel?.let { JawwidPush.detach(it) }
         callChannel = null
+        PushBridge.detach()
         if (attached === this) attached = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
@@ -118,6 +145,23 @@ class MainActivity : FlutterFragmentActivity() {
             CHANNEL_NAME,
         )
         this.channel = channel
+
+        // PD-32: taps on ordinary notifications, and sign-out clearing the tray.
+        val opens = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, OPENS_CHANNEL)
+        PushBridge.openChannel = opens
+        opens.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "listen" -> {
+                    PushBridge.listen()
+                    result.success(null)
+                }
+                "clearDelivered" -> {
+                    JawwidPush.clearMessages(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         val callChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, JawwidPush.CALL_CHANNEL_NAME)
         this.callChannel = callChannel
@@ -272,5 +316,8 @@ class MainActivity : FlutterFragmentActivity() {
 
         /** Shared with `device_security_settings.dart`. */
         private const val SECURITY_SETTINGS_CHANNEL = "jawwid/device_security_settings"
+
+        /** Shared with `lib/core/push/push_opens.dart`. */
+        private const val OPENS_CHANNEL = "jawwid/push_opens"
     }
 }

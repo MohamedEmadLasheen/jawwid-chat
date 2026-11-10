@@ -36,6 +36,18 @@ import UIKit
  * carry a call. Both are reported here with their kind; the server decides what
  * each receives.
  *
+ * ## Ordinary pushes: shown, and opened where they point (PD-32 amendment)
+ *
+ * iOS draws an ordinary (alert) push itself while the app is closed or in the
+ * background. While it is open, `willPresent` decides: shown as a banner,
+ * except chat traffic the app already shows in its own UI. A tap reaches
+ * `didReceive` in every state -- including the one that launched a closed app,
+ * which is why the delegate is set before launch finishes. The tap's ids
+ * (allowlisted, id-shaped: `PushOpenPayload`) wait in `pendingOpens` until Dart
+ * says it is listening on `jawwid/push_opens`, then Dart routes them. Permission
+ * to show alerts is asked when a session starts (`start`), never at launch.
+ * Calls are untouched: they are VoIP pushes, which never come through here.
+ *
  * ## What is still NOT here
  *
  * Any decision about a call. This file wakes the app and hands over; the call
@@ -60,10 +72,22 @@ import UIKit
   /// Shared with `push_tokens.dart`. One string, three places.
   private static let pushChannelName = "jawwid/push_tokens"
 
+  /// Shared with `push_opens.dart`.
+  private static let opensChannelName = "jawwid/push_opens"
+
+  private var opensChannel: FlutterMethodChannel?
+
+  /// Taps that arrived before Dart was listening -- the one that launched the app.
+  private var pendingOpens: [[String: String]] = []
+  private var opensListening = false
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Before launch finishes: the tap that launched a closed app is delivered to the
+    // delegate set by then, and to no other.
+    UNUserNotificationCenter.current().delegate = self
     ensureEngine()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -115,6 +139,29 @@ import UIKit
     }
 
     callKit.attach(messenger: engine.binaryMessenger)
+
+    let opensChannel = FlutterMethodChannel(
+      name: AppDelegate.opensChannelName,
+      binaryMessenger: engine.binaryMessenger
+    )
+    self.opensChannel = opensChannel
+    opensChannel.setMethodCallHandler { [weak self] call, result in
+      // Sign-out: the previous account's notifications leave Notification Center.
+      if call.method == "clearDelivered" {
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        result(nil)
+        return
+      }
+      guard call.method == "listen", let self else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      self.opensListening = true
+      let waiting = self.pendingOpens
+      self.pendingOpens.removeAll()
+      for open in waiting { self.deliverOpen(open) }
+      result(nil)
+    }
 
     self.engine = engine
 
@@ -190,6 +237,100 @@ import UIKit
       application,
       didFailToRegisterForRemoteNotificationsWithError: error
     )
+  }
+}
+
+// MARK: - Ordinary pushes: shown while open, and tapped
+
+extension AppDelegate {
+  /// The app is open: show an ordinary push as a banner, except chat the app already shows.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    let userInfo = notification.request.content.userInfo
+    guard PushOpenPayload.isOurs(userInfo) else {
+      super.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
+      return
+    }
+    completionHandler(PushOpenPayload.showWhileOpen(userInfo) ? [.banner, .list, .sound] : [])
+  }
+
+  /// A tap, in any state. Ours is routed by Dart; anything else goes where it went before.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let userInfo = response.notification.request.content.userInfo
+    guard
+      PushOpenPayload.isOurs(userInfo),
+      response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+      let open = PushOpenPayload.from(userInfo)
+    else {
+      super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
+      return
+    }
+    deliverOpen(open)
+    completionHandler()
+  }
+
+  /// To Dart if it is listening, else held until it is.
+  fileprivate func deliverOpen(_ open: [String: String]) {
+    guard opensListening, let opensChannel else {
+      pendingOpens.append(open)
+      return
+    }
+    opensChannel.invokeMethod("onOpen", arguments: open)
+  }
+}
+
+/**
+ * What an ordinary push's tap may carry into the app (PD-32 amendment). A push is
+ * data from outside the app: only the known keys, only values shaped like ids. An id
+ * is a pointer, never a permission -- the screen it opens re-reads the item through
+ * the signed-in account's own route. A call is never routed here.
+ */
+enum PushOpenPayload {
+  /// Matches the server's CALL_EVENT_TYPES (call-push-routing.ts).
+  static let callEvents: Set<String> = ["call_started", "group_call_started"]
+  /// Chat the open app already shows in its own UI.
+  static let quietWhileOpen: Set<String> = ["message_published", "mention_created"]
+  static let keys = [
+    "eventType", "notificationId", "actionKind",
+    "feedbackId", "conversationId", "learnerId", "lessonId", "taskId",
+  ]
+
+  private static func matches(_ value: String, _ pattern: String) -> Bool {
+    value.range(of: pattern, options: .regularExpression) != nil
+  }
+
+  private static func valid(_ key: String, _ value: String) -> Bool {
+    key == "eventType" || key == "actionKind"
+      ? matches(value, "^[a-z][a-z0-9_]{0,39}$")
+      : matches(value, "^[0-9A-Za-z-]{1,64}$")
+  }
+
+  /// Sent by Jawwid's server: it has an event type of the server's shape.
+  static func isOurs(_ userInfo: [AnyHashable: Any]) -> Bool {
+    guard let event = userInfo["eventType"] as? String else { return false }
+    return valid("eventType", event)
+  }
+
+  static func showWhileOpen(_ userInfo: [AnyHashable: Any]) -> Bool {
+    guard let event = userInfo["eventType"] as? String else { return false }
+    return !callEvents.contains(event) && !quietWhileOpen.contains(event)
+  }
+
+  /// The allowlisted, id-shaped subset; nil for a call or a push that is not ours.
+  static func from(_ userInfo: [AnyHashable: Any]) -> [String: String]? {
+    var out: [String: String] = [:]
+    for key in keys {
+      if let value = userInfo[key] as? String, valid(key, value) { out[key] = value }
+    }
+    guard let event = out["eventType"], !callEvents.contains(event) else { return nil }
+    return out
   }
 }
 

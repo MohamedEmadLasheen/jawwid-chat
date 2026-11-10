@@ -395,6 +395,7 @@ class FakeFeedbackRepository implements FeedbackRepository {
     List<FeedbackChild>? children,
     List<FeedbackItem> items = const [],
     this.refuseWith,
+    this.latency = Duration.zero,
   })  : _children = children ??
             const [
               FeedbackChild(learnerId: 'learner_1', name: 'أحمد', teacherName: 'teacher_t1'),
@@ -408,6 +409,9 @@ class FakeFeedbackRepository implements FeedbackRepository {
   /// Every submission is refused with this code (and the matching kind), when set.
   String? refuseWith;
 
+  /// How long [mine] takes to answer, for tests of what shows while it is read.
+  final Duration latency;
+
   /// What was submitted, oldest first.
   final submitted = <FeedbackItem>[];
 
@@ -417,7 +421,10 @@ class FakeFeedbackRepository implements FeedbackRepository {
   bool get isAvailable => true;
 
   @override
-  Future<MyFeedback> mine() async => MyFeedback(children: _children, items: List.unmodifiable(_items));
+  Future<MyFeedback> mine() async {
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+    return MyFeedback(children: _children, items: List.unmodifiable(_items));
+  }
 
   @override
   Future<FeedbackItem> submit({
@@ -458,6 +465,35 @@ class FakeFeedbackRepository implements FeedbackRepository {
     _items.insert(0, item);
     submitted.add(item);
     return item;
+  }
+
+  /// For tests: the administration replies to [feedbackId] (unread for this account).
+  void staffReplies(String feedbackId, String response) {
+    final i = _items.indexWhere((f) => f.id == feedbackId);
+    final f = _items[i];
+    _items[i] = FeedbackItem(
+      id: f.id,
+      learnerId: f.learnerId,
+      childName: f.childName,
+      teacherName: f.teacherName,
+      category: f.category,
+      body: f.body,
+      status: f.status,
+      response: response,
+      respondedAt: DateTime.now(),
+      replyUnread: true,
+      createdAt: f.createdAt,
+    );
+  }
+
+  /// The ids [markReplySeen] was called with, in order.
+  final seenReplies = <String>[];
+
+  @override
+  Future<void> markReplySeen(String feedbackId) async {
+    seenReplies.add(feedbackId);
+    final i = _items.indexWhere((f) => f.id == feedbackId);
+    if (i >= 0 && _items[i].response != null) _items[i] = _items[i].asReplySeen();
   }
 }
 
