@@ -170,6 +170,59 @@ void main() {
     });
   });
 
+  group('LR-27: the full-screen intent permission (Android 14+)', () {
+    void nativeAnswers(Object? Function(MethodCall call) answer) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        sentToNative.add(call);
+        return answer(call);
+      });
+    }
+
+    test('asks native, and reports a refusal', () async {
+      nativeAnswers((call) => call.method == 'canUseFullScreenIntent' ? false : null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.canUseFullScreenIntent(), isFalse);
+      expect(sentToNative.last.method, 'canUseFullScreenIntent');
+    });
+
+    test('opens the settings screen and says whether it opened', () async {
+      nativeAnswers((call) => call.method == 'openFullScreenIntentSettings' ? true : null);
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.openFullScreenIntentSettings(), isTrue);
+      expect(sentToNative.last.method, 'openFullScreenIntentSettings');
+    });
+
+    test('a platform without the method (iOS) counts as allowed, never throws', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'ready') return null;
+        throw MissingPluginException();
+      });
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+      await presentation.start();
+
+      expect(await presentation.canUseFullScreenIntent(), isTrue);
+      expect(await presentation.openFullScreenIntentSettings(), isFalse);
+    });
+
+    test('before start nothing is asked', () async {
+      final presentation = PlatformCallPresentation();
+      addTearDown(presentation.dispose);
+
+      expect(await presentation.canUseFullScreenIntent(), isTrue);
+      expect(await presentation.openFullScreenIntentSettings(), isFalse);
+      expect(sentToNative, isEmpty);
+    });
+  });
+
   group('a build with no platform side', () {
     test('the seam is inert rather than throwing', () async {
       // A fixture build, or a platform W8-W3 has not reached. Nothing can have
