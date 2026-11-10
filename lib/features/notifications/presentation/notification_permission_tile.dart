@@ -15,7 +15,9 @@ import 'push_permission_explainer_host.dart';
 /// for this app, which always works). The status is re-read when the row appears
 /// and every time the app comes back to the foreground.
 ///
-/// Nothing is shown where there is no native side (the web portal).
+/// Nothing is shown where there is no native side (the web portal). A native side
+/// that does not answer within `notificationPermissionReadTimeout` still gets the
+/// row, neutral (no On/Off, Open settings).
 class NotificationPermissionTile extends ConsumerStatefulWidget {
   const NotificationPermissionTile({super.key});
 
@@ -39,17 +41,36 @@ class _NotificationPermissionTileState extends ConsumerState<NotificationPermiss
     unawaited(ref.read(notificationPermissionProvider.notifier).refresh());
   }
 
+  /// The row's controller while this row's explanation dialog is open.
+  NotificationPermissionController? _dialogOpenFor;
+
   @override
   void dispose() {
     _lifecycle.dispose();
+    // Removed with the explanation still open (a forced sign-out removing the whole
+    // navigator): that dialog may never answer. Hand the explanation and the row
+    // back, as #557's host does, after this frame, never while the tree is being
+    // torn down.
+    final controller = _dialogOpenFor;
+    _dialogOpenFor = null;
+    if (controller != null) scheduleMicrotask(controller.dialogAbandoned);
     super.dispose();
   }
 
-  Future<bool?> _showExplainer() => showDialog<bool>(
+  Future<bool?> _showExplainer() async {
+    if (!mounted) return null;
+    final controller = ref.read(notificationPermissionProvider.notifier);
+    _dialogOpenFor = controller;
+    try {
+      return await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => const PushPermissionExplainerDialog(),
       );
+    } finally {
+      if (identical(_dialogOpenFor, controller)) _dialogOpenFor = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

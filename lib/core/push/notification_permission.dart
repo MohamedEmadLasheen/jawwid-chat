@@ -127,25 +127,67 @@ final notificationPermissionPlatformProvider = Provider<NotificationPermissionPl
   (ref) => PlatformNotificationPermission(),
 );
 
+/// How long a status read may take before the row shows anyway, neutral
+/// ([NotificationPermissionStatus.unknown]: no On/Off, Open settings). The next
+/// resume or tap reads again.
+const notificationPermissionReadTimeout = Duration(seconds: 2);
+
 /// The current status. Null until first read.
 class NotificationPermissionController extends Notifier<NotificationPermissionStatus?> {
-  bool _busy = false;
+  /// The tap being handled, if any: a second tap meanwhile does nothing. A token,
+  /// not a flag, so [dialogAbandoned] can hand the row back while that tap is still
+  /// stuck on a dialog that will never answer, and the stuck tap, if it ever ends,
+  /// does not clear a newer one.
+  Object? _activation;
 
   @override
   NotificationPermissionStatus? build() => null;
 
   /// Re-reads the status from the OS: on first show, on resume, after a tap.
   Future<NotificationPermissionStatus> refresh() async {
-    final next = await ref.read(notificationPermissionPlatformProvider).status();
+    var next = await ref
+        .read(notificationPermissionPlatformProvider)
+        .status()
+        .timeout(notificationPermissionReadTimeout, onTimeout: () => NotificationPermissionStatus.unknown);
+    if (next == NotificationPermissionStatus.notDetermined && await _continuedOnAndroid()) {
+      next = NotificationPermissionStatus.blocked;
+    }
     if (ref.mounted) state = next;
     return next;
+  }
+
+  /// The upgrade path on Android. The native side tells "never asked" from
+  /// "refused twice" only by its own saved first request, which builds before
+  /// LR-11b never saved. #557's explanation remembers a Continue on this device,
+  /// and a Continue was always followed by the system prompt; so with that record,
+  /// "never asked" really means "asked, and no longer askable" -- blocked. iOS
+  /// knows "never asked" itself and is trusted as it is. An unreadable store
+  /// keeps the native answer.
+  Future<bool> _continuedOnAndroid() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || !ref.mounted) return false;
+    try {
+      return await ref.read(pushExplainerStoreProvider).continued();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The row was removed while its explanation dialog was still open (its whole
+  /// navigator went, e.g. a forced sign-out): that dialog's answer may never come.
+  /// Hands the explanation back, as #557's host does, so the next session's
+  /// explanation still shows, and frees the row for its next tap. A late answer
+  /// from that dialog is then ignored.
+  void dialogAbandoned() {
+    _activation = null;
+    if (!ref.mounted) return;
+    ref.read(pushExplainerProvider.notifier).releaseFromSettings();
   }
 
   /// The Settings row was tapped. [showExplainer] shows #557's explanation dialog
   /// and completes with Continue (true), Not now (false) or null (removed).
   Future<void> activate(Future<bool?> Function() showExplainer) async {
-    if (_busy) return;
-    _busy = true;
+    if (_activation != null) return;
+    final activation = _activation = Object();
     try {
       final status = state ?? await refresh();
       if (!ref.mounted) return;
@@ -164,7 +206,7 @@ class NotificationPermissionController extends Notifier<NotificationPermissionSt
       // re-read catches the final answer; this catches an immediate one.
       if (ref.mounted) await refresh();
     } finally {
-      _busy = false;
+      if (identical(_activation, activation)) _activation = null;
     }
   }
 }

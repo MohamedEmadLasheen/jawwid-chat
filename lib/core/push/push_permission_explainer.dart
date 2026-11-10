@@ -157,6 +157,9 @@ enum PushExplainerPhase {
 class PushExplainer extends Notifier<PushExplainerPhase> {
   Completer<bool>? _pending;
 
+  /// The Settings row's dialog while it is on screen ([askFromSettings]).
+  Object? _settingsDialog;
+
   @override
   PushExplainerPhase build() => PushExplainerPhase.idle;
 
@@ -258,6 +261,7 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
     if (state == PushExplainerPhase.onScreen) return false;
 
     // On screen: the host's `claim` now fails, so its dialog never stacks on this one.
+    final dialog = _settingsDialog = Object();
     state = PushExplainerPhase.onScreen;
     bool? proceed;
     try {
@@ -266,6 +270,10 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
       proceed = null;
     }
     if (!ref.mounted) return false;
+    // Handed back while open (`releaseFromSettings`): no longer this dialog's
+    // question; whatever holds the screen now is left alone.
+    if (!identical(_settingsDialog, dialog)) return false;
+    _settingsDialog = null;
 
     if (proceed == null) {
       // Unanswered: anything that was waiting still is.
@@ -284,6 +292,21 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
       return false;
     }
     return proceed;
+  }
+
+  /// The Settings row's dialog ([askFromSettings]) was torn down unanswered: the
+  /// row was removed with it open, and its future may never complete (its whole
+  /// navigator went). The claim is handed back as the host's `release` does:
+  /// whatever was waiting still is, and the next host to mount asks; nothing
+  /// waiting, nothing to show. That dialog's answer, if it ever comes, is ignored.
+  void releaseFromSettings() {
+    // Called a microtask after the row is disposed: the app may be gone by then.
+    if (!ref.mounted) return;
+    if (_settingsDialog == null) return;
+    _settingsDialog = null;
+    if (state == PushExplainerPhase.onScreen) {
+      state = _pending != null ? PushExplainerPhase.waiting : PushExplainerPhase.idle;
+    }
   }
 }
 

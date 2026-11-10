@@ -5668,8 +5668,8 @@ class L10nAr extends L10n {
   String get notificationDeviceOn => 'مفعّلة';
 
   @override
-  String get notificationDeviceOff => 'متوقفة';
+  String get notificationDeviceOff => 'معطّلة';
 
   @override
-  String get notificationDeviceAllow => 'السماح';
+  String get notificationDeviceAllow => 'اسمح';
 }

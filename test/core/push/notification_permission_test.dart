@@ -7,6 +7,9 @@
 /// `test/features/notifications/notification_permission_tile_test.dart`.
 library;
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,9 +28,15 @@ class FakeNotificationPermission implements NotificationPermissionPlatform {
   int reads = 0;
   int opens = 0;
 
+  /// While set and not completed, every status read hangs (a native side that
+  /// never answers).
+  Completer<void>? hold;
+
   @override
   Future<NotificationPermissionStatus> status() async {
     reads++;
+    final waitFor = hold;
+    if (waitFor != null) await waitFor.future;
     return current;
   }
 
@@ -179,15 +188,154 @@ void main() {
       expect(c.read(pushExplainerProvider), PushExplainerPhase.idle);
     });
 
-    test('never asked, but Continue was already pressed on this device: no second explanation', () async {
+    test('iOS: never asked, but Continue was already pressed on this device: no second explanation',
+        () async {
+      // iOS knows "never asked" itself, so its answer is trusted as it is.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final c = build(
         NotificationPermissionStatus.notDetermined,
         initialStore: FakePushExplainerStore(hasContinued: true),
       );
+      expect(await row(c).refresh(), NotificationPermissionStatus.notDetermined);
       await row(c).activate(explainer(true));
 
       expect(explained, 0);
       expect(tokens.starts, 1);
+    });
+
+    group('upgrade path (Android): Continue already pressed counts as "already asked"', () {
+      setUp(() => debugDefaultTargetPlatformOverride = TargetPlatform.android);
+      tearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      test('the native side says "never asked" (no saved request from an older build), but '
+          'Continue was pressed: blocked, and the tap opens Settings', () async {
+        final c = build(
+          NotificationPermissionStatus.notDetermined,
+          initialStore: FakePushExplainerStore(hasContinued: true),
+        );
+        expect(await row(c).refresh(), NotificationPermissionStatus.blocked);
+        expect(c.read(notificationPermissionProvider), NotificationPermissionStatus.blocked);
+
+        await row(c).activate(explainer(true));
+        expect(platform.opens, 1);
+        expect(tokens.starts, 0, reason: 'the OS would show nothing: a silent no-op tap');
+        expect(explained, 0);
+      });
+
+      test('Continue never pressed: "never asked" stands', () async {
+        final c = build(NotificationPermissionStatus.notDetermined);
+        expect(await row(c).refresh(), NotificationPermissionStatus.notDetermined);
+      });
+
+      test('the store unreadable: the native answer stands', () async {
+        final c = build(
+          NotificationPermissionStatus.notDetermined,
+          initialStore: FakePushExplainerStore(hasContinued: true, readThrows: true),
+        );
+        expect(await row(c).refresh(), NotificationPermissionStatus.notDetermined);
+      });
+
+      test('only "never asked" is reinterpreted: every other native answer stands', () async {
+        for (final status in [
+          NotificationPermissionStatus.granted,
+          NotificationPermissionStatus.denied,
+          NotificationPermissionStatus.blocked,
+          NotificationPermissionStatus.unknown,
+        ]) {
+          final c = build(status, initialStore: FakePushExplainerStore(hasContinued: true));
+          expect(await row(c).refresh(), status, reason: status.name);
+        }
+      });
+    });
+
+    test('a native status read that never answers: unknown after the timeout (the row shows, '
+        'neutral, and Open settings works)', () async {
+      final c = build(NotificationPermissionStatus.granted);
+      platform.hold = Completer<void>();
+
+      final read = row(c).refresh();
+      expect(await read, NotificationPermissionStatus.unknown);
+      expect(c.read(notificationPermissionProvider), NotificationPermissionStatus.unknown);
+      expect(notificationPermissionReadTimeout, const Duration(seconds: 2));
+      platform.hold!.complete();
+    }, timeout: const Timeout(Duration(seconds: 10)));
+
+    group('the row\'s explanation torn down unanswered (its navigator removed: the dialog\'s '
+        'future never completes)', () {
+      test('the claim is handed back, a new session\'s explanation still shows, and the row works',
+          () async {
+        final c = build(NotificationPermissionStatus.notDetermined);
+        final explainerNotifier = c.read(pushExplainerProvider.notifier);
+        final never = Completer<bool?>();
+        final stuck = row(c).activate(() {
+          explained++;
+          return never.future;
+        });
+        await pumpEventQueue();
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.onScreen);
+
+        // What the row's `dispose` does.
+        row(c).dialogAbandoned();
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.idle);
+
+        // A new session (the same person signing in again) is still explained to.
+        final waiting = explainerNotifier.clearToStart();
+        await pumpEventQueue();
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.waiting);
+        expect(explainerNotifier.claim(), isTrue, reason: 'the host can show it');
+        await explainerNotifier.answer(proceed: false);
+        expect(await waiting, isFalse);
+
+        // And the row is not stuck busy.
+        await row(c).activate(explainer(true));
+        expect(explained, 2);
+        expect(tokens.starts, 1);
+
+        // The old dialog's late answer is no longer anybody's: nothing more is asked.
+        never.complete(true);
+        await stuck;
+        expect(tokens.starts, 1);
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.idle);
+      });
+
+      test('a session that was already waiting goes on waiting, and its host can ask', () async {
+        final c = build(NotificationPermissionStatus.notDetermined);
+        final explainerNotifier = c.read(pushExplainerProvider.notifier);
+        final waiting = explainerNotifier.clearToStart();
+        await pumpEventQueue();
+        unawaited(row(c).activate(() => Completer<bool?>().future));
+        await pumpEventQueue();
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.onScreen);
+
+        row(c).dialogAbandoned();
+
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.waiting);
+        expect(explainerNotifier.claim(), isTrue);
+        await explainerNotifier.answer(proceed: true);
+        expect(await waiting, isTrue);
+        expect(tokens.starts, 0, reason: 'the waiting session calls start itself');
+      });
+
+      test('a late answer after a host took the screen does not disturb the host', () async {
+        final c = build(NotificationPermissionStatus.notDetermined);
+        final explainerNotifier = c.read(pushExplainerProvider.notifier);
+        final never = Completer<bool?>();
+        final stuck = row(c).activate(() => never.future);
+        await pumpEventQueue();
+        row(c).dialogAbandoned();
+
+        final waiting = explainerNotifier.clearToStart();
+        await pumpEventQueue();
+        expect(explainerNotifier.claim(), isTrue);
+
+        never.complete(null);
+        await stuck;
+        expect(c.read(pushExplainerProvider), PushExplainerPhase.onScreen,
+            reason: 'the host\'s dialog is still the one on screen');
+        await explainerNotifier.answer(proceed: true);
+        expect(await waiting, isTrue);
+      });
     });
 
     test('a session already waiting on the explanation gets the answer, and the platform is '

@@ -2156,8 +2156,8 @@
   "@notificationDeviceTitle": {"description": "LR-11b: Settings row title for the phone's own notification permission (separate from the in-app notification preferences row)."},
   "notificationDeviceOn": "مفعّلة",
   "@notificationDeviceOn": {"description": "LR-11b: Settings row subtitle when the phone allows Jawwid's notifications."},
-  "notificationDeviceOff": "متوقفة",
+  "notificationDeviceOff": "معطّلة",
   "@notificationDeviceOff": {"description": "LR-11b: Settings row subtitle when the phone does not allow Jawwid's notifications."},
-  "notificationDeviceAllow": "السماح",
+  "notificationDeviceAllow": "اسمح",
   "@notificationDeviceAllow": {"description": "LR-11b: Settings row action while the app may still ask for the permission (first ask via the explanation, or Android 13+ after one refusal)."}
 }

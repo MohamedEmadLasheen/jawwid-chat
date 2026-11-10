@@ -6,6 +6,8 @@
 /// `test/core/push/notification_permission_test.dart`.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,9 +60,11 @@ void main() {
     WidgetTester tester,
     NotificationPermissionStatus status, {
     Locale locale = const Locale('en'),
+    bool hang = false,
   }) async {
     tokens = h.FakeTokens();
     platform = FakeNotificationPermission(status);
+    if (hang) platform.hold = Completer<void>();
     store = FakePushExplainerStore();
     container = ProviderContainer(overrides: [
       pushTokensProvider.overrideWithValue(tokens),
@@ -122,7 +126,7 @@ void main() {
       await pump(tester, NotificationPermissionStatus.blocked, locale: const Locale('ar'));
 
       expect(find.text('الإشعارات على هذا الجهاز'), findsOneWidget);
-      expect(find.text('متوقفة'), findsOneWidget);
+      expect(find.text('معطّلة'), findsOneWidget);
       expect(find.text('فتح الإعدادات'), findsOneWidget);
     });
 
@@ -132,8 +136,65 @@ void main() {
 
       platform.current = NotificationPermissionStatus.denied;
       await resume(tester);
-      expect(find.text('السماح'), findsOneWidget);
+      expect(find.text('اسمح'), findsOneWidget);
     });
+
+    testWidgets('the native status read hangs: after the timeout the row shows anyway, neutral, '
+        'and Open settings works', (tester) async {
+      await pump(tester, NotificationPermissionStatus.blocked, hang: true);
+      expect(row, findsNothing);
+
+      await tester.pump(notificationPermissionReadTimeout);
+      await tester.pump();
+      expect(row, findsOneWidget);
+      expect(tester.widget<ListTile>(row).subtitle, isNull, reason: 'neither On nor Off');
+      expect(tester.widget<Text>(action).data, 'Open settings');
+
+      await tester.tap(row);
+      await tester.pump();
+      expect(platform.opens, 1);
+
+      // The native side answers at last: the read after the tap shows it.
+      platform.hold!.complete();
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: row, matching: find.text('Off')), findsOneWidget);
+    });
+  });
+
+  testWidgets('the row torn down with its explanation open (a forced sign-out removes the whole '
+      'navigator): a new session\'s explanation still shows, and the row works again', (tester) async {
+    await pump(tester, NotificationPermissionStatus.notDetermined);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(explainerDialog, findsOneWidget);
+    expect(container.read(pushExplainerProvider), PushExplainerPhase.onScreen);
+
+    // The navigator, the dialog and the row all go at once; the dialog never answers.
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const SizedBox()));
+    await tester.pump();
+    expect(container.read(pushExplainerProvider), PushExplainerPhase.idle,
+        reason: 'the claim is handed back, not left on screen');
+
+    // The same person signs in again: their session's explanation can show.
+    final explainerNotifier = container.read(pushExplainerProvider.notifier);
+    final waiting = explainerNotifier.clearToStart();
+    await tester.pump();
+    expect(container.read(pushExplainerProvider), PushExplainerPhase.waiting);
+    expect(explainerNotifier.claim(), isTrue, reason: 'the host can put it on screen');
+    await explainerNotifier.answer(proceed: false);
+    expect(await waiting, isFalse);
+
+    // And the row is not stuck: Allow shows the explanation, Continue asks the OS once.
+    await tester.pumpWidget(
+      app(const Scaffold(body: Column(children: [NotificationPermissionTile()])), const Locale('en')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(explainerDialog, findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('push-explainer-continue')));
+    await tester.pumpAndSettle();
+    expect(tokens.starts, 1);
   });
 
   testWidgets('re-read on resume: turned on in the phone\'s Settings, the row says On', (tester) async {
