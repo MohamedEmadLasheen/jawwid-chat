@@ -15,6 +15,13 @@
 #      migrations, and again after the release
 #   6  deploy-staging records the digest of its OWN push as the artifact the
 #      other two download
+#   7  review-cohort never prints a review login (LR-46 P3-9): the login
+#      domain is in no env: block or ${{ }} expression (inputs.*,
+#      github.event.inputs.*, toJSON(inputs) ...), each job's first step reads
+#      it from the payload, refuses a line break, then masks THAT value before
+#      any line prints it, the CLI's raw output is reduced to counts, and no
+#      line prints <x>@$EMAIL_DOMAIN. This reduces exposure only: the login
+#      names are in this public source and the domain may be guessable.
 #
 #   bash scripts/qa/check-image-digest-gates.sh            # selftest, then check
 #
@@ -100,6 +107,25 @@ def run_blocks(text):
     return out
 
 
+def masked_first(body, var, inp):
+    """None if the step reads input `inp` into $var, refuses a line break in it,
+    then masks $var before anything prints it; otherwise the reason."""
+    v = re.escape(var)
+    read = re.search(r"(?m)^\s*%s=\"\$\(jq -r '\.inputs\.%s //" % (v, re.escape(inp)), body)
+    if not read:
+        return f"${var} is not read from the event payload's inputs.{inp}"
+    mask = body.find('echo "::add-mask::$%s"' % var, read.end())
+    if mask < 0:
+        return f"${var} (the login domain) is not masked after it is read"
+    before = body[:mask]
+    if re.search(r"(?:echo|printf)[^\n]*\$\{?%s\b" % v, before):
+        return f"${var} is printed before it is masked"
+    if not re.search(r"case \"[^\"\n]*\$\{?%s\b[^\"\n]*\" in\n\s*\*\$'\\n'\*\|\*\$'\\r'\*\)" % v,
+                     before[read.end():]):
+        return f"${var} is not refused for a line break before it is masked (a mask covers one line)"
+    return None
+
+
 def check(t):
     P = []
     # 1 ----------------------------------------------------------------------
@@ -144,6 +170,30 @@ def check(t):
             P.append("review-cohort: provision does not pull and run \"$IMAGE\"")
         if "/api@sha256:[0-9a-f]{64}$" not in prov:
             P.append("review-cohort: provision does not refuse an IMAGE that is not digest-pinned")
+
+    # 7 ----------------------------------------------------------------------
+    rct = t["review-cohort"]
+    # Any ${{ }} expression that can reach the inputs (inputs.x, inputs['x'],
+    # github.event.inputs.x, toJSON(inputs), toJSON(github.event), ...) must be
+    # exactly the image tag: an expression in env: or a step is printed in the log.
+    for expr in re.findall(r"\$\{\{(.*?)\}\}", rct, re.S):
+        if (re.search(r"\binputs\b|\bgithub\s*\.\s*event\b|\bgithub\s*\[|toJSON\(\s*github\s*\)", expr)
+                and re.sub(r"\s+", "", expr) not in ("inputs.image_tag", "github.event.inputs.image_tag")):
+            P.append(f"review-cohort: ${{{{{expr}}}}} can carry the login domain into an env: block or expression (its value is printed in the log)")
+    if re.search(r"(?:parent2?|teacher)@\$\{?EMAIL_DOMAIN", rct):
+        P.append("review-cohort: a review login is printed (summary or log)")
+    if re.search(r'(?:echo|printf)[^\n]*"\$out"', prov):
+        P.append("review-cohort: the CLI's raw output (it names the logins) is printed")
+    if '<<<"$out"' not in prov:
+        P.append("review-cohort: the CLI's output is not reduced to counts")
+    first_prov = steps(prov)[0][1] if prov and steps(prov) else ""
+    first_pre = steps(pre)[0][1] if pre and steps(pre) else ""
+    for job, body, var, inp in (("provision", first_prov, "d", "email_domain"),
+                                ("preflight", first_pre, "EMAIL_DOMAIN", "email_domain"),
+                                ("preflight", first_pre, "CONFIRM_EMAIL_DOMAIN", "confirm_email_domain")):
+        why = masked_first(body, var, inp)
+        if why:
+            P.append(f"review-cohort: {job}'s first step: {why}")
 
     # 3, 5 -------------------------------------------------------------------
     pj = jobs(t["deploy-production"])
@@ -210,6 +260,26 @@ MUTATIONS = [
     ("deploy-staging", "          name: api-image-digest\n", "          name: api-digest\n"),
     ("review-cohort", 'and .event == "workflow_dispatch" and .head_branch == "main"', 'and true'),
     ("deploy-production", 'and .event == "workflow_dispatch" and .head_branch == "main"', 'and true'),
+    # 7: the review logins never reach the public log or summary (LR-46 P3-9)
+    ("review-cohort", "      IMAGE_TAG: ${{ inputs.image_tag }}\n    steps:\n",
+     "      IMAGE_TAG: ${{ inputs.image_tag }}\n      EMAIL_DOMAIN: ${{ inputs.email_domain }}\n    steps:\n"),
+    ("review-cohort", 'echo "| run by | ${GITHUB_ACTOR} |"', 'echo "| logins | parent@${EMAIL_DOMAIN} |"'),
+    ("review-cohort", 'read -r total created org <<<"$counts"', 'echo "$out"; read -r total created org <<<"$counts"'),
+    ("review-cohort", 'echo "::add-mask::$d"', 'true'),
+    ("review-cohort", '[ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"', 'true'),
+    # the domain through github.event.inputs, or the whole inputs object, in env:
+    ("review-cohort", "      IMAGE: ${{ needs.preflight.outputs.image }}\n",
+     "      IMAGE: ${{ needs.preflight.outputs.image }}\n      EMAIL_DOMAIN: ${{ github.event.inputs.email_domain }}\n"),
+    ("review-cohort", "      IMAGE_TAG: ${{ inputs.image_tag }}\n    steps:\n",
+     "      IMAGE_TAG: ${{ inputs.image_tag }}\n      INPUTS: ${{ toJSON(inputs) }}\n    steps:\n"),
+    # a mask that is not the domain's, or a print of the domain before the mask
+    ("review-cohort", 'echo "::add-mask::$d"', 'echo "::add-mask::$IMAGE_TAG"'),
+    ("review-cohort", 'echo "::add-mask::$d"', 'echo "checking $d"; echo "::add-mask::$d"'),
+    ("review-cohort", '[ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"',
+     'printf \'%s\\n\' "$EMAIL_DOMAIN"; [ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"'),
+    # a domain with a line break is no longer refused before the mask
+    ("review-cohort", 'case "$d" in', 'case "x" in'),
+    ("review-cohort", 'case "$EMAIL_DOMAIN$CONFIRM_EMAIL_DOMAIN" in', 'case "$EMAIL_DOMAIN" in'),
 ]
 
 bad = 0
