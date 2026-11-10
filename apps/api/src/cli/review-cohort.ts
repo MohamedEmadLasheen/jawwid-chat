@@ -195,6 +195,12 @@ export async function provisionReviewCohort(prisma: PrismaClient, opts: ReviewCo
   const messages = new MessageService(db, authz, conversations, outbox, config, attachments, audit, identity);
   // No payment lock: the review child has no subscription, and a child with
   // none is never locked (chat.compute_learner_access, PD-30).
+  // Nothing payable. OA-12 is an open owner decision: the current state is
+  // Option B (nothing payable for review) until the owner decides; Option A
+  // would add a payable request to the cohort. This command writes no lesson
+  // package, instalment, payment request or invoice, so neither review parent
+  // has an amount due. Option A needs the test and the review notes changed
+  // with it (docs/release/review-accounts.md, "Still open").
   const lessons = new LessonService(db, authz, conversations, outbox, config, audit);
   // Reminders are the worker's (scheduleDueReminders); the schedule written
   // here sends none, so any use is a bug in this command.

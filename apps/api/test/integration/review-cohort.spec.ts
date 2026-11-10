@@ -28,6 +28,7 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { AdminModule } from '../../src/admin/admin.module';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
+import { BillingModule } from '../../src/billing/billing.module';
 import {
   REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_ORG_NAME, REVIEW_ORG_SLUG, REVIEW_STAFF, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
 } from '../../src/cli/review-cohort';
@@ -354,6 +355,25 @@ describe('1. what the command leaves in the database', () => {
     expect(state).toBe('open');
   });
 
+  it('nothing payable: no package, instalment, payment request or invoice for either review family (OA-12 current state)', async () => {
+    // Pins the current state: OA-12 is an open owner decision, and until the
+    // owner decides, the review cohort is Option B (nothing payable for
+    // review; docs/release/review-accounts.md, "No payments"). If OA-12 picks
+    // Option A (a payable request in the cohort), this test changes with it.
+    const familyId = { in: [m.familyId, m.deletionParent.familyId] };
+    expect({
+      packages: await g.prisma.learnerSubscription.count({ where: { familyId } }),
+      instalments: await g.prisma.familyInstalment.count({ where: { familyId } }),
+      requests: await g.prisma.paymentRequest.count({ where: { familyId } }),
+      invoices: await g.prisma.invoice.count({ where: { familyId } }),
+    }).toEqual({ packages: 0, instalments: 0, requests: 0, invoices: 0 });
+    // Nor anything in the review organization that names neither family.
+    const tables = Object.keys(await countsFor(m.organizationId));
+    for (const t of ['learner_subscription', 'family_instalment', 'payment_request', 'invoice', 'payment']) {
+      expect([t, tables.includes(t)]).toEqual([t, false]);
+    }
+  });
+
   it('a standing weekly timetable, and upcoming lessons materialized from it', async () => {
     const slots = await g.prisma.learnerScheduleSlot.findMany({ where: { learnerId: m.learnerId, validTo: null } });
     expect(slots.map((s) => s.weekday).sort()).toEqual(REVIEW_SCHEDULE.slots.map((s) => s.weekday));
@@ -523,7 +543,7 @@ describe('2. over HTTP, as a store reviewer', () => {
     defaultBefore = await countsFor(defaultOrg);
     process.env.REDIS_URL = REDIS_URL;
     const moduleRef = await Test.createTestingModule({
-      imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, AdminModule, AccountAdminModule],
+      imports: [PlatformModule, AuthModule, CommunicationModule, LessonModule, AdminModule, AccountAdminModule, BillingModule],
     }).compile();
     app = moduleRef.createNestApplication({ logger: false, rawBody: true });
     app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
@@ -608,6 +628,21 @@ describe('2. over HTTP, as a store reviewer', () => {
         body: `hello from the ${who}`, clientMessageId: `review-spec-${who}`,
       });
       expect([200, 201]).toContain(r.status);
+    }
+  });
+
+  it('neither parent has an amount due on the payments tab (OA-12 current state: Option B, nothing payable for review)', async () => {
+    // GET /me/billing is what the app's payments tab reads; its "Amount due"
+    // lists only open requests and unpaid instalments (amount_due.dart).
+    // Changes with the test above if OA-12 picks Option A.
+    for (const who of ['parent', 'parent2'] as const) {
+      const r = await as(who, 'GET', '/me/billing');
+      expect([who, r.status]).toEqual([who, 200]);
+      // One row per child, subscription or not; each review family has one child.
+      const subscriptions = r.json.subscriptions as Array<{ hasOpenPayment?: boolean }>;
+      expect([who, Array.isArray(subscriptions), subscriptions?.length]).toEqual([who, true, 1]);
+      expect([who, r.json.instalments, r.json.requests, subscriptions.some((s) => s.hasOpenPayment === true)])
+        .toEqual([who, [], [], false]);
     }
   });
 
