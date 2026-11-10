@@ -214,10 +214,11 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 
 **C. In progress (engineering).**
 - #549 (screenshots): the capture script moved out of `scripts/mobile/` to clear #572's guard. **ACCEPT @ `489e8cf0`, 14/14.**
-- #587 (one family per paid lesson call): ACCEPT @ `6f137f08` (live calls are now corrected by the existing sweep and the join webhook). W67c is fixing three more P2s: rejoin with an old token, telling the removed guardian why, and a partial index (migration slot `20261110100000`).
-- #588 (iOS push collapse id): the P1 fix (key = event type + chat, shared rule for #449) **ACCEPT @ `0c3df378`**; CI running.
+- #587 (one family per paid lesson call): ACCEPT @ `6f137f08` (live calls are now corrected by the existing sweep and the join webhook). W67c fixed three more P2s at `e65b8e87`: rejoin with an old token, telling the removed guardian why, and a partial index (migration `20261110100000`). Delta review and CI running.
+- #588 (iOS push collapse id): the P1 fix (key = event type + chat, shared rule for #449) **ACCEPT @ `0c3df378`, 14/14.** Ready for approval.
 - #589 (whiteboard test race, found on #577's CI): **ACCEPT @ `e83fd707`, 14/14.**
-- W70 (notification permission status and Open settings, stacked on #557): building.
+- #590 (notification permission status and Open settings, stacked on #557): CHANGES @ `cb7888d8`, two P2s; W70b is fixing them.
+- W71 (LR-71 pre-audit fixes: store-console drafts and legal texts match the launch candidate; pre-audit in `~/jawwid-owner-evidence/LR-71-preaudit-2026-11-10.md`): building.
 - Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. **CI green at `0aec87f1`** (run 42827668730) after the #549 fix.
 - Draft #578 (OA-12 Option B docs) stays a draft.
 
