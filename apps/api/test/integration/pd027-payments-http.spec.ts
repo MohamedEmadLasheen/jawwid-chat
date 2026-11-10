@@ -1254,4 +1254,37 @@ describe('W63: card payments paused by an operator', () => {
       await unpause();
     }
   });
+
+  it('LR-46 P3-1: paused, a card tap on an unpaid instalment writes nothing (no payment request) and gets the pause error; unpaused, it opens Checkout as before', async () => {
+    const { f, supervisor } = familyOf(28);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Paused plan', amountMinor: 20000, firstDueDate: '2026-11-01', learnerId: f.children[0]!.id, lessonsIncluded: 8,
+    });
+    expect(plan.status).toBe(201);
+    const inst = plan.json.instalments.find((i: any) => i.label.startsWith('Paused plan'));
+    expect(inst).toMatchObject({ payableInApp: true });
+    const requestsBefore = await g.prisma.paymentRequest.count();
+    expect(await g.prisma.paymentRequest.count({ where: { instalmentId: inst.id } })).toBe(0);
+
+    // Set directly (the switch's own route and audit are covered above).
+    await g.prisma.config.upsert({ where: { key: KEY }, create: { key: KEY, value: true }, update: { value: true } });
+    try {
+      const card = await http(f.parent.subject, 'POST', '/me/billing/checkout', { instalmentId: inst.id });
+      expect(card.status).toBe(503);
+      expect(card.code).toBe(CommErrorCode.PAYMENTS_UNAVAILABLE);
+      expect(await g.prisma.paymentRequest.count({ where: { instalmentId: inst.id } })).toBe(0);
+      expect(await g.prisma.paymentRequest.count()).toBe(requestsBefore);
+    } finally {
+      await unpause();
+    }
+
+    // Unpaused: unchanged -- the instalment's request is made and Checkout opens.
+    const again = await http(f.parent.subject, 'POST', '/me/billing/checkout', { instalmentId: inst.id });
+    expect(again.status).toBe(201);
+    expect(again.json.url).toEqual(expect.any(String));
+    const made = await g.prisma.paymentRequest.findMany({ where: { instalmentId: inst.id } });
+    expect(made).toHaveLength(1);
+    expect(checkoutInputs(made[0]!.id)).toHaveLength(1);
+  });
 });

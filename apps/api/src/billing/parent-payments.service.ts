@@ -11,6 +11,7 @@ import { sniffCertificateFile } from '../certificates/certificate-file';
 import { todayIn } from '../leave/leave.service';
 import { BillingService } from './billing.service';
 import { CheckoutService } from './checkout.service';
+import { isCardPaused } from './card-pause';
 import { PaymentLedger } from './payment-ledger.service';
 import { assertInstalmentPayableInApp, assertPayableInApp } from './in-app-payability';
 import { dateOnly, invalid, optionalText, optionalUuid, requireAmount, requireDate } from './validate';
@@ -46,6 +47,12 @@ export class ParentPaymentsService {
     const { actor, contact } = await this.billing.requireParent(actorId);
     if (!this.checkout.available) {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not available; pay by bank transfer', 503);
+    }
+    // W63 / LR-46 P3-1: the operator's pause, checked BEFORE payable() may make an
+    // instalment's payment request, so a paused card tap writes nothing. open()
+    // checks it again (the web /pay link goes straight there).
+    if (await isCardPaused(this.prisma)) {
+      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
     }
     const request = await this.payable(actor.actorId, contact.familyId, body);
     const family = await this.prisma.family.findUnique({ where: { id: contact.familyId }, select: { language: true } });
