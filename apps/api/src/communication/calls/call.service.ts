@@ -86,6 +86,26 @@ export const LESSON_CALL_EARLY_MINUTES = 15;
 /** ...until this many minutes after it ends. */
 export const LESSON_CALL_LATE_MINUTES = 15;
 
+/**
+ * OA-12 (LR-46 P3-2): the conversations a paid one-to-one lesson call is held
+ * in, and so the only ones the one-learner rule applies to. They are the
+ * conversations anchored to a learner, which is how isLessonCall ties a call to
+ * a lesson: a learner's Student Group (`conversation.learner_id`, required for
+ * that type) and a family group (`conversation_learner`, which
+ * guard_conversation_learner allows on a family_group only). Not a class
+ * group: it has no learner anchor, it is a group chat whose calls are never a
+ * lesson (lessons are one learner, and group classes are not sold), and it is
+ * the one type allowed to span families -- so a class-group call near one of
+ * its teacher's lessons keeps every family. Not a direct conversation: BR-1
+ * never lets a direct call pair a teacher with a family contact. The staff-only
+ * types seat no family.
+ */
+const LESSON_CALL_CONVERSATION_TYPES: readonly string[] = [
+  ConversationType.STUDENT_GROUP,
+  ConversationType.FAMILY_GROUP,
+];
+const isLessonCallConversation = (type: string) => LESSON_CALL_CONVERSATION_TYPES.includes(type);
+
 /** OA-12: a lesson call seats one learner (CallService.lessonFamiliesOn). */
 const ONE_LEARNER_REFUSAL = {
   allowed: false,
@@ -291,9 +311,16 @@ export class CallService {
    * family seats another learner, and is refused. The lesson's own parents, the
    * teacher and staff are never refused; a family's own conversations (siblings
    * included) hold one family and are unaffected; outside every window nothing
-   * changes. Only a class group may span families in the database. Refused at
-   * start, answer and media token (below); a call already live when the window
-   * opens is corrected by separateLessonLearners.
+   * changes. Refused at start, answer and media token (below); a call already
+   * live when the window opens is corrected by separateLessonLearners.
+   *
+   * WHERE, AND BY WHOM (LR-46 P3-2). Only calls in a lesson conversation
+   * (LESSON_CALL_CONVERSATION_TYPES): a class-group call is never a lesson call,
+   * whatever the time. And only a teacher still on the call -- a seat with no
+   * `left_at` -- opens a window; callers pass those teachers only. A lesson
+   * conversation holds one family (the family-scope trigger), so the API never
+   * seats another family there; the database does not tie a call seat to
+   * membership, though, and this rule is the backstop for such a seat.
    *
    * "Paid": every lesson counts. Lessons are what families pay for (in-app
    * payability names lesson packages only), a lesson row carries no package
@@ -320,6 +347,7 @@ export class CallService {
    * seats any other family too. Null when the call may go ahead.
    */
   private async oneLearnerAtStart(conv: Conversation, participants: Actor[], now: Date): Promise<Decision | null> {
+    if (!isLessonCallConversation(conv.type)) return null;
     const families = new Set(
       participants.flatMap((a) => (a.kind === ActorKind.CONTACT && a.familyId ? [a.familyId] : [])),
     );
@@ -332,15 +360,19 @@ export class CallService {
   /**
    * OA-12, on JOIN (answering, or a media token): a guardian is refused when a
    * teacher on the call has a lesson on for ANOTHER family that the call seats.
-   * Only a guardian is ever refused; the lesson's own family never is.
+   * Only a guardian is ever refused; the lesson's own family never is. Only in
+   * a lesson conversation, and only a teacher still on the call (no `left_at`)
+   * counts.
    */
   private async oneLearnerAtJoin(
     actor: Actor,
     call: Call & { participants: CallParticipant[] },
+    conversationType: string,
     participantActors: Actor[],
     now: Date,
   ): Promise<void> {
     if (actor.kind !== ActorKind.CONTACT || !actor.familyId) return;
+    if (!isLessonCallConversation(conversationType)) return;
     const seated = new Set(call.participants.filter((p) => p.leftAt === null).map((p) => p.actorId));
     const otherFamilies = new Set(
       participantActors.flatMap((a) =>
@@ -350,7 +382,9 @@ export class CallService {
       ),
     );
     if (otherFamilies.size === 0) return;
-    const teacherIds = participantActors.filter((a) => a.kind === ActorKind.TEACHER).map((a) => a.actorId);
+    const teacherIds = participantActors
+      .filter((a) => a.kind === ActorKind.TEACHER && seated.has(a.actorId))
+      .map((a) => a.actorId);
     const lessonFamilies = await this.lessonFamiliesOn(teacherIds, call.organizationId, now);
     if ([...otherFamilies].some((f) => lessonFamilies.has(f))) {
       throw new CommError(ONE_LEARNER_REFUSAL.code, ONE_LEARNER_REFUSAL.reason);
@@ -372,7 +406,9 @@ export class CallService {
    * teacher's back-to-back lessons, whose windows overlap), the lesson under
    * way now wins, else the later one. Every other family's guardian is taken
    * off. The lesson's family, the teacher and staff are never touched; a call
-   * that seats one family is never touched.
+   * that seats one family is never touched. Only a call in a lesson
+   * conversation (LESSON_CALL_CONVERSATION_TYPES; never a class group), and
+   * only a teacher still on it (no `left_at`), is considered.
    *
    * The room first, then the row: a removal that fails leaves `left_at` empty,
    * so the next pass tries again (and the webhook answers 503 so LiveKit
@@ -381,6 +417,13 @@ export class CallService {
    * transaction, so the call's participants -- the removed guardian first,
    * whose app then says why instead of "connection lost" -- are told exactly
    * once, and only of a removal that happened.
+   *
+   * Between the room removal and the `left_at` commit the guardian may already
+   * be reconnecting with a token they still hold. The webhook closes that gap
+   * by its order (LiveKitWebhookController): this check first, then
+   * removeReturningParticipant. If this one still sees the seat open, it takes
+   * them out itself; if it sees the seat closed, the commit came first and
+   * removeReturningParticipant sees it too.
    *
    * Two query shapes, each with its index: one room (the webhook) by the
    * unique `room_name`; every live call (the sweep) by the partial
@@ -402,7 +445,9 @@ export class CallService {
       WITH live AS (
         SELECT c.id, c.room_name, c.organization_id, c.conversation_id
           FROM chat.call c
+          JOIN chat.conversation cv ON cv.id = c.conversation_id
          WHERE ${liveCalls}
+           AND cv.type = ANY(${LESSON_CALL_CONVERSATION_TYPES}::text[])
       ),
       seated AS (
         SELECT cp.call_id, cp.actor_id, ct.family_id
@@ -414,7 +459,7 @@ export class CallService {
       lesson_family AS (
         SELECT DISTINCT ON (live.id) live.id AS call_id, ln.family_id
           FROM live
-          JOIN chat.call_participant tp ON tp.call_id = live.id AND tp.actor_kind = 'teacher'
+          JOIN chat.call_participant tp ON tp.call_id = live.id AND tp.actor_kind = 'teacher' AND tp.left_at IS NULL
           JOIN chat.lesson l ON l.teacher_id = tp.actor_id AND l.organization_id = live.organization_id
           JOIN chat.learner ln ON ln.id = l.learner_id
          WHERE (l.outcome IS NULL OR l.outcome = 'held')
@@ -483,12 +528,14 @@ export class CallService {
    * the call, which is never "live".) A legitimately seated participant has
    * `left_at` empty and is never touched.
    *
-   * 'removed' after a removal; 'seated' when there is nothing to undo. A
+   * 'removed' when LiveKit took them out; 'absent' when LiveKit says they were
+   * no longer in the room (already removed -- e.g. by separateLessonLearners
+   * on this same join -- or gone); 'seated' when there is nothing to undo. A
    * removal that fails throws, and the webhook answers 503 so LiveKit
    * redelivers. Nothing is announced: the departure was announced when it was
    * written.
    */
-  async removeReturningParticipant(roomName: string, identity: string): Promise<'removed' | 'seated'> {
+  async removeReturningParticipant(roomName: string, identity: string): Promise<'removed' | 'absent' | 'seated'> {
     if (!this.rooms || !isUuid(identity)) return 'seated';
     const [left] = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT cp.id::text AS id
@@ -499,9 +546,11 @@ export class CallService {
          AND cp.actor_id = ${identity}::uuid
          AND cp.left_at IS NOT NULL`;
     if (!left) return 'seated';
-    if ((await this.rooms.removeParticipant(roomName, identity)) === 'removed') {
-      realtimeMetrics.mediaParticipantsRemoved++;
+    if ((await this.rooms.removeParticipant(roomName, identity)) === 'absent') {
+      this.log.log('OA-12: a participant who had left a live call was reported joining, but is no longer in the room');
+      return 'absent';
     }
+    realtimeMetrics.mediaParticipantsRemoved++;
     this.log.warn('OA-12: a participant who had left a live call came back with an older media token; taken out again');
     return 'removed';
   }
@@ -1574,7 +1623,10 @@ export class CallService {
       // OA-12: a guardian taken off a lesson call by the one-learner rule is
       // told so while the lesson window is open, so their app's rejoin shows
       // why instead of ending as "connection lost". Otherwise: they left.
-      if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, await this.participantActorsOf(call), now);
+      if (opts.takesSeat) {
+        const { type } = await this.conversations.requireConversation(call.conversationId);
+        await this.oneLearnerAtJoin(actor, call, type, await this.participantActorsOf(call), now);
+      }
       throw new CommError(
         CommErrorCode.CALL_PARTICIPANT_LEFT,
         'this participant has already left the call',
@@ -1589,7 +1641,7 @@ export class CallService {
 
     // OA-12: one learner per paid lesson call. Answering and media take a seat;
     // declining does not, so a refused guardian can still turn the ring down.
-    if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, participantActors, now);
+    if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, conv.type, participantActors, now);
 
     const family = conv.familyId
       ? await this.prisma.family.findUnique({

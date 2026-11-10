@@ -677,9 +677,10 @@ export enum CommErrorCode {
   CALL_UNAVAILABLE = 'COMM.CALL_UNAVAILABLE',
   /**
    * OA-12 (store payments: one teacher, one learner per paid lesson). While one
-   * of the teacher's lessons is in its call window, a call that seats that
-   * lesson's family may not also seat a guardian of another family -- another
-   * learner. Refused on start (and in the call capability) and when that
+   * of the teacher's lessons is in its call window, a call in a lesson
+   * conversation (Student Group or family group, never a class group) that
+   * seats that teacher (still on the call) and that lesson's family may not
+   * also seat a guardian of another family -- another learner. Refused on start (and in the call capability) and when that
    * guardian answers or asks for media. The lesson's own parents, the teacher
    * and staff are never refused it. 403; not retried. (A call already live
    * when the window opens is corrected by CallService.separateLessonLearners,

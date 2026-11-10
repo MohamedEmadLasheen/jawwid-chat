@@ -147,19 +147,26 @@ export class LiveKitWebhookController {
     // window is open on it, every guardian of a family other than the lesson's
     // is taken out of the room and off the call (CallService owns the rule).
     // A removal that fails answers 503 so LiveKit delivers the join again.
-    // First, the joiner themselves: one already taken off this live call who
+    // Then the joiner themselves: one already taken off this live call who
     // came back with a media token they still held is taken out again.
+    //
+    // THIS ORDER CLOSES A GAP. The call sweep empties the room before it
+    // commits `left_at`, so a guardian it is taking off may reconnect in
+    // between. If the rule check below still sees their seat open, it takes
+    // them out itself; if it sees it closed, the commit came first and the
+    // returning-participant check after it sees it too. (The other order let a
+    // commit landing between the two checks hide the rejoin from both.)
     if (event.event === MEDIA_WEBHOOK_EVENTS.PARTICIPANT_JOINED && this.calls) {
+      const { failed } = await this.calls.separateLessonLearners({ roomName: event.roomName });
+      if (failed > 0) {
+        this.log.error('livekit webhook: a lesson call could not be kept to one learner; LiveKit will retry');
+        throw new ServiceUnavailableException();
+      }
       try {
         await this.calls.removeReturningParticipant(event.roomName, event.identity);
       } catch (e) {
         realtimeMetrics.mediaRemovalFailed++;
         this.log.error(`livekit webhook: could not undo a join by a participant who had left the call (${(e as Error).name}); LiveKit will retry`);
-        throw new ServiceUnavailableException();
-      }
-      const { failed } = await this.calls.separateLessonLearners({ roomName: event.roomName });
-      if (failed > 0) {
-        this.log.error('livekit webhook: a lesson call could not be kept to one learner; LiveKit will retry');
         throw new ServiceUnavailableException();
       }
     }

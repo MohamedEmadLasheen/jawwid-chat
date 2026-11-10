@@ -29,10 +29,20 @@
  * every window nothing changes; a family's own sibling group (one family) is
  * unaffected.
  *
- * The two-family call is held where production can hold one: a CLASS GROUP,
- * the only conversation type the family-scope trigger lets span families. It
- * is written directly (the API has no class-group writer yet), with every
- * trigger on.
+ * WHERE THE RULE APPLIES (LR-46 P3-2): calls in the conversations a paid
+ * one-to-one lesson is held in -- those anchored to a learner, a learner's
+ * Student Group and a family group, as isLessonCall reads them -- and only
+ * while a teacher still on the call (no `left_at`) has a lesson in its window.
+ * A CLASS GROUP call is a group chat call, never a lesson (a class group has no
+ * learner anchor), so a class-group call held near one of its teacher's
+ * lessons keeps every family. The class group is written directly (the API
+ * has no class-group writer yet), with every trigger on.
+ *
+ * A lesson conversation holds one family (the family-scope trigger), so the
+ * API never seats another family's guardian on its call; the database does not
+ * tie a call seat to membership, though, and the rule is the backstop. The
+ * two-family lesson call below is that seat written directly (seatOtherFamily),
+ * with every trigger on.
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { AccessToken } from 'livekit-server-sdk';
@@ -62,15 +72,26 @@ let otherFamilyId: string;
 let otherGuardianId: string;
 let otherLearnerId: string;
 
-/** The media control plane, observed: who was taken out of which room. */
+/**
+ * The media control plane, observed: who was taken out of which room. Like
+ * LiveKit, it answers 'absent' for someone already out of the room (until
+ * they connect again: `rejoin`).
+ */
 class FakeRooms implements MediaRoomControl {
   configured = true;
   removed: Array<[string, string]> = [];
   failWith: Error | null = null;
+  private out = new Set<string>();
   async removeParticipant(room: string, identity: string): Promise<'removed' | 'absent'> {
     if (this.failWith) throw this.failWith;
+    if (this.out.has(`${room}|${identity}`)) return 'absent';
+    this.out.add(`${room}|${identity}`);
     this.removed.push([room, identity]);
     return 'removed';
+  }
+  /** `identity` connects to `room` again (with a media token they still hold). */
+  rejoin(room: string, identity: string) {
+    this.out.delete(`${room}|${identity}`);
   }
 }
 /** The production CallService, with the media control plane the application wires. */
@@ -174,14 +195,44 @@ const seatedOn = async (callId: string) =>
 const seat = (callId: string, actorId: string) =>
   g.prisma.callParticipant.findFirstOrThrow({ where: { callId, actorId } });
 
-/** Before any lesson window: a class-group call both families answered and are on. */
+/**
+ * A seat the API never writes: parent_r (family_y) on a call of learner_l's
+ * Student Group (family_x). See the header: the rule is the backstop for it.
+ * Every trigger on (BR-1 holds: the admin is on the call).
+ */
+async function seatOtherFamily(callId: string, opts: { joined: boolean }) {
+  await g.prisma.callParticipant.create({
+    data: { callId, actorId: otherGuardianId, actorKind: 'contact', joinedAt: opts.joined ? new Date() : null },
+  });
+}
+
+/**
+ * Before any lesson window: a call of learner_l's Student Group -- the
+ * conversation the lesson is held in -- that the lesson's parent and teacher
+ * answered, with another family's guardian on it too.
+ */
 async function liveTwoFamilyCall() {
+  const call = await g.calls.start(groupId, s.ownerId);
+  await g.calls.accept(call.callId, s.parentId);
+  await g.calls.accept(call.callId, s.teacherId);
+  await seatOtherFamily(call.callId, { joined: true });
+  expect((await g.prisma.call.findUniqueOrThrow({ where: { id: call.callId } })).status).toBe('active');
+  return call;
+}
+
+/** Before any lesson window: a class-group call both families answered and are on. */
+async function liveClassCall() {
   const call = await g.calls.start(classId, s.ownerId);
   await g.calls.accept(call.callId, s.parentId);
   await g.calls.accept(call.callId, otherGuardianId);
   await g.calls.accept(call.callId, s.teacherId);
   expect((await g.prisma.call.findUniqueOrThrow({ where: { id: call.callId } })).status).toBe('active');
   return call;
+}
+
+/** The teacher's seat closed while the call goes on (no API path does this on a live call today). */
+async function teacherLeaves(callId: string) {
+  await g.prisma.callParticipant.updateMany({ where: { callId, actorId: s.teacherId }, data: { leftAt: new Date() } });
 }
 
 // LiveKit's participant_joined, signed as LiveKit signs it.
@@ -197,39 +248,53 @@ async function signedJoin(roomName: string, identity: string) {
   t.sha256 = createHash('sha256').update(raw).digest('base64');
   return { rawBody: Buffer.from(raw), auth: await t.toJwt() };
 }
-const webhookWith = (rooms: MediaRoomControl) =>
+const webhookWith = (rooms: MediaRoomControl, calls: CallService = callsWith(rooms)) =>
   new LiveKitWebhookController(
     new LiveKitWebhookVerifier(),
     new MediaPresenceService(g.prisma, new OutboxService(), g.config),
     g.prisma,
     rooms,
-    callsWith(rooms),
+    calls,
   );
 
 describe('OA-12: one learner per paid lesson call', () => {
-  it('a second learner is refused at start: in the lesson window, another family\'s guardian would be seated', async () => {
+  it('a class-group call held in the window of one of its teacher\'s lessons is not a lesson call: every family is kept', async () => {
+    // LR-46 P3-2: a class group is a group chat, never the conversation a
+    // paid one-to-one lesson is held in.
     await lessonNow();
 
-    await expect(g.calls.start(classId, s.ownerId)).rejects.toMatchObject({
-      code: CommErrorCode.LESSON_ONE_LEARNER,
-    });
-    await expect(g.calls.start(classId, s.teacherId)).rejects.toMatchObject({
-      code: CommErrorCode.LESSON_ONE_LEARNER,
-    });
-    await expect(g.calls.start(classId, otherGuardianId)).rejects.toMatchObject({
-      code: CommErrorCode.LESSON_ONE_LEARNER,
-    });
-    expect(await g.prisma.call.count({ where: { conversationId: classId } })).toBe(0);
-    // The advisory answer agrees with start().
-    await expect(g.calls.callCapability(classId, s.ownerId)).resolves.toEqual({
-      canCall: false,
-      code: CommErrorCode.LESSON_ONE_LEARNER,
-    });
+    await expect(g.calls.callCapability(classId, s.ownerId)).resolves.toEqual({ canCall: true, code: null });
+    const { callId, roomName } = await g.calls.start(classId, s.teacherId);
+    expect(await seatedOn(callId)).toEqual(expect.arrayContaining([s.parentId, otherGuardianId, s.teacherId]));
+    await expect(g.calls.accept(callId, otherGuardianId)).resolves.toBeUndefined();
+    await expect(g.calls.accept(callId, s.parentId)).resolves.toBeUndefined();
+    await expect(g.calls.issueToken(callId, otherGuardianId)).resolves.toMatchObject({ token: expect.any(String) });
+
+    // Neither the sweep nor a join takes anyone off.
+    const rooms = new FakeRooms();
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
+    const j = await signedJoin(roomName, otherGuardianId);
+    await expect(webhookWith(rooms).webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    expect(rooms.removed).toEqual([]);
+    expect((await seat(callId, otherGuardianId)).leftAt).toBeNull();
+    expect(await participantLeftEvents(callId)).toEqual([]);
   });
 
-  it('a second learner is refused at join: a call begun before the window cannot seat them once it opens', async () => {
-    const { callId } = await g.calls.start(classId, s.ownerId);
-    expect(await seatedOn(callId)).toContain(otherGuardianId);
+  it('a class-group call already live when the window opens keeps every family', async () => {
+    const { callId, roomName } = await liveClassCall();
+    await lessonNow();
+
+    const rooms = new FakeRooms();
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
+    const j = await signedJoin(roomName, otherGuardianId);
+    await expect(webhookWith(rooms).webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    expect(rooms.removed).toEqual([]);
+    await expect(g.calls.issueToken(callId, otherGuardianId)).resolves.toMatchObject({ token: expect.any(String) });
+  });
+
+  it('a second learner is refused at join: a lesson call begun before the window cannot seat them once it opens', async () => {
+    const { callId } = await g.calls.start(groupId, s.ownerId);
+    await seatOtherFamily(callId, { joined: false });
 
     // The lesson's window opens while the call is ringing.
     await lessonNow();
@@ -281,11 +346,13 @@ describe('OA-12: one learner per paid lesson call', () => {
   });
 
   it('a lesson that did not take place opens no window', async () => {
+    const { callId } = await liveTwoFamilyCall();
     const lesson = await lessonNow();
     await closeAsApology(lesson.id);
 
-    const { callId } = await g.calls.start(classId, s.ownerId);
-    expect(await seatedOn(callId)).toContain(otherGuardianId);
+    const rooms = new FakeRooms();
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
+    expect((await seat(callId, otherGuardianId)).leftAt).toBeNull();
   });
 
   it('a family group about several siblings, with no lesson on, is unaffected', async () => {
@@ -318,11 +385,23 @@ describe('OA-12: one learner per paid lesson call', () => {
     expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
   });
 
-  it('the refused guardian may still decline the ringing call', async () => {
-    const { callId } = await g.calls.start(classId, s.ownerId);
+  it('a teacher no longer on the call opens no window: their lesson does not separate it', async () => {
+    // LR-46 P3-2: only a teacher whose seat has no left_at counts.
+    const { callId, roomName } = await liveTwoFamilyCall();
+    await teacherLeaves(callId);
     await lessonNow();
 
-    await expect(g.calls.decline(callId, otherGuardianId)).resolves.toBeUndefined();
+    const rooms = new FakeRooms();
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
+    const j = await signedJoin(roomName, otherGuardianId);
+    await expect(webhookWith(rooms).webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    expect(rooms.removed).toEqual([]);
+    expect((await seat(callId, otherGuardianId)).leftAt).toBeNull();
+
+    // The same call with the teacher still on it is separated (the control).
+    await g.prisma.callParticipant.updateMany({ where: { callId, actorId: s.teacherId }, data: { leftAt: null } });
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
+    expect(rooms.removed).toEqual([[roomName, otherGuardianId]]);
   });
 
   it('another teacher\'s lesson opens no window on this call', async () => {
@@ -336,9 +415,9 @@ describe('OA-12: one learner per paid lesson call', () => {
       },
     });
 
-    // teacher_d is not in the class group, so this is not teacher_d's lesson call.
-    const { callId } = await g.calls.start(classId, s.ownerId);
-    expect(await seatedOn(callId)).toContain(otherGuardianId);
+    // teacher_d is not on this call, so this is not teacher_d's lesson call.
+    const { callId } = await liveTwoFamilyCall();
+    expect(await seatedOn(callId)).not.toContain(s.newTeacherId);
     const rooms = new FakeRooms();
     expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
   });
@@ -386,7 +465,7 @@ describe('OA-12: a call already live when the lesson window opens', () => {
     expect(await calls.separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
 
     expect(await participantLeftEvents(callId)).toEqual([
-      { callId, conversationId: classId, actorId: otherGuardianId, reason: CallParticipantLeftReason.ONE_LEARNER_LESSON },
+      { callId, conversationId: groupId, actorId: otherGuardianId, reason: CallParticipantLeftReason.ONE_LEARNER_LESSON },
     ]);
   });
 
@@ -470,6 +549,7 @@ describe('OA-12: a call already live when the lesson window opens', () => {
     expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
     const ctl = webhookWith(rooms);
 
+    rooms.rejoin(roomName, otherGuardianId);
     let j = await signedJoin(roomName, otherGuardianId);
     await expect(ctl.webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
     expect(rooms.removed).toEqual([[roomName, otherGuardianId], [roomName, otherGuardianId]]);
@@ -480,6 +560,7 @@ describe('OA-12: a call already live when the lesson window opens', () => {
     // And again on every later attempt, even once the window has closed: a
     // participant who has left a live call holds no token issued since.
     await closeAsApology(lesson.id);
+    rooms.rejoin(roomName, otherGuardianId);
     j = await signedJoin(roomName, otherGuardianId);
     await expect(ctl.webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
     expect(rooms.removed).toHaveLength(3);
@@ -511,5 +592,62 @@ describe('OA-12: a call already live when the lesson window opens', () => {
 
     const j = await signedJoin(roomName, otherGuardianId);
     await expect(webhookWith(rooms).webhook({ rawBody: j.rawBody }, j.auth)).rejects.toMatchObject({ status: 503 });
+  });
+
+  it('a returning participant LiveKit reports already gone is answered "absent", not "removed"', async () => {
+    const { roomName } = await liveTwoFamilyCall();
+    await lessonNow();
+    const rooms = new FakeRooms();
+    const calls = callsWith(rooms);
+    expect(await calls.separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
+
+    // Out of the room already: nothing was removed.
+    expect(await calls.removeReturningParticipant(roomName, otherGuardianId)).toBe('absent');
+    // Back in with a token they still held: removed.
+    rooms.rejoin(roomName, otherGuardianId);
+    expect(await calls.removeReturningParticipant(roomName, otherGuardianId)).toBe('removed');
+    // Still seated: untouched.
+    expect(await calls.removeReturningParticipant(roomName, s.parentId)).toBe('seated');
+    expect(rooms.removed).toEqual([[roomName, otherGuardianId], [roomName, otherGuardianId]]);
+  });
+
+  it('a rejoin the webhook checks while the sweep is still taking that guardian off is still taken out', async () => {
+    // The sweep empties the room first and writes left_at after. Here the
+    // sweep's left_at commits right after the webhook's first look at the
+    // call -- the moment a check that saw the seat still open, followed by one
+    // that sees it already closed, would let the rejoin through.
+    const { callId, roomName } = await liveTwoFamilyCall();
+    await lessonNow();
+    let committed = false;
+    const sweepCommits = async () => {
+      if (committed) return;
+      committed = true;
+      await g.prisma.callParticipant.updateMany({
+        where: { callId, actorId: otherGuardianId, leftAt: null },
+        data: { leftAt: new Date() },
+      });
+    };
+    class SweepCommitsMidWebhook extends CallService {
+      override async separateLessonLearners(opts?: Parameters<CallService['separateLessonLearners']>[0]) {
+        const r = await super.separateLessonLearners(opts);
+        await sweepCommits();
+        return r;
+      }
+      override async removeReturningParticipant(roomName: string, identity: string) {
+        const r = await super.removeReturningParticipant(roomName, identity);
+        await sweepCommits();
+        return r;
+      }
+    }
+    // The guardian is back in the room (the sweep's removal came before their rejoin).
+    const rooms = new FakeRooms();
+    const calls = new SweepCommitsMidWebhook(
+      g.prisma, g.authz, g.conversations, g.outbox, g.config, g.identity, g.audit, new LiveKitTokenIssuer(), rooms,
+    );
+
+    const j = await signedJoin(roomName, otherGuardianId);
+    await expect(webhookWith(rooms, calls).webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    expect(rooms.removed).toEqual([[roomName, otherGuardianId]]);
+    expect((await seat(callId, otherGuardianId)).leftAt).not.toBeNull();
   });
 });
