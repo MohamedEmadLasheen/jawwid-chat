@@ -28,9 +28,11 @@ laptop.
 - **Lessons.** Three 30-minute lessons a week, on Monday, Wednesday and Friday at 16:00 Cairo time. The worker keeps
   creating the upcoming ones for as long as the schedule stands.
 - **No real payments (OA-12, owner decision 2026-11-10).** The children have no subscription, so the payment lock never
-  applies (PD-30). Once the review organization is listed in the review payment mode (next section), the parent sees a
-  demo amount due and can open the pay sheet, but the server makes every payment a demo: nothing can be paid, sent
-  or stored.
+  applies (PD-30). The command creates no lesson package, instalment, payment request or invoice for either family;
+  the test checks this in the database and over `GET /me/billing`, the route the parents' payments tab reads. Until
+  the review organization is listed in the review payment mode (next section), that tab shows no amount due and no
+  Pay button. Once it is listed, the parent sees a synthetic demo amount due (never stored) and can open the pay
+  sheet, but the server makes every payment a demo: nothing can be paid, sent or stored.
 - **No lesson content yet.** There are no past lessons or lesson reports, because those need the owner to approve
   the content. The sample messages are everyday academy talk.
 
@@ -208,12 +210,17 @@ is harmless.
 
 ## Review notes (paste into both consoles; the credentials go in their own fields)
 
+The canonical paste-ready text is `store-console/review-notes.md` (§2 for App Store Connect, §3 for Play, each
+with Option B for the payments paragraph while OA-12 is open). Paste from that file; the summary below only
+describes what the review accounts hold.
+
 > Sign in with the parent or the teacher account from the credentials field. Sign-in is email and password; no
 > verification code is needed. The parent account has one child with weekly lessons, a family group chat with the
 > child's supervisor and teacher, and a direct chat with the supervisor. The teacher account is that child's teacher.
 > The two accounts can message each other in the family group. To test account deletion, please use the third
 > account (parent2), which exists for that purpose; deleting it does not affect the other two. All people and data
-> in these accounts are fictional. Deleting an account in the app takes effect immediately.
+> in these accounts are fictional. Deleting an account in the app takes effect immediately. The review families have
+> nothing to pay, so the payments tab shows no amount due.
 
 ## Still open (owner)
 
@@ -224,6 +231,19 @@ These need an owner decision or action before the review data is complete (LR-05
   the review family sees no amount due, and the store notes must use the "nothing to pay" text.
 - **Past lessons and lesson reports.** There are none yet. They need the owner's approval of the report content,
   which may name surahs, and then a follow-up PR.
+- **Docs that still promise a payable item (to align).** These assume a payable request in the review cohort. The
+  cohort stores none; with the review payment mode on, the reviewer reaches Pay through the synthetic demo item
+  instead, and without it there is nothing to pay. A follow-up must align them with whichever state the review build
+  ships in:
+  - `app-review-notes-payments.md` §4 (Apple, "Amount due → Pay"), §5 (Play) and §6 item 2 (an open
+    lesson-package request so the reviewer can reach the pay sheet).
+  - `store-console/play-declarations.md` §2: the paste ("Amount due → Pay") and the owner note below it ("Either
+    add an open lesson-package request ... or delete the Payments paragraph").
+  - `store-console/README.md` item 8 ("A payable lesson-package request in the review cohort | Yes").
+  - `store-console/listing-copy.md` screenshot 5 (the pay sheet, taken from "An open request in the review
+    cohort").
+  - `store-console/review-notes.md` §2.1 Option A paste ("Amount due > Pay"), its recommendation ("Option A, with
+    a payable request in the review cohort"), and the §3 Play Option A sentence.
 - **An exception to OD-04.** In Chat, only Core's assignment ingestion may set a child's teacher. Ingestion does not
   exist yet, so the command sets the teacher of its one taught synthetic child (Yahya; the deletion-test child has
   no teacher) through the same stand-in the QA seed uses,
