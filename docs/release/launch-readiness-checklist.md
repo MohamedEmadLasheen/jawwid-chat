@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-10 15:08 Cairo (13:08 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-10 15:50 Cairo (13:50 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -200,24 +200,37 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 | Builder W32 (integration) | Merge rehearsal: every open PR merged in plan order on a throwaway branch, so CI tests the combined result and conflicts are resolved ahead of time. Found an unplanned semantic conflict, #528 × #498 (`review-cohort` assumed a teacher cannot be deleted) | — | Resolving; then push for CI. Never merged |
 | Another session (not the lead) | CI re-runs on #498 and #503 | its own | Both now 30/30 green; not touched by the lead |
 
-### Next tasks (kept in order; the lead starts each one without being asked)
-1. **Owner merge approvals waiting.** Independently reviewed and accepted at the exact head, with CI green there (2026-11-09):
-   - **Ready now:** #521, #522, #525, #526, #527, #530, #531, #532, #533, #534, #536, #538, #539, #540, #541, #544, #546. **High, migration:** #545 (after #539 and #537).
-   - **Ready, plus Code Owner approval on GitHub:** #523 (workflow), #528 (workflow; High: every run is a separate approval), #542 (the secret scan sees the whole history), #548 (deploy inputs via env), #547 (signed builds; High; CI finishing).
-   - **Stacked on #449, follow once it merges:** #524, #529, #535, and #537 (High: migration; after #534).
-   - **Stacked on #533:** #543 (production alerts on api and worker; accepted).
-   - **Older:** #497 (ready), #517 (ready, Code Owner). Now ready, both High (migration): #449 (`c205aba0`) and #498 (`ea2243a0`).
-   - **Batches and order:** `docs/release/merge-plan-2026-11-09.md`.
-   - **Merge-order notes:** #534 before #537. When #498 and #537 meet, the session lock goes inside #498's `run()` helper (noted on both PRs).
-2. **OT-4 accepted 2026-11-08 with documented gaps** (E-09). Optional checks are folded into the next Play Console task, which is to enter the drafted forms: confirm Free, en-US and App in Store settings, and expand the Production "View tasks" list.
-3. **OT-2b: DECIDED 2026-11-09, Option C (GitHub cloud signing)**, using PR #547's workflow `release-store-builds.yml` and runbook `docs/release/signed-builds-ci.md`. Every key, secret and Environment setting stays a separate owner approval. **Stage 0 done:** #547 merged by the owner as `59fa0c9c`. **Stage 1 done and verified 2026-11-09 (read-only API):** `store-release` has required reviewer = the owner, prevent self-review on, admin bypass off, deployment branches = exactly one rule `main`; 0 secrets and 0 variables; it matches `production`. **Direction changed 2026-11-09 (owner): Direct Upload with Google Workload Identity Federation.** No age key and no artifact download; Android uploads a draft to the internal track; iOS goes to TestFlight only; Sentry symbols are uploaded from the workflow. Builder W51 is implementing it in a separate PR. Credentials, Google/Apple setup, secrets, real runs and the merge each stay an owner approval. If Google requires a manual first upload, it must not be done from the development Mac. **Owner progress 2026-11-09 (T4, OA-05):**
-- Sentry project `jawwid-chat-app` in organization `jawwid`.
-- The DSN and an organization token (`org:ci`, named `jawwid-chat-app-github-store-release`) are saved in the owner's password manager, **not yet in GitHub**.
-- Planned Environment values: variables `SENTRY_ORG=jawwid`, `SENTRY_PROJECT=jawwid-chat-app`; secrets `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`.
-- W51 is PR #572, under security and feasibility review. Recommended: a **new** upload key made off this Mac (not the existing local JKS); the App Store Connect key as App Manager first.
-4. **OT-3** (first deploy): **the handoff is final** (`~/jawwid-owner-evidence/OT-3/HANDOFF.md`, kept outside the repo), with every lead question answered. It has three gates: the lead verifies the owner's OT-3a report, merge batches 1–3 are merged with green CI (they include the security blocker fix #534), and the owner says "Approve first production deploy". Part B (DNS) and Part C (`TRUSTED_PROXY_HOPS`) are separate owner tasks.
-5. **LR-13, LR-27 and LR-79** as soon as #449 merges; **LR-26** once #449, #498 and #503 land.
-6. #503: merge if the other session has not.
+### Current state by category (verified 2026-11-10 from GitHub: each PR's head SHA, its "Review: ACCEPT @ <sha>" comment and its required checks)
+
+**A. Verified on main.** Batches 1, 2, 2b and 3, plus #547 (signed-build workflow, merge `59fa0c9c`). `main` = `7cc7aab5`.
+
+**B. Accepted at the current head, with required CI 14/14 green on that head.** All of these wait for the owner's approval; the batch order is in `docs/release/merge-plan-2026-11-09.md`.
+- Store and deploy (A3/A4, verified 2026-11-10): #572 `40b84fbf`, #576 `110f61c7` and #548 `7cd1031f`. #577 `0e5e5566` is stacked on #572 and is retargeted only after #572 merges.
+- Stripe (LR-34): #579 `44255722`, #580 `f092797c`, #581 `5ac1fe42`, #582 `0e6bfe68`, #583 `ed82b346`, #584 `cda1bdf5`.
+- OA-12 review payment mode: #585 `9f5748e5`. Review accounts: #528 `920b04c1`, with #560, #565, #569, #575 and #586 stacked on it (each accepted at its head).
+- Other launch PRs: #449, #497, #498, #503, #517, #523, #542, #543, #545, #552, #555, #556, #557, #558, #562, #567, #568, #571, #573, #574.
+- Stacked and accepted at their heads; they follow their base: #524, #529, #535, #537, #550, #551, #554, #559, #561, #563, #564, #566, #570.
+- #553 is a duplicate of #524. **Do not merge.**
+
+**C. In progress (engineering).**
+- #549 (screenshots): the capture script moved out of `scripts/mobile/` (`489e8cf0`) to clear #572's guard. Delta review and CI running.
+- #587 (one family per paid lesson call): accepted at `00190099`. W67b is fixing three P2s (live calls, review-notes wording, real class-group tests).
+- #588 (iOS push collapse id): **CHANGES**, a P1: the key must include the event type. W68b is fixing it.
+- #589 (whiteboard test race, found on #577's CI): under review.
+- W70 (notification permission status and Open settings, stacked on #557): building.
+- Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. CI re-running at `0aec87f1` after the #549 fix.
+- Draft #578 (OA-12 Option B docs) stays a draft.
+
+**D. Waiting for the owner's approval.** Every merge (Part 1 of the Owner Action Pack: A3, A4, A13, the Stripe batch, the docs batch and the high-risk stacks), the review-accounts production run, and the first deploy (OT-3).
+
+**E. Waiting for external owner setup.** OT-2b stages 2 onward: the Google Cloud project, WIF, the Play Console invite, the App Store Connect key, the Environment secrets and variables (Sentry values ready), and the upload key. Also the Stripe production keys and webhook (LR-34), the production storage variables `STORAGE_ENDPOINT` and `STORAGE_REGION`, and the legal pages publication (#573).
+
+**F. Blocked by a genuine dependency.**
+- #577 waits on #572 merging.
+- LR-13, LR-27 and LR-79 wait on #449.
+- LR-26 waits on #449, #498 and #503.
+- Per-account push binding (LR-11b item 1) touches the protected test rt037 D, so it needs the owner's sign-off first.
+- LR-71's final compliance audit waits on the release candidate.
 
 ## 2. Owner execution (one task at a time)
 
