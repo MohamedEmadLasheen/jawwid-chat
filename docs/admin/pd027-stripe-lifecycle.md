@@ -205,6 +205,14 @@ idempotency key stays `checkout:<request>:<attempts>`; if the `payment_checkout`
 violation (`P2002`, the same Stripe session already recorded, as when Stripe answers a replayed key), that is
 a replay: the same page, not a 500.
 
+**Fail closed on an earlier page (LR-46 P2-1).** Before a new page is created, each earlier `open` attempt is
+looked up at Stripe and expired. An attempt is marked `expired` only on Stripe's word: the expire call
+succeeded, or a fresh look-up shows it `expired` (or `complete`, which is recorded as paid). If Stripe cannot
+be reached for the look-up, or the expire fails and the page still shows `open` (or cannot be looked up
+again), the attempt stays `open` in Chat, no new page is created, and the parent gets the usual **503
+`COMM.PAYMENTS_UNAVAILABLE`** ("pay by bank transfer"); the next tap tries again. A transient Stripe error is
+never turned into a local state change. The claim is released on every path.
+
 ## 4. Not done, on purpose
 
 - **Automatic recurring card charges (Stripe Billing subscriptions).** PD-27 and PD-30 define a

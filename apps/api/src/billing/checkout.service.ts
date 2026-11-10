@@ -47,6 +47,11 @@ function alreadyOpening(): CommError {
   return new CommError(CommErrorCode.CHECKOUT_OPENING, 'a payment page is already opening; try again', 409);
 }
 
+/** Card payment cannot go ahead right now; the client offers the bank transfer instead. */
+function cardUnavailable(): CommError {
+  return new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
+}
+
 class DuplicateEvent extends Error {}
 
 export type WebhookOutcome =
@@ -81,7 +86,8 @@ const BILLING_EVENT = /^(invoice|customer\.subscription|subscription_schedule)\.
  * time, so the amount is always current. Before opening another, the request's
  * earlier sessions are looked at: one Stripe completed is RECORDED (its webhook
  * may be late) instead of charging again; one still open is expired, so two
- * Stripe pages for one request are never payable at once.
+ * Stripe pages for one request are never payable at once. If Stripe cannot
+ * confirm an earlier page is closed, no new one is opened (503, bank transfer).
  *
  * CONFIRMING. Only a verified webhook confirms (the success page records
  * nothing). A payment is recorded when the event is new (chat.stripe_event,
@@ -181,6 +187,20 @@ export class CheckoutService {
     }
   }
 
+  /**
+   * A Stripe read while opening. A failure (timeout, 5xx, anything) is never
+   * turned into a local change: it is the bank-transfer answer (503). Stripe's
+   * own message is never shown; the category is logged.
+   */
+  private async askStripe<T>(what: string, call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (e) {
+      this.log.error(`stripe checkout: could not ${what} (${errorCategory(e)}); no new page is opened`);
+      throw cardUnavailable();
+    }
+  }
+
   /** S1: the claim is given up (only our own; a later opener's is never removed). Best effort: it expires anyway. */
   private async releaseOpening(requestId: string, holder: string): Promise<void> {
     try {
@@ -197,26 +217,36 @@ export class CheckoutService {
     opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean },
     holder: string,
   ): Promise<string> {
-    // Earlier sessions: record a completed one, expire an open one.
+    // Earlier sessions: record a completed one, expire an open one. FAIL CLOSED
+    // (LR-46 P2-1): a row changes only on what Stripe answered. If Stripe cannot
+    // say an earlier page is closed (it is unreachable, or refuses to expire a
+    // page that is still open), no new page is created -- the earlier one may
+    // still be payable, and two payable pages charge a parent twice. The parent
+    // is offered the bank transfer (503) and the next tap tries again.
     const open = await this.prisma.paymentCheckout.findMany({ where: { requestId: request.id, status: 'open' } });
     for (const c of open) {
       await this.holdOpening(request.id, holder);
-      let session: CheckoutSession;
-      try {
-        session = await this.stripe.retrieveCheckout(c.stripeSessionId);
-      } catch {
-        continue;
+      let session = await this.askStripe('look up an earlier page', () => this.stripe.retrieveCheckout(c.stripeSessionId));
+      if (session.status === 'open') {
+        await this.holdOpening(request.id, holder);
+        try {
+          await this.stripe.expireCheckout(session.id);
+          session = { ...session, status: 'expired' };
+        } catch (e) {
+          // Paid or expired between the two calls, or Stripe failed: ask Stripe
+          // which. Only its answer closes the row; still open is a refusal.
+          this.log.warn(`stripe checkout: an earlier page was not expired (${errorCategory(e)}); asking Stripe again`);
+          await this.holdOpening(request.id, holder);
+          session = await this.askStripe('look up an earlier page again', () => this.stripe.retrieveCheckout(c.stripeSessionId));
+          if (session.status === 'open') {
+            this.log.error('stripe checkout: an earlier page is still payable and could not be expired; no new page is opened');
+            throw cardUnavailable();
+          }
+        }
       }
       await this.holdOpening(request.id, holder);
       if (session.status === 'complete' && session.paymentStatus === 'paid') {
         await this.confirm(session, null);
-      } else if (session.status === 'open') {
-        try {
-          await this.stripe.expireCheckout(session.id);
-        } catch {
-          // Completed between the two calls: its webhook records it.
-        }
-        await this.prisma.paymentCheckout.update({ where: { stripeSessionId: c.stripeSessionId }, data: { status: 'expired' } });
       } else {
         await this.prisma.paymentCheckout.update({
           where: { stripeSessionId: c.stripeSessionId },
@@ -272,7 +302,7 @@ export class CheckoutService {
       // and it is English API prose); the category is logged, never the body
       // or the key. The client offers the bank transfer instead.
       this.log.error(`stripe checkout refused: ${errorCategory(e)}`);
-      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
+      throw cardUnavailable();
     }
     if (!session.url) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'Stripe did not return a payment page', 503);
     // The session is recorded whatever happens next (so a later opener, the

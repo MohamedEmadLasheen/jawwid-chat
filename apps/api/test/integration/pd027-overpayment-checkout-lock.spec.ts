@@ -15,6 +15,9 @@
  *      pool never starves other queries; a claim lost to another opener stops
  *      before Stripe or hands nothing out; a session already recorded (a
  *      replayed idempotency key) answers the same page, never a 500.
+ *  LR-46 P2-1  if Stripe cannot confirm an earlier page is closed (look-up or
+ *      expire fails and it may still be payable), open() fails closed: 503
+ *      PAYMENTS_UNAVAILABLE, no new page, the row stays open, claim released.
  *
  * Synthetic people only (G-20).
  */
@@ -495,5 +498,113 @@ describe('S1: one payable Checkout session per request', () => {
     expect(replayed).not.toBeNull();
     expect(r.json.url.endsWith(replayed!)).toBe(true);
     expect(await g.prisma.paymentCheckout.count({ where: { stripeSessionId: replayed! } })).toBe(1);
+  });
+});
+
+/** The bank-transfer answer: 503 PAYMENTS_UNAVAILABLE. */
+function isUnavailable(e: unknown): boolean {
+  return e instanceof CommError && e.code === CommErrorCode.PAYMENTS_UNAVAILABLE && e.status === 503;
+}
+
+describe('LR-46 P2-1: an earlier page Stripe has not confirmed closed blocks a new one (fail closed)', () => {
+  /** A request with one page already opened (session A, open at Stripe and in Chat). */
+  async function withOpenPage() {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    const opts = { locale: 'en' as const, returnUrl: request.link };
+    const svc = app.get(CheckoutService);
+    const firstUrl = await svc.open(row, opts);
+    const [a] = sessionsOf(request.id);
+    expect(a!.url).toBe(firstUrl);
+    return { f, request, row, opts, svc, a: a! };
+  }
+  const rowStatus = async (sessionId: string) => (await g.prisma.paymentCheckout.findUniqueOrThrow({ where: { stripeSessionId: sessionId } })).status;
+  const claimOf = (requestId: string) => g.prisma.config.findUnique({ where: { key: checkoutClaimKey(requestId) } });
+
+  it('Stripe unreachable when the earlier page is looked up: 503 (pay by bank transfer), no new page, the earlier one untouched, the claim released', async () => {
+    const { f, request, row, opts, svc, a } = await withOpenPage();
+    const created = jest.spyOn(stripe, 'createCheckout');
+    stripe.failNextRead = Object.assign(new Error('connect ETIMEDOUT'), { type: 'StripeConnectionError' });
+
+    expect(isUnavailable(await svc.open(row, opts).catch((e: unknown) => e))).toBe(true);
+    expect(created).not.toHaveBeenCalled();
+    expect(sessionsOf(request.id)).toHaveLength(1);
+    expect(a.status).toBe('open');
+    expect(await rowStatus(a.id)).toBe('open');
+    expect(await claimOf(request.id)).toBeNull();
+
+    // Over HTTP the parent sees the same bank-transfer answer, never a 500.
+    stripe.failNextRead = Object.assign(new Error('connect ETIMEDOUT'), { type: 'StripeConnectionError' });
+    const r = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: request.id });
+    expect({ status: r.status, code: r.code }).toEqual({ status: 503, code: CommErrorCode.PAYMENTS_UNAVAILABLE });
+    expect(created).not.toHaveBeenCalled();
+    expect(await claimOf(request.id)).toBeNull();
+
+    // Stripe back: the earlier page is expired at Stripe first, then ONE new page.
+    const url = await svc.open(row, opts);
+    expect(a.status).toBe('expired');
+    expect(await rowStatus(a.id)).toBe('expired');
+    expect(sessionsOf(request.id).filter((s) => s.status === 'open').map((s) => s.url)).toEqual([url]);
+  });
+
+  it('Stripe fails to expire the earlier page (a 5xx): the row stays open, 503, no new page, the claim released', async () => {
+    const { request, row, opts, svc, a } = await withOpenPage();
+    const created = jest.spyOn(stripe, 'createCheckout');
+    jest.spyOn(stripe, 'expireCheckout').mockRejectedValueOnce(
+      Object.assign(new Error('An unknown error occurred'), { type: 'StripeAPIError', statusCode: 500 }),
+    );
+
+    expect(isUnavailable(await svc.open(row, opts).catch((e: unknown) => e))).toBe(true);
+    expect(created).not.toHaveBeenCalled();
+    expect(sessionsOf(request.id)).toHaveLength(1);
+    expect(a.status).toBe('open');
+    expect(await rowStatus(a.id)).toBe('open');
+    expect(await claimOf(request.id)).toBeNull();
+  });
+
+  it('expire fails and Stripe cannot be asked again either: 503, the row stays open', async () => {
+    const { request, row, opts, svc, a } = await withOpenPage();
+    const created = jest.spyOn(stripe, 'createCheckout');
+    jest.spyOn(stripe, 'expireCheckout').mockImplementationOnce(async () => {
+      stripe.failNextRead = Object.assign(new Error('connect ECONNRESET'), { type: 'StripeConnectionError' });
+      throw Object.assign(new Error('timeout'), { type: 'StripeConnectionError' });
+    });
+
+    expect(isUnavailable(await svc.open(row, opts).catch((e: unknown) => e))).toBe(true);
+    expect(created).not.toHaveBeenCalled();
+    expect(await rowStatus(a.id)).toBe('open');
+    expect(await claimOf(request.id)).toBeNull();
+  });
+
+  it('the earlier page was paid between the look-up and the expire: Stripe confirms it, the payment is recorded, no new page', async () => {
+    const { request, row, opts, svc, a } = await withOpenPage();
+    const created = jest.spyOn(stripe, 'createCheckout');
+    const realExpire = stripe.expireCheckout.bind(stripe);
+    jest.spyOn(stripe, 'expireCheckout').mockImplementationOnce(async (id: string) => {
+      stripe.complete(id);
+      return realExpire(id); // Stripe refuses: the session is no longer open.
+    });
+
+    const e = await svc.open(row, opts).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(CommError);
+    expect({ code: (e as CommError).code, status: (e as CommError).status }).toEqual({ code: CommErrorCode.BILLING_STATE, status: 409 }); // already paid
+    expect(created).not.toHaveBeenCalled();
+    expect(await g.prisma.payment.count({ where: { stripeCheckoutSessionId: a.id } })).toBe(1);
+    expect(await claimOf(request.id)).toBeNull();
+  });
+
+  it('the earlier page expired at Stripe between the look-up and the expire: Stripe confirms it, marked expired, one new page', async () => {
+    const { request, row, opts, svc, a } = await withOpenPage();
+    const realExpire = stripe.expireCheckout.bind(stripe);
+    jest.spyOn(stripe, 'expireCheckout').mockImplementationOnce(async (id: string) => {
+      stripe.expireAtStripe(id);
+      return realExpire(id); // Stripe refuses: the session is no longer open.
+    });
+
+    const url = await svc.open(row, opts);
+    expect(await rowStatus(a.id)).toBe('expired');
+    expect(sessionsOf(request.id).filter((s) => s.status === 'open').map((s) => s.url)).toEqual([url]);
+    expect(await claimOf(request.id)).toBeNull();
   });
 });
