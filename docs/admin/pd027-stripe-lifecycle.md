@@ -21,7 +21,8 @@ Stripe has been Chat's card provider since PD-27 (closed 2026-10-22, PRs #117 an
 | Refunds through Stripe (staff, `canVerify`) and from the Dashboard (webhook) | `payments.service.ts`, `CheckoutService` | done |
 | Numbered invoices (`JW-<year>-<n>`), frozen, PDF in Arabic and English | `invoice-pdf.ts` | done |
 | Parent payment history, invoices, receipts, subscription state | `GET /me/billing`, Flutter Settings > Payments | done |
-| Production guard: no test key, no missing webhook secret in production | `stripe-config.ts` | done |
+| Production guard: only a live `sk_live_`/`rk_live_` key, with a well-formed `whsec_` webhook secret | `stripe-config.ts`, `check-env.sh` | done |
+| Launch gate: both Stripe secrets required at `LAUNCH_PHASE=launch` (optional in review) | `check-env.sh` | done |
 | Append-only payments, refunds, invoices (database guards) | migration `20261022170000` | done |
 
 ## 2. Gaps found
@@ -193,13 +194,25 @@ owner authorizes) to run.
 
 | Variable | Where | |
 |---|---|---|
-| `STRIPE_SECRET_KEY` | API + worker, secret | Unchanged name. Use a **restricted** key (`rk_live_…` in production, `rk_test_…` in staging) with these scopes: Checkout Sessions **write**, Refunds **write**, Customers **write**, PaymentIntents **read**, Charges **read**. The last three are new. Without them, customers are not created and card details and reconciliation are not read, but payments still record. Production refuses a test key (`stripe-config.ts`). |
-| `STRIPE_WEBHOOK_SECRET` | API, secret | Unchanged: the endpoint's `whsec_…`. Production refuses to start without it when a key is set. |
+| `STRIPE_SECRET_KEY` | API + worker, secret | Unchanged name. Use a **restricted** key (`rk_live_…` in production, `rk_test_…` in staging) with these scopes: Checkout Sessions **write**, Refunds **write**, Customers **write**, PaymentIntents **read**, Charges **read**. The last three are new. Without them, customers are not created and card details and reconciliation are not read, but payments still record. In production it must match `^(sk\|rk)_live_\S+$` (any non-whitespace after the prefix; the prefix is the check): a test key, a publishable `pk_` key or anything else is refused. |
+| `STRIPE_WEBHOOK_SECRET` | API, secret | Unchanged: the endpoint's `whsec_…`. In production it must match `^whsec_\S+$`, and it is required whenever a key is set. |
 | `PAYMENT_LINK_BASE_URL` | API | Unchanged. |
 | `STRIPE_RECONCILE_MS` | worker, optional | Reconcile interval. The default is `300000` (5 minutes); `0` turns it off. |
 
 No secret is ever logged, returned or stored by Chat. Configure the secrets only in the platform's secret
 store (`infra/env/manifest.tsv` lists them).
+
+**Production phase rule (Stripe M1).** Card payments must work at the first public launch; production is
+deployed earlier, during store review:
+
+| `LAUNCH_PHASE` (production Environment variable) | Stripe secrets |
+|---|---|
+| `review` | Optional. Unset means cards are off (bank transfer and cash work), so the first production deploy is not blocked. If set, they must be live and well formed. |
+| `launch` | **Both required.** The deploy (`scripts/infra/check-env.sh production`) refuses to run without them. |
+
+The formats are checked twice with the same rules: by the deploy before anything changes
+(`check-env.sh`), and by the API and the worker at boot (`apps/api/src/billing/stripe-config.ts`). Neither
+ever prints a value; the error names only the variable.
 
 ### 5.2 Stripe Dashboard
 
@@ -236,6 +249,9 @@ Before deploying:
 1. The migration is applied.
 2. The restricted key has the new scopes.
 3. The webhook endpoint has the new events.
+4. Before switching production to `LAUNCH_PHASE=launch`: the live `STRIPE_SECRET_KEY` and
+   `STRIPE_WEBHOOK_SECRET` are set in the `production` GitHub Environment (the launch deploy refuses
+   without them).
 Deploying itself is unchanged. There is no flag to switch on: the reconciler starts with the worker.
 
 ### 5.5 Production verification checklist (owner, in test mode first)
