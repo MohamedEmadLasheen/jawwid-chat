@@ -24,16 +24,12 @@ export interface PushMessage {
    */
   platform: string;
   /**
-   * LR-11b: what a newer push may REPLACE on the lock screen, when the default
-   * (the call or the conversation in `data`) is wrong for this push. A held
-   * push stands for several chats, so it uses [HELD_PUSH_COLLAPSE_KEY] rather
-   * than the first chat's identity. Never personal data; hashed before sending.
+   * LR-11b: a held (deferred, summary) chat push. It stands for several chats,
+   * so it groups under its own key rather than the first chat's: see
+   * `push-grouping.ts`, the one rule for what replaces what on a device.
    */
-  collapseKey?: string;
+  held?: boolean;
 }
-
-/** The one stable grouping for held (deferred, summary) chat pushes. */
-export const HELD_PUSH_COLLAPSE_KEY = 'held-chats';
 
 export interface PushResult {
   ok: boolean;

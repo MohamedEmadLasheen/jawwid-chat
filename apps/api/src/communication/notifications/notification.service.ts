@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { PUSH_PROVIDER } from '../../platform/tokens';
-import { HELD_PUSH_COLLAPSE_KEY, type PushProvider } from './push.provider';
+import type { PushProvider } from './push.provider';
 import { TemplateService } from './template.service';
 import { QuietHoursService } from './quiet-hours.service';
 import { NotificationStatus } from '../contracts/vocab';
@@ -270,7 +270,7 @@ export class NotificationService {
         data,
         isVoip: t.isVoip,
         platform: t.platform,
-        ...(held ? { collapseKey: HELD_PUSH_COLLAPSE_KEY } : {}),
+        ...(held ? { held: true } : {}),
       });
       if (result.ok) anyOk = true;
       if (result.tokenInvalid) {

@@ -1,31 +1,20 @@
 import { Logger } from '@nestjs/common';
 import apn from '@parse/node-apn';
-import { createHash } from 'node:crypto';
 import type { PushMessage, PushProvider, PushResult } from './push.provider';
+import { pushGroupKey } from './push-grouping';
 
 /**
- * LR-11b: the `apns-collapse-id` for an ALERT push, so a newer push for the
- * same call or conversation REPLACES the older banner instead of stacking.
+ * LR-11b: the `apns-collapse-id` for an ALERT push, so a newer push of the
+ * same event type for the same chat (or call) REPLACES the older banner
+ * instead of stacking. The grouping rule itself is `pushGroupKey`, shared
+ * with Android tags.
  *
- * - VoIP: never. A PushKit wake is not a banner, and collapsing a ring is not
- *   something to experiment with.
- * - Identity: the push's explicit `collapseKey` (held pushes), else the call,
- *   else the conversation. None of those: no header, so nothing is wrongly
- *   merged with an unrelated push.
- * - Opaque: a SHA-256 prefix, 32 hex characters (Apple allows 64 bytes), so no
- *   id travels in a header and the value is stable for the same identity.
+ * VoIP: never. A PushKit wake is not a banner, and collapsing a ring is not
+ * something to experiment with.
  */
 export function apnsCollapseId(message: PushMessage): string | undefined {
   if (message.isVoip) return undefined;
-  const identity =
-    message.collapseKey ??
-    (message.data.callId
-      ? `call:${message.data.callId}`
-      : message.data.conversationId
-        ? `conversation:${message.data.conversationId}`
-        : undefined);
-  if (!identity) return undefined;
-  return createHash('sha256').update(`jawwid-push:${identity}`).digest('hex').slice(0, 32);
+  return pushGroupKey({ data: message.data, held: message.held });
 }
 
 /**
