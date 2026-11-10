@@ -739,6 +739,12 @@ abstract class L10n {
   /// **'This call is not available.'**
   String get callFailedNotAllowed;
 
+  /// No description provided for @callFailedOneLearnerLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson is for one student. Another child can join their own lesson.'**
+  String get callFailedOneLearnerLesson;
+
   /// No description provided for @callFailedNetwork.
   ///
   /// In en, this message translates to:

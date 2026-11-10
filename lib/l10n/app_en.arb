@@ -178,6 +178,7 @@
   },
   "callFailedMicrophone": "Jawwid needs microphone access to make calls.",
   "callFailedNotAllowed": "This call is not available.",
+  "callFailedOneLearnerLesson": "This lesson is for one student. Another child can join their own lesson.",
   "callFailedNetwork": "The call could not connect. Check your connection and try again.",
   "callOutgoing": "Calling…",
   "callEnded": "Call ended",

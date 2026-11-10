@@ -202,6 +202,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.BLOCK_NOT_FOUND` | 404 | PD-57: `DELETE /me/blocks/:id` -- no block of the caller's with this id. |
 | `COMM.DIRECT_BLOCKED` | 403 | PD-57: `POST /conversations/direct` -- the other person blocked the caller. Staff covering the family's direct conversation are not affected. |
 | `COMM.CALL_UNAVAILABLE` | 409 | PD-57: `POST /calls` -- everyone the call would ring blocked the caller, and it is not a lesson call; answered like a busy line, nobody is rung. |
+| `COMM.LESSON_ONE_LEARNER` | 403 | OA-12 (one learner per paid lesson call): `POST /calls`, `GET /conversations/:id/call-capability`, `POST /calls/:id/accept` and `POST /calls/:id/token` -- a teacher on the call has a lesson in its call window (15 minutes either side) and the call would seat a guardian of another family, which is another learner. The lesson's own parents, the teacher and staff are never refused it; declining is not. The app shows "This lesson is for one student. Another child can join their own lesson." Not retried. |
 | `COMM.REPORT_ALREADY_TAKEN` | 409 | PD-57: `POST /moderation/reports/:id/take` -- another staff member already took it. Taking one's own again answers 200. Reload. |
 | `COMM.REPORT_CLOSED` | 409 | PD-57: the report is actioned or dismissed and never changes. A resolve replayed by the same staff member with the same Idempotency-Key answers 200 instead. Reload. |
 

@@ -898,9 +898,23 @@ void main() {
         isGroup: false,
       );
 
-      // The failure is one of three actionable categories, not a code.
+      // The failure is one of four actionable categories, not a code.
       expect(stateOf(container).failure, CallUiFailure.notAllowed);
-      expect(CallUiFailure.values, hasLength(3));
+      expect(CallUiFailure.values, hasLength(4));
+    });
+
+    test('OA-12: another child\'s paid lesson call is its own failure, not "not available"', () async {
+      final container = await ready();
+      calls.startError = refusal(lessonOneLearnerCode);
+
+      await controllerOf(container).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: true,
+      );
+
+      expect(stateOf(container).phase, CallUiPhase.failed);
+      expect(stateOf(container).failure, CallUiFailure.oneLearnerLesson);
     });
   });
 

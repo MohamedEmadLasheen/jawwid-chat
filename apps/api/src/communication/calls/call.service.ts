@@ -16,7 +16,7 @@ import { ConversationService, isUuid } from '../conversations/conversation.servi
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { blockersAmong } from '../../platform/blocks';
-import { CallEndReason, CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
+import { ActorKind, CallEndReason, CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -83,6 +83,13 @@ const MAX_HISTORY_PAGE = 100;
 export const LESSON_CALL_EARLY_MINUTES = 15;
 /** ...until this many minutes after it ends. */
 export const LESSON_CALL_LATE_MINUTES = 15;
+
+/** OA-12: a lesson call seats one learner (CallService.lessonFamiliesOn). */
+const ONE_LEARNER_REFUSAL = {
+  allowed: false,
+  code: CommErrorCode.LESSON_ONE_LEARNER,
+  reason: 'this lesson is for one student; another child joins their own lesson',
+} as const satisfies Decision;
 
 /**
  * A keyset cursor: the last row's `started_at` and `id`, opaque to the client.
@@ -262,6 +269,87 @@ export class CallService {
   }
 
   /**
+   * OA-12 (docs/release/app-review-notes-payments.md): ONE LEARNER PER PAID
+   * LESSON CALL. Payments outside store billing rest on Apple 3.1.3(d) and
+   * Google Play's 1:1 rule: a live service between a teacher and ONE learner.
+   *
+   * The lesson already names one learner and a teacher cannot hold two lessons
+   * at once (lesson_teacher_is_never_double_booked). The call is the gap: it
+   * carries no lesson id. So, the same way isLessonCall ties a call to a lesson,
+   * a call is a LESSON CALL while one of its teachers has a lesson on (from
+   * LESSON_CALL_EARLY before the start to LESSON_CALL_LATE after the end, not
+   * cancelled, moved or voided) AND it seats that lesson's family.
+   *
+   * A child has no account: on a call a learner is present through their
+   * family's guardians. A lesson call that also seats a guardian of ANOTHER
+   * family seats another learner, and is refused. The lesson's own parents, the
+   * teacher and staff are never refused; a family's own conversations (siblings
+   * included) hold one family and are unaffected; outside every window nothing
+   * changes. Only a class group may span families in the database.
+   *
+   * "Paid": every lesson counts. Lessons are what families pay for (in-app
+   * payability names lesson packages only), a lesson row carries no package
+   * link, and a trial is held to the same rule -- so it fails closed. A trial
+   * names a prospect, not a learner, and has no family on a call to compare.
+   */
+  private async lessonFamiliesOn(teacherIds: string[], organizationId: string, now: Date): Promise<Set<string>> {
+    if (teacherIds.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<Array<{ family_id: string }>>`
+      SELECT DISTINCT ln.family_id::text AS family_id
+        FROM chat.lesson l
+        JOIN chat.learner ln ON ln.id = l.learner_id
+       WHERE l.teacher_id = ANY(${teacherIds}::uuid[])
+         AND l.organization_id = ${organizationId}::uuid
+         AND (l.outcome IS NULL OR l.outcome = 'held')
+         AND ${now}::timestamptz BETWEEN l.starts_at - ${LESSON_CALL_EARLY_MINUTES} * interval '1 minute'
+                                     AND l.ends_at + ${LESSON_CALL_LATE_MINUTES} * interval '1 minute'`;
+    return new Set(rows.map((r) => r.family_id));
+  }
+
+  /**
+   * OA-12, on START: the families whose guardians the call would seat. Refused
+   * when one of them has a lesson on with a teacher the call seats, and the call
+   * seats any other family too. Null when the call may go ahead.
+   */
+  private async oneLearnerAtStart(conv: Conversation, participants: Actor[], now: Date): Promise<Decision | null> {
+    const families = new Set(
+      participants.flatMap((a) => (a.kind === ActorKind.CONTACT && a.familyId ? [a.familyId] : [])),
+    );
+    if (families.size < 2) return null;
+    const teacherIds = participants.filter((a) => a.kind === ActorKind.TEACHER).map((a) => a.actorId);
+    const lessonFamilies = await this.lessonFamiliesOn(teacherIds, conv.organizationId, now);
+    return [...families].some((f) => lessonFamilies.has(f)) ? ONE_LEARNER_REFUSAL : null;
+  }
+
+  /**
+   * OA-12, on JOIN (answering, or a media token): a guardian is refused when a
+   * teacher on the call has a lesson on for ANOTHER family that the call seats.
+   * Only a guardian is ever refused; the lesson's own family never is.
+   */
+  private async oneLearnerAtJoin(
+    actor: Actor,
+    call: Call & { participants: CallParticipant[] },
+    participantActors: Actor[],
+    now: Date,
+  ): Promise<void> {
+    if (actor.kind !== ActorKind.CONTACT || !actor.familyId) return;
+    const seated = new Set(call.participants.filter((p) => p.leftAt === null).map((p) => p.actorId));
+    const otherFamilies = new Set(
+      participantActors.flatMap((a) =>
+        a.kind === ActorKind.CONTACT && a.familyId && a.familyId !== actor.familyId && seated.has(a.actorId)
+          ? [a.familyId]
+          : [],
+      ),
+    );
+    if (otherFamilies.size === 0) return;
+    const teacherIds = participantActors.filter((a) => a.kind === ActorKind.TEACHER).map((a) => a.actorId);
+    const lessonFamilies = await this.lessonFamiliesOn(teacherIds, call.organizationId, now);
+    if ([...otherFamilies].some((f) => lessonFamilies.has(f))) {
+      throw new CommError(ONE_LEARNER_REFUSAL.code, ONE_LEARNER_REFUSAL.reason);
+    }
+  }
+
+  /**
    * The BR-1 call triggers' refusal, as the COMM.* code the application would
    * have given. Null for anything else, which stays a 500.
    *
@@ -382,6 +470,12 @@ export class CallService {
         participantActors,
         callType,
       };
+    }
+    // OA-12: one learner per paid lesson call. Asked here, so callCapability
+    // and start() agree.
+    if (seat.allowed) {
+      const refusal = await this.oneLearnerAtStart(conv, participantActors, now);
+      if (refusal) return { decision: refusal, participantActors, callType };
     }
     return { decision: seat, participantActors, callType };
   }
@@ -640,7 +734,7 @@ export class CallService {
    * leave time onto a finished call and make its history wrong.
    */
   async decline(callId: string, actorId: string): Promise<void> {
-    const { actor, call } = await this.authorizeJoin(callId, actorId);
+    const { actor, call } = await this.authorizeJoin(callId, actorId, { takesSeat: false });
 
     await this.prisma.$transaction(async (tx) => {
       const { status } = await this.lockCall(tx, callId);
@@ -1289,7 +1383,7 @@ export class CallService {
    * mint a media token. "Is a participant" and "is still on the call" are
    * different questions; this asks the second.
    */
-  private async authorizeJoin(callId: string, actorId: string) {
+  private async authorizeJoin(callId: string, actorId: string, opts: { takesSeat: boolean } = { takesSeat: true }) {
     const now = new Date();
     const actor = await this.conversations.requireActor(actorId);
 
@@ -1335,6 +1429,10 @@ export class CallService {
       const a = await this.identity.resolveActor(p.actorId);
       if (a) participantActors.push(a);
     }
+
+    // OA-12: one learner per paid lesson call. Answering and media take a seat;
+    // declining does not, so a refused guardian can still turn the ring down.
+    if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, participantActors, now);
 
     const family = conv.familyId
       ? await this.prisma.family.findUnique({

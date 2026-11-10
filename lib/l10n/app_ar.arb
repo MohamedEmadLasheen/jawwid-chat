@@ -173,6 +173,7 @@
   },
   "callFailedMicrophone": "يحتاج جَوِّد إلى إذن الميكروفون لإجراء المكالمات.",
   "callFailedNotAllowed": "هذه المكالمة غير متاحة.",
+  "callFailedOneLearnerLesson": "هذا الدرس لطالب واحد. يمكن لأي طفل آخر أن ينضم إلى درسه الخاص.",
   "callFailedNetwork": "تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.",
   "callOutgoing": "جارٍ الاتصال…",
   "callEnded": "انتهت المكالمة",

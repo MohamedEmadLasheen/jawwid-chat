@@ -376,6 +376,10 @@ class L10nEn extends L10n {
   String get callFailedNotAllowed => 'This call is not available.';
 
   @override
+  String get callFailedOneLearnerLesson =>
+      'This lesson is for one student. Another child can join their own lesson.';
+
+  @override
   String get callFailedNetwork =>
       'The call could not connect. Check your connection and try again.';
 

@@ -175,6 +175,7 @@ class _StatusLine extends StatelessWidget {
       CallUiPhase.failed => switch (state.failure) {
         CallUiFailure.microphone => l10n.callFailedMicrophone,
         CallUiFailure.notAllowed => l10n.callFailedNotAllowed,
+        CallUiFailure.oneLearnerLesson => l10n.callFailedOneLearnerLesson,
         CallUiFailure.network || null => l10n.callFailedNetwork,
       },
     };

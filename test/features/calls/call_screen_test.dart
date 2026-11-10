@@ -242,6 +242,64 @@ void main() {
       expect(find.text(l10n.callSendMessageInstead), findsOneWidget);
     });
 
+    // OA-12: one learner per paid lesson call. The server refuses another
+    // child's guardian with COMM.LESSON_ONE_LEARNER; the screen says why in
+    // plain words, never the code.
+    testWidgets('another child\'s lesson call says it is for one student (English)',
+        (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pump();
+      calls.startError = refusal(lessonOneLearnerCode);
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Class group',
+        isGroup: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('This lesson is for one student. Another child can join their own lesson.'),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.callFailedNotAllowed), findsNothing);
+      expect(find.textContaining('COMM.'), findsNothing);
+      expect(find.text(l10n.callSendMessageInstead), findsOneWidget);
+    });
+
+    testWidgets('another child\'s lesson call says it is for one student (Arabic)',
+        (tester) async {
+      await tester.pumpWidget(harness(locale: const Locale('ar')));
+      await tester.pump();
+      calls.startError = refusal(lessonOneLearnerCode);
+
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'مجموعة الصف',
+        isGroup: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('هذا الدرس لطالب واحد. يمكن لأي طفل آخر أن ينضم إلى درسه الخاص.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('COMM.'), findsNothing);
+    });
+
+    testWidgets('answering another child\'s lesson call shows the same sentence',
+        (tester) async {
+      await pumpIncoming(tester, isGroup: true);
+      calls.acceptError = refusal(lessonOneLearnerCode);
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      await controllerOf(tester).accept();
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.callFailedOneLearnerLesson), findsOneWidget);
+    });
+
     testWidgets(
         'an unreachable media room shows the failure, never "Connecting…" forever',
         (tester) async {
