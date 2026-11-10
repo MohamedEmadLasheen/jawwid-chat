@@ -55,6 +55,7 @@ function transaction(over: Partial<Transaction> = {}): Transaction {
     recordedBy: null,
     card: { brand: 'visa', last4: '4242', wallet: null },
     stripe: { checkoutSessionId: 'cs_test_a1', paymentIntentId: 'pi_test_1', chargeId: 'ch_test_1', customerId: 'cus_test_1', livemode: false },
+    overpaid: null,
     ...over,
   }
 }
@@ -297,6 +298,33 @@ describe('Payments > Transactions', () => {
 
     // Reconcile is the server's word only.
     expect(within(dialog).queryByRole('button', { name: 'Reconcile with Stripe' })).not.toBeInTheDocument()
+  })
+
+  it('marks a payment recorded beyond what was owed: “Overpaid: refund or credit” on the row and in the detail, with the amount and why; none on an owed one', async () => {
+    const overpaid = { amountMinor: 120000, why: 'request_paid', settled: false }
+    serve({ list: list({ items: [transaction({ overpaid }), CASH] }) })
+    on('GET', /\/payments\/p-1$/, () =>
+      json(detail({ payment: { ...transaction({ overpaid }), voided: null, paymentMethodType: 'card' }, canReconcile: false })),
+    )
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    const [, alpha, beta] = within(table).getAllByRole('row')
+    expect(within(alpha!).getByText('Overpaid: refund or credit')).toBeInTheDocument()
+    expect(within(beta!).queryByText(/^Overpaid/)).not.toBeInTheDocument()
+
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).getByText('Overpaid: refund or credit')).toBeInTheDocument()
+    expect(within(dialog).getByText(/^Overpaid by AED\s1,200\.00$/)).toBeInTheDocument()
+    expect(within(dialog).getByText('The request was already paid when this money arrived.')).toBeInTheDocument()
+  })
+
+  it('an overpayment refunded since reads as settled, in Arabic too', async () => {
+    serve({ list: list({ items: [transaction({ overpaid: { amountMinor: 50000, why: 'instalment_closed', settled: true } })] }) })
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions', locale: 'ar' })
+    const table = await screen.findByRole('table', { name: 'المعاملات' })
+    expect(within(table).getByText('مبلغ زائد (تمت تسويته)')).toBeInTheDocument()
+    expect(within(table).queryByText('مبلغ زائد: يُردّ أو يُضاف رصيدًا')).not.toBeInTheDocument()
   })
 
   it('Reconcile with Stripe shows Chat’s and Stripe’s numbers when they differ, and the refunds recorded', async () => {

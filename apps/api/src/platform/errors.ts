@@ -353,6 +353,11 @@ export enum CommErrorCode {
   /** PD-27: card payments are not configured on this deployment (no STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET). 503. */
   PAYMENTS_UNAVAILABLE = 'COMM.PAYMENTS_UNAVAILABLE',
   /**
+   * PD-27 S1: another tap is opening Stripe's page for this same request right
+   * now. 409; nothing was opened. Not "paid" or "closed": try again in a moment.
+   */
+  CHECKOUT_OPENING = 'COMM.CHECKOUT_OPENING',
+  /**
    * Store payments policy: this request is not for live one-to-one lessons (e.g.
    * purpose `other`), so the app's card checkout and bank-transfer receipt refuse
    * it (App Store 3.1.3(d), Google Play 1:1 services). 409. Never retry in the app.
