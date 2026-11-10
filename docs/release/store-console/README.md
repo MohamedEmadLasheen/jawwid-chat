@@ -22,7 +22,7 @@ credential). No credential, entity name, address or URL has been invented.
 | [google-data-safety.md](google-data-safety.md) | Play Console → App content → Data safety | Every data type, the Firebase Installations ID, Sentry, encryption in transit, deletion |
 | [age-rating.md](age-rating.md) | App Store Connect → Age Rating; Play → Content rating (IARC) | Apple's current questionnaire (incl. user-generated content, messaging, social media) and IARC |
 | [play-declarations.md](play-declarations.md) | Play Console → App content, Store settings | Target audience, App access (review instructions), ads, financial features, health, news, government, foreground service (and its video), full-screen intent, permissions, category, countries |
-| [review-notes.md](review-notes.md) | App Store Connect → App Review Information → Notes; Play → App access | The paste-ready review text (LR-09f): three review accounts, deletion, calls, the staff role, the payments choice (OA-12), and the byte count |
+| [review-notes.md](review-notes.md) | App Store Connect → App Review Information → Notes; Play → App access | The paste-ready review text (LR-09f): three review accounts, deletion, calls, the staff role, the payments paragraph (OA-12 default: no payment step for review), and the byte count |
 | [ios-background-modes.md](ios-background-modes.md) | (App Review checks the app) | LR-24: each `UIBackgroundModes` entry, the code that uses it, and its justification. `remote-notification` has no use: remove it |
 | [listing-copy.md](listing-copy.md) | Both listings | Name, subtitle, short and full descriptions, keywords, what's new (Arabic first), screenshot sizes and shot list |
 
@@ -37,8 +37,10 @@ credential). No credential, entity name, address or URL has been invented.
    `apple-app-privacy.md` §5.
 3. **Purchase History must be declared** on both stores: the app shows payments, receipts and
    downloadable invoices (`lib/features/billing/presentation/my_payments_screen.dart:323-330`).
-4. **The review cohort has nothing to pay**, so a reviewer cannot reach the pay sheet that the payments
-   review notes point to (`play-declarations.md` §2).
+4. **The review cohort has nothing to pay** (tested in #575), so a reviewer sees no "Amount due" and no
+   Pay. The review texts now follow the OA-12 recommended default (no in-app payment step for review)
+   and say so (`review-notes.md` §2.1 and §3; `app-review-notes-payments.md` §4). The "Amount due > Pay"
+   text is kept only as the option A alternative.
 5. **Today's payment tab is named "Subscriptions"** (`lib/app/router.dart:140-142`); screenshots and
    review notes must wait for the LR-15 rename or avoid it.
 6. **The data inventory cites `checkout.service.ts:129`** for the child's name in the Stripe line item; it
@@ -72,7 +74,7 @@ Each item has a recommendation, so the answer can be yes or no.
 | 5 | Are Arabic or tajweed taught as courses in this app? | Quran only unless yes | `listing-copy.md` §5.3, §6 |
 | 6 | Payment tab wording (LR-15) | Lesson-package wording, before screenshots | `listing-copy.md` §9.2 |
 | 7 | Live card payments at launch (LR-34) | Owner's call; the copy drops the card sentence if not | `listing-copy.md` §5.3 |
-| 8 | A payable lesson-package request in the review cohort | Yes, so a reviewer can reach Pay | `play-declarations.md` §2 |
+| 8 | OA-12: a payment step for the reviewer? | **No** (the recommended default): the review cohort stays without anything payable, and the notes say the review families have nothing to pay. Option A (seed a payable request) only if the owner chooses it | `review-notes.md` §2.1, §3; `play-declarations.md` §2 |
 | 9 | Apple "Social Media" answer | No | `age-rating.md` §1.2 |
 | 10 | Apple age-rating override | None (calculated rating, expected 4+) | `age-rating.md` §1.4 |
 | 11 | Counsel: is Quran-lesson enrolment "religious beliefs" data? | Counsel decides; declare if unsure | `apple-app-privacy.md` §3.4; `google-data-safety.md` §2 |
