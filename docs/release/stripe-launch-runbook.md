@@ -23,6 +23,10 @@ recorded as `ignored` and nothing else; harmless) and ignore the `not_chat` outc
 merged, the `LAUNCH_PHASE=launch` deploy does **not** require the Stripe secrets, and a `pk_live_` key is
 refused only by Stripe, not by the deploy. Nothing else in this runbook depends on #581.
 
+A fourth PR, **W63** ("Pause card payments", an Admin switch that turns the card option off while webhooks
+and the reconciler keep working), is being built separately. Once it merges it becomes the preferred fast
+stop in §6.9 (option A'). Until then the key-based options in §6.9 are what exists.
+
 ---
 
 ## 1. Read-only pre-checks in the Stripe Dashboard (live mode)
@@ -38,10 +42,17 @@ top right). Change nothing in this section.
 2. **List the existing webhook endpoints.** Developers → Webhooks (UNVERIFIED; in newer Dashboards:
    Workbench → Webhooks). For each endpoint already there, note its URL, status (enabled/disabled), API
    version and its list of events. These are Core's. **Do not edit, disable or delete any of them.** Chat
-   gets its own endpoint in §2. Note in particular whether any Core endpoint listens to `refund.*`,
-   `charge.refunded` or `charge.dispute.*`: Stripe delivers each event to every endpoint subscribed to it,
-   so Core will also receive events about Chat's payments. That is expected and harmless for Chat; whether
-   Core ignores foreign objects is Core's concern and is not changed here.
+   gets its own endpoint in §2. Stripe delivers each event to **every** endpoint subscribed to it, so from
+   the first smoke-test charge Core receives every event about Chat's objects that a Core endpoint is
+   subscribed to. Write down every event in the §2 table that any Core endpoint also listens to. The ones
+   that matter most are the payment events, not only the refund ones: `checkout.session.completed`,
+   `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.succeeded` (Chat does not
+   subscribe to it, but Core may) and `charge.refunded`, `refund.*`, `charge.dispute.*`. **Before the
+   first live charge (§6.2), the owner confirms how Core handles an event about an object it did not
+   create.** Chat's objects carry `metadata.paymentRequestId` and `organizationId`, and with #580
+   `metadata.system = jawwid-chat`; Core can recognise them by that. This is a question for the owner
+   about Core; nothing in Core is changed here, and if the answer is "Core would act on it", the launch
+   waits for Core, not for a Chat change.
 3. **List the existing API keys.** Developers → API keys (UNVERIFIED). Note the names of existing standard
    and restricted keys. **Do not roll, reveal or delete any of them**: rolling the standard secret key
    would break Core. Chat gets its own restricted key in §3.
@@ -84,8 +95,15 @@ Add destination, type "Webhook endpoint").
   and `main.ts:82`; the host is `PRODUCTION_API_BASE_URL`, `scripts/infra/production-setup.py:45`).
 - **Description:** something that names Chat (for example "Jawwid Chat API, production"), so nobody
   mistakes it for Core's.
-- **API version:** leave the account default. The code reads only fields that exist in every current
-  version (`toSession`, `toRefundFacts`, `toIntentFacts`).
+- **API version:** **pin it** to the version the Stripe SDK pins; do not leave "account default". The
+  account default belongs to the shared account, so if Core ever upgrades it, an unpinned Chat endpoint
+  would start receiving payloads in the new shape. The API constructs its client with no `apiVersion`
+  (`stripe.gateway.ts:125`), so every call and every verified event uses the version baked into the
+  installed `stripe` package (`apps/api/package.json`: `^23.0.0`). Read the exact string from
+  `apps/api/node_modules/stripe/cjs/apiVersion.js` on the deployed build (or the `Stripe-Version` header
+  Stripe shows under Developers → Logs for any Chat request) and choose that version in the endpoint's
+  "API version" picker (UNVERIFIED label). The string the review quoted is `2026-09-30.endive`; confirm it
+  against the file rather than copying it from here. Pinning affects only Chat's endpoint, never Core's.
 - **Events to send:** exactly these, and nothing else.
 
 | Event | Handled where (on `main` unless noted) | Outcome recorded |
@@ -143,17 +161,27 @@ Developers → API keys → **Create restricted key** (UNVERIFIED). Name it for 
 
 Notes grounded in the code:
 
-- There is no other Stripe call. `grep` for `this.stripe.` across `apps/api/src` finds only the eight
-  gateway methods listed above (`createCheckout`, `retrieveCheckout`, `expireCheckout`, `refund`,
-  `createCustomer`, `findCheckoutByPaymentIntent`, `paymentIntentFacts`, `listRefunds`).
+- There is no other Stripe call. `grep` for `this.stripe.` across `apps/api/src` finds only the gateway
+  methods listed above: eight on `main` (`createCheckout`, `retrieveCheckout`, `expireCheckout`, `refund`,
+  `createCustomer`, `findCheckoutByPaymentIntent`, `paymentIntentFacts`, `listRefunds`) and a ninth with
+  #580 (`paymentIntentSystem`, another `paymentIntents.retrieve`, covered by the PaymentIntents row).
 - Stripe may group Checkout Sessions under "Checkout" and may require **Products**/**Prices** read for
   `price_data` line items; the code uses inline `price_data` (`stripe.gateway.ts:176-184`), not stored
   Prices. If Stripe refuses a checkout with a permission error after deploy (API log line
   `stripe checkout refused: <category>`, `checkout.service.ts:172`), add the permission Stripe's error
   names and nothing more. UNVERIFIED which extra grants, if any, Stripe demands.
-- `rk_live_` is accepted by the boot guard (`stripe.gateway.ts:138`; #579 `LIVE_KEY`). A publishable
+- **Rehearse the scopes in test mode before the launch window.** Do not let a missing scope show up for
+  the first time as a failed live checkout. In the Dashboard with the test-mode toggle **on**, create a
+  restricted **test** key (`rk_test_…`) with exactly the permissions in the table above, set it as
+  `STRIPE_SECRET_KEY` in the **staging** Environment (with staging's test-mode webhook secret), deploy
+  staging, and run `pd027-stripe-lifecycle.md` §5.5 steps 1, 4, 5 and 7 (a card payment, an Admin refund,
+  a resent event, a Reconcile). If any step fails with a permission error, add the permission Stripe
+  names to the test key, retest, and give the live key in this section the same permission. Only then
+  create the live key with the proven set. The staging guard accepts a test key; production refuses one
+  (`stripe-config.ts`), so the rehearsal cannot be confused with the live key.
+- `rk_live_` is accepted by the boot guard (`stripe-config.ts`; #579 `LIVE_KEY`). A publishable
   `pk_live_` key, a test key, or the webhook secret pasted into the key slot is refused by the deploy and by
-  the API at boot (#579).
+  the API at boot (#579). `stripe.gateway.ts:137-139` only reports `livemode` from the key's prefix.
 - Missing **Customers** write: Chat logs `stripe customer not created` and the parent pays as a guest;
   payments still record (`checkout.service.ts:218`). Missing **PaymentIntents**/**Charges** read: payments
   record without card details, and Reconcile cannot compare. Neither loses money, but fix the key.
@@ -165,8 +193,10 @@ restricted key"), with the key's name in Stripe and the date. Stripe shows it on
 
 ## 4. GitHub `production` Environment
 
-Everything the deploy reads comes from the `production` GitHub Environment (`deploy-production.yml:198,
-287-295`). Set values with the repository's helper, which uses gh's hidden prompt and never prints a secret
+The Stripe secrets and the variables below come from the `production` GitHub Environment
+(`deploy-production.yml:198, 287-295`). `PRODUCTION_API_BASE_URL`, which the payment-link default is built
+on, is a **repository** variable, not an Environment one (`production-setup.py` `REPO_VARS`). Set values
+with the repository's helper, which uses gh's hidden prompt and never prints a secret
 (`docs/infrastructure/production-readiness.md`, "Filling the GitHub configuration"):
 
 ```
@@ -176,7 +206,7 @@ python3 -I scripts/infra/production-setup.py ask STRIPE_SECRET_KEY STRIPE_WEBHOO
 
 | Name | Kind | Value | Notes |
 |---|---|---|---|
-| `STRIPE_SECRET_KEY` | secret | the `rk_live_…` key from §3 | API and worker. Must match `^(sk\|rk)_live_\S+$` (#579). Setting it turns `cardAvailable` on everywhere (`stripe.gateway.ts:129-131`; `billing.service.ts:632,710`, `payments.service.ts:732`, `pay-link.controller.ts:102`). |
+| `STRIPE_SECRET_KEY` | secret | the `rk_live_…` key from §3 | API and worker. Must match `^(sk\|rk)_live_\S+$` (#579). Setting it turns `cardAvailable` on everywhere (`stripe.gateway.ts:129-131`; `billing.service.ts:632,710`, `payments.service.ts` `presentSettings`, `pay-link.controller.ts:102`). |
 | `STRIPE_WEBHOOK_SECRET` | secret | the `whsec_…` from §2 | API. Required whenever the key is set (`stripe-config.ts`; `check-env.sh`). Must match `^whsec_\S+$` (#579). |
 | `PAYMENT_LINK_BASE_URL` | variable | **leave unset** | The deploy defaults it to `PRODUCTION_API_BASE_URL` + `/api/v1`, i.e. `https://api.chat.jawwid.com/api/v1` (`deploy-production.yml:292`). Payment links are built on it (`payment-ledger.service.ts:123-125`). Set it only if the public API origin ever differs from `PRODUCTION_API_BASE_URL`. |
 | `SUBSCRIPTION_LOCK_ENFORCED` | variable | **leave unset** (defaults to `false`, `deploy-production.yml:295`) | PD-30's payment lock stays **off** in production (owner, 2026-11-06, `docs/product/pd-registry/PD-30-amendment-chat-open.md`). Turning Stripe on does not change this. |
@@ -188,7 +218,8 @@ Both secrets may be set while `LAUNCH_PHASE=review`: then the next review-phase 
 public launch, set the two secrets in the launch window itself, immediately before switching
 `LAUNCH_PHASE`.
 
-After the deploy, the workflow summary prints `launch phase` (`deploy-production.yml:447`). The API and
+After the deploy, the workflow summary table prints a `launch phase` row (`deploy-production.yml`, the
+summary step near line 445). The API and
 worker logs print the Stripe state at boot only through the payment-lock line
 (`main.ts:124`, `worker.ts:330`); the Stripe check itself is silent on success and fails the boot on error
 with a message naming the variable, never the value.
@@ -214,10 +245,12 @@ else sees it read-only.
 The same tab shows two read-only badges from the server (`PaymentsPage.tsx:351-358`):
 **"Stripe connected"** / **"Not configured: no card option anywhere."** (`cardAvailable`) and
 **"Webhook configured"** (`webhookConfigured`). After §4 both must be green. Every save writes an audit row
-`billing.settings_set` with before and after (`payments.service.ts:712-717`).
+`billing.settings_set` with before and after (`payments.service.ts`, the `setSettings` transaction near
+line 710).
 
-Nothing about Stripe is set through Admin Web. There is no Admin switch for cards: `cardAvailable` is
-exactly "a secret key is configured" (§4, §6.9).
+Nothing about Stripe is set through Admin Web. On `main` there is no Admin switch for cards: `cardAvailable`
+is exactly "a secret key is configured" (§4, §6.9). W63 adds a "Pause card payments" switch on this tab;
+until it merges, leave this paragraph as the rule.
 
 ---
 
@@ -259,8 +292,14 @@ Admin Web → Payments:
 
 1. **Stripe events** tab: within seconds, rows for `checkout.session.completed` and
    `payment_intent.succeeded` (either order). One has outcome `recorded`, the other `already_recorded`
-   (`pd027-stripe-lifecycle.md` §3.2, "Order does not matter"). Any `mismatch`, `unknown_session` or a
-   400 from the endpoint means stop: see §6.9 and `pd027-stripe-lifecycle.md` §5.7.
+   (`pd027-stripe-lifecycle.md` §3.2, "Order does not matter"). Find the two rows by the smoke test's
+   session id (`cs_live_…`) and payment intent (`pi_…`) from the Stripe Dashboard, not by time alone.
+   Stop only if a row **about the smoke-test session or payment intent** shows `mismatch` or
+   `unknown_session`, or the endpoint answered 400 for it: see §6.9 and `pd027-stripe-lifecycle.md` §5.7.
+   Other rows with `unknown_session` or `ignored` in the same minutes are not an alarm on a shared
+   account: Chat's endpoint receives every `checkout.session.*` and `payment_intent.*` event on the
+   account, so a Core Checkout Session records as `unknown_session` and a Core payment intent (no
+   `paymentRequestId` in its metadata) as `ignored`. #580's `not_chat` covers only refunds and disputes.
 2. **Transactions** tab: exactly **one** payment, method card, with brand and last 4, the Stripe
    references (session, payment intent, charge, customer, `livemode: true`), and the invoice number.
    With #581 there is no "Overpaid" marker (the request was owed).
@@ -278,14 +317,24 @@ Stripe side (read-only): Payments → the payment shows the metadata above; Cust
 
 ### 6.4 Resend one event (idempotency)
 
-Stripe Dashboard → the Chat endpoint → the `checkout.session.completed` delivery → **Resend** (UNVERIFIED).
-Expected: Admin → Stripe events shows the same event id again with outcome `duplicate`
-(`checkout.service.ts:230`); nothing else changes.
+Before resending, note the row count in Admin → Stripe events (or the count of rows for that event id: it
+is one). Then Stripe Dashboard → the Chat endpoint → the `checkout.session.completed` delivery → **Resend**
+(UNVERIFIED).
+
+Expected: the redelivery is answered **200** and the response body shown in the Dashboard's delivery log
+reads `{"received":true,"outcome":"duplicate"}` (`stripe-webhook.controller.ts:64`); the API log prints
+`stripe webhook: checkout.session.completed -> duplicate`. Admin → Stripe events does **not** gain a row:
+the `stripe_event` table is keyed by the event id, so a redelivered event is detected before anything is
+written (`checkout.service.ts:230`) and never appears as a second row. Confirm the row count is unchanged
+and the payment is still exactly one. A `duplicate` row in Admin would be a bug, not the expected result.
 
 ### 6.5 Refund from Admin
 
-Transactions → the payment → **Refund** (`copy.ts:218`) → the full amount, with a reason. This calls
-`refunds.create` at Stripe inside one locked transaction (`payments.service.ts:409-470`).
+The Transactions ledger is read-only (its one action is Reconcile, `copy.ts:318-320`); the Refund button
+lives on the **Parent Profile**. Admin Web → the test family's Parent Profile → the payments list → the
+card payment → **Refund** (`ParentProfilePage.tsx:502` `canRefund`, `PaymentParts.tsx`, `RefundPaymentDialog`)
+→ the full amount, with a reason. This calls `refunds.create` at Stripe inside one locked transaction
+(`payments.service.ts:409-470`).
 
 Expected:
 - the transaction reads **Refunded** (`copy.ts:313`), one refund line "through Stripe";
@@ -294,8 +343,9 @@ Expected:
 - the parent app shows the refund in the payment history.
 
 Stripe side: the refund on the payment, with the same amount. Do **not** also refund from the Stripe
-Dashboard on this payment: it is already fully refunded, and a Dashboard-initiated refund was proven in
-staging (`pd027-stripe-lifecycle.md` §5.5 step 4).
+Dashboard on this payment: it is already fully refunded. A Dashboard-initiated refund is covered by the
+staging rehearsal (`pd027-stripe-lifecycle.md` §5.5 step 4, run as part of §3's rehearsal above), not by
+the live smoke test.
 
 ### 6.6 Reconcile
 
@@ -316,18 +366,25 @@ select outcome, type, count(*) from chat.stripe_event where received_at > now() 
 There is no Core-side step and no Core change. Look only at Chat and at the Dashboard, read-only:
 
 - Stripe Dashboard → Webhooks: Core's endpoints from §1.2 are unchanged (same URLs, same events, still
-  enabled). Their delivery logs may now show Chat's events (`refund.created`, `charge.refunded`); that is
-  Stripe's fan-out, not a change.
+  enabled). Their delivery logs may now show Chat's events (any event from §1.2's overlap list, such as
+  `checkout.session.completed`, `payment_intent.succeeded`, `refund.created`, `charge.refunded`); that is
+  Stripe's fan-out, not a change, and the §1.2 confirmation covers what Core does with them.
 - Stripe Dashboard → API keys: Core's keys are unchanged; only the new Chat restricted key was added.
 - Settings from §1.4 are unchanged against the note taken then.
-- Admin → Stripe events: every row has one of the outcomes from §2. With #580, if the account carried any
-  Core refund or dispute during the window it appears as `not_chat` and Chat did nothing with it; Core's
-  Stripe Billing events, if any, appear as `ignored_not_chat`. Both prove the separation, not a problem.
+- Admin → Stripe events: every row has one of the outcomes from §2. Core's traffic during the window
+  shows up in four ways, none of them a problem: a Core Checkout Session as `unknown_session` (the event
+  row only; no payment, `checkout.service.ts:272,288`), a Core payment intent as `ignored` (no
+  `paymentRequestId`), and with
+  #580 a Core refund or dispute as `not_chat` and Core's Stripe Billing events as `ignored_not_chat`.
+  What would be a problem is any of these outcomes on a row whose session or payment intent is the
+  smoke test's (§6.3.1), or a `recorded` row whose payment is not the smoke test's.
 
 ### 6.8 Leave the test family
 
-Keep the test family (and its Customer in Stripe) for future smoke tests. Mark it as internal in Chat's
-records so it is excluded from any business reporting.
+Keep the test family (and its Customer in Stripe) for future smoke tests. Chat has no "internal family"
+flag or reporting exclusion; the only marking is the unmistakable label given at intake (§6, "Who pays")
+and a note in the family's Parent Profile. Whoever reads revenue figures must know that family's one
+small payment and its refund are a test; the refund leaves the net at zero.
 
 ### 6.9 Rollback: turning cards off fast
 
@@ -335,7 +392,16 @@ records so it is excluded from any business reporting.
 (`stripe.gateway.ts:129-131`). Unset it and: no card option anywhere (app, link page, Admin), checkout
 answers 503 `COMM.PAYMENTS_UNAVAILABLE` and the client offers the bank transfer (`checkout.service.ts:93-95`,
 `docs/communication/error-codes.md`), the webhook still verifies and records with the secret alone
-(`stripe.gateway.ts:215-222`), but no lookup, refund or reconcile can run until the key is back.
+(`stripe.gateway.ts:215-222`; `confirm` records without the key because the card facts are best effort),
+but no lookup, refund or reconcile can run until the key is back (`stripe-reconciler.service.ts:63`).
+
+**Payments in flight.** A Checkout Session stays payable for 45 minutes after it was opened
+(`CHECKOUT_MINUTES`, `checkout.service.ts:26`). Whatever is switched off, a parent already on Stripe's
+page can still pay inside that window, and the money is taken. Chat records that payment only from a
+verified webhook, or from the reconciler while a key is set. So every option below keeps
+`STRIPE_WEBHOOK_SECRET` set, and every key-based option has a **deadline under 3 days** to restore a
+working key: Stripe retries a failed delivery for 3 days and then gives up, and the reconciler only
+looks back a fixed window (`LOOK_BACK_MS`, 30 days) once a key is back.
 
 **The #579 constraint.** At `LAUNCH_PHASE=launch` the deploy refuses to run without both secrets
 (`check-env.sh`, `MISSING STRIPE_SECRET_KEY`). So after the public launch, "unset the key and redeploy"
@@ -343,15 +409,15 @@ is not available as is. Options, from least to most disruptive:
 
 | Option | How | Effect | When |
 |---|---|---|---|
-| **A. Revoke the restricted key in Stripe** (UNVERIFIED label: API keys → the key → Delete/Revoke) | no deploy | Every Stripe call fails. Checkout: `stripe checkout refused` in the log and 503 to the client, which offers the bank transfer (`checkout.service.ts:168-174`). The card button is still shown (`cardAvailable` is still true) until the parent taps it. Webhooks keep recording (`verifyWebhook` needs no key). Refunds and Reconcile fail until a new key is set. | Minutes. The fast stop for a suspected key leak or a run of bad charges. Re-enable: §3 with a new key, §4, redeploy. |
-| **B. Disable Chat's webhook endpoint** (UNVERIFIED: the endpoint → Disable) | no deploy | Stops recording, not charging: a parent can still pay and Chat does not record it until the endpoint is re-enabled (Stripe retries 3 days) or the reconciler finds the paid session (`stripe-reconciler.service.ts:61-125`). **Not a card-off switch.** Use only while fixing the secret. | Rarely. |
-| **C. Swap in a dummy live-shaped key** | set `STRIPE_SECRET_KEY` to a value Stripe rejects but the guard accepts, redeploy | Same as A, through the deploy. The guard checks only the prefix (#579: "any non-whitespace after the prefix"). | If the Dashboard is unavailable. Not preferred: a fake secret in the Environment is confusing. |
-| **D. Back to `LAUNCH_PHASE=review`, secrets unset** | set `LAUNCH_PHASE=review` **and** `REDIS_URL=redis://redis:6379`, unset both Stripe secrets, redeploy the same image | Cards off cleanly (`cardAvailable` false). But the resolver re-adds the review-period in-app Redis and refuses a managed `REDIS_URL` at `review` (`app-spec.py:461-464`), and `production-runbook.md` §1c says: **only before the store release is public**. | Only in the launch window itself, before the store release is switched to public. Never after. |
+| **A'. Pause card payments in Admin** (**after PR W63 merges**; UNVERIFIED label until then: Admin → Payments → Settings → "Pause card payments") | no deploy, no Stripe change | The card option disappears everywhere and new checkouts are refused, while the key stays set: webhooks keep recording, refunds and Reconcile keep working, in-flight payments from the 45-minute window are recorded normally. Nothing to restore in Stripe or GitHub; switch it back off in Admin to resume. | **Preferred fast stop once W63 is merged and deployed.** Seconds. Until W63 is on production, use A. |
+| **A. Revoke the restricted key in Stripe** (UNVERIFIED label: API keys → the key → Delete/Revoke) | no deploy | Every Stripe API call fails. Checkout: `stripe checkout refused` in the log and 503 to the client, which offers the bank transfer (`checkout.service.ts:168-174`). The card button is still shown (`cardAvailable` is still true) until the parent taps it. **Webhooks only partly record.** `checkout.session.completed` and `refund.*` on an already recorded payment still record (without card details). But `payment_intent.succeeded` and `payment_intent.payment_failed` call `findCheckoutByPaymentIntent` (`checkout.service.ts:271,286`) and `charge.refunded` calls `listRefunds` (`:339,350`); with #580, disputes on an unrecorded payment also look up Stripe. Those throw, the endpoint answers 500, and Stripe retries them for 3 days. Refunds and Reconcile fail until a new key is set. | Minutes. The fast stop for a suspected key leak or a run of bad charges before W63. **Deadline: a new key within 3 days, sooner is better.** Re-enable: §3 with a new key, §4, redeploy; then Admin → Stripe events → **Reconcile now** and check the Dashboard's failed deliveries have been retried as 200. |
+| **B. Disable Chat's webhook endpoint** (UNVERIFIED: the endpoint → Disable) | no deploy | Stops recording, not charging: a parent can still pay and Chat does not record it until the endpoint is re-enabled (Stripe retries 3 days) or the reconciler finds the paid session (`stripe-reconciler.service.ts:61-125`). **Not a card-off switch.** Use only while fixing the secret. | Rarely. Re-enable within 3 days. |
+| **C. Swap in a dummy live-shaped key** | set `STRIPE_SECRET_KEY` to a value Stripe rejects but the guard accepts, redeploy; keep `STRIPE_WEBHOOK_SECRET` | Same as A, through the deploy, with the same partial webhook recording and the same 3-day deadline. The guard checks only the prefix (#579: "any non-whitespace after the prefix"). | If the Dashboard is unavailable. Not preferred: a fake secret in the Environment is confusing. |
+| **D. Back to `LAUNCH_PHASE=review`, key unset, webhook secret kept** | set `LAUNCH_PHASE=review` **and** `REDIS_URL=redis://redis:6379`, delete **only** `STRIPE_SECRET_KEY` (`gh secret delete STRIPE_SECRET_KEY --env production`; `production-setup.py` has no unset mode), **keep `STRIPE_WEBHOOK_SECRET` set**, redeploy the same image | Cards off cleanly (`cardAvailable` false) and in-flight payments are still recorded: #579 accepts the signing secret alone at `review`, and the webhook records with it. Do **not** also delete the signing secret: with it gone every delivery gets a 503, and once cards stay off past Stripe's 3-day retry those payments are taken and never recorded in Chat. The resolver re-adds the review-period in-app Redis and refuses a managed `REDIS_URL` at `review` (`app-spec.py:461-464`), and `production-runbook.md` §1c says: **only before the store release is public**. | Only in the launch window itself, before the store release is switched to public. Never after. |
 
 Recommendation: before the store release is public, D is the clean rollback (it is the same rollback as
-the Redis cutover's). After it, A, then fix forward. A code switch that turns cards off without unsetting
-the key (so the launch guard and a card-off state can coexist) does not exist on `main`; it is a follow-up
-for the lead to decide, not an action in this runbook.
+the Redis cutover's). After it: A' once W63 is merged and deployed, otherwise A with a new key within
+3 days, then fix forward. Whichever option is used, `STRIPE_WEBHOOK_SECRET` stays set the whole time.
 
 **Rolling the webhook secret** (wrong value, or leaked): Dashboard → the endpoint → roll the signing secret
 (UNVERIFIED), set the new `STRIPE_WEBHOOK_SECRET`, redeploy. Between the two, deliveries fail verification
@@ -365,12 +431,13 @@ within three days.
 | # | Step | Where | Done by | Evidence to keep | Done |
 |---|---|---|---|---|---|
 | 1 | Live mode on; account confirmed as the shared Core account | Stripe Dashboard | owner | account name in the password manager | ☐ |
-| 2 | Core's webhook endpoints listed (URL, events, status); none changed | Dashboard → Webhooks (UNVERIFIED) | owner | dated note | ☐ |
+| 2 | Core's webhook endpoints listed (URL, events, status); none changed; every §2 event a Core endpoint also listens to written down, and how Core treats a foreign object confirmed before the first live charge | Dashboard → Webhooks (UNVERIFIED) | owner | dated note | ☐ |
 | 3 | Core's API keys listed; none rolled or deleted | Dashboard → API keys (UNVERIFIED) | owner | dated note | ☐ |
 | 4 | Branding, statement descriptor, customer e-mails, Radar, payment methods, currency noted; unchanged | Dashboard → Settings (UNVERIFIED) | owner | dated note | ☐ |
-| 5 | Chat endpoint created at `https://api.chat.jawwid.com/api/v1/stripe/webhook` with exactly the §2 events (10 on `main`, 15 with #580) | Dashboard → Webhooks (UNVERIFIED) | owner | endpoint description names Chat | ☐ |
+| 5 | Chat endpoint created at `https://api.chat.jawwid.com/api/v1/stripe/webhook` with exactly the §2 events (10 on `main`, 15 with #580), API version pinned to the SDK's | Dashboard → Webhooks (UNVERIFIED) | owner | endpoint description names Chat; pinned version noted | ☐ |
 | 6 | Signing secret stored in the password manager; never pasted elsewhere | password manager | owner | entry exists | ☐ |
-| 7 | Restricted key created with Checkout Sessions W, Refunds W, Customers W, PaymentIntents R, Charges R; all else None | Dashboard → API keys (UNVERIFIED) | owner | key name; password-manager entry | ☐ |
+| 6a | Scopes rehearsed in staging with an `rk_test_` key of the same permissions (§3; lifecycle §5.5 steps 1, 4, 5, 7 pass) | Dashboard (test mode) + staging | owner + staff | staging transaction id; any extra permission Stripe demanded | ☐ |
+| 7 | Restricted live key created with Checkout Sessions W, Refunds W, Customers W, PaymentIntents R, Charges R (plus anything 6a proved necessary); all else None | Dashboard → API keys (UNVERIFIED) | owner | key name; password-manager entry | ☐ |
 | 8 | Invoice issuer and bank account saved in Admin → Payments → Settings | Admin Web | super admin or Operations Manager | audit `billing.settings_set` | ☐ |
 | 9 | Internal test family created and labelled | Admin Web | owner | family id | ☐ |
 | 10 | #579, #580, #581 merged and deployed | GitHub | lead | PR merges | ☐ |
@@ -382,9 +449,9 @@ within three days.
 | 16 | 6.1 request created; card option visible on link and in app | Admin + phone | owner | request id | ☐ |
 | 17 | 6.2 paid with a real card; redirect `checkout=success` | phone | owner | — | ☐ |
 | 18 | 6.3 one payment, card details, invoice with issuer, push received, lessons credited once; events `recorded` + `already_recorded` | Admin + phone | staff | transaction id, invoice number | ☐ |
-| 19 | 6.4 resent event → `duplicate` | Dashboard + Admin | owner | event id | ☐ |
-| 20 | 6.5 refunded from Admin → "Refunded", one refund row, `refund_recorded` | Admin | staff with `canVerify` | refund id | ☐ |
+| 19 | 6.4 resent event → delivery response `{"received":true,"outcome":"duplicate"}`; no new row in Admin → Stripe events | Dashboard + Admin | owner | event id; row count before and after | ☐ |
+| 20 | 6.5 refunded from the Parent Profile → "Refunded", one refund row, `refund_recorded` | Admin → Parent Profile | staff with `canVerify` | refund id | ☐ |
 | 21 | 6.6 Reconcile with Stripe → in sync; Reconcile now → 0 errors | Admin | staff with `canVerify` | — | ☐ |
 | 22 | 6.7 Core's endpoints, keys and settings unchanged against the notes from 2 to 4 | Dashboard | owner | dated note | ☐ |
-| 23 | Rollback path chosen and written down for the window (D before public release, A after) | this runbook §6.9 | owner | — | ☐ |
+| 23 | Rollback path chosen and written down for the window (D before public release; after it A' if W63 is deployed, else A with a key deadline under 3 days); `STRIPE_WEBHOOK_SECRET` stays set in every case | this runbook §6.9 | owner | — | ☐ |
 | 24 | Store release switched to public only after 14 to 22 pass | App Store Connect / Play Console | owner | — | ☐ |

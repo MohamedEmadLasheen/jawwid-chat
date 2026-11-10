@@ -252,8 +252,10 @@ Run in **staging with Stripe test mode** first. Test cards: `4242 4242 4242 4242
 3. Open a checkout and abandon it. After 45 minutes, the attempt shows as expired.
 4. Refund part of a payment from Admin, then refund the rest from the Stripe Dashboard. Each is recorded
    once, and the transaction shows "refunded".
-5. Stripe Dashboard → the webhook → **Resend** an old event. Admin → Stripe events shows `duplicate`, and
-   nothing changes.
+5. Stripe Dashboard → the webhook → **Resend** an old event. The Dashboard's delivery log shows a 200 with
+   the body `{"received":true,"outcome":"duplicate"}`, and the API log prints `stripe webhook: <type> ->
+   duplicate`. Admin → Stripe events does **not** gain a row (the table is keyed by event id; a redelivery
+   is detected before anything is written), and nothing else changes.
 6. Disable the webhook endpoint for a few minutes and pay. Within about 15 minutes the worker log shows
    `stripe reconcile: a paid checkout had no webhook; recorded from Stripe`, and the payment is there
    once. Re-enable the endpoint: its late delivery shows `already_recorded`.
