@@ -18,7 +18,7 @@ import '../wire/wire_vocab.dart';
 /// | POST | `/auth/refresh` | `@Public()` | [AuthTransport] |
 /// | GET | `/me` | bearer | [ApiClient] |
 /// | GET | `/lessons/access` | bearer | [ApiClient] (staff only: the department, PD-20) |
-/// | POST | `/auth/logout` | bearer | [ApiClient] |
+/// | POST | `/auth/logout` | bearer | [ApiClient]; [AuthTransport] for [logoutWith] |
 ///
 /// ## Why two transports
 ///
@@ -40,7 +40,7 @@ import '../wire/wire_vocab.dart';
 /// [StoredTokenProvider] asks and returns the result. That is the single-token-authority
 /// rule, and the reason for it is that refresh rotation makes a second refresher
 /// account-fatal, not merely wasteful.
-class HttpAuthRepository implements AuthRepository {
+class HttpAuthRepository implements AuthRepository, SignOutReporting, SignOutServer {
   HttpAuthRepository({
     required AuthTransport transport,
     required ApiClient Function() protected,
@@ -67,7 +67,7 @@ class HttpAuthRepository implements AuthRepository {
 
   /// Single-flights sign-out, so two taps -- or a tap racing a terminal refusal -- produce
   /// one logout flow rather than two.
-  Future<void>? _signingOut;
+  Future<SignOutOutcome>? _signingOut;
 
   @override
   Future<AuthSession> signIn({
@@ -156,38 +156,61 @@ class HttpAuthRepository implements AuthRepository {
   /// changes generic replay policy, and `_mayReplay` is untouched — a POST is still not
   /// something the transport replays on its own.
   @override
-  Future<void> signOut() => _signingOut ??= _signOut().whenComplete(() {
+  Future<void> signOut() => signOutReporting();
+
+  /// [signOut], saying whether the server gave a verdict (LR-46 follow-up). An
+  /// [SignOutOutcome.unreached] answer is what `AuthController` keeps as a pending sign-out
+  /// and retries later; this repository itself still never holds a token between calls.
+  @override
+  Future<SignOutOutcome> signOutReporting() => _signingOut ??= _signOut().whenComplete(() {
         _signingOut = null;
       });
 
-  Future<void> _signOut() async {
+  Future<SignOutOutcome> _signOut() async {
     final before = await _currentAccessToken();
 
     try {
       await _protected().post<Map<String, Object?>>('/auth/logout');
-      return;
+      return SignOutOutcome.ended;
     } on AppError catch (error) {
-      // Only an expired access token is worth a second attempt. A revoked session, a
+      // Only an expired access token is worth a second attempt here. A revoked session, a
       // disabled or locked account, a network failure or a 500 are each either already final
-      // or not recoverable by sending the same request again.
-      if (!error.isRefreshable) return;
+      // or not recoverable by sending the same request again NOW; the last two are reported
+      // as unreached so they can be retried later.
+      if (!error.isRefreshable) return _outcomeOf(error);
     }
 
     final renewed = await _currentAccessToken();
     // Unchanged means the refresh did not happen or did not succeed, so there is no new
-    // credential to try and a retry would simply be refused identically.
-    if (renewed == null || renewed == before) return;
+    // credential to try and a retry would simply be refused identically. (A refresh that
+    // could not reach the server surfaces above as a network error, not here.)
+    if (renewed == null || renewed == before) return SignOutOutcome.ended;
 
     try {
-      await _transport.post<Map<String, Object?>>(
-        '/auth/logout',
-        headers: {'Authorization': 'Bearer $renewed'},
-      );
-    } on AppError {
-      // Bounded: there is no third attempt. The local session is cleared by AuthController
-      // regardless, and a server session the client can no longer name will expire on its
-      // own. Throwing would strand a user signed in on their own device.
+      await logoutWith(renewed);
+      return SignOutOutcome.ended;
+    } on AppError catch (error) {
+      // Bounded: there is no third attempt now. The local session is cleared by
+      // AuthController regardless; an unreached answer is kept by it as a pending sign-out.
+      // Throwing would strand a user signed in on their own device.
+      return _outcomeOf(error);
     }
+  }
+
+  /// A transient failure (no network, a timeout, a 5xx, rate limited) is no verdict; any
+  /// other answer -- a 401 included, which means the session is already over -- is one.
+  static SignOutOutcome _outcomeOf(AppError error) =>
+      error.isTransient ? SignOutOutcome.unreached : SignOutOutcome.ended;
+
+  /// `POST /auth/logout` over the public transport, presenting [accessToken] explicitly. That
+  /// transport has no refresh interceptor, so this can never renew anything: it is used for
+  /// the bounded retry above and for a pending sign-out, whose session is not the live one.
+  @override
+  Future<void> logoutWith(String accessToken) async {
+    await _transport.post<Map<String, Object?>>(
+      '/auth/logout',
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
   }
 
   /// No server-push channel exists for revocation on this branch, so this never emits.
