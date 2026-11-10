@@ -156,7 +156,12 @@ export interface ReminderRule {
 export interface BillingSettings {
   bankAccount: BankAccount | null
   issuer: InvoiceIssuer | null
+  /** Card is offered to parents: Stripe is configured AND not paused. */
   cardAvailable: boolean
+  /** W63: the Stripe keys are set on this deployment. */
+  cardConfigured: boolean
+  /** W63: an operator paused card payments (bank transfer remains; webhooks keep recording). */
+  cardPaused: boolean
   /** STRIPE_WEBHOOK_SECRET is set: without it no card payment is ever recorded. */
   webhookConfigured: boolean
   reminders: ReminderRule[]
@@ -167,6 +172,8 @@ export type BillingSettingsUpdate = Partial<{
   bankAccount: BankAccount | null
   issuer: InvoiceIssuer | null
   reminders: Array<{ key: string; enabled: boolean }>
+  /** W63: the card kill switch, sent on its own from its confirmation dialog. */
+  cardPaused: boolean
 }>
 
 export interface ReceiptList {

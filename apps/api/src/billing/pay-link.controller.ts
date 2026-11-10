@@ -4,6 +4,7 @@ import { Public } from '../platform/auth/auth.guard';
 import { CommError } from '../platform/errors';
 import { PrismaService } from '../platform/prisma.service';
 import { parseBankAccount } from './billing.service';
+import { isCardPaused } from './card-pause';
 import { CheckoutService } from './checkout.service';
 import { BANK_ACCOUNT_KEY, PaymentLedger } from './payment-ledger.service';
 import { renderPayPage, type PayLang, type PayPageModel } from './pay-page';
@@ -99,7 +100,7 @@ export class PayLinkController {
       currency: request.currency,
       expiresAt: request.expiresAt.toISOString(),
       bankAccount: parseBankAccount(bank?.value),
-      cardAvailable: this.checkout.available,
+      cardAvailable: this.checkout.available && !(await isCardPaused(this.prisma)),
       checkout,
       error: null,
       cardFailure: failure?.code ?? null,

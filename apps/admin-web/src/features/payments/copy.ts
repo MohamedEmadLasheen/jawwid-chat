@@ -95,6 +95,23 @@ export const PAY = {
   card: { en: 'Card payments', ar: 'الدفع بالبطاقة' },
   cardOn: { en: 'Stripe connected', ar: 'Stripe متصل' },
   cardOff: { en: 'Not configured: no card option anywhere.', ar: 'غير مُعَد: لا يظهر خيار البطاقة في أي مكان.' },
+  cardPausedBadge: { en: 'Card payments paused', ar: 'الدفع بالبطاقة متوقف مؤقتًا' },
+  cardPausedBanner: {
+    en: 'Card payments paused. Parents see bank transfer only; payments already made on Stripe are still recorded.',
+    ar: 'الدفع بالبطاقة متوقف مؤقتًا. لا يرى أولياء الأمور إلا التحويل البنكي، وما دُفع على Stripe قبل ذلك ما زال يُسجَّل.',
+  },
+  pauseCard: { en: 'Pause card payments', ar: 'إيقاف الدفع بالبطاقة مؤقتًا' },
+  resumeCard: { en: 'Resume card payments', ar: 'استئناف الدفع بالبطاقة' },
+  pauseCardTitle: { en: 'Pause card payments?', ar: 'إيقاف الدفع بالبطاقة مؤقتًا؟' },
+  pauseCardHint: {
+    en: 'From now on no parent can start a card payment, in the app or from a payment link; they are offered bank transfer instead. Payments already made on Stripe, refunds and disputes are still recorded. This change is audited.',
+    ar: 'من الآن لن يستطيع أي ولي أمر بدء دفع بالبطاقة، لا في التطبيق ولا من رابط الدفع، ويظهر له التحويل البنكي بدلًا منه. ما دُفع على Stripe قبل ذلك والاستردادات والنزاعات تظل تُسجَّل. يُسجَّل هذا التغيير في سجل التدقيق.',
+  },
+  resumeCardTitle: { en: 'Resume card payments?', ar: 'استئناف الدفع بالبطاقة؟' },
+  resumeCardHint: {
+    en: 'Parents can pay by card again, in the app and from payment links. This change is audited.',
+    ar: 'سيستطيع أولياء الأمور الدفع بالبطاقة مجددًا في التطبيق ومن روابط الدفع. يُسجَّل هذا التغيير في سجل التدقيق.',
+  },
   webhookOn: { en: 'Webhook configured', ar: 'الـWebhook مُعَد' },
   webhookOff: {
     en: 'Webhook not configured: card payments cannot be confirmed, so none is recorded.',
