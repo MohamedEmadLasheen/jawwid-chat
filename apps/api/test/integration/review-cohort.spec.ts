@@ -11,11 +11,16 @@
  * test with its own family), in their own organization, staff with no login,
  * upcoming lessons, the chats, no password anywhere but as a hash, nothing
  * written into the default organization, and a second run that changes
- * nothing -- or repairs a locked or deleted parent account.
+ * nothing -- or repairs a locked or deleted parent account, or a teacher
+ * account erased at its 30-day deadline (the child moves to the teacher
+ * created again).
  *
  * Section 2 signs all three accounts in through the real POST /auth/login (no
  * WhatsApp code, no bypass) and checks what each sees and may do over HTTP:
  * their own chats and lessons, and a refusal from every admin route.
+ *
+ * Section 3 (last, it leaves the child elsewhere): a child moved to a live
+ * teacher is refused, never moved back.
  *
  * Synthetic people only (G-20).
  */
@@ -35,7 +40,7 @@ import { AdminModule } from '../../src/admin/admin.module';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
 import { BillingModule } from '../../src/billing/billing.module';
 import {
-  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_MODE_CONFIG_KEY, REVIEW_ORG_NAME, REVIEW_ORG_SLUG, REVIEW_STAFF, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
+  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_MODE_CONFIG_KEY, REVIEW_ORG_NAME, REVIEW_PEOPLE, REVIEW_ORG_SLUG, REVIEW_STAFF, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
 } from '../../src/cli/review-cohort';
 import { parseArgs, publicSummary } from '../../src/cli/provision-review-cohort';
 import { buildGraph, truncate } from './harness';
@@ -603,10 +608,78 @@ describe('1. what the command leaves in the database', () => {
     m = again;
   });
 
-  it('the teacher review account cannot be deleted while the child is assigned to it', async () => {
+  it('the teacher review account is not deleted at once while the child is assigned to it', async () => {
     await expect(
       g.prisma.$queryRaw`select chat.erase_account(${m.teacher.accountId}::uuid, 'review spec', '{}'::text[])`,
     ).rejects.toThrow(/TEACHER_DELETION_BLOCKED/);
+  });
+
+  it('a teacher account erased at its 30-day deadline is created again, and the child moves to it', async () => {
+    // A reviewer's request (PD-56 O-3), made 31 days ago so it is due: written
+    // with the guard off, as the PD-56 suite writes its past requests, and its
+    // task raised the normal way. Then the worker's own completion.
+    const requestId = await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      const [r] = await tx.$queryRaw<Array<{ id: string }>>`
+        insert into chat.account_deletion_request (organization_id, account_id, teacher_id, requested_at, deadline_at, open_items)
+        values (${m.organizationId}::uuid, ${m.teacher.accountId}::uuid, ${m.teacher.teacherId}::uuid,
+                now() - interval '744 hours', now() - interval '24 hours', '{future_lessons,assigned_learners}')
+        returning id::text as id`;
+      return r!.id;
+    });
+    await g.prisma.$queryRaw`
+      select chat.work_task_raise(${m.organizationId}::uuid, 'teacher_deletion_request', ${requestId}::uuid,
+                                  ${m.staff.teachersManagerId}::uuid, null, 'high', 'operational', 'generic',
+                                  now() - interval '24 hours')::text`;
+    await g.prisma.$queryRaw`select chat.complete_account_deletion_request(${requestId}::uuid, null, 'deadline')::text`;
+    const erased = await g.prisma.account.findUniqueOrThrow({ where: { id: m.teacher.accountId } });
+    expect(erased.subject).toBe(`erased:${erased.id}`);
+    // The erasure leaves the child on the erased teacher ("Deleted user").
+    expect((await g.prisma.learner.findUniqueOrThrow({ where: { id: m.learnerId } })).teacherId).toBe(m.teacher.teacherId);
+
+    const after = await provisionReviewCohort(g.prisma, opts);
+    expect(after.teacher.created).toBe(true);
+    expect(after.teacher.accountId).not.toBe(m.teacher.accountId);
+    expect(after.teacher.teacherId).not.toBe(m.teacher.teacherId);
+    expect(after.learnerId).toBe(m.learnerId);
+    expect(after.familyGroupId).toBe(m.familyGroupId);
+    expect((await g.prisma.learner.findUniqueOrThrow({ where: { id: m.learnerId } })).teacherId).toBe(after.teacher.teacherId);
+
+    // Moved the way a Teachers manager moves a learner, and recorded as such.
+    const transfers = await g.prisma.learnerTransfer.findMany({ where: { learnerId: m.learnerId } });
+    expect(transfers).toEqual([expect.objectContaining({
+      fromTeacherId: m.teacher.teacherId, toTeacherId: after.teacher.teacherId, decidedBy: m.staff.teachersManagerId,
+    })]);
+
+    // The family group seats the new teacher; the erased one's seat stays closed.
+    const seats = await g.prisma.conversationMember.findMany({ where: { conversationId: m.familyGroupId, leftAt: null } });
+    expect(seats.map((s) => s.actorId)).toEqual(expect.arrayContaining([after.teacher.teacherId, after.parent.contactId]));
+    expect(seats.map((s) => s.actorId)).not.toContain(m.teacher.teacherId);
+
+    // Weekly times again, with the new teacher; every lesson ahead is theirs, none twice.
+    const slots = await g.prisma.learnerScheduleSlot.findMany({ where: { learnerId: m.learnerId, validTo: null } });
+    expect(slots.map((s) => s.weekday).sort()).toEqual(REVIEW_SCHEDULE.slots.map((s) => s.weekday));
+    expect(slots.every((s) => s.teacherId === after.teacher.teacherId)).toBe(true);
+    const upcoming = await g.prisma.lesson.findMany({ where: { learnerId: m.learnerId, startsAt: { gt: new Date() }, outcome: null } });
+    expect(upcoming.length).toBeGreaterThanOrEqual(3);
+    expect(upcoming.every((l) => l.teacherId === after.teacher.teacherId)).toBe(true);
+    expect(new Set(upcoming.map((l) => l.startsAt.toISOString())).size).toBe(upcoming.length);
+
+    // The erasure's learner_needs_teacher task settles itself on the next sweep.
+    const [{ r }] = await g.prisma.$queryRaw<Array<{ r: { handoversSettled: number } }>>`select chat.erased_teacher_sweep(50) as r`;
+    expect(r.handoversSettled).toBeGreaterThanOrEqual(1);
+
+    // The parent, the teacher created again, and the disposable parent (untouched by this repair).
+    expect(await g.prisma.account.count({ where: { organizationId: m.organizationId, isActive: true } })).toBe(3);
+    expect(after.deletionParent).toEqual(m.deletionParent);
+    expect(await countsFor(defaultOrg)).toEqual(defaultBefore);
+
+    // And the run after it changes nothing.
+    const before = await countsFor(m.organizationId);
+    const again = await provisionReviewCohort(g.prisma, opts);
+    expect(again).toEqual({ ...after, parent: { ...after.parent, created: false }, teacher: { ...after.teacher, created: false } });
+    expect(await countsFor(m.organizationId)).toEqual(before);
+    m = after;
   });
 });
 
@@ -773,5 +846,24 @@ describe('2. over HTTP, as a store reviewer', () => {
 
   it("nothing the reviewers did (sign-in, reading, messaging, push) wrote into the default organization", async () => {
     expect(await countsFor(defaultOrg)).toEqual(defaultBefore);
+  });
+});
+
+// ===========================================================================
+// Last: it leaves the child with another teacher.
+describe('3. a child moved to a live teacher is never moved back by a run', () => {
+  it('the run refuses (TEACHER_CHANGED) and changes no assignment', async () => {
+    if (!m) m = await provisionReviewCohort(g.prisma, opts);
+    // Named as the review teacher (but with no login), so the organization check
+    // (assertOnlyReviewCohort, which refuses any other teacher name with
+    // NOT_REVIEW_ORGANIZATION; section 0) passes and the child's move is what is refused.
+    const other = await g.prisma.teacher.create({
+      data: { organizationId: m.organizationId, name: REVIEW_PEOPLE.teacher, isActive: true },
+    });
+    await g.prisma.$queryRaw`
+      select count(*)::int as n
+        from chat.transfer_learner(${m.learnerId}::uuid, ${other.id}::uuid, 'other', 'review spec', null, ${m.staff.teachersManagerId}::uuid)`;
+    await expect(provisionReviewCohort(g.prisma, opts)).rejects.toMatchObject({ code: 'TEACHER_CHANGED' });
+    expect((await g.prisma.learner.findUniqueOrThrow({ where: { id: m.learnerId } })).teacherId).toBe(other.id);
   });
 });

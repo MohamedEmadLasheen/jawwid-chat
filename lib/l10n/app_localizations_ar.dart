@@ -5272,12 +5272,16 @@ class L10nAr extends L10n {
       'يُحذف فورًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك.';
 
   @override
+  String get deleteAccountGoesOnRequest =>
+      'يُحذف مع حسابك خلال 30 يومًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك. وحتى ذلك الحين، يعمل حسابك كالمعتاد.';
+
+  @override
   String get deleteAccountKeptParent =>
       'يُحتفظ به: المدفوعات والفواتير لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»)، وسجلات أبنائك لدى الأكاديمية. ويُبلَّغ فريق العمل لمتابعتها.';
 
   @override
   String get deleteAccountKeptTeacher =>
-      'يُحتفظ به: سجلات الرواتب لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.';
+      'يُحتفظ به: سجلات الرواتب، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.';
 
   @override
   String get deleteAccountPasswordLabel => 'كلمة المرور';
@@ -5302,8 +5306,44 @@ class L10nAr extends L10n {
   String get deleteAccountDone => 'تم حذف حسابك.';
 
   @override
-  String get deleteAccountTeacherBlocked =>
-      'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
+  String get deleteAccountRequestIntro =>
+      'ما زالت لديك حصص أو طلاب أو رواتب مفتوحة. يمكنك طلب حذف حسابك الآن: تغلقها الأكاديمية، ويُحذف حسابك خلال 30 يومًا على الأكثر.';
+
+  @override
+  String get deleteAccountRequestAction => 'طلب حذف الحساب';
+
+  @override
+  String deleteAccountRequestConfirm(String date) {
+    return 'هل تريد طلب حذف حسابك؟ تغلق الأكاديمية حصصك ورواتبك، ويُحذف حسابك في موعد أقصاه $date. ويمكنك إلغاء الطلب حتى ذلك الحين.';
+  }
+
+  @override
+  String get deleteAccountRequested => 'سُجّل طلب حذف حسابك.';
+
+  @override
+  String get deleteAccountRequestStatusTitle => 'طُلب حذف الحساب';
+
+  @override
+  String deleteAccountRequestStatus(String requested, String deadline) {
+    return 'طُلب في $requested، وسيُحذف حسابك في موعد أقصاه $deadline.';
+  }
+
+  @override
+  String get deleteAccountRequestCancel => 'إلغاء الطلب';
+
+  @override
+  String get deleteAccountRequestCancelConfirm =>
+      'هل تريد إلغاء طلب حذف حسابك؟ سيبقى حسابك كما هو.';
+
+  @override
+  String get deleteAccountRequestKeep => 'إبقاء الطلب';
+
+  @override
+  String get deleteAccountRequestCancelled => 'أُلغي طلب حذف حسابك.';
+
+  @override
+  String get deleteAccountRequestCancelFailed =>
+      'تعذّر إلغاء الطلب. حاول مرة أخرى.';
 
   @override
   String get locationRowTitle => 'الموقع';

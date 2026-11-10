@@ -102,6 +102,7 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `AUTH.ACCOUNT_LOCKED` | 403 | Login: temporarily locked after repeated failures. Terminal until unlock. |
 | `AUTH.SESSION_REVOKED` | 401 | Refresh token revoked, rotated-and-reused, or session deleted. Terminal. |
 | `AUTH.FORBIDDEN` | 403 | Authenticated but lacks the permission key (used only where no `COMM.*` code is more specific). |
+| `AUTH.DELETION_REQUEST_NOT_PENDING` | 409 | PD-56 O-3: cancelling a teacher's account deletion request when none is pending (§1.1d). `AUTH.TEACHER_DELETION_BLOCKED` is retired: a teacher with work open gets a request, never a refusal. |
 | `COMMON.VALIDATION` | 400 | Body / query fails schema validation. `message` names the field. |
 | `COMMON.NOT_FOUND` | 404 | Unknown route or resource with no domain-specific code. |
 | `COMMON.IDEMPOTENCY_CONFLICT` | 409 | Same `Idempotency-Key`, different request body. |
@@ -172,8 +173,8 @@ Every account accepts **two** documents: its kind's terms (`terms_family`, `term
 - **Accept rules.** The documents must be the kind's own, without duplicates, at the version in force, and must include every outstanding one. Re-sending one already accepted is a no-op. Sign-up takes exactly the family set. Each acceptance is recorded once (`chat.accept_legal_documents`, method `gate` or `signup`, never chosen by the client), with the database's time.
 - **The gate.** A route marked `@RequiresLegal()` answers **403 `COMM.TERMS_NOT_ACCEPTED`** to any account (family, teacher or staff) with anything outstanding, `error.detail.required` listing it. The check runs after authentication and permissions and **before** the action rate limit (a refused request spends no budget). On this code the client refreshes `GET /me` (or `GET /me/legal`), shows the gate, accepts, and retries.
 - **LD-11.** `POST /reports` with `reason: 'child_safety'` is **always** accepted, with or without acceptance. Every other reason is gated. The rest of the body is validated as usual.
-- **Never gated:** every `GET`, `/auth/*`, `GET /me/legal`, `POST /me/legal/accept`, `/me/sessions/*`, `POST /me/account/delete`, the public `/account-deletion`, `/parent-notices/*`, settings, and every `@Public()` route (`PUT /storage/:objectKey` is authorized by its signed URL; the gate is where the URL is minted).
-- **Gated routes** (63). `apps/api/test/unit/legal/legal-coverage.spec.ts` lists every authenticated non-GET route and fails on any that is neither gated nor on `apps/api/test/unit/legal/ungated-writes.ts`, the explicit ungated list with one reason per route (268 today):
+- **Never gated:** every `GET`, `/auth/*`, `GET /me/legal`, `POST /me/legal/accept`, `/me/sessions/*`, `POST /me/account/delete`, `POST /me/account/deletion-request/cancel`, the public `/account-deletion`, `/parent-notices/*`, settings, and every `@Public()` route (`PUT /storage/:objectKey` is authorized by its signed URL; the gate is where the URL is minted).
+- **Gated routes** (63). `apps/api/test/unit/legal/legal-coverage.spec.ts` lists every authenticated non-GET route and fails on any that is neither gated nor on `apps/api/test/unit/legal/ungated-writes.ts`, the explicit ungated list with one reason per route (272 today):
   - messages: `POST /conversations/:id/messages`, `POST .../messages/forward`, `POST .../messages/attachments/authorize`, `PATCH .../messages/:messageId`, `POST .../messages/:messageId/reactions`;
   - conversations: `POST /conversations/direct`, `/family-group`, `/student-group`;
   - stories: `POST /stories`, `POST /stories/media`, `POST /stories/:id/publish`, `POST /certificates/:id/story`;
@@ -186,6 +187,20 @@ Every account accepts **two** documents: its kind's terms (`terms_family`, `term
   - moderation: `POST /reports` (except `child_safety`), `POST /me/blocks`.
 - **Release order.** ENG-11 (Flutter) and ENG-12 (Admin Web) ship first; then the owner publishes the versions (`chat.publish_legal_version`) and sets the four `legal.current.*` rows; then the API with ENG-10 deploys. Rows set before the clients can show the gate lock app users and staff out of every gated route with no screen to accept on. Pre-deploy check: `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal` (`docs/infrastructure/production-runbook.md` §1).
 - **Fail closed (§7.3).** In production (`APP_ENV=production`) the API and the worker refuse to start when any of the four `legal.current.*` rows is missing, is not a JSON string, or names a version never published. Elsewhere a missing row is a warning and that document is not asked for; a row that names an unpublished version answers 503 `COMM.LEGAL_NOT_CONFIGURED` on gated routes everywhere. "No terms configured" never means "no terms required" in production.
+
+### 1.1d Account deletion (PD-56; O-3, owner 2026-11-07)
+
+A parent or a teacher deletes their own account in the app (Apple 5.1.1(v), Google Play). "The teacher requests deletion in the app; staff close the lessons and payroll; the account is deleted within 30 days."
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /me/account/deletion` | the holder (self-service) | — | `{ kind, immediate, openItems, request, deadlineIfRequested }`. `immediate: false` for a teacher with a lesson ahead, an assigned student or payroll of this or last month (`openItems`: `future_lessons`, `assigned_learners`, `open_payroll`). `request`: the pending one, else the latest, else `null`. `deadlineIfRequested`: now + 30 days on the database clock. Staff: `AUTH.FORBIDDEN` 403. |
+| `POST /me/account/delete` | the holder | `{ password }` | `{ deleted: true }` (every session ended), or for a teacher with work open `{ deleted: false, request }`: nothing is erased, the session stays. Asking again returns the same pending request. Wrong password `AUTH.INVALID_CREDENTIALS` 401; staff `AUTH.FORBIDDEN` 403. |
+| `POST /me/account/deletion-request/cancel` | the holder (teacher) | — | `{ request }` (state `cancelled`). None pending: `AUTH.DELETION_REQUEST_NOT_PENDING` 409; not a teacher: `AUTH.FORBIDDEN` 403. |
+| `GET /teacher-files/:teacherId/deletion-request` | `teacher_files.view`; a Teacher File reader for a teacher in their scope (PD-10, PD-35) | — | `{ request, leftOpen: { futureLessons, assignedLearners, openPayroll } \| null, canComplete }`. |
+| `POST /teacher-files/:teacherId/deletion-request/complete` | `teachers.offboard`; the super admin or the Teachers manager (PD-43's offboarding rule), teacher in scope | `{ confirm: true }` | `{ requestId, leftOpen, request }` (state `completed`, `completedVia: 'staff'`): the erasure ran. No pending request `COMM.TEACHER_FILE_CONFLICT` 409; not allowed `COMM.TEACHER_ONBOARDING_DENIED` 403; out of scope `COMM.TEACHER_FILE_NOT_FOUND` 404; no `confirm` `COMMON.VALIDATION` 400. |
+
+`request` is `{ id, state: 'pending' | 'completed' | 'cancelled', requestedAt, deadlineAt, openItems, completedAt, completedVia: 'staff' | 'deadline' | 'holder' | null, cancelledAt }` (ISO times). `deadlineAt` is `requestedAt` + 30 days. The worker reminds the Teachers manager, the task's assignee and the teacher's supervisor at day 21 and day 28 (`teacher_deletion_day21`, `teacher_deletion_day28`), and erases the account at `deadlineAt` if it is still pending (the database refuses before its own clock reaches it). Both `POST /me/account/delete` and the cancel route are limited to 10 per account in 15 minutes, never cleared by a request or a cancellation. A forced erasure (staff or the deadline) ends the teacher's weekly times, leaves lessons ahead on "Deleted user" (never cancelled) with no family reminders, raises one `learner_needs_teacher` task per learner, and keeps the payout account while payroll is open (`erased_teacher_payroll` task) until the worker finds it settled. The public page `POST /account-deletion` makes the same request and shows its date.
 
 ### 1.2 Permission keys
 
