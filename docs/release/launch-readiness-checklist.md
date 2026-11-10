@@ -5,7 +5,7 @@
 
 - **Where:** `docs/release/launch-readiness-checklist.md`.
 - **Maintained by:** the engineering lead (CEO session), after every task, merge or owner answer. Every `[x]` has evidence in §6.
-- **Last updated:** 2026-11-10 13:44 Cairo (11:44 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
+- **Last updated:** 2026-11-10 15:08 Cairo (13:08 UTC). Earlier versions today carried times about 2½ hours ahead of the real clock; the facts in them were current when written.
 - **State of `main`:** `bc47d376`, which contains #500, #502, #504–#516, #518, #519 and #520. Main CI on it: run 42524542714, success (15/15).
 
 ## 1. Dashboard
@@ -69,7 +69,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 
 | Area | PRs |
 |---|---|
-| Store builds and uploads (OT-2b direct upload with WIF) | #572 (Code Owner, High), #577 artifact evidence, #576 upload-key script |
+| Store builds and uploads (OT-2b direct upload with WIF) | #572 ACCEPT @ `40b84fbf` 14/14 (Code Owner, High); #577 ACCEPT @ `0e5e5566` (on #572; retarget after #572 merges); #576 ACCEPT @ `110f61c7` 14/14. Verified for A3 on 2026-11-10 |
 | Stripe at launch (owner decision, LR-34) | #579 config guard, #580 disputes and Core hygiene, #581 overpayment flag and lock, #583 pending-receipt warning, #584 card pause switch, #582 launch runbook |
 | Legal and docs | #573 legal pages (switched off until no placeholder remains), #574 release-doc truth, #555, #556, #558, #578 (draft, OA-12 Option B only) |
 | Review accounts and the OA-12 review payment mode | #585: server-enforced App Review payment mode (no real bank details, receipts, charges or records); ACCEPT @ `9f5748e5`, required CI 14/14. #575 (nothing payable) on #565. #586 (the review run switches the mode on for its own organization) on #575; ACCEPT @ `1e70fe21` |
@@ -185,7 +185,7 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 | Builder W23 (backend) | #498 completed: the earlier P2-1 fix (it had been left uncommitted; that tree is preserved) and the four new P2s (demo-teacher repair, migration lock timeout, payout wording marked for legal review, request-mode screen text) | #498 | **ACCEPT @ `ea2243a0`**, CI 30/30; **High: migration** |
 | Lead | #449 reviewed in full for the first time | #449 | **ACCEPT @ `c205aba0`**, no P1 or P2; **High: migration** |
 | Builder W24 (release) | LR-76 option C: signed store builds in a gated `store-release` Environment. No keys are created; artifacts are age-encrypted to the owner's public key (1-day retention); preflight refuses an unprotected Environment | #547 | **ACCEPT @ `66f9418f`**; CI running; **High: owner Code Owner approval; every key needs a separate approval** |
-| Lead | Deploy workflows: inputs reach the shell only through env; `image_tag` must be a full SHA | #548 | **ACCEPT @ `5349bf83`**; **owner Code Owner approval needed** |
+| Lead | Deploy workflows: inputs reach the shell only through env; `image_tag` must be a full SHA | #548 | **ACCEPT @ `7cd1031f`** (main merged in 2026-11-10, own files unchanged), 14/14 required; **owner Code Owner approval needed** |
 | Builder W25 (QA) | LR-09j: reproducible store screenshots, Arabic and English, with fakes (no server, no real people). The lock was completed by hand from the SDK and pub's cached hashes. Captures probably have no status bar (documented) | #549 | ACCEPT @ `3a5ffb1d`; the analyzer clash is fixed @ `5739da30`, delta review running |
 | Builder W26 (database) | RT-029: a teacher cannot move to another organization while learners name them. **High: migration `20261109140000`**, stacked on #545 | #550 | **ACCEPT @ `c63d3c6c`**; CI running |
 | Builder W27 (database) | RT-029 parent side: `organization_id` is immutable on family, conversation and teacher (no legitimate path moves them; this also closes the parent/child race). **High: migration `20261109150000`**, stacked on #550 | #551 | **Two independent reviews, both ACCEPT @ `499b0725`** (database; breakage hunt with no code path or fixture broken); CI running |
