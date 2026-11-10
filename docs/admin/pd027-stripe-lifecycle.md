@@ -97,7 +97,11 @@ edited in the Dashboard): a payment in `chat.payment` (by payment intent or char
 Anything else is another system's and is recorded as `not_chat`, with no academy, and never acted on. If
 Chat cannot tell (no secret key, or Stripe unreachable), a refund is kept as `refund_deferred`. It is never
 dropped, and it is harmless if it turns out to be foreign: the reconciler only syncs it once a Chat payment
-with that payment intent exists. A dispute Chat cannot classify because Stripe is unreachable answers
+with that payment intent exists. One safeguard for refunds only: when Chat finds no checkout of its own
+but the Stripe session or its payment intent carries `metadata.system = jawwid-chat`, the refund is kept
+as `refund_deferred` with a warning log (never `not_chat`), so a missing row or an empty Stripe session
+list cannot silently drop a Chat refund. The tag only keeps a refund waiting; it never records money or
+flags a dispute. A dispute Chat cannot classify because Stripe is unreachable answers
 500, so Stripe retries. Without a secret key Chat opens no checkouts, so an unmatched dispute is `not_chat`.
 
 **Order does not matter.**
@@ -316,7 +320,7 @@ key, a card number or Stripe's error message. Errors go to Sentry, as before.
 | outcome `ignored_not_chat` (info) | Stripe Billing is in use on the account (another system's recurring charges) | Nothing in Chat |
 | outcome `not_chat` | A refund or dispute on a payment Chat did not take | Nothing in Chat; it belongs to another system on the account |
 | `stripe dispute … dispute_opened` / `dispute_funds_withdrawn` (error), audit `payment.dispute_*`, outcome `dispute_*` | A parent's bank disputed a Chat card payment | Respond in the Stripe Dashboard before the evidence deadline. Chat's ledger is unchanged. |
-| outcome `refund_deferred` older than an hour | A refund on a Chat checkout whose payment Chat has not recorded, or one Chat could not classify (Stripe unreachable) | Admin → Stripe events; find the payment intent in Stripe |
+| outcome `refund_deferred` older than an hour | A refund on a Chat checkout whose payment Chat has not recorded, one Chat could not classify (Stripe unreachable), or one tagged `jawwid-chat` with no Chat checkout (warning log) | Admin → Stripe events; find the payment intent in Stripe |
 | `stripe customer not created` / `paying as a guest` (warn) | Customers scope missing, or a customer was deleted | Fix the key scopes |
 
 SQL for operations (read-only):

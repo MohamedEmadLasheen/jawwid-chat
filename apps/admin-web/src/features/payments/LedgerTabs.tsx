@@ -90,6 +90,7 @@ const OUTCOME_TONE: Record<string, Tone> = {
   dispute_updated: 'warn',
   dispute_closed_unknown: 'warn',
   dispute_closed_won: 'ok',
+  dispute_closed_prevented: 'ok',
   dispute_funds_reinstated: 'ok',
 }
 

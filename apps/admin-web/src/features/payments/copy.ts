@@ -487,6 +487,7 @@ export const EVENT_OUTCOME: Record<string, Pair> = {
   dispute_funds_reinstated: { en: 'Dispute: funds returned', ar: 'الاعتراض: أُعيد المبلغ' },
   dispute_closed_won: { en: 'Dispute closed: won', ar: 'أُغلق الاعتراض: لصالحنا' },
   dispute_closed_lost: { en: 'Dispute closed: lost', ar: 'أُغلق الاعتراض: لغير صالحنا' },
+  dispute_closed_prevented: { en: 'Dispute closed: prevented', ar: 'أُغلق الاعتراض: مُنع' },
   dispute_closed_warning_closed: { en: 'Dispute inquiry closed', ar: 'أُغلق الاستفسار عن الدفعة' },
   dispute_closed_unknown: { en: 'Dispute closed', ar: 'أُغلق الاعتراض' },
   not_chat: { en: 'Not a Chat payment', ar: 'ليست دفعة من Chat' },

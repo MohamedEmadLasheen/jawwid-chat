@@ -153,6 +153,12 @@ export class FakeStripe implements StripeGateway {
     };
   }
 
+  async paymentIntentSystem(paymentIntentId: string): Promise<string | null> {
+    this.read(`system:${paymentIntentId}`);
+    const s = [...this.sessions.values()].find((x) => x.paymentIntentId === paymentIntentId);
+    return s?.metadata.system ?? null;
+  }
+
   async listRefunds(paymentIntentId: string, record = true): Promise<RefundFacts[]> {
     if (record) this.read(`refunds:${paymentIntentId}`);
     const api = this.refunds

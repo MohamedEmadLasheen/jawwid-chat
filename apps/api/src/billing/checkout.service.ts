@@ -9,6 +9,7 @@ import { todayIn } from '../leave/leave.service';
 import { checkoutDescription, isPayableInApp, loadPackageFacts, notInApp } from './in-app-payability';
 import { PaymentLedger, type RecordedPayment } from './payment-ledger.service';
 import {
+  CHAT_STRIPE_SYSTEM,
   STRIPE_GATEWAY,
   safe,
   toDisputeFacts,
@@ -385,7 +386,16 @@ export class CheckoutService {
   private async unrecordedRefund(meta: EventMeta, paymentIntentId: string | null): Promise<WebhookOutcome> {
     let checkout: PaymentCheckout | null | undefined;
     try {
-      checkout = await this.chatCheckoutFor(paymentIntentId);
+      const found = await this.lookUpChatCheckout(paymentIntentId);
+      checkout = found.checkout;
+      // No Chat checkout, but Stripe says the object is Chat's (the tag on the
+      // session or its payment intent): Chat's own row is missing, or Stripe's
+      // session list came back empty. Kept as refund_deferred, so the reconciler
+      // and the payment's recording still sync it; not_chat would lose it silently.
+      if (checkout === null && paymentIntentId && (await this.taggedChat(paymentIntentId, found.session))) {
+        this.log.warn('stripe webhook: a refund on a payment intent tagged jawwid-chat has no Chat checkout; kept as deferred (check it in the Stripe Dashboard)');
+        checkout = undefined;
+      }
     } catch (e) {
       // Stripe unreachable: kept (the reconciler syncs it once the payment exists); harmless if foreign.
       this.log.warn(`stripe webhook: a refund's payment was not looked up (${errorCategory(e)}); kept as deferred`);
@@ -395,6 +405,12 @@ export class CheckoutService {
     return this.remember(checkout ? { ...meta, organizationId: checkout.organizationId } : meta, 'refund_deferred');
   }
 
+  /** The session or its payment intent carries Chat's system tag. A hint for keeping a refund, never proof of ownership. */
+  private async taggedChat(paymentIntentId: string, session: CheckoutSession | null): Promise<boolean> {
+    if (session?.metadata?.system === CHAT_STRIPE_SYSTEM) return true;
+    return (await this.stripe.paymentIntentSystem(paymentIntentId)) === CHAT_STRIPE_SYSTEM;
+  }
+
   /**
    * S3: the checkout Chat opened for a payment intent -- from Chat's own table,
    * never from metadata alone. null: not Chat's (no payment intent; or Stripe
@@ -402,13 +418,21 @@ export class CheckoutService {
    * tell (no secret key to ask Stripe with). Throws when Stripe is unreachable.
    */
   private async chatCheckoutFor(paymentIntentId: string | null): Promise<PaymentCheckout | null | undefined> {
-    if (!paymentIntentId) return null;
+    return (await this.lookUpChatCheckout(paymentIntentId)).checkout;
+  }
+
+  /** chatCheckoutFor, plus the Stripe session it asked about (null when none was asked for or found). */
+  private async lookUpChatCheckout(
+    paymentIntentId: string | null,
+  ): Promise<{ checkout: PaymentCheckout | null | undefined; session: CheckoutSession | null }> {
+    if (!paymentIntentId) return { checkout: null, session: null };
     const local = await this.prisma.paymentCheckout.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
-    if (local) return local;
-    if (!this.stripe.checkoutAvailable) return undefined;
+    if (local) return { checkout: local, session: null };
+    if (!this.stripe.checkoutAvailable) return { checkout: undefined, session: null };
     const session = await this.stripe.findCheckoutByPaymentIntent(paymentIntentId);
-    if (!session) return null;
-    return (await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } })) ?? null;
+    if (!session) return { checkout: null, session: null };
+    const checkout = await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } });
+    return { checkout: checkout ?? null, session };
   }
 
   /**

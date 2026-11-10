@@ -137,6 +137,8 @@ export interface StripeGateway {
   /** The Checkout Session a payment intent belongs to, or null. */
   findCheckoutByPaymentIntent(paymentIntentId: string): Promise<CheckoutSession | null>;
   paymentIntentFacts(paymentIntentId: string): Promise<PaymentIntentFacts>;
+  /** The payment intent's `metadata.system` tag (CHAT_STRIPE_SYSTEM on Chat's), or null. A hint only, never proof. */
+  paymentIntentSystem(paymentIntentId: string): Promise<string | null>;
   /** Every refund of a payment intent, newest first (all pages). */
   listRefunds(paymentIntentId: string): Promise<RefundFacts[]>;
 }
@@ -184,6 +186,11 @@ export class StripeSdkGateway implements StripeGateway {
     const pi = await this.requireClient().paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
     const charge = typeof pi.latest_charge === 'object' && pi.latest_charge ? pi.latest_charge : null;
     return toIntentFacts(pi, charge);
+  }
+
+  async paymentIntentSystem(paymentIntentId: string): Promise<string | null> {
+    const pi = await this.requireClient().paymentIntents.retrieve(paymentIntentId);
+    return pi.metadata?.system ?? null;
   }
 
   async listRefunds(paymentIntentId: string): Promise<RefundFacts[]> {

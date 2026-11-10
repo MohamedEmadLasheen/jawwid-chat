@@ -97,7 +97,9 @@ interface World {
   payments: Array<Record<string, unknown>>;
   checkouts: Array<{ stripeSessionId: string; organizationId: string; requestId: string; stripePaymentIntentId: string | null }>;
   requests: Array<Record<string, unknown>>;
-  stripeSessions: Array<{ id: string; paymentIntentId: string }>;
+  stripeSessions: Array<{ id: string; paymentIntentId: string; metadata?: Record<string, string> }>;
+  /** metadata.system on payment intents Stripe knows (by id). */
+  intentSystems?: Record<string, string>;
   checkoutAvailable?: boolean;
   stripeDown?: boolean;
 }
@@ -139,7 +141,11 @@ function service(world: World) {
     findCheckoutByPaymentIntent: jest.fn(async (pi: string) => {
       if (world.stripeDown) throw Object.assign(new Error('connect ETIMEDOUT'), { type: 'StripeConnectionError' });
       const s = world.stripeSessions.find((x) => x.paymentIntentId === pi);
-      return s ? { id: s.id, paymentIntentId: s.paymentIntentId } : null;
+      return s ? { id: s.id, paymentIntentId: s.paymentIntentId, metadata: s.metadata ?? {} } : null;
+    }),
+    paymentIntentSystem: jest.fn(async (pi: string) => {
+      if (world.stripeDown) throw Object.assign(new Error('connect ETIMEDOUT'), { type: 'StripeConnectionError' });
+      return world.intentSystems?.[pi] ?? null;
     }),
   };
   const audit = { audit: jest.fn(async (_tx: unknown, input: Record<string, unknown>) => { audits.push(input); }), event: jest.fn() };
@@ -207,6 +213,14 @@ describe('CheckoutService: disputes on Chat\'s payments are flagged and audited,
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('Stripe unreachable while classifying an unmatched dispute: the webhook fails (Stripe retries), nothing is recorded', async () => {
+    const { svc, events, audits } = service({ ...empty(), stripeDown: true });
+    const ev = event('charge.dispute.created', dispute());
+    await expect(svc.handleEvent(ev)).rejects.toThrow('connect ETIMEDOUT');
+    expect(events).toHaveLength(0);
+    expect(audits).toHaveLength(0);
+  });
+
   it('a session Stripe knows for the intent but Chat never opened is not Chat\'s', async () => {
     const { svc, audits } = service({ ...empty(), stripeSessions: [{ id: 'cs_OtherSystem', paymentIntentId: 'pi_U1' }] });
     expect(await svc.handleEvent(event('charge.dispute.created', dispute()))).toBe('not_chat');
@@ -239,6 +253,48 @@ describe('CheckoutService: refunds Chat cannot match', () => {
     const { svc, stripe } = service({ ...empty(), checkouts: [{ stripeSessionId: 'cs_U3', organizationId: ORG, requestId: REQUEST, stripePaymentIntentId: 'pi_U3' }] });
     expect(await svc.handleEvent(event('refund.created', refund('pi_U3')))).toBe('refund_deferred');
     expect(stripe.findCheckoutByPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it('a Chat-tagged payment intent with no session Stripe lists is kept (refund_deferred) with a warning, never not_chat', async () => {
+    const { svc, events, stripe } = service({ ...empty(), intentSystems: { pi_U5: CHAT_STRIPE_SYSTEM } });
+    const warn = jest.spyOn((svc as unknown as { log: { warn: (m: string) => void } }).log, 'warn').mockImplementation(() => undefined);
+    expect(await svc.handleEvent(event('refund.created', refund('pi_U5')))).toBe('refund_deferred');
+    expect(await svc.handleEvent(event('charge.refunded', { id: 'ch_U5', object: 'charge', payment_intent: 'pi_U5' }))).toBe('refund_deferred');
+    expect(events.map((e) => [e.outcome, e.paymentIntentId, e.organizationId ?? null])).toEqual([
+      ['refund_deferred', 'pi_U5', null],
+      ['refund_deferred', 'pi_U5', null],
+    ]);
+    expect(stripe.paymentIntentSystem).toHaveBeenCalledWith('pi_U5');
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[0]![0]).toMatch(/tagged jawwid-chat has no Chat checkout; kept as deferred/);
+  });
+
+  it('a Chat-tagged session Chat has no row for is kept (refund_deferred) without asking for the payment intent', async () => {
+    const { svc, stripe } = service({ ...empty(), stripeSessions: [{ id: 'cs_U6', paymentIntentId: 'pi_U6', metadata: { system: CHAT_STRIPE_SYSTEM } }] });
+    const warn = jest.spyOn((svc as unknown as { log: { warn: (m: string) => void } }).log, 'warn').mockImplementation(() => undefined);
+    expect(await svc.handleEvent(event('refund.created', refund('pi_U6')))).toBe('refund_deferred');
+    expect(stripe.paymentIntentSystem).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('an untagged foreign payment intent (another system\'s tag, or none) is not_chat, with no warning', async () => {
+    const { svc, events } = service({
+      ...empty(),
+      intentSystems: { pi_Other7: 'recurring-billing' },
+      stripeSessions: [{ id: 'cs_Other8', paymentIntentId: 'pi_Other8', metadata: { system: 'other' } }],
+    });
+    const warn = jest.spyOn((svc as unknown as { log: { warn: (m: string) => void } }).log, 'warn').mockImplementation(() => undefined);
+    expect(await svc.handleEvent(event('refund.created', refund('pi_Other7')))).toBe('not_chat');
+    expect(await svc.handleEvent(event('refund.created', refund('pi_Other8')))).toBe('not_chat');
+    expect(await svc.handleEvent(event('refund.created', refund('pi_Other9')))).toBe('not_chat');
+    expect(events.every((e) => e.outcome === 'not_chat' && !e.organizationId)).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('the tag never makes a dispute Chat\'s: a tagged intent with no Chat checkout stays not_chat', async () => {
+    const { svc, audits } = service({ ...empty(), intentSystems: { pi_U1: CHAT_STRIPE_SYSTEM } });
+    expect(await svc.handleEvent(event('charge.dispute.created', dispute()))).toBe('not_chat');
+    expect(audits).toHaveLength(0);
   });
 
   it('when Chat cannot tell (no key, or Stripe unreachable) the refund is kept, never dropped', async () => {
