@@ -615,7 +615,7 @@ describe('disputes (M2): flagged and audited; the money ledger is never changed'
     expect((await webhook(stripe.disputeEvent('closed', null, { disputeId: 'du_TDisputeTwo2', chargeId: before.stripeChargeId!, status: 'lost' }))).json.outcome).toBe('dispute_closed_lost');
 
     // One audit row per event, naming the payment and the dispute (codes only).
-    const audits = await g.prisma.auditLog.findMany({ where: { action: { startsWith: 'payment.dispute_' }, entityId: f.id }, orderBy: { createdAt: 'asc' } });
+    const audits = await g.prisma.auditLog.findMany({ where: { action: { startsWith: 'payment.dispute_' }, entityId: f.id }, orderBy: { at: 'asc' } });
     expect(audits.map((a) => a.action)).toEqual([
       'payment.dispute_opened', 'payment.dispute_updated', 'payment.dispute_funds_withdrawn', 'payment.dispute_closed', 'payment.dispute_funds_reinstated',
       'payment.dispute_opened', 'payment.dispute_closed',
