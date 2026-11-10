@@ -1,0 +1,520 @@
+# Signed store builds (LR-76, option (c) of docs/release/signed-build-options.md).
+#
+# MANUAL ONLY, and nothing leaves GitHub except as a short-lived, ENCRYPTED artifact: this workflow
+# builds a signed Android App Bundle and/or a signed iOS .ipa from a commit already on main, verifies
+# the signature, encrypts the files with `age` to the owner's public key, and uploads them for the
+# OWNER to decrypt on a trusted device and upload to Play internal testing / TestFlight by hand. It
+# never uploads to Google Play or App Store Connect itself.
+#
+# Every job that sees a secret runs in the `store-release` GitHub Environment: the owner is the
+# required reviewer, only `main` may deploy to it, and administrators may not bypass it. Preflight
+# reads that configuration through the API and refuses the run unless all three hold;
+# docs/release/signed-builds-ci.md lists it and everything else the owner must create. Secrets are
+# referenced by name only and never printed.
+#
+# Environment secrets (store-release):
+#   ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_KEYSTORE_PASSWORD, ANDROID_UPLOAD_KEY_ALIAS,
+#   ANDROID_UPLOAD_KEY_PASSWORD, GOOGLE_SERVICES_JSON_BASE64,
+#   ASC_API_KEY_ID, ASC_API_ISSUER_ID, ASC_API_KEY_P8_BASE64, SENTRY_DSN
+# Environment variables (store-release), the names scripts/mobile/build-store.sh reads:
+#   API_BASE_URL, PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_URL, SUPPORT_EMAIL,
+#   LESSONS_ORIGIN (optional), SENTRY_ENVIRONMENT (optional, default production),
+#   ANDROID_UPLOAD_CERT_SHA256 (optional pin of the upload certificate's SHA-256),
+#   STORE_ARTIFACT_AGE_RECIPIENT (required: the owner's age PUBLIC key, age1...; not a secret)
+#
+# Never add pull_request, pull_request_target, workflow_run or push triggers to this file.
+name: Release store builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Full 40-character commit SHA to build. Must already be on main.'
+        required: true
+        type: string
+      platform:
+        description: 'What to build'
+        required: true
+        type: choice
+        options: [both, android, ios]
+        default: both
+      build_name:
+        description: 'Version shown to users, x.y.z (BUILD_NAME)'
+        required: true
+        type: string
+      build_number:
+        description: 'Build number, a positive integer higher than the last upload to either store (BUILD_NUMBER)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-store-builds
+  cancel-in-progress: false
+
+env:
+  # `age` (https://github.com/FiloSottile/age) encrypts the artifacts. Pinned by version AND by the
+  # SHA-256 of each release archive; a download that does not match is refused. The SHA-256 values
+  # must be copied from the release (GitHub shows each asset's sha256 digest) by whoever bumps the
+  # version; preflight refuses to start while either is not 64 hex digits.
+  # age v1.3.2 (2026-08-29). The digests are the ones GitHub publishes for the release assets
+  # (gh api repos/FiloSottile/age/releases/tags/v1.3.2 --jq '.assets[].digest').
+  AGE_VERSION: v1.3.2
+  AGE_SHA256_LINUX_AMD64: 'cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10'
+  AGE_SHA256_DARWIN_ARM64: 'e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5'
+
+jobs:
+  preflight:
+    # No environment and no secrets: refuses a bad request before anyone is asked to approve it.
+    name: Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # actions: read is only for reading the store-release Environment's protection rules (below).
+    # A job-level block replaces the workflow's, so contents: read is repeated.
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: verify
+        name: The workflow runs from main, and the commit is on main
+        # Inputs reach the shell only through env, never through ${{ }} inside the script.
+        env:
+          REF: ${{ inputs.ref }}
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run this workflow from main (it ran from $GITHUB_REF)."; exit 1; }
+          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::ref must be a full 40-character lower-case commit SHA."; exit 1; }
+          [[ "$BUILD_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::build_name must be x.y.z (digits only)."; exit 1; }
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::build_number must be a positive integer."; exit 1; }
+          git cat-file -e "$REF^{commit}" 2>/dev/null || { echo "::error::$REF is not a commit in this repository."; exit 1; }
+          git merge-base --is-ancestor "$REF" origin/main || { echo "::error::$REF is not on main. Store builds are made from reviewed, merged commits only."; exit 1; }
+          echo "sha=$REF" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Store build request"
+            echo ""
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| commit | \`$REF\` |"
+            echo "| version | $BUILD_NAME+$BUILD_NUMBER |"
+            echo "| requested by | $GITHUB_ACTOR |"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: The pinned age download is fully specified
+        run: |
+          rc=0
+          for v in AGE_SHA256_LINUX_AMD64 AGE_SHA256_DARWIN_ARM64; do
+            [[ "${!v}" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::$v (workflow env) is not a 64-hex-digit SHA-256 for age $AGE_VERSION; nothing can be encrypted, so nothing is built"; rc=1; }
+          done
+          exit "$rc"
+      - name: The store-release Environment is protected (reviewer, main only, no admin bypass)
+        # GitHub creates an Environment named by a job on first use, with NO protection. Refuse the run
+        # unless the owner's three settings are in place, so secrets are never pasted into an
+        # unprotected Environment and approved by nobody. Fails closed: anything unreadable, missing
+        # or unexpected is a refusal. Checked again by GitHub itself when the jobs below start.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api() { gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
+          manual="Nothing was built. Configure the Environment as in docs/release/signed-builds-ci.md §3.1 (edit it if it already exists)."
+          e="$(api "repos/$GITHUB_REPOSITORY/environments/store-release")" \
+            || { echo "::error::Could not read the store-release Environment with the job token (it may not exist yet). $manual"; exit 1; }
+          p="$(api "repos/$GITHUB_REPOSITORY/environments/store-release/deployment-branch-policies")" \
+            || { echo "::error::Could not read store-release's deployment branch policies with the job token. $manual"; exit 1; }
+          bad=0
+          no() { echo "::error title=store-release is not protected::$1"; bad=1; }
+          reviewers="$(jq -r '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]? | (.reviewer.login // .reviewer.slug // "?")] | join(", ")' <<<"$e")"
+          [ -n "$reviewers" ] || no "it has no required reviewer"
+          # jq's `//` treats false as missing, so every flag is compared as a string ("null" if absent).
+          self_review="$(jq -r '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review][0] | tostring' <<<"$e")"
+          admins_bypass="$(jq -r '.can_admins_bypass | tostring' <<<"$e")"
+          [ "$(jq -r '.deployment_branch_policy.custom_branch_policies | tostring' <<<"$e")" = true ] \
+            && [ "$(jq -r '.deployment_branch_policy.protected_branches | tostring' <<<"$e")" = false ] \
+            || no "its deployment branches are not 'Selected branches and tags'"
+          [ "$(jq -c '[.branch_policies[]? | {name, type}]' <<<"$p")" = '[{"name":"main","type":"branch"}]' ] \
+            || no "its only deployment branch rule must be the branch 'main'"
+          [ "$admins_bypass" = false ] \
+            || no "administrators may bypass it ($admins_bypass): untick 'Allow administrators to bypass configured protection rules'"
+          {
+            echo ""
+            echo "### store-release Environment"
+            echo ""
+            echo "- required reviewers: ${reviewers:-none}"
+            echo "- prevent self-review: $self_review"
+            echo "- deployment branches: $(jq -r '[.branch_policies[]? | "\(.type) \(.name)"] | join(", ")' <<<"$p")"
+            echo "- administrators may bypass: $admins_bypass"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$bad" -eq 0 ] || { echo "$manual"; exit 1; }
+
+  android:
+    name: Signed Android App Bundle
+    needs: [preflight]
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: store-release
+    env:
+      BUILD_NAME: ${{ inputs.build_name }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - name: Use the runner's preinstalled JDK 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: false # a signing build never restores a cache another workflow wrote
+      - name: The Android secrets and the owner's age public key are present
+        # Booleans only: the secret values never enter this step.
+        env:
+          HAS_KS: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 != '' }}
+          HAS_KS_PASS: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD != '' }}
+          HAS_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS != '' }}
+          HAS_KEY_PASS: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD != '' }}
+          HAS_GSJ: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 != '' }}
+          HAS_DSN: ${{ secrets.SENTRY_DSN != '' }}
+          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+        run: |
+          rc=0
+          for pair in HAS_KS:ANDROID_UPLOAD_KEYSTORE_BASE64 HAS_KS_PASS:ANDROID_UPLOAD_KEYSTORE_PASSWORD \
+                      HAS_ALIAS:ANDROID_UPLOAD_KEY_ALIAS HAS_KEY_PASS:ANDROID_UPLOAD_KEY_PASSWORD \
+                      HAS_GSJ:GOOGLE_SERVICES_JSON_BASE64 HAS_DSN:SENTRY_DSN; do
+            flag="${pair%%:*}"
+            [ "${!flag}" = true ] || { echo "::error title=Missing secret::${pair#*:} is not set in the store-release Environment"; rc=1; }
+          done
+          [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] \
+            || { echo "::error title=Missing variable::STORE_ARTIFACT_AGE_RECIPIENT is not set to an age public key (age1...) in the store-release Environment; the build would have nothing to be encrypted to"; rc=1; }
+          [ "$rc" -eq 0 ] || echo "Nothing was built. Owner steps: docs/release/signed-builds-ci.md"
+          exit "$rc"
+      - name: Install age (pinned version and SHA-256)
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/age-install"; mkdir -p "$d"; f="$d/age.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$f" \
+            "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+          echo "$AGE_SHA256_LINUX_AMD64  $f" | shasum -a 256 -c - \
+            || { echo "::error::the age $AGE_VERSION download does not match AGE_SHA256_LINUX_AMD64"; exit 1; }
+          tar -xzf "$f" -C "$d"
+          "$d/age/age" --version
+          echo "AGE=$d/age/age" >> "$GITHUB_ENV"
+      - name: Write the upload keystore, key.properties and google-services.json (mode 600)
+        # The keystore lives under RUNNER_TEMP. android/key.properties and android/app/google-services.json
+        # must sit where the Gradle build looks for them (android/app/build.gradle.kts); they are
+        # git-ignored and removed by the clean-up step whatever happens.
+        env:
+          KS_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          GSJ_B64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          S="$RUNNER_TEMP/store-signing"; mkdir -p "$S"; chmod 700 "$S"
+          KS="$S/upload-keystore"
+          printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 --decode > "$KS" \
+            || { echo "::error::ANDROID_UPLOAD_KEYSTORE_BASE64 is not valid base64"; exit 1; }
+          printf '%s' "$GSJ_B64" | tr -d '[:space:]' | base64 --decode > "$S/google-services.json" \
+            || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 is not valid base64"; exit 1; }
+          chmod 600 "$KS" "$S/google-services.json"
+          # These go into a Java properties file, which treats backslashes, line breaks and leading
+          # spaces specially. Accept only characters it reads literally, as the docs ask, rather than
+          # escape them.
+          [[ "$KS_PASS" =~ ^[A-Za-z0-9]+$ ]] || { echo "::error::ANDROID_UPLOAD_KEYSTORE_PASSWORD must be letters and digits only"; exit 1; }
+          [[ "$KEY_PASS" =~ ^[A-Za-z0-9]+$ ]] || { echo "::error::ANDROID_UPLOAD_KEY_PASSWORD must be letters and digits only"; exit 1; }
+          [[ "$KEY_ALIAS" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::ANDROID_UPLOAD_KEY_ALIAS must be letters, digits, '.', '_' or '-' only"; exit 1; }
+          # Wrong store password or alias fails here, with keytool's message and nothing secret.
+          keytool -list -keystore "$KS" -storepass:env KS_PASS -alias "$KEY_ALIAS" > /dev/null \
+            || { echo "::error::The keystore does not open with ANDROID_UPLOAD_KEYSTORE_PASSWORD, or has no entry named by ANDROID_UPLOAD_KEY_ALIAS"; exit 1; }
+          grep -q '"package_name": *"com.jawwid.jawwid_chat"' "$S/google-services.json" \
+            || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 does not decode to a google-services.json for com.jawwid.jawwid_chat"; exit 1; }
+          install -m 600 "$S/google-services.json" android/app/google-services.json
+          { printf 'storeFile=%s\n' "$KS"
+            printf 'storePassword=%s\n' "$KS_PASS"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASS"; } > android/key.properties
+          chmod 600 android/key.properties
+          # The upload certificate's SHA-256 (public; Play Console shows the same value).
+          sha="$(keytool -list -v -keystore "$KS" -storepass:env KS_PASS -alias "$KEY_ALIAS" | awk '/SHA256:/ && !f {print $2; f=1}')"
+          [ -n "$sha" ] || { echo "::error::could not read the upload certificate's SHA-256"; exit 1; }
+          echo "UPLOAD_CERT_SHA256=$sha" >> "$GITHUB_ENV"
+      - name: Build the App Bundle through the store build script
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+          TERMS_URL: ${{ vars.TERMS_URL }}
+          SUPPORT_URL: ${{ vars.SUPPORT_URL }}
+          SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+          LESSONS_ORIGIN: ${{ vars.LESSONS_ORIGIN }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT || 'production' }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: bash scripts/mobile/build-store.sh android
+      - name: Verify the App Bundle is signed with the upload key
+        env:
+          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          [ -f "$AAB" ] || { echo "::error::no App Bundle at $AAB"; exit 1; }
+          jarsigner -verify "$AAB" > "$RUNNER_TEMP/jarsigner.txt" 2>&1 || true
+          grep -q '^jar verified\.' "$RUNNER_TEMP/jarsigner.txt" \
+            || { cat "$RUNNER_TEMP/jarsigner.txt"; echo "::error::jarsigner does not verify the App Bundle"; exit 1; }
+          signers="$(keytool -printcert -jarfile "$AAB" | awk '/SHA256:/{print $2}' | sort -u)"
+          [ "$(printf '%s\n' "$signers" | grep -c .)" -eq 1 ] \
+            || { echo "::error::expected exactly one signing certificate, found: $signers"; exit 1; }
+          [ "$signers" = "$UPLOAD_CERT_SHA256" ] \
+            || { echo "::error::the App Bundle is signed by $signers, not the upload key ($UPLOAD_CERT_SHA256)"; exit 1; }
+          if [ -n "$PINNED_SHA256" ]; then
+            norm() { printf '%s' "$1" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]'; }
+            [ "$(norm "$signers")" = "$(norm "$PINNED_SHA256")" ] \
+              || { echo "::error::the upload key in the secrets ($signers) is not the one pinned in ANDROID_UPLOAD_CERT_SHA256"; exit 1; }
+          fi
+          mkdir -p "$RUNNER_TEMP/out/symbols"
+          cp "$AAB" "$RUNNER_TEMP/out/jawwid-$BUILD_NAME+$BUILD_NUMBER.aab"
+          cp -R "build/symbols/android/$BUILD_NAME+$BUILD_NUMBER" "$RUNNER_TEMP/out/symbols/dart"
+          {
+            echo "### Android App Bundle $BUILD_NAME+$BUILD_NUMBER"
+            echo ""
+            echo "- jarsigner: jar verified"
+            echo "- upload certificate SHA-256: \`$signers\`${PINNED_SHA256:+ (matches the pinned value)}"
+            echo "- compare it with Play Console > App integrity > Upload key certificate before uploading"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Encrypt the App Bundle and its Dart symbols to the owner's age public key
+        # Artifacts are downloadable by any logged-in GitHub user; only the owner's age identity,
+        # which never comes near GitHub, can open this one.
+        env:
+          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          U="$RUNNER_TEMP/upload"; mkdir -p "$U"
+          ENC="$U/jawwid-android-$BUILD_NAME+$BUILD_NUMBER.tar.age"
+          tar -C "$RUNNER_TEMP/out" -cf - . | "$AGE" --encrypt -r "$RECIPIENT" -o "$ENC"
+          [ "$(head -c 21 "$ENC")" = "age-encryption.org/v1" ] || { echo "::error::$ENC is not an age file"; exit 1; }
+          echo "- artifact: \`$(basename "$ENC")\`, encrypted to \`$RECIPIENT\` (decrypt: docs/release/signed-builds-ci.md §4)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the encrypted App Bundle and symbols (kept 1 day)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-aab-${{ inputs.build_name }}-${{ inputs.build_number }}
+          path: ${{ runner.temp }}/upload/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove the signing material and the unencrypted outputs
+        if: always()
+        run: |
+          rm -f android/key.properties android/app/google-services.json
+          rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/jarsigner.txt" "$RUNNER_TEMP/out" "$RUNNER_TEMP/upload"
+
+  ios:
+    name: Signed iOS .ipa (cloud signing; UNVERIFIED until the first run)
+    needs: [preflight]
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    runs-on: macos-26
+    timeout-minutes: 90
+    environment: store-release
+    env:
+      BUILD_NAME: ${{ inputs.build_name }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      TEAM_ID: KX683HAR3Y
+      BUNDLE_ID: com.jawwid.jawwidChat
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - name: Select Xcode 26 explicitly
+        run: |
+          x="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)"
+          [ -n "$x" ] || { echo "::error::no Xcode 26 on this runner image"; ls -d /Applications/Xcode*; exit 1; }
+          sudo xcode-select -s "$x/Contents/Developer"
+          xcodebuild -version
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: false # a signing build never restores a cache another workflow wrote
+      - name: The iOS secrets and the owner's age public key are present
+        # Booleans only: the secret values never enter this step.
+        env:
+          HAS_KEY_ID: ${{ secrets.ASC_API_KEY_ID != '' }}
+          HAS_ISSUER: ${{ secrets.ASC_API_ISSUER_ID != '' }}
+          HAS_P8: ${{ secrets.ASC_API_KEY_P8_BASE64 != '' }}
+          HAS_DSN: ${{ secrets.SENTRY_DSN != '' }}
+          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+        run: |
+          rc=0
+          for pair in HAS_KEY_ID:ASC_API_KEY_ID HAS_ISSUER:ASC_API_ISSUER_ID HAS_P8:ASC_API_KEY_P8_BASE64 HAS_DSN:SENTRY_DSN; do
+            flag="${pair%%:*}"
+            [ "${!flag}" = true ] || { echo "::error title=Missing secret::${pair#*:} is not set in the store-release Environment"; rc=1; }
+          done
+          [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] \
+            || { echo "::error title=Missing variable::STORE_ARTIFACT_AGE_RECIPIENT is not set to an age public key (age1...) in the store-release Environment; the build would have nothing to be encrypted to"; rc=1; }
+          [ "$rc" -eq 0 ] || echo "Nothing was built. Owner steps: docs/release/signed-builds-ci.md"
+          exit "$rc"
+      - name: Install age (pinned version and SHA-256)
+        run: |
+          set -euo pipefail
+          [ "$(uname -m)" = arm64 ] || { echo "::error::expected an Apple silicon runner for the darwin-arm64 age build, got $(uname -m)"; exit 1; }
+          d="$RUNNER_TEMP/age-install"; mkdir -p "$d"; f="$d/age.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$f" \
+            "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-darwin-arm64.tar.gz"
+          echo "$AGE_SHA256_DARWIN_ARM64  $f" | shasum -a 256 -c - \
+            || { echo "::error::the age $AGE_VERSION download does not match AGE_SHA256_DARWIN_ARM64"; exit 1; }
+          tar -xzf "$f" -C "$d"
+          "$d/age/age" --version
+          echo "AGE=$d/age/age" >> "$GITHUB_ENV"
+      - name: This commit's build script can configure an iOS build for CI
+        run: |
+          grep -q 'ios-config' scripts/mobile/build-store.sh \
+            || { echo "::error::scripts/mobile/build-store.sh at this commit has no ios-config target; build a newer commit"; exit 1; }
+      - name: Write the App Store Connect API key (mode 600, under RUNNER_TEMP)
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          P8_B64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$ASC_API_KEY_ID" =~ ^[A-Za-z0-9]+$ ]] || { echo "::error::ASC_API_KEY_ID must be letters and digits only"; exit 1; }
+          [[ "$ASC_API_ISSUER_ID" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] \
+            || { echo "::error::ASC_API_ISSUER_ID must be a UUID (App Store Connect > Users and Access > Integrations)"; exit 1; }
+          S="$RUNNER_TEMP/store-signing"; mkdir -p "$S"; chmod 700 "$S"
+          P8="$S/AuthKey_$ASC_API_KEY_ID.p8"
+          printf '%s' "$P8_B64" | tr -d '[:space:]' | base64 --decode > "$P8" \
+            || { echo "::error::ASC_API_KEY_P8_BASE64 is not valid base64"; exit 1; }
+          chmod 600 "$P8"
+          # Parse it rather than look for text: proves it is a private key, and prints nothing.
+          openssl pkey -in "$P8" -noout > /dev/null 2>&1 \
+            || { echo "::error::ASC_API_KEY_P8_BASE64 does not decode to an App Store Connect .p8 private key"; exit 1; }
+          echo "ASC_KEY_PATH=$P8" >> "$GITHUB_ENV"
+      - name: Configure the Flutter build through the store build script (no signing yet)
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+          TERMS_URL: ${{ vars.TERMS_URL }}
+          SUPPORT_URL: ${{ vars.SUPPORT_URL }}
+          SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+          LESSONS_ORIGIN: ${{ vars.LESSONS_ORIGIN }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT || 'production' }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: bash scripts/mobile/build-store.sh ios-config
+      - name: Archive and export with cloud signing (UNVERIFIED flags; fails clearly)
+        # WWDC21 "Distribute apps in Xcode with cloud signing": xcodebuild (Xcode 13+) signs in with an
+        # App Store Connect key through -authenticationKeyPath/-authenticationKeyID/-authenticationKeyIssuerID
+        # and "still requires allow provisioning updates". UNVERIFIED on Xcode 26: that the archive's
+        # development signing and the export's cloud distribution signing both work with an App Manager
+        # key (Admin may be needed), and that no extra flag is required. The full xcodebuild log stays on
+        # the runner: it lists build settings, including the base64 dart-defines that carry SENTRY_DSN.
+        # Only error lines are printed, and never one that mentions DART_DEFINES.
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          B="$RUNNER_TEMP/ios-build"; mkdir -p "$B"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH"
+                -authenticationKeyID "$ASC_API_KEY_ID" -authenticationKeyIssuerID "$ASC_API_ISSUER_ID")
+          run_quiet() { # label log command...
+            local label="$1" log="$2"; shift 2
+            if ! "$@" > "$log" 2>&1; then
+              grep -E 'error:|error -|\*\* .* FAILED \*\*|No profiles|No Accounts|not authorized|requires a provisioning profile' "$log" \
+                | grep -v 'DART_DEFINES' | head -60 || true
+              echo "::error title=$label failed::see the lines above and docs/release/signed-builds-ci.md, 'If the iOS job fails'"
+              exit 1
+            fi
+          }
+          run_quiet "xcodebuild archive" "$B/archive.log" \
+            xcodebuild -quiet -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+              -destination 'generic/platform=iOS' -archivePath "$B/Runner.xcarchive" "${AUTH[@]}" archive
+          cat > "$B/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$B/ExportOptions.plist"
+          run_quiet "xcodebuild -exportArchive" "$B/export.log" \
+            xcodebuild -quiet -exportArchive -archivePath "$B/Runner.xcarchive" \
+              -exportOptionsPlist "$B/ExportOptions.plist" -exportPath "$B/export" "${AUTH[@]}"
+      - name: Verify the .ipa is App Store signed, for this app and version
+        run: |
+          set -uo pipefail
+          B="$RUNNER_TEMP/ios-build"; bad=0
+          rec() { echo "$1 $2"; echo "- $1 $2" >> "$B/report.md"; [ "$1" = FAIL ] && bad=1; return 0; }
+          echo "### iOS .ipa $BUILD_NAME+$BUILD_NUMBER" > "$B/report.md"
+          ipas=("$B"/export/*.ipa)
+          [ "${#ipas[@]}" -eq 1 ] && [ -f "${ipas[0]}" ] || { echo "::error::expected exactly one .ipa in $B/export"; ls -la "$B/export" || true; exit 1; }
+          rm -rf "$B/check"; mkdir -p "$B/check"; ditto -x -k "${ipas[0]}" "$B/check"
+          APP="$(ls -d "$B"/check/Payload/*.app | head -1)"
+          [ -d "$APP" ] || { echo "::error::no .app inside the .ipa"; exit 1; }
+          get() { plutil -extract "$2" raw -o - "$1" 2>/dev/null || true; }
+          if codesign --verify --deep --strict "$APP" 2>/dev/null; then rec PASS "codesign --verify --deep --strict"; else rec FAIL "codesign --verify --deep --strict"; fi
+          info="$(codesign -dvv "$APP" 2>&1 || true)"
+          case "$(printf '%s\n' "$info" | grep -m1 '^Authority=')" in
+            "Authority=Apple Distribution"* | "Authority=iPhone Distribution"*) rec PASS "signed with a distribution certificate" ;;
+            *) rec FAIL "not signed with a distribution certificate (first authority is not Apple/iPhone Distribution)" ;;
+          esac
+          printf '%s\n' "$info" | grep -qx "TeamIdentifier=$TEAM_ID" && rec PASS "team $TEAM_ID" || rec FAIL "team is not $TEAM_ID"
+          codesign -d --entitlements - --xml "$APP" > "$B/entitlements.plist" 2>/dev/null || true
+          [ "$(get "$B/entitlements.plist" get-task-allow)" = false ] && rec PASS "get-task-allow false" || rec FAIL "get-task-allow is not false (not a distribution signature)"
+          [ "$(get "$B/entitlements.plist" aps-environment)" = production ] && rec PASS "aps-environment production" || rec FAIL "aps-environment is not production"
+          security cms -D -i "$APP/embedded.mobileprovision" > "$B/profile.plist" 2>/dev/null || true
+          if [ ! -s "$B/profile.plist" ]; then rec FAIL "no readable embedded.mobileprovision"
+          # xml1, not raw: raw refuses an array, which would hide a device list.
+          elif plutil -extract ProvisionedDevices xml1 -o - "$B/profile.plist" > /dev/null 2>&1 \
+            || plutil -extract ProvisionsAllDevices xml1 -o - "$B/profile.plist" > /dev/null 2>&1; then
+            rec FAIL "the profile lists devices or all devices: not an App Store profile"
+          else rec PASS "App Store provisioning profile (no device list)"; fi
+          P="$APP/Info.plist"
+          [ "$(get "$P" CFBundleIdentifier)" = "$BUNDLE_ID" ] && rec PASS "bundle id $BUNDLE_ID" || rec FAIL "bundle id is not $BUNDLE_ID"
+          [ "$(get "$P" CFBundleShortVersionString)" = "$BUILD_NAME" ] && rec PASS "version $BUILD_NAME" || rec FAIL "CFBundleShortVersionString is not $BUILD_NAME"
+          [ "$(get "$P" CFBundleVersion)" = "$BUILD_NUMBER" ] && rec PASS "build $BUILD_NUMBER" || rec FAIL "CFBundleVersion is not $BUILD_NUMBER"
+          SYM="build/symbols/ios/$BUILD_NAME+$BUILD_NUMBER"
+          [ -n "$(ls -A "$SYM" 2>/dev/null)" ] && rec PASS "Dart symbols in $SYM" || rec FAIL "no Dart symbols in $SYM (split-debug-info path not honoured)"
+          [ -d "$B/Runner.xcarchive/dSYMs" ] && rec PASS "dSYMs in the archive" || rec FAIL "no dSYMs in the archive"
+          cat "$B/report.md" >> "$GITHUB_STEP_SUMMARY"
+          [ "$bad" -eq 0 ] || { echo "::error::the .ipa failed verification; it is not uploaded"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/out/symbols"
+          cp "${ipas[0]}" "$RUNNER_TEMP/out/jawwid-$BUILD_NAME+$BUILD_NUMBER.ipa"
+          cp -R "$SYM" "$RUNNER_TEMP/out/symbols/dart"
+          cp -R "$B/Runner.xcarchive/dSYMs" "$RUNNER_TEMP/out/symbols/dSYMs"
+      - name: Encrypt the .ipa and its symbols to the owner's age public key
+        # Artifacts are downloadable by any logged-in GitHub user; only the owner's age identity,
+        # which never comes near GitHub, can open this one.
+        env:
+          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          U="$RUNNER_TEMP/upload"; mkdir -p "$U"
+          ENC="$U/jawwid-ios-$BUILD_NAME+$BUILD_NUMBER.tar.age"
+          tar -C "$RUNNER_TEMP/out" -cf - . | "$AGE" --encrypt -r "$RECIPIENT" -o "$ENC"
+          [ "$(head -c 21 "$ENC")" = "age-encryption.org/v1" ] || { echo "::error::$ENC is not an age file"; exit 1; }
+          echo "- artifact: \`$(basename "$ENC")\`, encrypted to \`$RECIPIENT\` (decrypt: docs/release/signed-builds-ci.md §4)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the encrypted .ipa and symbols (kept 1 day)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-ipa-${{ inputs.build_name }}-${{ inputs.build_number }}
+          path: ${{ runner.temp }}/upload/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove the signing material, build logs and the unencrypted outputs
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/store-signing" "$RUNNER_TEMP/ios-build" "$RUNNER_TEMP/out" "$RUNNER_TEMP/upload"

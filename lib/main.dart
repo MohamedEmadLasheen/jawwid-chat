@@ -10,12 +10,15 @@ import 'app/bootstrap.dart';
 import 'app/providers.dart';
 import 'app/retry_policy.dart';
 import 'core/crash/crash_reporting.dart';
+import 'core/orientation/orientation_policy.dart';
 import 'core/push/push_registration.dart';
 import 'core/time/time_zone_controller.dart';
 import 'shared/utils/western_digits.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // LR-39: portrait on every screen; only the full-screen board may turn (PD-55 rev2).
+  await lockAppOrientation();
   // DD-09 / RQA-F3: Western digits everywhere, dates and times included.
   useWesternDigits();
 

@@ -441,7 +441,24 @@ describe('PD-30 over HTTP', () => {
     const locked = await cards(directId, 'subscription_locked');
     expect(locked).toHaveLength(1);
     expect(locked[0]!.payload).toMatchObject({ learnerId: child.id, reasons: ['balance'] });
-    expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_locked', familyId: f.id } })).toBeGreaterThan(0);
+    expect(await g.prisma.notification.count({ where: { eventType: 'subscription_locked', familyId: f.id } })).toBeGreaterThan(0);
+    // The lock screen (Privacy Policy 4.12.4, Child Safety 4.4): what the push
+    // provider is given -- the delivery row's template, rendered as the
+    // dispatcher renders it -- names neither the child nor the reason, for the
+    // parent and the supervisor alike (names are off by default). The Center
+    // entry is the one it always was, with the row's variables.
+    const templates = new TemplateService(g.prisma);
+    const lockedPushes = await g.prisma.notification.findMany({ where: { eventType: 'subscription_locked', familyId: f.id } });
+    expect(lockedPushes.map((n) => n.recipientId)).toContain(parent.id);
+    for (const n of lockedPushes) {
+      const shown = await templates.render(n.templateKey, n.locale, n.variables as Record<string, unknown>);
+      expect(shown).not.toBeNull();
+      expect(`${shown!.title} ${shown!.body}`).not.toContain(child.name);
+      expect(`${shown!.title} ${shown!.body}`).not.toMatch(/used up|overdue|انتهت|متأخر|\{/);
+      const entry = await g.prisma.notificationItem.findUniqueOrThrow({ where: { dedupeKey: n.dedupeKey } });
+      expect(entry).toMatchObject({ eventType: 'subscription_locked', templateKey: 'inbox.generic' });
+      expect(entry.variables).toMatchObject({ learner: child.name, reason: expect.any(String) });
+    }
 
     // D-1 (owner, 2026-11-06): the lesson already on the calendar goes ahead.
     // The hold stops only the materializer (no new regular lessons).
@@ -466,7 +483,7 @@ describe('PD-30 over HTTP', () => {
     // PD-47 PR-4 (owner Q-F6): no push to every Sales member; the request raises its
     // renewal task for the family's one Sales owner (else the Sales manager), whose
     // assignment is the notice (task-delivery-pd047.spec.ts).
-    expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_renewal_requested' } })).toBe(0);
+    expect(await g.prisma.notification.count({ where: { eventType: 'subscription_renewal_requested' } })).toBe(0);
     const [renewalTask] = await g.prisma.$queryRaw<Array<{ sales: string | null }>>`
       SELECT chat.sales_department_role(t.assignee_staff_id) AS sales FROM chat.work_task t
         JOIN chat.work_task_package_episode e ON e.id = t.source_id
@@ -823,7 +840,7 @@ describe('PD-30 over HTTP', () => {
     expect(await cards(legacy, 'subscription_locked')).toHaveLength(0);
     expect((await cards(directId, 'subscription_locked')).length).toBe(1);
     // The supervisor is pushed as well as the parents.
-    expect(await g.prisma.notification.count({ where: { templateKey: 'subscription_locked', familyId: f.id, recipientId: m.families.find((x) => x.id === f.id)!.children.find((c) => c.id === child.id)!.supervisorId } })).toBe(1);
+    expect(await g.prisma.notification.count({ where: { eventType: 'subscription_locked', familyId: f.id, recipientId: m.families.find((x) => x.id === f.id)!.children.find((c) => c.id === child.id)!.supervisorId } })).toBe(1);
   });
 
   it('while locked (D-1, D-3): booked lessons go ahead, both chats work, calls ring and are answered, the teacher learns nothing financial, the parent the reason', async () => {
@@ -881,7 +898,7 @@ describe('PD-30 over HTTP', () => {
     const teacherThread = (await http(teacher.subject, 'GET', `/conversations/${groupId}/messages`)).json;
     expect(JSON.stringify(teacherThread)).not.toMatch(financial);
     expect((await http(teacher.subject, 'GET', `/conversations/${directId}`)).status).toBeGreaterThanOrEqual(400);
-    expect(await g.prisma.notification.count({ where: { recipientId: teacher.id, templateKey: { startsWith: 'subscription_' } } })).toBe(0);
+    expect(await g.prisma.notification.count({ where: { recipientId: teacher.id, eventType: { startsWith: 'subscription_' } } })).toBe(0);
 
     // 5. The parent: the reason, the instalment, and the way to pay.
     const asParent = await http(parent.subject, 'GET', `/conversations/${groupId}`);
@@ -889,7 +906,7 @@ describe('PD-30 over HTTP', () => {
       readOnly: false, canPay: true,
       children: [{ id: child.id, name: child.name, reasons: ['overdue'], overdue: { label: 'Term · 2/3' } }],
     });
-    const pushed = await g.prisma.notification.findFirstOrThrow({ where: { recipientId: parent.id, templateKey: 'subscription_locked', familyId: f.id } });
+    const pushed = await g.prisma.notification.findFirstOrThrow({ where: { recipientId: parent.id, eventType: 'subscription_locked', familyId: f.id } });
     expect(String((pushed.variables as Record<string, unknown>).reason)).toMatch(/overdue|متأخر/);
   });
 

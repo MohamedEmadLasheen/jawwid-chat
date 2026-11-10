@@ -1,11 +1,12 @@
 import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Conversation, Message, Prisma } from '@prisma/client';
+import { Conversation, ConversationMember, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { ContentFilterService } from '../../platform/content-filter/content-filter.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
+import { retryOnTransactionConflict } from '../../platform/transaction-retry';
 import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import type {
@@ -110,6 +111,26 @@ export interface ListMessagesInput {
   limit?: number;
 }
 
+type MemberFacts = Pick<ConversationMember, 'id' | 'actorId' | 'memberRole' | 'isSilent'>;
+const memberFacts = (m: MemberFacts | null) => (m ? `${m.id}:${m.actorId}:${m.memberRole}:${m.isSilent}` : '-');
+
+/**
+ * RT-014: has membership moved between the send's pre-check and its locked
+ * read? The sender's own row (present, role, silence) and the whole live set
+ * (which canSend reads for BR-1 and admin presence, and which names the
+ * recipients). Exported for its unit test.
+ */
+export function membershipMoved(
+  senderBefore: MemberFacts | null,
+  senderNow: MemberFacts | null,
+  liveBefore: readonly MemberFacts[],
+  liveNow: readonly MemberFacts[],
+): boolean {
+  if (memberFacts(senderBefore) !== memberFacts(senderNow)) return true;
+  const set = (rows: readonly MemberFacts[]) => rows.map(memberFacts).sort().join('|');
+  return set(liveBefore) !== set(liveNow);
+}
+
 /** PARENT-003: one answer for every client, naming the limit. */
 const tooLong = () =>
   new CommError(CommErrorCode.MESSAGE_TOO_LONG, `a message may be at most ${MESSAGE_MAX_CHARACTERS} characters`, 400);
@@ -194,7 +215,27 @@ export class MessageService {
   // Send
   // -------------------------------------------------------------------
 
+  /**
+   * RT-014: the send locks the conversation's member rows, then the
+   * conversation row. Some writers take them the other way round -- a room
+   * sync whose member insert takes KEY SHARE on the conversation (foreign-key
+   * check) before it removes someone, chat.erase_account, a seat sweep
+   * removing two seats of one conversation -- so the two can deadlock, and
+   * Postgres cancels one of them (40P01). When it cancels the send, the whole
+   * send runs once more from the start: the pre-check, then the transaction.
+   *
+   * Safe to repeat: the cancelled transaction is rolled back whole, and
+   * nothing before it writes. Nothing after it can raise a deadlock either
+   * (plain reads), so a retry never follows a committed message. And with a
+   * clientMessageId the retry's idempotency fast path, then the unique index,
+   * returns the one message rather than a second. A second deadlock is a
+   * retryable 503 (DATABASE_UNAVAILABLE), never a 500.
+   */
   async send(input: SendMessageInput): Promise<MessageDto> {
+    return retryOnTransactionConflict(() => this.sendOnce(input));
+  }
+
+  private async sendOnce(input: SendMessageInput): Promise<MessageDto> {
     const now = new Date();
     const actor = await this.conversations.requireActor(input.senderId);
     const conv = await this.conversations.requireConversation(input.conversationId);
@@ -294,18 +335,19 @@ export class MessageService {
 
     // PD-36: resolved before the transaction; a mention of anyone this sender
     // may not reach here refuses the whole send. Never on a forward.
-    const plannedMentions =
+    const planMentions = (against: ReadonlyArray<Pick<ConversationMember, 'actorId' | 'actorKind'>>) =>
       this.mentions && !input.forwardedFromMessageId
-        ? await this.mentions.plan({
+        ? this.mentions.plan({
             actor,
             conversation: conv,
             body: input.body,
             visibility,
             raw: input.mentions,
-            members,
+            members: against,
             now,
           })
-        : [];
+        : Promise.resolve([]);
+    let plannedMentions = await planMentions(members);
     let mentionsLimited = false;
 
     // PD-14 (2026-10-20): every message is published when it is sent. Nothing
@@ -314,16 +356,26 @@ export class MessageService {
     const stickyMinutes = await this.config.get('handoff.grace_minutes');
     const activeHandler = await this.conversations.responsibleSupervisor(conv);
 
-    // Recipients: live members other than the author. Internal notes never
-    // reach a contact or a teacher.
-    const recipients = members.filter(
-      (m) =>
-        m.actorId !== actor.actorId &&
-        (visibility === Visibility.CUSTOMER || m.actorKind === ActorKind.STAFF),
-    );
-
     try {
       const created = await this.prisma.$transaction(async (tx) => {
+        // RT-014: the membership this send is decided on is held until it
+        // commits. FOR SHARE on every live member row of the conversation,
+        // taken BEFORE the conversation row: a plain removal updates its
+        // member row first and only then takes the conversation row (the
+        // announcement it posts locks it), so the opposite order would
+        // deadlock with it. Writers that take a lock this send needs before
+        // they update a member row (a member insert's foreign-key KEY SHARE on
+        // the conversation, erase_account's account lock, a sweep removing two
+        // seats of one conversation) can still deadlock with it; `send`
+        // retries once for them. Id order, as the delivery locks take the same
+        // rows (RT-009). A removal that committed first is skipped here (its
+        // row no longer matches `left_at IS NULL` once re-checked); one that
+        // arrives later waits for this commit, so the message is ordered
+        // strictly before it.
+        await tx.$queryRaw`
+          SELECT 1 FROM chat.conversation_member
+           WHERE conversation_id = ${conv.id}::uuid AND left_at IS NULL
+           ORDER BY id FOR SHARE`;
         // Serialize sequence assignment. Ordering is decided by the server,
         // never by a device clock.
         // The locked row is also the authority for the message's tenant
@@ -342,13 +394,47 @@ export class MessageService {
         // before their deactivation commits.
         await this.conversations.assertActorLive(tx, actor);
 
+        // RT-014: membership as it stands under those locks is the authority.
+        // The decision above was made on reads taken before this transaction;
+        // when they no longer match -- the sender's own seat, or anyone's
+        // presence, role or silence -- the same decision is taken again on the
+        // locked state, and refuses with the same error a fresh send would.
+        const liveNow = await tx.conversationMember.findMany({
+          where: { conversationId: conv.id, leftAt: null },
+        });
+        const memberNow = liveNow.find((m) => m.actorId === actor.actorId) ?? null;
+        let onBehalfMode = decision.onBehalfMode;
+        if (membershipMoved(membership, memberNow, members, liveNow)) {
+          const again = await this.authz.canSend(
+            actor,
+            conv,
+            memberNow,
+            { visibility, requestedMode: input.requestedMode },
+            now,
+            family?.ownerId ?? null,
+            liveNow.map((m) => m.actorKind),
+            await this.conversations.liveMembersOf(conv.id, tx),
+          );
+          if (!again.allowed) throw new CommError(again.code, again.reason);
+          onBehalfMode = again.onBehalfMode;
+          plannedMentions = await planMentions(liveNow);
+        }
+
+        // Recipients: live members other than the author, as locked above.
+        // Internal notes never reach a contact or a teacher.
+        const recipients = liveNow.filter(
+          (m) =>
+            m.actorId !== actor.actorId &&
+            (visibility === Visibility.CUSTOMER || m.actorKind === ActorKind.STAFF),
+        );
+
         const message = await tx.message.create({
           data: {
             organizationId,
             conversationId: conv.id,
             authorType: actor.kind,
             authorId: actor.kind === ActorKind.SYSTEM ? null : actor.actorId,
-            onBehalfMode: decision.onBehalfMode,
+            onBehalfMode,
             type,
             body: input.body ?? null,
             visibility,
@@ -449,16 +535,16 @@ export class MessageService {
         });
 
         if (
-          decision.onBehalfMode === OnBehalfMode.ASSIST ||
-          decision.onBehalfMode === OnBehalfMode.ESCALATION
+          onBehalfMode === OnBehalfMode.ASSIST ||
+          onBehalfMode === OnBehalfMode.ESCALATION
         ) {
           await this.audit.audit(tx, {
             actorId: actor.actorId,
-            action: `message.${decision.onBehalfMode}`,
+            action: `message.${onBehalfMode}`,
             entity: 'conversation',
             entityId: conv.id,
             after: { messageId: message.id },
-            reason: `staff replied with on_behalf_mode=${decision.onBehalfMode}`,
+            reason: `staff replied with on_behalf_mode=${onBehalfMode}`,
           });
         }
 
