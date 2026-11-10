@@ -3,6 +3,9 @@
 Status: implemented on branch `claude/stripe-jawwid-chat-integration-f3e06a`. Not deployed.
 Builds on `pd027-payments.md` (the PD-27 contract) and `pd030-subscriptions.md`. It does **not**
 replace either, and it adds no second payment system.
+The owner-executable steps for turning Stripe on at the public launch (shared account pre-checks, the
+webhook endpoint and its events, the restricted key, the GitHub Environment, the M4 live smoke test and the
+rollback) are in `docs/release/stripe-launch-runbook.md`; §5 below is the reference it builds on.
 
 ## 1. What was already there (verified in code, 2026-11-07)
 
