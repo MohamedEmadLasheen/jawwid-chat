@@ -27,13 +27,39 @@ laptop.
   bypasses the code.
 - **Lessons.** Three 30-minute lessons a week, on Monday, Wednesday and Friday at 16:00 Cairo time. The worker keeps
   creating the upcoming ones for as long as the schedule stands.
-- **No payments, and nothing to pay.** OA-12 is an open owner decision. The current state is **Option B (nothing
-  payable for review)** until the owner decides OA-12; Option A would add a payable request to the cohort. The command creates no lesson package, instalment, payment request or invoice for either family,
-  so the parents' payments tab ("Subscriptions" today) shows no amount due and no Pay button, and the payment lock
-  never applies (PD-30). The test checks this in the database and over `GET /me/billing`, the route that tab reads.
-  The review notes below say so.
+- **A demo payment, never a real one (OA-12, owner decision 2026-11-10).** The command creates no lesson package,
+  instalment, payment request or invoice for either family, so the payment lock never applies (PD-30). Instead it
+  switches on the **App Review payment mode** for the review organization (next section). The API then shows each
+  review parent one synthetic amount due that is never stored ("Lesson package (demo): 8 live one-to-one lessons",
+  USD 80.00), so a reviewer can open the pay sheet. Every payment is a demo: "Pay by card" opens a static page that
+  explains what the live app does, and never Stripe; the bank details are clearly fake; a bank-transfer receipt is
+  refused. The server enforces this (`apps/api/src/billing/review-mode.ts`, PR #585). The test checks that nothing
+  payable is stored, and that `GET /me/billing` lists nothing payable except that demo item.
 - **No lesson content yet.** There are no past lessons or lesson reports, because those need the owner to approve
   the content. The sample messages are everyday academy talk.
+
+## It switches on the App Review payment mode for its own organization
+
+Every run makes the `chat.config` row `review.sandbox_organization_ids` (a JSON array of organization ids, read by
+`apps/api/src/billing/review-mode.ts`) contain the review organization's id:
+
+- **Only after the organization checks pass** (next section). A run refused with `NOT_REVIEW_ORGANIZATION`, or one
+  stopped earlier (a deactivated or default organization), never writes the row.
+- **It adds; it never replaces.** Any id already in the array stays as it is. If the review organization's id is
+  already there (in any letter case), nothing is written, so a second run leaves the row exactly as it was.
+- **It touches no other config key.** The read and the write are one transaction, under a lock on that key, so two
+  runs cannot each add to an old copy.
+- **A value that is not a JSON array of organization ids is never overwritten.** The run stops with
+  `REVIEW_MODE_CONFIG`; the API already treats such a value as "no organization in review mode". Fix the row by hand
+  (make it an array of uuid strings), then run again.
+- It is done right after the organization checks, before the accounts. A later refusal leaves the organization
+  listed; that only ever restricts the review accounts further.
+- The command's return value carries the array as written (`reviewModeOrganizationIds`). The workflow's printed
+  summary does not show it yet: check the row in the database, or `reviewMode: true` on a review parent's
+  `GET /me/billing`.
+
+Until PR #585 (the payment mode itself) is deployed, the row is written but nothing reads it: the review parents
+then see no amount due at all.
 
 ## Run it (the owner, in the browser; never on a laptop)
 
@@ -138,16 +164,17 @@ is harmless.
 ## Review notes (paste into both consoles; the credentials go in their own fields)
 
 The canonical paste-ready text is `store-console/review-notes.md` (§2 for App Store Connect, §3 for Play, each
-with Option B for the payments paragraph while OA-12 is open). Paste from that file; the summary below only
-describes what the review accounts hold.
+its payments paragraph to be aligned with the OA-12 decision; see "Still open"). Paste from that file; the summary
+below only describes what the review accounts hold.
 
 > Sign in with the parent or the teacher account from the credentials field. Sign-in is email and password; no
 > verification code is needed. The parent account has one child with weekly lessons, a family group chat with the
 > child's supervisor and teacher, and a direct chat with the supervisor. The teacher account is that child's teacher.
 > The two accounts can message each other in the family group. To test account deletion, please use the third
 > account (parent2), which exists for that purpose; deleting it does not affect the other two. All people and data
-> in these accounts are fictional. Deleting an account in the app takes effect immediately. The review families have
-> nothing to pay, so the payments tab shows no amount due.
+> in these accounts are fictional. Deleting an account in the app takes effect immediately. The parent account shows
+> one demo amount due so the payment screens can be reviewed; payments are disabled for these accounts, so no card is
+> charged, the bank details are a demo, and no receipt can be sent.
 
 ## Still open (owner)
 
@@ -155,15 +182,14 @@ These need an owner decision before the review data is complete (LR-05, LR-09f):
 
 - **Past lessons and lesson reports.** There are none yet. They need the owner's approval of the report content,
   which may name surahs, and then a follow-up PR.
-- **Something payable (OA-12).** Still the owner's decision; the owner picks the option in
-  `store-console/review-notes.md` §2.1. The current state is Option B (nothing payable for review) until the owner
-  decides OA-12: a reviewer has nothing to pay and cannot reach the pay sheet (found in #507). Option A would add a
-  payable request to the cohort, so a reviewer can reach Pay; a follow-up PR must then add it to the command,
-  change the tests above, and change the review notes. The owner must also decide what the review family may be
-  billed for, and how.
-- **Docs that still promise a payable item (to align after OA-12).** These assume a payable request in the review
-  cohort, which the current state (Option B) does not have. Once the owner decides OA-12, a follow-up must align
-  them (this change may not edit them):
+- **Run the workflow once more after PR #585 is deployed.** That run lists the review organization in the payment
+  mode (see "It switches on the App Review payment mode"); until then the review parents see no amount due.
+- **Store notes for payments (OA-12).** OA-12 is decided (2026-11-10): a demo amount due from the API, never a
+  stored request. The paste-ready notes in `store-console/review-notes.md` must use the demo-payment text, not the
+  "nothing to pay" one.
+- **Docs that still describe a stored payable item (to align with OA-12).** These assume a payable request written
+  into the review cohort. The reviewer instead sees the API's synthetic demo item; a follow-up must align them (this
+  change may not edit them):
   - `app-review-notes-payments.md` §4 (Apple, "Amount due → Pay"), §5 (Play) and §6 item 2 (an open
     lesson-package request so the reviewer can reach the pay sheet).
   - `store-console/play-declarations.md` §2: the paste ("Amount due → Pay") and the owner note below it ("Either
