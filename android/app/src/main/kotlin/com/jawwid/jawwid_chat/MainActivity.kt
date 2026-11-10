@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -64,6 +65,10 @@ class MainActivity : FlutterFragmentActivity() {
             handleCallIntent(intent)
             handlePushTap(intent)
         }
+        // Rotation does not recreate this activity (manifest configChanges). A real
+        // recreate detaches the engine, whose cleanup clears the tracker, so this
+        // starts from nothing and fails closed: the lock screen comes back.
+        applyLockScreenPolicy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -95,7 +100,8 @@ class MainActivity : FlutterFragmentActivity() {
     /**
      * A call action: shown over the lock screen and waking it (#408 review --
      * otherwise a full-screen ring or an Answer lands on the unlock prompt),
-     * handed to Flutter, then cleared so nothing replays it.
+     * handed to Flutter, then cleared so nothing replays it. Shown over the lock
+     * screen only while that call rings or is in progress ([LockScreenCall]).
      */
     private fun handleCallIntent(intent: Intent?) {
         val action = intent?.action ?: return
@@ -103,24 +109,36 @@ class MainActivity : FlutterFragmentActivity() {
         // Another app can start this exported activity with these actions and any call id;
         // only the ring this app drew carries the install's nonce (as a notification tap does).
         if (!PushPayload.isTrustedTap(intent.getStringExtra(PushBridge.EXTRA_NONCE), PushBridge.nonce(this))) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
-            )
-        }
+        intent.getStringExtra(JawwidPush.EXTRA_CALL_ID)?.let { lockScreenCalls.ringing(it) }
+        applyLockScreenPolicy()
         JawwidPush.onCallIntent(applicationContext, intent)
         intent.action = null
         intent.removeExtra(JawwidPush.EXTRA_CALL_ID)
     }
 
+    /**
+     * Show over the lock screen (and turn the screen on) exactly while a call from the
+     * lock screen rings or is in progress; otherwise reset both, so after the call the
+     * phone shows its lock screen, not the app.
+     */
+    @Suppress("DEPRECATION")
+    private fun applyLockScreenPolicy() {
+        val show = lockScreenCalls.showWhenLocked()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(show)
+            setTurnScreenOn(show)
+        } else {
+            // Android 8.0 (minSdk 26): the window flags, the only way there.
+            val flags = android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            if (show) window.addFlags(flags) else window.clearFlags(flags)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         JawwidPush.inForeground = true
+        applyLockScreenPolicy()
     }
 
     override fun onPause() {
@@ -128,7 +146,16 @@ class MainActivity : FlutterFragmentActivity() {
         super.onPause()
     }
 
+    /** Defensive: leaving the screen with no call alive drops the lock-screen permission. */
+    override fun onStop() {
+        applyLockScreenPolicy()
+        super.onStop()
+    }
+
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // The engine ran the calls; with it gone nothing can end them, so none holds the lock screen.
+        lockScreenCalls.clear()
+        applyLockScreenPolicy()
         callChannel?.let { JawwidPush.detach(it) }
         callChannel = null
         PushBridge.detach()
@@ -171,18 +198,34 @@ class MainActivity : FlutterFragmentActivity() {
                     JawwidPush.attach(applicationContext, callChannel)
                     result.success(null)
                 }
+                // Dart sends this when a call ends for this device (decline, missed, ended,
+                // answered elsewhere, failed) and when its call controller is torn down
+                // mid-call (sign-out, session rebuild). Not sent if Dart never took the ring
+                // (busy, no session): that entry lapses with the tracker's ring window.
                 "dismiss" -> {
-                    call.argument<String>("callId")?.let { JawwidPush.cancelCall(applicationContext, it) }
+                    call.argument<String>("callId")?.let {
+                        JawwidPush.cancelCall(applicationContext, it)
+                        lockScreenCalls.ended(it)
+                    }
+                    applyLockScreenPolicy()
                     result.success(null)
                 }
                 // S-06: the call keeps its microphone in the background (CallForegroundService).
                 "ongoingStart" -> {
                     val callId = call.argument<String>("callId")
-                    if (callId != null) CallForegroundService.start(applicationContext, callId, call.argument<String>("title").orEmpty())
+                    if (callId != null) {
+                        CallForegroundService.start(applicationContext, callId, call.argument<String>("title").orEmpty())
+                        // An answer from the lock screen stays over it for the whole call.
+                        lockScreenCalls.connected(callId)
+                    }
+                    applyLockScreenPolicy()
                     result.success(null)
                 }
                 "ongoingStop" -> {
                     CallForegroundService.stop(applicationContext)
+                    // The call is over: the app no longer shows over the lock screen.
+                    call.argument<String>("callId")?.let { lockScreenCalls.ended(it) } ?: lockScreenCalls.clear()
+                    applyLockScreenPolicy()
                     result.success(null)
                 }
                 // LR-27: may a ring take over the screen (Android 14+), and the screen to allow it.
@@ -344,6 +387,13 @@ class MainActivity : FlutterFragmentActivity() {
 
         /** Shared with `device_security_settings.dart`. */
         private const val SECURITY_SETTINGS_CHANNEL = "jawwid/device_security_settings"
+
+        /**
+         * Which calls let the app show over the lock screen. Process-wide, so a recreated
+         * activity keeps a live call's permission. Touched only on the main thread (lifecycle
+         * and channel handlers). The ring window: the ring, then time to connect an answer.
+         */
+        private val lockScreenCalls = LockScreenCall.Tracker({ SystemClock.elapsedRealtime() }, 2 * JawwidPush.RING_TIMEOUT_MS)
 
         /** Shared with `lib/core/push/push_opens.dart`. */
         private const val OPENS_CHANNEL = "jawwid/push_opens"
