@@ -660,7 +660,8 @@ def check_sentry(files, errors):
             errors.append(f'{WORKFLOW}:{n}: sentry-cli called by name; use the verified "$SENTRY_CLI" through sq (R3)')
         if re.match(r'^\s*sq\s', l) and not re.match(SENTRY_CALL, l):
             errors.append(f'{WORKFLOW}:{n}: sq may only run `debug-files upload` or `upload-proguard` on one path (R3)')
-        if 'SENTRY_LOG_LEVEL' in l and not re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l):
+        if 'SENTRY_LOG_LEVEL' in l and not re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l) \
+                and not l.lstrip().startswith('for v in $(compgen -e); do case "$v" in '):
             errors.append(f'{WORKFLOW}:{n}: SENTRY_LOG_LEVEL must be warn (R3)')
     for job, body in job_bodies(text).items():
         tokens = [n for n, l in body if re.match(SENTRY_TOKEN_LINES[0], l)]
@@ -750,6 +751,7 @@ SHA_LINE = '[ "$(shasum -a 256 "$VERIFIED_IPA" | awk \'{print $1}\')" = "$VERIFI
 AH_LINE = '          AH="$(xcrun altool --help 2>&1 || true)"\n'
 ALTOOL_APP_START = '            xcrun altool --upload-app'
 ALTOOL_PLAIN_START = '              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apiKey'
+ALTOOL_PACKAGE_START = '              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apple-id'
 BUILD_HEAD_LINE = ('          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] || { echo "::error::the checked-out build commit '
                    'is not this workflow\'s own commit; nothing was built."; exit 1; }\n')
 AUTH_STEP = '      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0\n'
@@ -778,13 +780,16 @@ def mutations_r123():
         ('altool found through a variable', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          A="$(xcrun --find altool)"\n')),
         ('another tool through xcrun', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          xcrun stapler validate "$VERIFIED_IPA" || true\n')),
         ('a second altool upload', W, lambda t: replaced(t, AH_LINE, AH_LINE + '          ' + SHA_LINE + ' || { echo "::error::x"; exit 1; }\n          xcrun altool --upload-app -f "$VERIFIED_IPA" -t ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" > "$B/upload.log" 2>&1 || rc=$?\n')),
-        ('altool --upload-package of another file', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA"', '--upload-package "$B/export/Runner.ipa"')),
-        ('plain altool --upload-package of another file', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA" --type ios --apiKey', '--upload-package "$B/export/Runner.ipa" --type ios --apiKey')),
-        ('plain altool --upload-package with an extra flag', W, lambda t: replaced(t, '--upload-package "$VERIFIED_IPA" --type ios --apiKey', '--upload-package "$VERIFIED_IPA" --type ios --validate --apiKey')),
+        # The anchors below start at "xcrun altool": the step's comment block names the same flags
+        # (`altool --upload-package "$VERIFIED_IPA" --type ios --apiKey`, `altool --upload-app -f
+        # "$VERIFIED_IPA"`), and an anchor that matched there first mutated only a comment.
+        ('altool --upload-package of another file', W, lambda t: replaced(t, ALTOOL_PACKAGE_START, ALTOOL_PACKAGE_START.replace('"$VERIFIED_IPA"', '"$B/export/Runner.ipa"'))),
+        ('plain altool --upload-package of another file', W, lambda t: replaced(t, ALTOOL_PLAIN_START, ALTOOL_PLAIN_START.replace('"$VERIFIED_IPA"', '"$B/export/Runner.ipa"'))),
+        ('plain altool --upload-package with an extra flag', W, lambda t: replaced(t, ALTOOL_PLAIN_START, ALTOOL_PLAIN_START.replace('--type ios --apiKey', '--type ios --validate --apiKey'))),
         ('plain altool --upload-package removed', W, lambda t: replaced(t, ALTOOL_PLAIN_START, '              : plain-upload-gone "$VERIFIED_IPA" --type ios')),
         ('the SHA-256 re-check not right before the plain --upload-package', W, lambda t: replaced(t, ALTOOL_PLAIN_START, '              cp "$B/export/other.ipa" "$VERIFIED_IPA" || true\n' + ALTOOL_PLAIN_START)),
         ('altool --upload-app with notarization', W, lambda t: replaced(t, '-f "$VERIFIED_IPA" -t ios --apiKey', '-f "$VERIFIED_IPA" -t ios --notarize --apiKey')),
-        ('altool --upload-app of another file', W, lambda t: replaced(t, '--upload-app -f "$VERIFIED_IPA"', '--upload-app -f "$B/check/Runner.ipa"')),
+        ('altool --upload-app of another file', W, lambda t: replaced(t, ALTOOL_APP_START + ' -f "$VERIFIED_IPA"', ALTOOL_APP_START + ' -f "$B/check/Runner.ipa"')),
         ('altool --upload-package with a bundle id not read from the .ipa', W, lambda t: replaced(t, '--bundle-id "$VERIFIED_BUNDLE_ID"', '--bundle-id "$BUNDLE_ID"')),
         ('altool --upload-package removed', W, lambda t: replaced(t, '            xcrun altool --upload-package', '            : altool-free')),
         ('altool success wording not required', W, lambda t: replaced(t, "OK='No errors uploading|UPLOAD SUCCEEDED'", "OK=''")),
@@ -971,14 +976,30 @@ def main(mode):
             print(f'selftest: the real files already fail: {e}')
         return 1
     bad = 0
+    # A mutation must change what it claims to change. Unchanged text, or a change only to comment
+    # lines (an anchor that matched a comment first), is a broken mutation and fails the selftest:
+    # otherwise "caught" or "NOT caught" says nothing about the rule. Only these mutations add a
+    # comment on purpose (the words and the App Store Connect API rules read comments too).
+    comment_only = {'a direct App Store Connect API call', 'a staged-release fraction in the Play script',
+                    'a second word in the build script'} | {f'`{w}` in the workflow' for w, _ in WORDS}
     for name, path, mutate in mutations():
         mutated = dict(files)
-        mutated[path] = mutate(files.get(path, ''))
+        original = files.get(path, '')
+        mutated[path] = mutate(original)
+        if mutated[path] == original:
+            print(f'selftest: mutation changes nothing (fix its anchor): {name}')
+            bad += 1
+            continue
+        if name not in comment_only and \
+                [l for _, l in code_lines(mutated[path])] == [l for _, l in code_lines(original)]:
+            print(f'selftest: mutation changes only comment lines (fix its anchor): {name}')
+            bad += 1
+            continue
         if not check(mutated):
             print(f'selftest: NOT caught: {name}')
             bad += 1
     if bad:
-        print(f'store upload guards selftest: FAIL ({bad} mutation(s) not caught)')
+        print(f'store upload guards selftest: FAIL ({bad} mutation(s) broken or not caught)')
         return 1
     print(f'store upload guards selftest: every mutation caught ({len(mutations())})')
     return 0
