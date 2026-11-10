@@ -86,10 +86,24 @@ It is guarded by `FOR UPDATE` on the request and by unique keys. No event trigge
 | `checkout.session.expired` | attempt → `expired` | `checkout_expired` |
 | `payment_intent.succeeded` **(new)** | ours (metadata `paymentRequestId`): find its session at Stripe, confirm it. This is a second path to the same idempotent confirm, so a missed `checkout.session.completed` still records. | as confirm, or `ignored` |
 | `payment_intent.payment_failed` **(new)** | ours: the attempt's `failure_count`, `failure_code` (Stripe's decline code, never a message, never card data) and `last_failed_at` | `payment_failed` |
-| `refund.created`, `refund.updated` | record (unchanged); an unknown payment is now **deferred**, not dropped | `refund_recorded`, `refund_deferred`, `refund_not_final` |
-| `charge.refunded` **(new)** | sync every refund of that payment intent from Stripe | `refund_recorded`, `refund_deferred`, `already_recorded` |
-| `invoice.*`, `customer.subscription.*` **(new)** | none: Chat opens no Stripe Billing subscriptions (§4). A warning is logged. | `ignored_not_chat` |
+| `refund.created`, `refund.updated`, `refund.failed` | record (unchanged). A payment not recorded yet that belongs to a checkout Chat opened is **deferred**, not dropped. A payment Chat did not take (another system on the same Stripe account) is `not_chat` (W59). | `refund_recorded`, `refund_deferred`, `refund_not_final`, `refund_failed_after_record`, `not_chat` |
+| `charge.refunded` **(new)** | sync every refund of that payment intent from Stripe | `refund_recorded`, `refund_deferred`, `already_recorded`, `not_chat` |
+| `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated` **(W59)** | Chat's own payments only (matched by payment intent, else charge). Flag only: one audit row per event, an error log for opened and funds withdrawn, **no change to the money ledger** (§4). | `dispute_opened`, `dispute_updated`, `dispute_closed_<status>` (`won`, `lost`, `warning_closed`, …), `dispute_funds_withdrawn`, `dispute_funds_reinstated`, `not_chat` |
+| `invoice.*`, `customer.subscription.*`, `subscription_schedule.*` | none: Chat opens no Stripe Billing subscriptions (§4). Logged at info level. | `ignored_not_chat` |
 | anything else | none | `ignored` |
+
+**Whose object is it (W59).** Chat decides from its own tables, never from metadata alone (metadata can be
+edited in the Dashboard): a payment in `chat.payment` (by payment intent or charge), or a checkout in
+`chat.payment_checkout` (locally by the payment intent, else the session Stripe lists for that intent).
+Anything else is another system's and is recorded as `not_chat`, with no academy, and never acted on. If
+Chat cannot tell (no secret key, or Stripe unreachable), a refund is kept as `refund_deferred`. It is never
+dropped, and it is harmless if it turns out to be foreign: the reconciler only syncs it once a Chat payment
+with that payment intent exists. One safeguard for refunds only: when Chat finds no checkout of its own
+but the Stripe session or its payment intent carries `metadata.system = jawwid-chat`, the refund is kept
+as `refund_deferred` with a warning log (never `not_chat`), so a missing row or an empty Stripe session
+list cannot silently drop a Chat refund. The tag only keeps a refund waiting; it never records money or
+flags a dispute. A dispute Chat cannot classify because Stripe is unreachable answers
+500, so Stripe retries. Without a secret key Chat opens no checkouts, so an unmatched dispute is `not_chat`.
 
 **Order does not matter.**
 - A refund before its payment is stored as `refund_deferred`, with the payment intent. When the payment is
@@ -184,6 +198,27 @@ payment holds the new data, unless exported first).
   `payment.refund_failed_at_stripe` names the payment and refund, and the API logs an error. Admin shows
   the outcome in Stripe events. Follow-up: a reversal entry on `chat.payment_refund` (forward-only, with a
   reason) that the totals subtract.
+- **Disputes (chargebacks) change no money in Chat (W59, M2).** A dispute on one of Chat's card payments is
+  recorded and flagged: the event's outcome (`dispute_opened`, `dispute_updated`, `dispute_closed_<status>`,
+  `dispute_funds_withdrawn`, `dispute_funds_reinstated`), an audit row (`payment.dispute_opened`,
+  `payment.dispute_updated`, `payment.dispute_closed`, `payment.dispute_funds_withdrawn`,
+  `payment.dispute_funds_reinstated`) naming the payment, request, dispute, charge, amount, Stripe's status
+  and reason code, and an error log for a new dispute and for money withdrawn. The payment, its refunds,
+  the request and the lesson package stay as they were. Responding with evidence happens in the Stripe
+  Dashboard, before Stripe's deadline. Whether a lost dispute should reduce what Chat shows as received (a
+  forward-only adjustment entry) is a follow-up decision. A dispute that arrives before Chat recorded the
+  payment (its webhook was lost) is flagged against the request.
+- **Other systems on the same Stripe account (W59, S3).** Every Checkout Session Chat opens, and its payment
+  intent, carry `metadata.system = jawwid-chat` (with `paymentRequestId` and `organizationId`), so another
+  system, or a person in the Dashboard, can tell Chat's objects apart. Chat never acts on an object it did
+  not create: refunds and disputes on other payments are `not_chat`. Recurring Stripe Billing events
+  (`invoice.*`, `customer.subscription.*`, `subscription_schedule.*`) keep the outcome `ignored_not_chat`
+  rather than a new `recurring_observed`. The outcome already means "Stripe Billing, not Chat's, recorded,
+  not acted on". Renaming it would split the webhook log's history and filter in two with no change in
+  behaviour. Because those events are expected when another system bills on the account, they are now
+  logged at info level, not as a warning.
+- **No child's name on Stripe (W59, S6).** The Checkout line item is the request's label only (or "Live
+  one-to-one Quran lessons" if the label is blank). The child's name stays in Chat's own records.
 
 ## 5. Operations: setup, deploy, verify, roll back
 
@@ -219,9 +254,11 @@ ever prints a value; the error names only the variable.
 1. **Developers → Webhooks → Add endpoint**: `https://<api host>/api/v1/stripe/webhook`. Events:
    `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
    `checkout.session.async_payment_failed`, `checkout.session.expired`, `payment_intent.succeeded`,
-   `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `charge.refunded`.
-   For an existing endpoint, **add** the four new ones: `payment_intent.succeeded`,
-   `payment_intent.payment_failed`, `refund.updated` (if missing) and `charge.refunded`.
+   `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `refund.failed`, `charge.refunded`,
+   `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`,
+   `charge.dispute.funds_withdrawn`, `charge.dispute.funds_reinstated`.
+   For an existing endpoint, **add** any that are missing, in particular the five `charge.dispute.*` events
+   (W59) and `refund.failed`.
    Do not subscribe `invoice.*` or `customer.subscription.*`: they are harmless (recorded as
    `ignored_not_chat`) but noise.
 2. Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET`. Staging and production have separate
@@ -296,8 +333,10 @@ key, a card number or Stripe's error message. Errors go to Sentry, as before.
 | `stripe reconcile: a paid checkout had no webhook; recorded from Stripe` (warn) | A webhook was lost | Occasional is fine; frequent means check the endpoint's events and delivery |
 | `stripe reconcile: payment … differs from Stripe` (warn) | Chat and Stripe disagree after reconciling | Open the payment in Admin and reconcile; escalate if it stays out of sync |
 | `payment.stripe_mismatch` in `chat.audit_log`, outcome `mismatch` | Paid amount or currency differs from what Chat asked | Investigate. It was never recorded as a payment. |
-| outcome `ignored_not_chat` (warn) | Stripe Billing is in use on the account | Nothing in Chat; ask who set it up |
-| outcome `refund_deferred` older than an hour | A refund for a payment Chat never recorded | Admin → Stripe events; find the payment intent in Stripe |
+| outcome `ignored_not_chat` (info) | Stripe Billing is in use on the account (another system's recurring charges) | Nothing in Chat |
+| outcome `not_chat` | A refund or dispute on a payment Chat did not take | Nothing in Chat; it belongs to another system on the account |
+| `stripe dispute … dispute_opened` / `dispute_funds_withdrawn` (error), audit `payment.dispute_*`, outcome `dispute_*` | A parent's bank disputed a Chat card payment | Respond in the Stripe Dashboard before the evidence deadline. Chat's ledger is unchanged. |
+| outcome `refund_deferred` older than an hour | A refund on a Chat checkout whose payment Chat has not recorded, one Chat could not classify (Stripe unreachable), or one tagged `jawwid-chat` with no Chat checkout (warning log) | Admin → Stripe events; find the payment intent in Stripe |
 | `stripe customer not created` / `paying as a guest` (warn) | Customers scope missing, or a customer was deleted | Fix the key scopes |
 
 SQL for operations (read-only):
@@ -329,6 +368,8 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Stripe unreachable (event lookup, card details, reconcile): retried or recorded without details, never lost | same |
 | Lost webhook: the reconciler records once, marks expired, survives Stripe being down; per-payment reconcile | same |
 | Stripe Billing events (`invoice.*`, `customer.subscription.*`): change nothing | › Stripe Billing events |
+| W59: `system: jawwid-chat` on the session and its payment intent; no child's name on the line item | › S3 + S6, and `test/unit/billing/stripe-disputes-hygiene.spec.ts` |
+| W59: each dispute event on a recorded payment (by payment intent or charge): outcome, one audit row, error log for opened and funds withdrawn, ledger unchanged; foreign dispute, refund and `charge.refunded` are `not_chat`; an unclassifiable refund stays deferred | › disputes (M2), and the unit spec above |
 | Ledger filters, totals, paging, detail; family scope; parents, teachers, unauthenticated refused; another family's request refused; webhook-log tenancy | › the transaction ledger |
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
