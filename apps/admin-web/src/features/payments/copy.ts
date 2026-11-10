@@ -314,11 +314,6 @@ export const INVOICE_STATUS: Record<InvoiceStatus, Pair> = {
   void: { en: 'Void', ar: 'ملغاة' },
 }
 
-/**
- * PD-27 completion: the transaction ledger -- Transactions, Card attempts and
- * Stripe events (docs/admin/pd027-stripe-lifecycle.md §3.6). Read only; the
- * one act is Reconcile, which asks Stripe and records only what Stripe says.
- */
 /** Why a payment was more than owed (the server's `overpaid.why`). */
 export const OVERPAID_WHY: Record<string, Pair> = {
   request_paid: { en: 'The request was already paid when this money arrived.', ar: 'كان الطلب مدفوعًا عند وصول هذا المبلغ.' },
@@ -327,6 +322,11 @@ export const OVERPAID_WHY: Record<string, Pair> = {
   more_than_owed: { en: 'This payment is more than what was still owed.', ar: 'هذه الدفعة أكبر مما كان مستحقًا.' },
 }
 
+/**
+ * PD-27 completion: the transaction ledger -- Transactions, Card attempts and
+ * Stripe events (docs/admin/pd027-stripe-lifecycle.md §3.6). Read only; the
+ * one act is Reconcile, which asks Stripe and records only what Stripe says.
+ */
 export const LED = {
   transactionsTab: { en: 'Transactions', ar: 'المعاملات' },
   attemptsTab: { en: 'Card attempts', ar: 'محاولات البطاقة' },

@@ -8,9 +8,13 @@
  *      amounts, a notice to the staff who refund (canVerify), and an
  *      "Overpaid: refund or credit" marker on the Admin transaction. A payment
  *      that is owed is never flagged.
- *  S1  CheckoutService.open() is serialized per request (advisory lock): two
- *      opens at once leave ONE payable Stripe session; a session already
- *      recorded (a replayed idempotency key) answers the same page, never a 500.
+ *  S1  CheckoutService.open() CLAIMS the request in a short transaction
+ *      (pg_try_advisory_xact_lock + a chat.config claim row) and asks Stripe
+ *      with no transaction open: two opens at once create ONE Stripe session
+ *      and the other gets 409 CHECKOUT_OPENING at once; a burst on a small
+ *      pool never starves other queries; a claim lost to another opener stops
+ *      before Stripe or hands nothing out; a session already recorded (a
+ *      replayed idempotency key) answers the same page, never a 500.
  *
  * Synthetic people only (G-20).
  */
@@ -22,6 +26,9 @@ import { PlatformModule } from '@platform/platform.module';
 import { AuthModule } from '@platform/auth/auth.module';
 import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
+import { PrismaService } from '@platform/prisma.service';
+import { PrismaAuditService } from '@platform/audit.service';
+import { CommError, CommErrorCode } from '@platform/errors';
 import { CommunicationModule } from '@communication/communication.module';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
 import { REDIS_CLIENT } from '@communication/realtime/redis.provider';
@@ -30,8 +37,8 @@ import { LessonModule } from '../../src/lessons/lesson.module';
 import { BillingModule } from '../../src/billing/billing.module';
 import { ParentRecordModule } from '../../src/parent-profile/parent-record.module';
 import { STRIPE_GATEWAY, type CheckoutInput } from '../../src/billing/stripe.gateway';
-import { CheckoutService } from '../../src/billing/checkout.service';
-import { OVERPAYMENT_ACTION, OVERPAYMENT_EVENT } from '../../src/billing/payment-ledger.service';
+import { CheckoutService, checkoutClaimKey } from '../../src/billing/checkout.service';
+import { OVERPAYMENT_ACTION, OVERPAYMENT_EVENT, PaymentLedger } from '../../src/billing/payment-ledger.service';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
@@ -284,37 +291,185 @@ describe('M3: money beyond what was owed is recorded AND flagged', () => {
   });
 });
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Stripe answering createCheckout slowly, as a real network does: the window the claim must cover. */
+function slowCheckouts(ms: number) {
+  const real = stripe.createCheckout.bind(stripe);
+  return jest.spyOn(stripe, 'createCheckout').mockImplementation(async (input: CheckoutInput) => {
+    await sleep(ms);
+    return real(input);
+  });
+}
+
+/** Refused at once because another opener holds the request: 409 CHECKOUT_OPENING, never "paid". */
+function isOpening(e: unknown): boolean {
+  return e instanceof CommError && e.code === CommErrorCode.CHECKOUT_OPENING && e.status === 409;
+}
+
+const sessionsOf = (requestId: string) => [...stripe.sessions.values()].filter((s) => s.input.requestId === requestId);
+
 describe('S1: one payable Checkout session per request', () => {
-  it('two opens at once: serialized, so exactly one Stripe session stays payable', async () => {
+  it('two opens at once while Stripe is slow: ONE Stripe session is created, the other is refused at once (409 CHECKOUT_OPENING)', async () => {
     const { f, child } = freshFamily();
     const request = await lessonRequest(f.id, child.id);
     const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
     const svc = app.get(CheckoutService);
     const opts = { locale: 'en' as const, returnUrl: request.link };
+    const created = slowCheckouts(400);
 
-    const urls = await Promise.all([svc.open(row, opts), svc.open(row, opts)]);
-    expect(new Set(urls).size).toBe(2);
+    const both = await Promise.allSettled([svc.open(row, opts), svc.open(row, opts)]);
+    const opened = both.filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled');
+    const refused = both.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(opened).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(isOpening(refused[0]!.reason)).toBe(true);
 
-    const atStripe = [...stripe.sessions.values()].filter((s) => s.input.requestId === request.id);
-    expect(atStripe).toHaveLength(2);
-    expect(atStripe.filter((s) => s.status === 'open')).toHaveLength(1);
-    expect(await g.prisma.paymentCheckout.count({ where: { requestId: request.id } })).toBe(2);
-    expect(await g.prisma.paymentCheckout.count({ where: { requestId: request.id, status: 'open' } })).toBe(1);
-    // The payable one is the one recorded open.
-    const open = await g.prisma.paymentCheckout.findFirstOrThrow({ where: { requestId: request.id, status: 'open' } });
-    expect(atStripe.find((s) => s.status === 'open')!.id).toBe(open.stripeSessionId);
+    // Stripe was asked once; one page exists and it is the one recorded open.
+    expect(created.mock.calls.filter(([input]) => input.requestId === request.id)).toHaveLength(1);
+    const atStripe = sessionsOf(request.id);
+    expect(atStripe).toHaveLength(1);
+    expect(atStripe[0]!.status).toBe('open');
+    expect(opened[0]!.value).toBe(atStripe[0]!.url);
+    const rows = await g.prisma.paymentCheckout.findMany({ where: { requestId: request.id } });
+    expect(rows.map((r) => [r.stripeSessionId, r.status])).toEqual([[atStripe[0]!.id, 'open']]);
+    // The claim is given up when the open ends.
+    expect(await g.prisma.config.findUnique({ where: { key: checkoutClaimKey(request.id) } })).toBeNull();
+
+    // The next tap works: it expires that page and opens a new one.
+    created.mockRestore();
+    const again = await svc.open(row, opts);
+    expect(sessionsOf(request.id).filter((s) => s.status === 'open').map((s) => s.url)).toEqual([again]);
   });
 
-  it('two taps on Pay over HTTP at once: both answer a page, one is payable, no 500', async () => {
+  it('eight opens at once on a 3-connection pool while Stripe is slow: nobody waits holding a connection, an unrelated query is not starved, one Stripe session', async () => {
     const { f, child } = freshFamily();
     const request = await lessonRequest(f.id, child.id);
+    const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    const url = new URL(process.env.DATABASE_URL!);
+    url.searchParams.set('connection_limit', '3');
+    url.searchParams.set('pool_timeout', '5');
+    const small = new PrismaService({ datasourceUrl: url.toString() });
+    await small.$connect();
+    try {
+      const audit = new PrismaAuditService();
+      const svc = new CheckoutService(small, new PaymentLedger(small, audit), stripe, audit);
+      const opts = { locale: 'en' as const, returnUrl: request.link };
+      const created = slowCheckouts(2_500);
+
+      const opens = Promise.allSettled(Array.from({ length: 8 }, () => svc.open(row, opts)));
+      // The winner is now inside Stripe's (slow) call; every other tap was answered.
+      await sleep(600);
+      const t0 = Date.now();
+      await small.$queryRaw`SELECT 1`;
+      const waited = Date.now() - t0;
+      const results = await opens;
+
+      // Under a lock held across Stripe, this query waited for the pool (pool_timeout, P2024).
+      expect(waited).toBeLessThan(1_000);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const refused = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(refused).toHaveLength(7);
+      expect(refused.every((r) => isOpening(r.reason))).toBe(true);
+      expect(created.mock.calls.filter(([input]) => input.requestId === request.id)).toHaveLength(1);
+      expect(sessionsOf(request.id)).toHaveLength(1);
+      expect(await g.prisma.paymentCheckout.count({ where: { requestId: request.id, status: 'open' } })).toBe(1);
+      expect(await g.prisma.config.findUnique({ where: { key: checkoutClaimKey(request.id) } })).toBeNull();
+    } finally {
+      await small.$disconnect();
+    }
+  });
+
+  it('two taps on Pay over HTTP at once (app and link page): one page, the other a 409 the clients show as "try again", no 500', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    slowCheckouts(400);
     const both = await Promise.all([
       http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: request.id }),
       http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: request.id }),
     ]);
-    expect(both.map((r) => r.status)).toEqual([201, 201]);
-    expect([...stripe.sessions.values()].filter((s) => s.input.requestId === request.id && s.status === 'open')).toHaveLength(1);
+    expect(both.map((r) => r.status).sort()).toEqual([201, 409]);
+    // Not COMM.BILLING_STATE: the app would read that as "paid, cancelled or expired".
+    expect(both.find((r) => r.status === 409)!.code).toBe(CommErrorCode.CHECKOUT_OPENING);
+    expect(sessionsOf(request.id)).toHaveLength(1);
     expect(await g.prisma.paymentCheckout.count({ where: { requestId: request.id, status: 'open' } })).toBe(1);
+
+    // The link page's form: one 303 to Stripe, the other the page again with a 409, never a 500.
+    const token = tokenOf(request.link);
+    const taps = await Promise.all([1, 2].map(() => fetch(`${base}/pay/${token}/checkout`, { method: 'POST', redirect: 'manual' })));
+    expect(taps.map((r) => r.status).sort()).toEqual([303, 409]);
+    expect(sessionsOf(request.id).filter((s) => s.status === 'open')).toHaveLength(1);
+    expect(await g.prisma.paymentCheckout.count({ where: { requestId: request.id, status: 'open' } })).toBe(1);
+  });
+
+  it('a claim taken over before Stripe is asked: this opener stops, no Stripe session is created', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    const key = checkoutClaimKey(request.id);
+    const realCustomer = stripe.createCustomer.bind(stripe);
+    // While this opener asks Stripe for the family's customer, its claim runs out and another opener takes it.
+    jest.spyOn(stripe, 'createCustomer').mockImplementationOnce(async (input) => {
+      await g.prisma.config.update({ where: { key }, data: { value: { holder: 'another-opener', until: new Date(Date.now() + 60_000).toISOString() } } });
+      return realCustomer(input);
+    });
+    const created = jest.spyOn(stripe, 'createCheckout');
+    try {
+      expect(isOpening(await app.get(CheckoutService).open(row, { locale: 'en', returnUrl: request.link }).catch((e: unknown) => e))).toBe(true);
+      expect(created).not.toHaveBeenCalled();
+      expect(sessionsOf(request.id)).toHaveLength(0);
+      expect(await g.prisma.paymentCheckout.count({ where: { requestId: request.id } })).toBe(0);
+      // The other opener's claim is never removed by this one.
+      expect((await g.prisma.config.findUniqueOrThrow({ where: { key } })).value).toMatchObject({ holder: 'another-opener' });
+    } finally {
+      await g.prisma.config.deleteMany({ where: { key } });
+    }
+  });
+
+  it('a claim taken over while Stripe creates the page (Stripe slower than the claim): the page is recorded, expired and never handed out', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    const key = checkoutClaimKey(request.id);
+    const real = stripe.createCheckout.bind(stripe);
+    jest.spyOn(stripe, 'createCheckout').mockImplementationOnce(async (input: CheckoutInput) => {
+      const s = await real(input);
+      await g.prisma.config.update({ where: { key }, data: { value: { holder: 'another-opener', until: new Date(Date.now() + 60_000).toISOString() } } });
+      return s;
+    });
+    try {
+      expect(isOpening(await app.get(CheckoutService).open(row, { locale: 'en', returnUrl: request.link }).catch((e: unknown) => e))).toBe(true);
+      const atStripe = sessionsOf(request.id);
+      expect(atStripe).toHaveLength(1);
+      expect(atStripe[0]!.status).toBe('expired');
+      const rows = await g.prisma.paymentCheckout.findMany({ where: { requestId: request.id } });
+      expect(rows.map((r) => [r.stripeSessionId, r.status])).toEqual([[atStripe[0]!.id, 'expired']]);
+      expect((await g.prisma.config.findUniqueOrThrow({ where: { key } })).value).toMatchObject({ holder: 'another-opener' });
+    } finally {
+      await g.prisma.config.deleteMany({ where: { key } });
+    }
+  });
+
+  it('a claim left by an API process that died is taken over once its time has passed', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const row = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    const key = checkoutClaimKey(request.id);
+    const opts = { locale: 'en' as const, returnUrl: request.link };
+    const svc = app.get(CheckoutService);
+    try {
+      // Still live: refused.
+      await g.prisma.config.create({ data: { key, scope: 'checkout', value: { holder: 'dead-opener', until: new Date(Date.now() + 60_000).toISOString() } } });
+      expect(isOpening(await svc.open(row, opts).catch((e: unknown) => e))).toBe(true);
+      expect(sessionsOf(request.id)).toHaveLength(0);
+      // Its time has passed: taken over, opened, released.
+      await g.prisma.config.update({ where: { key }, data: { value: { holder: 'dead-opener', until: new Date(Date.now() - 1_000).toISOString() } } });
+      const url = await svc.open(row, opts);
+      expect(sessionsOf(request.id).map((s) => s.url)).toEqual([url]);
+      expect(await g.prisma.config.findUnique({ where: { key } })).toBeNull();
+    } finally {
+      await g.prisma.config.deleteMany({ where: { key } });
+    }
   });
 
   it('the session already recorded (Stripe answered a replayed idempotency key): the same page, not a 500', async () => {

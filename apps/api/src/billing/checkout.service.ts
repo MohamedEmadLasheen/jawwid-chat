@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Payment, PaymentRequest } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -26,8 +27,25 @@ const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const CHECKOUT_MINUTES = 45;
 /** Opening Stripe's page again and again for one request is not paying; it is a loop or abuse. */
 const MAX_CHECKOUTS_PER_HOUR = 10;
-/** S1: open() holds its request's lock across Stripe calls (20 s timeout each, 2 retries). */
-const OPEN_TRANSACTION_TIMEOUT_MS = 120_000;
+/**
+ * S1: how long a claim on opening one request's page lasts unless renewed. It
+ * is renewed before every Stripe call (each at most 20 s x 3 tries), so it only
+ * matters when an API process dies mid-open: the request is then free again
+ * after this long. Never a lock held open: see claimOpening().
+ */
+const OPEN_CLAIM_SECONDS = 150;
+/** S1: the claim's own transactions are a few statements; they never wait for each other. */
+const CLAIM_TRANSACTION = { maxWait: 5_000, timeout: 5_000 } as const;
+
+/** S1: the chat.config row that says one opener is opening this request's page (holder, until). */
+export function checkoutClaimKey(requestId: string): string {
+  return `checkout.opening:${requestId}`;
+}
+
+/** S1: another tap is opening this request's page right now. Not "paid": try again. */
+function alreadyOpening(): CommError {
+  return new CommError(CommErrorCode.CHECKOUT_OPENING, 'a payment page is already opening; try again', 409);
+}
 
 class DuplicateEvent extends Error {}
 
@@ -97,20 +115,7 @@ export class CheckoutService {
     }
     this.requirePayable(request);
 
-    // S1: one opener per request at a time. Two taps (two devices, a double
-    // submit) would otherwise both find no open session and both create one --
-    // two payable Stripe pages for one request. A transaction-scoped advisory
-    // lock on the request id serializes list -> expire -> create; the second
-    // opener then finds the first one's session and expires it. The lock is
-    // held across the Stripe calls, so the transaction's timeout covers them.
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment_checkout:${request.id}`}, 0))`;
-      return this.openLocked(request, opts);
-    }, { maxWait: 10_000, timeout: OPEN_TRANSACTION_TIMEOUT_MS });
-  }
-
-  /** open(), under the request's checkout lock. */
-  private async openLocked(request: PaymentRequest, opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean }): Promise<string> {
+    // A loop or abuse is refused first: one plain read, before any claim or Stripe call.
     const recent = await this.prisma.paymentCheckout.count({
       where: { requestId: request.id, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
     });
@@ -118,15 +123,91 @@ export class CheckoutService {
       throw new CommError(CommErrorCode.BILLING_STATE, 'too many payment attempts for this request; try again in an hour', 429);
     }
 
+    // S1: one opener per request at a time. Two taps (two devices, a double
+    // submit) would otherwise both find no open session and both create one --
+    // two payable Stripe pages for one request. The first tap CLAIMS the
+    // request in a short transaction; a second tap meanwhile is refused at once
+    // (409 CHECKOUT_OPENING) instead of waiting. No transaction is open and no
+    // connection is held while Stripe is asked.
+    const holder = await this.claimOpening(request.id);
+    try {
+      return await this.openClaimed(request, opts, holder);
+    } finally {
+      await this.releaseOpening(request.id, holder);
+    }
+  }
+
+  /**
+   * S1: claim the right to open this request's page. A short transaction: a
+   * non-blocking advisory lock (a concurrent claimer is refused, never queued),
+   * then a chat.config row naming this opener until a time. A claim whose time
+   * has passed (its API process died) is taken over. Answers the holder id.
+   */
+  private async claimOpening(requestId: string): Promise<string> {
+    const key = checkoutClaimKey(requestId);
+    const holder = randomUUID();
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const [lock] = await tx.$queryRaw<Array<{ locked: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(hashtextextended(${key}, 0)) AS locked`;
+      if (lock?.locked !== true) return false;
+      const rows = await tx.$queryRaw<Array<{ key: string }>>`
+        INSERT INTO chat.config AS c (key, value, scope, description)
+        VALUES (${key},
+                jsonb_build_object('holder', ${holder}::text, 'until', now() + ${OPEN_CLAIM_SECONDS}::int * interval '1 second'),
+                'checkout', 'PD-27 S1: a Stripe Checkout page is being opened for this request (removed when done).')
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+         WHERE (c.value ->> 'until')::timestamptz <= now()
+        RETURNING key`;
+      return rows.length === 1;
+    }, CLAIM_TRANSACTION);
+    if (!claimed) throw alreadyOpening();
+    return holder;
+  }
+
+  /**
+   * S1: still ours? Renewed before every Stripe call. If another opener took
+   * the request over (ours ran past its time), nothing more is done: no Stripe
+   * call is ever made without the claim.
+   */
+  private async holdOpening(requestId: string, holder: string): Promise<void> {
+    const renewed = await this.prisma.$executeRaw`
+      UPDATE chat.config
+         SET value = jsonb_build_object('holder', ${holder}::text, 'until', now() + ${OPEN_CLAIM_SECONDS}::int * interval '1 second'),
+             updated_at = now()
+       WHERE key = ${checkoutClaimKey(requestId)} AND value ->> 'holder' = ${holder}`;
+    if (renewed !== 1) {
+      this.log.warn('stripe checkout: this opener\'s claim was taken over; stopping before Stripe is asked');
+      throw alreadyOpening();
+    }
+  }
+
+  /** S1: the claim is given up (only our own; a later opener's is never removed). Best effort: it expires anyway. */
+  private async releaseOpening(requestId: string, holder: string): Promise<void> {
+    try {
+      await this.prisma.$executeRaw`
+        DELETE FROM chat.config WHERE key = ${checkoutClaimKey(requestId)} AND value ->> 'holder' = ${holder}`;
+    } catch (e) {
+      this.log.warn(`stripe checkout: claim not released (${errorCategory(e)}); it expires in ${OPEN_CLAIM_SECONDS} s`);
+    }
+  }
+
+  /** open(), holding the request's claim. Every Stripe call runs with no transaction open. */
+  private async openClaimed(
+    request: PaymentRequest,
+    opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean },
+    holder: string,
+  ): Promise<string> {
     // Earlier sessions: record a completed one, expire an open one.
     const open = await this.prisma.paymentCheckout.findMany({ where: { requestId: request.id, status: 'open' } });
     for (const c of open) {
+      await this.holdOpening(request.id, holder);
       let session: CheckoutSession;
       try {
         session = await this.stripe.retrieveCheckout(c.stripeSessionId);
       } catch {
         continue;
       }
+      await this.holdOpening(request.id, holder);
       if (session.status === 'complete' && session.paymentStatus === 'paid') {
         await this.confirm(session, null);
       } else if (session.status === 'open') {
@@ -154,6 +235,7 @@ export class CheckoutService {
     // From the app: checked again just before Stripe is asked (a package voided since).
     if (opts.inApp && !lessons) throw notInApp();
     const sep = opts.returnUrl.includes('?') ? '&' : '?';
+    await this.holdOpening(fresh.id, holder);
     let customerId = await this.customerFor(fresh);
     const input = {
       requestId: fresh.id,
@@ -169,6 +251,7 @@ export class CheckoutService {
       idempotencyKey: `checkout:${fresh.id}:${attempts}`,
     };
     let session: CheckoutSession;
+    await this.holdOpening(fresh.id, holder);
     try {
       try {
         session = await this.stripe.createCheckout({ ...input, customerId });
@@ -179,9 +262,12 @@ export class CheckoutService {
         if (!customerId || err.code !== 'resource_missing' || (err.param && err.param !== 'customer')) throw e;
         this.log.warn('stripe checkout: the family\'s Stripe customer no longer exists; paying as a guest (do not delete customers Chat created)');
         customerId = null;
+        await this.holdOpening(fresh.id, holder);
         session = await this.stripe.createCheckout({ ...input, customerId, idempotencyKey: `${input.idempotencyKey}:guest` });
       }
     } catch (e) {
+      // Our claim was taken over: the same 409, never "card payments are unavailable".
+      if (e instanceof CommError && e.code === CommErrorCode.CHECKOUT_OPENING) throw e;
       // Stripe's own message never reaches a parent (it can name parameters,
       // and it is English API prose); the category is logged, never the body
       // or the key. The client offers the bank transfer instead.
@@ -189,18 +275,27 @@ export class CheckoutService {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
     }
     if (!session.url) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'Stripe did not return a payment page', 503);
+    // The session is recorded whatever happens next (so a later opener, the
+    // webhook and the reconciler all know it), and in the same short
+    // transaction we look whether the claim is still ours.
+    let held: boolean;
     try {
-      await this.prisma.paymentCheckout.create({
-        data: {
-          stripeSessionId: session.id,
-          organizationId: fresh.organizationId,
-          requestId: fresh.id,
-          amountMinor: BigInt(remaining),
-          currency: fresh.currency,
-          expiresAt: session.expiresAt,
-          stripeCustomerId: safe.customer(session.customerId ?? customerId),
-        },
-      });
+      held = await this.prisma.$transaction(async (tx) => {
+        const mine = await tx.$queryRaw<Array<{ key: string }>>`
+          SELECT key FROM chat.config WHERE key = ${checkoutClaimKey(fresh.id)} AND value ->> 'holder' = ${holder} FOR UPDATE`;
+        await tx.paymentCheckout.create({
+          data: {
+            stripeSessionId: session.id,
+            organizationId: fresh.organizationId,
+            requestId: fresh.id,
+            amountMinor: BigInt(remaining),
+            currency: fresh.currency,
+            expiresAt: session.expiresAt,
+            stripeCustomerId: safe.customer(session.customerId ?? customerId),
+          },
+        });
+        return mine.length === 1;
+      }, CLAIM_TRANSACTION);
     } catch (e) {
       // S1: the same Stripe session is already recorded -- Stripe answered a
       // replayed idempotency key with the session another open() recorded. A
@@ -209,6 +304,20 @@ export class CheckoutService {
       const known = await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } });
       if (!known || known.requestId !== fresh.id) throw e;
       this.log.warn('stripe checkout: the session was already recorded (a replayed open); answering the same page');
+      return session.url;
+    }
+    if (!held) {
+      // Stripe took longer than the claim and another opener took the request
+      // over: it may be creating its own page right now. Ours is never handed
+      // out; it is expired, so at most one page stays payable.
+      this.log.warn('stripe checkout: the claim was taken over while Stripe answered; this page is expired, not handed out');
+      try {
+        await this.stripe.expireCheckout(session.id);
+        await this.prisma.paymentCheckout.updateMany({ where: { stripeSessionId: session.id, status: 'open' }, data: { status: 'expired' } });
+      } catch {
+        // Recorded open: the next opener expires it, or its webhook records it.
+      }
+      throw alreadyOpening();
     }
     return session.url;
   }

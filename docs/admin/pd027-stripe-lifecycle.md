@@ -182,17 +182,28 @@ Manager of the academy) get a notice through `NotificationService.schedule`, as 
 sent (event type `payment_overpaid`, one per payment and person). The push is the generic one, so the
 amount stays behind sign-in. The notice is best effort. The audit row is the record. Admin > Payments >
 Transactions shows **"Overpaid: refund or credit"** on the row and in the detail (with the amount and the
-reason). It reads **"Overpaid (settled)"** once refunds or a void cover it. The API gives
+reason). It reads **"Overpaid (settled)"** once refunds or a void *of the flagged payment itself* cover
+it. Resolve a double payment by refunding (or voiding) the flagged payment: voiding the *other* payment
+(for example the bank transfer) does not clear the marker, which stays red. The API gives
 `overpaid: { amountMinor, why, settled } | null` on `GET /payments` and `GET /payments/:id`, computed from
 the audit row. No schema change.
 
-**S1: one payable Stripe session per request.** `CheckoutService.open()` runs list → expire → create
-under a transaction-scoped advisory lock on the request id (`pg_advisory_xact_lock`). Two taps at once
-used to find no open session each and create two payable pages. Now the second one waits, finds the first
-one's session, and expires it. If the `payment_checkout` insert hits a unique violation (`P2002`, the same
-Stripe session already recorded, as when Stripe answers a replayed idempotency key), that is a replay. It
-answers the same page, not a 500. The lock is held across the Stripe calls, so the transaction's timeout
-(120 s) covers them.
+**S1: one payable Stripe session per request.** Two taps at once used to find no open session each and
+create two payable pages. `CheckoutService.open()` now first refuses a loop (10 opens in an hour, 429),
+then **claims** the request in a short transaction: `pg_try_advisory_xact_lock` (never waits) and a
+`chat.config` row `checkout.opening:<request id>` naming this opener until a time (150 s). A second tap
+while the first is opening gets **409 `COMM.CHECKOUT_OPENING`** at once ("a payment page is already
+opening; try again"); the app and the link page show their general "try again" message, and the next tap
+works. No transaction is open and no pool connection is held while Stripe is asked, so a burst of taps on
+one request (the link is public) cannot use up the API's small connection pool.
+
+The claim is renewed before every Stripe call; if another opener took it over (ours ran past its time),
+nothing more is asked of Stripe. The session Stripe returned is recorded in a short transaction that also
+checks the claim is still ours; if it is not, that page is expired and never handed out, so at most one page
+stays payable. The claim row is removed when the open ends (its time covers an API process that died). The
+idempotency key stays `checkout:<request>:<attempts>`; if the `payment_checkout` insert hits a unique
+violation (`P2002`, the same Stripe session already recorded, as when Stripe answers a replayed key), that is
+a replay: the same page, not a 500.
 
 ## 4. Not done, on purpose
 
@@ -347,7 +358,7 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Stripe Billing events (`invoice.*`, `customer.subscription.*`): change nothing | › Stripe Billing events |
 | Ledger filters, totals, paging, detail; family scope; parents, teachers, unauthenticated refused; another family's request refused; webhook-log tenancy | › the transaction ledger |
 | Overpayment (M3): bank transfer then a late card webhook, and an instalment paid in cash while the card paid it, are recorded, flagged, staff told, the transaction marked; an owed payment is never flagged | `pd027-overpayment-checkout-lock.spec.ts` › M3 |
-| One payable session (S1): two concurrent opens (service and HTTP) leave one open session; an already-recorded session answers the same page, no 500 | same › S1 |
+| One payable session (S1): two concurrent opens (service and HTTP) create one Stripe session, the other tap gets 409 `CHECKOUT_OPENING`; eight opens on a 3-connection pool leave an unrelated query fast; a claim lost before or during Stripe creates nothing or hands nothing out; an already-recorded session answers the same page, no 500 | same › S1 |
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
