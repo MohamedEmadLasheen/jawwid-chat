@@ -356,7 +356,7 @@ describe('OA-12: the App Review payment mode', () => {
         expect(r.headers.get('cache-control')).toBe('no-store');
         expect(r.headers.get('content-security-policy')).toMatch(PAY_PAGE_CSP);
         const html = await r.text();
-        expect(html).toContain("In the live app this opens Stripe's secure checkout page in the browser to pay this lesson package by card. The review account cannot make a payment.");
+        expect(html).toContain("In the live app this opens Stripe&#39;s secure checkout page in the browser to pay this lesson package by card. The review account cannot make a payment.");
         expect(html).toContain('لا يمكن لحساب المراجعة إجراء أي دفع.');
         expect(html).toContain(`<html lang="${lang}"`);
         expect(html).not.toMatch(/<script|<form/i);
