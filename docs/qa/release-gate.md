@@ -273,8 +273,11 @@ bash scripts/qa/guards.sh g20        # one gate (ids: --list)
 (fast)** job: each step of that job in `.github/workflows/ci.yml` is one call
 into it, and its `ci-wiring` gate fails if a gate it defines is not called from
 CI. It covers G-18, G-20, the G-20 meta-guard, JC-011, G-31..G-35, the secret
-scan, the client-bundle and environment checks, the env-template/manifest diff
-and the backup-client check. It runs every gate even after one fails and exits
+scan, the client-bundle and environment checks, the env-template/manifest diff,
+the backup-client check, and `actions-pinned` (every `uses:` in
+`.github/workflows` and `.github/actions` names a full 40-hex commit; local
+`./` actions and `docker://` images with a sha256 digest are allowed, so a PR
+that adds an action must pin it). It runs every gate even after one fails and exits
 non-zero if any did. Slow suites (jest, flutter test, the migration gate) are
 not in it.
 

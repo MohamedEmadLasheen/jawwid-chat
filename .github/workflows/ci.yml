@@ -138,6 +138,11 @@ jobs:
         # The App Store and Google Play reject the template artwork (PR-G).
         run: bash scripts/qa/guards.sh app-icons
 
+      - name: Every GitHub Action is pinned to a full commit SHA
+        # P3-11: a tag or branch can be repointed by the action's owner; a
+        # 40-hex commit cannot. A PR that adds an action must pin it.
+        run: bash scripts/qa/guards.sh actions-pinned
+
       - name: Every gate in scripts/qa/guards.sh runs in CI
         # Anti-drift: fails if guards.sh defines a gate this job never calls.
         run: bash scripts/qa/guards.sh ci-wiring
