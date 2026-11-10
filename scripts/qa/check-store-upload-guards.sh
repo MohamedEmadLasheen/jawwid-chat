@@ -748,6 +748,9 @@ IDENTITY_MUTATIONS = [
 ]
 SYM_CALL = '          sq "Dart symbols" debug-files upload "$SYM"\n'
 SHA_LINE = '[ "$(shasum -a 256 "$VERIFIED_IPA" | awk \'{print $1}\')" = "$VERIFIED_IPA_SHA256" ]'
+# The evidence step (W56) re-checks the same hash before it unpacks the .ipa, earlier in the file;
+# the re-check removed must be the one right before an upload, so it is found after this step name.
+ASC_UPLOAD_STEP = '      - name: Upload the verified .ipa itself to App Store Connect'
 AH_LINE = '          AH="$(xcrun altool --help 2>&1 || true)"\n'
 ALTOOL_APP_START = '            xcrun altool --upload-app'
 ALTOOL_PLAIN_START = '              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apiKey'
@@ -767,7 +770,7 @@ def mutations_r123():
         ('another Transporter mode', W, lambda t: replaced(t, '"$T" -m upload', '"$T" -m lookupMetadata')),
         ('a second Transporter call', W, lambda t: replaced(t, '            "$T" -m upload -assetFile', '            "$T" -m upload -assetFile "$VERIFIED_IPA"\n            "$T" -m upload -assetFile')),
         ('a Transporter upload of another file', W, lambda t: replaced(t, '-assetFile "$VERIFIED_IPA"', '-assetFile "$B/export/Runner.ipa"')),
-        ('the SHA-256 re-check removed', W, lambda t: replaced(t, SHA_LINE, '[ -n "$VERIFIED_IPA_SHA256" ]')),
+        ('the SHA-256 re-check removed', W, lambda t: after(t, ASC_UPLOAD_STEP, SHA_LINE, '[ -n "$VERIFIED_IPA_SHA256" ]')),
         ('the SHA-256 re-check not right before an upload', W, lambda t: replaced(t, ALTOOL_APP_START, '            cp "$B/export/other.ipa" "$VERIFIED_IPA" || true\n' + ALTOOL_APP_START)),
         ('the SHA-256 not recorded', W, lambda t: replaced(t, 'echo "VERIFIED_IPA_SHA256=$sha"', 'echo "VERIFIED_IPA_SHA=$sha"')),
         ('the .ipa not made read-only', W, lambda t: replaced(t, '          chmod a-w "$IPA"\n', '')),
