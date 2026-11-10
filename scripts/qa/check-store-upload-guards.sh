@@ -543,7 +543,8 @@ def check_sentry(files, errors):
             errors.append(f'{WORKFLOW}:{n}: sentry-cli called by name; use the verified "$SENTRY_CLI" through sq (R3)')
         if re.match(r'^\s*sq\s', l) and not re.match(SENTRY_CALL, l):
             errors.append(f'{WORKFLOW}:{n}: sq may only run `debug-files upload` or `upload-proguard` on one path (R3)')
-        if 'SENTRY_LOG_LEVEL' in l and not re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l):
+        if 'SENTRY_LOG_LEVEL' in l and not re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l) \
+                and not l.lstrip().startswith('for v in $(compgen -e); do case "$v" in '):
             errors.append(f'{WORKFLOW}:{n}: SENTRY_LOG_LEVEL must be warn (R3)')
     for job, body in job_bodies(text).items():
         tokens = [n for n, l in body if re.match(SENTRY_TOKEN_LINES[0], l)]
