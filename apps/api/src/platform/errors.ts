@@ -141,6 +141,8 @@ export enum CommErrorCode {
   STORY_DELETED = 'COMM.STORY_DELETED',
   /** PD-34: a Notification Center entry that is not the caller's, or does not exist -- one answer for both. */
   NOTIFICATION_NOT_FOUND = 'COMM.NOTIFICATION_NOT_FOUND',
+  /** LR-46: the push token is another account's, registered by a session that is still signed in. 409. */
+  DEVICE_TOKEN_IN_USE = 'COMM.DEVICE_TOKEN_IN_USE',
   STORY_DELETE_REASON_REQUIRED = 'COMM.STORY_DELETE_REASON_REQUIRED',
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',

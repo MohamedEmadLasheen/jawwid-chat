@@ -256,6 +256,15 @@ export class FakeDb {
     findUnique: async (_args: { where: { id: string } }) => null,
   };
 
+  // -- device_token (LR-46) -------------------------------------------------
+  // No push token is ever registered in these unit specs, so a rotation finds
+  // none to move to its successor session. The binding, the move and the
+  // revocation trigger are proven against the real database in
+  // test/integration/lr046-device-token-session.spec.ts.
+  readonly deviceToken = {
+    updateMany: async (_args: { where: { sessionId: string }; data: { sessionId: string } }) => ({ count: 0 }),
+  };
+
   // -- device -------------------------------------------------------------
   readonly device = {
     findFirst: async (args: {

@@ -154,6 +154,13 @@ export class AccountDeletionService {
     erase: (tx: Prisma.TransactionClient) => Promise<E>,
   ): Promise<E> {
     const { erasure, revoked } = await this.prisma.$transaction(async (tx) => {
+      // LR-46 (#537): lock the account's live sessions before erase_account touches its
+      // push tokens. registerDevice locks the session, then the token; taking them here in
+      // the same order means a registration racing this deletion waits instead of
+      // deadlocking it. Here, at the top of the shared run(), it covers every erasure
+      // (the holder's own, staff's completion and the deadline's).
+      await tx.$queryRaw`
+        SELECT 1 FROM chat.session WHERE account_id = ${accountId}::uuid AND revoked_at IS NULL FOR UPDATE`;
       const r = await erase(tx);
       const revokedCount = await this.auth.revokeAccountSessionsInTx(tx, accountId, reason, by ?? {
         revokedBy: accountId,

@@ -69,13 +69,14 @@ class HttpPushRegistration implements PushRegistrationApi {
 /// signed-out the bearer is gone and the request would be refused — so this
 /// retires tokens on the way out and does not treat a failure as an error.
 ///
-/// A token that survives is not a leak. `registerDevice` upserts **by token**
-/// and moves it to whoever registers it next, which is the server's stated
-/// design for a handed-over device: the next person to sign in on this phone
-/// takes ownership of its tokens, and the previous account stops receiving
-/// anything on it. A device that signs out and is never used again keeps an
-/// active row until a provider rejects it as permanently invalid, which is
-/// recorded as a carry-forward rather than papered over here.
+/// A token that survives is not a leak. On the server (LR-46, #537) a token is
+/// bound to the session that registered it: when that session is revoked the
+/// token is deactivated, and the next person to sign in on this phone takes it
+/// over only once the previous session has ended (until then the server
+/// answers 409 `COMM.DEVICE_TOKEN_IN_USE`, which this registrar ignores like
+/// any registration failure). A sign-out made offline leaves the previous
+/// session live until it expires; retrying that sign-out when back online is a
+/// recorded follow-up.
 ///
 /// ## Failure is never fatal
 ///
