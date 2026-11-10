@@ -6109,6 +6109,18 @@ abstract class L10n {
   /// **'This has already been paid or is no longer open. The list has been refreshed.'**
   String get billingNoLongerOpen;
 
+  /// W61 S2: pay sheet -- a bank-transfer receipt for this payment is waiting for the academy.
+  ///
+  /// In en, this message translates to:
+  /// **'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.'**
+  String get billingReceiptPendingNotice;
+
+  /// W61 S2: pay sheet -- the waiting receipts cover what is left, so the card is paused until they are decided.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment will be available again if the academy cannot confirm the transfer.'**
+  String get billingReceiptPendingCardPaused;
+
   /// PD-27: Settings -> Payments.
   ///
   /// In en, this message translates to:

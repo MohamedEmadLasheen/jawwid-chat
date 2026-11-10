@@ -204,6 +204,15 @@ export const PAY = {
   recordedByLine: { en: 'recorded by {name}', ar: 'سجّله {name}' },
   byStripe: { en: 'confirmed by Stripe', ar: 'أكّده Stripe' },
   refunded: { en: 'refunded {amount}', ar: 'مُسترد {amount}' },
+  /** W61 S4: a refund gives money back and never takes lessons back (product decision: no automatic lesson reversal). */
+  refundedLessonsStay: { en: 'Refunded {amount}; the lesson package stays credited', ar: 'تم استرداد {amount}، وتبقى حصص الباقة مضافة كما هي' },
+  /** W61 S4: a refund of a payment that bought no lessons (a trial, a balance, anything else). */
+  refundedPlain: { en: 'Refunded {amount}', ar: 'تم استرداد {amount}' },
+  /** W61 S4: where the payment's purpose is not known (the parent profile's list). */
+  refundedNeutral: {
+    en: 'Refunded {amount}. Refunds do not remove lessons already credited.',
+    ar: 'تم استرداد {amount}. لا يُلغي الاسترداد الحصص المضافة من قبل.',
+  },
   invoiceNo: { en: 'Invoice {number}', ar: 'فاتورة {number}' },
   voidedLine: { en: 'Voided by {name}: {reason}', ar: 'ألغاه {name}: {reason}' },
   refundLine: { en: 'Refund {amount}, {date} ({source}): {reason}', ar: 'استرداد {amount}، {date} ({source}): {reason}' },
@@ -608,6 +617,16 @@ export function reminderLabel(offsetDays: number, locale: 'ar' | 'en'): string {
 /** What the link still asks for: the remaining amount, or the whole when nothing is paid. */
 export function owed(request: Pick<PaymentRequest, 'amountMinor' | 'remainingMinor' | 'paidMinor'>): number {
   return request.paidMinor > 0 ? request.remainingMinor : request.amountMinor
+}
+
+/**
+ * W61 S4: whether a payment credited lessons: a subscription or renewal, or an instalment
+ * (of a lesson package). A trial's payment, a balance and anything else did not.
+ */
+export function paymentCreditsLessons(p: { trialId: string | null; instalmentId: string | null; purpose: RequestPurpose | null }): boolean {
+  if (p.trialId) return false
+  if (p.purpose === null) return p.instalmentId !== null
+  return p.purpose === 'subscription' || p.purpose === 'renewal' || p.purpose === 'instalment'
 }
 
 /**

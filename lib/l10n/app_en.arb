@@ -2161,6 +2161,14 @@
   "@billingNoLongerOpen": {
     "description": "PD-27: Settings -> Payments."
   },
+  "billingReceiptPendingNotice": "A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.",
+  "@billingReceiptPendingNotice": {
+    "description": "W61 S2: pay sheet -- a bank-transfer receipt for this payment is waiting for the academy."
+  },
+  "billingReceiptPendingCardPaused": "Card payment will be available again if the academy cannot confirm the transfer.",
+  "@billingReceiptPendingCardPaused": {
+    "description": "W61 S2: pay sheet -- the waiting receipts cover what is left, so the card is paused until they are decided."
+  },
   "billingCouldNotOpen": "Couldn't open the page. Try again.",
   "@billingCouldNotOpen": {
     "description": "PD-27: Settings -> Payments."

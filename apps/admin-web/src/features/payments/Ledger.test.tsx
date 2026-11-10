@@ -327,6 +327,92 @@ describe('Payments > Transactions', () => {
     expect(within(table).queryByText('مبلغ زائد: يُردّ أو يُضاف رصيدًا')).not.toBeInTheDocument()
   })
 
+  it('W61 S4: a refunded payment says the lesson package stays credited (a refund removes no lessons), in English and Arabic', async () => {
+    serve()
+    on('GET', /\/payments\/p-1$/, () => json(detail({ canReconcile: false })))
+    const view = renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).getByText(/^Refunded AED\s200\.00; the lesson package stays credited$/)).toBeInTheDocument()
+    view.unmount()
+
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions', locale: 'ar' })
+    const arTable = await screen.findByRole('table', { name: 'المعاملات' })
+    await userEvent.click(within(arTable).getByText('Family Alpha'))
+    const arDialog = await screen.findByRole('dialog')
+    expect(within(arDialog).getByText(/^تم استرداد .*200\.00.*، وتبقى حصص الباقة مضافة كما هي$/)).toBeInTheDocument()
+  })
+
+  it('W61 S4: a refunded trial payment says only "Refunded X" (it bought no lesson package), in English and Arabic', async () => {
+    serve()
+    on('GET', /\/payments\/p-1$/, () =>
+      json(
+        detail({
+          canReconcile: false,
+          request: null,
+          payment: { ...transaction({ refundedMinor: 20000, status: 'partially_refunded', trialId: 't-1', request: null }), voided: null, paymentMethodType: 'card' },
+        }),
+      ),
+    )
+    const view = renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).getByText(/^Refunded AED\s200\.00$/)).toBeInTheDocument()
+    expect(within(dialog).queryByText(/stays credited/)).not.toBeInTheDocument()
+    view.unmount()
+
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions', locale: 'ar' })
+    const arTable = await screen.findByRole('table', { name: 'المعاملات' })
+    await userEvent.click(within(arTable).getByText('Family Alpha'))
+    const arDialog = await screen.findByRole('dialog')
+    expect(within(arDialog).getByText(/^تم استرداد .*200\.00[^،]*$/)).toBeInTheDocument()
+    expect(within(arDialog).queryByText(/مضافة كما هي/)).not.toBeInTheDocument()
+  })
+
+  it('W61 S4: a refunded payment for a purpose that bought no lessons (a balance) says only "Refunded X"', async () => {
+    serve()
+    on('GET', /\/payments\/p-1$/, () =>
+      json(
+        detail({
+          canReconcile: false,
+          request: {
+            id: 'r-9', label: 'Outstanding balance', purpose: 'balance', amountMinor: 120000, currency: 'AED',
+            planMonths: null, periodStart: null, periodEnd: null, status: 'paid',
+          },
+          payment: {
+            ...transaction({
+              refundedMinor: 20000,
+              status: 'partially_refunded',
+              request: { id: 'r-9', label: 'Outstanding balance', purpose: 'balance', planMonths: null },
+            }),
+            voided: null,
+            paymentMethodType: 'card',
+          },
+        }),
+      ),
+    )
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).getByText(/^Refunded AED\s200\.00$/)).toBeInTheDocument()
+    expect(within(dialog).queryByText(/stays credited/)).not.toBeInTheDocument()
+  })
+
+  it('W61 S4: a payment with no refund shows no refund marker', async () => {
+    serve()
+    on('GET', /\/payments\/p-1$/, () =>
+      json(detail({ canReconcile: false, refunds: [], payment: { ...transaction(), voided: null, paymentMethodType: 'card' } })),
+    )
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).queryByText(/the lesson package stays credited/)).not.toBeInTheDocument()
+  })
+
   it('Reconcile with Stripe shows Chat’s and Stripe’s numbers when they differ, and the refunds recorded', async () => {
     serve({ canReconcile: true })
     on('GET', /\/payments\/p-1$/, () => json(detail()))

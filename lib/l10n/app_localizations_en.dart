@@ -3576,6 +3576,14 @@ class L10nEn extends L10n {
       'This has already been paid or is no longer open. The list has been refreshed.';
 
   @override
+  String get billingReceiptPendingNotice =>
+      'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.';
+
+  @override
+  String get billingReceiptPendingCardPaused =>
+      'Card payment will be available again if the academy cannot confirm the transfer.';
+
+  @override
   String get billingCouldNotOpen => 'Couldn\'t open the page. Try again.';
 
   @override

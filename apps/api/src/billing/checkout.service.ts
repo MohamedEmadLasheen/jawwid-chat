@@ -23,6 +23,7 @@ import {
   type StripeGateway,
 } from './stripe.gateway';
 import { WEBHOOK_REFUND_REASON } from './idempotency';
+import { pendingReceiptMinor, receiptPendingRefusal } from './payments-read.service';
 import { isUuid } from '../communication/conversations/conversation.service';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
@@ -283,6 +284,9 @@ export class CheckoutService {
     this.requirePayable(fresh);
     const remaining = Number(fresh.amountMinor) - (await this.ledger.standingSum(this.prisma, { requestId: fresh.id }));
     if (remaining <= 0) throw new CommError(CommErrorCode.BILLING_STATE, 'this request is already paid', 409);
+    // W61 S2: transfer receipts the academy has not checked yet already cover the rest -- a card would charge twice.
+    const pendingMinor = await pendingReceiptMinor(this.prisma, fresh);
+    if (pendingMinor >= remaining) throw receiptPendingRefusal(pendingMinor, remaining);
 
     const attempts = await this.prisma.paymentCheckout.count({ where: { requestId: fresh.id } });
     const lessons = isPayableInApp(fresh, await loadPackageFacts(this.prisma, { requests: [fresh] }));
