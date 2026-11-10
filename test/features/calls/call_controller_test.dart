@@ -72,6 +72,7 @@ void main() {
         mediaRoomFactoryProvider.overrideWithValue(() => room),
         microphonePermissionProvider.overrideWithValue(mic),
         audioRouteProvider.overrideWithValue(audio),
+        viewerActorIdProvider.overrideWithValue(() => 'actor_me'),
         if (rejoinLimit != null) callRejoinLimitProvider.overrideWithValue(rejoinLimit),
       ],
     );
@@ -915,6 +916,59 @@ void main() {
 
       expect(stateOf(container).phase, CallUiPhase.failed);
       expect(stateOf(container).failure, CallUiFailure.oneLearnerLesson);
+    });
+
+    Map<String, Object?> takenOff(String actorId, {String? reason = 'one_learner_lesson'}) =>
+        {...Frames.participant(actorId: actorId), 'reason': ?reason};
+
+    test('OA-12: the server took THIS guardian off a lesson call -- the call ends here with the one-learner reason', () async {
+      final container = await liveOutgoing();
+
+      socket.emit(CallEventNames.participantLeft, takenOff('actor_me'));
+      await settle();
+
+      final ended = stateOf(container);
+      expect([ended.phase, ended.endReason], [CallUiPhase.ended, CallEndReason.oneLearnerLesson]);
+      expect(calls.endCalls, isEmpty, reason: 'the server already took them off: nothing to end');
+    });
+
+    test('OA-12: someone ELSE taken off, or a plain presence departure, never ends this call', () async {
+      final container = await liveOutgoing();
+
+      socket.emit(CallEventNames.participantLeft, takenOff('actor_other'));
+      socket.emit(CallEventNames.participantLeft, takenOff('actor_me', reason: null));
+      socket.emit(CallEventNames.participantLeft, takenOff('actor_me', reason: 'something_new'));
+      socket.emit(CallEventNames.participantLeft, {
+        ...takenOff('actor_me'),
+        'callId': 'call_other',
+      });
+      await settle();
+
+      expect(stateOf(container).phase, CallUiPhase.live);
+      expect(stateOf(container).endReason, isNull);
+    });
+
+    test('OA-12: taken off, the media drops first and the rejoin is refused as one-learner -- ends with that reason, not connection lost', () async {
+      final container = await liveOutgoing();
+      room.announceConnected = false;
+      room.announcePublished = false;
+      calls.tokenError = refusal(WireErrors.lessonOneLearner);
+
+      room.drop();
+      await settle();
+
+      final ended = stateOf(container);
+      expect([ended.phase, ended.endReason], [CallUiPhase.ended, CallEndReason.oneLearnerLesson]);
+      expect(calls.endCalls, isEmpty);
+      final tries = calls.tokenCalls.length;
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await settle();
+      expect(calls.tokenCalls, hasLength(tries), reason: 'no rejoining once refused');
+
+      // The event that follows changes nothing.
+      socket.emit(CallEventNames.participantLeft, takenOff('actor_me'));
+      await settle();
+      expect(stateOf(container).endReason, CallEndReason.oneLearnerLesson);
     });
   });
 

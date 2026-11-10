@@ -225,6 +225,10 @@ class CallUiState {
 ///
 /// Terminality arrives from exactly two places: the server's `call.ended` /
 /// `call.declined` events, and a successful terminal request we ourselves made.
+/// OA-12 adds one more SERVER word, for this device only: the server took THIS
+/// guardian off a lesson call (`call.participant_left` naming us with reason
+/// `one_learner_lesson`, or our rejoin refused with COMM.LESSON_ONE_LEARNER).
+/// The call goes on for the others; it is over here.
 ///
 /// IDEMPOTENT AND ORDER-FREE. `call.declined` and `call.ended` are written in ONE
 /// server transaction and share a `created_at`, so their delivery order is not a
@@ -802,6 +806,17 @@ class CallController extends Notifier<CallUiState> {
       case CallResumed(:final callId):
         if (callId != state.callId || state.isTerminal) return;
         state = state.copyWith(clearInterrupted: true);
+
+      case CallParticipantLeft(:final callId, :final actorId, :final reason):
+        // Presence never ends a call (see the class note). The one exception
+        // is the SERVER's word that it took THIS participant off a lesson call
+        // (OA-12): the call goes on for the others, and is over here -- with
+        // the reason, so the person reads why and not "connection lost".
+        if (callId != state.callId || state.isTerminal) return;
+        if (reason != CallParticipantLeftReason.oneLearnerLesson) return;
+        final me = ref.read(viewerActorIdProvider)?.call();
+        if (me == null || me.isEmpty || actorId != me) return;
+        _goTerminal(outcome: state.outcome, reason: CallEndReason.oneLearnerLesson, authoritative: true);
     }
   }
 
@@ -1018,6 +1033,13 @@ class CallController extends Notifier<CallUiState> {
         final failure = snapshot.refusalCode == WireErrors.lessonOneLearner
             ? CallUiFailure.oneLearnerLesson
             : _classifyMedia(snapshot.failure);
+        if (_rejoining && failure == CallUiFailure.oneLearnerLesson) {
+          // OA-12: the server took this guardian off a lesson call (the media
+          // dropped first) and refuses the rejoin for that reason. The call is
+          // over HERE -- it goes on for the others -- and says why.
+          _goTerminal(outcome: state.outcome, reason: CallEndReason.oneLearnerLesson, authoritative: true);
+          return;
+        }
         if (_rejoining && _rejoinFoundCallOver(snapshot)) {
           // CHATSCHED-013: the SERVER refused the rejoin because the call ended
           // while we were away (a phone offline past the grace never hears

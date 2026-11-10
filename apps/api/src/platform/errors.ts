@@ -676,7 +676,9 @@ export enum CommErrorCode {
    * guardian answers or asks for media. The lesson's own parents, the teacher
    * and staff are never refused it. 403; not retried. (A call already live
    * when the window opens is corrected by CallService.separateLessonLearners,
-   * which sends no code.)
+   * which announces `call.participant_left` with reason one_learner_lesson; a
+   * guardian it took off who asks again for media, or answers, gets this code
+   * while the window is open, CALL_PARTICIPANT_LEFT after.)
    */
   LESSON_ONE_LEARNER = 'COMM.LESSON_ONE_LEARNER',
   /**

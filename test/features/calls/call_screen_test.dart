@@ -62,6 +62,7 @@ void main() {
         mediaRoomFactoryProvider.overrideWithValue(() => room),
         microphonePermissionProvider.overrideWithValue(mic),
         audioRouteProvider.overrideWithValue(audio),
+        viewerActorIdProvider.overrideWithValue(() => 'actor_me'),
       ],
       child: MaterialApp(
         locale: locale,
@@ -307,6 +308,30 @@ void main() {
       expect(l10n.callFailedOneLearnerLesson, 'هذا الدرس لطالب واحد، ولكل طفل آخر درسه الخاص.');
       expect(l10n.callFailedOneLearnerLessonStart, 'أثناء الدرس تكون المكالمة لطالب واحد فقط.');
     });
+
+    // OA-12: a guardian of another family, on a call that was live before the
+    // lesson window opened, is taken off it by the server. They read why --
+    // never "connection lost".
+    for (final (locale, sentence) in [
+      (const Locale('en'), 'This lesson is for one student. Every other child has their own lesson.'),
+      (const Locale('ar'), 'هذا الدرس لطالب واحد، ولكل طفل آخر درسه الخاص.'),
+    ]) {
+      testWidgets('taken off a lesson call by the server, the guardian reads the one-learner message (${locale.languageCode})',
+          (tester) async {
+        await pumpLive(tester, locale: locale);
+        final l10n = await L10n.delegate.load(locale);
+
+        socket.emit(CallEventNames.participantLeft, {
+          ...Frames.participant(actorId: 'actor_me'),
+          'reason': 'one_learner_lesson',
+        });
+        await tester.pumpAndSettle();
+
+        expect(find.text(sentence), findsOneWidget);
+        expect(find.text(l10n.callEndedConnectionLost), findsNothing);
+        expect(find.textContaining('COMM.'), findsNothing);
+      });
+    }
 
     testWidgets(
         'an unreachable media room shows the failure, never "Connecting…" forever',

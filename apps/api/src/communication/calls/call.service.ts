@@ -18,7 +18,7 @@ import { ConversationService, isUuid } from '../conversations/conversation.servi
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { blockersAmong } from '../../platform/blocks';
-import { ActorKind, CallEndReason, CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
+import { ActorKind, CallEndReason, CallOutcome, CallParticipantLeftReason, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -376,20 +376,33 @@ export class CallService {
    *
    * The room first, then the row: a removal that fails leaves `left_at` empty,
    * so the next pass tries again (and the webhook answers 503 so LiveKit
-   * redelivers). Without a media control plane only the row is written.
+   * redelivers). Without a media control plane only the row is written. The
+   * row and `call.participant_left` (reason one_learner_lesson) are one
+   * transaction, so the call's participants -- the removed guardian first,
+   * whose app then says why instead of "connection lost" -- are told exactly
+   * once, and only of a removal that happened.
+   *
+   * Two query shapes, each with its index: one room (the webhook) by the
+   * unique `room_name`; every live call (the sweep) by the partial
+   * `call_live_idx` (status <> 'ended'). A single query with an optional room
+   * could be planned generically and use neither.
    */
   async separateLessonLearners(
     opts: { roomName?: string; now?: Date; limit?: number } = {},
   ): Promise<{ removed: number; failed: number }> {
     const now = opts.now ?? new Date();
-    const roomName = opts.roomName ?? null;
     const limit = opts.limit ?? 200;
-    const seats = await this.prisma.$queryRaw<Array<{ call_id: string; room_name: string; actor_id: string }>>`
+    const liveCalls =
+      opts.roomName === undefined
+        ? Prisma.sql`c.status <> 'ended'`
+        : Prisma.sql`c.room_name = ${opts.roomName}::text AND c.status <> 'ended'`;
+    const seats = await this.prisma.$queryRaw<
+      Array<{ call_id: string; conversation_id: string; room_name: string; actor_id: string }>
+    >`
       WITH live AS (
-        SELECT c.id, c.room_name, c.organization_id
+        SELECT c.id, c.room_name, c.organization_id, c.conversation_id
           FROM chat.call c
-         WHERE c.status <> 'ended'
-           AND (${roomName}::text IS NULL OR c.room_name = ${roomName}::text)
+         WHERE ${liveCalls}
       ),
       seated AS (
         SELECT cp.call_id, cp.actor_id, ct.family_id
@@ -412,7 +425,8 @@ export class CallService {
                   (${now}::timestamptz >= l.starts_at AND ${now}::timestamptz < l.ends_at) DESC,
                   l.starts_at DESC
       )
-      SELECT s.call_id::text AS call_id, live.room_name, s.actor_id::text AS actor_id
+      SELECT s.call_id::text AS call_id, live.conversation_id::text AS conversation_id,
+             live.room_name, s.actor_id::text AS actor_id
         FROM lesson_family f
         JOIN live ON live.id = f.call_id
         JOIN seated s ON s.call_id = f.call_id AND s.family_id <> f.family_id
@@ -431,16 +445,65 @@ export class CallService {
         this.log.warn(`OA-12: another family's guardian could not be taken out of a lesson call room (${(e as Error).name}); retried on the next pass`);
         continue;
       }
-      removed += await this.prisma.$executeRaw`
-        UPDATE chat.call_participant cp
-           SET left_at = now()
-         WHERE cp.call_id = ${seat.call_id}::uuid
-           AND cp.actor_id = ${seat.actor_id}::uuid
-           AND cp.left_at IS NULL
-           AND EXISTS (SELECT 1 FROM chat.call c WHERE c.id = cp.call_id AND c.status <> 'ended')`;
+      removed += await this.prisma.$transaction(async (tx) => {
+        const n = await tx.$executeRaw`
+          UPDATE chat.call_participant cp
+             SET left_at = now()
+           WHERE cp.call_id = ${seat.call_id}::uuid
+             AND cp.actor_id = ${seat.actor_id}::uuid
+             AND cp.left_at IS NULL
+             AND EXISTS (SELECT 1 FROM chat.call c WHERE c.id = cp.call_id AND c.status <> 'ended')`;
+        if (n > 0) {
+          await this.outbox.enqueue(tx, CommEvent.CALL_PARTICIPANT_LEFT, {
+            callId: seat.call_id,
+            conversationId: seat.conversation_id,
+            actorId: seat.actor_id,
+            reason: CallParticipantLeftReason.ONE_LEARNER_LESSON,
+          });
+        }
+        return n;
+      });
     }
     if (removed > 0) this.log.log(`OA-12: took ${removed} guardian(s) of another family off lesson call(s)`);
     return { removed, failed };
+  }
+
+  /**
+   * OA-12, on LiveKit's participant_joined: an identity whose seat on this
+   * live call already has `left_at` is taken out of the room again.
+   *
+   * WHY ANY `left_at`, NOT ONLY THIS RULE'S. Nothing re-seats a participant:
+   * no path clears `left_at` on a call (authorizeJoin refuses a new token with
+   * LESSON_ONE_LEARNER or CALL_PARTICIPANT_LEFT; presence writes only the
+   * media_* columns). A participant who has left a call that is still live
+   * therefore holds no token issued since they left, and a join by them is an
+   * older token reused -- a guardian taken off a lesson call reconnecting
+   * within the token's few minutes, which LiveKit would not end when it
+   * expires. (Hang-up, decline and the sweeps write `left_at` only as they END
+   * the call, which is never "live".) A legitimately seated participant has
+   * `left_at` empty and is never touched.
+   *
+   * 'removed' after a removal; 'seated' when there is nothing to undo. A
+   * removal that fails throws, and the webhook answers 503 so LiveKit
+   * redelivers. Nothing is announced: the departure was announced when it was
+   * written.
+   */
+  async removeReturningParticipant(roomName: string, identity: string): Promise<'removed' | 'seated'> {
+    if (!this.rooms || !isUuid(identity)) return 'seated';
+    const [left] = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT cp.id::text AS id
+        FROM chat.call c
+        JOIN chat.call_participant cp ON cp.call_id = c.id
+       WHERE c.room_name = ${roomName}::text
+         AND c.status <> 'ended'
+         AND cp.actor_id = ${identity}::uuid
+         AND cp.left_at IS NOT NULL`;
+    if (!left) return 'seated';
+    if ((await this.rooms.removeParticipant(roomName, identity)) === 'removed') {
+      realtimeMetrics.mediaParticipantsRemoved++;
+    }
+    this.log.warn('OA-12: a participant who had left a live call came back with an older media token; taken out again');
+    return 'removed';
   }
 
   /**
@@ -1508,6 +1571,10 @@ export class CallService {
       );
     }
     if (participant.leftAt !== null) {
+      // OA-12: a guardian taken off a lesson call by the one-learner rule is
+      // told so while the lesson window is open, so their app's rejoin shows
+      // why instead of ending as "connection lost". Otherwise: they left.
+      if (opts.takesSeat) await this.oneLearnerAtJoin(actor, call, await this.participantActorsOf(call), now);
       throw new CommError(
         CommErrorCode.CALL_PARTICIPANT_LEFT,
         'this participant has already left the call',
@@ -1518,11 +1585,7 @@ export class CallService {
     const conv = await this.conversations.requireConversation(call.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const participantActors: Actor[] = [];
-    for (const p of call.participants) {
-      const a = await this.identity.resolveActor(p.actorId);
-      if (a) participantActors.push(a);
-    }
+    const participantActors = await this.participantActorsOf(call);
 
     // OA-12: one learner per paid lesson call. Answering and media take a seat;
     // declining does not, so a refused guardian can still turn the ring down.
@@ -1551,6 +1614,16 @@ export class CallService {
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     return { actor, call, participant, conv, membership };
+  }
+
+  /** Every participant of the call, resolved (one that no longer resolves is left out). */
+  private async participantActorsOf(call: { participants: CallParticipant[] }): Promise<Actor[]> {
+    const participantActors: Actor[] = [];
+    for (const p of call.participants) {
+      const a = await this.identity.resolveActor(p.actorId);
+      if (a) participantActors.push(a);
+    }
+    return participantActors;
   }
 
   /**

@@ -19,7 +19,11 @@
  *   - a call ALREADY LIVE when the window opens is corrected the next time the
  *     server looks at it: the worker's call sweep, and LiveKit's
  *     participant_joined webhook, take the other family's guardian out of the
- *     media room and off the call (left_at).
+ *     media room and off the call (left_at), and tell the call's participants
+ *     (call.participant_left with reason one_learner_lesson);
+ *   - a guardian taken off who comes back with a media token they still hold
+ *     is taken out again at the join; one who asks for a new token is told
+ *     COMM.LESSON_ONE_LEARNER while the window is open.
  *
  * The lesson's own parents, the teacher and staff are seated as before; outside
  * every window nothing changes; a family's own sibling group (one family) is
@@ -40,6 +44,8 @@ import { LiveKitWebhookController } from '@communication/api/livekit-webhook.con
 import { LiveKitWebhookVerifier } from '@communication/calls/livekit-webhook.verifier';
 import { MediaPresenceService } from '@communication/calls/media-presence.service';
 import { OutboxService } from '@communication/outbox/outbox.service';
+import { CommEvent } from '@communication/contracts/events';
+import { CallParticipantLeftReason } from '@communication/contracts/vocab';
 import { buildGraph, seed, truncate, withAssignmentGate, type Scenario } from './harness';
 
 jest.setTimeout(60_000);
@@ -136,6 +142,32 @@ async function lessonAt(offsetMs: number) {
 }
 /** Happening now: started five minutes ago. */
 const lessonNow = () => lessonAt(-5 * MINUTE);
+
+/**
+ * Closed as the teacher's apology, which closes its call window. The outcome
+ * is the lesson writer's (guard_lesson); a fixture stands in for it with
+ * triggers off, and the table's CHECK constraints still hold.
+ */
+async function closeAsApology(lessonId: string) {
+  await g.prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    await tx.$executeRawUnsafe(
+      `update chat.lesson
+          set outcome = 'teacher_apology', outcome_by_kind = 'teacher', outcome_by = $2::uuid, outcome_at = now()
+        where id = $1::uuid`,
+      lessonId, s.teacherId,
+    );
+  });
+}
+
+/** The call.participant_left events enqueued for one call, oldest first. */
+const participantLeftEvents = async (callId: string) =>
+  (await g.prisma.outboxEvent.findMany({
+    where: { type: CommEvent.CALL_PARTICIPANT_LEFT },
+    orderBy: { createdAt: 'asc' },
+  }))
+    .map((r) => r.payload as Record<string, unknown>)
+    .filter((p) => p.callId === callId);
 
 const seatedOn = async (callId: string) =>
   (await g.prisma.callParticipant.findMany({ where: { callId }, select: { actorId: true } })).map((p) => p.actorId);
@@ -250,18 +282,7 @@ describe('OA-12: one learner per paid lesson call', () => {
 
   it('a lesson that did not take place opens no window', async () => {
     const lesson = await lessonNow();
-    // Closed as the teacher's apology. The outcome is the lesson writer's
-    // (guard_lesson); a fixture stands in for it with triggers off, and the
-    // table's CHECK constraints still hold.
-    await g.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
-      await tx.$executeRawUnsafe(
-        `update chat.lesson
-            set outcome = 'teacher_apology', outcome_by_kind = 'teacher', outcome_by = $2::uuid, outcome_at = now()
-          where id = $1::uuid`,
-        lesson.id, s.teacherId,
-      );
-    });
+    await closeAsApology(lesson.id);
 
     const { callId } = await g.calls.start(classId, s.ownerId);
     expect(await seatedOn(callId)).toContain(otherGuardianId);
@@ -341,14 +362,53 @@ describe('OA-12: a call already live when the lesson window opens', () => {
     // The call carries on for the lesson.
     expect((await g.prisma.call.findUniqueOrThrow({ where: { id: callId } })).status).toBe('active');
     await expect(calls.issueToken(callId, s.parentId)).resolves.toMatchObject({ token: expect.any(String) });
-    // The guardian taken off cannot come back for a new media token.
+    // The guardian taken off cannot come back for a new media token, and is
+    // told why (their app's rejoin shows the one-learner message, not
+    // "connection lost").
     await expect(calls.issueToken(callId, otherGuardianId)).rejects.toMatchObject({
-      code: CommErrorCode.CALL_PARTICIPANT_LEFT,
+      code: CommErrorCode.LESSON_ONE_LEARNER,
+    });
+    await expect(calls.accept(callId, otherGuardianId)).rejects.toMatchObject({
+      code: CommErrorCode.LESSON_ONE_LEARNER,
     });
 
     // Idempotent: the next pass finds nobody.
     expect(await calls.separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
     expect(rooms.removed).toHaveLength(1);
+  });
+
+  it('the call\'s participants, the removed guardian included, are told who was taken off and why (once)', async () => {
+    const { callId } = await liveTwoFamilyCall();
+    await lessonNow();
+    const calls = callsWith(new FakeRooms());
+
+    expect(await calls.separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
+    expect(await calls.separateLessonLearners()).toEqual({ removed: 0, failed: 0 });
+
+    expect(await participantLeftEvents(callId)).toEqual([
+      { callId, conversationId: classId, actorId: otherGuardianId, reason: CallParticipantLeftReason.ONE_LEARNER_LESSON },
+    ]);
+  });
+
+  it('a removal the media server refuses announces nothing', async () => {
+    const { callId } = await liveTwoFamilyCall();
+    await lessonNow();
+    const rooms = new FakeRooms();
+    rooms.failWith = new Error('down');
+
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 0, failed: 1 });
+    expect(await participantLeftEvents(callId)).toEqual([]);
+  });
+
+  it('once the window has closed, a guardian taken off reads as having left the call', async () => {
+    const { callId } = await liveTwoFamilyCall();
+    const lesson = await lessonNow();
+    expect(await callsWith(new FakeRooms()).separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
+    await closeAsApology(lesson.id);
+
+    await expect(g.calls.issueToken(callId, otherGuardianId)).rejects.toMatchObject({
+      code: CommErrorCode.CALL_PARTICIPANT_LEFT,
+    });
   });
 
   it('a media server that cannot remove them leaves the seat for the next pass, which takes it', async () => {
@@ -398,6 +458,49 @@ describe('OA-12: a call already live when the lesson window opens', () => {
     await expect(ctl.webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
     expect(rooms.removed).toHaveLength(1);
     expect((await seat(callId, s.parentId)).leftAt).toBeNull();
+  });
+
+  it('a guardian taken off who rejoins with a media token they still hold is taken out again; a guardian still seated is not', async () => {
+    // Tokens issued before the window last minutes past it, and LiveKit does
+    // not drop a participant whose token later expires. The official app asks
+    // for a new token (refused); a modified one could reuse the old one.
+    const { callId, roomName } = await liveTwoFamilyCall();
+    const lesson = await lessonNow();
+    const rooms = new FakeRooms();
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
+    const ctl = webhookWith(rooms);
+
+    let j = await signedJoin(roomName, otherGuardianId);
+    await expect(ctl.webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    expect(rooms.removed).toEqual([[roomName, otherGuardianId], [roomName, otherGuardianId]]);
+    // Still off the call, and nobody is told twice.
+    expect((await seat(callId, otherGuardianId)).leftAt).not.toBeNull();
+    expect(await participantLeftEvents(callId)).toHaveLength(1);
+
+    // And again on every later attempt, even once the window has closed: a
+    // participant who has left a live call holds no token issued since.
+    await closeAsApology(lesson.id);
+    j = await signedJoin(roomName, otherGuardianId);
+    await expect(ctl.webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    expect(rooms.removed).toHaveLength(3);
+
+    // The lesson's own parent, the teacher and the admin -- seated -- are left alone.
+    for (const stays of [s.parentId, s.teacherId, s.ownerId]) {
+      j = await signedJoin(roomName, stays);
+      await expect(ctl.webhook({ rawBody: j.rawBody }, j.auth)).resolves.toEqual({ ok: true });
+    }
+    expect(rooms.removed).toHaveLength(3);
+  });
+
+  it('if the webhook cannot take a returning guardian out again it answers 503, so LiveKit delivers it again', async () => {
+    const { roomName } = await liveTwoFamilyCall();
+    await lessonNow();
+    const rooms = new FakeRooms();
+    expect(await callsWith(rooms).separateLessonLearners()).toEqual({ removed: 1, failed: 0 });
+    rooms.failWith = new Error('down');
+
+    const j = await signedJoin(roomName, otherGuardianId);
+    await expect(webhookWith(rooms).webhook({ rawBody: j.rawBody }, j.auth)).rejects.toMatchObject({ status: 503 });
   });
 
   it('if the webhook cannot take them out it answers 503, so LiveKit delivers it again', async () => {
