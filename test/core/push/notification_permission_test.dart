@@ -261,6 +261,60 @@ void main() {
       platform.hold!.complete();
     }, timeout: const Timeout(Duration(seconds: 10)));
 
+    // testWidgets for its fake clock: it fails any test that ends with a timer still
+    // pending, which is exactly what these three guard against.
+    testWidgets('the row goes while a native read still hangs: the read ends at once, its timeout '
+        'cancelled, and nothing is written', (tester) async {
+      final c = build(NotificationPermissionStatus.granted);
+      platform.hold = Completer<void>();
+      NotificationPermissionStatus? result;
+      unawaited(row(c).refresh().then((s) => result = s));
+      await tester.pump();
+      expect(result, isNull, reason: 'still waiting on the native side');
+
+      // What the row's `dispose` does.
+      row(c).stopWaiting();
+      await tester.pump();
+      expect(result, NotificationPermissionStatus.unknown, reason: 'nothing known yet');
+      expect(c.read(notificationPermissionProvider), isNull, reason: 'nothing written');
+
+      // The native side answering late changes nothing either.
+      platform.hold!.complete();
+      await tester.pump();
+      expect(c.read(notificationPermissionProvider), isNull);
+    });
+
+    testWidgets('disposing the controller cancels a hanging read\'s timeout too', (tester) async {
+      final c = build(NotificationPermissionStatus.granted);
+      platform.hold = Completer<void>();
+      var ended = false;
+      unawaited(row(c).refresh().then((_) => ended = true));
+      await tester.pump();
+
+      c.dispose();
+      await tester.pump();
+      expect(ended, isTrue);
+      platform.hold!.complete();
+      await tester.pump();
+    });
+
+    testWidgets('the row goes during a tap\'s first read: nothing is opened or asked, and the row '
+        'is not left busy', (tester) async {
+      final c = build(NotificationPermissionStatus.denied);
+      platform.hold = Completer<void>();
+      var finished = false;
+      unawaited(row(c).activate(explainer(true)).then((_) => finished = true));
+      await tester.pump();
+
+      row(c).stopWaiting();
+      await tester.pump();
+      expect(finished, isTrue);
+      expect(tokens.starts, 0);
+      expect(platform.opens, 0);
+      platform.hold!.complete();
+      await tester.pump();
+    });
+
     group('the row\'s explanation torn down unanswered (its navigator removed: the dialog\'s '
         'future never completes)', () {
       test('the claim is handed back, a new session\'s explanation still shows, and the row works',

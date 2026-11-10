@@ -140,20 +140,64 @@ class NotificationPermissionController extends Notifier<NotificationPermissionSt
   /// does not clear a newer one.
   Object? _activation;
 
+  /// The reads still waiting on the native side, each with its own timeout. Held
+  /// so [stopWaiting] can end them: a `Future.timeout` cannot be cancelled, and a
+  /// timer must not outlive the row or this controller.
+  final _waiting = <_PendingRead>{};
+
   @override
-  NotificationPermissionStatus? build() => null;
+  NotificationPermissionStatus? build() {
+    ref.onDispose(stopWaiting);
+    return null;
+  }
 
   /// Re-reads the status from the OS: on first show, on resume, after a tap.
   Future<NotificationPermissionStatus> refresh() async {
-    var next = await ref
-        .read(notificationPermissionPlatformProvider)
-        .status()
-        .timeout(notificationPermissionReadTimeout, onTimeout: () => NotificationPermissionStatus.unknown);
+    var next = await _read();
+    // Abandoned by [stopWaiting]: nothing new is known, so nothing is written.
+    if (next == null) {
+      return (ref.mounted ? state : null) ?? NotificationPermissionStatus.unknown;
+    }
     if (next == NotificationPermissionStatus.notDetermined && await _continuedOnAndroid()) {
       next = NotificationPermissionStatus.blocked;
     }
     if (ref.mounted) state = next;
     return next;
+  }
+
+  /// The native status, [NotificationPermissionStatus.unknown] after
+  /// [notificationPermissionReadTimeout], or null once [stopWaiting] ended it.
+  Future<NotificationPermissionStatus?> _read() {
+    final pending = _PendingRead();
+    _waiting.add(pending);
+    pending.timer = Timer(notificationPermissionReadTimeout, () {
+      _waiting.remove(pending);
+      pending.finish(NotificationPermissionStatus.unknown);
+    });
+    unawaited(ref.read(notificationPermissionPlatformProvider).status().then(
+      (status) {
+        _waiting.remove(pending);
+        pending.finish(status);
+      },
+      onError: (Object error, StackTrace stack) {
+        _waiting.remove(pending);
+        pending.fail(error, stack);
+      },
+    ));
+    return pending.done.future;
+  }
+
+  /// The row is gone (or this controller is): every read still waiting on the
+  /// native side ends now, its timeout cancelled, and writes nothing. The next
+  /// row to appear reads again.
+  void stopWaiting() {
+    // A tap still in progress belonged to the row that went: it stops here too.
+    _activation = null;
+    final waiting = _waiting.toList();
+    _waiting.clear();
+    for (final pending in waiting) {
+      pending.finish(null);
+    }
   }
 
   /// The upgrade path on Android. The native side tells "never asked" from
@@ -188,9 +232,13 @@ class NotificationPermissionController extends Notifier<NotificationPermissionSt
   Future<void> activate(Future<bool?> Function() showExplainer) async {
     if (_activation != null) return;
     final activation = _activation = Object();
+    // Still this row's tap: not ended by [dialogAbandoned] or [stopWaiting] (the
+    // row went), and the controller is alive. Nothing is asked or read for a row
+    // that is gone.
+    bool live() => ref.mounted && identical(_activation, activation);
     try {
       final status = state ?? await refresh();
-      if (!ref.mounted) return;
+      if (!live()) return;
       switch (notificationPermissionActionFor(status)) {
         case NotificationPermissionAction.openSettings:
           await ref.read(notificationPermissionPlatformProvider).openSettings();
@@ -198,16 +246,32 @@ class NotificationPermissionController extends Notifier<NotificationPermissionSt
           await ref.read(pushTokensProvider).start();
         case NotificationPermissionAction.explainThenAsk:
           final ask = await ref.read(pushExplainerProvider.notifier).askFromSettings(showExplainer);
-          if (ask && ref.mounted) await ref.read(pushTokensProvider).start();
+          if (ask && live()) await ref.read(pushTokensProvider).start();
         case NotificationPermissionAction.none:
           return;
       }
       // The system prompt or the Settings app may still be on screen: the resume
       // re-read catches the final answer; this catches an immediate one.
-      if (ref.mounted) await refresh();
+      if (live()) await refresh();
     } finally {
       if (identical(_activation, activation)) _activation = null;
     }
+  }
+}
+
+/// One native status read: its answer, its timeout, or its end, whichever is first.
+class _PendingRead {
+  final done = Completer<NotificationPermissionStatus?>();
+  Timer? timer;
+
+  void finish(NotificationPermissionStatus? status) {
+    timer?.cancel();
+    if (!done.isCompleted) done.complete(status);
+  }
+
+  void fail(Object error, StackTrace stack) {
+    timer?.cancel();
+    if (!done.isCompleted) done.completeError(error, stack);
   }
 }
 

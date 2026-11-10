@@ -80,10 +80,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // Away and back through the legal states only, as app_lock_gate_test does: the
+  // framework asserts every transition (paused straight to resumed is not one).
   Future<void> resume(WidgetTester tester) async {
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding
+      ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+      ..handleAppLifecycleStateChanged(AppLifecycleState.hidden)
+      ..handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    tester.binding
+      ..handleAppLifecycleStateChanged(AppLifecycleState.hidden)
+      ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+      ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
   }
 
@@ -158,6 +166,22 @@ void main() {
       platform.hold!.complete();
       await tester.pumpAndSettle();
       expect(find.descendant(of: row, matching: find.text('Off')), findsOneWidget);
+    });
+
+    testWidgets('a native side that never answers, and the row goes before the timeout (leaving '
+        'Settings): no timer is left behind', (tester) async {
+      // What every other Settings test meets: a channel nobody answers in a test.
+      // testWidgets fails a test that ends with a pending timer.
+      await pump(tester, NotificationPermissionStatus.blocked, hang: true);
+      expect(row, findsNothing);
+
+      await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const SizedBox()));
+      await tester.pump();
+      expect(container.read(notificationPermissionProvider), isNull, reason: 'nothing written');
+
+      platform.hold!.complete();
+      await tester.pump();
+      expect(container.read(notificationPermissionProvider), isNull);
     });
   });
 

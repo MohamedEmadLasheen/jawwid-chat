@@ -28,9 +28,13 @@ class NotificationPermissionTile extends ConsumerStatefulWidget {
 class _NotificationPermissionTileState extends ConsumerState<NotificationPermissionTile> {
   late final AppLifecycleListener _lifecycle;
 
+  /// Held for [dispose], where `ref` may no longer be read.
+  late final NotificationPermissionController _controller;
+
   @override
   void initState() {
     super.initState();
+    _controller = ref.read(notificationPermissionProvider.notifier);
     _lifecycle = AppLifecycleListener(onResume: _refresh);
     // After the first frame: a provider is not modified while the tree builds.
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
@@ -47,6 +51,10 @@ class _NotificationPermissionTileState extends ConsumerState<NotificationPermiss
   @override
   void dispose() {
     _lifecycle.dispose();
+    // A native side that never answers: its read's timeout does not outlive the
+    // row (a pending timer), and nothing is read or asked for a row that is gone.
+    // The next row to appear reads again.
+    _controller.stopWaiting();
     // Removed with the explanation still open (a forced sign-out removing the whole
     // navigator): that dialog may never answer. Hand the explanation and the row
     // back, as #557's host does, after this frame, never while the tree is being
