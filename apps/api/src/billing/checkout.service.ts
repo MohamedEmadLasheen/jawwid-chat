@@ -26,6 +26,8 @@ const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const CHECKOUT_MINUTES = 45;
 /** Opening Stripe's page again and again for one request is not paying; it is a loop or abuse. */
 const MAX_CHECKOUTS_PER_HOUR = 10;
+/** S1: open() holds its request's lock across Stripe calls (20 s timeout each, 2 retries). */
+const OPEN_TRANSACTION_TIMEOUT_MS = 120_000;
 
 class DuplicateEvent extends Error {}
 
@@ -95,6 +97,20 @@ export class CheckoutService {
     }
     this.requirePayable(request);
 
+    // S1: one opener per request at a time. Two taps (two devices, a double
+    // submit) would otherwise both find no open session and both create one --
+    // two payable Stripe pages for one request. A transaction-scoped advisory
+    // lock on the request id serializes list -> expire -> create; the second
+    // opener then finds the first one's session and expires it. The lock is
+    // held across the Stripe calls, so the transaction's timeout covers them.
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment_checkout:${request.id}`}, 0))`;
+      return this.openLocked(request, opts);
+    }, { maxWait: 10_000, timeout: OPEN_TRANSACTION_TIMEOUT_MS });
+  }
+
+  /** open(), under the request's checkout lock. */
+  private async openLocked(request: PaymentRequest, opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean }): Promise<string> {
     const recent = await this.prisma.paymentCheckout.count({
       where: { requestId: request.id, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
     });
@@ -173,17 +189,27 @@ export class CheckoutService {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
     }
     if (!session.url) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'Stripe did not return a payment page', 503);
-    await this.prisma.paymentCheckout.create({
-      data: {
-        stripeSessionId: session.id,
-        organizationId: fresh.organizationId,
-        requestId: fresh.id,
-        amountMinor: BigInt(remaining),
-        currency: fresh.currency,
-        expiresAt: session.expiresAt,
-        stripeCustomerId: safe.customer(session.customerId ?? customerId),
-      },
-    });
+    try {
+      await this.prisma.paymentCheckout.create({
+        data: {
+          stripeSessionId: session.id,
+          organizationId: fresh.organizationId,
+          requestId: fresh.id,
+          amountMinor: BigInt(remaining),
+          currency: fresh.currency,
+          expiresAt: session.expiresAt,
+          stripeCustomerId: safe.customer(session.customerId ?? customerId),
+        },
+      });
+    } catch (e) {
+      // S1: the same Stripe session is already recorded -- Stripe answered a
+      // replayed idempotency key with the session another open() recorded. A
+      // replay, not a failure: the same page, never a 500.
+      if ((e as { code?: string }).code !== 'P2002') throw e;
+      const known = await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } });
+      if (!known || known.requestId !== fresh.id) throw e;
+      this.log.warn('stripe checkout: the session was already recorded (a replayed open); answering the same page');
+    }
     return session.url;
   }
 

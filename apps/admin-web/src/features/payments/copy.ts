@@ -319,6 +319,14 @@ export const INVOICE_STATUS: Record<InvoiceStatus, Pair> = {
  * Stripe events (docs/admin/pd027-stripe-lifecycle.md §3.6). Read only; the
  * one act is Reconcile, which asks Stripe and records only what Stripe says.
  */
+/** Why a payment was more than owed (the server's `overpaid.why`). */
+export const OVERPAID_WHY: Record<string, Pair> = {
+  request_paid: { en: 'The request was already paid when this money arrived.', ar: 'كان الطلب مدفوعًا عند وصول هذا المبلغ.' },
+  request_cancelled: { en: 'The request was cancelled when this money arrived.', ar: 'كان الطلب ملغًى عند وصول هذا المبلغ.' },
+  instalment_closed: { en: 'The instalment was already paid another way, or voided.', ar: 'كان القسط مدفوعًا بطريقة أخرى أو ملغًى.' },
+  more_than_owed: { en: 'This payment is more than what was still owed.', ar: 'هذه الدفعة أكبر مما كان مستحقًا.' },
+}
+
 export const LED = {
   transactionsTab: { en: 'Transactions', ar: 'المعاملات' },
   attemptsTab: { en: 'Card attempts', ar: 'محاولات البطاقة' },
@@ -352,6 +360,9 @@ export const LED = {
   colPaidOn: { en: 'Paid on', ar: 'تاريخ الدفع' },
   colInvoice: { en: 'Invoice', ar: 'الفاتورة' },
   beforeAssign: { en: 'New student (not assigned yet)', ar: 'طالب جديد (لم يُسنَد بعد)' },
+  overpaid: { en: 'Overpaid: refund or credit', ar: 'مبلغ زائد: يُردّ أو يُضاف رصيدًا' },
+  overpaidSettled: { en: 'Overpaid (settled)', ar: 'مبلغ زائد (تمت تسويته)' },
+  overpaidBy: { en: 'Overpaid by {amount}', ar: 'زيادة بمبلغ {amount}' },
   details: { en: 'Details', ar: 'التفاصيل' },
   detailsNamed: { en: 'Details of the payment of {amount}, {date}', ar: 'تفاصيل الدفعة بمبلغ {amount}، {date}' },
   loadMore: { en: 'Load more', ar: 'تحميل المزيد' },

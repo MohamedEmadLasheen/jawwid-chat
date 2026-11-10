@@ -162,6 +162,38 @@ payment holds the new data, unless exported first).
   webhook log are `canVerify`.
 - Card data never touches Chat (Stripe-hosted Checkout). Only brand, last 4 and wallet type are stored.
 
+### 3.8 Overpayments and one payable checkout (M3, S1; 2026-11-10)
+
+**M3: money beyond what was owed is recorded, then flagged.** `PaymentLedger.record` reads what the
+request or instalment still owed *before* the payment, under the same row locks. It never changes what is
+recorded: money that was taken is always recorded. When the payment is larger than what was owed, it
+writes an audit row `payment.overpayment_detected` (entity `payment`, the payment id) with `amountMinor`,
+`owedMinor`, `overpaidMinor`, `currency` and `why`:
+
+| `why` | When |
+|---|---|
+| `request_paid` | the request was already paid (two payments, e.g. a bank transfer approved, then a late card webhook) |
+| `request_cancelled` | the request was cancelled (replaced, or cancelled by staff) |
+| `instalment_closed` | its instalment was already paid another way, or voided (also a receipt approved after that, which the ledger records against no request) |
+| `more_than_owed` | still open, but this payment is larger than what remained |
+
+After the transaction, the staff who refund and reconcile (`canVerify`: the super admin and the Operations
+Manager of the academy) get a notice through `NotificationService.schedule`, as other staff notices are
+sent (event type `payment_overpaid`, one per payment and person). The push is the generic one, so the
+amount stays behind sign-in. The notice is best effort. The audit row is the record. Admin > Payments >
+Transactions shows **"Overpaid: refund or credit"** on the row and in the detail (with the amount and the
+reason). It reads **"Overpaid (settled)"** once refunds or a void cover it. The API gives
+`overpaid: { amountMinor, why, settled } | null` on `GET /payments` and `GET /payments/:id`, computed from
+the audit row. No schema change.
+
+**S1: one payable Stripe session per request.** `CheckoutService.open()` runs list → expire → create
+under a transaction-scoped advisory lock on the request id (`pg_advisory_xact_lock`). Two taps at once
+used to find no open session each and create two payable pages. Now the second one waits, finds the first
+one's session, and expires it. If the `payment_checkout` insert hits a unique violation (`P2002`, the same
+Stripe session already recorded, as when Stripe answers a replayed idempotency key), that is a replay. It
+answers the same page, not a 500. The lock is held across the Stripe calls, so the transaction's timeout
+(120 s) covers them.
+
 ## 4. Not done, on purpose
 
 - **Automatic recurring card charges (Stripe Billing subscriptions).** PD-27 and PD-30 define a
@@ -314,6 +346,8 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Lost webhook: the reconciler records once, marks expired, survives Stripe being down; per-payment reconcile | same |
 | Stripe Billing events (`invoice.*`, `customer.subscription.*`): change nothing | › Stripe Billing events |
 | Ledger filters, totals, paging, detail; family scope; parents, teachers, unauthenticated refused; another family's request refused; webhook-log tenancy | › the transaction ledger |
+| Overpayment (M3): bank transfer then a late card webhook, and an instalment paid in cash while the card paid it, are recorded, flagged, staff told, the transaction marked; an owed payment is never flagged | `pd027-overpayment-checkout-lock.spec.ts` › M3 |
+| One payable session (S1): two concurrent opens (service and HTTP) leave one open session; an already-recorded session answers the same page, no 500 | same › S1 |
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
