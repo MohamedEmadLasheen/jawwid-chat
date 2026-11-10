@@ -224,7 +224,7 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 
 **D. Waiting for the owner's approval.** Every merge (Part 1 of the Owner Action Pack: A3, A4, A13, the Stripe batch, the docs batch and the high-risk stacks), the review-accounts production run, and the first deploy (OT-3).
 
-**E. Waiting for external owner setup.** OT-2b stages 2 onward: the Google Cloud project, WIF, the Play Console invite, the App Store Connect key, the Environment secrets and variables (Sentry values ready), and the upload key. Also the Stripe production keys and webhook (LR-34), the production storage variables `STORAGE_ENDPOINT` and `STORAGE_REGION`, and the legal pages publication (#573).
+**E. Waiting for external owner setup.** OT-2b progress: the owner created the Google Cloud project `jawwid-store-upload` (number 943579444072). With the owner's approval, Claude set `store-release` variables `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT` (2026-11-10 15:00 UTC) and read them back: exactly 2 variables, 0 secrets, protection unchanged (owner reviewer, prevent self-review, `main` only, no admin bypass). Remaining OT-2b steps: the Google Cloud project, WIF, the Play Console invite, the App Store Connect key, the Environment secrets and variables (Sentry values ready), and the upload key. Also the Stripe production keys and webhook (LR-34), the production storage variables `STORAGE_ENDPOINT` and `STORAGE_REGION`, and the legal pages publication (#573).
 
 **F. Blocked by a genuine dependency.**
 - #577 waits on #572 merging.
