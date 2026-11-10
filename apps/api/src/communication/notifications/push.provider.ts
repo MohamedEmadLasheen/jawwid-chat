@@ -23,6 +23,12 @@ export interface PushMessage {
    * token on Apple's connection.
    */
   platform: string;
+  /**
+   * LR-11b: a held (deferred, summary) chat push. It stands for several chats,
+   * so it groups under its own key rather than the first chat's: see
+   * `push-grouping.ts`, the one rule for what replaces what on a device.
+   */
+  held?: boolean;
 }
 
 export interface PushResult {

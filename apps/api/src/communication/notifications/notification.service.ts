@@ -266,6 +266,10 @@ export class NotificationService {
       action: entry?.action,
     });
 
+    // LR-11b: a held push stands for several chats, so it must not replace (or
+    // be replaced by) the first chat's own banner.
+    const held = ((n.variables ?? {}) as Record<string, unknown>).held === true;
+
     let anyOk = false;
     for (const t of tokens) {
       const result = await this.push.send({
@@ -275,6 +279,7 @@ export class NotificationService {
         data,
         isVoip: t.isVoip,
         platform: t.platform,
+        ...(held ? { held: true } : {}),
       });
       if (result.ok) anyOk = true;
       if (result.tokenInvalid) {
