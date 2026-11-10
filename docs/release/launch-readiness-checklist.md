@@ -219,7 +219,7 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 - #589 (whiteboard test race, found on #577's CI): **ACCEPT @ `e83fd707`, 14/14.**
 - #590 (notification permission status and Open settings, stacked on #557): **ACCEPT @ `1a1ee685`.** The timer that outlived the Settings row is fixed in product code, with no other test edited. 29/30 checks green, the last finishing; follows #557.
 - #591 (LR-71 pre-audit fixes: store-console drafts and legal texts match the launch candidate; merged last, with no conflicts in a trial merge): **ACCEPT @ `3fb017c6`, 14/14, 30/30.** **Its legal-text changes need the owner's approval; every sentence is listed old → new in the PR.**
-- Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. **CI green at `0aec87f1`** (run 42827668730) after the #549 fix.
+- Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. **CI green at `0aec87f1`** (run 42827668730) after the #549 fix. **Round 4** (round 3 plus #587, #588, #589, #590 and #591; throwaway branch `claude/merge-rehearsal-4-2026-11-10`): **CI green at `7aa84850`** (run 42843904495); recipes in the merge plan.
 - Draft #578 (OA-12 Option B docs) stays a draft.
 
 **D. Waiting for the owner's approval.** Every merge (Part 1 of the Owner Action Pack: A3, A4, A13, the Stripe batch, the docs batch and the high-risk stacks), the review-accounts production run, and the first deploy (OT-3).

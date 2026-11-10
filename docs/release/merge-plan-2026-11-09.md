@@ -119,6 +119,16 @@ Each real merge of a stacked or conflicting PR still gets its own CI run and a d
 - Nothing still uses sqflite after #503 removed it.
 
 
+## Rehearsal round 4 (2026-11-10): round 3 plus #587, #588, #589, #590 and #591, the combined result passes CI
+
+- **What it is:** the throwaway branch `claude/merge-rehearsal-4-2026-11-10`, never merged. It is round 3's green branch with #587, #588, #589, #590 and #591 merged on top at their accepted heads; #549 was already in at `489e8cf0`.
+- **CI:** run 42843904495 is green at `7aa84850`.
+- **Recipes:**
+  - **#590 × l10n:** keep every key from both sides: the review-mode keys from #585 and the four `notificationDevice*` keys from #590. That gives 1606 keys in AR and in EN, with the generated files consistent.
+  - **#591 × `docs/release/review-accounts.md`:** keep the "Run it again" list as #585/#586 leave it, and replace only the wrong teacher-account line with #591's correction.
+  - Everything else merged with no conflicts. #587's migration `20261110100000` is the latest and unique.
+- **Order:** #587, #588 and #589 can join any batch after their bases. #590 goes after #557. **#591 goes last of all.**
+
 ## Batches
 
 | Batch | PRs, in merge order (head SHA) | Purpose | Risk | Verify afterwards |
