@@ -214,11 +214,11 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 
 **C. In progress (engineering).**
 - #549 (screenshots): the capture script moved out of `scripts/mobile/` to clear #572's guard. **ACCEPT @ `489e8cf0`, 14/14.**
-- #587 (one family per paid lesson call): ACCEPT @ `6f137f08` (live calls are now corrected by the existing sweep and the join webhook). W67c fixed three more P2s at `e65b8e87`: rejoin with an old token, telling the removed guardian why, and a partial index (migration `20261110100000`). Delta review and CI running.
+- #587 (one family per paid lesson call): ACCEPT @ `6f137f08` (live calls are now corrected by the existing sweep and the join webhook). W67c fixed three more P2s: rejoin with an old token, telling the removed guardian why, and a partial index (migration `20261110100000`). **ACCEPT @ `e65b8e87`, 14/14, 30/30.** Ready for approval. High: a migration, plus live-call removal. The index is built without CONCURRENTLY: a sub-second lock on today's small table.
 - #588 (iOS push collapse id): the P1 fix (key = event type + chat, shared rule for #449) **ACCEPT @ `0c3df378`, 14/14.** Ready for approval.
 - #589 (whiteboard test race, found on #577's CI): **ACCEPT @ `e83fd707`, 14/14.**
-- #590 (notification permission status and Open settings, stacked on #557): CHANGES @ `cb7888d8`, two P2s; W70b is fixing them.
-- W71 (LR-71 pre-audit fixes: store-console drafts and legal texts match the launch candidate; pre-audit in `~/jawwid-owner-evidence/LR-71-preaudit-2026-11-10.md`): building.
+- #590 (notification permission status and Open settings, stacked on #557): review fixes ACCEPT @ `f59a9e7e`. CI found a pending 2 s timer that broke 18 existing Settings tests, and an illegal lifecycle step in a test. W70c is fixing the timer in product code, without editing the other tests.
+- #591 (LR-71 pre-audit fixes: store-console drafts and legal texts match the launch candidate; merged last, with no conflicts in a trial merge onto it): ACCEPT @ `60ccfffa`; its P2 (the privacy policy said deletion is immediate) fixed at `3fb017c6`, delta review running. **Its legal-text changes need the owner's approval; every sentence is listed old → new in the PR.**
 - Rehearsal round 3 (51 PRs on the throwaway branch `claude/merge-rehearsal-3-2026-11-10`, never merged). The independent review says SOUND. **CI green at `0aec87f1`** (run 42827668730) after the #549 fix.
 - Draft #578 (OA-12 Option B docs) stays a draft.
 
