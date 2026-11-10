@@ -74,8 +74,8 @@ credential). No credential, entity name, address or URL has been invented.
     teacher with lessons, students or payroll open requests deletion in Settings or on the web page, sees
     the date, and is deleted within 30 days at the latest. `review-notes.md` (§2, §3), the public deletion
     page (`docs/legal/account-deletion-*.md` §1.5) and the Teacher Terms (§12.2) now say so.
-    `docs/release/review-accounts.md` still says the review teacher "cannot be deleted"; it was outside this
-    change and needs the same correction.
+    `docs/release/review-accounts.md` (re-run rules) and `docs/infrastructure/production-readiness.md`
+    (Account deletion row) say so too.
 13. **Export compliance (pre-audit item 13).** The app declares `ITSAppUsesNonExemptEncryption = false`
     (`ios/Runner/Info.plist:37-38`, as of the launch candidate): only the system's standard encryption
     (HTTPS/TLS, WebRTC's DTLS-SRTP), which is exempt. **App Store Connect:** answer the export compliance

@@ -64,7 +64,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 > - **Your country and region** are typed by you, used for three stated purposes, and shared with no third party (section 4.3).
 > - **Card details** are entered on our payment provider's page. We never see your card number. We do not send your child's name to the provider (section 4.11).
 > - **Staff support sessions** let an authorised staff member see the app as you see it, for at most 60 minutes, with a written reason and a permanent log. You are not notified today (section 9).
-> - **Deleting your account** is immediate. Some records are kept, for example the messages you sent (shown as "Deleted user"), your children's records, and financial records (section 10).
+> - **Deleting your account** is immediate (for a teacher with work still open, within 30 days of the request: section 10.4.1). Some records are kept, for example the messages you sent (shown as "Deleted user"), your children's records, and financial records (section 10).
 > - **Your data is hosted in Frankfurt, Germany.** Some service providers are in other countries, including the United States (section 11).
 > - **You have rights** to access, correct and delete your data and to complain. Write to {{PRIVACY_EMAIL}} (section 13).
 
@@ -192,9 +192,9 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 4.11.2 **Card payments.** Card payments are made on the hosted payment page of our card-payment provider, Stripe. **You enter your card details, e-mail address and billing details directly with Stripe. We never see or store your card number.** We keep only the reference numbers Stripe gives us for the payment, the payment intent and any refund.
 
-4.11.3 **What Stripe receives from us:** the amount; the currency; a line-item name, which is the name the Academy gave the payment request (we do not add your child's name); a description of the lesson period (for example "live one-to-one"); our internal reference numbers for the payment request; and the page language.
+4.11.3 **What Stripe receives from us:** the amount; the currency; a line-item name, which is the name the Academy gave the payment request (we do not add your child's name); a description of the lesson period (for example "live one-to-one"); our internal reference numbers for the payment request; the page language; and, once per family, a customer record that holds only our internal reference numbers for your family and for the Academy (no name or e-mail address).
 
-> **Drafting note (remove before publication):** LD-8 is done in the code (PR #580): the Stripe line item is the payment request's label only (`apps/api/src/billing/checkout.service.ts`, `checkoutProductName`, lines 120-131 as of the launch candidate), so clause 4.11.3, the summary, clause 6.7 and the section 11 table no longer say the child's name is sent. The label is typed by staff: staff must not type a child's name into it. If #580 is not in the published build, restore the earlier wording.
+> **Drafting note (remove before publication):** LD-8 is done in the code (PR #580): the Stripe line item is the payment request's label only (`apps/api/src/billing/checkout.service.ts`, `checkoutProductName`, lines 120-131 as of the launch candidate), so clause 4.11.3, the summary, clause 6.7 and the section 11 table no longer say the child's name is sent. The family's Stripe customer is created with metadata only, the family id and the organization id (`apps/api/src/billing/stripe.gateway.ts`, `createCustomer`; `checkout.service.ts`, `customerFor`), as clause 4.11.3 and the section 11 table say. The label is typed by staff: staff must not type a child's name into it. If #580 is not in the published build, restore the earlier wording.
 
 ### 4.12 Device and push information
 
@@ -447,7 +447,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 ### 10.2 What is deleted immediately
 
-10.2.1 Deletion takes effect at once, in a single operation. The following are deleted:
+10.2.1 Deletion takes effect at once, in a single operation (for a teacher with work still open, when the account is deleted, within 30 days of the request: section 10.4.1). The following are deleted:
 
 (a) your sign-in name (it is replaced by an internal marker, so the e-mail address can be used again), your password, your devices, your push tokens, any pending reset codes and your own notifications;
 
@@ -582,7 +582,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 | LiveKit Cloud | Service provider | Live audio streams; internal account number; display name in the call; room name; join and leave times. No recording | Audio calls and live lessons | [TO CONFIRM] |
 | Apple Push Notification service | Service provider | Device token; notification title and text | Notifications and call rings on iPhone and iPad | United States / global |
 | Google Firebase Cloud Messaging | Service provider | Device token; notification title, text and data | Notifications and call rings on Android | Global |
-| Stripe | Service provider for the payment; independent controller for its own legal duties [legal review] | Amount; currency; line item with the name the Academy gave the payment request (not the child's name); lesson period; our reference numbers; page language. The card details, e-mail and billing details you enter on its page | Card payments and refunds | United States / Ireland [TO CONFIRM] |
+| Stripe | Service provider for the payment; independent controller for its own legal duties [legal review] | Amount; currency; line item with the name the Academy gave the payment request (not the child's name); lesson period; our reference numbers; page language; a customer record per family holding only our reference numbers for the family and the Academy (no name). The card details, e-mail and billing details you enter on its page | Card payments and refunds | United States / Ireland [TO CONFIRM] |
 | Sentry | Service provider | Error and crash details; hashed account number; device model and operating system; names of the screens visited before a crash. No names, e-mails, IP addresses or message contents | Fixing errors and crashes | [TO CONFIRM] |
 | Our speech provider | Service provider | Only the text of our lessons. No personal data | Lesson pronunciation audio (section 14) | [TO CONFIRM] |
 | Our e-mail delivery provider | Service provider | E-mail address and one-time code | Account recovery and password reset | [TO CONFIRM] |

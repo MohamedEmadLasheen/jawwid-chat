@@ -25,13 +25,13 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 1.4 Parents and teachers can delete their own accounts. A staff account is closed by the Academy when the staff member leaves.
 
-1.5 **Teachers:** a teacher who still has a future lesson, an assigned student, or this month's or last month's payroll open requests deletion in the same two places. In the app, the same screen offers "Request account deletion"; after your password, the app shows the date by which your account will be deleted, and you confirm. On the web form, you are told that date after you submit. The Academy then moves your students and completes your payroll, and your account is deleted within 30 days of the request at the latest, even if something is still open. Until then your account works as usual, and you can cancel the request in the app (Settings → Delete account → "Cancel request"). A teacher with nothing open is deleted at once.
+1.5 **Teachers:** if you are a teacher and still have a future lesson, an assigned student, or this month's or last month's payroll open, you request deletion in the same two places. In the app, the same screen offers "Request account deletion"; after your password, the app shows the date by which your account will be deleted, and you confirm. On the web form, you are told that date after you submit. The Academy then moves your students and completes your payroll, and your account is deleted within 30 days of the request at the latest, even if something is still open. Until then your account works as usual, and you can cancel the request in the app (Settings → Delete account → "Cancel request"). If you have nothing open, your account is deleted at once.
 
 1.6 Deletion is final and cannot be undone.
 
 ## 2. What is deleted at once
 
-2.1 Deletion takes effect immediately; after a teacher's request (clause 1.5), it takes effect when the account is deleted. We delete:
+2.1 Deletion takes effect immediately; after a teacher's request (clause 1.5), it takes effect when the request is completed, at the latest on the date shown. We delete:
 
 (a) your sign-in name, your password, your devices, your push tokens, any pending reset codes and your own notifications; you are signed out everywhere;
 
