@@ -11,7 +11,7 @@ and English, **without a server and without real people** (LR-10). The shot list
 | The fakes the app runs on (no server, no microphone, no CallKit) | `integration_test/screenshot_fakes.dart` |
 | The device side of the capture handshake (the test waits on each screen while the host captures it) | `integration_test/host_capture.dart` |
 | The host side: captures each screen with the platform tool, or saves the in-app fallback | `test_driver/integration_test.dart` |
-| The script: simulator / emulator, clean status bar, size check, capture report, JPEG copies | `scripts/mobile/screenshots/capture.sh` |
+| The script: simulator / emulator, clean status bar, size check, capture report, JPEG copies | `scripts/store-screenshots/capture.sh` |
 
 ## 1. What the run does
 
@@ -98,7 +98,7 @@ Max, 17 Pro Max, 16 Pro Max, 16 Plus, 15 Pro Max, 15 Plus and 14 Pro Max. The fo
 requires at least one screenshot for **"iPhone with Dynamic Island (medium display)"**. That part of the page came to
 us summarized rather than word for word. If App Store Connect asks for that slot, run again with the matching simulator
 and size:
-`IOS_DEVICE_TYPE=… IOS_EXPECT_WIDTH=… IOS_EXPECT_HEIGHT=… bash scripts/mobile/screenshots/capture.sh ios`.
+`IOS_DEVICE_TYPE=… IOS_EXPECT_WIDTH=… IOS_EXPECT_HEIGHT=… bash scripts/store-screenshots/capture.sh ios`.
 
 **Play (unverified today, re-read the page).** Phone screenshots are PNG or JPEG with no alpha, up to 8 MB each. Each
 side is 320 to 3840 px, and the long side is at most twice the short side. Play takes 2 to 8 per device type, and asks
@@ -115,11 +115,11 @@ CI). It is not run on shared development machines.
 
 ```bash
 # iOS (macOS with Xcode and an iOS simulator runtime that has the iPhone 17 Pro Max)
-bash scripts/mobile/screenshots/capture.sh ios
+bash scripts/store-screenshots/capture.sh ios
 
 # Android (ANDROID_HOME set; the emulator, platform-tools and the system image installed:
 #   sdkmanager "system-images;android-35;google_apis;arm64-v8a"   (x86_64 on an Intel host / Linux CI))
-bash scripts/mobile/screenshots/capture.sh android
+bash scripts/store-screenshots/capture.sh android
 ```
 
 - **Output:** `build/store_screenshots/<UTC timestamp>/` (not committed). It holds `ios/` or `android/` with
@@ -148,9 +148,9 @@ Wiring this into CI is a `.github/` change and needs a Code Owner PR. The propos
 (`workflow_dispatch`) and on release tags, not on every push:
 
 - **iOS:** `runs-on: macos-15` (or the newest macOS image whose Xcode has the iPhone 17 Pro Max simulator), the pinned
-  `subosito/flutter-action` already used in `ci.yml`, then `bash scripts/mobile/screenshots/capture.sh ios`.
+  `subosito/flutter-action` already used in `ci.yml`, then `bash scripts/store-screenshots/capture.sh ios`.
 - **Android:** `runs-on: ubuntu-latest` with KVM enabled (the usual `udev` rule for `/dev/kvm`). Install the
-  `x86_64` system image and the emulator with `sdkmanager`, then run `bash scripts/mobile/screenshots/capture.sh android`.
+  `x86_64` system image and the emulator with `sdkmanager`, then run `bash scripts/store-screenshots/capture.sh android`.
 - Both jobs upload `build/store_screenshots/` as an artifact (`actions/upload-artifact`, kept 14 days). Nothing is
   uploaded to a store from CI.
 

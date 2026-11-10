@@ -2,8 +2,8 @@
 # LR-09j: take the store screenshots on a simulator / emulator, with no server and
 # no real person (synthetic data from integration_test/screenshot_fixtures.dart).
 #
-#   bash scripts/mobile/screenshots/capture.sh ios       # iPhone 6.9" class, 1320 x 2868 (macOS + Xcode)
-#   bash scripts/mobile/screenshots/capture.sh android   # Play phone, 1080 x 1920 (Android SDK + emulator)
+#   bash scripts/store-screenshots/capture.sh ios       # iPhone 6.9" class, 1320 x 2868 (macOS + Xcode)
+#   bash scripts/store-screenshots/capture.sh android   # Play phone, 1080 x 1920 (Android SDK + emulator)
 #
 # Output: $JAWWID_SCREENSHOT_DIR (default build/store_screenshots/<UTC timestamp>), as
 #   <platform>/<ar|en>/<NN>_<screen>.png   -- 10 shots per language, 20 per platform.
@@ -41,7 +41,7 @@ esac
 
 fail() { echo "capture: $*" >&2; exit 1; }
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 FLUTTER="${FLUTTER:-$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")}"
