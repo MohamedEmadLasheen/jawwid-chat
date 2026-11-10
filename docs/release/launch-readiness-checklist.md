@@ -228,9 +228,9 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 - #593 (lesson-package wording, LR-15): ACCEPT @ `1304f4a0` with two stale-doc P2s, which W73b is fixing. **It replaces the owner-chosen PD-30 wording, so it needs the owner's LR-15 decision before merge.**
 
 - **LR-46 integrated security review of the 56-PR candidate** (`git diff 4071771c 7aa84850`, 175 commits; read-only; report at `~/jawwid-owner-evidence/LR-46-delta-review-7aa84850.md`): **0 P1, 1 P2, 2 P3.** Everything else checked is clean: review mode first, card pause, webhook signatures, push privacy, deletion, workflows, new definer functions.
-  - **P2:** a Stripe retrieve or expire that fails left an old card page payable while a second was opened, so a double charge was possible. The code predates this round. W76 is fixing it on #581: fail closed with a 503, and mark a session expired only once Stripe confirms.
-  - **P3:** a paused card tap still wrote an instalment request (W77, on #584).
-  - **P3:** the one-learner rule could remove families from class-group calls near a lesson (W67d, on #587).
+  - **P2:** a Stripe retrieve or expire that fails left an old card page payable while a second was opened, so a double charge was possible. The code predates this round. **Fixed: #581 ACCEPT @ `8c613f23`, 14/14** (fails closed; a page Stripe no longer has is closed only once its own expiry is safely past).
+  - **P3:** a paused card tap still wrote an instalment request: **fixed, #584 ACCEPT @ `8fc61aa6`, 14/14.**
+  - **P3:** the one-learner rule could remove families from class-group calls near a lesson: **fixed, #587 ACCEPT @ `6f0dd902`, 14/14.**
 - #593 (LR-15 wording): **ACCEPT @ `f9a6e967`**; needs the owner's D7 decision.
 - #592 (pin GitHub Actions): **ACCEPT @ `6d3c544d`, 14/14**; needs Code Owner approval.
 
