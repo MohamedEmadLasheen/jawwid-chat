@@ -3701,5 +3701,13 @@
   "notificationPermissionContinue": "Continue",
   "@notificationPermissionContinue": {"description": "LR-11: the explanation's button that goes on to the system notification prompt."},
   "notificationPermissionNotNow": "Not now",
-  "@notificationPermissionNotNow": {"description": "LR-11: the explanation's button that skips the system prompt; asked again at most once a day."}
+  "@notificationPermissionNotNow": {"description": "LR-11: the explanation's button that skips the system prompt; asked again at most once a day."},
+  "notificationDeviceTitle": "Notifications on this device",
+  "@notificationDeviceTitle": {"description": "LR-11b: Settings row title for the phone's own notification permission (separate from the in-app notification preferences row)."},
+  "notificationDeviceOn": "On",
+  "@notificationDeviceOn": {"description": "LR-11b: Settings row subtitle when the phone allows Jawwid's notifications."},
+  "notificationDeviceOff": "Off",
+  "@notificationDeviceOff": {"description": "LR-11b: Settings row subtitle when the phone does not allow Jawwid's notifications."},
+  "notificationDeviceAllow": "Allow",
+  "@notificationDeviceAllow": {"description": "LR-11b: Settings row action while the app may still ask for the permission (first ask via the explanation, or Android 13+ after one refusal)."}
 }

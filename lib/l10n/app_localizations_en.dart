@@ -5573,4 +5573,16 @@ class L10nEn extends L10n {
 
   @override
   String get notificationPermissionNotNow => 'Not now';
+
+  @override
+  String get notificationDeviceTitle => 'Notifications on this device';
+
+  @override
+  String get notificationDeviceOn => 'On';
+
+  @override
+  String get notificationDeviceOff => 'Off';
+
+  @override
+  String get notificationDeviceAllow => 'Allow';
 }

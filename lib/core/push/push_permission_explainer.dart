@@ -35,6 +35,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///    explanation is not shown again for [pushExplainerSnooze]: the next app start or
 ///    sign-in after that asks again. At most once a day.
 ///
+/// The Settings row (LR-11b, `notification_permission.dart`) reuses this same
+/// question for its first ask (`askFromSettings`); it never shows a second one.
+///
 /// An unreadable store means "never answered" (explain again), never "continued": the
 /// point of this is that the system prompt never comes first.
 ///
@@ -210,6 +213,11 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
     _pending = null;
     state = PushExplainerPhase.idle;
 
+    await _remember(proceed);
+    pending.complete(proceed);
+  }
+
+  Future<void> _remember(bool proceed) async {
     final store = ref.read(pushExplainerStoreProvider);
     try {
       if (proceed) {
@@ -221,7 +229,61 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
       // Not remembered: the next app start explains again. This session still
       // gets what the person chose.
     }
-    pending.complete(proceed);
+  }
+
+  /// LR-11b: the FIRST ask from the Settings row ("Notifications on this device")
+  /// goes through this same explanation -- there is no second card or prompt.
+  ///
+  /// [show] puts `PushPermissionExplainerDialog` on screen and returns its answer: true
+  /// (Continue), false (Not now) or null (removed unanswered). Resolves true when
+  /// the CALLER should now ask the platform (`PushTokens.start`); false when it
+  /// should not -- Not now, no answer, a dialog already on screen, or a signed-in
+  /// session was already waiting on this question and now asks itself (so the
+  /// platform is asked exactly once).
+  ///
+  /// Already continued on this device: nothing to explain, so true at once. A
+  /// "Not now" snooze does not hold here: the person tapped the row to turn
+  /// notifications on.
+  Future<bool> askFromSettings(Future<bool?> Function() show) async {
+    if (state == PushExplainerPhase.onScreen) return false;
+    var continued = false;
+    try {
+      continued = await ref.read(pushExplainerStoreProvider).continued();
+    } catch (_) {
+      // Unreadable: explain, exactly as `clearToStart` does.
+    }
+    if (!ref.mounted) return false;
+    if (continued) return true;
+    // Re-checked after the await: the host may have claimed the screen meanwhile.
+    if (state == PushExplainerPhase.onScreen) return false;
+
+    // On screen: the host's `claim` now fails, so its dialog never stacks on this one.
+    state = PushExplainerPhase.onScreen;
+    bool? proceed;
+    try {
+      proceed = await show();
+    } catch (_) {
+      proceed = null;
+    }
+    if (!ref.mounted) return false;
+
+    if (proceed == null) {
+      // Unanswered: anything that was waiting still is.
+      state = _pending != null ? PushExplainerPhase.waiting : PushExplainerPhase.idle;
+      return false;
+    }
+
+    final pending = _pending;
+    _pending = null;
+    state = PushExplainerPhase.idle;
+    await _remember(proceed);
+    if (pending != null) {
+      // A session was waiting on this question: the answer is its, and on Continue
+      // it calls `start` itself.
+      pending.complete(proceed);
+      return false;
+    }
+    return proceed;
   }
 }
 
