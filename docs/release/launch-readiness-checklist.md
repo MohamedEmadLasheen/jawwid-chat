@@ -205,7 +205,7 @@ The owner's consolidated action list is kept outside the repository (Owner Actio
 **A. Verified on main.** Batches 1, 2, 2b and 3, plus #547 (signed-build workflow, merge `59fa0c9c`). `main` = `7cc7aab5`.
 
 **B. Accepted at the current head, with required CI 14/14 green on that head.** All of these wait for the owner's approval; the batch order is in `docs/release/merge-plan-2026-11-09.md`.
-- Store and deploy (A3/A4, verified 2026-11-10): #572 `40b84fbf`, #576 `110f61c7` and #548 `7cd1031f`. #577 `0e5e5566` is stacked on #572 and is retargeted only after #572 merges.
+- Store and deploy (A3/A4, verified 2026-11-10; #572's Google Cloud/WIF setup re-verified at `40b84fbf`: six checks PASS, no correction): #572 `40b84fbf`, #576 `110f61c7` and #548 `7cd1031f`. #577 `0e5e5566` is stacked on #572 and is retargeted only after #572 merges.
 - Stripe (LR-34): #579 `44255722`, #580 `f092797c`, #581 `5ac1fe42`, #582 `0e6bfe68`, #583 `ed82b346`, #584 `cda1bdf5`.
 - OA-12 review payment mode: #585 `9f5748e5`. Review accounts: #528 `920b04c1`, with #560, #565, #569, #575 and #586 stacked on it (each accepted at its head).
 - Other launch PRs: #449, #497, #498, #503, #517, #523, #542, #543, #545, #552, #555, #556, #557, #558, #562, #567, #568, #571, #573, #574.
