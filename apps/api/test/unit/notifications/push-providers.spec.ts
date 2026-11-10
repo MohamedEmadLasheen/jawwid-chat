@@ -176,6 +176,79 @@ describe('APNs', () => {
     expect(aps.alert).toEqual({ title: 'Incoming call', body: 'Call from teacher_c' });
   });
 
+  describe('LR-11b: apns-collapse-id on alert pushes', () => {
+    const sendAlert = async (over: Partial<PushMessage>) => {
+      const transport = apnsTransport({ sent: [{ device: 'd' }] });
+      await new ApnsPushProvider(apnsConfig, transport as never).send(
+        message({ platform: 'ios', ...over }),
+      );
+      return transport.calls[0].notification as unknown as {
+        collapseId?: string;
+        headers(): Record<string, string>;
+      };
+    };
+    const chat = (conversationId: string, notificationId = 'n_1') => ({
+      data: { eventType: 'message_published', notificationId, conversationId },
+    });
+
+    it('an alert push for a conversation carries the header, at most 64 bytes', async () => {
+      const sent = await sendAlert(chat('c_1'));
+
+      expect(sent.collapseId).toBeTruthy();
+      expect(sent.headers()['apns-collapse-id']).toBe(sent.collapseId);
+      expect(Buffer.byteLength(sent.collapseId!, 'utf8')).toBeLessThanOrEqual(64);
+    });
+
+    it('is stable for the same conversation and different for another', async () => {
+      const first = await sendAlert(chat('c_1', 'n_1'));
+      const newer = await sendAlert(chat('c_1', 'n_2'));
+      const other = await sendAlert(chat('c_2', 'n_3'));
+
+      expect(newer.collapseId).toBe(first.collapseId);
+      expect(other.collapseId).not.toBe(first.collapseId);
+    });
+
+    it('carries no identifier in clear', async () => {
+      const id = 'e0b1c2d3-0000-4000-8000-000000000001';
+      const sent = await sendAlert(chat(id));
+
+      expect(sent.collapseId).not.toContain(id);
+      expect(sent.collapseId).not.toContain('conversation');
+    });
+
+    it('a call alert collapses on the call', async () => {
+      const a = await sendAlert({ data: { eventType: 'call_missed', notificationId: 'n_1', callId: 'call_1' } });
+      const b = await sendAlert({ data: { eventType: 'call_started', notificationId: 'n_2', callId: 'call_1' } });
+
+      expect(a.collapseId).toBeTruthy();
+      expect(b.collapseId).toBe(a.collapseId);
+    });
+
+    it('a held push uses its own key, not the first chat\'s', async () => {
+      const own = await sendAlert(chat('c_1'));
+      const held = await sendAlert({ ...chat('c_1'), collapseKey: 'held-chats' });
+      const heldElsewhere = await sendAlert({ ...chat('c_9'), collapseKey: 'held-chats' });
+
+      expect(held.collapseId).toBeTruthy();
+      expect(held.collapseId).not.toBe(own.collapseId);
+      expect(heldElsewhere.collapseId).toBe(held.collapseId);
+    });
+
+    it('is omitted when the push has no identity', async () => {
+      const sent = await sendAlert({ data: { eventType: 'lesson_reminder', notificationId: 'n_1' } });
+
+      expect(sent.collapseId).toBeUndefined();
+      expect(sent.headers()).not.toHaveProperty('apns-collapse-id');
+    });
+
+    it('is NEVER set on a VoIP push', async () => {
+      const sent = await sendAlert({ isVoip: true, collapseKey: 'held-chats' });
+
+      expect(sent.collapseId).toBeUndefined();
+      expect(sent.headers()).not.toHaveProperty('apns-collapse-id');
+    });
+  });
+
   for (const reason of [
     'BadDeviceToken',
     'Unregistered',
