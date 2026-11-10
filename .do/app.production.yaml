@@ -75,6 +75,21 @@ services:
     # Longer than SHUTDOWN_GRACE_MS, so the graceful drain finishes first.
     termination:
       grace_period_seconds: 20
+    # Component alerts (LR-29, monitoring.md section 7.4). No recipient here:
+    # the owner sets each alert's destination after the deploy (section 7.5).
+    alerts:
+      - rule: RESTART_COUNT
+        operator: GREATER_THAN
+        value: 3
+        window: FIVE_MINUTES
+      - rule: MEM_UTILIZATION
+        operator: GREATER_THAN
+        value: 85
+        window: TEN_MINUTES
+      - rule: CPU_UTILIZATION
+        operator: GREATER_THAN
+        value: 90
+        window: TEN_MINUTES
     envs:
       - key: NODE_ENV
         scope: RUN_TIME
@@ -484,6 +499,21 @@ workers:
     instance_count: 1
     termination:
       grace_period_seconds: 20
+    # Component alerts (LR-29, monitoring.md section 7.4). No recipient here:
+    # the owner sets each alert's destination after the deploy (section 7.5).
+    alerts:
+      - rule: RESTART_COUNT
+        operator: GREATER_THAN
+        value: 3
+        window: FIVE_MINUTES
+      - rule: MEM_UTILIZATION
+        operator: GREATER_THAN
+        value: 85
+        window: TEN_MINUTES
+      - rule: CPU_UTILIZATION
+        operator: GREATER_THAN
+        value: 90
+        window: TEN_MINUTES
     envs:
       - key: NODE_ENV
         scope: RUN_TIME

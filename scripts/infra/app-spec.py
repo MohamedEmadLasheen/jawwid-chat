@@ -131,6 +131,19 @@ IN_APP_REDIS_IMAGE = ("valkey", "valkey", "8.1.11-alpine")   # Docker Hub regist
 IN_APP_REDIS_COMMAND = ("valkey-server --port 6379 --protected-mode no --appendonly no "
                         "--maxmemory 256mb --maxmemory-policy noeviction")
 
+# Component alerts on the API and the worker (LR-29, monitoring.md section 7.4):
+# (rule, threshold, window), each GREATER_THAN. Production only: staging would
+# send the same e-mails to the same person. The spec carries no recipient; the
+# owner sets the destination of each alert after the deploy (section 7.5). For
+# the worker, RESTART_COUNT is the only crash signal: it has no health check.
+COMPONENT_ALERT_ENVIRONMENTS = ("production",)
+COMPONENT_ALERT_COMPONENTS = ("api", "worker")
+COMPONENT_ALERTS = (
+    ("RESTART_COUNT", 3, "FIVE_MINUTES"),
+    ("MEM_UTILIZATION", 85, "TEN_MINUTES"),
+    ("CPU_UTILIZATION", 90, "TEN_MINUTES"),
+)
+
 PLACEHOLDER = re.compile(r"\$\{([A-Z][A-Z0-9_]*)\}")
 
 
@@ -177,6 +190,29 @@ def image_block(repository: str, tag_var: str) -> list[str]:
         f"      tag: ${{{tag_var}}}",
         "      registry_credentials: ${GHCR_PULL_CREDENTIALS}",
     ]
+
+
+def alert_lines(rule: str, value: int, window: str) -> list[str]:
+    return [
+        f"      - rule: {rule}",
+        "        operator: GREATER_THAN",
+        f"        value: {value}",
+        f"        window: {window}",
+    ]
+
+
+def component_alerts_block(env: str) -> list[str]:
+    """The `alerts:` of the api and worker components; empty outside production."""
+    if env not in COMPONENT_ALERT_ENVIRONMENTS:
+        return []
+    out = [
+        "    # Component alerts (LR-29, monitoring.md section 7.4). No recipient here:",
+        "    # the owner sets each alert's destination after the deploy (section 7.5).",
+        "    alerts:",
+    ]
+    for rule, value, window in COMPONENT_ALERTS:
+        out += alert_lines(rule, value, window)
+    return out
 
 
 def in_app_redis_block(env: str, size: tuple[str, int]) -> list[str]:
@@ -299,6 +335,7 @@ def render(env: str, manifest_path: str = MANIFEST) -> str:
         "    # Longer than SHUTDOWN_GRACE_MS, so the graceful drain finishes first.",
         "    termination:",
         "      grace_period_seconds: 20",
+        *component_alerts_block(env),
         "    envs:",
         *app_env,
         "  # Admin Web: its nginx container, not a static site (ADR-011). The bundle",
@@ -325,6 +362,7 @@ def render(env: str, manifest_path: str = MANIFEST) -> str:
         f"    instance_count: {size['worker'][1]}",
         "    termination:",
         "      grace_period_seconds: 20",
+        *component_alerts_block(env),
         "    envs:",
         *worker_env,
     ]
@@ -554,6 +592,31 @@ def redis_invariants(env: str, text: str) -> list[str]:
     return errs
 
 
+def is_alert_threshold(lines: list[str], i: int) -> bool:
+    """True when lines[i] is the numeric `value:` of a component alert: the one
+    literal `value:` the spec may hold, because it is a threshold, not
+    configuration. Anything else shaped `value:` must be a placeholder."""
+    rules = "|".join(rule for rule, _, _ in COMPONENT_ALERTS)
+    return (i >= 2
+            and re.fullmatch(rf"- rule: (?:{rules})", lines[i - 2].strip()) is not None
+            and lines[i - 1].strip() == "operator: GREATER_THAN"
+            and re.fullmatch(r"value: \d+", lines[i].strip()) is not None)
+
+
+def alert_invariants(env: str, text: str) -> list[str]:
+    """LR-29: production's api and worker carry every component alert, so an
+    edit to the generator cannot quietly drop one."""
+    if env not in COMPONENT_ALERT_ENVIRONMENTS:
+        return []
+    errs = []
+    for component in COMPONENT_ALERT_COMPONENTS:
+        block = component_block(text, component) or ""
+        for rule, value, window in COMPONENT_ALERTS:
+            if "\n".join(alert_lines(rule, value, window)) not in block:
+                errs.append(f"{component}: missing the {rule} > {value} over {window} alert (LR-29)")
+    return errs
+
+
 def invariants(env: str, text: str, manifest_path: str = MANIFEST) -> list[str]:
     """Properties the ADRs require of the spec, checked on the committed text so
     an edit to the generator cannot quietly remove one."""
@@ -576,9 +639,12 @@ def invariants(env: str, text: str, manifest_path: str = MANIFEST) -> list[str]:
     if text.count(f"repository: {API_REPOSITORY}") != 2:
         errs.append("the API and the worker must run the one API image (ADR-004)")
     errs += redis_invariants(env, text)
-    for n, line in enumerate(text.split("\n"), 1):
+    errs += alert_invariants(env, text)
+    lines = text.split("\n")
+    for n, line in enumerate(lines, 1):
         s = line.strip()
-        if s.startswith("value:") and not re.fullmatch(r"value: \$\{[A-Z][A-Z0-9_]*\}", s):
+        if s.startswith("value:") and not re.fullmatch(r"value: \$\{[A-Z][A-Z0-9_]*\}", s) \
+                and not is_alert_threshold(lines, n - 1):
             errs.append(f"line {n}: a literal value bypasses the GitHub Environment")
         if s.startswith("registry_credentials:") and s != "registry_credentials: ${GHCR_PULL_CREDENTIALS}":
             errs.append(f"line {n}: registry credentials must be a placeholder")
@@ -725,6 +791,22 @@ def cmd_selftest() -> int:
         expect(not invariants("production", prod), "the rendered production spec keeps every invariant")
         expect(component_block(prod, "redis") is not None, "production renders its review-period redis")
         expect(bool(component_block(spec, "redis")), "staging renders its in-app redis")
+        for component in COMPONENT_ALERT_COMPONENTS:
+            block = component_block(prod, component) or ""
+            expect(all("\n".join(alert_lines(*a)) in block for a in COMPONENT_ALERTS),
+                   f"production's {component} carries the restart, memory and CPU alerts (LR-29)")
+        expect("    alerts:" not in spec and "rule: RESTART_COUNT" not in spec,
+               "staging renders no component alerts")
+        no_restart = prod.replace("\n".join(alert_lines(*COMPONENT_ALERTS[0])) + "\n", "", 1)
+        expect(any(e.startswith("api: missing the RESTART_COUNT")
+                   for e in invariants("production", no_restart)),
+               "a production component alert removed by a generator edit is refused")
+        worded = prod.replace("        value: 85\n", "        value: high\n", 1)
+        expect(any("literal value" in e for e in invariants("production", worded)),
+               "a non-numeric alert threshold is refused")
+        smuggled = spec.replace("value: ${CORE_BASE_URL}", "value: 3", 1)
+        expect(any("literal value" in e for e in invariants("staging", smuggled)),
+               "a numeric literal outside an alert is still refused")
         unmarked = prod.replace("REVIEW PERIOD ONLY (ADR-015)", "temporary", 1)
         expect(any("REVIEW PERIOD ONLY" in e for e in invariants("production", unmarked)),
                "a production in-app redis not marked review-only is refused")
