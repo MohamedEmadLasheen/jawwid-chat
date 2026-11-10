@@ -544,7 +544,7 @@ def check_sentry(files, errors):
         if re.match(r'^\s*sq\s', l) and not re.match(SENTRY_CALL, l):
             errors.append(f'{WORKFLOW}:{n}: sq may only run `debug-files upload` or `upload-proguard` on one path (R3)')
         if 'SENTRY_LOG_LEVEL' in l and not re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l) \
-                and not l.lstrip().startswith('for v in $(compgen -e); do case "$v" in '):
+                and not re.match(SENTRY_SCRUB, l):
             errors.append(f'{WORKFLOW}:{n}: SENTRY_LOG_LEVEL must be warn (R3)')
     for job, body in job_bodies(text).items():
         tokens = [n for n, l in body if re.match(SENTRY_TOKEN_LINES[0], l)]
@@ -691,6 +691,8 @@ def mutations_r123():
         ('the Sentry token echoed', W, lambda t: replaced(t, '          O="$RUNNER_TEMP/sentry-out"', '          echo "$SENTRY_AUTH_TOKEN" | wc -c\n          O="$RUNNER_TEMP/sentry-out"')),
         ('a debug Sentry log level', W, lambda t: replaced(t, '          SENTRY_LOG_LEVEL: warn\n', '          SENTRY_LOG_LEVEL: debug\n')),
         ('a Sentry step without its log level', W, lambda t: replaced(t, '          SENTRY_LOG_LEVEL: warn\n', '')),
+        ('a log level set after the scrub loop on its line', W,
+         lambda t: replaced(t, SENTRY_SCRUB_TEXT, SENTRY_SCRUB_TEXT + '; export SENTRY_LOG_LEVEL="$L"')),
         ('--log-level trace', W, lambda t: replaced(t, SYM_CALL, '          sq "Dart symbols" debug-files upload --log-level=trace "$SYM"\n')),
         ('sentry-cli info', W, lambda t: replaced(t, SYM_CALL, '          sq "config" info\n' + SYM_CALL)),
         ('sentry-cli output printed', W, lambda t: replaced(t, SYM_CALL, '          "$SENTRY_CLI" debug-files upload "$SYM"\n')),
