@@ -401,6 +401,38 @@ Then in production, with one small real payment by the owner, refunded afterward
   and `chat.allow_pd027_lifecycle_rollback` is set (see the file). It restores `chat.guard_payment` to
   20261022170000's body verbatim. Existing payments, refunds and invoices are never touched.
 
+### 5.6a Pausing card payments (W63 kill switch)
+
+When card payments must stop at once (a suspected Stripe problem, a wrong price, a key that may be
+exposed) and revoking the key in Stripe is too slow or too broad, pause them from Admin Web:
+**Payments → Settings → Card payments → Pause card payments**, then confirm.
+
+- **Who:** the super admin and the Operations Manager, the same people who may change any payment
+  setting (`POST /billing/settings`, permission `billing.verify` plus the billing `canAssign` rule).
+  Everyone else gets `BILLING_DENIED`. Read-only staff see the state but no switch.
+- **Where it lives:** the global `chat.config` key `billing.card_paused` (`true` or `false`; no
+  migration). Every switch writes one `chat.audit_log` row, action `billing.card_pause_set`, with the
+  actor, the time, and `before`/`after` `{ cardPaused }`.
+- **What stops:** every `cardAvailable` is `false` (the app's `/me/billing`, the `/pay` link page,
+  Admin's settings and a family's billing), and a new Stripe Checkout is refused with
+  `PAYMENTS_UNAVAILABLE` (503), so the app and the link page offer bank transfer instead. Admin's
+  Payments page shows **Card payments paused** on every tab.
+- **What keeps working:** Stripe webhooks, the reconciler and staff refunds of card payments. A parent
+  already on Stripe's page when the pause was set can finish, and that payment is recorded; earlier
+  payments, refunds and disputes are still recorded.
+- **A malformed value** (anything but `true`/`false`, e.g. set by hand in SQL) is treated as
+  **paused**, and the API logs `billing.card_paused is not true or false`. Card is a convenience and
+  bank transfer always remains, so a switch meant to be on must never read as off. Fix it by pressing
+  Resume (or Pause) in Admin, which writes a proper value.
+- **Resume:** the same place, **Resume card payments**, then confirm. Takes effect on the next request
+  (the value is read on every request, never cached).
+
+Check the state read-only:
+```sql
+select value, updated_at from chat.config where key = 'billing.card_paused';
+select actor_id, at, before, after from chat.audit_log where action = 'billing.card_pause_set' order by at desc limit 5;
+```
+
 ### 5.7 Monitoring and logs
 
 Logs carry event type, outcome, ids and Stripe error categories. They never carry a body, a signature, a
@@ -454,6 +486,7 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Overpayment (M3): bank transfer then a late card webhook, and an instalment paid in cash while the card paid it, are recorded, flagged, staff told, the transaction marked; an owed payment is never flagged | `pd027-overpayment-checkout-lock.spec.ts` › M3 |
 | One payable session (S1): two concurrent opens (service and HTTP) create one Stripe session, the other tap gets 409 `CHECKOUT_OPENING`; eight opens on a 3-connection pool leave an unrelated query fast; a claim lost before or during Stripe creates nothing or hands nothing out; an already-recorded session answers the same page, no 500 | same › S1 |
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
+| W63 card pause: who may switch it, `cardAvailable` false everywhere, Checkout refused, an in-flight payment still recorded by its webhook, resume, audit rows, malformed value fails safe | `pd027-payments-http.spec.ts` › W63; `test/unit/billing/card-pause.spec.ts`; Admin `Payments.test.tsx` › W63 |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
 | W61 S2: card refused when pending receipts cover what is left (app and `/pay`), allowed when they cover part; rejected or other-currency receipts do not count | `apps/api/test/integration/w61-pending-receipt-http.spec.ts`, `test/unit/billing/w61-pay-page-receipt.spec.ts` |

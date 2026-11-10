@@ -24,6 +24,7 @@ import {
 } from './stripe.gateway';
 import { WEBHOOK_REFUND_REASON } from './idempotency';
 import { pendingReceiptMinor, receiptPendingRefusal } from './payments-read.service';
+import { isCardPaused } from './card-pause';
 import { isUuid } from '../communication/conversations/conversation.service';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
@@ -168,6 +169,8 @@ export class CheckoutService {
     if (!this.stripe.checkoutAvailable) {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not configured on this deployment', 503);
     }
+    // W63: the operator's pause (card-pause.ts). Only new payments stop; webhooks and the reconciler go on.
+    if (await isCardPaused(this.prisma)) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
     this.requirePayable(request);
 
     // A loop or abuse is refused first: one plain read, before any claim or Stripe call.

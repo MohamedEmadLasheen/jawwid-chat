@@ -17,6 +17,7 @@ import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
 import { day, invalid, optionalUuid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
 import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-ledger.service';
+import { isCardPaused } from './card-pause';
 import { PaymentsReadService, type MoneyView } from './payments-read.service';
 import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
@@ -592,6 +593,11 @@ export class BillingService {
     return this.presentFamily(actor, access, inv.familyId);
   }
 
+  /** Stripe is configured and the operator has not paused card payments (W63, card-pause.ts). */
+  private async cardAvailable(): Promise<boolean> {
+    return this.stripe.checkoutAvailable && !(await isCardPaused(this.prisma));
+  }
+
   /** The family's money, as every staff route answers it (PD-17 + PD-27). */
   async presentFamily(actor: Actor, access: BillingAccess, familyId: string) {
     const org = actor.organizationId as string;
@@ -629,7 +635,7 @@ export class BillingService {
       canRecord: access.canRecord,
       // PD-27.
       canVerify: access.canVerify,
-      cardAvailable: this.stripe.checkoutAvailable,
+      cardAvailable: await this.cardAvailable(),
       requests: money.requests,
       payments: money.payments,
       invoices: money.invoices,
@@ -707,7 +713,7 @@ export class BillingService {
       invoices: money.invoices,
       receipts: money.receipts,
       bankAccount: parseBankAccount(bank?.value),
-      cardAvailable: this.stripe.checkoutAvailable,
+      cardAvailable: await this.cardAvailable(),
       subscriptions,
     };
   }
