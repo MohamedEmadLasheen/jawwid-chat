@@ -162,8 +162,10 @@ if [ "$ENVIRONMENT" = "production" ]; then
   #   launch  the public launch takes card payments: BOTH secrets required.
   stripe_key="$(trim "$(lookup STRIPE_SECRET_KEY)")"
   stripe_whsec="$(trim "$(lookup STRIPE_WEBHOOK_SECRET)")"
-  stripe_live_re='^(sk|rk)_live_[A-Za-z0-9]+$'
-  stripe_whsec_re='^whsec_[A-Za-z0-9]+$'
+  # The prefix is the safety check; after it any non-whitespace character is
+  # accepted (Stripe promises no character set). Portable POSIX ERE classes.
+  stripe_live_re='^(sk|rk)_live_[^[:space:]]+$'
+  stripe_whsec_re='^whsec_[^[:space:]]+$'
   if [ -n "$stripe_key" ]; then
     case "$stripe_key" in
       sk_test_* | rk_test_*)

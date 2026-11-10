@@ -17,8 +17,8 @@ describe('assertProductionStripeConfig', () => {
     'pk_live_abc123', // a publishable key: it cannot create a Checkout Session or a refund
     'pk_test_abc123',
     'sk_live_', // a prefix with nothing after it
-    'sk_live_abc-123', // characters a Stripe key never has
-    'sk_live_abc 123',
+    'sk_live_abc 123', // whitespace inside the value
+    'rk_live_abc\t123',
     'whsec_abc123', // the two secrets swapped
     'garbage',
     'SK_LIVE_abc123',
@@ -35,7 +35,7 @@ describe('assertProductionStripeConfig', () => {
     );
   });
 
-  it.each(['whsec_', 'whsec_abc-123', 'sk_live_abc123', 'abc123', 'WHSEC_abc'])(
+  it.each(['whsec_', 'whsec_abc 123', 'sk_live_abc123', 'abc123', 'WHSEC_abc'])(
     'refuses the malformed webhook secret %p in production',
     (secret) => {
       expect(() => assertProductionStripeConfig(prod({ STRIPE_SECRET_KEY: 'sk_live_abc', STRIPE_WEBHOOK_SECRET: secret }))).toThrow(
@@ -48,9 +48,17 @@ describe('assertProductionStripeConfig', () => {
     expect(() => assertProductionStripeConfig(prod({ STRIPE_WEBHOOK_SECRET: 'not-a-secret' }))).toThrow(/STRIPE_WEBHOOK_SECRET/);
   });
 
-  it.each(['sk_live_abc123', 'rk_live_AbC123', '  rk_live_padded  '])('accepts the live key %p with its webhook secret', (key) => {
-    expect(() => assertProductionStripeConfig(prod({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: WHSEC }))).not.toThrow();
-    expect(() => assertProductionStripeConfig(prod({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: ` ${WHSEC}\n` }))).not.toThrow();
+  // The prefix is the check; Stripe promises no character set after it.
+  it.each(['sk_live_abc123', 'rk_live_AbC123', '  rk_live_padded  ', 'sk_live_abc-123', 'rk_live_a_b+c'])(
+    'accepts the live key %p with its webhook secret',
+    (key) => {
+      expect(() => assertProductionStripeConfig(prod({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: WHSEC }))).not.toThrow();
+      expect(() => assertProductionStripeConfig(prod({ STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: ` ${WHSEC}\n` }))).not.toThrow();
+    },
+  );
+
+  it.each(['whsec_abc-123', 'whsec_MARKER-two2', 'whsec_a_b+c'])('accepts the webhook secret %p with a live key', (secret) => {
+    expect(() => assertProductionStripeConfig(prod({ STRIPE_SECRET_KEY: 'sk_live_abc', STRIPE_WEBHOOK_SECRET: secret }))).not.toThrow();
   });
 
   it('accepts no Stripe configuration at all in production (review phase: cards off)', () => {
@@ -62,7 +70,7 @@ describe('assertProductionStripeConfig', () => {
     const cases: Record<string, string>[] = [
       { STRIPE_SECRET_KEY: 'pk_live_SECRETVALUE1', STRIPE_WEBHOOK_SECRET: WHSEC },
       { STRIPE_SECRET_KEY: 'sk_test_SECRETVALUE1', STRIPE_WEBHOOK_SECRET: WHSEC },
-      { STRIPE_SECRET_KEY: 'sk_live_SECRETVALUE1', STRIPE_WEBHOOK_SECRET: 'whsec_SECRET-VALUE2' },
+      { STRIPE_SECRET_KEY: 'sk_live_SECRETVALUE1', STRIPE_WEBHOOK_SECRET: 'whsec_SECRET VALUE2' },
     ];
     for (const extra of cases) {
       let message = '';
@@ -73,7 +81,8 @@ describe('assertProductionStripeConfig', () => {
       }
       expect(message).not.toBe('');
       expect(message).not.toContain('SECRETVALUE1');
-      expect(message).not.toContain('SECRET-VALUE2');
+      expect(message).not.toContain('SECRET VALUE2');
+      expect(message).not.toContain('VALUE2');
     }
   });
 

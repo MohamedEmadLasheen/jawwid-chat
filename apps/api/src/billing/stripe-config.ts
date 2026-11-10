@@ -20,11 +20,15 @@
  * deploy (scripts/infra/check-env.sh) REQUIRES both secrets at
  * LAUNCH_PHASE=launch. Staging and local may use test keys.
  *
+ * The prefix is the safety check (it refuses test, publishable and swapped
+ * values). After it, any non-whitespace character is accepted: Stripe does not
+ * promise a character set, and a stricter rule could refuse a real key at launch.
+ *
  * Messages name the variable, never its value.
  */
-const LIVE_KEY = /^(sk|rk)_live_[A-Za-z0-9]+$/;
+const LIVE_KEY = /^(sk|rk)_live_\S+$/;
 const TEST_KEY = /^(sk|rk)_test_/;
-const WEBHOOK_SECRET = /^whsec_[A-Za-z0-9]+$/;
+const WEBHOOK_SECRET = /^whsec_\S+$/;
 
 export function assertProductionStripeConfig(env: NodeJS.ProcessEnv = process.env): void {
   if ((env.APP_ENV ?? '').trim() !== 'production') return;

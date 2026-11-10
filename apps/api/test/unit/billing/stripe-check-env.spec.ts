@@ -82,12 +82,27 @@ describe('check-env.sh production: Stripe', () => {
     }
   });
 
+  // The prefix is the check; Stripe promises no character set after it.
+  it('any non-whitespace after the prefix passes (sk_live_abc-123, whsec_abc-123, whsec_MARKER-two2)', () => {
+    for (const [key, secret] of [
+      ['sk_live_abc-123', 'whsec_abc-123'],
+      ['rk_live_a_b+c', 'whsec_MARKER-two2'],
+    ]) {
+      const r = checkEnv({ LAUNCH_PHASE: 'launch', STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: secret });
+      expect(r.out).not.toMatch(/(MISSING|FORBIDDEN).*STRIPE_/);
+      expect(r.out).not.toContain('MARKER');
+      expect(r.status).toBe(0);
+    }
+  });
+
   it.each([
     ['sk_test_AbC123', /FORBIDDEN\s+STRIPE_SECRET_KEY is a Stripe TEST key/],
     ['rk_test_AbC123', /FORBIDDEN\s+STRIPE_SECRET_KEY is a Stripe TEST key/],
     ['pk_live_AbC123', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
     ['sk_live_', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
-    ['sk_live_AbC-123', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
+    ['sk_live_AbC 123', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
+    ['whsec_AbC123', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
+    ['SK_LIVE_AbC123', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
     ['garbage', /FORBIDDEN\s+STRIPE_SECRET_KEY is not a live secret or restricted key/],
   ])('a malformed key %p is refused in either phase', (key, message) => {
     for (const LAUNCH_PHASE of ['review', 'launch']) {
@@ -97,7 +112,7 @@ describe('check-env.sh production: Stripe', () => {
     }
   });
 
-  it.each(['whsec_', 'whsec_AbC-123', 'sk_live_AbC123', 'not-a-secret'])(
+  it.each(['whsec_', 'whsec_AbC 123', 'sk_live_AbC123', 'WHSEC_AbC123', 'not-a-secret'])(
     'a malformed webhook secret %p is refused in either phase',
     (secret) => {
       for (const LAUNCH_PHASE of ['review', 'launch']) {
@@ -118,6 +133,7 @@ describe('check-env.sh production: Stripe', () => {
     const cases: Record<string, string>[] = [
       { LAUNCH_PHASE: 'launch', STRIPE_SECRET_KEY: 'pk_live_MARKERone1', STRIPE_WEBHOOK_SECRET: 'whsec_MARKER-two2' },
       { LAUNCH_PHASE: 'review', STRIPE_SECRET_KEY: 'sk_test_MARKERone1', STRIPE_WEBHOOK_SECRET: 'whsec_MARKERtwo2' },
+      { LAUNCH_PHASE: 'launch', STRIPE_SECRET_KEY: 'rk_live_MARKER one1', STRIPE_WEBHOOK_SECRET: 'whsec_MARKER two2' },
       { LAUNCH_PHASE: 'launch', STRIPE_SECRET_KEY: 'rk_live_MARKERone1', STRIPE_WEBHOOK_SECRET: 'whsec_MARKERtwo2' },
     ];
     for (const extra of cases) {

@@ -240,9 +240,9 @@ TEACHER_PAYOUT_KEYS	payroll	yes	opt	opt	opt
 #   LAUNCH_PHASE=launch  both REQUIRED: scripts/infra/check-env.sh refuses the
 #                        deploy without them.
 # In either phase, when set in production: STRIPE_SECRET_KEY must be a LIVE key
-# matching ^(sk|rk)_live_[A-Za-z0-9]+$ (a test key, a publishable pk_ key or
+# matching ^(sk|rk)_live_\S+$ (a test key, a publishable pk_ key or
 # anything else is refused), and STRIPE_WEBHOOK_SECRET must be set with it and
-# match ^whsec_[A-Za-z0-9]+$. The deploy (check-env.sh) and the API and worker
+# match ^whsec_\S+$ (no whitespace after the prefix). The deploy (check-env.sh) and the API and worker
 # at boot (apps/api/src/billing/stripe-config.ts) apply the same rules and
 # never print a value. Staging and local may use test keys.
 STRIPE_SECRET_KEY	payments	yes	opt	opt	opt

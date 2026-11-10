@@ -194,8 +194,8 @@ owner authorizes) to run.
 
 | Variable | Where | |
 |---|---|---|
-| `STRIPE_SECRET_KEY` | API + worker, secret | Unchanged name. Use a **restricted** key (`rk_live_…` in production, `rk_test_…` in staging) with these scopes: Checkout Sessions **write**, Refunds **write**, Customers **write**, PaymentIntents **read**, Charges **read**. The last three are new. Without them, customers are not created and card details and reconciliation are not read, but payments still record. In production it must match `^(sk\|rk)_live_[A-Za-z0-9]+$`: a test key, a publishable `pk_` key or anything else is refused. |
-| `STRIPE_WEBHOOK_SECRET` | API, secret | Unchanged: the endpoint's `whsec_…`. In production it must match `^whsec_[A-Za-z0-9]+$`, and it is required whenever a key is set. |
+| `STRIPE_SECRET_KEY` | API + worker, secret | Unchanged name. Use a **restricted** key (`rk_live_…` in production, `rk_test_…` in staging) with these scopes: Checkout Sessions **write**, Refunds **write**, Customers **write**, PaymentIntents **read**, Charges **read**. The last three are new. Without them, customers are not created and card details and reconciliation are not read, but payments still record. In production it must match `^(sk\|rk)_live_\S+$` (any non-whitespace after the prefix; the prefix is the check): a test key, a publishable `pk_` key or anything else is refused. |
+| `STRIPE_WEBHOOK_SECRET` | API, secret | Unchanged: the endpoint's `whsec_…`. In production it must match `^whsec_\S+$`, and it is required whenever a key is set. |
 | `PAYMENT_LINK_BASE_URL` | API | Unchanged. |
 | `STRIPE_RECONCILE_MS` | worker, optional | Reconcile interval. The default is `300000` (5 minutes); `0` turns it off. |
 
