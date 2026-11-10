@@ -109,6 +109,33 @@ import UIKit
           let promptPossible = settings.authorizationStatus == .notDetermined
           DispatchQueue.main.async { result(promptPossible) }
         }
+      case "permissionStatus":
+        // LR-11b: the status the Settings row shows. iOS asks once only, so any
+        // refusal is `blocked` (only Settings can change it); there is no `denied`.
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+          let status: String
+          switch settings.authorizationStatus {
+          case .authorized, .provisional, .ephemeral: status = "granted"
+          case .notDetermined: status = "notDetermined"
+          case .denied: status = "blocked"
+          @unknown default: status = "unknown"
+          }
+          DispatchQueue.main.async { result(status) }
+        }
+      case "openNotificationSettings":
+        // LR-11b "Open settings": this app's notification settings on iOS 16+,
+        // this app's Settings page before that.
+        let urlString: String
+        if #available(iOS 16.0, *) {
+          urlString = UIApplication.openNotificationSettingsURLString
+        } else {
+          urlString = UIApplication.openSettingsURLString
+        }
+        guard let url = URL(string: urlString) else {
+          result(false)
+          return
+        }
+        UIApplication.shared.open(url, options: [:]) { opened in result(opened) }
       default:
         result(FlutterMethodNotImplemented)
       }

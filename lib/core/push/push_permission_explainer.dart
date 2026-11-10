@@ -35,6 +35,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///    explanation is not shown again for [pushExplainerSnooze]: the next app start or
 ///    sign-in after that asks again. At most once a day.
 ///
+/// The Settings row (LR-11b, `notification_permission.dart`) reuses this same
+/// question for its first ask (`askFromSettings`); it never shows a second one.
+///
 /// An unreadable store means "never answered" (explain again), never "continued": the
 /// point of this is that the system prompt never comes first.
 ///
@@ -154,6 +157,9 @@ enum PushExplainerPhase {
 class PushExplainer extends Notifier<PushExplainerPhase> {
   Completer<bool>? _pending;
 
+  /// The Settings row's dialog while it is on screen ([askFromSettings]).
+  Object? _settingsDialog;
+
   @override
   PushExplainerPhase build() => PushExplainerPhase.idle;
 
@@ -210,6 +216,11 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
     _pending = null;
     state = PushExplainerPhase.idle;
 
+    await _remember(proceed);
+    pending.complete(proceed);
+  }
+
+  Future<void> _remember(bool proceed) async {
     final store = ref.read(pushExplainerStoreProvider);
     try {
       if (proceed) {
@@ -221,7 +232,81 @@ class PushExplainer extends Notifier<PushExplainerPhase> {
       // Not remembered: the next app start explains again. This session still
       // gets what the person chose.
     }
-    pending.complete(proceed);
+  }
+
+  /// LR-11b: the FIRST ask from the Settings row ("Notifications on this device")
+  /// goes through this same explanation -- there is no second card or prompt.
+  ///
+  /// [show] puts `PushPermissionExplainerDialog` on screen and returns its answer: true
+  /// (Continue), false (Not now) or null (removed unanswered). Resolves true when
+  /// the CALLER should now ask the platform (`PushTokens.start`); false when it
+  /// should not -- Not now, no answer, a dialog already on screen, or a signed-in
+  /// session was already waiting on this question and now asks itself (so the
+  /// platform is asked exactly once).
+  ///
+  /// Already continued on this device: nothing to explain, so true at once. A
+  /// "Not now" snooze does not hold here: the person tapped the row to turn
+  /// notifications on.
+  Future<bool> askFromSettings(Future<bool?> Function() show) async {
+    if (state == PushExplainerPhase.onScreen) return false;
+    var continued = false;
+    try {
+      continued = await ref.read(pushExplainerStoreProvider).continued();
+    } catch (_) {
+      // Unreadable: explain, exactly as `clearToStart` does.
+    }
+    if (!ref.mounted) return false;
+    if (continued) return true;
+    // Re-checked after the await: the host may have claimed the screen meanwhile.
+    if (state == PushExplainerPhase.onScreen) return false;
+
+    // On screen: the host's `claim` now fails, so its dialog never stacks on this one.
+    final dialog = _settingsDialog = Object();
+    state = PushExplainerPhase.onScreen;
+    bool? proceed;
+    try {
+      proceed = await show();
+    } catch (_) {
+      proceed = null;
+    }
+    if (!ref.mounted) return false;
+    // Handed back while open (`releaseFromSettings`): no longer this dialog's
+    // question; whatever holds the screen now is left alone.
+    if (!identical(_settingsDialog, dialog)) return false;
+    _settingsDialog = null;
+
+    if (proceed == null) {
+      // Unanswered: anything that was waiting still is.
+      state = _pending != null ? PushExplainerPhase.waiting : PushExplainerPhase.idle;
+      return false;
+    }
+
+    final pending = _pending;
+    _pending = null;
+    state = PushExplainerPhase.idle;
+    await _remember(proceed);
+    if (pending != null) {
+      // A session was waiting on this question: the answer is its, and on Continue
+      // it calls `start` itself.
+      pending.complete(proceed);
+      return false;
+    }
+    return proceed;
+  }
+
+  /// The Settings row's dialog ([askFromSettings]) was torn down unanswered: the
+  /// row was removed with it open, and its future may never complete (its whole
+  /// navigator went). The claim is handed back as the host's `release` does:
+  /// whatever was waiting still is, and the next host to mount asks; nothing
+  /// waiting, nothing to show. That dialog's answer, if it ever comes, is ignored.
+  void releaseFromSettings() {
+    // Called a microtask after the row is disposed: the app may be gone by then.
+    if (!ref.mounted) return;
+    if (_settingsDialog == null) return;
+    _settingsDialog = null;
+    if (state == PushExplainerPhase.onScreen) {
+      state = _pending != null ? PushExplainerPhase.waiting : PushExplainerPhase.idle;
+    }
   }
 }
 

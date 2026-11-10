@@ -5660,4 +5660,16 @@ class L10nAr extends L10n {
 
   @override
   String get notificationPermissionNotNow => 'ليس الآن';
+
+  @override
+  String get notificationDeviceTitle => 'الإشعارات على هذا الجهاز';
+
+  @override
+  String get notificationDeviceOn => 'مفعّلة';
+
+  @override
+  String get notificationDeviceOff => 'معطّلة';
+
+  @override
+  String get notificationDeviceAllow => 'اسمح';
 }
