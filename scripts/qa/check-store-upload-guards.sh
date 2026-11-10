@@ -412,7 +412,7 @@ XCRUN_LINES = ALTOOL_LINES + [TRANSPORTER_LINES[0]]
 # Transporter.
 OK_ALTOOL = r"^\s*OK='No errors uploading\|UPLOAD SUCCEEDED'\s*$"
 OK_TRANSPORTER = r"^\s*OK='uploaded successfully'\s*$"
-UPLOAD_SUCCESS = r'^\s*if \[ "\$rc" -ne 0 \] \|\| ! grep -qF "\$OK" "\$B/upload\.log" \\\s*$'
+UPLOAD_SUCCESS = r'^\s*if \[ "\$rc" -ne 0 \] \|\| ! grep -qE "\$OK" "\$B/upload\.log" \\\s*$'
 SHA_RECHECK = (r'^\s*\[ "\$\(shasum -a 256 "\$VERIFIED_IPA" \| awk \'\{print \$1\}\'\)" = "\$VERIFIED_IPA_SHA256" \] '
                r'\|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$')
 STEP_NAME = r'^\s*(-\s+)?name\s*:'
@@ -670,8 +670,8 @@ def mutations_r123():
         ('altool --upload-package with a bundle id not read from the .ipa', W, lambda t: replaced(t, '--bundle-id "$VERIFIED_BUNDLE_ID"', '--bundle-id "$BUNDLE_ID"')),
         ('altool --upload-package removed', W, lambda t: replaced(t, '            xcrun altool --upload-package', '            : altool-free')),
         ('altool success wording not required', W, lambda t: replaced(t, "OK='No errors uploading|UPLOAD SUCCEEDED'", "OK=''")),
-        ('the success line not checked', W, lambda t: replaced(t, '! grep -qF "$OK" "$B/upload.log"', '! true')),
-        ('the upload exit status not checked', W, lambda t: replaced(t, 'if [ "$rc" -ne 0 ] || ! grep -qF', 'if ! grep -qF')),
+        ('the success line not checked', W, lambda t: replaced(t, '! grep -qE "$OK" "$B/upload.log"', '! true')),
+        ('the upload exit status not checked', W, lambda t: replaced(t, 'if [ "$rc" -ne 0 ] || ! grep -qE', 'if ! grep -qE')),
         ('altool in a mobile script', 'scripts/mobile/zz-selftest.sh', lambda t: 'xcrun altool --upload-app -f x.ipa --type ios\n'),
         # R2
         ('a Google sign-in in the ios job', W, lambda t: replaced(t, '      - name: Select Xcode 26 explicitly\n', AUTH_STEP + '      - name: Select Xcode 26 explicitly\n')),
