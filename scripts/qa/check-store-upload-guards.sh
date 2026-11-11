@@ -46,7 +46,15 @@
 #     SENTRY_PROPERTIES / SENTRY_CONFIG / SENTRY_DOTENV* / SENTRYCLI_* named anywhere;
 #   - (P2-1) preflight does not require the build commit to be $GITHUB_SHA (main's head at
 #     dispatch), or the android job does not assert its checkout is that commit before the build
-#     and the Google sign-in.
+#     and the Google sign-in;
+#   - (W56) the release evidence check (scripts/mobile/verify-store-artifact.sh) does not run
+#     exactly once in each of the android and ios jobs, on the signed artifact AFTER its signature
+#     verification and BEFORE the Sentry upload, the Google sign-in and every store upload; its step
+#     is conditional, does not fail the job on a failed check, or does not write the summary; the
+#     android step does not take bundletool from scripts/mobile/install-bundletool.sh, or that script
+#     does not refuse a jar whose SHA-256 is not its pinned one; the helper's pinned expectations
+#     (package, targetSdk 36, minSdk 26, 16 KB, AD_ID, Xcode 26, iOS 26 SDK, background modes audio
+#     and voip) or its failing exit status change; or continue-on-error appears in the workflow.
 #
 # Python 3 (standard library only), run isolated. If python3 is missing this FAILS, never passes.
 set -uo pipefail
@@ -382,6 +390,115 @@ def check_build_commit(text, errors):
                       f'before the build and before the Google sign-in (P2-1)')
 
 
+# W56: release evidence read from the signed artifacts (LR-50, LR-51, LR-52, LR-58, LR-73). In each
+# job, the helper runs exactly once, after the signature verification and before anything leaves the
+# runner (Sentry, the Google sign-in, every store upload); a failed check fails the job; the table
+# goes to the step summary. The helper's expectations and the bundletool pin cannot drift.
+HELPER = 'scripts/mobile/verify-store-artifact.sh'
+BUNDLETOOL = 'scripts/mobile/install-bundletool.sh'
+EVIDENCE_ANDROID = (r'^\s*out="\$\(bash release-tools/scripts/mobile/verify-store-artifact\.sh android "\$AAB" "\$BT" '
+                    r'"\$BUILD_NAME" "\$BUILD_NUMBER"\)" \|\| rc=\$\?\s*$')
+EVIDENCE_IOS = (r'^\s*out="\$\(bash release-tools/scripts/mobile/verify-store-artifact\.sh ios "\$\{apps\[0\]\}" '
+                r'ios/Runner/PrivacyInfo\.xcprivacy\)" \|\| rc=\$\?\s*$')
+EVIDENCE_FAIL = r'^\s*\[ "\$rc" -eq 0 \] \|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$'
+EVIDENCE_BT = r'^\s*BT="\$\(bash release-tools/scripts/mobile/install-bundletool\.sh "\$RUNNER_TEMP/bundletool"\)"\s*$'
+PLAY_UPLOAD = r'^\s*bash release-tools/scripts/mobile/play-upload\.sh\b'
+STEP_START = r'^      - '
+
+
+def evidence_specs():
+    """(job, the pinned helper call, what it must follow, what it must precede). A function, because
+    the Sentry and upload line patterns are defined further down."""
+    return [
+        ('android', EVIDENCE_ANDROID, ('the App Bundle signature verification', r'^\s*jarsigner -verify '),
+         [('the Sentry upload', SENTRY_CALL), ('the Google sign-in', AUTH_ACTION), ('the Play upload', PLAY_UPLOAD)]),
+        ('ios', EVIDENCE_IOS, ('the .ipa verification', r'^\s*echo "VERIFIED_IPA_SHA256=\$sha" >> "\$GITHUB_ENV"\s*$'),
+         [('the Sentry upload', SENTRY_CALL), ('the altool help', ALTOOL_HELP)] + UPLOADS),
+    ]
+
+
+HELPER_PINS = [
+    ('the package', "readonly PACKAGE='com.jawwid.jawwid_chat'"),
+    ('targetSdk 36 (LR-50)', "readonly TARGET_SDK='36'"),
+    ('minSdk 26 (LR-50)', "readonly MIN_SDK='26'"),
+    ('16 KB alignment (LR-51)', "readonly PAGE_BYTES='16384'"),
+    ('the AD_ID permission', "readonly AD_ID='com.google.android.gms.permission.AD_ID'"),
+    ('Xcode 26 (LR-52)', "readonly DTXCODE_MIN='2600'"),
+    ('the iOS 26 SDK (LR-52)', "readonly SDK_RX='^iphoneos26(\\.[0-9]+)*$'"),
+    ('background modes exactly audio and voip', "readonly BACKGROUND_MODES='audio voip'"),
+    ('a failed check marks the run failed', '  [ "$1" = FAIL ] && bad=1'),
+    ('the exit status of the checks', 'exit "$bad"'),
+]
+BUNDLETOOL_PINS = [
+    ('a pinned SHA-256', r"^readonly BUNDLETOOL_SHA256='[0-9a-f]{64}'$"),
+    ('the refusal of any other jar', r'^if \[ "\$got" != "\$BUNDLETOOL_SHA256" \]; then$'),
+]
+
+
+def step_of(body, n):
+    """The (line number, line) pairs of the step of a job body that holds line n."""
+    starts = [m for m, l in body if re.match(STEP_START, l)]
+    s = max([m for m in starts if m <= n], default=None)
+    if s is None:
+        return []
+    e = min([m for m in starts if m > n], default=10 ** 9)
+    return [(m, l) for m, l in body if s <= m < e]
+
+
+def check_evidence(files, errors):
+    text = files.get(WORKFLOW, '')
+    code = code_lines(text)
+    jobs = job_bodies(text)
+    if re.search(r'continue-on-error', text):
+        errors.append(f'{WORKFLOW}: continue-on-error lets a failed check through (W56)')
+    for job, call, (verified_what, verified_rx), later in evidence_specs():
+        body = jobs.get(job, [])
+        everywhere = [n for n, l in code if re.match(call, l)]
+        at = first(body, call)
+        if len(everywhere) != 1 or at is None:
+            errors.append(f'{WORKFLOW}: the {job} job must run the release evidence check exactly once, on its '
+                          f'pinned line (found lines {everywhere}) (W56)')
+            continue
+        v = first(body, verified_rx)
+        if v is None or v > at:
+            errors.append(f'{WORKFLOW}: the {job} release evidence must read the artifact after {verified_what} (W56)')
+        for what, rx in later:
+            n = first(body, rx)
+            if n is None or n < at:
+                errors.append(f'{WORKFLOW}: the {job} release evidence must run before {what} (W56)')
+        step = [(n, l) for n, l in step_of(body, at) if l.strip() and not l.strip().startswith('#')]
+        if any(re.match(r'^        (if|continue-on-error)\s*:', l) for _, l in step):
+            errors.append(f'{WORKFLOW}: the {job} release evidence step must not be conditional (W56)')
+        if not any(n < at and re.match(r'^\s*rc=0\s*$', l) for n, l in step):
+            errors.append(f'{WORKFLOW}: the {job} release evidence step must start from rc=0 (W56)')
+        fail = [n for n, l in step if n > at and re.match(EVIDENCE_FAIL, l)]
+        if not fail:
+            errors.append(f'{WORKFLOW}: a failed {job} release evidence check must fail the job (W56)')
+        elif any(at < n < fail[0] and re.search(r'\brc=', l) for n, l in step):
+            errors.append(f'{WORKFLOW}: the {job} release evidence result is overwritten before it is checked (W56)')
+        if not any(n > at and re.search(r'>> "\$GITHUB_STEP_SUMMARY"', l) for n, l in step):
+            errors.append(f'{WORKFLOW}: the {job} release evidence step must write its table to the step summary (W56)')
+        if job == 'android' and not any(n < at and re.match(EVIDENCE_BT, l) for n, l in step):
+            errors.append(f'{WORKFLOW}: the android release evidence must use the bundletool that '
+                          f'{BUNDLETOOL} verified against its pin (W56)')
+    helper = files.get(HELPER, '')
+    lines = helper.split('\n')
+    for what, literal in HELPER_PINS:
+        if lines.count(literal) != 1:
+            errors.append(f'{HELPER}: must pin {what}, exactly `{literal.strip()}` once (W56)')
+        m = re.match(r'^readonly ([A-Z_0-9]+)=', literal)
+        if m and len(re.findall(r'\b%s=' % m.group(1), helper)) != 1:
+            errors.append(f'{HELPER}: {m.group(1)} is assigned somewhere other than its readonly constant (W56)')
+    if len(re.findall(r'\bbad=0\b', helper)) != 1:
+        errors.append(f'{HELPER}: the failure flag may be reset only where it starts (W56)')
+    tool = files.get(BUNDLETOOL, '')
+    for what, rx in BUNDLETOOL_PINS:
+        if len(re.findall(rx, tool, re.M)) != 1:
+            errors.append(f'{BUNDLETOOL}: must have {what}, on its pinned line (W56)')
+    if len(re.findall(r'\bBUNDLETOOL_SHA256=', tool)) != 1:
+        errors.append(f'{BUNDLETOOL}: BUNDLETOOL_SHA256 is assigned somewhere other than its readonly constant (W56)')
+
+
 # R1: one export; the exact verified .ipa is what is uploaded, by altool in an upload mode
 # (--upload-package, else --upload-app) or, failing both, by Transporter. Every altool, xcrun and
 # "$T" line is pinned; each upload line is immediately preceded by the SHA-256 re-check.
@@ -594,6 +711,7 @@ def check(files):
         check_identity(files[WORKFLOW], errors)
         check_build_commit(files[WORKFLOW], errors)
         check_ios_upload(files[WORKFLOW], errors)
+    check_evidence(files, errors)
     check_sentry(files, errors)
     if PLAY not in files:
         errors.append(f'{PLAY} not found')
@@ -630,6 +748,9 @@ IDENTITY_MUTATIONS = [
 ]
 SYM_CALL = '          sq "Dart symbols" debug-files upload "$SYM"\n'
 SHA_LINE = '[ "$(shasum -a 256 "$VERIFIED_IPA" | awk \'{print $1}\')" = "$VERIFIED_IPA_SHA256" ]'
+# The evidence step (W56) re-checks the same hash before it unpacks the .ipa, earlier in the file;
+# the re-check removed must be the one right before an upload, so it is found after this step name.
+ASC_UPLOAD_STEP = '      - name: Upload the verified .ipa itself to App Store Connect'
 AH_LINE = '          AH="$(xcrun altool --help 2>&1 || true)"\n'
 ALTOOL_APP_START = '            xcrun altool --upload-app'
 ALTOOL_PLAIN_START = '              xcrun altool --upload-package "$VERIFIED_IPA" --type ios --apiKey'
@@ -649,7 +770,7 @@ def mutations_r123():
         ('another Transporter mode', W, lambda t: replaced(t, '"$T" -m upload', '"$T" -m lookupMetadata')),
         ('a second Transporter call', W, lambda t: replaced(t, '            "$T" -m upload -assetFile', '            "$T" -m upload -assetFile "$VERIFIED_IPA"\n            "$T" -m upload -assetFile')),
         ('a Transporter upload of another file', W, lambda t: replaced(t, '-assetFile "$VERIFIED_IPA"', '-assetFile "$B/export/Runner.ipa"')),
-        ('the SHA-256 re-check removed', W, lambda t: replaced(t, SHA_LINE, '[ -n "$VERIFIED_IPA_SHA256" ]')),
+        ('the SHA-256 re-check removed', W, lambda t: after(t, ASC_UPLOAD_STEP, SHA_LINE, '[ -n "$VERIFIED_IPA_SHA256" ]')),
         ('the SHA-256 re-check not right before an upload', W, lambda t: replaced(t, ALTOOL_APP_START, '            cp "$B/export/other.ipa" "$VERIFIED_IPA" || true\n' + ALTOOL_APP_START)),
         ('the SHA-256 not recorded', W, lambda t: replaced(t, 'echo "VERIFIED_IPA_SHA256=$sha"', 'echo "VERIFIED_IPA_SHA=$sha"')),
         ('the .ipa not made read-only', W, lambda t: replaced(t, '          chmod a-w "$IPA"\n', '')),
@@ -734,9 +855,75 @@ def mutations_r123():
     return m
 
 
+def after_line(text, prefix, new):
+    """Insert `new` after the whole line that starts with `prefix` (e.g. a step's name line)."""
+    i = text.find(prefix)
+    j = text.find('\n', i) if i >= 0 else -1
+    if j < 0:
+        raise SystemExit(f'selftest: the mutation anchor is gone, update the selftest: {prefix!r}')
+    return text[:j + 1] + new + text[j + 1:]
+
+
+EV_A = ('          out="$(bash release-tools/scripts/mobile/verify-store-artifact.sh android "$AAB" "$BT" '
+        '"$BUILD_NAME" "$BUILD_NUMBER")" || rc=$?\n')
+EV_I = ('          out="$(bash release-tools/scripts/mobile/verify-store-artifact.sh ios "${apps[0]}" '
+        'ios/Runner/PrivacyInfo.xcprivacy)" || rc=$?\n')
+FAIL_A = ('          [ "$rc" -eq 0 ] || { echo "::error::the signed App Bundle failed its release evidence checks; '
+          'nothing was uploaded."; exit 1; }\n')
+FAIL_I = ('          [ "$rc" -eq 0 ] || { echo "::error::the signed .ipa failed its release evidence checks; '
+          'nothing was uploaded."; exit 1; }\n')
+BT_A = '          BT="$(bash release-tools/scripts/mobile/install-bundletool.sh "$RUNNER_TEMP/bundletool")"\n'
+EV_SUMMARY = '          { echo ""; printf \'%s\\n\' "$out"; } >> "$GITHUB_STEP_SUMMARY"\n'
+NAME_A = '      - name: Release evidence from the signed App Bundle'
+NAME_I = '      - name: Release evidence from the signed .ipa'
+AAB_CHECK = '          AAB=build/app/outputs/bundle/release/app-release.aab\n          [ -f "$AAB" ]'
+ASC_SUMMARY = '          echo "- App Store Connect: the verified .ipa'
+
+
+def mutations_w56():
+    W, H, T = WORKFLOW, HELPER, BUNDLETOOL
+    return [
+        ('android evidence check removed', W, lambda t: replaced(t, EV_A, '          out="$(echo skipped)" || rc=$?\n')),
+        ('android evidence result ignored', W, lambda t: replaced(t, FAIL_A, '          true\n')),
+        ('android evidence result overwritten', W, lambda t: replaced(t, EV_A, EV_A + '          rc=0\n')),
+        ('a second android evidence call', W, lambda t: replaced(t, EV_A, EV_A + EV_A)),
+        ('android evidence after the Google sign-in', W, lambda t: replaced(
+            replaced(t, EV_A, ''), '          echo "::add-mask::$PLAY_ACCESS_TOKEN"\n',
+            '          echo "::add-mask::$PLAY_ACCESS_TOKEN"\n' + EV_A)),
+        ('android evidence before the signature check', W, lambda t: replaced(
+            replaced(t, EV_A, ''), AAB_CHECK, AAB_CHECK.replace('\n', '\n' + EV_A, 1))),
+        ('android evidence step skippable', W, lambda t: after_line(t, NAME_A, '        if: false\n')),
+        ('android evidence step continue-on-error', W, lambda t: after_line(t, NAME_A, '        continue-on-error: true\n')),
+        ('android evidence not in the summary', W, lambda t: replaced(t, EV_SUMMARY, '          : no summary\n')),
+        ('bundletool not the pinned one', W, lambda t: replaced(t, BT_A, '          BT="$RUNNER_TEMP/bundletool.jar"\n')),
+        ('ios evidence check removed', W, lambda t: replaced(t, EV_I, '          out="$(echo skipped)" || rc=$?\n')),
+        ('ios evidence result ignored', W, lambda t: replaced(t, FAIL_I, '          true\n')),
+        ('ios evidence after the upload', W, lambda t: replaced(replaced(t, EV_I, ''), ASC_SUMMARY, EV_I + ASC_SUMMARY)),
+        ('ios evidence step skippable', W, lambda t: after_line(t, NAME_I, '        if: false\n')),
+        ('ios evidence not in the summary', W, lambda t: after(t, '\n  ios:\n', EV_SUMMARY, '          : no summary\n')),
+        ('continue-on-error on the .ipa verification', W, lambda t: after_line(
+            t, '      - name: Verify the .ipa is App Store signed', '        continue-on-error: true\n')),
+        ('targetSdk 35', H, lambda t: replaced(t, "readonly TARGET_SDK='36'", "readonly TARGET_SDK='35'")),
+        ('minSdk 21', H, lambda t: replaced(t, "readonly MIN_SDK='26'", "readonly MIN_SDK='21'")),
+        ('4 KB alignment', H, lambda t: replaced(t, "readonly PAGE_BYTES='16384'", "readonly PAGE_BYTES='4096'")),
+        ('AD_ID looked up under another name', H, lambda t: replaced(t, "permission.AD_ID'", "permission.AD_ID_X'")),
+        ('Xcode 16 accepted', H, lambda t: replaced(t, "readonly DTXCODE_MIN='2600'", "readonly DTXCODE_MIN='1600'")),
+        ('any iOS SDK accepted', H, lambda t: replaced(t, "readonly SDK_RX='^iphoneos26(\\.[0-9]+)*$'", "readonly SDK_RX='^iphoneos'")),
+        ('another background mode accepted', H, lambda t: replaced(t, "readonly BACKGROUND_MODES='audio voip'", "readonly BACKGROUND_MODES='audio fetch voip'")),
+        ('a failed check that does not count', H, lambda t: replaced(t, '  [ "$1" = FAIL ] && bad=1', '  [ "$1" = FAIL ] && : bad=1')),
+        ('the helper always exits 0', H, lambda t: replaced(t, '\nexit "$bad"', '\nexit 0')),
+        ('the failure flag reset before the exit', H, lambda t: replaced(t, '\nexit "$bad"', '\nbad=0\nexit "$bad"')),
+        ('a pinned expectation reassigned', H, lambda t: replaced(t, "readonly MAX_ENTRIES=", "TARGET_SDK=35\nreadonly MAX_ENTRIES=")),
+        ('the helper emptied', H, lambda t: ''),
+        ('bundletool SHA-256 not checked', T, lambda t: replaced(t, 'if [ "$got" != "$BUNDLETOOL_SHA256" ]; then', 'if false; then')),
+        ('bundletool digest not pinned', T, lambda t: re.sub(r"readonly BUNDLETOOL_SHA256='[0-9a-f]{64}'",
+                                                               'readonly BUNDLETOOL_SHA256="${BT_SHA:-}"', t, count=1)),
+    ]
+
+
 def mutations():
     W, P = WORKFLOW, PLAY
-    m = mutations_r123() + [
+    m = mutations_r123() + mutations_w56() + [
         ('a push trigger', W, lambda t: replaced(t, '\non:\n  workflow_dispatch:\n', '\non:\n  push:\n  workflow_dispatch:\n')),
         ('a pull_request_target trigger', W, lambda t: replaced(t, '\non:\n  workflow_dispatch:\n', '\non:\n  workflow_dispatch:\n  pull_request_target:\n')),
         ('an inline trigger list', W, lambda t: replaced(t, '\non:\n  workflow_dispatch:\n', '\non: [workflow_dispatch, push]\nold_on:\n  workflow_dispatch:\n')),
@@ -790,7 +977,8 @@ def main(mode):
               'com.jawwid.jawwid_chat / internal / draft; no other channel or action; no artifacts; actions pinned; '
               'no expression in a run block; iOS uploads the verified .ipa only, altool in upload modes only (R1); identity asserted, Google '
               'sign-in only in android (R2); Sentry token env-only, output captured, symbols cleaned up (R3); '
-              'sentry-cli reads no planted settings (P2-2); only main\'s head at dispatch is built (P2-1)')
+              'sentry-cli reads no planted settings (P2-2); only main\'s head at dispatch is built (P2-1); '
+              'release evidence read from each signed artifact before anything leaves the runner (W56)')
         return 0
     base = check(files)
     if base:
