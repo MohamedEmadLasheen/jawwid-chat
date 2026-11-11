@@ -47,6 +47,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | Stage 0 | #547 |
 | 3 | #534, #536, #546, #540 |
 | L1 (2026-11-11, owner-approved Batch 1) | #576 at `110f61c7` merged as `dae9c3c0` (09:25 UTC); main CI run 42995026634 success 15/15. #572 at `40b84fbf` (Code Owner approval by the owner) merged as `8c3c17e3` (09:47 UTC); main CI run 42998094578 success 15/15. #577 retargeted to `main` (merge of main, new head `5fb4bce0`); #577 at `5fb4bce0` (retargeted, re-reviewed ACCEPT, 30/30) merged as `24730544`; main CI run 43002019502 success 15/15. Batch 3: #548 at `7cd1031f` (Code Owner approved) merged as `3200a4f7`; main CI run 43003895443 success 15/15. |
+| Apple (owner, 2026-11-11) | App Store Connect app record created: name "Jawwid", Apple ID 6832258042, bundle `com.jawwid.jawwidChat`, SKU `jawwid-chat-ios`, primary language English (U.S.). `ASC_APP_APPLE_ID` not yet set (owner instruction). API key not created yet. |
 
 `main` = `7cc7aab5`, CI 15/15.
 
