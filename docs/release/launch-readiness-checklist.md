@@ -46,7 +46,7 @@ From the moment the owner inputs arrive, the critical path is about 4 days:
 | 2b | #522 |
 | Stage 0 | #547 |
 | 3 | #534, #536, #546, #540 |
-| L1 (2026-11-11, owner-approved Batch 1) | #576 at `110f61c7` merged as `dae9c3c0` (09:25 UTC); main CI run 42995026634 success 15/15. #572 at `40b84fbf` waits for the Code Owner approval and the owner's explicit merge go. |
+| L1 (2026-11-11, owner-approved Batch 1) | #576 at `110f61c7` merged as `dae9c3c0` (09:25 UTC); main CI run 42995026634 success 15/15. #572 at `40b84fbf` (Code Owner approval by the owner) merged as `8c3c17e3` (09:47 UTC); main CI run 42998094578 success 15/15. #577 retargeted to `main` (merge of main, new head `5fb4bce0`); CI and delta review running. |
 
 `main` = `7cc7aab5`, CI 15/15.
 
