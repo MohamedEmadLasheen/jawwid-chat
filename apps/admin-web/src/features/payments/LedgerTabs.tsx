@@ -84,6 +84,16 @@ const OUTCOME_TONE: Record<string, Tone> = {
   checkout_failed: 'warn',
   refund_deferred: 'warn',
   unknown_session: 'warn',
+  refund_failed_after_record: 'danger',
+  // A dispute is a flag for a person (the ledger is unchanged): opened and money withdrawn are urgent.
+  dispute_opened: 'danger',
+  dispute_funds_withdrawn: 'danger',
+  dispute_closed_lost: 'danger',
+  dispute_updated: 'warn',
+  dispute_closed_unknown: 'warn',
+  dispute_closed_won: 'ok',
+  dispute_closed_prevented: 'ok',
+  dispute_funds_reinstated: 'ok',
 }
 
 const raw = (s: string): Pair => ({ en: s, ar: s })
