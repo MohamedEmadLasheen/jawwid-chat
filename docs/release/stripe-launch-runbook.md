@@ -23,9 +23,9 @@ recorded as `ignored` and nothing else; harmless) and ignore the `not_chat` outc
 merged, the `LAUNCH_PHASE=launch` deploy does **not** require the Stripe secrets, and a `pk_live_` key is
 refused only by Stripe, not by the deploy. Nothing else in this runbook depends on #581.
 
-A fourth PR, **W63** ("Pause card payments", an Admin switch that turns the card option off while webhooks
-and the reconciler keep working), is being built separately. Once it merges it becomes the preferred fast
-stop in §6.9 (option A'). Until then the key-based options in §6.9 are what exists.
+A fourth PR, **W63** (#584, "Pause card payments", an Admin switch that turns the card option off while
+webhooks and the reconciler keep working), is merged ahead of this runbook. It is the preferred fast stop in
+§6.9 (option A'). The pause wins everywhere, App Review mode included (owner, 2026-11-12).
 
 ---
 
@@ -206,7 +206,7 @@ python3 -I scripts/infra/production-setup.py ask STRIPE_SECRET_KEY STRIPE_WEBHOO
 
 | Name | Kind | Value | Notes |
 |---|---|---|---|
-| `STRIPE_SECRET_KEY` | secret | the `rk_live_…` key from §3 | API and worker. Must match `^(sk\|rk)_live_\S+$` (#579). Setting it turns `cardAvailable` on everywhere (`stripe.gateway.ts:129-131`; `billing.service.ts:632,710`, `payments.service.ts` `presentSettings`, `pay-link.controller.ts:102`). |
+| `STRIPE_SECRET_KEY` | secret | the `rk_live_…` key from §3 | API and worker. Must match `^(sk\|rk)_live_\S+$` (#579). Setting it turns `cardAvailable` on everywhere unless card payments are paused (W63, `card-pause.ts`; a malformed `billing.card_paused` counts as paused) (`stripe.gateway.ts:129-131`; `billing.service.ts:632,710`, `payments.service.ts` `presentSettings`, `pay-link.controller.ts:102`). |
 | `STRIPE_WEBHOOK_SECRET` | secret | the `whsec_…` from §2 | API. Required whenever the key is set (`stripe-config.ts`; `check-env.sh`). Must match `^whsec_\S+$` (#579). |
 | `PAYMENT_LINK_BASE_URL` | variable | **leave unset** | The deploy defaults it to `PRODUCTION_API_BASE_URL` + `/api/v1`, i.e. `https://api.chat.jawwid.com/api/v1` (`deploy-production.yml:292`). Payment links are built on it (`payment-ledger.service.ts:123-125`). Set it only if the public API origin ever differs from `PRODUCTION_API_BASE_URL`. |
 | `SUBSCRIPTION_LOCK_ENFORCED` | variable | **leave unset** (defaults to `false`, `deploy-production.yml:295`) | PD-30's payment lock stays **off** in production (owner, 2026-11-06, `docs/product/pd-registry/PD-30-amendment-chat-open.md`). Turning Stripe on does not change this. |
@@ -248,9 +248,10 @@ The same tab shows two read-only badges from the server (`PaymentsPage.tsx:351-3
 `billing.settings_set` with before and after (`payments.service.ts`, the `setSettings` transaction near
 line 710).
 
-Nothing about Stripe is set through Admin Web. On `main` there is no Admin switch for cards: `cardAvailable`
-is exactly "a secret key is configured" (§4, §6.9). W63 adds a "Pause card payments" switch on this tab;
-until it merges, leave this paragraph as the rule.
+Nothing about Stripe is set through Admin Web. The one card switch on this tab is W63's **"Pause card
+payments"** ("إيقاف الدفع بالبطاقة مؤقتًا"): `cardAvailable` is "a secret key is configured **and** card
+payments are not paused" (§4, §6.9). While paused, the tab shows a **"Card payments paused"** badge instead
+of "Stripe connected".
 
 ---
 
@@ -388,8 +389,9 @@ small payment and its refund are a test; the refund leaves the net at zero.
 
 ### 6.9 Rollback: turning cards off fast
 
-**What "off" means in the code.** `cardAvailable` is exactly "`STRIPE_SECRET_KEY` is set"
-(`stripe.gateway.ts:129-131`). Unset it and: no card option anywhere (app, link page, Admin), checkout
+**What "off" means in the code.** `cardAvailable` is "`STRIPE_SECRET_KEY` is set (`stripe.gateway.ts:129-131`)
+and card payments are not paused (W63, `card-pause.ts`; a malformed value counts as paused)". Option A' below
+is the pause; the rest of this paragraph describes unsetting the key. Unset it and: no card option anywhere (app, link page, Admin), checkout
 answers 503 `COMM.PAYMENTS_UNAVAILABLE` and the client offers the bank transfer (`checkout.service.ts:93-95`,
 `docs/communication/error-codes.md`), the webhook still verifies and records with the secret alone
 (`stripe.gateway.ts:215-222`; `confirm` records without the key because the card facts are best effort),
@@ -409,7 +411,7 @@ is not available as is. Options, from least to most disruptive:
 
 | Option | How | Effect | When |
 |---|---|---|---|
-| **A'. Pause card payments in Admin** (**after PR W63 merges**; UNVERIFIED label until then: Admin → Payments → Settings → "Pause card payments") | no deploy, no Stripe change | The card option disappears everywhere and new checkouts are refused, while the key stays set: webhooks keep recording, refunds and Reconcile keep working, in-flight payments from the 45-minute window are recorded normally. Nothing to restore in Stripe or GitHub; switch it back off in Admin to resume. | **Preferred fast stop once W63 is merged and deployed.** Seconds. Until W63 is on production, use A. |
+| **A'. Pause card payments in Admin** (W63, #584: Admin → Payments → Settings → "Pause card payments" / "إيقاف الدفع بالبطاقة مؤقتًا") | no deploy, no Stripe change | The card option disappears everywhere and new checkouts are refused, while the key stays set: webhooks keep recording, refunds and Reconcile keep working, in-flight payments from the 45-minute window are recorded normally. Nothing to restore in Stripe or GitHub; switch it back off in Admin to resume. | **Preferred fast stop once W63 is merged and deployed.** Seconds. Until W63 is on production, use A. |
 | **A. Revoke the restricted key in Stripe** (UNVERIFIED label: API keys → the key → Delete/Revoke) | no deploy | Every Stripe API call fails. Checkout: `stripe checkout refused` in the log and 503 to the client, which offers the bank transfer (`checkout.service.ts:168-174`). The card button is still shown (`cardAvailable` is still true) until the parent taps it. **Webhooks only partly record.** `checkout.session.completed` and `refund.*` on an already recorded payment still record (without card details). But `payment_intent.succeeded` and `payment_intent.payment_failed` call `findCheckoutByPaymentIntent` (`checkout.service.ts:271,286`) and `charge.refunded` calls `listRefunds` (`:339,350`); with #580, disputes on an unrecorded payment also look up Stripe. Those throw, the endpoint answers 500, and Stripe retries them for 3 days. Refunds and Reconcile fail until a new key is set. | Minutes. The fast stop for a suspected key leak or a run of bad charges before W63. **Deadline: a new key within 3 days, sooner is better.** Re-enable: §3 with a new key, §4, redeploy; then Admin → Stripe events → **Reconcile now** and check the Dashboard's failed deliveries have been retried as 200. |
 | **B. Disable Chat's webhook endpoint** (UNVERIFIED: the endpoint → Disable) | no deploy | Stops recording, not charging: a parent can still pay and Chat does not record it until the endpoint is re-enabled (Stripe retries 3 days) or the reconciler finds the paid session (`stripe-reconciler.service.ts:61-125`). **Not a card-off switch.** Use only while fixing the secret. | Rarely. Re-enable within 3 days. |
 | **C. Swap in a dummy live-shaped key** | set `STRIPE_SECRET_KEY` to a value Stripe rejects but the guard accepts, redeploy; keep `STRIPE_WEBHOOK_SECRET` | Same as A, through the deploy, with the same partial webhook recording and the same 3-day deadline. The guard checks only the prefix (#579: "any non-whitespace after the prefix"). | If the Dashboard is unavailable. Not preferred: a fake secret in the Environment is confusing. |
@@ -445,6 +447,7 @@ within three days.
 | 12 | `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` set in the `production` Environment via `production-setup.py ask` | GitHub | owner | `production-setup.py status` shows both set | ☐ |
 | 13 | `PAYMENT_LINK_BASE_URL` unset (default), `SUBSCRIPTION_LOCK_ENFORCED` unset/false | GitHub | owner | `gh variable list --env production` | ☐ |
 | 14 | `LAUNCH_PHASE=launch`; Deploy production run passes `check-env.sh` and the smoke test | GitHub Actions | owner | run summary (`launch phase | launch`) | ☐ |
+| 14a | Admin → Payments → Settings shows **no** "Card payments paused" badge (W63 pause off) | Admin Web | staff | screenshot | ☐ |
 | 15 | Admin → Payments → Settings shows "Stripe connected" and "Webhook configured" | Admin Web | staff | screenshot | ☐ |
 | 16 | 6.1 request created; card option visible on link and in app | Admin + phone | owner | request id | ☐ |
 | 17 | 6.2 paid with a real card; redirect `checkout=success` | phone | owner | — | ☐ |
