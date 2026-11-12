@@ -74,6 +74,7 @@ esac
 exec "$PYTHON" -I - "$1" << 'PY'
 import os
 import re
+import subprocess
 import sys
 
 WORKFLOW = '.github/workflows/release-store-builds.yml'
@@ -609,7 +610,7 @@ SENTRY_TOKEN_LINES = [
 # P2-2: nothing an earlier step planted (a .sentryclirc in a parent directory, a reused output
 # directory, SENTRY_* / proxy / CA / loader variables added through GITHUB_ENV, a .env file) is
 # read by sentry-cli. Each pinned line is in every Sentry step, before its first upload.
-SENTRY_SCRUB_TEXT = ('for v in $(compgen -e); do case "$v" in SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | '
+SENTRY_SCRUB_TEXT = ('for v in $(compgen -e); do case "$v" in SENTRY_CLI | SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | '
                      'SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | '
                      'SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done')
 SENTRY_SCRUB = r'^\s*' + re.escape(SENTRY_SCRUB_TEXT) + r'\s*$'
@@ -651,6 +652,18 @@ def check_sentry(files, errors):
                     errors.append(f'{path}:{n}: {what} (R3)')
             if 'SENTRY_AUTH_TOKEN' in l and not (path == WORKFLOW and any(re.match(rx, l) for rx in SENTRY_TOKEN_LINES)):
                 errors.append(f'{path}:{n}: SENTRY_AUTH_TOKEN used outside a step env line: sentry-cli reads it from the environment (R3)')
+    # Run the scrub itself: it must keep every variable the Sentry step reads after it (release run
+    # 43024454072 failed because SENTRY_CLI matched SENTRY* and was unset under set -u) and still
+    # unset a planted SENTRY_* variable.
+    kept = ('SENTRY_CLI', 'SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_URL')
+    env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'SENTRY_PLANTED': 'x'}
+    env.update({k: 'x' for k in kept})
+    probe = ' '.join(f'"${{{k}-UNSET}}"' for k in kept + ('SENTRY_PLANTED',))
+    run = subprocess.run(['bash', '-euc', SENTRY_SCRUB_TEXT + '; printf "%s\\n" ' + probe],
+                         env=env, capture_output=True, text=True)
+    if run.returncode != 0 or run.stdout.split() != ['x'] * len(kept) + ['UNSET']:
+        errors.append(f'the Sentry variable scrub must keep {", ".join(kept)} and unset any other SENTRY_* '
+                      f'variable (got {run.stdout.split()!r}) (P2-2)')
     text = files.get(WORKFLOW, '')
     code = code_lines(text)
     for n, l in code:

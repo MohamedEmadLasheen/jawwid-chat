@@ -395,7 +395,7 @@ jobs:
           SENTRY_NO_PROGRESS_BAR: '1'
         run: |
           set -euo pipefail
-          for v in $(compgen -e); do case "$v" in SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done
+          for v in $(compgen -e); do case "$v" in SENTRY_CLI | SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done
           export SENTRY_LOAD_DOTENV=0
           [ -n "$SENTRY_URL" ] || unset SENTRY_URL
           O="$RUNNER_TEMP/sentry-out"; rm -rf "$O"; mkdir -m 700 "$O"; cd "$O"
@@ -705,7 +705,7 @@ jobs:
           SENTRY_NO_PROGRESS_BAR: '1'
         run: |
           set -euo pipefail
-          for v in $(compgen -e); do case "$v" in SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done
+          for v in $(compgen -e); do case "$v" in SENTRY_CLI | SENTRY_AUTH_TOKEN | SENTRY_ORG | SENTRY_PROJECT | SENTRY_URL | SENTRY_LOG_LEVEL | SENTRY_NO_PROGRESS_BAR) : ;; SENTRY* | *_proxy | *_PROXY | SSL_CERT_* | CURL_CA_BUNDLE | LD_* | DYLD_*) unset "$v" ;; esac; done
           export SENTRY_LOAD_DOTENV=0
           [ -n "$SENTRY_URL" ] || unset SENTRY_URL
           O="$RUNNER_TEMP/sentry-out"; rm -rf "$O"; mkdir -m 700 "$O"; cd "$O"
