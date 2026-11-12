@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Invoice, Payment, PaymentReceipt, PaymentRefund, PaymentRequest } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
+import { CommError, CommErrorCode } from '../platform/errors';
 import { MediaUrlSigner } from '../platform/media-url';
 import { PaymentLedger, type InvoiceSnapshot, type PaymentMethod, type RequestPurpose } from './payment-ledger.service';
 import { day } from './validate';
@@ -332,6 +333,36 @@ export class PaymentsReadService {
 
     return { requests: requestDtos, payments: paymentDtos, invoices: invoiceDtos, receipts: receiptDtos, byInstalment };
   }
+}
+
+/** W61 S2: `error.detail.reason` of the card refusal below; the app tells it apart from "no longer open". */
+export const RECEIPT_PENDING = 'receipt_pending';
+
+/**
+ * W61 S2: what a request's bank-transfer receipts still waiting for the academy
+ * add up to (in the request's currency). A card on top of them may charge the
+ * family twice: the pay sheet and the /pay page say so, and a card checkout is
+ * refused when they already cover what is left (CheckoutService.open).
+ */
+export async function pendingReceiptMinor(
+  db: Pick<PrismaService, 'paymentReceipt'>,
+  request: { id: string; currency: string },
+): Promise<number> {
+  const sum = await db.paymentReceipt.aggregate({
+    where: { requestId: request.id, status: 'pending', currency: request.currency },
+    _sum: { amountMinor: true },
+  });
+  return Number(sum._sum.amountMinor ?? 0n);
+}
+
+/** 409 COMM.BILLING_STATE with `detail.reason` = receipt_pending: pending receipts already cover the rest. */
+export function receiptPendingRefusal(pendingMinor: number, remainingMinor: number): CommError {
+  return new CommError(
+    CommErrorCode.BILLING_STATE,
+    'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.',
+    409,
+    { reason: RECEIPT_PENDING, pendingMinor, remainingMinor },
+  );
 }
 
 /**

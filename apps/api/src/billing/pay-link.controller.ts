@@ -4,10 +4,11 @@ import { Public } from '../platform/auth/auth.guard';
 import { CommError } from '../platform/errors';
 import { PrismaService } from '../platform/prisma.service';
 import { parseBankAccount } from './billing.service';
+import { isCardPaused } from './card-pause';
 import { CheckoutService } from './checkout.service';
 import { BANK_ACCOUNT_KEY, PaymentLedger } from './payment-ledger.service';
 import { renderPayPage, type PayLang, type PayPageModel } from './pay-page';
-import { lastCardFailures } from './payments-read.service';
+import { RECEIPT_PENDING, lastCardFailures, pendingReceiptMinor } from './payments-read.service';
 import { inReviewMode, renderReviewDemoPage, reviewDemoBankAccount, REVIEW_DEMO_PAGE } from './review-mode';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
@@ -74,7 +75,8 @@ export class PayLinkController {
     } catch (e) {
       if (!(e instanceof CommError)) throw e;
       const model = await this.model(token, null, l);
-      model.error = l === 'ar' ? arabicError(e.status) : e.message;
+      // W61 S2: the page already says a transfer receipt is waiting (its own notice); no second line.
+      model.error = e.detail?.reason === RECEIPT_PENDING ? null : l === 'ar' ? arabicError(e.status) : e.message;
       return this.send(res, e.status === 503 ? 503 : 409, model, token, l);
     }
   }
@@ -101,6 +103,7 @@ export class PayLinkController {
     const amount = Number(request.amountMinor);
     const status = request.paidAt ? 'paid' : request.cancelledAt ? 'cancelled' : request.expiresAt <= new Date() ? 'expired' : 'open';
     const failure = status === 'open' ? (await lastCardFailures(this.prisma, [request.id])).get(request.id) ?? null : null;
+    const pendingReceipts = status === 'open' ? await pendingReceiptMinor(this.prisma, request) : 0;
     return {
       status,
       payerName,
@@ -117,10 +120,12 @@ export class PayLinkController {
       currency: request.currency,
       expiresAt: request.expiresAt.toISOString(),
       bankAccount: review ? reviewDemoBankAccount(lang) : parseBankAccount(bank?.value),
-      cardAvailable: review ? true : this.checkout.available,
+      // OA-12 + W63: review mode offers the demo card page, but the operator's pause wins there too.
+      cardAvailable: (review || this.checkout.available) && !(await isCardPaused(this.prisma)),
       checkout,
       error: null,
       cardFailure: failure?.code ?? null,
+      pendingReceiptMinor: pendingReceipts,
       ...(review ? { reviewMode: true } : {}),
     };
   }

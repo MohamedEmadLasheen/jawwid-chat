@@ -17,6 +17,7 @@
  *
  * Synthetic people only (G-20).
  */
+import { CARD_PAUSED_KEY } from '../../src/billing/card-pause';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -335,6 +336,24 @@ describe('OA-12: the App Review payment mode', () => {
       }
       // Never written.
       expect(await g.prisma.paymentRequest.count({ where: { id: REVIEW_DEMO_REQUEST_ID } })).toBe(0);
+    });
+
+    it('W63 wins in review mode too: with card payments paused, /me/billing offers no card and checkout is refused (503), with no Stripe call', async () => {
+      const f = m.families[0]!;
+      await g.prisma.config.upsert({ where: { key: CARD_PAUSED_KEY }, create: { key: CARD_PAUSED_KEY, value: true }, update: { value: true } });
+      try {
+        const mine = await http(f.parent.subject, 'GET', '/me/billing');
+        expect(mine.status).toBe(200);
+        expect(mine.json.reviewMode).toBe(true);
+        expect(mine.json.cardAvailable).toBe(false);
+        const card = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: REVIEW_DEMO_REQUEST_ID });
+        expect(card.status).toBe(503);
+        expect(stripeCalls()).toEqual(calls);
+      } finally {
+        await g.prisma.config.deleteMany({ where: { key: CARD_PAUSED_KEY } });
+      }
+      const after = await http(f.parent.subject, 'GET', '/me/billing');
+      expect(after.json.cardAvailable).toBe(true);
     });
 
     it('card from the app: the demo page, whatever is named, and no Stripe call', async () => {

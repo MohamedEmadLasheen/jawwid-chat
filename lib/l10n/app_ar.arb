@@ -1446,6 +1446,8 @@
   "billingCardFailureDeclined": "رفض البنك الدفع بالبطاقة.",
   "billingPaymentsUnavailable": "الدفع بالبطاقة غير متاح حاليًا. يمكنك الدفع بالتحويل البنكي.",
   "billingNoLongerOpen": "تم دفع هذا المبلغ أو لم يعد مطلوبًا. تم تحديث القائمة.",
+  "billingReceiptPendingNotice": "يوجد إيصال تحويل لهذا الطلب بانتظار مراجعة الأكاديمية. إن دفعت بالبطاقة أيضًا فقد يُخصم المبلغ مرتين.",
+  "billingReceiptPendingCardPaused": "سيُتاح الدفع بالبطاقة مجددًا إذا تعذّر على الأكاديمية تأكيد التحويل.",
   "billingCouldNotOpen": "تعذّر فتح الصفحة. حاول مرة أخرى.",
   "billingTransferAmount": "المبلغ المطلوب تحويله",
   "billingBankName": "البنك",
