@@ -17,7 +17,9 @@
 #   - a store channel or action word appears in the workflow or scripts/mobile (production, beta,
 #     alpha, rollout, completed, notarization, the Transporter binary name, submit..., the App Store
 #     review and release-type API names), outside the few lines listed in ALLOW below;
-#   - a GitHub artifact upload appears;
+#   - a GitHub artifact upload appears, other than the one pinned first-bundle step (FB: android job,
+#     android_delivery=first-bundle-artifact only, the verified .aab only, kept 1 day, with the Google
+#     sign-in and the Play upload skipped in that mode);
 #   - any action is not pinned to a full commit SHA;
 #   - an expression (an input or anything else) is written inside a run block: inputs reach the
 #     shell through env only;
@@ -120,6 +122,8 @@ ALLOW = [
     # P2-1: play-upload.sh accepts a track answer whose other releases are finished ones only. This
     # one line, exactly, may name that status.
     (PLAY, 'completed', r'^  and all\(\.releases\[\]\?; \.status == \$status or \.status == "completed"\)\' "\$W/track\.json" > /dev/null 2>&1 \\$'),
+    # FB: the one GitHub artifact, the first-bundle attachment (check_first_bundle pins its step).
+    (WORKFLOW, 'upload-artifact', r'^        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4\.6\.2$'),
     # The build script refuses non-production API hosts and names the Sentry environment; it
     # never talks to a store (no Play API, checked below).
     ('scripts/mobile/build-store.sh', 'production', None),
@@ -412,7 +416,8 @@ def evidence_specs():
     the Sentry and upload line patterns are defined further down."""
     return [
         ('android', EVIDENCE_ANDROID, ('the App Bundle signature verification', r'^\s*jarsigner -verify '),
-         [('the Sentry upload', SENTRY_CALL), ('the Google sign-in', AUTH_ACTION), ('the Play upload', PLAY_UPLOAD)]),
+         [('the Sentry upload', SENTRY_CALL), ('the Google sign-in', AUTH_ACTION), ('the Play upload', PLAY_UPLOAD),
+          ('the first-bundle attachment', ARTIFACT_ACTION)]),
         ('ios', EVIDENCE_IOS, ('the .ipa verification', r'^\s*echo "VERIFIED_IPA_SHA256=\$sha" >> "\$GITHUB_ENV"\s*$'),
          [('the Sentry upload', SENTRY_CALL), ('the altool help', ALTOOL_HELP)] + UPLOADS),
     ]
@@ -708,6 +713,90 @@ def check_sentry(files, errors):
                 errors.append(f'{WORKFLOW}: the {job} always-cleanup does not delete {what} (R3)')
 
 
+# FB: first-bundle mode. Google refuses API uploads until an app's first bundle is uploaded by hand
+# in Play Console, so android_delivery=first-bundle-artifact (Android only, refused by preflight
+# otherwise) skips the Google sign-in and the Play upload and attaches the exact verified .aab to the
+# run for one day instead. That attachment is the workflow's only GitHub artifact; its step is pinned
+# line for line, and nothing else may read the delivery input.
+ARTIFACT_ACTION = r'^\s*(-\s+)?uses\s*:\s*actions/upload-artifact@'
+FB_IF = "        if: inputs.android_delivery == 'first-bundle-artifact'"
+PLAY_IF = "        if: inputs.android_delivery == 'play'"
+FB_STEP = [
+    FB_IF,
+    '        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2',
+    '        with:',
+    '          name: jawwid-android-first-bundle',
+    '          path: build/app/outputs/bundle/release/app-release.aab',
+    '          retention-days: 1',
+    '          if-no-files-found: error',
+    '          compression-level: 0',
+]
+FB_RECHECK = (r'^\s*\[ "\$\(sha256sum "\$AAB" \| awk \'\{print \$1\}\'\)" = "\$VERIFIED_AAB_SHA256" \] '
+              r'\|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$')
+FB_AAB = '          AAB=build/app/outputs/bundle/release/app-release.aab'
+AAB_HASH_RECORD = '          echo "VERIFIED_AAB_SHA256=$(sha256sum "$AAB" | awk \'{print $1}\')" >> "$GITHUB_ENV"'
+FB_INPUT = ("      android_delivery:\n"
+            "        description: '[^'\\n]*'\n"
+            "        required: true\n"
+            "        type: choice\n"
+            "        options: \\[play, first-bundle-artifact\\]\n"
+            "        default: play\n")
+FB_PREFLIGHT = [
+    r'^\s*\[ "\$DELIVERY" = play \] \|\| \[ "\$DELIVERY" = first-bundle-artifact \] \|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$',
+    r'^\s*\[ "\$DELIVERY" = play \] \|\| \[ "\$PLATFORM" = android \] \|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$',
+]
+FB_INPUT_READS = [r'^          PLATFORM: \$\{\{ inputs\.platform \}\}$', r'^          DELIVERY: \$\{\{ inputs\.android_delivery \}\}$']
+
+
+def check_first_bundle(text, errors):
+    code = code_lines(text)
+    jobs = job_bodies(text)
+    body = jobs.get(ID_TOKEN_JOB, [])
+    pre = jobs.get('preflight', [])
+    if len(re.findall(FB_INPUT, text)) != 1:
+        errors.append(f'{WORKFLOW}: the android_delivery input must be exactly [play, first-bundle-artifact], default play (FB)')
+    reads = [(n, l) for n, l in code if 'inputs.android_delivery' in l]
+    allowed = [n for n, l in reads if l in (FB_IF, PLAY_IF) or re.match(FB_INPUT_READS[1], l)]
+    if len(reads) != len(allowed) or len(reads) != 5:
+        errors.append(f'{WORKFLOW}: inputs.android_delivery may be read only by preflight\'s DELIVERY env and the four '
+                      f'pinned step conditions (found lines {[n for n, _ in reads]}) (FB)')
+    if [n for n, l in reads if l == FB_IF and n not in dict(body)] or [n for n, l in reads if l == PLAY_IF and n not in dict(body)]:
+        errors.append(f'{WORKFLOW}: the android_delivery conditions belong in the {ID_TOKEN_JOB} job (FB)')
+    out = first(pre, r'^\s*echo "sha=\$REF" >> "\$GITHUB_OUTPUT"\s*$')
+    for rx in FB_PREFLIGHT + FB_INPUT_READS:
+        at = first(pre, rx)
+        if at is None or out is None or at > out:
+            errors.append(f'{WORKFLOW}: preflight must refuse an unknown android_delivery, or first-bundle-artifact with a '
+                          f'platform other than android, before it outputs the sha (FB)')
+            break
+    arts = [n for n, l in code if re.search(r'upload-artifact', l)]
+    if len(arts) != 1 or arts[0] not in dict(body):
+        errors.append(f'{WORKFLOW}: exactly one GitHub artifact upload, the first-bundle step in the {ID_TOKEN_JOB} job '
+                      f'(found lines {arts}) (FB)')
+        return
+    step = [l for n, l in step_of(body, arts[0]) if l.strip() and not l.strip().startswith('#')]
+    if not step or not re.match(STEP_NAME, step[0]) or step[1:] != FB_STEP:
+        errors.append(f'{WORKFLOW}: the first-bundle step must be exactly its pinned lines (only in first-bundle-artifact '
+                      f'mode, the pinned action, the verified .aab only, kept 1 day) (FB)')
+    for what, rx in (('the Google sign-in', AUTH_ACTION), ('the Play upload', PLAY_UPLOAD)):
+        at = first(body, rx)
+        lines = [l for _, l in step_of(body, at)] if at else []
+        if PLAY_IF not in lines:
+            errors.append(f'{WORKFLOW}: {what} must run only when android_delivery is play (FB)')
+    starts = [m for m, l in body if re.match(STEP_START, l)]
+    s = max([m for m in starts if m <= arts[0]])
+    prev = [m for m in starts if m < s]
+    prev_step = [l for _, l in step_of(body, prev[-1])] if prev else []
+    if FB_IF not in prev_step or FB_AAB not in prev_step or not any(re.match(FB_RECHECK, l) for l in prev_step):
+        errors.append(f'{WORKFLOW}: the step right before the first-bundle attachment must re-check the .aab against '
+                      f'VERIFIED_AAB_SHA256, in first-bundle-artifact mode only (FB)')
+    sets = [n for n, l in code if 'VERIFIED_AAB_SHA256=' in l]
+    jar = first(body, r'^\s*jarsigner -verify ')
+    rec = [n for n, l in code if l == AAB_HASH_RECORD]
+    if sets != rec or len(rec) != 1 or jar is None or rec[0] not in [n for n, _ in step_of(body, jar)]:
+        errors.append(f'{WORKFLOW}: VERIFIED_AAB_SHA256 must be set exactly once, by the signature verification step (FB)')
+
+
 def check_words(files, errors):
     for path, text in files.items():
         words = WORDS + (PLAY_WORDS if path == PLAY else [])
@@ -736,6 +825,7 @@ def check(files):
         check_identity(files[WORKFLOW], errors)
         check_build_commit(files[WORKFLOW], errors)
         check_ios_upload(files[WORKFLOW], errors)
+        check_first_bundle(files[WORKFLOW], errors)
     check_evidence(files, errors)
     check_sentry(files, errors)
     if PLAY not in files:
@@ -950,9 +1040,46 @@ def mutations_w56():
     ]
 
 
+def mutations_fb():
+    W = WORKFLOW
+    USES = '        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n'
+    AUTH_IF = "        name: Sign in to Google with Workload Identity Federation (no stored key)\n" + PLAY_IF + "\n"
+    PLAY_STEP_IF = "      - name: Upload the App Bundle to Play internal testing as a draft release\n" + PLAY_IF + "\n"
+    return [
+        ('a first-bundle artifact in the ios job', W, lambda t: replaced(t, '      - name: Select Xcode 26 explicitly\n',
+         '      - name: Attach\n' + FB_IF + '\n' + USES + '      - name: Select Xcode 26 explicitly\n')),
+        ('the first bundle kept 7 days', W, lambda t: replaced(t, '          retention-days: 1\n', '          retention-days: 7\n')),
+        ('the artifact action unpinned', W, lambda t: replaced(t, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2',
+         'actions/upload-artifact@v4')),
+        ('the artifact path not the verified .aab', W, lambda t: replaced(t, '          path: build/app/outputs/bundle/release/app-release.aab\n',
+         '          path: build/app/outputs\n')),
+        ('the artifact uploaded in play mode', W, lambda t: replaced(t, FB_IF + '\n' + USES, PLAY_IF + '\n' + USES)),
+        ('the artifact uploaded always', W, lambda t: replaced(t, FB_IF + '\n' + USES, '        if: always()\n' + USES)),
+        ('another key on the artifact step', W, lambda t: replaced(t, '          compression-level: 0\n',
+         '          compression-level: 0\n          include-hidden-files: true\n')),
+        ('the Google sign-in not skipped in first-bundle mode', W, lambda t: replaced(t, AUTH_IF,
+         "        name: Sign in to Google with Workload Identity Federation (no stored key)\n")),
+        ('the Play upload not skipped in first-bundle mode', W, lambda t: replaced(t, PLAY_STEP_IF,
+         "      - name: Upload the App Bundle to Play internal testing as a draft release\n")),
+        ('the first-bundle hash re-check removed', W, lambda t: replaced(t,
+         '          [ "$(sha256sum "$AAB" | awk \'{print $1}\')" = "$VERIFIED_AAB_SHA256" ] ||', '          true ||')),
+        ('the verified hash overwritten by a later step', W, lambda t: after_line(t, '      - name: Install sentry-cli',
+         '        env:\n          X: "1"\n        run: echo "VERIFIED_AAB_SHA256=0" >> "$GITHUB_ENV"\n')),
+        ('preflight lets first-bundle mode build ios', W, lambda t: replaced(t,
+         '          [ "$DELIVERY" = play ] || [ "$PLATFORM" = android ] ||', '          true ||')),
+        ('a third android_delivery option', W, lambda t: replaced(t, 'options: [play, first-bundle-artifact]',
+         'options: [play, first-bundle-artifact, production-artifact]')),
+        ('the delivery input read in a step env', W, lambda t: replaced(t, '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n',
+         '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n          D: ${{ inputs.android_delivery }}\n')),
+        ('the attachment before the release evidence', W, lambda t: replaced(t,
+         '      - name: Release evidence from the signed App Bundle',
+         '      - name: Early\n' + FB_IF + '\n' + USES + '      - name: Release evidence from the signed App Bundle')),
+    ]
+
+
 def mutations():
     W, P = WORKFLOW, PLAY
-    m = mutations_r123() + mutations_w56() + [
+    m = mutations_r123() + mutations_w56() + mutations_fb() + [
         ('a push trigger', W, lambda t: replaced(t, '\non:\n  workflow_dispatch:\n', '\non:\n  push:\n  workflow_dispatch:\n')),
         ('a pull_request_target trigger', W, lambda t: replaced(t, '\non:\n  workflow_dispatch:\n', '\non:\n  workflow_dispatch:\n  pull_request_target:\n')),
         ('an inline trigger list', W, lambda t: replaced(t, '\non:\n  workflow_dispatch:\n', '\non: [workflow_dispatch, push]\nold_on:\n  workflow_dispatch:\n')),
@@ -1003,7 +1130,7 @@ def main(mode):
             print(f'store upload guards: FAIL ({len(errors)})')
             return 1
         print('store upload guards: workflow_dispatch only; id-token only in android; Play upload fixed to '
-              'com.jawwid.jawwid_chat / internal / draft; no other channel or action; no artifacts; actions pinned; '
+              'com.jawwid.jawwid_chat / internal / draft; no other channel or action; one pinned 1-day first-bundle artifact (FB); actions pinned; '
               'no expression in a run block; iOS uploads the verified .ipa only, altool in upload modes only (R1); identity asserted, Google '
               'sign-in only in android (R2); Sentry token env-only, output captured, symbols cleaned up (R3); '
               'sentry-cli reads no planted settings (P2-2); only main\'s head at dispatch is built (P2-1); '
