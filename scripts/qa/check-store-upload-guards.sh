@@ -734,7 +734,18 @@ FB_STEP = [
 FB_RECHECK = (r'^\s*\[ "\$\(sha256sum "\$AAB" \| awk \'\{print \$1\}\'\)" = "\$VERIFIED_AAB_SHA256" \] '
               r'\|\| \{ echo "::error::[^"]*"; exit 1; \}\s*$')
 FB_AAB = '          AAB=build/app/outputs/bundle/release/app-release.aab'
-AAB_HASH_RECORD = '          echo "VERIFIED_AAB_SHA256=$(sha256sum "$AAB" | awk \'{print $1}\')" >> "$GITHUB_ENV"'
+AAB_HASH_RECORD = '          echo "VERIFIED_AAB_SHA256=$aab_sha" >> "$GITHUB_ENV"'
+AAB_HASH_ONCE = '          aab_sha="$(sha256sum "$AAB" | awk \'{print $1}\')"'
+# The step right before the attachment, line for line (after its name line).
+FB_RECHECK_STEP = [
+    re.escape(FB_IF),
+    r'        run: \|',
+    r'          set -euo pipefail',
+    re.escape(FB_AAB),
+    r'          \[ -n "\$\{VERIFIED_AAB_SHA256:-\}" \] \|\| \{ echo "::error::[^"]*"; exit 1; \}',
+    r'          ' + FB_RECHECK[len(r'^\s*'):-len(r'\s*$')],
+    r'          echo "- First bundle: [^"]*" >> "\$GITHUB_STEP_SUMMARY"',
+]
 FB_INPUT = ("      android_delivery:\n"
             "        description: '[^'\\n]*'\n"
             "        required: true\n"
@@ -755,7 +766,8 @@ def check_first_bundle(text, errors):
     pre = jobs.get('preflight', [])
     if len(re.findall(FB_INPUT, text)) != 1:
         errors.append(f'{WORKFLOW}: the android_delivery input must be exactly [play, first-bundle-artifact], default play (FB)')
-    reads = [(n, l) for n, l in code if 'inputs.android_delivery' in l]
+    reads = [(n, l) for n, l in code if re.search(r'android_delivery', l, re.I) and not l.startswith('      android_delivery:')
+             and not any(re.match(rx, l) for rx in FB_PREFLIGHT)]
     allowed = [n for n, l in reads if l in (FB_IF, PLAY_IF) or re.match(FB_INPUT_READS[1], l)]
     if len(reads) != len(allowed) or len(reads) != 5:
         errors.append(f'{WORKFLOW}: inputs.android_delivery may be read only by preflight\'s DELIVERY env and the four '
@@ -787,13 +799,20 @@ def check_first_bundle(text, errors):
     s = max([m for m in starts if m <= arts[0]])
     prev = [m for m in starts if m < s]
     prev_step = [l for _, l in step_of(body, prev[-1])] if prev else []
-    if FB_IF not in prev_step or FB_AAB not in prev_step or not any(re.match(FB_RECHECK, l) for l in prev_step):
+    prev_code = [l for l in prev_step if l.strip() and not l.strip().startswith('#')]
+    if (len(prev_code) != len(FB_RECHECK_STEP) + 1 or not re.match(STEP_NAME, prev_code[0])
+            or not all(re.fullmatch(rx, l) for rx, l in zip(FB_RECHECK_STEP, prev_code[1:]))):
         errors.append(f'{WORKFLOW}: the step right before the first-bundle attachment must re-check the .aab against '
                       f'VERIFIED_AAB_SHA256, in first-bundle-artifact mode only (FB)')
-    sets = [n for n, l in code if 'VERIFIED_AAB_SHA256=' in l]
     jar = first(body, r'^\s*jarsigner -verify ')
     rec = [n for n, l in code if l == AAB_HASH_RECORD]
-    if sets != rec or len(rec) != 1 or jar is None or rec[0] not in [n for n, _ in step_of(body, jar)]:
+    once = [n for n, l in code if l == AAB_HASH_ONCE]
+    recheck = [n for n, l in code if l in prev_code[1:]]
+    others = [n for n, l in code if re.search(r'VERIFIED_AAB_SHA256', l, re.I) and n not in rec + recheck]
+    sig = [n for n, _ in step_of(body, jar)] if jar else []
+    if (others or len(rec) != 1 or len(once) != 1 or jar is None or rec[0] not in sig or once[0] not in sig
+            or not jar < once[0] < rec[0]
+            or len([n for n, l in code if re.search(r'\baab_sha=', l)]) != 1):
         errors.append(f'{WORKFLOW}: VERIFIED_AAB_SHA256 must be set exactly once, by the signature verification step (FB)')
 
 
@@ -1040,6 +1059,18 @@ def mutations_w56():
     ]
 
 
+def move_fb_before_evidence(t):
+    """Move the re-check and attachment steps, unchanged, above the android release evidence step."""
+    a = t.find('      - name: The App Bundle to hand over is the one verified')
+    b = t.find('      - name: Remove the signing material, the symbols and the build outputs\n')
+    e = t.find('      - name: Release evidence from the signed App Bundle')
+    if min(a, b, e) < 0:
+        raise SystemExit('selftest: the mutation anchor is gone, update the selftest: first-bundle steps')
+    block = t[a:b]
+    t = t[:a] + t[b:]
+    return t[:e] + block + t[e:]
+
+
 def mutations_fb():
     W = WORKFLOW
     USES = '        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n'
@@ -1063,17 +1094,25 @@ def mutations_fb():
          "      - name: Upload the App Bundle to Play internal testing as a draft release\n")),
         ('the first-bundle hash re-check removed', W, lambda t: replaced(t,
          '          [ "$(sha256sum "$AAB" | awk \'{print $1}\')" = "$VERIFIED_AAB_SHA256" ] ||', '          true ||')),
-        ('the verified hash overwritten by a later step', W, lambda t: after_line(t, '      - name: Install sentry-cli',
-         '        env:\n          X: "1"\n        run: echo "VERIFIED_AAB_SHA256=0" >> "$GITHUB_ENV"\n')),
+        ('the verified hash overwritten by a later step', W, lambda t: replaced(t, '      - name: Install sentry-cli',
+         '      - name: Overwrite\n        run: echo "VERIFIED_AAB_SHA256=0" >> "$GITHUB_ENV"\n      - name: Install sentry-cli')),
+        ('the verified hash written through a heredoc', W, lambda t: replaced(t, '      - name: Install sentry-cli',
+         '      - name: Overwrite\n        run: printf \'VERIFIED_AAB_SHA256<<E\\n0\\nE\\n\' >> "$GITHUB_ENV"\n      - name: Install sentry-cli')),
+        ('the delivery input read in another case', W, lambda t: replaced(t, '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n',
+         '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n          D: ${{ inputs.ANDROID_DELIVERY }}\n')),
+        ('the delivery input read by index', W, lambda t: replaced(t, '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n',
+         '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n          D: ${{ inputs[\'android_delivery\'] }}\n')),
+        ('the .aab replaced after the re-check', W, lambda t: replaced(t, '          echo "- First bundle:',
+         '          cp /dev/null "$AAB"\n          echo "- First bundle:')),
+        ('the hash computed again after the summary', W, lambda t: replaced(t, '          echo "VERIFIED_AAB_SHA256=$aab_sha" >> "$GITHUB_ENV"\n',
+         '          aab_sha="$(cat /dev/null)"\n          echo "VERIFIED_AAB_SHA256=$aab_sha" >> "$GITHUB_ENV"\n')),
         ('preflight lets first-bundle mode build ios', W, lambda t: replaced(t,
          '          [ "$DELIVERY" = play ] || [ "$PLATFORM" = android ] ||', '          true ||')),
         ('a third android_delivery option', W, lambda t: replaced(t, 'options: [play, first-bundle-artifact]',
          'options: [play, first-bundle-artifact, production-artifact]')),
         ('the delivery input read in a step env', W, lambda t: replaced(t, '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n',
          '          PINNED_SHA256: ${{ vars.ANDROID_UPLOAD_CERT_SHA256 }}\n          D: ${{ inputs.android_delivery }}\n')),
-        ('the attachment before the release evidence', W, lambda t: replaced(t,
-         '      - name: Release evidence from the signed App Bundle',
-         '      - name: Early\n' + FB_IF + '\n' + USES + '      - name: Release evidence from the signed App Bundle')),
+        ('the attachment before the release evidence', W, lambda t: move_fb_before_evidence(t)),
     ]
 
 

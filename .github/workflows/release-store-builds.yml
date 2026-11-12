@@ -11,7 +11,9 @@
 #     an upload mode only (--upload-package, else --upload-app, else Transporter if present).
 #     Nothing is sent for App Review and nothing is released.
 # A person releases each build to testers, and later to the public, in Play Console and App Store
-# Connect. No build output is kept as a GitHub artifact.
+# Connect. No build output is kept as a GitHub artifact, with one exception: android_delivery =
+# first-bundle-artifact (Android only, no Google sign-in) attaches the verified .aab to the run for
+# 1 day, for the one-time manual first upload in Play Console (docs/release/signed-builds-ci.md §3.3a).
 #
 # Every job that sees a secret runs in the `store-release` GitHub Environment: the owner is the
 # required reviewer, only `main` may deploy to it, and administrators may not bypass it. Preflight
@@ -35,7 +37,7 @@
 # Never add pull_request, pull_request_target, workflow_run or push triggers to this file.
 # scripts/qa/check-store-upload-guards.sh (run by CI through scripts/qa/guards.sh) fails if this
 # file gains another trigger, an unpinned action, an expression inside a run block, a GitHub
-# artifact upload, a second job with id-token: write or a Google sign-in outside the android job,
+# artifact upload other than the pinned first-bundle step, a second job with id-token: write or a Google sign-in outside the android job,
 # loses an identity assertion, uploads anything but the verified .ipa, runs xcrun or altool other
 # than on its pinned lines (upload modes only), builds any commit but main's head at dispatch, lets
 # sentry-cli see its token other than through env, print its output or read settings planted by an
@@ -137,7 +139,11 @@ jobs:
             echo "| commit | \`$REF\` |"
             echo "| version | $BUILD_NAME+$BUILD_NUMBER |"
             echo "| requested by | $GITHUB_ACTOR |"
-            echo "| destination | Play internal testing (draft) / App Store Connect (TestFlight) |"
+            if [ "$DELIVERY" = play ]; then
+              echo "| destination | Play internal testing (draft) / App Store Connect (TestFlight) |"
+            else
+              echo "| destination | NOT Play: the verified .aab attached to this run for 1 day (first-bundle-artifact; no Google sign-in) |"
+            fi
             echo "| android delivery | $DELIVERY |"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: The store-release Environment is protected (reviewer, main only, no admin bypass)
@@ -181,7 +187,7 @@ jobs:
           [ "$bad" -eq 0 ] || { echo "$manual"; exit 1; }
 
   android:
-    name: Signed Android App Bundle, uploaded to Play internal testing as a draft
+    name: Signed Android App Bundle, to Play internal testing as a draft (or, in first-bundle mode, attached to the run for 1 day)
     needs: [preflight]
     if: inputs.platform == 'android' || inputs.platform == 'both'
     runs-on: ubuntu-latest
@@ -346,6 +352,7 @@ jobs:
           jarsigner -verify "$AAB" > "$RUNNER_TEMP/jarsigner.txt" 2>&1 || true
           grep -q '^jar verified\.' "$RUNNER_TEMP/jarsigner.txt" \
             || { cat "$RUNNER_TEMP/jarsigner.txt"; echo "::error::jarsigner does not verify the App Bundle"; exit 1; }
+          aab_sha="$(sha256sum "$AAB" | awk '{print $1}')"
           signers="$(keytool -printcert -jarfile "$AAB" | awk '/SHA256:/{print $2}' | sort -u)"
           [ "$(printf '%s\n' "$signers" | grep -c .)" -eq 1 ] \
             || { echo "::error::expected exactly one signing certificate, found: $signers"; exit 1; }
@@ -361,9 +368,9 @@ jobs:
             echo ""
             echo "- jarsigner: jar verified"
             echo "- upload certificate SHA-256: \`$signers\`${PINNED_SHA256:+ (matches the pinned value)}"
-            echo "- App Bundle SHA-256: \`$(sha256sum "$AAB" | awk '{print $1}')\`"
+            echo "- App Bundle SHA-256: \`$aab_sha\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "VERIFIED_AAB_SHA256=$(sha256sum "$AAB" | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "VERIFIED_AAB_SHA256=$aab_sha" >> "$GITHUB_ENV"
       - name: Release evidence from the signed App Bundle (LR-50, LR-51, Data safety; a failure stops the run before Sentry and Play)
         # Read-only: scripts/mobile/verify-store-artifact.sh reads the signed .aab's own manifest with
         # bundletool (pinned version and SHA-256, scripts/mobile/install-bundletool.sh) and every native
