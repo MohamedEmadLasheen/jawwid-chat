@@ -469,4 +469,37 @@ describe('Payments > Stripe events', () => {
     )
     expect(counts).toEqual({ Checked: '4', 'Payments recorded': '1', 'Marked expired': '2', 'Refunds recorded': '3', Errors: '0' })
   })
+
+  it('names dispute outcomes and not_chat in words (English and Arabic); urgent ones stand out; dispute events are a type filter', async () => {
+    serve({ canReconcile: true })
+    on('GET', /\/stripe\/events(\?.*)?$/, () =>
+      json({
+        items: [
+          event({ id: 'evt_d1', type: 'charge.dispute.created', outcome: 'dispute_opened', objectId: 'du_test_1' }),
+          event({ id: 'evt_d2', type: 'charge.dispute.funds_withdrawn', outcome: 'dispute_funds_withdrawn', objectId: 'du_test_1' }),
+          event({ id: 'evt_d3', type: 'charge.dispute.closed', outcome: 'dispute_closed_won', objectId: 'du_test_1' }),
+          event({ id: 'evt_d4', type: 'refund.created', outcome: 'not_chat', objectId: 're_test_x', paymentIntentId: 'pi_test_x' }),
+        ],
+        nextCursor: null,
+      }),
+    )
+    const view = renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
+    await userEvent.click(await within(tabs()).findByRole('button', { name: 'Stripe events' }))
+    const table = await screen.findByRole('table', { name: 'Stripe events' })
+    const opened = await within(table).findByText('Dispute opened')
+    expect(opened.closest('.badge')).toHaveClass('badge--danger')
+    expect(within(table).getByText('Dispute: funds withdrawn').closest('.badge')).toHaveClass('badge--danger')
+    expect(within(table).getByText('Dispute closed: won').closest('.badge')).toHaveClass('badge--ok')
+    expect(within(table).getByText('Not a Chat payment')).toBeInTheDocument()
+
+    const filters = screen.getByRole('region', { name: 'Filters' })
+    await chooseOption(userEvent, within(filters).getByLabelText('Outcome'), 'dispute_opened')
+    await chooseOption(userEvent, within(filters).getByLabelText('Event type'), 'charge.dispute.')
+    await waitFor(() => expect(calls('GET', /\/stripe\/events/).map(qs)).toContain('outcome=dispute_opened&type=charge.dispute.'))
+    view.unmount()
+
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=events', locale: 'ar' })
+    expect((await screen.findAllByText('فُتح اعتراض على الدفعة')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('ليست دفعة من Chat').length).toBeGreaterThan(0)
+  })
 })

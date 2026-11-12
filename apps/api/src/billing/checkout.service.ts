@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Payment, PaymentRequest } from '@prisma/client';
+import type { Payment, PaymentCheckout, PaymentRequest } from '@prisma/client';
 import type Stripe from 'stripe';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -9,11 +9,14 @@ import { todayIn } from '../leave/leave.service';
 import { checkoutDescription, isPayableInApp, loadPackageFacts, notInApp } from './in-app-payability';
 import { PaymentLedger, type RecordedPayment } from './payment-ledger.service';
 import {
+  CHAT_STRIPE_SYSTEM,
   STRIPE_GATEWAY,
   safe,
+  toDisputeFacts,
   toRefundFacts,
   toSession,
   type CheckoutSession,
+  type DisputeFacts,
   type PaymentIntentFacts,
   type RefundFacts,
   type StripeGateway,
@@ -46,12 +49,63 @@ export type WebhookOutcome =
   | 'refund_failed_after_record'
   /** A card was declined on Stripe's page; the attempt stays open (the parent may try again). */
   | 'payment_failed'
-  /** Stripe Billing (invoices, subscriptions): Chat opens none (PD-27 / PD-30 are prepaid packages). */
+  /**
+   * Stripe Billing (invoices, subscriptions, recurring charges): Chat opens none (PD-27 / PD-30 are
+   * prepaid packages). Another system on the same Stripe account may; recorded, never acted on.
+   */
   | 'ignored_not_chat'
+  /** A refund or dispute about a payment Chat did not take (another system on the same Stripe account): recorded, never acted on. */
+  | 'not_chat'
+  /** A dispute (chargeback) on one of Chat's card payments: audited and alerted; the money ledger is NOT changed (flag only). */
+  | 'dispute_opened'
+  | 'dispute_updated'
+  | `dispute_closed_${string}`
+  | 'dispute_funds_withdrawn'
+  | 'dispute_funds_reinstated'
   | 'ignored';
 
-/** Event families Chat never creates; seen only if someone sets up Stripe Billing on the account. */
+/**
+ * Event families Chat never creates; seen when Stripe Billing is used on the
+ * account (by another system: Chat's recurring charges do not exist).
+ */
 const BILLING_EVENT = /^(invoice|customer\.subscription|subscription_schedule)\./;
+
+const DISPUTE_EVENTS = new Set([
+  'charge.dispute.created',
+  'charge.dispute.updated',
+  'charge.dispute.closed',
+  'charge.dispute.funds_withdrawn',
+  'charge.dispute.funds_reinstated',
+]);
+
+/** The outcome of a `charge.dispute.*` event on one of Chat's payments. */
+export function disputeOutcome(type: string, status: string | null): WebhookOutcome {
+  switch (type) {
+    case 'charge.dispute.created':
+      return 'dispute_opened';
+    case 'charge.dispute.closed':
+      return `dispute_closed_${safe.disputeCode(status) ?? 'unknown'}`;
+    case 'charge.dispute.funds_withdrawn':
+      return 'dispute_funds_withdrawn';
+    case 'charge.dispute.funds_reinstated':
+      return 'dispute_funds_reinstated';
+    default:
+      return 'dispute_updated';
+  }
+}
+
+/** The generic line when a request has no usable label (in-app-payability.ts wording). */
+const LESSONS_LINE = 'Live one-to-one Quran lessons';
+
+/**
+ * S6: what the parent (and anyone reading the Stripe Dashboard, receipts or
+ * exports) sees as the line item: the request's label only, never the child's
+ * name. The label is what staff named the request; the period and "live
+ * one-to-one lessons" wording travel in the description (checkoutDescription).
+ */
+export function checkoutProductName(request: { label: string }): string {
+  return request.label.trim() || LESSONS_LINE;
+}
 
 /**
  * PD-27: card payments through Stripe Checkout.
@@ -144,7 +198,7 @@ export class CheckoutService {
       organizationId: fresh.organizationId,
       amountMinor: remaining,
       currency: fresh.currency,
-      productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
+      productName: checkoutProductName(fresh),
       description: checkoutDescription(fresh, lessons, opts.locale),
       successUrl: `${opts.returnUrl}${sep}checkout=success`,
       cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
@@ -251,8 +305,10 @@ export class CheckoutService {
       case 'charge.refunded':
         return this.chargeRefunded(meta, event.data.object as Stripe.Charge);
       default:
+        if (DISPUTE_EVENTS.has(event.type)) return this.disputeEvent(meta, event.type, toDisputeFacts(event.data.object as Stripe.Dispute));
         if (BILLING_EVENT.test(event.type)) {
-          this.log.warn(`stripe webhook: ${event.type} -- Chat opens no Stripe Billing subscriptions or invoices; recorded, not acted on`);
+          // Expected when another system bills on the same Stripe account; not a warning about Chat.
+          this.log.log(`stripe webhook: ${event.type} -- Stripe Billing is not Chat's (Chat opens no subscriptions or invoices); recorded, not acted on`);
           return this.remember(meta, 'ignored_not_chat');
         }
         return this.remember(meta, 'ignored');
@@ -317,11 +373,135 @@ export class CheckoutService {
     const payment = refund.paymentIntentId
       ? await this.prisma.payment.findUnique({ where: { stripePaymentIntentId: refund.paymentIntentId } })
       : null;
-    // Its payment is not recorded yet (the refund arrived first, or the payment
-    // is not Chat's): kept with its payment intent, so recording the payment
-    // (and the reconciler) syncs it. Never dropped.
-    if (!payment) return this.remember(meta, 'refund_deferred');
+    // Its payment is not recorded. A payment Chat did not take (another system
+    // on the same Stripe account) is not_chat: recorded, never acted on. One of
+    // Chat's checkouts whose payment is not recorded yet (the refund arrived
+    // first), or one Chat cannot tell, is kept with its payment intent, so
+    // recording the payment (and the reconciler) syncs it. Never dropped.
+    if (!payment) return this.unrecordedRefund(meta, refund.paymentIntentId);
     return this.recordRefund({ ...meta, organizationId: payment.organizationId }, payment, refund);
+  }
+
+  /** A refund (or charge.refunded) whose payment Chat has not recorded: not_chat, or kept as refund_deferred. */
+  private async unrecordedRefund(meta: EventMeta, paymentIntentId: string | null): Promise<WebhookOutcome> {
+    let checkout: PaymentCheckout | null | undefined;
+    try {
+      const found = await this.lookUpChatCheckout(paymentIntentId);
+      checkout = found.checkout;
+      // No Chat checkout, but Stripe says the object is Chat's (the tag on the
+      // session or its payment intent): Chat's own row is missing, or Stripe's
+      // session list came back empty. Kept as refund_deferred, so the reconciler
+      // and the payment's recording still sync it; not_chat would lose it silently.
+      if (checkout === null && paymentIntentId && (await this.taggedChat(paymentIntentId, found.session))) {
+        this.log.warn('stripe webhook: a refund on a payment intent tagged jawwid-chat has no Chat checkout; kept as deferred (check it in the Stripe Dashboard)');
+        checkout = undefined;
+      }
+    } catch (e) {
+      // Stripe unreachable: kept (the reconciler syncs it once the payment exists); harmless if foreign.
+      this.log.warn(`stripe webhook: a refund's payment was not looked up (${errorCategory(e)}); kept as deferred`);
+      checkout = undefined;
+    }
+    if (checkout === null) return this.remember(meta, 'not_chat');
+    return this.remember(checkout ? { ...meta, organizationId: checkout.organizationId } : meta, 'refund_deferred');
+  }
+
+  /** The session or its payment intent carries Chat's system tag. A hint for keeping a refund, never proof of ownership. */
+  private async taggedChat(paymentIntentId: string, session: CheckoutSession | null): Promise<boolean> {
+    if (session?.metadata?.system === CHAT_STRIPE_SYSTEM) return true;
+    return (await this.stripe.paymentIntentSystem(paymentIntentId)) === CHAT_STRIPE_SYSTEM;
+  }
+
+  /**
+   * S3: the checkout Chat opened for a payment intent -- from Chat's own table,
+   * never from metadata alone. null: not Chat's (no payment intent; or Stripe
+   * knows no checkout for it, or one Chat did not open). undefined: Chat cannot
+   * tell (no secret key to ask Stripe with). Throws when Stripe is unreachable.
+   */
+  private async chatCheckoutFor(paymentIntentId: string | null): Promise<PaymentCheckout | null | undefined> {
+    return (await this.lookUpChatCheckout(paymentIntentId)).checkout;
+  }
+
+  /** chatCheckoutFor, plus the Stripe session it asked about (null when none was asked for or found). */
+  private async lookUpChatCheckout(
+    paymentIntentId: string | null,
+  ): Promise<{ checkout: PaymentCheckout | null | undefined; session: CheckoutSession | null }> {
+    if (!paymentIntentId) return { checkout: null, session: null };
+    const local = await this.prisma.paymentCheckout.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
+    if (local) return { checkout: local, session: null };
+    if (!this.stripe.checkoutAvailable) return { checkout: undefined, session: null };
+    const session = await this.stripe.findCheckoutByPaymentIntent(paymentIntentId);
+    if (!session) return { checkout: null, session: null };
+    const checkout = await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } });
+    return { checkout: checkout ?? null, session };
+  }
+
+  /**
+   * M2: a dispute (chargeback) on a card payment. Chat's own payments only --
+   * matched by payment intent, else by charge, to chat.payment (or to a checkout
+   * Chat opened whose payment is not recorded yet). Anything else is not_chat.
+   *
+   * FLAG ONLY. The money ledger is not changed: no refund row, no void, the
+   * package stands. The event row and an audit row are written together (once
+   * per event), and opened / funds withdrawn log an error so a person responds
+   * in the Stripe Dashboard before Stripe's evidence deadline.
+   * docs/admin/pd027-stripe-lifecycle.md §4.
+   */
+  private async disputeEvent(meta: EventMeta, type: string, dispute: DisputeFacts): Promise<WebhookOutcome> {
+    const m: EventMeta = { ...meta, paymentIntentId: meta.paymentIntentId ?? dispute.paymentIntentId };
+    const owner = await this.disputedPayment(dispute);
+    if (!owner) return this.remember(m, 'not_chat');
+
+    const outcome = disputeOutcome(type, dispute.status);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const inserted = await tx.stripeEvent.createMany({ data: [{ ...m, organizationId: owner.organizationId, outcome }], skipDuplicates: true });
+        if (inserted.count === 0) throw new DuplicateEvent();
+        await this.audit.audit(tx, {
+          // payment.dispute_opened | _updated | _closed | _funds_withdrawn | _funds_reinstated
+          action: `payment.${outcome.startsWith('dispute_closed_') ? 'dispute_closed' : outcome}`,
+          entity: owner.familyId ? 'family' : 'lesson',
+          entityId: (owner.familyId ?? owner.trialLessonId) as string,
+          after: {
+            paymentId: owner.paymentId,
+            requestId: owner.requestId,
+            disputeId: safe.objectId(dispute.id),
+            chargeId: dispute.chargeId,
+            paymentIntentId: dispute.paymentIntentId,
+            amountMinor: dispute.amountMinor,
+            currency: dispute.currency,
+            stripeStatus: dispute.status,
+            stripeReason: dispute.reason,
+            outcome,
+          },
+          reason: 'a Stripe dispute on a Chat card payment; recorded and flagged, the money ledger is not changed -- respond in the Stripe Dashboard',
+        });
+      });
+    } catch (e) {
+      if (e instanceof DuplicateEvent) return 'duplicate';
+      throw e;
+    }
+    const line = `stripe dispute ${dispute.id}: ${outcome} on ${owner.paymentId ? `payment ${owner.paymentId}` : `request ${owner.requestId} (payment not recorded yet)`}; audited, ledger unchanged`;
+    if (outcome === 'dispute_opened' || outcome === 'dispute_funds_withdrawn') this.log.error(`${line} -- needs a person`);
+    else this.log.warn(line);
+    return outcome;
+  }
+
+  /** The Chat payment (or, before it is recorded, the Chat request) a dispute is about; null when it is not Chat's. */
+  private async disputedPayment(dispute: DisputeFacts): Promise<DisputeOwner | null> {
+    let payment: Payment | null = null;
+    if (dispute.paymentIntentId) payment = await this.prisma.payment.findUnique({ where: { stripePaymentIntentId: dispute.paymentIntentId } });
+    if (!payment && dispute.chargeId) payment = await this.prisma.payment.findUnique({ where: { stripeChargeId: dispute.chargeId } });
+    if (payment) {
+      return payment.familyId || payment.trialLessonId
+        ? { organizationId: payment.organizationId, familyId: payment.familyId, trialLessonId: payment.trialLessonId, paymentId: payment.id, requestId: payment.requestId }
+        : null;
+    }
+    // Rare: disputed before Chat recorded the payment (its webhook lost). Throws
+    // if Stripe is unreachable: the webhook answers 500 and Stripe retries.
+    const checkout = await this.chatCheckoutFor(dispute.paymentIntentId);
+    const request = checkout ? await this.prisma.paymentRequest.findUnique({ where: { id: checkout.requestId } }) : null;
+    if (!request || (!request.familyId && !request.trialLessonId)) return null;
+    return { organizationId: request.organizationId, familyId: request.familyId, trialLessonId: request.trialLessonId, paymentId: null, requestId: request.id };
   }
 
   /**
@@ -334,8 +514,10 @@ export class CheckoutService {
     const m = { ...meta, paymentIntentId: intent };
     if (!intent) return this.remember(m, 'ignored');
     const payment = await this.prisma.payment.findUnique({ where: { stripePaymentIntentId: intent } });
-    // Unknown payment, or no key to list the refunds with: kept for the sync.
-    if (!payment || !this.stripe.checkoutAvailable) return this.remember(payment ? { ...m, organizationId: payment.organizationId } : m, 'refund_deferred');
+    // Not Chat's payment: not_chat. Chat's but not recorded yet: kept for the sync.
+    if (!payment) return this.unrecordedRefund(m, intent);
+    // No key to list the refunds with: kept for the sync.
+    if (!this.stripe.checkoutAvailable) return this.remember({ ...m, organizationId: payment.organizationId }, 'refund_deferred');
     const recorded = await this.syncRefunds(payment);
     return this.remember({ ...m, organizationId: payment.organizationId }, recorded > 0 ? 'refund_recorded' : 'already_recorded');
   }
@@ -621,6 +803,14 @@ export class CheckoutService {
       return DEFAULT_TIME_ZONE;
     }
   }
+}
+
+interface DisputeOwner {
+  organizationId: string;
+  familyId: string | null;
+  trialLessonId: string | null;
+  paymentId: string | null;
+  requestId: string | null;
 }
 
 interface EventMeta {
