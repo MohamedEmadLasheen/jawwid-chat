@@ -158,7 +158,7 @@ else, and nothing of them, of the token or of sentry-cli's configuration reaches
 - `SENTRY_LOG_LEVEL: warn` in every Sentry step; no `--log-level debug`/`trace`, no `set -x`, no
   `sentry-cli info`/`login`/config print, no `.sentryclirc`;
 - sentry-cli reads **nothing an earlier step planted** (P2-2). Before the first upload the Sentry step
-  unsets every `SENTRY_*`/`SENTRYCLI_*` variable except the five it sets itself (an earlier step, such
+  unsets every `SENTRY_*`/`SENTRYCLI_*` variable except the six it sets itself (an earlier step, such
   as the build, could have added `SENTRY_PROPERTIES` or similar through `GITHUB_ENV`), and the proxy
   (`*_proxy`, `*_PROXY`), CA-bundle (`SSL_CERT_*`, `CURL_CA_BUNDLE`) and dynamic-loader (`LD_*`,
   `DYLD_*`) variables; sets `SENTRY_LOAD_DOTENV=0` so no `.env` file is read (sentry-cli's documented
