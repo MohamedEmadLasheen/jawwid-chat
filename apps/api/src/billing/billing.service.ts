@@ -17,11 +17,13 @@ import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { addMonths, compareInstalments, daysFrom, statusOf, type InstalmentStatus } from './instalment';
 import { day, invalid, optionalUuid, requireAmount, requireCurrency, requireDate, requireText, requireUuid } from './validate';
 import { BANK_ACCOUNT_KEY, PaymentLedger, type PaymentMethod } from './payment-ledger.service';
+import { isCardPaused } from './card-pause';
 import { PaymentsReadService, type MoneyView } from './payments-read.service';
 import { PaymentReminders } from './payment-reminders.service';
 import { STRIPE_GATEWAY, StripeSdkGateway, type StripeGateway } from './stripe.gateway';
 import { childSubscriptions, forParent } from './subscription-reads';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+import { inReviewMode, refuseReviewOrganizationStaff, reviewDemoBankAccount, reviewDemoRequest } from './review-mode';
 
 /**
  * ADMIN-007: a family's billing settings (method, currency, plan) as one
@@ -592,6 +594,11 @@ export class BillingService {
     return this.presentFamily(actor, access, inv.familyId);
   }
 
+  /** Stripe is configured and the operator has not paused card payments (W63, card-pause.ts). */
+  private async cardAvailable(): Promise<boolean> {
+    return this.stripe.checkoutAvailable && !(await isCardPaused(this.prisma));
+  }
+
   /** The family's money, as every staff route answers it (PD-17 + PD-27). */
   async presentFamily(actor: Actor, access: BillingAccess, familyId: string) {
     const org = actor.organizationId as string;
@@ -629,7 +636,7 @@ export class BillingService {
       canRecord: access.canRecord,
       // PD-27.
       canVerify: access.canVerify,
-      cardAvailable: this.stripe.checkoutAvailable,
+      cardAvailable: await this.cardAvailable(),
       requests: money.requests,
       payments: money.payments,
       invoices: money.invoices,
@@ -651,16 +658,28 @@ export class BillingService {
   async mine(actorId: string) {
     const { contact } = await this.requireParent(actorId);
     const today = todayIn(await this.timeZone());
+    // OA-12: an App Review organization's parent never reads the real bank
+    // account (it is not even fetched) and sees one synthetic amount due.
+    const review = await inReviewMode(this.prisma, contact.organizationId);
     const [family, billing, rows, money, bank] = await Promise.all([
-      this.prisma.family.findUniqueOrThrow({ where: { id: contact.familyId }, select: { subscriptionPlanMonths: true } }),
+      this.prisma.family.findUniqueOrThrow({ where: { id: contact.familyId }, select: { subscriptionPlanMonths: true, language: true } }),
       this.prisma.familyBilling.findUnique({ where: { familyId: contact.familyId } }),
       this.prisma.familyInstalment.findMany({
         where: { familyId: contact.familyId, organizationId: contact.organizationId, voidedAt: null },
         orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       }),
       this.reads.forFamily(contact.familyId, contact.organizationId, { actorId, staff: false }),
-      this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
+      review ? Promise.resolve(null) : this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
     ]);
+    if (review) {
+      const lang = family.language === 'en' ? 'en' : 'ar';
+      const first = await this.prisma.learner.findFirst({
+        where: { familyId: contact.familyId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, name: true },
+      });
+      money.requests = [reviewDemoRequest(lang, first), ...money.requests];
+    }
     const packages = await loadPackageFacts(this.prisma, { instalments: rows });
     const payable = (i: FamilyInstalment) => isInstalmentPayableInApp(i, packages);
     const subscriptions = await this.subscriptionsForParent(contact.familyId, rows.filter(payable), money.requests);
@@ -706,9 +725,13 @@ export class BillingService {
       requests: money.requests,
       invoices: money.invoices,
       receipts: money.receipts,
-      bankAccount: parseBankAccount(bank?.value),
-      cardAvailable: this.stripe.checkoutAvailable,
+      bankAccount: review ? reviewDemoBankAccount(family.language === 'en' ? 'en' : 'ar') : parseBankAccount(bank?.value),
+      // Review mode: the card option opens the demo page, never Stripe. The operator's pause (W63) wins
+      // in review mode too: a paused deployment offers no card anywhere.
+      cardAvailable: review ? !(await isCardPaused(this.prisma)) : await this.cardAvailable(),
       subscriptions,
+      // Only in review mode: a public family's answer is unchanged.
+      ...(review ? { reviewMode: true as const } : {}),
     };
   }
 
@@ -859,6 +882,10 @@ export class BillingService {
     if (!access.canRecord) {
       throw new CommError(CommErrorCode.BILLING_DENIED, 'payments are recorded by the Operations and Sales departments');
     }
+    // OA-12: no money is ever requested, recorded, invoiced or split into
+    // instalments for an App Review organization, whoever signs in (every staff
+    // money write passes here; the actor's organization is the target family's).
+    await refuseReviewOrganizationStaff(this.prisma, actor.organizationId);
     return { actor, access };
   }
 

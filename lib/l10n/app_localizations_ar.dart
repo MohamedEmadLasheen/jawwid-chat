@@ -3643,6 +3643,14 @@ class L10nAr extends L10n {
       'تم دفع هذا المبلغ أو لم يعد مطلوبًا. تم تحديث القائمة.';
 
   @override
+  String get billingReceiptPendingNotice =>
+      'يوجد إيصال تحويل لهذا الطلب بانتظار مراجعة الأكاديمية. إن دفعت بالبطاقة أيضًا فقد يُخصم المبلغ مرتين.';
+
+  @override
+  String get billingReceiptPendingCardPaused =>
+      'سيُتاح الدفع بالبطاقة مجددًا إذا تعذّر على الأكاديمية تأكيد التحويل.';
+
+  @override
   String get billingCouldNotOpen => 'تعذّر فتح الصفحة. حاول مرة أخرى.';
 
   @override
@@ -5650,4 +5658,12 @@ class L10nAr extends L10n {
   @override
   String get legalLoadFailed =>
       'تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get billingReviewModeNotice =>
+      'حساب تجريبي لمراجعة المتجر: لا يمكن إجراء أي دفع حقيقي. خيار البطاقة يفتح صفحة تشرح الدفع الفعلي بالبطاقة، والتحويل البنكي يعرض بيانات تجريبية فقط.';
+
+  @override
+  String get billingReviewModeTransferNotice =>
+      'حساب تجريبي لمراجعة المتجر: هذه البيانات البنكية ليست حقيقية. لا يمكن إجراء أي تحويل ولا إرسال أي إيصال من هذا الحساب.';
 }

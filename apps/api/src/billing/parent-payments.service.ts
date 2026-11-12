@@ -11,10 +11,12 @@ import { sniffCertificateFile } from '../certificates/certificate-file';
 import { todayIn } from '../leave/leave.service';
 import { BillingService } from './billing.service';
 import { CheckoutService } from './checkout.service';
+import { isCardPaused } from './card-pause';
 import { PaymentLedger } from './payment-ledger.service';
 import { assertInstalmentPayableInApp, assertPayableInApp } from './in-app-payability';
 import { dateOnly, invalid, optionalText, optionalUuid, requireAmount, requireDate } from './validate';
 import { assertReplay, isoDay, lockIdempotencyKey } from './idempotency';
+import { inReviewMode, reviewDemoUrl, reviewModeRefusal } from './review-mode';
 
 export const RECEIPT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
 export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
@@ -44,8 +46,20 @@ export class ParentPaymentsService {
   /** { requestId } | { instalmentId } -> { url } (Stripe Checkout). */
   async startCheckout(actorId: string, body: Record<string, unknown>) {
     const { actor, contact } = await this.billing.requireParent(actorId);
+    // OA-12: before anything is looked up or made (an instalment's request is
+    // created on the way to Stripe): a review account gets the demo page only.
+    if (await inReviewMode(this.prisma, contact.organizationId)) {
+      const family = await this.prisma.family.findUnique({ where: { id: contact.familyId }, select: { language: true } });
+      return { url: reviewDemoUrl(family?.language === 'en' ? 'en' : 'ar') };
+    }
     if (!this.checkout.available) {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not available; pay by bank transfer', 503);
+    }
+    // W63 / LR-46 P3-1: the operator's pause, checked BEFORE payable() may make an
+    // instalment's payment request, so a paused card tap writes nothing. open()
+    // checks it again (the web /pay link goes straight there).
+    if (await isCardPaused(this.prisma)) {
+      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
     }
     const request = await this.payable(actor.actorId, contact.familyId, body);
     const family = await this.prisma.family.findUnique({ where: { id: contact.familyId }, select: { language: true } });
@@ -60,6 +74,8 @@ export class ParentPaymentsService {
   /** { mimeType, byteSize } -> a signed PUT for the receipt file. */
   async authorizeReceiptUpload(actorId: string, body: Record<string, unknown>) {
     const { contact } = await this.billing.requireParent(actorId);
+    // OA-12: no signed URL, so no file can ever be stored for a review account.
+    if (await inReviewMode(this.prisma, contact.organizationId)) throw reviewModeRefusal();
     const { mimeType, byteSize } = validateReceiptFile(body.mimeType, body.byteSize);
     const grant = await this.storage.authorizeUpload({ prefix: `payment-receipts/${contact.familyId}`, mimeType, byteSize });
     return { objectKey: grant.objectKey, uploadUrl: grant.uploadUrl, method: grant.method, headers: grant.headers, expiresAt: grant.expiresAt };
@@ -68,6 +84,8 @@ export class ParentPaymentsService {
   /** { objectKey, requestId | instalmentId, amountMinor, transferredOn, note? } -> GET /me/billing. */
   async submitReceipt(actorId: string, body: Record<string, unknown>) {
     const { actor, contact } = await this.billing.requireParent(actorId);
+    // OA-12: refused before storage or the database is touched (no receipt, no audit, no task).
+    if (await inReviewMode(this.prisma, contact.organizationId)) throw reviewModeRefusal();
     const objectKey = typeof body.objectKey === 'string' ? body.objectKey : '';
     if (!objectKey.startsWith(`payment-receipts/${contact.familyId}/`) || objectKey.includes('..')) {
       throw invalid('objectKey: that upload does not belong to this family');

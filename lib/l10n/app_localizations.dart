@@ -6109,6 +6109,18 @@ abstract class L10n {
   /// **'This has already been paid or is no longer open. The list has been refreshed.'**
   String get billingNoLongerOpen;
 
+  /// W61 S2: pay sheet -- a bank-transfer receipt for this payment is waiting for the academy.
+  ///
+  /// In en, this message translates to:
+  /// **'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.'**
+  String get billingReceiptPendingNotice;
+
+  /// W61 S2: pay sheet -- the waiting receipts cover what is left, so the card is paused until they are decided.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment will be available again if the academy cannot confirm the transfer.'**
+  String get billingReceiptPendingCardPaused;
+
   /// PD-27: Settings -> Payments.
   ///
   /// In en, this message translates to:
@@ -9552,6 +9564,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'We couldn\'t load the terms of use. Please try again.'**
   String get legalLoadFailed;
+
+  /// OA-12: top of the pay sheet for the App Review demo family (GET /me/billing reviewMode). The server makes card a demo page and refuses receipts.
+  ///
+  /// In en, this message translates to:
+  /// **'App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.'**
+  String get billingReviewModeNotice;
+
+  /// OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode).
+  ///
+  /// In en, this message translates to:
+  /// **'App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.'**
+  String get billingReviewModeTransferNotice;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
