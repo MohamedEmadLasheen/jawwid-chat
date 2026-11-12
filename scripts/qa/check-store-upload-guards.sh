@@ -74,6 +74,7 @@ esac
 exec "$PYTHON" -I - "$1" << 'PY'
 import os
 import re
+import subprocess
 import sys
 
 WORKFLOW = '.github/workflows/release-store-builds.yml'
@@ -630,11 +631,17 @@ SENTRY_BANNED = [
     ('a debug or trace log level', r'(log-level|log_level|SENTRY_LOG_LEVEL)\W{1,3}(debug|trace)'),
     ('shell tracing', r'\bset\s+-[a-z]*x|\bxtrace\b|\bbash\s+-[a-z]*x\b'),
     ('a source upload', r'include-sources|sourcemaps|source-bundle|bundle-sources|bundle-jvm'),
-    ('a sentry-cli config file or config print', r'sentryclirc|sentry-cli\W+(info|login|config)\b|\$SENTRY_CLI"?\s+(info|login|config)\b'),
+    ('a sentry-cli config file or config print', r'sentryclirc|sentry-cli\W+(info|login|config)\b'),
     ('a sentry-cli properties, config or dotenv setting (P2-2)', r'SENTRY_PROPERTIES|SENTRY_CONFIG|SENTRY_DOTENV|SENTRYCLI_'),
     ('.env loading not off (P2-2)', r'SENTRY_LOAD_DOTENV(?!=0\s*$)'),
 ]
-SENTRY_HELPER = r'^\s*if HOME="\$O" "\$SENTRY_CLI" "\$@" > "\$O/sentry\.log" 2>&1; then\s*$'
+SENTRY_HELPER = r'^\s*if HOME="\$O" "\$RUNNER_TEMP/sentry-cli/sentry-cli" "\$@" > "\$O/sentry\.log" 2>&1; then\s*$'
+# The install step refuses unless the pinned installer put sentry-cli at that fixed path (its directory
+# must be empty, and the binary must match its pinned SHA-256). The path is never passed through a
+# variable: release run 43024454072 lost SENTRY_CLI to the P2-2 scrub, and a variable an earlier step
+# could set through GITHUB_ENV is exactly what the scrub exists to refuse.
+SENTRY_INSTALL_CHECK = (r'^\s*' + re.escape('[ "$p" = "$RUNNER_TEMP/sentry-cli/sentry-cli" ] || { echo "::error::')
+                        + r'[^"]*' + re.escape('"; exit 1; }') + r'\s*$')
 SENTRY_CALL = r'^\s*sq "[^"$]+" (debug-files upload|upload-proguard) "[^"]+"\s*$'
 
 
@@ -651,13 +658,27 @@ def check_sentry(files, errors):
                     errors.append(f'{path}:{n}: {what} (R3)')
             if 'SENTRY_AUTH_TOKEN' in l and not (path == WORKFLOW and any(re.match(rx, l) for rx in SENTRY_TOKEN_LINES)):
                 errors.append(f'{path}:{n}: SENTRY_AUTH_TOKEN used outside a step env line: sentry-cli reads it from the environment (R3)')
+    # Run the scrub itself: it must keep every variable the Sentry step reads after it and unset any
+    # other SENTRY_* variable, SENTRY_CLI included (release run 43024454072 failed under set -u
+    # because the step still read a SENTRY_CLI the scrub had unset).
+    kept = ('SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_URL', 'SENTRY_LOG_LEVEL', 'SENTRY_NO_PROGRESS_BAR')
+    env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'SENTRY_PLANTED': 'x', 'SENTRY_CLI': 'x'}
+    env.update({k: 'x' for k in kept})
+    probe = ' '.join(f'"${{{k}-UNSET}}"' for k in kept + ('SENTRY_PLANTED', 'SENTRY_CLI'))
+    run = subprocess.run(['bash', '-euc', SENTRY_SCRUB_TEXT + '; printf "%s\\n" ' + probe],
+                         env=env, capture_output=True, text=True)
+    if run.returncode != 0 or run.stdout.split() != ['x'] * len(kept) + ['UNSET', 'UNSET']:
+        errors.append(f'the Sentry variable scrub must keep {", ".join(kept)} and unset any other SENTRY_* '
+                      f'variable, SENTRY_CLI included (got {run.stdout.split()!r}) (P2-2)')
     text = files.get(WORKFLOW, '')
     code = code_lines(text)
     for n, l in code:
-        if re.search(r'\$\{?SENTRY_CLI\b', l) and not re.match(SENTRY_HELPER, l):
+        if re.search(r'\bSENTRY_CLI\b', l):
+            errors.append(f'{WORKFLOW}:{n}: the sentry-cli path read from a variable; sq calls the fixed path (R3)')
+        if 'sentry-cli/sentry-cli' in l and not (re.match(SENTRY_HELPER, l) or re.match(SENTRY_INSTALL_CHECK, l)):
             errors.append(f'{WORKFLOW}:{n}: sentry-cli called without capturing its output; use the sq helper (R3)')
         if re.search(r'(^|[\s;&|(])sentry-cli\s', l) and not re.match(r'^\s*(-\s+)?name\s*:', l):
-            errors.append(f'{WORKFLOW}:{n}: sentry-cli called by name; use the verified "$SENTRY_CLI" through sq (R3)')
+            errors.append(f'{WORKFLOW}:{n}: sentry-cli called by name; use the verified binary through sq (R3)')
         if re.match(r'^\s*sq\s', l) and not re.match(SENTRY_CALL, l):
             errors.append(f'{WORKFLOW}:{n}: sq may only run `debug-files upload` or `upload-proguard` on one path (R3)')
         if 'SENTRY_LOG_LEVEL' in l and not re.match(r'^\s*SENTRY_LOG_LEVEL: warn\s*$', l) \
@@ -671,6 +692,10 @@ def check_sentry(files, errors):
         if len(levels) != len(tokens):
             errors.append(f'{WORKFLOW}: every Sentry step in the {job} job must set SENTRY_LOG_LEVEL: warn (R3)')
         calls = [n for n, l in body if re.match(SENTRY_CALL, l)]
+        checks = [n for n, l in body if re.match(SENTRY_INSTALL_CHECK, l)]
+        if len(checks) != len(tokens) or (calls and (not checks or checks[0] > calls[0])):
+            errors.append(f'{WORKFLOW}: every Sentry step in the {job} job must follow an install step that '
+                          f'refuses unless sentry-cli is at its fixed path (R3)')
         for what, rx in SENTRY_ISOLATION:
             at = [n for n, l in body if re.match(rx, l)]
             if len(at) != len(tokens) or (calls and (not at or at[0] > calls[0])):
@@ -821,7 +846,7 @@ def mutations_r123():
                             + 'export SENTRY_LOG_LEVEL=$(echo debug)')),
         ('--log-level trace', W, lambda t: replaced(t, SYM_CALL, '          sq "Dart symbols" debug-files upload --log-level=trace "$SYM"\n')),
         ('sentry-cli info', W, lambda t: replaced(t, SYM_CALL, '          sq "config" info\n' + SYM_CALL)),
-        ('sentry-cli output printed', W, lambda t: replaced(t, SYM_CALL, '          "$SENTRY_CLI" debug-files upload "$SYM"\n')),
+        ('sentry-cli output printed', W, lambda t: replaced(t, SYM_CALL, '          "$RUNNER_TEMP/sentry-cli/sentry-cli" debug-files upload "$SYM"\n')),
         ('sentry-cli called by name', W, lambda t: replaced(t, SYM_CALL, '          sentry-cli debug-files upload "$SYM"\n')),
         ('a source upload', W, lambda t: replaced(t, SYM_CALL, '          sq "Dart symbols" debug-files upload --include-sources "$SYM"\n')),
         ('shell tracing', W, lambda t: replaced(t, '          O="$RUNNER_TEMP/sentry-out"', '          set -x\n          O="$RUNNER_TEMP/sentry-out"')),
@@ -840,7 +865,11 @@ def mutations_r123():
         ('.env loading not turned off', W, lambda t: replaced(t, '          export SENTRY_LOAD_DOTENV=0\n', '')),
         ('a properties file for sentry-cli', W, lambda t: replaced(t, '          O="$RUNNER_TEMP/sentry-out"', '          export SENTRY_PROPERTIES="$GITHUB_WORKSPACE/sentry.properties"\n          O="$RUNNER_TEMP/sentry-out"')),
         ('the parent .sentryclirc check removed', W, lambda t: replaced(t, '[ ! -e "$d/.sentryclirc" ] ||', 'true ||')),
-        ('HOME not the empty directory', W, lambda t: replaced(t, 'if HOME="$O" "$SENTRY_CLI"', 'if "$SENTRY_CLI"')),
+        ('HOME not the empty directory', W, lambda t: replaced(t, 'if HOME="$O" "$RUNNER_TEMP/sentry-cli/sentry-cli"', 'if "$RUNNER_TEMP/sentry-cli/sentry-cli"')),
+        ('the sentry-cli path read from a variable', W, lambda t: replaced(t, 'if HOME="$O" "$RUNNER_TEMP/sentry-cli/sentry-cli"', 'if HOME="$O" "$SENTRY_CLI"')),
+        ('the sentry-cli path handed over through GITHUB_ENV', W, lambda t: after_line(t, '          "$p" --version', '          echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"\n')),
+        ('the installed path not checked', W, lambda t: replaced(t, '[ "$p" = "$RUNNER_TEMP/sentry-cli/sentry-cli" ] ||', 'true ||')),
+        ('SENTRY_CLI allowed through the scrub', W, lambda t: replaced(t, 'case "$v" in SENTRY_AUTH_TOKEN', 'case "$v" in SENTRY_CLI | SENTRY_AUTH_TOKEN')),
         # P2-1: only the head of main at dispatch is built in the job that can request the token.
         ('preflight accepts an older commit on main', W, lambda t: replaced(t, '[ "$REF" = "$GITHUB_SHA" ]', '[ -n "$GITHUB_SHA" ]')),
         ('android does not assert the build commit', W, lambda t: replaced(t, '[ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ]', '[ -n "$GITHUB_SHA" ]')),

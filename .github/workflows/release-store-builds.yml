@@ -370,8 +370,8 @@ jobs:
         run: |
           set -euo pipefail
           p="$(bash release-tools/scripts/mobile/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli")"
+          [ "$p" = "$RUNNER_TEMP/sentry-cli/sentry-cli" ] || { echo "::error::install-sentry-cli.sh did not install at its fixed path; nothing was sent to Sentry."; exit 1; }
           "$p" --version
-          echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the Dart split-debug-info symbols, and the R8
         # mapping file when the build wrote one. Symbols go to Sentry and nowhere else, and nothing of
@@ -379,7 +379,7 @@ jobs:
         #   - sentry-cli reads the token, organisation, project and (optional) server from this env
         #     only, never from a command line; it logs at warn;
         #   - nothing an earlier step planted is read (P2-2): every SENTRY_* / SENTRYCLI_* variable
-        #     but the five set here, proxy, CA-bundle and dynamic-loader variables are unset (an
+        #     but the six set here, proxy, CA-bundle and dynamic-loader variables are unset (an
         #     earlier step could have added them through GITHUB_ENV); .env loading is off; it runs in
         #     a freshly created, empty directory that is also its HOME (removed and re-made, never
         #     reused); and the step refuses to run if a .sentryclirc exists in any parent directory;
@@ -402,7 +402,7 @@ jobs:
           d="$O"; while [ "$d" != / ]; do d="$(dirname "$d")"; [ ! -e "$d/.sentryclirc" ] || { echo "::error::a planted Sentry settings file exists in $d; nothing was sent to Sentry."; exit 1; }; done
           sq() { # what, then the arguments
             local what="$1"; shift
-            if HOME="$O" "$SENTRY_CLI" "$@" > "$O/sentry.log" 2>&1; then
+            if HOME="$O" "$RUNNER_TEMP/sentry-cli/sentry-cli" "$@" > "$O/sentry.log" 2>&1; then
               echo "Sentry: $what uploaded"
             else
               grep -E '^[[:space:]]*error:' "$O/sentry.log" | cut -c1-200 | head -5 || true
@@ -688,8 +688,8 @@ jobs:
         run: |
           set -euo pipefail
           p="$(bash release-tools/scripts/mobile/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli")"
+          [ "$p" = "$RUNNER_TEMP/sentry-cli/sentry-cli" ] || { echo "::error::install-sentry-cli.sh did not install at its fixed path; nothing was sent to Sentry."; exit 1; }
           "$p" --version
-          echo "SENTRY_CLI=$p" >> "$GITHUB_ENV"
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the archive's dSYMs and the Dart
         # split-debug-info symbols, handled exactly as in the android job (token through env only,
@@ -712,7 +712,7 @@ jobs:
           d="$O"; while [ "$d" != / ]; do d="$(dirname "$d")"; [ ! -e "$d/.sentryclirc" ] || { echo "::error::a planted Sentry settings file exists in $d; nothing was sent to Sentry."; exit 1; }; done
           sq() { # what, then the arguments
             local what="$1"; shift
-            if HOME="$O" "$SENTRY_CLI" "$@" > "$O/sentry.log" 2>&1; then
+            if HOME="$O" "$RUNNER_TEMP/sentry-cli/sentry-cli" "$@" > "$O/sentry.log" 2>&1; then
               echo "Sentry: $what uploaded"
             else
               grep -E '^[[:space:]]*error:' "$O/sentry.log" | cut -c1-200 | head -5 || true
