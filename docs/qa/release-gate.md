@@ -59,6 +59,13 @@ The codebase is far from the September picture. The P0s that blocked it then
 
 ## 2a. Phase 1 store-submission gates (new 2026-11-02; re-verified 2026-11-03)
 
+> **Correction, 2026-11-08 (`launch-readiness-checklist.md`, re-audit of `main` @ `cebbcd99`).**
+> S-11, S-12 and S-15 below say PASS (code), but that code is **not on `main`**: it lives in the uncommitted
+> `~/dev/jawwid-push-acceptance` tree and partly in open PR #449. Treat them as NOT MET until it lands (LR-11).
+> S-09 is now built on `main` (PD-57 report and block, #463…#482; filter #493). S-06's "Android: no call UI" is
+> out of date (#408, #458 merged); it stays BLOCKED on Firebase, the APNs key and a device (LR-12).
+> The current status of every store requirement is in `docs/release/launch-readiness-checklist.md`.
+
 Each one is a hard blocker for its store. Re-verified on 2026-11-03 against `main` @ `c7ca895c`
 by reading the code and building a signed release AAB and an unsigned iOS release build.
 

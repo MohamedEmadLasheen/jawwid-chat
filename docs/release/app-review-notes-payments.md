@@ -117,8 +117,8 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 > card (Stripe Checkout, opened in the browser) or by bank transfer, uploading the transfer
 > receipt for the academy to confirm. Lessons are not recorded.
 >
-> Where to see it: sign in with the parent demo account below → Settings → Payments → Amount due
-> → Pay. The pay sheet states what is bought ("Live one-to-one Quran lessons: one teacher and one
+> Where to see it: sign in with the parent demo account below → the **Subscriptions** tab
+> (bottom bar) → Amount due → Pay. The pay sheet states what is bought ("Live one-to-one Quran lessons: one teacher and one
 > student, in real time. Lessons are not recorded.").
 >
 > Demo accounts: [parent], [teacher] (supplied in the Sign-In Information fields).
@@ -130,7 +130,7 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 > app. Under the Payments policy's 1:1 online paid services rule (education classes), these are
 > paid by card (Stripe) or bank transfer rather than Google Play Billing. No group class, digital
 > content or app feature is sold; any other charge cannot be paid in the app. To see it: parent
-> demo account → Settings → Payments → Amount due → Pay.
+> demo account → the Subscriptions tab (bottom bar) → Amount due → Pay.
 
 ## 6. Before submission (owner, in the consoles)
 
