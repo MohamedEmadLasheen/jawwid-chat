@@ -231,11 +231,26 @@ TEACHER_PAYOUT_KEYS	payroll	yes	opt	opt	opt
 # scopes: Checkout Sessions write, Refunds write, Customers write, PaymentIntents
 # read, Charges read (docs/admin/pd027-stripe-lifecycle.md: customers, payment
 # method details, reconciliation).
+#
+# PRODUCTION PHASE RULE (Stripe M1; the PROD column says opt because a column
+# cannot express a phase). Stripe must be fully working at the first PUBLIC
+# launch, and production is deployed earlier, in the store-review period:
+#   LAUNCH_PHASE=review  both Stripe secrets OPTIONAL (unset = cards off), so
+#                        the first production deploy is not blocked;
+#   LAUNCH_PHASE=launch  both REQUIRED: scripts/infra/check-env.sh refuses the
+#                        deploy without them.
+# In either phase, when set in production: STRIPE_SECRET_KEY must be a LIVE key
+# matching ^(sk|rk)_live_\S+$ (a test key, a publishable pk_ key or
+# anything else is refused), and STRIPE_WEBHOOK_SECRET must be set with it and
+# match ^whsec_\S+$ (no whitespace after the prefix). The deploy (check-env.sh) and the API and worker
+# at boot (apps/api/src/billing/stripe-config.ts) apply the same rules and
+# never print a value. Staging and local may use test keys.
 STRIPE_SECRET_KEY	payments	yes	opt	opt	opt
 # STRIPE_WEBHOOK_SECRET is CONSUMED by POST /api/v1/stripe/webhook (PD-27): the
 # endpoint's signing secret (whsec_...). A card payment is recorded ONLY from a
 # webhook this secret verifies. Unset = the webhook answers 503 and Stripe
-# retries for three days.
+# retries for three days. Production phase rule: see STRIPE_SECRET_KEY above
+# (required at LAUNCH_PHASE=launch).
 STRIPE_WEBHOOK_SECRET	payments	yes	opt	opt	opt
 # PAYMENT_LINK_BASE_URL is CONSUMED by apps/api/src/billing (PD-27): the public
 # origin plus /api/v1 that payment links are built on, e.g.
