@@ -6,7 +6,7 @@ import { isUuid } from '../communication/conversations/conversation.service';
 import { StaffRole, SUBSCRIPTION_PLAN_MONTHS } from '../communication/contracts/vocab';
 import { BillingService } from './billing.service';
 import { familyInScopeSql } from './billing-access';
-import { PAYMENT_METHODS, REQUEST_PURPOSES } from './payment-ledger.service';
+import { OVERPAYMENT_ACTION, PAYMENT_METHODS, REQUEST_PURPOSES } from './payment-ledger.service';
 import { day } from './validate';
 
 /**
@@ -57,6 +57,13 @@ export interface TransactionDto {
     customerId: string | null;
     livemode: boolean | null;
   } | null;
+  /**
+   * M3: money recorded beyond what was owed (the request already paid or
+   * cancelled, its instalment paid another way): "Overpaid -- refund or
+   * credit". From the payment's `payment.overpayment_detected` audit row; null
+   * when there is none. `settled`: refunds (or a void) now cover it.
+   */
+  overpaid: { amountMinor: number; why: string; settled: boolean } | null;
 }
 
 interface TxRow {
@@ -91,6 +98,8 @@ interface TxRow {
   card_brand: string | null;
   card_last4: string | null;
   card_wallet: string | null;
+  overpaid_minor: bigint | null;
+  overpaid_why: string | null;
 }
 
 @Injectable()
@@ -321,7 +330,8 @@ const selectTransactions = Prisma.sql`
          p.child_name, p.request_id, q.label AS request_label, q.purpose AS request_purpose, q.plan_months,
          p.instalment_id, i.id AS invoice_id, i.number AS invoice_number, p.reference, p.recorded_by,
          s.name AS recorder_name, p.stripe_checkout_session_id, p.stripe_payment_intent_id, p.stripe_charge_id,
-         p.stripe_customer_id, p.card_brand, p.card_last4, p.card_wallet
+         p.stripe_customer_id, p.card_brand, p.card_last4, p.card_wallet,
+         ov.overpaid_minor, ov.overpaid_why
     FROM chat.payment p
     LEFT JOIN chat.invoice i ON i.payment_id = p.id
     LEFT JOIN chat.family f ON f.id = p.family_id
@@ -329,7 +339,11 @@ const selectTransactions = Prisma.sql`
     LEFT JOIN chat.payment_request q ON q.id = p.request_id
     LEFT JOIN chat.staff s ON s.id = p.recorded_by
     CROSS JOIN LATERAL (SELECT coalesce(sum(r.amount_minor), 0)::bigint AS refunded_minor
-                          FROM chat.payment_refund r WHERE r.payment_id = p.id) rf`;
+                          FROM chat.payment_refund r WHERE r.payment_id = p.id) rf
+    LEFT JOIN LATERAL (SELECT (a.after ->> 'overpaidMinor')::bigint AS overpaid_minor, a.after ->> 'why' AS overpaid_why
+                         FROM chat.audit_log a
+                        WHERE a.entity = 'payment' AND a.entity_id = p.id AND a.action = ${OVERPAYMENT_ACTION}
+                        ORDER BY a.at DESC LIMIT 1) ov ON true`;
 
 /** A trial's money (no family yet) is the 'all' scope's only; a family's, the shared predicate's. */
 function scopeSql(actorId: string, scope: 'all' | 'reach' | 'owned' | null, familyCol: Prisma.Sql): Prisma.Sql {
@@ -440,6 +454,13 @@ function presentTransaction(r: TxRow): TransactionDto {
           chargeId: r.stripe_charge_id,
           customerId: r.stripe_customer_id,
           livemode: r.stripe_checkout_session_id ? !r.stripe_checkout_session_id.startsWith('cs_test_') : null,
+        }
+      : null,
+    overpaid: r.overpaid_minor !== null
+      ? {
+          amountMinor: Number(r.overpaid_minor),
+          why: r.overpaid_why ?? 'more_than_owed',
+          settled: r.voided_at !== null || refunded >= Number(r.overpaid_minor),
         }
       : null,
   };

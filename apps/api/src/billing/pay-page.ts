@@ -42,6 +42,12 @@ export interface PayPageModel {
   error: string | null;
   /** PD-27 completion: the latest card attempt's Stripe decline code, when it failed. */
   cardFailure?: string | null;
+  /**
+   * W61 S2: bank-transfer receipts on this request still waiting for the academy.
+   * Any: a notice (a card too may charge twice). Covering what is left: no card
+   * button (the API refuses it, 409 receipt_pending).
+   */
+  pendingReceiptMinor?: number;
 }
 
 const T = {
@@ -71,6 +77,8 @@ const T = {
     statusNotFound: 'رابط الدفع غير صحيح. تأكدوا من نسخ الرابط كاملًا.',
     confirming: 'شكرًا! نتحقق الآن من الدفع مع Stripe — ستتحدث هذه الصفحة تلقائيًا.',
     cancelledCheckout: 'لم تكتمل عملية الدفع. يمكنكم المحاولة مرة أخرى.',
+    receiptPending: 'يوجد إيصال تحويل لهذا الطلب بانتظار مراجعة الأكاديمية. إن دفعتم بالبطاقة أيضًا فقد يُخصم المبلغ مرتين.',
+    receiptCardPaused: 'سيُتاح الدفع بالبطاقة مجددًا إذا تعذّر على الأكاديمية تأكيد التحويل.',
     other: 'English',
     months: (n: number) => (n === 1 ? 'شهر واحد' : n === 12 ? 'سنة' : `${n} أشهر`),
     lessons: (n: number) => (n === 1 ? 'حصة واحدة' : n === 2 ? 'حصتان' : n <= 10 ? `${n} حصص` : `${n} حصة`),
@@ -102,6 +110,8 @@ const T = {
     statusNotFound: 'This payment link is not valid. Check that the whole link was copied.',
     confirming: 'Thank you! We are confirming your payment with Stripe — this page refreshes by itself.',
     cancelledCheckout: 'The payment was not completed. You can try again.',
+    receiptPending: 'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.',
+    receiptCardPaused: 'Card payment will be available again if the academy cannot confirm the transfer.',
     other: 'العربية',
     months: (n: number) => (n === 1 ? '1 month' : `${n} months`),
     lessons: (n: number) => (n === 1 ? '1 lesson' : `${n} lessons`),
@@ -142,10 +152,15 @@ export function renderPayPage(m: PayPageModel, lang: PayLang, ctx: { token: stri
   else if (confirming) notice = note('info', t.confirming);
   else if (m.checkout === 'cancelled') notice = note('muted', t.cancelledCheckout);
   if (m.status === 'open' && !confirming && m.cardFailure) notice += note('warn', e(cardFailureText(m.cardFailure, lang)));
+  const payable = m.status === 'open' && !confirming;
+  // W61 S2: a transfer receipt is waiting; when it covers the rest, the card waits for its decision.
+  // Said only where a card would be offered.
+  const pending = payable && m.cardAvailable ? m.pendingReceiptMinor ?? 0 : 0;
+  const receiptCovers = pending > 0 && pending >= m.remainingMinor;
+  if (pending > 0) notice += note('warn', e(receiptCovers ? `${t.receiptPending} ${t.receiptCardPaused}` : t.receiptPending));
   if (m.error) notice += note('warn', e(m.error));
 
-  const payable = m.status === 'open' && !confirming;
-  const card = payable && m.cardAvailable
+  const card = payable && m.cardAvailable && !receiptCovers
     ? `<form method="post" action="${self}/checkout?lang=${lang}">
          <button type="submit" class="pay">${e(t.payCard)} · ${money(m.remainingMinor)}</button>
        </form>

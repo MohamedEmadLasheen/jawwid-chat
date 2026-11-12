@@ -247,6 +247,20 @@ export interface Transaction {
   card: { brand: string | null; last4: string | null; wallet: string | null } | null
   /** Card payments only. */
   stripe: StripeRefs | null
+  /**
+   * Money recorded beyond what was owed (the request already paid or cancelled,
+   * its instalment paid another way): refund or credit it. `settled`: refunds
+   * (or a void) now cover it. null: not overpaid.
+   */
+  overpaid?: Overpaid | null
+}
+
+export type OverpaidWhy = 'request_paid' | 'request_cancelled' | 'instalment_closed' | 'more_than_owed'
+
+export interface Overpaid {
+  amountMinor: number
+  why: OverpaidWhy | string
+  settled: boolean
 }
 
 export interface TransactionTotal {

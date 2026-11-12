@@ -16,6 +16,16 @@ import Stripe from 'stripe';
  */
 export const STRIPE_GATEWAY = Symbol('STRIPE_GATEWAY');
 
+/**
+ * Every Checkout Session Chat opens, and the payment intent Stripe makes for it,
+ * carries `metadata.system = 'jawwid-chat'`. Other systems on the same Stripe
+ * account can then tell Chat's objects from their own, and so can a person in
+ * the Stripe Dashboard. Chat itself still decides "is this mine?" from its own
+ * table (chat.payment_checkout), never from metadata alone: metadata can be
+ * edited in the Dashboard.
+ */
+export const CHAT_STRIPE_SYSTEM = 'jawwid-chat';
+
 export interface CheckoutInput {
   requestId: string;
   organizationId: string;
@@ -84,6 +94,24 @@ export interface PaymentIntentFacts {
   cardWallet: string | null;
 }
 
+/**
+ * A dispute (chargeback) as Chat reads it from a `charge.dispute.*` webhook.
+ * Codes only: Stripe's status and reason codes, never the evidence or any
+ * cardholder text.
+ */
+export interface DisputeFacts {
+  id: string;
+  chargeId: string | null;
+  paymentIntentId: string | null;
+  amountMinor: number;
+  /** Upper case, as Chat stores it. */
+  currency: string | null;
+  /** warning_needs_response | warning_under_review | warning_closed | needs_response | under_review | won | lost | ... */
+  status: string | null;
+  /** fraudulent | duplicate | product_not_received | ... */
+  reason: string | null;
+}
+
 export interface RefundResult {
   id: string;
   amountMinor: number;
@@ -109,6 +137,8 @@ export interface StripeGateway {
   /** The Checkout Session a payment intent belongs to, or null. */
   findCheckoutByPaymentIntent(paymentIntentId: string): Promise<CheckoutSession | null>;
   paymentIntentFacts(paymentIntentId: string): Promise<PaymentIntentFacts>;
+  /** The payment intent's `metadata.system` tag (CHAT_STRIPE_SYSTEM on Chat's), or null. A hint only, never proof. */
+  paymentIntentSystem(paymentIntentId: string): Promise<string | null>;
   /** Every refund of a payment intent, newest first (all pages). */
   listRefunds(paymentIntentId: string): Promise<RefundFacts[]>;
 }
@@ -158,6 +188,11 @@ export class StripeSdkGateway implements StripeGateway {
     return toIntentFacts(pi, charge);
   }
 
+  async paymentIntentSystem(paymentIntentId: string): Promise<string | null> {
+    const pi = await this.requireClient().paymentIntents.retrieve(paymentIntentId);
+    return pi.metadata?.system ?? null;
+  }
+
   async listRefunds(paymentIntentId: string): Promise<RefundFacts[]> {
     // Every page (newest first): a payment may have more than one page of partial refunds.
     const all = await this.requireClient().refunds.list({ payment_intent: paymentIntentId, limit: 100 }).autoPagingToArray({ limit: 10_000 });
@@ -165,34 +200,7 @@ export class StripeSdkGateway implements StripeGateway {
   }
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutSession> {
-    const metadata = { paymentRequestId: input.requestId, organizationId: input.organizationId };
-    const session = await this.requireClient().checkout.sessions.create(
-      {
-        mode: 'payment',
-        client_reference_id: input.requestId,
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency: input.currency.toLowerCase(),
-              unit_amount: input.amountMinor,
-              product_data: {
-                name: input.productName,
-                ...(input.description ? { description: input.description } : {}),
-              },
-            },
-          },
-        ],
-        metadata,
-        payment_intent_data: { metadata },
-        success_url: input.successUrl,
-        cancel_url: input.cancelUrl,
-        expires_at: Math.floor(input.expiresAt.getTime() / 1000),
-        locale: stripeCheckoutLocale(input.locale),
-        ...(input.customerId ? { customer: input.customerId } : {}),
-      },
-      { idempotencyKey: input.idempotencyKey },
-    );
+    const session = await this.requireClient().checkout.sessions.create(checkoutCreateParams(input), { idempotencyKey: input.idempotencyKey });
     return toSession(session);
   }
 
@@ -237,6 +245,40 @@ export function stripeCheckoutLocale(locale: 'ar' | 'en'): 'en' | 'auto' {
   return locale === 'en' ? 'en' : 'auto';
 }
 
+/** The metadata on a Checkout Session Chat opens and on its payment intent: ids and the system tag only. */
+export function checkoutMetadata(input: Pick<CheckoutInput, 'requestId' | 'organizationId'>): Record<string, string> {
+  return { system: CHAT_STRIPE_SYSTEM, paymentRequestId: input.requestId, organizationId: input.organizationId };
+}
+
+/** What Chat asks Stripe for when it opens a Checkout Session (pure, so a test reads it without the network). */
+export function checkoutCreateParams(input: CheckoutInput): Stripe.Checkout.SessionCreateParams {
+  const metadata = checkoutMetadata(input);
+  return {
+    mode: 'payment',
+    client_reference_id: input.requestId,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: input.currency.toLowerCase(),
+          unit_amount: input.amountMinor,
+          product_data: {
+            name: input.productName,
+            ...(input.description ? { description: input.description } : {}),
+          },
+        },
+      },
+    ],
+    metadata,
+    payment_intent_data: { metadata: { ...metadata } },
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    expires_at: Math.floor(input.expiresAt.getTime() / 1000),
+    locale: stripeCheckoutLocale(input.locale),
+    ...(input.customerId ? { customer: input.customerId } : {}),
+  };
+}
+
 export function toSession(s: Stripe.Checkout.Session): CheckoutSession {
   const pi = s.payment_intent;
   return {
@@ -267,6 +309,8 @@ export const safe = {
   last4: pattern(/^[0-9]{4}$/),
   wallet: pattern(/^[a-z_]{1,30}$/),
   failureCode: pattern(/^[a-z0-9_]{1,64}$/),
+  /** A dispute's status or reason code; short enough that `dispute_closed_<status>` stays a valid outcome filter (40). */
+  disputeCode: pattern(/^[a-z_]{1,25}$/),
   objectId: (v: string | null | undefined): string | null => (typeof v === 'string' && v.length >= 1 && v.length <= 255 ? v : null),
 };
 
@@ -279,6 +323,20 @@ export function toRefundFacts(r: Stripe.Refund): RefundFacts {
     paymentIntentId: typeof pi === 'string' ? pi : pi?.id ?? null,
     reason: r.reason ?? null,
     metadata: (r.metadata ?? {}) as Record<string, string>,
+  };
+}
+
+export function toDisputeFacts(d: Stripe.Dispute): DisputeFacts {
+  const ch = d.charge as string | { id: string } | null | undefined;
+  const pi = d.payment_intent as string | { id: string } | null | undefined;
+  return {
+    id: d.id,
+    chargeId: safe.charge(typeof ch === 'string' ? ch : ch?.id ?? null),
+    paymentIntentId: safe.paymentIntent(typeof pi === 'string' ? pi : pi?.id ?? null),
+    amountMinor: typeof d.amount === 'number' ? d.amount : 0,
+    currency: typeof d.currency === 'string' ? d.currency.toUpperCase() : null,
+    status: safe.disputeCode(d.status ?? null),
+    reason: safe.disputeCode(d.reason ?? null),
   };
 }
 

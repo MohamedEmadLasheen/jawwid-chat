@@ -19,7 +19,8 @@ import { CARD_PAUSED_KEY, isCardPaused, parseCardPaused } from './card-pause';
 import { familyInScopeSql } from './billing-access';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
-import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
+import { STRIPE_GATEWAY, type CheckoutSession, type StripeGateway } from './stripe.gateway';
+import { closeUnconfirmedCheckout, errorCategory } from './checkout.service';
 import { WEBHOOK_REFUND_REASON, assertReplay, isLockTimeout, isoDay, lockIdempotencyKey, tryLockIdempotencyKey } from './idempotency';
 import { formatMajor, minorDigits } from './money';
 import type { TrialFormPayer } from '../new-students/new-students.service';
@@ -910,15 +911,50 @@ export class PaymentsService {
     return this.reads.forTrial(payment.trialLessonId as string, payment.organizationId, actor.actorId);
   }
 
+  /**
+   * After a cancel: close every Stripe page still open for the request, so the
+   * link cannot be paid after all. FAIL CLOSED (LR-46): a row is marked
+   * expired only on Stripe's word -- the expire call succeeded, or a look-up
+   * after a failed expire shows the page expired -- or, when Stripe cannot be
+   * asked, once the page's own expiry is long past (closeUnconfirmedCheckout,
+   * audited). Anything else leaves the row open and is logged as an error: the
+   * page may still be payable. The reconciler keeps asking Stripe about it, and
+   * a payment that does come is recorded and flagged as an overpayment (M3).
+   * Best effort: the cancel itself is already committed and never fails here.
+   */
   async expireOpenCheckouts(requestId: string): Promise<void> {
     if (!this.stripe.checkoutAvailable) return;
     const open = await this.prisma.paymentCheckout.findMany({ where: { requestId, status: 'open' } });
+    const markExpired = (sessionId: string) =>
+      this.prisma.paymentCheckout.updateMany({ where: { stripeSessionId: sessionId, status: 'open' }, data: { status: 'expired' } });
     for (const c of open) {
       try {
-        await this.stripe.expireCheckout(c.stripeSessionId);
-        await this.prisma.paymentCheckout.update({ where: { stripeSessionId: c.stripeSessionId }, data: { status: 'expired' } });
-      } catch {
-        // Already completed or expired at Stripe; the webhook settles which.
+        let expireError: unknown;
+        try {
+          await this.stripe.expireCheckout(c.stripeSessionId);
+        } catch (e) {
+          expireError = e;
+        }
+        if (expireError === undefined) {
+          await markExpired(c.stripeSessionId);
+          continue;
+        }
+        // Already completed or expired at Stripe, or Stripe failed: ask which.
+        let session: CheckoutSession;
+        try {
+          session = await this.stripe.retrieveCheckout(c.stripeSessionId);
+        } catch (e) {
+          if (await closeUnconfirmedCheckout(this.prisma, this.audit, c, e)) continue;
+          this.log.error(`stripe: a cancelled request's page could not be expired or looked up (${errorCategory(expireError)}; ${errorCategory(e)}); left open, it may still be payable`);
+          continue;
+        }
+        if (session.status === 'expired') await markExpired(c.stripeSessionId);
+        else if (session.status === 'open') {
+          this.log.error(`stripe: a cancelled request's page is still open at Stripe and was not expired (${errorCategory(expireError)}); left open`);
+        }
+        // complete: its webhook (or the reconciler) records it, flagged as an overpayment.
+      } catch (e) {
+        this.log.error(`stripe: a cancelled request's page was not closed (${errorCategory(e)}); left open`);
       }
     }
   }
