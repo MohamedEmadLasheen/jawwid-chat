@@ -31,9 +31,36 @@ adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
 # neither this broadcast nor FCM itself is delivered (only a launch clears it),
 # so force-stop tests a state no ring can leave, on any phone.
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
-sleep 8
+# Wait for the launch to actually reach the screen (bounded, 60 s) instead of a fixed 8 s:
+# on a slow shared CI emulator the first cold start can take longer than that.
+for _ in $(seq 1 60); do
+  adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | grep -qF "$PKG/" && break
+  sleep 1
+done
+sleep 2
 adb shell input keyevent KEYCODE_HOME
 sleep 2
+
+# Settle the freshly installed package before the push (test-only; the app is unchanged).
+# Seen on run 43302103648 (both attempts): right after install, system_server refreshed its
+# cached ApplicationInfo for this package while enqueueing the call notification
+# ("getPackageInfo() caused update to cached ApplicationInfo"), and NotificationManagerService
+# then dropped it ("Cannot fix notification", SecurityException NETWORK_STACK). Waiting until
+# the package's state as Android reports it has stopped changing makes that refresh happen
+# before the push, not during it. Deterministic and bounded: the fields below must read the
+# same in 3 consecutive polls 2 s apart, within 30 polls (60 s); otherwise go on with a
+# warning -- this is a mitigation, never a reason to skip the assertions below.
+settled=0; prev=""; same=0
+for _ in $(seq 1 30); do
+  cur="$(adb shell dumpsys package "$PKG" \
+    | { grep -E 'versionCode=|lastUpdateTime=|firstInstallTime=|pkgFlags=|privateFlags=|dataDir=|codePath=|primaryCpuAbi=|User 0:' || true; } \
+    | cksum)" || cur=""
+  if [ -n "$prev" ] && [ "$cur" = "$prev" ]; then same=$((same + 1)); else same=0; fi
+  prev="$cur"
+  if [ "$same" -ge 2 ]; then settled=1; break; fi
+  sleep 2
+done
+[ "$settled" = 1 ] || echo "::warning title=android-ring::the package state was still changing after 60 s; continuing"
 # `am kill` kills only a process Android already counts as cached; right after
 # Home it may not be yet, so ask again for a while. If it is still alive, end it
 # from inside its own uid (run-as, a debug build): a plain process death, as the
@@ -65,7 +92,17 @@ for _ in $(seq 1 40); do
   sleep 1
 done
 # A fresh emulator has no other app posting: the dump is this app's records.
-grep -q "pkg=$PKG" <<<"$dump" || fail "no notification from $PKG after the call push"
+if ! grep -q "pkg=$PKG" <<<"$dump"; then
+  # Tell a platform rejection apart from an app failure (the job fails either way). The app
+  # logs "notification ... posted" when NotificationManager.notify returns, but Android's
+  # NotificationManagerService can still drop the record on its side: seen on the API 34
+  # emulator as "Cannot fix notification" with a SecurityException naming NETWORK_STACK.
+  svc="$(adb logcat -d -s 'NotificationService:E' 2>/dev/null || true)"
+  if grep -q 'Cannot fix notification' <<<"$svc" && grep -q 'NETWORK_STACK' <<<"$svc"; then
+    echo "::error title=android-ring::Android platform rejected the notification (NotificationManagerService 'Cannot fix notification', SecurityException NETWORK_STACK) -- a known emulator/platform issue, not an app failure"
+  fi
+  fail "no notification from $PKG after the call push"
+fi
 record="$dump"
 grep -q "jawwid_calls" <<<"$record" || fail "the notification is not on the Calls channel"
 grep -qi "category=call" <<<"$record" || fail "the notification is not category=call"
