@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Payment, PaymentRequest } from '@prisma/client';
+import type { Payment, PaymentCheckout, PaymentRequest } from '@prisma/client';
 import type Stripe from 'stripe';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -9,11 +10,14 @@ import { todayIn } from '../leave/leave.service';
 import { checkoutDescription, isPayableInApp, loadPackageFacts, notInApp } from './in-app-payability';
 import { PaymentLedger, type RecordedPayment } from './payment-ledger.service';
 import {
+  CHAT_STRIPE_SYSTEM,
   STRIPE_GATEWAY,
   safe,
+  toDisputeFacts,
   toRefundFacts,
   toSession,
   type CheckoutSession,
+  type DisputeFacts,
   type PaymentIntentFacts,
   type RefundFacts,
   type StripeGateway,
@@ -27,6 +31,85 @@ const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 const CHECKOUT_MINUTES = 45;
 /** Opening Stripe's page again and again for one request is not paying; it is a loop or abuse. */
 const MAX_CHECKOUTS_PER_HOUR = 10;
+/**
+ * S1: how long a claim on opening one request's page lasts unless renewed. It
+ * is renewed before every Stripe call (each at most 20 s x 3 tries), so it only
+ * matters when an API process dies mid-open: the request is then free again
+ * after this long. Never a lock held open: see claimOpening().
+ */
+const OPEN_CLAIM_SECONDS = 150;
+/** S1: the claim's own transactions are a few statements; they never wait for each other. */
+const CLAIM_TRANSACTION = { maxWait: 5_000, timeout: 5_000 } as const;
+
+/**
+ * LR-46 (W76b): Stripe never takes a payment on a Checkout Session after its
+ * expires_at. A page Stripe cannot be asked about (it no longer has it -- a
+ * changed key or mode -- or it is unreachable) is treated as closed only once
+ * its own expiry is at least this far behind us: room for clock skew and for a
+ * payment submitted in the page's last seconds. Before that, a failed look-up
+ * is a refusal (fail closed).
+ */
+export const UNCONFIRMED_CLOSE_MARGIN_MS = 60 * 60_000;
+/** The audit action written when a page is closed that way. */
+export const CHECKOUT_CLOSED_UNCONFIRMED_ACTION = 'payment.checkout_closed_unconfirmed';
+
+/** True when a page's own expiry passed long enough ago that Stripe cannot take payment on it any more. */
+export function pastPayableWindow(checkout: { expiresAt: Date }, now = Date.now()): boolean {
+  return checkout.expiresAt.getTime() + UNCONFIRMED_CLOSE_MARGIN_MS <= now;
+}
+
+/**
+ * LR-46 (W76b): an `open` attempt Stripe could not be asked about. Marked
+ * `expired` -- with the reason audited, in one transaction -- only when
+ * pastPayableWindow() says Stripe can no longer take payment on it; otherwise
+ * nothing changes. Answers whether this call closed it. A page that was in
+ * fact paid is still recorded by its webhook (confirm() finds the attempt by
+ * session id, whatever its status). Logs categories only.
+ */
+export async function closeUnconfirmedCheckout(
+  prisma: PrismaService,
+  audit: AuditService,
+  checkout: PaymentCheckout,
+  cause: unknown,
+): Promise<boolean> {
+  if (checkout.status !== 'open' || !pastPayableWindow(checkout)) return false;
+  const request = await prisma.paymentRequest.findUniqueOrThrow({ where: { id: checkout.requestId } });
+  return prisma.$transaction(async (tx) => {
+    const changed = await tx.paymentCheckout.updateMany({
+      where: { stripeSessionId: checkout.stripeSessionId, status: 'open' },
+      data: { status: 'expired' },
+    });
+    if (changed.count !== 1) return false;
+    await audit.audit(tx, {
+      action: CHECKOUT_CLOSED_UNCONFIRMED_ACTION,
+      entity: request.familyId ? 'family' : 'lesson',
+      entityId: request.familyId ?? (request.trialLessonId as string),
+      after: {
+        requestId: request.id,
+        session: checkout.stripeSessionId,
+        expiresAt: checkout.expiresAt.toISOString(),
+        stripeError: errorCategory(cause),
+      },
+      reason: 'Stripe could not be asked about a card payment page whose expiry passed over an hour ago; Stripe takes no payment after expiry, so it was marked expired',
+    });
+    return true;
+  });
+}
+
+/** S1: the chat.config row that says one opener is opening this request's page (holder, until). */
+export function checkoutClaimKey(requestId: string): string {
+  return `checkout.opening:${requestId}`;
+}
+
+/** S1: another tap is opening this request's page right now. Not "paid": try again. */
+function alreadyOpening(): CommError {
+  return new CommError(CommErrorCode.CHECKOUT_OPENING, 'a payment page is already opening; try again', 409);
+}
+
+/** Card payment cannot go ahead right now; the client offers the bank transfer instead. */
+function cardUnavailable(): CommError {
+  return new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
+}
 
 class DuplicateEvent extends Error {}
 
@@ -47,12 +130,63 @@ export type WebhookOutcome =
   | 'refund_failed_after_record'
   /** A card was declined on Stripe's page; the attempt stays open (the parent may try again). */
   | 'payment_failed'
-  /** Stripe Billing (invoices, subscriptions): Chat opens none (PD-27 / PD-30 are prepaid packages). */
+  /**
+   * Stripe Billing (invoices, subscriptions, recurring charges): Chat opens none (PD-27 / PD-30 are
+   * prepaid packages). Another system on the same Stripe account may; recorded, never acted on.
+   */
   | 'ignored_not_chat'
+  /** A refund or dispute about a payment Chat did not take (another system on the same Stripe account): recorded, never acted on. */
+  | 'not_chat'
+  /** A dispute (chargeback) on one of Chat's card payments: audited and alerted; the money ledger is NOT changed (flag only). */
+  | 'dispute_opened'
+  | 'dispute_updated'
+  | `dispute_closed_${string}`
+  | 'dispute_funds_withdrawn'
+  | 'dispute_funds_reinstated'
   | 'ignored';
 
-/** Event families Chat never creates; seen only if someone sets up Stripe Billing on the account. */
+/**
+ * Event families Chat never creates; seen when Stripe Billing is used on the
+ * account (by another system: Chat's recurring charges do not exist).
+ */
 const BILLING_EVENT = /^(invoice|customer\.subscription|subscription_schedule)\./;
+
+const DISPUTE_EVENTS = new Set([
+  'charge.dispute.created',
+  'charge.dispute.updated',
+  'charge.dispute.closed',
+  'charge.dispute.funds_withdrawn',
+  'charge.dispute.funds_reinstated',
+]);
+
+/** The outcome of a `charge.dispute.*` event on one of Chat's payments. */
+export function disputeOutcome(type: string, status: string | null): WebhookOutcome {
+  switch (type) {
+    case 'charge.dispute.created':
+      return 'dispute_opened';
+    case 'charge.dispute.closed':
+      return `dispute_closed_${safe.disputeCode(status) ?? 'unknown'}`;
+    case 'charge.dispute.funds_withdrawn':
+      return 'dispute_funds_withdrawn';
+    case 'charge.dispute.funds_reinstated':
+      return 'dispute_funds_reinstated';
+    default:
+      return 'dispute_updated';
+  }
+}
+
+/** The generic line when a request has no usable label (in-app-payability.ts wording). */
+const LESSONS_LINE = 'Live one-to-one Quran lessons';
+
+/**
+ * S6: what the parent (and anyone reading the Stripe Dashboard, receipts or
+ * exports) sees as the line item: the request's label only, never the child's
+ * name. The label is what staff named the request; the period and "live
+ * one-to-one lessons" wording travel in the description (checkoutDescription).
+ */
+export function checkoutProductName(request: { label: string }): string {
+  return request.label.trim() || LESSONS_LINE;
+}
 
 /**
  * PD-27: card payments through Stripe Checkout.
@@ -62,7 +196,10 @@ const BILLING_EVENT = /^(invoice|customer\.subscription|subscription_schedule)\.
  * time, so the amount is always current. Before opening another, the request's
  * earlier sessions are looked at: one Stripe completed is RECORDED (its webhook
  * may be late) instead of charging again; one still open is expired, so two
- * Stripe pages for one request are never payable at once.
+ * Stripe pages for one request are never payable at once. If Stripe cannot
+ * confirm an earlier page is closed, no new one is opened (503, bank transfer)
+ * -- unless that page's own expiry passed over an hour ago (Stripe takes no
+ * payment after it): it is then marked expired, audited (W76b).
  *
  * CONFIRMING. Only a verified webhook confirms (the success page records
  * nothing). A payment is recorded when the event is new (chat.stripe_event,
@@ -96,6 +233,7 @@ export class CheckoutService {
     }
     this.requirePayable(request);
 
+    // A loop or abuse is refused first: one plain read, before any claim or Stripe call.
     const recent = await this.prisma.paymentCheckout.count({
       where: { requestId: request.id, createdAt: { gte: new Date(Date.now() - 3_600_000) } },
     });
@@ -103,24 +241,141 @@ export class CheckoutService {
       throw new CommError(CommErrorCode.BILLING_STATE, 'too many payment attempts for this request; try again in an hour', 429);
     }
 
-    // Earlier sessions: record a completed one, expire an open one.
+    // S1: one opener per request at a time. Two taps (two devices, a double
+    // submit) would otherwise both find no open session and both create one --
+    // two payable Stripe pages for one request. The first tap CLAIMS the
+    // request in a short transaction; a second tap meanwhile is refused at once
+    // (409 CHECKOUT_OPENING) instead of waiting. No transaction is open and no
+    // connection is held while Stripe is asked.
+    const holder = await this.claimOpening(request.id);
+    try {
+      return await this.openClaimed(request, opts, holder);
+    } finally {
+      await this.releaseOpening(request.id, holder);
+    }
+  }
+
+  /**
+   * S1: claim the right to open this request's page. A short transaction: a
+   * non-blocking advisory lock (a concurrent claimer is refused, never queued),
+   * then a chat.config row naming this opener until a time. A claim whose time
+   * has passed (its API process died) is taken over. Answers the holder id.
+   */
+  private async claimOpening(requestId: string): Promise<string> {
+    const key = checkoutClaimKey(requestId);
+    const holder = randomUUID();
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const [lock] = await tx.$queryRaw<Array<{ locked: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(hashtextextended(${key}, 0)) AS locked`;
+      if (lock?.locked !== true) return false;
+      const rows = await tx.$queryRaw<Array<{ key: string }>>`
+        INSERT INTO chat.config AS c (key, value, scope, description)
+        VALUES (${key},
+                jsonb_build_object('holder', ${holder}::text, 'until', now() + ${OPEN_CLAIM_SECONDS}::int * interval '1 second'),
+                'checkout', 'PD-27 S1: a Stripe Checkout page is being opened for this request (removed when done).')
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+         WHERE (c.value ->> 'until')::timestamptz <= now()
+        RETURNING key`;
+      return rows.length === 1;
+    }, CLAIM_TRANSACTION);
+    if (!claimed) throw alreadyOpening();
+    return holder;
+  }
+
+  /**
+   * S1: still ours? Renewed before every Stripe call. If another opener took
+   * the request over (ours ran past its time), nothing more is done: no Stripe
+   * call is ever made without the claim.
+   */
+  private async holdOpening(requestId: string, holder: string): Promise<void> {
+    const renewed = await this.prisma.$executeRaw`
+      UPDATE chat.config
+         SET value = jsonb_build_object('holder', ${holder}::text, 'until', now() + ${OPEN_CLAIM_SECONDS}::int * interval '1 second'),
+             updated_at = now()
+       WHERE key = ${checkoutClaimKey(requestId)} AND value ->> 'holder' = ${holder}`;
+    if (renewed !== 1) {
+      this.log.warn('stripe checkout: this opener\'s claim was taken over; stopping before Stripe is asked');
+      throw alreadyOpening();
+    }
+  }
+
+  /**
+   * An earlier page, looked up at Stripe while opening. Answers Stripe's
+   * session, or null when the look-up failed but the page's own expiry is long
+   * past and it was just marked expired (closeUnconfirmedCheckout). Any other
+   * failure (timeout, 5xx, not found, anything) is never turned into a local
+   * change: it is the bank-transfer answer (503). Stripe's own message is never
+   * shown; the category is logged. A claim taken over is still the 409.
+   */
+  private async lookUpEarlier(c: PaymentCheckout, requestId: string, holder: string, what: string): Promise<CheckoutSession | null> {
+    try {
+      return await this.stripe.retrieveCheckout(c.stripeSessionId);
+    } catch (e) {
+      if (pastPayableWindow(c)) {
+        await this.holdOpening(requestId, holder);
+        if (await closeUnconfirmedCheckout(this.prisma, this.audit, c, e)) {
+          this.log.warn(`stripe checkout: could not ${what} (${errorCategory(e)}); its expiry is long past, so it was marked expired (audited)`);
+          return null;
+        }
+      }
+      this.log.error(`stripe checkout: could not ${what} (${errorCategory(e)}); no new page is opened`);
+      throw cardUnavailable();
+    }
+  }
+
+  /** S1: the claim is given up (only our own; a later opener's is never removed). Best effort: it expires anyway. */
+  private async releaseOpening(requestId: string, holder: string): Promise<void> {
+    try {
+      await this.prisma.$executeRaw`
+        DELETE FROM chat.config WHERE key = ${checkoutClaimKey(requestId)} AND value ->> 'holder' = ${holder}`;
+    } catch (e) {
+      this.log.warn(`stripe checkout: claim not released (${errorCategory(e)}); it expires in ${OPEN_CLAIM_SECONDS} s`);
+    }
+  }
+
+  /** open(), holding the request's claim. Every Stripe call runs with no transaction open. */
+  private async openClaimed(
+    request: PaymentRequest,
+    opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean },
+    holder: string,
+  ): Promise<string> {
+    // Earlier sessions: record a completed one, expire an open one. FAIL CLOSED
+    // (LR-46 P2-1): a row changes only on what Stripe answered. If Stripe cannot
+    // say an earlier page is closed (it is unreachable, or refuses to expire a
+    // page that is still open), no new page is created -- the earlier one may
+    // still be payable, and two payable pages charge a parent twice. The parent
+    // is offered the bank transfer (503) and the next tap tries again; such a
+    // tap creates no session, so the hourly cap (MAX_CHECKOUTS_PER_HOUR) does
+    // not count it -- each costs one or two Stripe look-ups. The one exception
+    // (W76b): a page Stripe cannot be asked about whose own expiry passed long
+    // ago (pastPayableWindow) cannot take payment any more; it is marked
+    // expired with an audited reason, so it never blocks card payment forever.
     const open = await this.prisma.paymentCheckout.findMany({ where: { requestId: request.id, status: 'open' } });
     for (const c of open) {
-      let session: CheckoutSession;
-      try {
-        session = await this.stripe.retrieveCheckout(c.stripeSessionId);
-      } catch {
-        continue;
-      }
-      if (session.status === 'complete' && session.paymentStatus === 'paid') {
-        await this.confirm(session, null);
-      } else if (session.status === 'open') {
+      await this.holdOpening(request.id, holder);
+      let session = await this.lookUpEarlier(c, request.id, holder, 'look up an earlier page');
+      if (!session) continue;
+      if (session.status === 'open') {
+        await this.holdOpening(request.id, holder);
         try {
           await this.stripe.expireCheckout(session.id);
-        } catch {
-          // Completed between the two calls: its webhook records it.
+          session = { ...session, status: 'expired' };
+        } catch (e) {
+          // Paid or expired between the two calls, or Stripe failed: ask Stripe
+          // which. Only its answer closes the row; still open is a refusal.
+          this.log.warn(`stripe checkout: an earlier page was not expired (${errorCategory(e)}); asking Stripe again`);
+          await this.holdOpening(request.id, holder);
+          session = await this.lookUpEarlier(c, request.id, holder, 'look up an earlier page again');
+          if (!session) continue;
+          if (session.status === 'open') {
+            this.log.error('stripe checkout: an earlier page is still payable and could not be expired; no new page is opened');
+            throw cardUnavailable();
+          }
         }
-        await this.prisma.paymentCheckout.update({ where: { stripeSessionId: c.stripeSessionId }, data: { status: 'expired' } });
+      }
+      await this.holdOpening(request.id, holder);
+      if (session.status === 'complete' && session.paymentStatus === 'paid') {
+        await this.confirm(session, null);
       } else {
         await this.prisma.paymentCheckout.update({
           where: { stripeSessionId: c.stripeSessionId },
@@ -142,13 +397,14 @@ export class CheckoutService {
     // From the app: checked again just before Stripe is asked (a package voided since).
     if (opts.inApp && !lessons) throw notInApp();
     const sep = opts.returnUrl.includes('?') ? '&' : '?';
+    await this.holdOpening(fresh.id, holder);
     let customerId = await this.customerFor(fresh);
     const input = {
       requestId: fresh.id,
       organizationId: fresh.organizationId,
       amountMinor: remaining,
       currency: fresh.currency,
-      productName: fresh.childName ? `${fresh.label} — ${fresh.childName}` : fresh.label,
+      productName: checkoutProductName(fresh),
       description: checkoutDescription(fresh, lessons, opts.locale),
       successUrl: `${opts.returnUrl}${sep}checkout=success`,
       cancelUrl: `${opts.returnUrl}${sep}checkout=cancelled`,
@@ -157,6 +413,7 @@ export class CheckoutService {
       idempotencyKey: `checkout:${fresh.id}:${attempts}`,
     };
     let session: CheckoutSession;
+    await this.holdOpening(fresh.id, holder);
     try {
       try {
         session = await this.stripe.createCheckout({ ...input, customerId });
@@ -167,27 +424,63 @@ export class CheckoutService {
         if (!customerId || err.code !== 'resource_missing' || (err.param && err.param !== 'customer')) throw e;
         this.log.warn('stripe checkout: the family\'s Stripe customer no longer exists; paying as a guest (do not delete customers Chat created)');
         customerId = null;
+        await this.holdOpening(fresh.id, holder);
         session = await this.stripe.createCheckout({ ...input, customerId, idempotencyKey: `${input.idempotencyKey}:guest` });
       }
     } catch (e) {
+      // Our claim was taken over: the same 409, never "card payments are unavailable".
+      if (e instanceof CommError && e.code === CommErrorCode.CHECKOUT_OPENING) throw e;
       // Stripe's own message never reaches a parent (it can name parameters,
       // and it is English API prose); the category is logged, never the body
       // or the key. The client offers the bank transfer instead.
       this.log.error(`stripe checkout refused: ${errorCategory(e)}`);
-      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payment is unavailable right now; pay by bank transfer', 503);
+      throw cardUnavailable();
     }
     if (!session.url) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'Stripe did not return a payment page', 503);
-    await this.prisma.paymentCheckout.create({
-      data: {
-        stripeSessionId: session.id,
-        organizationId: fresh.organizationId,
-        requestId: fresh.id,
-        amountMinor: BigInt(remaining),
-        currency: fresh.currency,
-        expiresAt: session.expiresAt,
-        stripeCustomerId: safe.customer(session.customerId ?? customerId),
-      },
-    });
+    // The session is recorded whatever happens next (so a later opener, the
+    // webhook and the reconciler all know it), and in the same short
+    // transaction we look whether the claim is still ours.
+    let held: boolean;
+    try {
+      held = await this.prisma.$transaction(async (tx) => {
+        const mine = await tx.$queryRaw<Array<{ key: string }>>`
+          SELECT key FROM chat.config WHERE key = ${checkoutClaimKey(fresh.id)} AND value ->> 'holder' = ${holder} FOR UPDATE`;
+        await tx.paymentCheckout.create({
+          data: {
+            stripeSessionId: session.id,
+            organizationId: fresh.organizationId,
+            requestId: fresh.id,
+            amountMinor: BigInt(remaining),
+            currency: fresh.currency,
+            expiresAt: session.expiresAt,
+            stripeCustomerId: safe.customer(session.customerId ?? customerId),
+          },
+        });
+        return mine.length === 1;
+      }, CLAIM_TRANSACTION);
+    } catch (e) {
+      // S1: the same Stripe session is already recorded -- Stripe answered a
+      // replayed idempotency key with the session another open() recorded. A
+      // replay, not a failure: the same page, never a 500.
+      if ((e as { code?: string }).code !== 'P2002') throw e;
+      const known = await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } });
+      if (!known || known.requestId !== fresh.id) throw e;
+      this.log.warn('stripe checkout: the session was already recorded (a replayed open); answering the same page');
+      return session.url;
+    }
+    if (!held) {
+      // Stripe took longer than the claim and another opener took the request
+      // over: it may be creating its own page right now. Ours is never handed
+      // out; it is expired, so at most one page stays payable.
+      this.log.warn('stripe checkout: the claim was taken over while Stripe answered; this page is expired, not handed out');
+      try {
+        await this.stripe.expireCheckout(session.id);
+        await this.prisma.paymentCheckout.updateMany({ where: { stripeSessionId: session.id, status: 'open' }, data: { status: 'expired' } });
+      } catch {
+        // Recorded open: the next opener expires it, or its webhook records it.
+      }
+      throw alreadyOpening();
+    }
     return session.url;
   }
 
@@ -255,8 +548,10 @@ export class CheckoutService {
       case 'charge.refunded':
         return this.chargeRefunded(meta, event.data.object as Stripe.Charge);
       default:
+        if (DISPUTE_EVENTS.has(event.type)) return this.disputeEvent(meta, event.type, toDisputeFacts(event.data.object as Stripe.Dispute));
         if (BILLING_EVENT.test(event.type)) {
-          this.log.warn(`stripe webhook: ${event.type} -- Chat opens no Stripe Billing subscriptions or invoices; recorded, not acted on`);
+          // Expected when another system bills on the same Stripe account; not a warning about Chat.
+          this.log.log(`stripe webhook: ${event.type} -- Stripe Billing is not Chat's (Chat opens no subscriptions or invoices); recorded, not acted on`);
           return this.remember(meta, 'ignored_not_chat');
         }
         return this.remember(meta, 'ignored');
@@ -321,11 +616,135 @@ export class CheckoutService {
     const payment = refund.paymentIntentId
       ? await this.prisma.payment.findUnique({ where: { stripePaymentIntentId: refund.paymentIntentId } })
       : null;
-    // Its payment is not recorded yet (the refund arrived first, or the payment
-    // is not Chat's): kept with its payment intent, so recording the payment
-    // (and the reconciler) syncs it. Never dropped.
-    if (!payment) return this.remember(meta, 'refund_deferred');
+    // Its payment is not recorded. A payment Chat did not take (another system
+    // on the same Stripe account) is not_chat: recorded, never acted on. One of
+    // Chat's checkouts whose payment is not recorded yet (the refund arrived
+    // first), or one Chat cannot tell, is kept with its payment intent, so
+    // recording the payment (and the reconciler) syncs it. Never dropped.
+    if (!payment) return this.unrecordedRefund(meta, refund.paymentIntentId);
     return this.recordRefund({ ...meta, organizationId: payment.organizationId }, payment, refund);
+  }
+
+  /** A refund (or charge.refunded) whose payment Chat has not recorded: not_chat, or kept as refund_deferred. */
+  private async unrecordedRefund(meta: EventMeta, paymentIntentId: string | null): Promise<WebhookOutcome> {
+    let checkout: PaymentCheckout | null | undefined;
+    try {
+      const found = await this.lookUpChatCheckout(paymentIntentId);
+      checkout = found.checkout;
+      // No Chat checkout, but Stripe says the object is Chat's (the tag on the
+      // session or its payment intent): Chat's own row is missing, or Stripe's
+      // session list came back empty. Kept as refund_deferred, so the reconciler
+      // and the payment's recording still sync it; not_chat would lose it silently.
+      if (checkout === null && paymentIntentId && (await this.taggedChat(paymentIntentId, found.session))) {
+        this.log.warn('stripe webhook: a refund on a payment intent tagged jawwid-chat has no Chat checkout; kept as deferred (check it in the Stripe Dashboard)');
+        checkout = undefined;
+      }
+    } catch (e) {
+      // Stripe unreachable: kept (the reconciler syncs it once the payment exists); harmless if foreign.
+      this.log.warn(`stripe webhook: a refund's payment was not looked up (${errorCategory(e)}); kept as deferred`);
+      checkout = undefined;
+    }
+    if (checkout === null) return this.remember(meta, 'not_chat');
+    return this.remember(checkout ? { ...meta, organizationId: checkout.organizationId } : meta, 'refund_deferred');
+  }
+
+  /** The session or its payment intent carries Chat's system tag. A hint for keeping a refund, never proof of ownership. */
+  private async taggedChat(paymentIntentId: string, session: CheckoutSession | null): Promise<boolean> {
+    if (session?.metadata?.system === CHAT_STRIPE_SYSTEM) return true;
+    return (await this.stripe.paymentIntentSystem(paymentIntentId)) === CHAT_STRIPE_SYSTEM;
+  }
+
+  /**
+   * S3: the checkout Chat opened for a payment intent -- from Chat's own table,
+   * never from metadata alone. null: not Chat's (no payment intent; or Stripe
+   * knows no checkout for it, or one Chat did not open). undefined: Chat cannot
+   * tell (no secret key to ask Stripe with). Throws when Stripe is unreachable.
+   */
+  private async chatCheckoutFor(paymentIntentId: string | null): Promise<PaymentCheckout | null | undefined> {
+    return (await this.lookUpChatCheckout(paymentIntentId)).checkout;
+  }
+
+  /** chatCheckoutFor, plus the Stripe session it asked about (null when none was asked for or found). */
+  private async lookUpChatCheckout(
+    paymentIntentId: string | null,
+  ): Promise<{ checkout: PaymentCheckout | null | undefined; session: CheckoutSession | null }> {
+    if (!paymentIntentId) return { checkout: null, session: null };
+    const local = await this.prisma.paymentCheckout.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
+    if (local) return { checkout: local, session: null };
+    if (!this.stripe.checkoutAvailable) return { checkout: undefined, session: null };
+    const session = await this.stripe.findCheckoutByPaymentIntent(paymentIntentId);
+    if (!session) return { checkout: null, session: null };
+    const checkout = await this.prisma.paymentCheckout.findUnique({ where: { stripeSessionId: session.id } });
+    return { checkout: checkout ?? null, session };
+  }
+
+  /**
+   * M2: a dispute (chargeback) on a card payment. Chat's own payments only --
+   * matched by payment intent, else by charge, to chat.payment (or to a checkout
+   * Chat opened whose payment is not recorded yet). Anything else is not_chat.
+   *
+   * FLAG ONLY. The money ledger is not changed: no refund row, no void, the
+   * package stands. The event row and an audit row are written together (once
+   * per event), and opened / funds withdrawn log an error so a person responds
+   * in the Stripe Dashboard before Stripe's evidence deadline.
+   * docs/admin/pd027-stripe-lifecycle.md §4.
+   */
+  private async disputeEvent(meta: EventMeta, type: string, dispute: DisputeFacts): Promise<WebhookOutcome> {
+    const m: EventMeta = { ...meta, paymentIntentId: meta.paymentIntentId ?? dispute.paymentIntentId };
+    const owner = await this.disputedPayment(dispute);
+    if (!owner) return this.remember(m, 'not_chat');
+
+    const outcome = disputeOutcome(type, dispute.status);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const inserted = await tx.stripeEvent.createMany({ data: [{ ...m, organizationId: owner.organizationId, outcome }], skipDuplicates: true });
+        if (inserted.count === 0) throw new DuplicateEvent();
+        await this.audit.audit(tx, {
+          // payment.dispute_opened | _updated | _closed | _funds_withdrawn | _funds_reinstated
+          action: `payment.${outcome.startsWith('dispute_closed_') ? 'dispute_closed' : outcome}`,
+          entity: owner.familyId ? 'family' : 'lesson',
+          entityId: (owner.familyId ?? owner.trialLessonId) as string,
+          after: {
+            paymentId: owner.paymentId,
+            requestId: owner.requestId,
+            disputeId: safe.objectId(dispute.id),
+            chargeId: dispute.chargeId,
+            paymentIntentId: dispute.paymentIntentId,
+            amountMinor: dispute.amountMinor,
+            currency: dispute.currency,
+            stripeStatus: dispute.status,
+            stripeReason: dispute.reason,
+            outcome,
+          },
+          reason: 'a Stripe dispute on a Chat card payment; recorded and flagged, the money ledger is not changed -- respond in the Stripe Dashboard',
+        });
+      });
+    } catch (e) {
+      if (e instanceof DuplicateEvent) return 'duplicate';
+      throw e;
+    }
+    const line = `stripe dispute ${dispute.id}: ${outcome} on ${owner.paymentId ? `payment ${owner.paymentId}` : `request ${owner.requestId} (payment not recorded yet)`}; audited, ledger unchanged`;
+    if (outcome === 'dispute_opened' || outcome === 'dispute_funds_withdrawn') this.log.error(`${line} -- needs a person`);
+    else this.log.warn(line);
+    return outcome;
+  }
+
+  /** The Chat payment (or, before it is recorded, the Chat request) a dispute is about; null when it is not Chat's. */
+  private async disputedPayment(dispute: DisputeFacts): Promise<DisputeOwner | null> {
+    let payment: Payment | null = null;
+    if (dispute.paymentIntentId) payment = await this.prisma.payment.findUnique({ where: { stripePaymentIntentId: dispute.paymentIntentId } });
+    if (!payment && dispute.chargeId) payment = await this.prisma.payment.findUnique({ where: { stripeChargeId: dispute.chargeId } });
+    if (payment) {
+      return payment.familyId || payment.trialLessonId
+        ? { organizationId: payment.organizationId, familyId: payment.familyId, trialLessonId: payment.trialLessonId, paymentId: payment.id, requestId: payment.requestId }
+        : null;
+    }
+    // Rare: disputed before Chat recorded the payment (its webhook lost). Throws
+    // if Stripe is unreachable: the webhook answers 500 and Stripe retries.
+    const checkout = await this.chatCheckoutFor(dispute.paymentIntentId);
+    const request = checkout ? await this.prisma.paymentRequest.findUnique({ where: { id: checkout.requestId } }) : null;
+    if (!request || (!request.familyId && !request.trialLessonId)) return null;
+    return { organizationId: request.organizationId, familyId: request.familyId, trialLessonId: request.trialLessonId, paymentId: null, requestId: request.id };
   }
 
   /**
@@ -338,8 +757,10 @@ export class CheckoutService {
     const m = { ...meta, paymentIntentId: intent };
     if (!intent) return this.remember(m, 'ignored');
     const payment = await this.prisma.payment.findUnique({ where: { stripePaymentIntentId: intent } });
-    // Unknown payment, or no key to list the refunds with: kept for the sync.
-    if (!payment || !this.stripe.checkoutAvailable) return this.remember(payment ? { ...m, organizationId: payment.organizationId } : m, 'refund_deferred');
+    // Not Chat's payment: not_chat. Chat's but not recorded yet: kept for the sync.
+    if (!payment) return this.unrecordedRefund(m, intent);
+    // No key to list the refunds with: kept for the sync.
+    if (!this.stripe.checkoutAvailable) return this.remember({ ...m, organizationId: payment.organizationId }, 'refund_deferred');
     const recorded = await this.syncRefunds(payment);
     return this.remember({ ...m, organizationId: payment.organizationId }, recorded > 0 ? 'refund_recorded' : 'already_recorded');
   }
@@ -462,6 +883,11 @@ export class CheckoutService {
     await this.ledger.afterRecorded(recorded);
     await this.syncDeferredRefunds(recorded.payment);
     return 'recorded';
+  }
+
+  /** W76b: closeUnconfirmedCheckout() for the reconciler (an attempt Stripe could not be asked about). */
+  closeUnconfirmed(checkout: PaymentCheckout, cause: unknown): Promise<boolean> {
+    return closeUnconfirmedCheckout(this.prisma, this.audit, checkout, cause);
   }
 
   /** Called by reconciliation: a session Stripe says is paid, with no event (it was lost). */
@@ -625,6 +1051,14 @@ export class CheckoutService {
       return DEFAULT_TIME_ZONE;
     }
   }
+}
+
+interface DisputeOwner {
+  organizationId: string;
+  familyId: string | null;
+  trialLessonId: string | null;
+  paymentId: string | null;
+  requestId: string | null;
 }
 
 interface EventMeta {

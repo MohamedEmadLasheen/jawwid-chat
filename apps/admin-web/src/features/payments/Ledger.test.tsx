@@ -55,6 +55,7 @@ function transaction(over: Partial<Transaction> = {}): Transaction {
     recordedBy: null,
     card: { brand: 'visa', last4: '4242', wallet: null },
     stripe: { checkoutSessionId: 'cs_test_a1', paymentIntentId: 'pi_test_1', chargeId: 'ch_test_1', customerId: 'cus_test_1', livemode: false },
+    overpaid: null,
     ...over,
   }
 }
@@ -385,6 +386,33 @@ describe('Payments > Transactions', () => {
     expect(within(dialog).queryByText(/the lesson package stays credited/)).not.toBeInTheDocument()
   })
 
+  it('marks a payment recorded beyond what was owed: “Overpaid: refund or credit” on the row and in the detail, with the amount and why; none on an owed one', async () => {
+    const overpaid = { amountMinor: 120000, why: 'request_paid', settled: false }
+    serve({ list: list({ items: [transaction({ overpaid }), CASH] }) })
+    on('GET', /\/payments\/p-1$/, () =>
+      json(detail({ payment: { ...transaction({ overpaid }), voided: null, paymentMethodType: 'card' }, canReconcile: false })),
+    )
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions' })
+    const table = await screen.findByRole('table', { name: 'Transactions' })
+    const [, alpha, beta] = within(table).getAllByRole('row')
+    expect(within(alpha!).getByText('Overpaid: refund or credit')).toBeInTheDocument()
+    expect(within(beta!).queryByText(/^Overpaid/)).not.toBeInTheDocument()
+
+    await userEvent.click(within(table).getByText('Family Alpha'))
+    const dialog = await screen.findByRole('dialog', { name: /^Payment of/ })
+    expect(within(dialog).getByText('Overpaid: refund or credit')).toBeInTheDocument()
+    expect(within(dialog).getByText(/^Overpaid by AED\s1,200\.00$/)).toBeInTheDocument()
+    expect(within(dialog).getByText('The request was already paid when this money arrived.')).toBeInTheDocument()
+  })
+
+  it('an overpayment refunded since reads as settled, in Arabic too', async () => {
+    serve({ list: list({ items: [transaction({ overpaid: { amountMinor: 50000, why: 'instalment_closed', settled: true } })] }) })
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=transactions', locale: 'ar' })
+    const table = await screen.findByRole('table', { name: 'المعاملات' })
+    expect(within(table).getByText('مبلغ زائد (تمت تسويته)')).toBeInTheDocument()
+    expect(within(table).queryByText('مبلغ زائد: يُردّ أو يُضاف رصيدًا')).not.toBeInTheDocument()
+  })
+
   it('Reconcile with Stripe shows Chat’s and Stripe’s numbers when they differ, and the refunds recorded', async () => {
     serve({ canReconcile: true })
     on('GET', /\/payments\/p-1$/, () => json(detail()))
@@ -554,5 +582,38 @@ describe('Payments > Stripe events', () => {
       within(done).getAllByRole('term').map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]),
     )
     expect(counts).toEqual({ Checked: '4', 'Payments recorded': '1', 'Marked expired': '2', 'Refunds recorded': '3', Errors: '0' })
+  })
+
+  it('names dispute outcomes and not_chat in words (English and Arabic); urgent ones stand out; dispute events are a type filter', async () => {
+    serve({ canReconcile: true })
+    on('GET', /\/stripe\/events(\?.*)?$/, () =>
+      json({
+        items: [
+          event({ id: 'evt_d1', type: 'charge.dispute.created', outcome: 'dispute_opened', objectId: 'du_test_1' }),
+          event({ id: 'evt_d2', type: 'charge.dispute.funds_withdrawn', outcome: 'dispute_funds_withdrawn', objectId: 'du_test_1' }),
+          event({ id: 'evt_d3', type: 'charge.dispute.closed', outcome: 'dispute_closed_won', objectId: 'du_test_1' }),
+          event({ id: 'evt_d4', type: 'refund.created', outcome: 'not_chat', objectId: 're_test_x', paymentIntentId: 'pi_test_x' }),
+        ],
+        nextCursor: null,
+      }),
+    )
+    const view = renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments' })
+    await userEvent.click(await within(tabs()).findByRole('button', { name: 'Stripe events' }))
+    const table = await screen.findByRole('table', { name: 'Stripe events' })
+    const opened = await within(table).findByText('Dispute opened')
+    expect(opened.closest('.badge')).toHaveClass('badge--danger')
+    expect(within(table).getByText('Dispute: funds withdrawn').closest('.badge')).toHaveClass('badge--danger')
+    expect(within(table).getByText('Dispute closed: won').closest('.badge')).toHaveClass('badge--ok')
+    expect(within(table).getByText('Not a Chat payment')).toBeInTheDocument()
+
+    const filters = screen.getByRole('region', { name: 'Filters' })
+    await chooseOption(userEvent, within(filters).getByLabelText('Outcome'), 'dispute_opened')
+    await chooseOption(userEvent, within(filters).getByLabelText('Event type'), 'charge.dispute.')
+    await waitFor(() => expect(calls('GET', /\/stripe\/events/).map(qs)).toContain('outcome=dispute_opened&type=charge.dispute.'))
+    view.unmount()
+
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=events', locale: 'ar' })
+    expect((await screen.findAllByText('فُتح اعتراض على الدفعة')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('ليست دفعة من Chat').length).toBeGreaterThan(0)
   })
 })

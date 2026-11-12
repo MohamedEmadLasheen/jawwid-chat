@@ -85,10 +85,24 @@ It is guarded by `FOR UPDATE` on the request and by unique keys. No event trigge
 | `checkout.session.expired` | attempt → `expired` | `checkout_expired` |
 | `payment_intent.succeeded` **(new)** | ours (metadata `paymentRequestId`): find its session at Stripe, confirm it. This is a second path to the same idempotent confirm, so a missed `checkout.session.completed` still records. | as confirm, or `ignored` |
 | `payment_intent.payment_failed` **(new)** | ours: the attempt's `failure_count`, `failure_code` (Stripe's decline code, never a message, never card data) and `last_failed_at` | `payment_failed` |
-| `refund.created`, `refund.updated` | record (unchanged); an unknown payment is now **deferred**, not dropped | `refund_recorded`, `refund_deferred`, `refund_not_final` |
-| `charge.refunded` **(new)** | sync every refund of that payment intent from Stripe | `refund_recorded`, `refund_deferred`, `already_recorded` |
-| `invoice.*`, `customer.subscription.*` **(new)** | none: Chat opens no Stripe Billing subscriptions (§4). A warning is logged. | `ignored_not_chat` |
+| `refund.created`, `refund.updated`, `refund.failed` | record (unchanged). A payment not recorded yet that belongs to a checkout Chat opened is **deferred**, not dropped. A payment Chat did not take (another system on the same Stripe account) is `not_chat` (W59). | `refund_recorded`, `refund_deferred`, `refund_not_final`, `refund_failed_after_record`, `not_chat` |
+| `charge.refunded` **(new)** | sync every refund of that payment intent from Stripe | `refund_recorded`, `refund_deferred`, `already_recorded`, `not_chat` |
+| `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated` **(W59)** | Chat's own payments only (matched by payment intent, else charge). Flag only: one audit row per event, an error log for opened and funds withdrawn, **no change to the money ledger** (§4). | `dispute_opened`, `dispute_updated`, `dispute_closed_<status>` (`won`, `lost`, `warning_closed`, …), `dispute_funds_withdrawn`, `dispute_funds_reinstated`, `not_chat` |
+| `invoice.*`, `customer.subscription.*`, `subscription_schedule.*` | none: Chat opens no Stripe Billing subscriptions (§4). Logged at info level. | `ignored_not_chat` |
 | anything else | none | `ignored` |
+
+**Whose object is it (W59).** Chat decides from its own tables, never from metadata alone (metadata can be
+edited in the Dashboard): a payment in `chat.payment` (by payment intent or charge), or a checkout in
+`chat.payment_checkout` (locally by the payment intent, else the session Stripe lists for that intent).
+Anything else is another system's and is recorded as `not_chat`, with no academy, and never acted on. If
+Chat cannot tell (no secret key, or Stripe unreachable), a refund is kept as `refund_deferred`. It is never
+dropped, and it is harmless if it turns out to be foreign: the reconciler only syncs it once a Chat payment
+with that payment intent exists. One safeguard for refunds only: when Chat finds no checkout of its own
+but the Stripe session or its payment intent carries `metadata.system = jawwid-chat`, the refund is kept
+as `refund_deferred` with a warning log (never `not_chat`), so a missing row or an empty Stripe session
+list cannot silently drop a Chat refund. The tag only keeps a refund waiting; it never records money or
+flags a dispute. A dispute Chat cannot classify because Stripe is unreachable answers
+500, so Stripe retries. Without a secret key Chat opens no checkouts, so an unmatched dispute is `not_chat`.
 
 **Order does not matter.**
 - A refund before its payment is stored as `refund_deferred`, with the payment intent. When the payment is
@@ -162,6 +176,76 @@ payment holds the new data, unless exported first).
   webhook log are `canVerify`.
 - Card data never touches Chat (Stripe-hosted Checkout). Only brand, last 4 and wallet type are stored.
 
+### 3.8 Overpayments and one payable checkout (M3, S1; 2026-11-10)
+
+**M3: money beyond what was owed is recorded, then flagged.** `PaymentLedger.record` reads what the
+request or instalment still owed *before* the payment, under the same row locks. It never changes what is
+recorded: money that was taken is always recorded. When the payment is larger than what was owed, it
+writes an audit row `payment.overpayment_detected` (entity `payment`, the payment id) with `amountMinor`,
+`owedMinor`, `overpaidMinor`, `currency` and `why`:
+
+| `why` | When |
+|---|---|
+| `request_paid` | the request was already paid (two payments, e.g. a bank transfer approved, then a late card webhook) |
+| `request_cancelled` | the request was cancelled (replaced, or cancelled by staff) |
+| `instalment_closed` | its instalment was already paid another way, or voided (also a receipt approved after that, which the ledger records against no request) |
+| `more_than_owed` | still open, but this payment is larger than what remained |
+
+After the transaction, the staff who refund and reconcile (`canVerify`: the super admin and the Operations
+Manager of the academy) get a notice through `NotificationService.schedule`, as other staff notices are
+sent (event type `payment_overpaid`, one per payment and person). The push is the generic one, so the
+amount stays behind sign-in. The notice is best effort. The audit row is the record. Admin > Payments >
+Transactions shows **"Overpaid: refund or credit"** on the row and in the detail (with the amount and the
+reason). It reads **"Overpaid (settled)"** once refunds or a void *of the flagged payment itself* cover
+it. Resolve a double payment by refunding (or voiding) the flagged payment: voiding the *other* payment
+(for example the bank transfer) does not clear the marker, which stays red. The API gives
+`overpaid: { amountMinor, why, settled } | null` on `GET /payments` and `GET /payments/:id`, computed from
+the audit row. No schema change.
+
+**S1: one payable Stripe session per request.** Two taps at once used to find no open session each and
+create two payable pages. `CheckoutService.open()` now first refuses a loop (10 opens in an hour, 429),
+then **claims** the request in a short transaction: `pg_try_advisory_xact_lock` (never waits) and a
+`chat.config` row `checkout.opening:<request id>` naming this opener until a time (150 s). A second tap
+while the first is opening gets **409 `COMM.CHECKOUT_OPENING`** at once ("a payment page is already
+opening; try again"); the app and the link page show their general "try again" message, and the next tap
+works. No transaction is open and no pool connection is held while Stripe is asked, so a burst of taps on
+one request (the link is public) cannot use up the API's small connection pool.
+
+The claim is renewed before every Stripe call; if another opener took it over (ours ran past its time),
+nothing more is asked of Stripe. The session Stripe returned is recorded in a short transaction that also
+checks the claim is still ours; if it is not, that page is expired and never handed out, so at most one page
+stays payable. The claim row is removed when the open ends (its time covers an API process that died). The
+idempotency key stays `checkout:<request>:<attempts>`; if the `payment_checkout` insert hits a unique
+violation (`P2002`, the same Stripe session already recorded, as when Stripe answers a replayed key), that is
+a replay: the same page, not a 500.
+
+**Fail closed on an earlier page (LR-46 P2-1).** Before a new page is created, each earlier `open` attempt is
+looked up at Stripe and expired. An attempt is marked `expired` only on Stripe's word: the expire call
+succeeded, or a fresh look-up shows it `expired` (or `complete`, which is recorded as paid). If Stripe cannot
+be reached for the look-up, or the expire fails and the page still shows `open` (or cannot be looked up
+again), the attempt stays `open` in Chat, no new page is created, and the parent gets the usual **503
+`COMM.PAYMENTS_UNAVAILABLE`** ("pay by bank transfer"); the next tap tries again. Such a tap creates no
+session, so the hourly cap (`MAX_CHECKOUTS_PER_HOUR`, 10 sessions per request) does not count it: during a
+Stripe outage each tap costs one or two Stripe look-ups and nothing more. A transient Stripe error is never
+turned into a local state change. The claim is released on every path.
+
+**A page Stripe cannot be asked about (W76b).** Stripe never takes a payment on a Checkout Session after its
+`expires_at`. So when the look-up fails (Stripe no longer has the session, for example after the key or mode
+changed, or Stripe is down) **and** the attempt's own `expires_at` passed more than **1 hour** ago
+(`UNCONFIRMED_CLOSE_MARGIN_MS`: room for clock skew and a payment submitted in the page's last seconds), the
+attempt is marked `expired` and an audit row `payment.checkout_closed_unconfirmed` is written with the request,
+the session, its expiry and the Stripe error category. The tap then goes on and opens one new page. Before that
+point the tap is still refused (503): a failed look-up on a page that may still be payable never closes it.
+The reconciler applies the same rule on every pass, so such an attempt is cleared without anyone tapping. If the
+page was in fact paid, its webhook still records the payment (it finds the attempt by session id, whatever its
+status).
+
+**After a cancel.** Cancelling a request expires its open pages at Stripe. A row is marked `expired` only when
+the expire call succeeded, a look-up after a failed expire shows the page `expired`, or (as above) Stripe cannot
+be asked and the page's expiry is over an hour past. Otherwise the row stays `open` and an error is logged
+(`a cancelled request's page …`): the page may still be payable, the reconciler keeps asking Stripe, and a
+payment that does come is recorded and flagged as an overpayment (M3). The cancel itself never fails on this.
+
 ## 4. Not done, on purpose
 
 - **Automatic recurring card charges (Stripe Billing subscriptions).** PD-27 and PD-30 define a
@@ -196,6 +280,28 @@ payment holds the new data, unless exported first).
     remove lessons already credited." ("تم استرداد <amount>. لا يُلغي الاسترداد الحصص المضافة من قبل.").
 
   Removing lessons after a refund is a manual staff action.
+
+- **Disputes (chargebacks) change no money in Chat (W59, M2).** A dispute on one of Chat's card payments is
+  recorded and flagged: the event's outcome (`dispute_opened`, `dispute_updated`, `dispute_closed_<status>`,
+  `dispute_funds_withdrawn`, `dispute_funds_reinstated`), an audit row (`payment.dispute_opened`,
+  `payment.dispute_updated`, `payment.dispute_closed`, `payment.dispute_funds_withdrawn`,
+  `payment.dispute_funds_reinstated`) naming the payment, request, dispute, charge, amount, Stripe's status
+  and reason code, and an error log for a new dispute and for money withdrawn. The payment, its refunds,
+  the request and the lesson package stay as they were. Responding with evidence happens in the Stripe
+  Dashboard, before Stripe's deadline. Whether a lost dispute should reduce what Chat shows as received (a
+  forward-only adjustment entry) is a follow-up decision. A dispute that arrives before Chat recorded the
+  payment (its webhook was lost) is flagged against the request.
+- **Other systems on the same Stripe account (W59, S3).** Every Checkout Session Chat opens, and its payment
+  intent, carry `metadata.system = jawwid-chat` (with `paymentRequestId` and `organizationId`), so another
+  system, or a person in the Dashboard, can tell Chat's objects apart. Chat never acts on an object it did
+  not create: refunds and disputes on other payments are `not_chat`. Recurring Stripe Billing events
+  (`invoice.*`, `customer.subscription.*`, `subscription_schedule.*`) keep the outcome `ignored_not_chat`
+  rather than a new `recurring_observed`. The outcome already means "Stripe Billing, not Chat's, recorded,
+  not acted on". Renaming it would split the webhook log's history and filter in two with no change in
+  behaviour. Because those events are expected when another system bills on the account, they are now
+  logged at info level, not as a warning.
+- **No child's name on Stripe (W59, S6).** The Checkout line item is the request's label only (or "Live
+  one-to-one Quran lessons" if the label is blank). The child's name stays in Chat's own records.
 
 ## 4a. A card while a bank-transfer receipt is waiting (W61 S2)
 
@@ -243,9 +349,11 @@ store (`infra/env/manifest.tsv` lists them).
 1. **Developers → Webhooks → Add endpoint**: `https://<api host>/api/v1/stripe/webhook`. Events:
    `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
    `checkout.session.async_payment_failed`, `checkout.session.expired`, `payment_intent.succeeded`,
-   `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `charge.refunded`.
-   For an existing endpoint, **add** the four new ones: `payment_intent.succeeded`,
-   `payment_intent.payment_failed`, `refund.updated` (if missing) and `charge.refunded`.
+   `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `refund.failed`, `charge.refunded`,
+   `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`,
+   `charge.dispute.funds_withdrawn`, `charge.dispute.funds_reinstated`.
+   For an existing endpoint, **add** any that are missing, in particular the five `charge.dispute.*` events
+   (W59) and `refund.failed`.
    Do not subscribe `invoice.*` or `customer.subscription.*`: they are harmless (recorded as
    `ignored_not_chat`) but noise.
 2. Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET`. Staging and production have separate
@@ -317,8 +425,12 @@ key, a card number or Stripe's error message. Errors go to Sentry, as before.
 | `stripe reconcile: a paid checkout had no webhook; recorded from Stripe` (warn) | A webhook was lost | Occasional is fine; frequent means check the endpoint's events and delivery |
 | `stripe reconcile: payment … differs from Stripe` (warn) | Chat and Stripe disagree after reconciling | Open the payment in Admin and reconcile; escalate if it stays out of sync |
 | `payment.stripe_mismatch` in `chat.audit_log`, outcome `mismatch` | Paid amount or currency differs from what Chat asked | Investigate. It was never recorded as a payment. |
-| outcome `ignored_not_chat` (warn) | Stripe Billing is in use on the account | Nothing in Chat; ask who set it up |
-| outcome `refund_deferred` older than an hour | A refund for a payment Chat never recorded | Admin → Stripe events; find the payment intent in Stripe |
+| `payment.checkout_closed_unconfirmed` in `chat.audit_log` | Stripe could not be asked about a card page over an hour past its expiry; it was marked expired | Occasional (Stripe down): fine. Many: check the key and mode (`STRIPE_SECRET_KEY`) |
+| `a cancelled request's page … left open` (error) | A cancelled request's Stripe page could not be expired | Check it in the Stripe Dashboard; a payment that comes is flagged as an overpayment |
+| outcome `ignored_not_chat` (info) | Stripe Billing is in use on the account (another system's recurring charges) | Nothing in Chat |
+| outcome `not_chat` | A refund or dispute on a payment Chat did not take | Nothing in Chat; it belongs to another system on the account |
+| `stripe dispute … dispute_opened` / `dispute_funds_withdrawn` (error), audit `payment.dispute_*`, outcome `dispute_*` | A parent's bank disputed a Chat card payment | Respond in the Stripe Dashboard before the evidence deadline. Chat's ledger is unchanged. |
+| outcome `refund_deferred` older than an hour | A refund on a Chat checkout whose payment Chat has not recorded, one Chat could not classify (Stripe unreachable), or one tagged `jawwid-chat` with no Chat checkout (warning log) | Admin → Stripe events; find the payment intent in Stripe |
 | `stripe customer not created` / `paying as a guest` (warn) | Customers scope missing, or a customer was deleted | Fix the key scopes |
 
 SQL for operations (read-only):
@@ -350,7 +462,12 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Stripe unreachable (event lookup, card details, reconcile): retried or recorded without details, never lost | same |
 | Lost webhook: the reconciler records once, marks expired, survives Stripe being down; per-payment reconcile | same |
 | Stripe Billing events (`invoice.*`, `customer.subscription.*`): change nothing | › Stripe Billing events |
+| W59: `system: jawwid-chat` on the session and its payment intent; no child's name on the line item | › S3 + S6, and `test/unit/billing/stripe-disputes-hygiene.spec.ts` |
+| W59: each dispute event on a recorded payment (by payment intent or charge): outcome, one audit row, error log for opened and funds withdrawn, ledger unchanged; foreign dispute, refund and `charge.refunded` are `not_chat`; an unclassifiable refund stays deferred | › disputes (M2), and the unit spec above |
 | Ledger filters, totals, paging, detail; family scope; parents, teachers, unauthenticated refused; another family's request refused; webhook-log tenancy | › the transaction ledger |
+| Overpayment (M3): bank transfer then a late card webhook, and an instalment paid in cash while the card paid it, are recorded, flagged, staff told, the transaction marked; an owed payment is never flagged | `pd027-overpayment-checkout-lock.spec.ts` › M3 |
+| One payable session (S1): two concurrent opens (service and HTTP) create one Stripe session, the other tap gets 409 `CHECKOUT_OPENING`; eight opens on a 3-connection pool leave an unrelated query fast; a claim lost before or during Stripe creates nothing or hands nothing out; an already-recorded session answers the same page, no 500 | same › S1 |
+| Fail closed (LR-46 P2-1, W76b): an earlier page Stripe cannot confirm closed gives 503 and no new page; one Stripe cannot find and over an hour past its expiry is marked expired (audited) by a tap or the reconciler; after a cancel, a failed expire leaves the row open | same › LR-46 |
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
