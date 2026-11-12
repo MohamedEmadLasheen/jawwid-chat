@@ -46,6 +46,13 @@ export class ParentPaymentsService {
   /** { requestId } | { instalmentId } -> { url } (Stripe Checkout). */
   async startCheckout(actorId: string, body: Record<string, unknown>) {
     const { actor, contact } = await this.billing.requireParent(actorId);
+    // W63 / LR-46 P3-1: the operator's pause comes first and wins everywhere, App Review
+    // mode included (owner, 2026-11-12). Checked BEFORE payable() may make an
+    // instalment's payment request, so a paused card tap writes nothing. open()
+    // checks it again (the web /pay link goes straight there).
+    if (await isCardPaused(this.prisma)) {
+      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
+    }
     // OA-12: before anything is looked up or made (an instalment's request is
     // created on the way to Stripe): a review account gets the demo page only.
     if (await inReviewMode(this.prisma, contact.organizationId)) {
@@ -54,12 +61,6 @@ export class ParentPaymentsService {
     }
     if (!this.checkout.available) {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not available; pay by bank transfer', 503);
-    }
-    // W63 / LR-46 P3-1: the operator's pause, checked BEFORE payable() may make an
-    // instalment's payment request, so a paused card tap writes nothing. open()
-    // checks it again (the web /pay link goes straight there).
-    if (await isCardPaused(this.prisma)) {
-      throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
     }
     const request = await this.payable(actor.actorId, contact.familyId, body);
     const family = await this.prisma.family.findUnique({ where: { id: contact.familyId }, select: { language: true } });
