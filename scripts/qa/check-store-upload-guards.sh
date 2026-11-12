@@ -661,7 +661,7 @@ def check_sentry(files, errors):
     # Run the scrub itself: it must keep every variable the Sentry step reads after it and unset any
     # other SENTRY_* variable, SENTRY_CLI included (release run 43024454072 failed under set -u
     # because the step still read a SENTRY_CLI the scrub had unset).
-    kept = ('SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_URL')
+    kept = ('SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_URL', 'SENTRY_LOG_LEVEL', 'SENTRY_NO_PROGRESS_BAR')
     env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'SENTRY_PLANTED': 'x', 'SENTRY_CLI': 'x'}
     env.update({k: 'x' for k in kept})
     probe = ' '.join(f'"${{{k}-UNSET}}"' for k in kept + ('SENTRY_PLANTED', 'SENTRY_CLI'))

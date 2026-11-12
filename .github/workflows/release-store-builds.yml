@@ -370,8 +370,8 @@ jobs:
         run: |
           set -euo pipefail
           p="$(bash release-tools/scripts/mobile/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli")"
-          "$p" --version
           [ "$p" = "$RUNNER_TEMP/sentry-cli/sentry-cli" ] || { echo "::error::install-sentry-cli.sh did not install at its fixed path; nothing was sent to Sentry."; exit 1; }
+          "$p" --version
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the Dart split-debug-info symbols, and the R8
         # mapping file when the build wrote one. Symbols go to Sentry and nowhere else, and nothing of
@@ -688,8 +688,8 @@ jobs:
         run: |
           set -euo pipefail
           p="$(bash release-tools/scripts/mobile/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli")"
-          "$p" --version
           [ "$p" = "$RUNNER_TEMP/sentry-cli/sentry-cli" ] || { echo "::error::install-sentry-cli.sh did not install at its fixed path; nothing was sent to Sentry."; exit 1; }
+          "$p" --version
       - name: Upload the debug symbols to Sentry (before the store upload, so a failure stops the release)
         # docs/mobile/store-builds.md "Debug symbols": the archive's dSYMs and the Dart
         # split-debug-info symbols, handled exactly as in the android job (token through env only,
