@@ -15,6 +15,7 @@ import { todayIn } from '../leave/leave.service';
 import { BillingService, mapPaymentRefusal, parseBankAccount, requireLessonPackage, type BankAccount } from './billing.service';
 import { BANK_ACCOUNT_KEY, INVOICE_ISSUER_KEY, PaymentLedger, REQUEST_PURPOSES, parseIssuer, type RequestPurpose } from './payment-ledger.service';
 import { PaymentsReadService } from './payments-read.service';
+import { CARD_PAUSED_KEY, isCardPaused, parseCardPaused } from './card-pause';
 import { familyInScopeSql } from './billing-access';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
 import { PAYMENT_DUE_EVENT } from './payment-reminders.service';
@@ -682,10 +683,18 @@ export class PaymentsService {
     return this.presentSettings(access.canAssign);
   }
 
-  /** { bankAccount?, issuer?, reminders?: [{key, enabled}] } -- the super admin or the Operations Manager. */
+  /**
+   * { bankAccount?, issuer?, reminders?: [{key, enabled}], cardPaused? } -- the
+   * super admin or the Operations Manager. `cardPaused` (W63) is the card
+   * kill switch (card-pause.ts), audited on its own row.
+   */
   async setSettings(actorId: string, body: Record<string, unknown>) {
     const { actor, access } = await this.billing.requireReader(actorId);
     if (!access.canAssign) throw new CommError(CommErrorCode.BILLING_DENIED, 'payment settings are set by the super admin or the Operations Manager');
+    if ('cardPaused' in body && typeof body.cardPaused !== 'boolean') throw invalid('cardPaused: true or false');
+    const cardPaused = typeof body.cardPaused === 'boolean' ? body.cardPaused : undefined;
+    // Only the switch: no settings row for the other keys (they were not sent).
+    const onlyPause = cardPaused !== undefined && !['bankAccount', 'issuer', 'reminders'].some((k) => k in body);
     const before = await this.presentSettings(true);
     const writes: Array<{ key: string; value: unknown }> = [];
     if ('bankAccount' in body) writes.push({ key: BANK_ACCOUNT_KEY, value: body.bankAccount === null ? null : validateBankAccount(body.bankAccount) });
@@ -708,6 +717,21 @@ export class PaymentsService {
         else await tx.config.upsert({ where: { key: w.key }, create: { key: w.key, value: w.value as object }, update: { value: w.value as object } });
       }
       for (const r of reminders) await tx.notificationRule.update({ where: { key: r.key }, data: { enabled: r.enabled } });
+      if (cardPaused !== undefined) {
+        // Read inside the transaction: the audit's `before` is what this write replaced.
+        const was = parseCardPaused(await tx.config.findUnique({ where: { key: CARD_PAUSED_KEY } })).paused;
+        await tx.config.upsert({ where: { key: CARD_PAUSED_KEY }, create: { key: CARD_PAUSED_KEY, value: cardPaused }, update: { value: cardPaused } });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: 'billing.card_pause_set',
+          entity: 'organization',
+          entityId: actor.organizationId as string,
+          before: { cardPaused: was },
+          after: { cardPaused },
+          reason: cardPaused ? 'card payments paused' : 'card payments resumed',
+        });
+      }
+      if (onlyPause) return;
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: 'billing.settings_set',
@@ -722,15 +746,19 @@ export class PaymentsService {
   }
 
   private async presentSettings(canEdit: boolean) {
-    const [bank, issuer, rules] = await Promise.all([
+    const [bank, issuer, rules, cardPaused] = await Promise.all([
       this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } }),
       this.prisma.config.findUnique({ where: { key: INVOICE_ISSUER_KEY } }),
       this.prisma.notificationRule.findMany({ where: { eventType: PAYMENT_DUE_EVENT }, orderBy: { offsetSeconds: 'asc' } }),
+      isCardPaused(this.prisma),
     ]);
     return {
       bankAccount: parseBankAccount(bank?.value),
       issuer: parseIssuer(issuer?.value),
-      cardAvailable: this.stripe.checkoutAvailable,
+      // W63: offered to parents = Stripe configured and not paused by an operator.
+      cardAvailable: this.stripe.checkoutAvailable && !cardPaused,
+      cardConfigured: this.stripe.checkoutAvailable,
+      cardPaused,
       webhookConfigured: this.stripe.webhookAvailable,
       reminders: rules.map((r) => ({ key: r.key, offsetDays: Math.round(r.offsetSeconds / 86_400), enabled: r.enabled })),
       canEdit,
