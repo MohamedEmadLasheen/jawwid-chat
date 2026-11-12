@@ -33,10 +33,12 @@ adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 # Wait for the launch to actually reach the screen (bounded, 60 s) instead of a fixed 8 s:
 # on a slow shared CI emulator the first cold start can take longer than that.
+resumed=0
 for _ in $(seq 1 60); do
-  adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | grep -qF "$PKG/" && break
+  adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | grep -qF "$PKG/" && { resumed=1; break; }
   sleep 1
 done
+[ "$resumed" = 1 ] || echo "::warning title=android-ring::the first launch did not reach the screen within 60 s; continuing"
 sleep 2
 adb shell input keyevent KEYCODE_HOME
 sleep 2
@@ -98,7 +100,9 @@ if ! grep -q "pkg=$PKG" <<<"$dump"; then
   # NotificationManagerService can still drop the record on its side: seen on the API 34
   # emulator as "Cannot fix notification" with a SecurityException naming NETWORK_STACK.
   svc="$(adb logcat -d -s 'NotificationService:E' 2>/dev/null || true)"
-  if grep -q 'Cannot fix notification' <<<"$svc" && grep -q 'NETWORK_STACK' <<<"$svc"; then
+  posted="$(adb logcat -d -s 'JawwidPush:I' 2>/dev/null || true)"
+  # Only when this app did post (its own log) and the service refused a post in this window.
+  if grep -q 'notification .* posted' <<<"$posted" && grep -q 'Cannot fix notification' <<<"$svc" && grep -q 'NETWORK_STACK' <<<"$svc"; then
     echo "::error title=android-ring::Android platform rejected the notification (NotificationManagerService 'Cannot fix notification', SecurityException NETWORK_STACK) -- a known emulator/platform issue, not an app failure"
   fi
   fail "no notification from $PKG after the call push"
