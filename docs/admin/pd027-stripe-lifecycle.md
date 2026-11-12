@@ -268,6 +268,20 @@ payment that does come is recorded and flagged as an overpayment (M3). The cance
   `payment.refund_failed_at_stripe` names the payment and refund, and the API logs an error. Admin shows
   the outcome in Stripe events. Follow-up: a reversal entry on `chat.payment_refund` (forward-only, with a
   reason) that the totals subtract.
+- **A refund does not take lessons back (W61 S4).** A refund gives money back; the lesson package the
+  payment credited stays credited. There is no automatic lesson reversal (product decision; out of
+  scope). So staff are not misled, Admin marks every refunded payment:
+  - **Transactions detail**, when the payment bought lessons (its request is a subscription, a renewal
+    or an instalment, or it pays an instalment with no request): "Refunded <amount>; the lesson package
+    stays credited" (Arabic: "تم استرداد <amount>، وتبقى حصص الباقة مضافة كما هي"). For a trial's
+    payment (`trialId`), a balance or anything else: just "Refunded <amount>" ("تم استرداد <amount>").
+    A subscription or renewal is taken to have bought lessons; the detail does not carry
+    `lessonsIncluded`.
+  - **Parent profile's payments**, whose payload has no purpose: "Refunded <amount>. Refunds do not
+    remove lessons already credited." ("تم استرداد <amount>. لا يُلغي الاسترداد الحصص المضافة من قبل.").
+
+  Removing lessons after a refund is a manual staff action.
+
 - **Disputes (chargebacks) change no money in Chat (W59, M2).** A dispute on one of Chat's card payments is
   recorded and flagged: the event's outcome (`dispute_opened`, `dispute_updated`, `dispute_closed_<status>`,
   `dispute_funds_withdrawn`, `dispute_funds_reinstated`), an audit row (`payment.dispute_opened`,
@@ -289,6 +303,30 @@ payment that does come is recorded and flagged as an overpayment (M3). The cance
   logged at info level, not as a warning.
 - **No child's name on Stripe (W59, S6).** The Checkout line item is the request's label only (or "Live
   one-to-one Quran lessons" if the label is blank). The child's name stays in Chat's own records.
+
+## 4a. A card while a bank-transfer receipt is waiting (W61 S2)
+
+A parent who has sent a transfer receipt and then pays by card may be charged twice. A receipt is not money
+until the academy approves it, so it never lowers what a request still owes. Instead:
+
+- **Notice.** When a request has receipts with status `pending` (in its currency), the app's pay sheet and
+  the `/pay` page say: "A transfer receipt for this request is waiting for the academy to check. Paying by
+  card too may charge you twice." (Arabic, the pay sheet: "يوجد إيصال تحويل لهذا الطلب بانتظار مراجعة
+  الأكاديمية. إن دفعت بالبطاقة أيضًا فقد يُخصم المبلغ مرتين."; the `/pay` page addresses the family in
+  the plural, as the rest of that page does.)
+- **Part covered.** Card is still allowed, for the whole remaining amount, with the notice.
+- **All covered** (pending receipts ≥ what is left). `CheckoutService.open` refuses with
+  `409 COMM.BILLING_STATE` and `error.detail = { reason: "receipt_pending", pendingMinor, remainingMinor }`;
+  no Stripe page is opened. The app's pay sheet disables the card option and adds "Card payment will be
+  available again if the academy cannot confirm the transfer."; it also tells this refusal apart from "no
+  longer open" when it arrives from the server, and then keeps the card disabled for that sheet. The
+  `/pay` page shows no card button.
+- **No card offered** (Stripe not configured): neither surface shows the notice, since it is about a card.
+- **Known gap.** A receipt uploaded after `CheckoutService.open` checked, while a Stripe page is already
+  open, is not caught. Accepted: a receipt is not money until the academy approves it, so staff see both.
+- A rejected receipt stops counting at once; an approved one becomes a payment (and so lowers what is left).
+- The app reads pending receipts from `GET /me/billing`'s `receipts` (no new field). The `/pay` page reads
+  them per request (`pendingReceiptMinor`, `payments-read.service.ts`).
 
 ## 5. Operations: setup, deploy, verify, roll back
 
@@ -449,3 +487,6 @@ signatures are signed and verified by the real Stripe SDK. No network, no real p
 | Pure parts: id patterns, intent facts, decline wording, filters, cursors, rate-limit wiring | `test/unit/billing/pd027-stripe-lifecycle.spec.ts` |
 | Admin Web tabs, filters, detail, reconcile, access | `apps/admin-web/src/features/payments/Ledger.test.tsx` |
 | App: parsing (old and new server), banner wording per code, card label | `test/features/billing/pd027_card_failure_test.dart`, `test/core/data/http/billing_payments_over_http_test.dart` |
+| W61 S2: card refused when pending receipts cover what is left (app and `/pay`), allowed when they cover part; rejected or other-currency receipts do not count | `apps/api/test/integration/w61-pending-receipt-http.spec.ts`, `test/unit/billing/w61-pay-page-receipt.spec.ts` |
+| W61 S2: the pay sheet notice in English and Arabic; card disabled when covered; the server's receipt_pending refusal said in the sheet and the card then disabled; no notice when no card is offered | `test/features/billing/w61_pending_receipt_test.dart` |
+| W61 S4: refund wording in the Transactions detail (lessons kept for a lesson purchase; plain for a trial or a balance) and the neutral line on the parent profile, English and Arabic | `Ledger.test.tsx`, `apps/admin-web/src/features/profiles/ProfilePayments.test.tsx` |

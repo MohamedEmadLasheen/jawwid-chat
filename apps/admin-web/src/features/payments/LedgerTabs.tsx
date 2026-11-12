@@ -43,6 +43,7 @@ import {
   describeError,
   formatDay,
   formatMoney,
+  paymentCreditsLessons,
   useCopy,
 } from './copy'
 import {
@@ -53,7 +54,7 @@ import {
   useTransaction,
   useTransactions,
 } from './hooks'
-import { Field, InvoiceDownloadButton, RequestStatusBadge, ServerError } from './PaymentParts'
+import { Field, InvoiceDownloadButton, RefundNote, RequestStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
 /**
@@ -532,6 +533,18 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             </>
           )}
         </dl>
+        {p.refundedMinor > 0 && (
+          <RefundNote
+            as="p"
+            wording={
+              paymentCreditsLessons({ trialId: p.trialId, instalmentId: p.instalmentId, purpose: p.request?.purpose ?? d.request?.purpose ?? null })
+                ? 'lessons'
+                : 'plain'
+            }
+            amountMinor={p.refundedMinor}
+            currency={p.currency}
+          />
+        )}
       </Section>
 
       {p.stripe && (
