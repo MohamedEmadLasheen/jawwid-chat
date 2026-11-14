@@ -51,7 +51,12 @@ INSTALL_SCRIPT_ALLOWLIST = {'esbuild', 'fsevents'}
 # fallback): the same file Admin Web bundles, Amiri 1.003, OFL 1.1.
 BINARY_ALLOWLIST: dict = {
     'src/fonts/AmiriQuran.ttf': 'e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c',
+    # IBM Plex Sans Arabic (OFL), the UI and letter/reading text: byte for byte Admin Web's files
+    # (apps/admin-web/src/assets/fonts, since 64c8ab13), the Arabic subset, weights 400 and 600.
+    'src/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2': '6010e7fd0dce5d527583951750728cbe3c895efbd16aa0f809ab8c824878c9d8',
+    'src/fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2': '16734a5adb27b0f363e566cbbeacec480da0dc0baa19c8f0053251c2e2bc0eac',
 }
+PLEX_WEIGHTS = ('400', '600')
 FONT_FACE = re.compile(r'@font-face\s*\{[^}]*\}')
 EXACT = re.compile(r'^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$')
 MARKERS = [
@@ -232,6 +237,13 @@ def check(base, paths=None, api_integrity=API_INTEGRITY):
             errors.append("src/styles.css: must declare @font-face 'Amiri Quran' from url('./fonts/AmiriQuran.ttf') with font-display: block")
         if not re.search(r"--quran-font:\s*'Amiri Quran';", css):
             errors.append("src/styles.css: --quran-font must be 'Amiri Quran' (no fallback)")
+        # The text font: IBM Plex Sans Arabic, both weights from the pinned files, and the page drawn in it.
+        for w in PLEX_WEIGHTS:
+            if not any(re.search(r"font-family:\s*'IBM Plex Sans Arabic'", f) and f"font-weight: {w};" in f
+                       and f"url('./fonts/ibm-plex-sans-arabic-arabic-{w}-normal.woff2')" in f and 'font-display: block' in f for f in faces):
+                errors.append(f"src/styles.css: must declare @font-face 'IBM Plex Sans Arabic' {w} from its pinned file, with font-display: block")
+        if not re.search(r"--text-font:\s*'IBM Plex Sans Arabic';", css) or not re.search(r'font-family:\s*var\(--text-font\)', css):
+            errors.append("src/styles.css: --text-font must be 'IBM Plex Sans Arabic', and the page must be drawn in var(--text-font)")
 
     engine = os.path.join(base, 'src', 'quran', 'basmala.ts')
     if not os.path.exists(engine) or not os.path.exists(api_integrity):
@@ -350,6 +362,10 @@ def selftest():
         'no-font-face': (write('src/styles.css', ":root { --quran-font: 'Amiri Quran'; }\n"), 'must declare @font-face'),
         # The vendored Quran font at its own path, but other bytes: the pin is by path AND hash.
         'swapped-quran-font': (write('src/fonts/AmiriQuran.ttf', b'\x00\x01not the pinned font', binary=True), 'binary file'),
+        # The text font: both Plex weights declared from their pinned files, and the page drawn in it.
+        'no-text-font-face': (write('src/styles.css', "@font-face { font-family: 'Amiri Quran'; font-display: block; src: url('./fonts/AmiriQuran.ttf'); }\n:root { --quran-font: 'Amiri Quran'; --text-font: 'IBM Plex Sans Arabic'; font-family: var(--text-font); }\n"), "'IBM Plex Sans Arabic' 400"),
+        'text-font-not-used': (write('src/styles.css', "@font-face { font-family: 'Amiri Quran'; font-display: block; src: url('./fonts/AmiriQuran.ttf'); }\n:root { --quran-font: 'Amiri Quran'; font-family: system-ui; }\n"), '--text-font must be'),
+        'swapped-text-font': (write('src/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2', b'\x00\x01not the pinned font', binary=True), 'binary file'),
         'postcss': (write('postcss.config.js', 'module.exports = {};\n'), 'build-config file'),
         'vscode': (write('.vscode/tasks.json', '{}'), 'under .vscode/'),
         'nested-dist': (write('src/dist/x.ts', "export const x = 1;\n"), 'under dist/'),
