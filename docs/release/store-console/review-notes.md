@@ -3,6 +3,8 @@
 **Launch item LR-09f.** Draft, 2026-11-09, written from the code on `main` @ `bc47d376` and from the open
 pull requests #528 (review accounts), #524 (Android full-screen check) and #449 (push taps).
 Nothing here has been entered in a console. The owner pastes the text.
+**Payments wording updated 2026-11-10** (W57) against `main` @ `7cc7aab5` and #575: the paste texts
+follow the OA-12 recommended default (no in-app payment step for review).
 
 **Where it goes**
 - App Store Connect → the app → the version → **App Review Information**:
@@ -16,8 +18,8 @@ the consoles, never in this repository, a ticket or a chat (`docs/release/review
 Three more placeholders are not secret and are filled or replaced before pasting: `[PAYMENTS PARAGRAPH]`
 (§2.1), `[PAYMENTS SENTENCE]` and `{{ACCOUNT_DELETION_URL}}` (§3). Every other word is ready to paste.
 
-**Before pasting:** the §4 checks must pass on the submitted build, and the owner chooses the payments
-paragraph (§2.1).
+**Before pasting:** the §4 checks must pass on the submitted build. The payments paragraph (§2.1) follows
+the OA-12 recommended default unless the owner chooses otherwise: the reviewer sees no payment step.
 
 ---
 
@@ -43,6 +45,8 @@ paragraph (§2.1).
 | On iPhone, a call rings through CallKit while the app is closed | `ios/Runner/AppDelegate.swift:215-235`; `ios/Runner/CallKitBridge.swift:174`. **Only if** production sets `APNS_VOIP_ENABLED=true` (`apps/api/src/communication/notifications/push.provider.selector.ts:51-67`, default off). See §4 |
 | The call's audio continues in the background | iOS `UIBackgroundModes` `audio` (`ios/Runner/Info.plist:48-50`); Android `CallForegroundService` (`android/app/src/main/AndroidManifest.xml:72-76`). **Not verified on a device** (see `ios-background-modes.md`) |
 | Parent tab names: "Subscriptions" and "Amount due", then "Pay" | `lib/app/shells/app_shell.dart:108`, `:119`; `app_en.arb:1747` (`tabSubscriptions`), `:2064` (`billingAmountDueTitle`), `:2068` (`billingPay`) |
+| The review families have nothing to pay, so the Subscriptions tab shows no "Amount due" section and no Pay button | The review cohort creates no subscription, instalment, payment request or invoice (`review-accounts.md`, "No payments"; `apps/api/src/cli/review-cohort.ts:161-162`; verified and tested in #575). The tab reads `GET /me/billing` (`apps/api/src/billing/billing.service.ts:651-713`), and the "Amount due" heading and its Pay buttons are built only when `amountsDue` returns an item (`lib/features/billing/presentation/my_payments_screen.dart:302`, `:315-322`; `lib/features/billing/domain/amount_due.dart:58-119`). A subscription card shows Pay only when the child has an open payment (`lib/features/billing/presentation/subscription_cards.dart:131-136`; `billing.service.ts:734-738`), and the review child has no subscription card at all. With no instalments, the tab shows "No payments yet" (`app_en.arb:1742-1743`) |
+| Payments are an arrangement between the academy and the family. A lesson package that the academy has opened is paid by card (Stripe Checkout in the browser) or by bank transfer with a receipt upload; anything else is collected by the academy outside the app | `app-review-notes-payments.md` §2 (the table and "Anything refused above": "Staff can still collect it outside the app (web pay link, cash)"); `billing.service.ts:710` (`cardAvailable`), `lib/core/data/http/http_billing_repository.dart:31-81` |
 
 ### Apple Guideline 2.5.19 (staff features)
 
@@ -67,9 +71,9 @@ That needs a change to the provisioning command, so it is not in this draft.
 
 ## 2. App Store Connect → App Review Information → Notes (paste)
 
-Choose **one** payments paragraph from §2.1 and paste it where `[PAYMENTS PARAGRAPH]` stands. The text
-is plain ASCII on purpose: Apple's limit is **4000 bytes**, not characters, so an arrow or a curly quote
-would count as 3 bytes.
+Paste the recommended payments paragraph from §2.1 where `[PAYMENTS PARAGRAPH]` stands (the alternative
+in §2.1 applies only if the owner chooses OA-12 option A). The text is plain ASCII on purpose: Apple's
+limit is **4000 bytes**, not characters, so an arrow or a curly quote would count as 3 bytes.
 
 <!-- APPLE-NOTES-START -->
 ```text
@@ -94,58 +98,67 @@ STAFF: the academy's supervisors, managers and administrators work in a separate
 
 **Length:** 2949 bytes without the payments paragraph. 3452 bytes with the longest option. See §2.2.
 
-### 2.1 The payments paragraph: an OPEN choice (owner decision OA-12)
+### 2.1 The payments paragraph: the OA-12 default, and the alternative
 
-`[OWNER DECISION: OA-12]`. The policy reasoning is in `docs/release/app-review-notes-payments.md`. Pick
-the option that matches the submitted build and the review data.
+`[OWNER DECISION: OA-12]` is still open. Its **recommended default is "no in-app payment step for
+review"**, and the review data already matches it: the review cohort creates nothing payable, so the
+review parents see no "Amount due" and no Pay button (§1, the two payments rows; verified and tested in
+#575). The policy reasoning is in `docs/release/app-review-notes-payments.md`. Until the owner decides
+otherwise, paste the recommended paragraph.
 
-**Option A: the review family has something to pay.** Use this only if the review organization has an
-open lesson-package request (`app-review-notes-payments.md` §6 item 2; LR-05). Use the first sentence
-with "by card" only if production has Stripe configured (LR-34). Otherwise use the "bank transfer only"
-version.
+**Recommended (OA-12 default): the reviewer sees no payment flow.** Payments are an arrangement between
+the academy and each family: the academy opens a lesson package for a child, and the parent pays it by
+card (Stripe Checkout, opened in the browser) or by bank transfer with a receipt upload, outside in-app
+purchase, under Guideline 3.1.3(d). Anything else the academy collects outside the app
+(`app-review-notes-payments.md` §2). The review families have no package, so nothing is due.
+
+```text
+PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold; everything else in the app is free. Lesson packages are arranged between the academy and each family and paid outside in-app purchase under Guideline 3.1.3(d) Person-to-Person Services: by card (Stripe Checkout, opened in the browser) or by bank transfer with a receipt upload. The review families have no lesson package and nothing to pay, so the Subscriptions tab shows no amount due and no payment step. A screen recording of the pay sheet is available on request.
+```
+
+Use "by card (Stripe Checkout, opened in the browser) or by bank transfer with a receipt upload" only if
+production has Stripe configured (LR-34). Otherwise replace it with "by bank transfer, uploading the
+receipt for the academy to confirm". Keep the last sentence only if the owner has recorded the pay sheet
+(`app-review-notes-payments.md` §6 item 3); otherwise delete it.
+
+**Alternative, only if the owner chooses OA-12 option A: the review family has something to pay.** Not
+the recommendation. It needs a follow-up change first: an open lesson-package request in the review
+cohort (`app-review-notes-payments.md` §6 item 2), which means changing the provisioning command, its
+test (#575 asserts that nothing payable exists) and `review-accounts.md`. Use "by card" only if
+production has Stripe configured (LR-34); otherwise use the "bank transfer only" wording above.
 
 ```text
 PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold; everything else in the app is free. Under Guideline 3.1.3(d) Person-to-Person Services, a parent pays a lesson package by card (Stripe Checkout, opened in the browser) or by bank transfer with a receipt upload. To see it: parent account > Subscriptions tab > Amount due > Pay.
-```
-
-Bank transfer only (no Stripe in production): replace "by card (Stripe Checkout, opened in the browser)
-or by bank transfer with a receipt upload" with "by bank transfer, uploading the receipt for the academy
-to confirm".
-
-**Option B: the review family has nothing to pay** (today's review data: `review-accounts.md`, "No
-payments").
-
-```text
-PAYMENTS: the academy sells only live one-to-one Quran lessons: each lesson is a real-time audio call between one teacher and one student, and lessons are not recorded. No digital content, materials or app features are sold. Under Guideline 3.1.3(d) Person-to-Person Services, parents pay for lesson packages outside in-app purchase. The review family has nothing to pay, so the Subscriptions tab shows no amount due.
 ```
 
 Notes for the owner:
 - **The tab name.** "Subscriptions" is today's name (`tabSubscriptions`). LR-15 recommends renaming it
   to lesson-package wording, so use whatever name the submitted build shows. LR-15 also notes that
   "Subscriptions" may read as an auto-renewing subscription under 3.1.2.
-- **`app-review-notes-payments.md` §4 gives a different path:** "Settings → Payments → Amount due → Pay".
-  `/settings/payments` is retired and now forwards to the Subscriptions tab (`lib/app/router.dart:136-142`).
-  So that path no longer matches the screens, and the text above uses the tab instead. Correct §4 there
-  when the owner chooses.
-- **Option B is weaker evidence.** The reviewer cannot see the pay sheet's "Live one-to-one Quran
-  lessons ..." line. App Review may ask to see it. Recommendation: Option A, with a payable request in
-  the review cohort.
+- **Paths.** The recommended paragraph names no path, because there is nothing to open. The option A
+  paragraph uses the tab, not "Settings → Payments": `/settings/payments` is retired and forwards to the
+  Subscriptions tab (`lib/app/router.dart:137-143`).
+- **What the reviewer cannot see under the default.** The pay sheet's "Live one-to-one Quran lessons ..."
+  line (`app-review-notes-payments.md` §2) is not reachable without a payable item. If App Review asks to
+  see it, the answer is the screen recording (`app-review-notes-payments.md` §6 item 3), not a change to
+  the review data; option A is the owner's call under OA-12.
 
 ### 2.2 Length
 
 | Text | Bytes (= characters; the text is ASCII) |
 |---|---|
 | The Notes block without the payments paragraph | 2949 |
-| With Option A (card): the block, a blank line and the paragraph | 3452 |
-| With Option B | 3368 |
+| With the recommended paragraph (OA-12 default, card wording, recording sentence kept): the block, a blank line and the paragraph | 3643 |
+| With the option A paragraph (card) | 3452 |
 | Apple's limit | 4000 bytes |
-| Play "Any other information" text (§3) without the payments sentence | 1091 (about 1330 with it) |
+| Play "Any other information" text (§3) without the payments sentence | 1071 (about 1460 with the recommended sentence; about 1320 with option A) |
 
-Counted with `sed -n <lines> review-notes.md | wc -c`. Each count includes the line breaks. Only the
-paste blocks were checked for non-ASCII characters (none). Apple's limit was read from the App Store
-Connect help page on 2026-11-09, and only as a summary ("up to 4000 bytes"). Keep at least 500 bytes spare,
-as the counts above do (548 with Option A). Do not shorten the deletion paragraph to save space: it must
-not say less is kept than the privacy policy does.
+Counted with `sed -n <lines> review-notes.md | wc -c` (re-counted 2026-11-10). Each count includes the
+line breaks. Only the paste blocks were checked for non-ASCII characters (none). Apple's limit was read
+from the App Store Connect help page on 2026-11-09, and only as a summary ("up to 4000 bytes"). The
+recommended paragraph leaves 357 bytes spare, enough for the domain and passwords (a few dozen bytes);
+deleting its last sentence (no recording) frees about 60 more. Do not shorten the deletion paragraph to
+save space: it must not say less is kept than the privacy policy does.
 
 Each count includes the placeholders as they are written here. The real domain and passwords change the
 total by a few dozen bytes. Re-count after filling them in if the domain is long.
@@ -175,9 +188,11 @@ Account deletion: use the Deletion test account. Settings > Delete account > pas
 [PAYMENTS SENTENCE]
 ```
 
-`[PAYMENTS SENTENCE]` (OA-12, the same choice as §2.1):
-- **Option A:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid by card on Stripe's page or by bank transfer under the 1:1 online paid services rule. Parent account > Subscriptions tab > Amount due > Pay.`
-- **Option B:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid outside Google Play Billing under the 1:1 online paid services rule. The review family has nothing to pay.`
+`[PAYMENTS SENTENCE]` (OA-12, the same default as §2.1):
+- **Recommended (OA-12 default):** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded). Lesson packages are arranged between the academy and each family and paid outside Google Play Billing under the 1:1 online paid services rule, by card on Stripe's page or by bank transfer. The review families have no lesson package and nothing to pay, so no payment step appears.`
+  Without Stripe in production (LR-34), replace "by card on Stripe's page or by bank transfer" with "by bank transfer".
+- **Only if the owner chooses OA-12 option A** (a payable request seeded in the review cohort; see §2.1):
+  `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid by card on Stripe's page or by bank transfer under the 1:1 online paid services rule. Parent account > Subscriptions tab > Amount due > Pay.`
 
 `{{ACCOUNT_DELETION_URL}}` is not a credential. It is the LR-04 web deletion page that Play's account
 deletion form also needs. If it does not exist at submission, delete that sentence.
@@ -200,5 +215,5 @@ Each check needs a release build on the production backend (LR-01) with the revi
 | 3 | Parent and teacher on two phones: a family-group call from either side rings the other | Fix before submitting: Apple and Google both test calls |
 | 4 | **iPhone, app closed:** the call rings through CallKit. This needs `APNS_VOIP_ENABLED=true` in production (default off: `push.provider.selector.ts:51-67`) | Remove "also when the app is closed (CallKit on iPhone)" from §2, and see `ios-background-modes.md` (`voip` would then have no use in that build) |
 | 5 | Lock the screen during a call; both sides still hear each other (iPhone and Android 14+) | Fix before submitting (iOS `audio` mode; Android LR-14 service) |
-| 6 | The payments path in the chosen option opens the screens it names, with the names it uses | Correct the words to match the build |
+| 6 | Under the OA-12 default: the review parent's Subscriptions tab shows no "Amount due" section and no Pay button (#575 tests this on the server; confirm on the phone). Under option A only: the path in the paragraph opens the screens it names, with the names it uses | Default: if an amount is due, the review data has changed; fix the cohort, do not change the words. Option A: correct the words to match the build |
 | 7 | Count the bytes again after filling in the domain (§2.2) | Shorten the STAFF paragraph first |

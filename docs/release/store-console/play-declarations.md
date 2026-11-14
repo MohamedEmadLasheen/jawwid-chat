@@ -33,8 +33,10 @@ and adult action (checklist G-6 to G-10). None of that is built.
 **Answer:** "All or some functionality in my app is restricted" → add instructions.
 
 **Superseded by [`review-notes.md`](review-notes.md) §3 (2026-11-09).** That version has three accounts,
-including the deletion-test parent from #528. It adds the call test and the staff role, and sets out the
-payments choice (OA-12). The text below is kept for its history.
+including the deletion-test parent from #528. It adds the call test and the staff role, and carries the
+OA-12 recommended default for payments: the reviewer sees no payment step, because the review cohort
+creates nothing payable (#575). The text below is kept for its history; **its "Payments" paragraph is
+withdrawn**, because it sends the reviewer to a Pay button the review parent does not see.
 
 Review accounts: `docs/release/review-accounts.md` (own "Jawwid App Review" organization; e-mail and
 password; no verification code). They exist only after launch items LR-01 (production backend) and LR-05
@@ -76,10 +78,13 @@ password; no verification code). They exist only after launch items LR-01 (produ
 Notes for the owner:
 - `{{PAYMENTS_TAB_NAME}}` is "Subscriptions" in today's app (`lib/app/router.dart:140-142`). Launch item
   LR-15 recommends renaming it to lesson-package wording; use whatever name the submitted build shows.
-- **The review child has no payment due today** (`review-accounts.md`, "No payments"), so a reviewer
-  cannot reach Pay. Either add an open lesson-package request to the review cohort before submitting
-  (`app-review-notes-payments.md` §6 item 2), or delete the "Payments" paragraph above.
-  `[OWNER DECISION: which one]`
+- **The review child has nothing to pay** (`review-accounts.md`, "No payments"; tested in #575), so a
+  reviewer never sees "Amount due" or Pay (`lib/features/billing/presentation/my_payments_screen.dart:315-322`;
+  `lib/features/billing/domain/amount_due.dart:58-119`). The OA-12 recommended default is "no in-app
+  payment step for review": use the payments sentence in `review-notes.md` §3, which says the review
+  families have nothing to pay and describes payments as arranged between the academy and each family.
+  The paragraph above (a path to Pay) applies **only if the owner chooses OA-12 option A** and seeds an
+  open lesson-package request first (`app-review-notes-payments.md` §6 item 2). `[OWNER DECISION: OA-12]`
 - Verify each path in the instructions on the submitted build before pasting. The report and block
   gestures are PD-57's; check them on a phone.
 - Also enter the same credentials in **Testing → Pre-launch report → Settings → Credentials**.
@@ -250,5 +255,5 @@ pending merge) are in `google-data-safety.md` §6.
 | O-4 | Child Safety Standards | "Not required for this category", with the prepared answer if the Console asks | **OPEN.** Owner: whether Play's Child Safety Standards apply to this app (compliance checklist G-5); the designate and mailbox are LD-19. The app has user-generated content and messaging, so prepare the answer either way | §4 |
 | O-5 | Advertising ID | No | **OPEN** pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6) | §3; `google-data-safety.md` §2.1 |
 | O-6 | Merged-manifest permissions | §7 tables | **OPEN**, same check as O-5: confirm Firebase's `WAKE_LOCK` and `c2dm RECEIVE`, and that nothing else is added | §7 |
-| O-7 | Review payment paragraph | Either seed a payable request or delete the paragraph | **OPEN.** Owner (§2 note); live card payments are LR-34 | §2 |
+| O-7 | Review payment paragraph | The OA-12 recommended default: no in-app payment step for review; the text says the review families have nothing to pay (`review-notes.md` §3) | **OPEN** (OA-12). Owner may instead choose option A (seed a payable request, then the "Amount due > Pay" text); live card payments are LR-34 | §2 |
 | O-8 | Category | Education | **OPEN.** Owner. Also weighs on the full-screen-intent case (§6) | §8 |

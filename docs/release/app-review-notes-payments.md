@@ -105,38 +105,70 @@ Stripe configured (`cardAvailable`); bank transfer always does.
   - **Any other existing open instalment or balance is no longer payable in the app.** Staff
     collect it outside the app, or re-create it naming the child's package.
 
-## 4. App Store Connect: App Review Information → Notes (paste)
+## 4. What the reviewer sees (OA-12 recommended default, 2026-11-10)
 
-> Jawwid is a Quran academy. In the app, families buy only **live one-to-one Quran lessons**:
-> each lesson is a real-time audio call between one teacher and one student. There are no group
-> classes, and no digital content, materials or app features are sold; everything else in the
-> app is free.
->
-> Payments use methods other than in-app purchase under **Guideline 3.1.3(d) Person-to-Person
-> Services** (real-time tutoring between two individuals). A parent can pay a lesson package by
-> card (Stripe Checkout, opened in the browser) or by bank transfer, uploading the transfer
-> receipt for the academy to confirm. Lessons are not recorded.
->
-> Where to see it: sign in with the parent demo account below → Settings → Payments → Amount due
-> → Pay. The pay sheet states what is bought ("Live one-to-one Quran lessons: one teacher and one
-> student, in real time. Lessons are not recorded.").
->
-> Demo accounts: [parent], [teacher] (supplied in the Sign-In Information fields).
+Owner decision **OA-12** is still open. Its recommended default is **no in-app payment step for
+review**, and the review data already follows it: the review cohort creates no lesson package,
+instalment, payment request or invoice (`docs/release/review-accounts.md`, "No payments";
+`apps/api/src/cli/review-cohort.ts:161-162`; tested in #575). So the review parents see no
+"Amount due" section and no Pay button:
 
-## 5. Google Play Console (paste where asked: App access instructions, or a policy appeal)
+- the Subscriptions tab reads `GET /me/billing` (`apps/api/src/billing/billing.service.ts:651-713`);
+- the "Amount due" heading and its Pay buttons exist only when `amountsDue` returns an item
+  (`lib/features/billing/presentation/my_payments_screen.dart:302`, `:315-322`;
+  `lib/features/billing/domain/amount_due.dart:58-119`);
+- a subscription card offers Pay only for a child with an open payment
+  (`lib/features/billing/presentation/subscription_cards.dart:131-136`; `billing.service.ts:734-738`),
+  and the review child has no subscription.
+
+Payments are therefore described to the reviewer as what they are in §2: an arrangement between
+the academy and each family. The academy opens a lesson package; the parent pays it by card
+(Stripe Checkout in the browser) or by bank transfer with a receipt upload, outside in-app
+purchase; anything the app refuses, staff collect outside the app (§2, "Anything refused above").
+The reviewer is told plainly that the review families have nothing to pay. The pay-sheet wording
+("Live one-to-one Quran lessons ...") is shown by the screen recording in §6 item 3, not by a
+payable item.
+
+**The paste texts live in `docs/release/store-console/review-notes.md`:** the Apple Notes payments
+paragraph in §2.1 and the Play "App access" payments sentence in §3. Both carry the recommended
+default, and each keeps the earlier text (a payable request in the review cohort, "Subscriptions
+tab > Amount due > Pay") as a clearly marked alternative **only if the owner chooses OA-12
+option A**. That alternative needs a follow-up change to the provisioning command, its test and
+`review-accounts.md` before it is true.
+
+The earlier paste texts in this file (2026-11-05) sent the reviewer to "Settings → Payments →
+Amount due → Pay". That path is retired (`/settings/payments` forwards to the Subscriptions tab,
+`lib/app/router.dart:137-143`) and the review parent has nothing to pay, so those texts are
+withdrawn; use `review-notes.md`.
+
+## 5. Google Play Console: policy appeal (paste only if Google questions the payment model)
+
+The App access text is in `review-notes.md` §3. If Google asks about payments outside Play
+Billing (a policy appeal), the facts are:
 
 > Jawwid sells only live one-to-one Quran lessons, each between one teacher and one student, as
 > real-time audio calls. Lessons are not recorded and cannot be replayed or accessed again in the
-> app. Under the Payments policy's 1:1 online paid services rule (education classes), these are
-> paid by card (Stripe) or bank transfer rather than Google Play Billing. No group class, digital
-> content or app feature is sold; any other charge cannot be paid in the app. To see it: parent
-> demo account → Settings → Payments → Amount due → Pay.
+> app. Lesson packages are arranged between the academy and each family and, under the Payments
+> policy's 1:1 online paid services rule (education classes), are paid by card (Stripe) or bank
+> transfer rather than Google Play Billing. No group class, digital content or app feature is
+> sold; any other charge cannot be paid in the app. The review accounts have no lesson package
+> and nothing to pay, so no payment step appears for them; a screen recording of the pay sheet is
+> available on request.
+
+Without Stripe in production (LR-34), write "by bank transfer" instead of "by card (Stripe) or
+bank transfer".
 
 ## 6. Before submission (owner, in the consoles)
 
 1. The store listings (both stores) describe the service as live one-to-one lessons, never as
    access to content or the app.
-2. Demo parent and teacher accounts on the production backend, with an open lesson-package
-   request so the reviewer can reach the pay sheet.
-3. A short screen recording of a lesson call and of the pay sheet, kept ready for an appeal.
+2. Demo parent and teacher accounts on the production backend (`review-accounts.md`). Under the
+   OA-12 default they have nothing to pay, and #575 tests that. **Only if the owner chooses OA-12
+   option A:** an open lesson-package request in the review cohort so the reviewer can reach the
+   pay sheet; that needs a change to the provisioning command, its test and `review-accounts.md`
+   first.
+3. A short screen recording of a lesson call and of the pay sheet, kept ready for the Notes and
+   for an appeal. Under the default the review accounts cannot open the pay sheet, so the
+   recording is the only way a reviewer sees its wording; record it from an account that has an
+   open lesson package, with no real person's name visible.
 4. Re-read the three policy pages above on the day of submission; they change.
