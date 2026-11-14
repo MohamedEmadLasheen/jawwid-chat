@@ -39,8 +39,10 @@ credential). No credential, entity name, address or URL has been invented.
    downloadable invoices (`lib/features/billing/presentation/my_payments_screen.dart:323-330`).
 4. **The review cohort has nothing to pay**, so a reviewer cannot reach the pay sheet that the payments
    review notes point to (`play-declarations.md` §2).
-5. **Today's payment tab is named "Subscriptions"** (`lib/app/router.dart:140-142`); screenshots and
-   review notes must wait for the LR-15 rename or avoid it.
+5. **The payment tab is named "Packages" / «الباقات»** (LR-15; `tabSubscriptions` in
+   `lib/l10n/app_en.arb` and `app_ar.arb`; the key and the route `/subscriptions` keep their old names).
+   The screenshots and review notes use that name. LR-15 replaces the owner-chosen PD-30 wording, so
+   it needs the owner's decision (row 6 below) before it ships.
 6. **The data inventory cites `checkout.service.ts:129`** for the child's name in the Stripe line item; it
    is now line 147.
 7. **The Foreground service and full-screen intent declarations must match the submitted build.** LR-14
@@ -70,7 +72,7 @@ Each item has a recommendation, so the answer can be yes or no.
 | 3 | App name in each store | «جَوِّد: أكاديمية القرآن» / "Jawwid: Quran Academy" | `listing-copy.md` §1 |
 | 4 | Category | Education (both stores) | `listing-copy.md` §8; `play-declarations.md` §8 |
 | 5 | Are Arabic or tajweed taught as courses in this app? | Quran only unless yes | `listing-copy.md` §5.3, §6 |
-| 6 | Payment tab wording (LR-15) | Lesson-package wording, before screenshots | `listing-copy.md` §9.2 |
+| 6 | Payment tab wording (LR-15, OA-12 D2): approve "Packages" / «الباقات» and the parent's button «عرض الباقات», replacing the PD-30 «عرض الاشتراكات» | Yes; done in the app, waiting only for this approval | `listing-copy.md` §9.2; `review-notes.md` §1 |
 | 7 | Live card payments at launch (LR-34) | Owner's call; the copy drops the card sentence if not | `listing-copy.md` §5.3 |
 | 8 | A payable lesson-package request in the review cohort | Yes, so a reviewer can reach Pay | `play-declarations.md` §2 |
 | 9 | Apple "Social Media" answer | No | `age-rating.md` §1.2 |
@@ -86,7 +88,8 @@ Each item has a recommendation, so the answer can be yes or no.
 ## Before submission (blocks the answers being true)
 
 LR-01 (production backend), LR-03 (teacher deletion), LR-04 (hosted policies), LR-05 (review accounts),
-LR-11 (notification permission timing), LR-15 (payment wording), LR-27 (full-screen check), and the
+LR-11 (notification permission timing), LR-15 (payment wording: done in #593, waiting for the owner's
+approval, row 6), LR-27 (full-screen check), and the
 merged-manifest and privacy-report checks of the release builds (release audit WP-6). LR-14 (#505),
 LR-32 (#506) and LR-73 (#508) are done. See the launch readiness checklist.
 

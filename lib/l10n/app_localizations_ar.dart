@@ -810,7 +810,7 @@ class L10nAr extends L10n {
   String get childLevelLabel => 'المستوى';
 
   @override
-  String get childSubscriptionLabel => 'الاشتراك';
+  String get childSubscriptionLabel => 'باقة الدروس';
 
   @override
   String get childScheduleLabel => 'المواعيد';
@@ -2049,10 +2049,10 @@ class L10nAr extends L10n {
   String get cardTrialNoShowTitle => 'لم يحضر الطالب الحصة التجريبية.';
 
   @override
-  String get cardTrialSubscribedTitle => 'اشترك الطالب.';
+  String get cardTrialSubscribedTitle => 'التحق الطالب بالدروس.';
 
   @override
-  String get cardTrialNotSubscribedTitle => 'لم يشترك الطالب.';
+  String get cardTrialNotSubscribedTitle => 'لم يلتحق الطالب بالدروس.';
 
   @override
   String get cardTrialLevel => 'المستوى';
@@ -2891,7 +2891,7 @@ class L10nAr extends L10n {
 
   @override
   String get signupEmailIntro =>
-      'أدخل البريد الإلكتروني الذي سجّلته لدى الأكاديمية عند الاشتراك.';
+      'أدخل البريد الإلكتروني الذي سجّلته عند التحاقكم بالأكاديمية.';
 
   @override
   String get signupEmailLabel => 'البريد الإلكتروني';
@@ -3277,7 +3277,7 @@ class L10nAr extends L10n {
   String get tabPayments => 'المدفوعات';
 
   @override
-  String get tabSubscriptions => 'الاشتراكات';
+  String get tabSubscriptions => 'الباقات';
 
   @override
   String subscriptionMonthCount(int months) {
@@ -3314,7 +3314,7 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get subscriptionNone => 'لا يوجد اشتراك بعد';
+  String get subscriptionNone => 'لا توجد باقة حصص بعد';
 
   @override
   String subscriptionLessonsLeft(int count) {
@@ -3350,7 +3350,7 @@ class L10nAr extends L10n {
   String get subscriptionStateOpen => 'فعّال';
 
   @override
-  String get subscriptionStateGrace => 'بانتظار التجديد';
+  String get subscriptionStateGrace => 'بانتظار الباقة التالية';
 
   @override
   String get subscriptionStateLocked => 'متوقف';
@@ -3364,10 +3364,10 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get subscriptionRequestRenewal => 'طلب التجديد';
+  String get subscriptionRequestRenewal => 'طلب الباقة التالية';
 
   @override
-  String get subscriptionRenewalRequested => 'تم طلب التجديد';
+  String get subscriptionRenewalRequested => 'تم طلب الباقة التالية';
 
   @override
   String get lockBannerTitle => 'حجز الحصص الجديدة متوقف مؤقتًا';
@@ -3392,7 +3392,7 @@ class L10nAr extends L10n {
       'المحادثة تبقى مفتوحة، والحصص المحجوزة مسبقًا تُقام في موعدها.';
 
   @override
-  String get lockBannerOpenSubscriptions => 'عرض الاشتراكات';
+  String get lockBannerOpenSubscriptions => 'عرض الباقات';
 
   @override
   String reportLessonOf(int number, int total) {
@@ -3422,7 +3422,7 @@ class L10nAr extends L10n {
 
   @override
   String get cardSubscriptionLockedHint =>
-      'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».';
+      'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، اطلبوا الباقة التالية أو ادفعوا القسط من «الباقات».';
 
   @override
   String get cardSubscriptionUnlockedTitle => 'عادت الحصص الجديدة';

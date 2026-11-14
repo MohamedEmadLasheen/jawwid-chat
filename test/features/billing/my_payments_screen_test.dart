@@ -96,8 +96,8 @@ void main() {
       await tester.pumpWidget(app(_Billing()..answer = billing));
       await tester.pumpAndSettle();
 
-      // PD-30: the screen is the parent's Subscriptions tab.
-      expect(find.text('Subscriptions'), findsOneWidget);
+      // PD-30: the screen is the parent's Packages tab (LR-15: never "Subscriptions").
+      expect(find.text('Packages'), findsOneWidget);
       expect(within('billing-plan', find.text('3-month plan')), findsOneWidget);
       expect(within('billing-method', find.text('Bank transfer')), findsOneWidget);
       expect(within('billing-paid-AED', find.text('AED 1,250.50')), findsOneWidget);
@@ -198,7 +198,7 @@ void main() {
       await tester.pumpWidget(app(_Billing()..answer = billing, locale: ar));
       await tester.pumpAndSettle();
 
-      expect(find.text('الاشتراكات'), findsOneWidget);
+      expect(find.text('الباقات'), findsOneWidget);
       expect(within('billing-plan', find.text('خطة 3 أشهر')), findsOneWidget);
       expect(within('billing-method', find.text('تحويل بنكي')), findsOneWidget);
       expect(within('billing-paid-AED', find.text(formatMoney(125050, 'AED', 'ar'))), findsOneWidget);

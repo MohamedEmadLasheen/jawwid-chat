@@ -74,8 +74,8 @@ password; no verification code). They exist only after launch items LR-01 (produ
 > {{ACCOUNT_DELETION_URL}}.
 
 Notes for the owner:
-- `{{PAYMENTS_TAB_NAME}}` is "Subscriptions" in today's app (`lib/app/router.dart:140-142`). Launch item
-  LR-15 recommends renaming it to lesson-package wording; use whatever name the submitted build shows.
+- `{{PAYMENTS_TAB_NAME}}` is "Packages" (LR-15; `tabSubscriptions` in `lib/l10n/app_en.arb`). Check it
+  against the submitted build and use whatever name that build shows.
 - **The review child has no payment due today** (`review-accounts.md`, "No payments"), so a reviewer
   cannot reach Pay. Either add an open lesson-package request to the review cohort before submitting
   (`app-review-notes-payments.md` §6 item 2), or delete the "Payments" paragraph above.

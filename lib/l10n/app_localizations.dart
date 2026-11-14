@@ -1432,7 +1432,7 @@ abstract class L10n {
   /// No description provided for @childSubscriptionLabel.
   ///
   /// In en, this message translates to:
-  /// **'Subscription'**
+  /// **'Lesson package'**
   String get childSubscriptionLabel;
 
   /// No description provided for @childScheduleLabel.
@@ -3490,13 +3490,13 @@ abstract class L10n {
   /// No description provided for @cardTrialSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'The student has subscribed.'**
+  /// **'The student has enrolled.'**
   String get cardTrialSubscribedTitle;
 
   /// No description provided for @cardTrialNotSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'The student did not subscribe.'**
+  /// **'The student did not enrol.'**
   String get cardTrialNotSubscribedTitle;
 
   /// No description provided for @cardTrialLevel.
@@ -4984,7 +4984,7 @@ abstract class L10n {
   /// No description provided for @signupEmailIntro.
   ///
   /// In en, this message translates to:
-  /// **'Enter the e-mail address you gave the academy when you subscribed.'**
+  /// **'Enter the e-mail address you gave the academy when you enrolled.'**
   String get signupEmailIntro;
 
   /// No description provided for @signupEmailLabel.
@@ -5584,7 +5584,7 @@ abstract class L10n {
   /// PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments.
   ///
   /// In en, this message translates to:
-  /// **'Subscriptions'**
+  /// **'Packages'**
   String get tabSubscriptions;
 
   /// PD-30: a plan's length, as in "3 Months — 24 Lessons".
@@ -5608,7 +5608,7 @@ abstract class L10n {
   /// PD-30: a child with no subscription on record.
   ///
   /// In en, this message translates to:
-  /// **'No subscription yet'**
+  /// **'No lesson package yet'**
   String get subscriptionNone;
 
   /// PD-30: a child's lessons left in their subscriptions.
@@ -5632,7 +5632,7 @@ abstract class L10n {
   /// PD-30: a child's subscription chip: lessons used up, grace lessons left.
   ///
   /// In en, this message translates to:
-  /// **'Renewal due'**
+  /// **'Next package due'**
   String get subscriptionStateGrace;
 
   /// PD-30: a child's subscription chip: locked for payment.
@@ -5656,13 +5656,13 @@ abstract class L10n {
   /// PD-30: a locked child with nothing to pay yet: ask the academy to renew.
   ///
   /// In en, this message translates to:
-  /// **'Request renewal'**
+  /// **'Request the next package'**
   String get subscriptionRequestRenewal;
 
   /// PD-30: the renewal was asked for today.
   ///
   /// In en, this message translates to:
-  /// **'Renewal requested'**
+  /// **'Next package requested'**
   String get subscriptionRenewalRequested;
 
   /// PD-30 D-3 (owner, 2026-11-06): the informational banner above the composer when a child's new lesson bookings are paused. The chat stays open.
@@ -5698,7 +5698,7 @@ abstract class L10n {
   /// PD-30: the banner's button, a parent only.
   ///
   /// In en, this message translates to:
-  /// **'Go to Subscriptions'**
+  /// **'Go to Packages'**
   String get lockBannerOpenSubscriptions;
 
   /// PD-30: the report's lesson number within the child's subscription.
@@ -5746,7 +5746,7 @@ abstract class L10n {
   /// PD-30 D-3: the last line of the family's direct-chat card.
   ///
   /// In en, this message translates to:
-  /// **'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'**
+  /// **'Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.'**
   String get cardSubscriptionLockedHint;
 
   /// PD-30: the group card when a locked child's lessons resume.

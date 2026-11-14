@@ -98,7 +98,7 @@ void main() {
         viewerActorId: 't1',
       );
       await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), locale: const Locale('ar')));
-      expect(find.text('اشترك الطالب.'), findsOneWidget);
+      expect(find.text('التحق الطالب بالدروس.'), findsOneWidget);
       expect(find.textContaining('Core'), findsNothing);
     });
 
@@ -109,7 +109,7 @@ void main() {
       );
       await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
       expect(find.text('Outcome corrected'), findsOneWidget);
-      expect(find.text('The student did not subscribe.'), findsOneWidget);
+      expect(find.text('The student did not enrol.'), findsOneWidget);
       expect(find.text('plain-text fallback'), findsNothing);
     });
   });

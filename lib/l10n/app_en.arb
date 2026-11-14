@@ -367,7 +367,7 @@
   "childGroupLabel": "Group",
   "childTeacherLabel": "Teacher",
   "childLevelLabel": "Level",
-  "childSubscriptionLabel": "Subscription",
+  "childSubscriptionLabel": "Lesson package",
   "childScheduleLabel": "Schedule",
   "childrenEmpty": "No children are linked to your account yet.",
   "contactInfoTitle": "Contact information",
@@ -1204,8 +1204,8 @@
   "cardTrialCancelledTitle": "Trial cancelled",
   "cardTrialReportTitle": "Trial report",
   "cardTrialNoShowTitle": "The student did not attend the trial lesson.",
-  "cardTrialSubscribedTitle": "The student has subscribed.",
-  "cardTrialNotSubscribedTitle": "The student did not subscribe.",
+  "cardTrialSubscribedTitle": "The student has enrolled.",
+  "cardTrialNotSubscribedTitle": "The student did not enrol.",
   "cardTrialLevel": "Level",
   "cardTrialCorrectionTitle": "Outcome corrected",
   "cardTrialNewOutcome": "Now",
@@ -1581,7 +1581,7 @@
   },
   "signupOpen": "New parent? Create your account",
   "signupTitle": "Create your parent account",
-  "signupEmailIntro": "Enter the e-mail address you gave the academy when you subscribed.",
+  "signupEmailIntro": "Enter the e-mail address you gave the academy when you enrolled.",
   "signupEmailLabel": "E-mail",
   "signupEmailInvalid": "Enter a valid e-mail address.",
   "signupSendCode": "Get my code",
@@ -1746,7 +1746,7 @@
   "billingDeniedTitle": "Payments are shown to the family's parents",
   "billingDeniedBody": "If you have a question, ask the academy.",
   "tabPayments": "Payments",
-  "tabSubscriptions": "Subscriptions",
+  "tabSubscriptions": "Packages",
   "@tabSubscriptions": {
     "description": "PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments."
   },
@@ -1780,7 +1780,7 @@
       }
     }
   },
-  "subscriptionNone": "No subscription yet",
+  "subscriptionNone": "No lesson package yet",
   "@subscriptionNone": {
     "description": "PD-30: a child with no subscription on record."
   },
@@ -1806,7 +1806,7 @@
   "@subscriptionStateOpen": {
     "description": "PD-30: a child's subscription chip: lessons go on."
   },
-  "subscriptionStateGrace": "Renewal due",
+  "subscriptionStateGrace": "Next package due",
   "@subscriptionStateGrace": {
     "description": "PD-30: a child's subscription chip: lessons used up, grace lessons left."
   },
@@ -1830,11 +1830,11 @@
       }
     }
   },
-  "subscriptionRequestRenewal": "Request renewal",
+  "subscriptionRequestRenewal": "Request the next package",
   "@subscriptionRequestRenewal": {
     "description": "PD-30: a locked child with nothing to pay yet: ask the academy to renew."
   },
-  "subscriptionRenewalRequested": "Renewal requested",
+  "subscriptionRenewalRequested": "Next package requested",
   "@subscriptionRenewalRequested": {
     "description": "PD-30: the renewal was asked for today."
   },
@@ -1879,7 +1879,7 @@
   "@lockBannerGeneric": {
     "description": "PD-30 D-3: the banner's line everyone reads, the teacher included. Nothing financial."
   },
-  "lockBannerOpenSubscriptions": "Go to Subscriptions",
+  "lockBannerOpenSubscriptions": "Go to Packages",
   "@lockBannerOpenSubscriptions": {
     "description": "PD-30: the banner's button, a parent only."
   },
@@ -1927,7 +1927,7 @@
   "@cardSubscriptionLockedTitle": {
     "description": "PD-30: the family's direct-chat card when a child is locked."
   },
-  "cardSubscriptionLockedHint": "Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.",
+  "cardSubscriptionLockedHint": "Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.",
   "@cardSubscriptionLockedHint": {
     "description": "PD-30 D-3: the last line of the family's direct-chat card."
   },
