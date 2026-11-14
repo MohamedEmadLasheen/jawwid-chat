@@ -154,6 +154,9 @@ export const SOURCE_LABEL: Record<SourceType | 'manual', Pair> = {
   makeup_owed: { en: 'Make-up owed', ar: 'حصة تعويضية مستحقة' },
   family_without_account: { en: 'Parent deleted their account', ar: 'وليّ أمر حذف حسابه' },
   teacher_account_deleted: { en: 'Teacher deleted their account', ar: 'معلم حذف حسابه' },
+  teacher_deletion_request: { en: 'Teacher asked to delete their account', ar: 'معلم طلب حذف حسابه' },
+  learner_needs_teacher: { en: 'Student needs a new teacher', ar: 'طالب يحتاج إلى معلم جديد' },
+  erased_teacher_payroll: { en: 'Payroll of a deleted teacher', ar: 'رواتب معلم محذوف' },
   group_admin_absent: { en: 'Group without an admin', ar: 'مجموعة بلا مشرف' },
 }
 
@@ -196,6 +199,20 @@ export const SOURCE_TITLE: Record<SourceType, Pair> = {
   teacher_account_deleted: {
     en: 'A teacher deleted their account: record their departure',
     ar: 'معلم حذف حسابه: سجّل مغادرته',
+  },
+  // PD-56 O-3: due at the 30-day deadline, when the account is deleted whatever is left.
+  teacher_deletion_request: {
+    en: 'Close the lessons and payroll of {teacher}, who asked to delete their account',
+    ar: 'أغلق حصص {teacher} ورواتبه، فقد طلب حذف حسابه',
+  },
+  // PD-56 O-3 review: what a forced erasure leaves. Completed by themselves once done.
+  learner_needs_teacher: {
+    en: 'Find a new teacher for {learner}: their teacher’s account was deleted ({count} lessons ahead to move or cancel)',
+    ar: 'اختر معلمًا جديدًا لـ{learner}: حُذف حساب معلمه ({count} من الحصص القادمة لنقلها أو إلغائها)',
+  },
+  erased_teacher_payroll: {
+    en: 'Payroll still open for a deleted teacher: pay what is owed (their bank details are deleted once it is settled)',
+    ar: 'رواتب ما زالت مفتوحة لمعلم محذوف: ادفع المستحق (تُحذف بياناته المصرفية بعد تسويتها)',
   },
   group_admin_absent: {
     en: 'Add an admin to the group: {group} (the teacher and parents cannot write until then)',
