@@ -10,6 +10,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../domain/amount_due.dart';
 import '../domain/money_format.dart';
+import 'bank_transfer_screen.dart' show ReviewModeNotice;
 import 'my_payments_screen.dart';
 import 'payment_sections.dart';
 
@@ -28,12 +29,12 @@ enum PayOutcome {
 
 /// PD-27: "How would you like to pay?" -- by card (only where the academy takes cards)
 /// or by bank transfer. Null when dismissed.
-Future<PayOutcome?> showPaySheet(BuildContext context, {required DueItem item, required bool cardAvailable}) {
+Future<PayOutcome?> showPaySheet(BuildContext context, {required DueItem item, required bool cardAvailable, bool reviewMode = false}) {
   return showModalBottomSheet<PayOutcome>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => PaySheet(item: item, cardAvailable: cardAvailable),
+    builder: (_) => PaySheet(item: item, cardAvailable: cardAvailable, reviewMode: reviewMode),
   );
 }
 
@@ -79,10 +80,14 @@ class ReceiptPendingNotice extends StatelessWidget {
 }
 
 class PaySheet extends ConsumerStatefulWidget {
-  const PaySheet({super.key, required this.item, required this.cardAvailable});
+  const PaySheet({super.key, required this.item, required this.cardAvailable, this.reviewMode = false});
 
   final DueItem item;
   final bool cardAvailable;
+
+  /// OA-12: the App Review demo family -- said at the top; the server makes card a
+  /// demo page and refuses every receipt.
+  final bool reviewMode;
 
   @override
   ConsumerState<PaySheet> createState() => _PaySheetState();
@@ -180,6 +185,10 @@ class _PaySheetState extends ConsumerState<PaySheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.reviewMode) ...[
+              ReviewModeNotice(key: const ValueKey('pay-sheet-review-mode'), text: l10n.billingReviewModeNotice),
+              const SizedBox(height: Spacing.spacing3),
+            ],
             Text(l10n.billingPaySheetTitle, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: Spacing.spacing2),
             ContentText(item.label, style: theme.textTheme.bodyMedium?.copyWith(color: tokens.colorTextSecondary)),

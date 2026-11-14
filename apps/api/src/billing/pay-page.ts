@@ -43,6 +43,12 @@ export interface PayPageModel {
   /** PD-27 completion: the latest card attempt's Stripe decline code, when it failed. */
   cardFailure?: string | null;
   /**
+   * OA-12: an App Review organization's link. The bank block then shows the
+   * demo details only, without the "send a photo of the receipt" instruction
+   * (no receipt can be sent from a review account).
+   */
+  reviewMode?: boolean;
+  /**
    * W61 S2: bank-transfer receipts on this request still waiting for the academy.
    * Any: a notice (a card too may charge twice). Covering what is left: no card
    * button (the API refuses it, 409 receipt_pending).
@@ -166,7 +172,7 @@ export function renderPayPage(m: PayPageModel, lang: PayLang, ctx: { token: stri
        </form>
        <p class="fine">${e(t.cardNote)}</p>`
     : '';
-  const bank = payable && m.bankAccount ? bankBlock(m.bankAccount, t, e) : '';
+  const bank = payable && m.bankAccount ? bankBlock(m.bankAccount, t, e, m.reviewMode === true) : '';
   const expires = payable && m.expiresAt ? `<p class="fine">${e(t.expires)} <bdi dir="ltr">${e(m.expiresAt.slice(0, 10))}</bdi></p>` : '';
 
   return `<!doctype html>
@@ -229,7 +235,7 @@ function note(kind: 'ok' | 'info' | 'muted' | 'warn', html: string): string {
   return `<p class="note ${kind}" role="status">${html}</p>`;
 }
 
-function bankBlock(b: BankAccount, t: (typeof T)['ar'] | (typeof T)['en'], e: (s: string) => string): string {
+function bankBlock(b: BankAccount, t: (typeof T)['ar'] | (typeof T)['en'], e: (s: string) => string, reviewMode: boolean): string {
   const line = (label: string, value: string | null, mono = false) =>
     value ? `<div class="row"><dt>${e(label)}</dt><dd${mono ? ' class="mono" dir="ltr"' : ''}><bdi>${e(value)}</bdi></dd></div>` : '';
   return `<div class="bank"><h2>${e(t.bankTitle)}</h2><dl>
@@ -240,5 +246,5 @@ function bankBlock(b: BankAccount, t: (typeof T)['ar'] | (typeof T)['en'], e: (s
     ${line(t.swift, b.swift, true)}
   </dl>
   ${b.note ? `<p class="fine"><bdi>${e(b.note)}</bdi></p>` : ''}
-  <p class="fine">${e(t.bankNote)}</p></div>`;
+  ${reviewMode ? '' : `<p class="fine">${e(t.bankNote)}</p>`}</div>`;
 }

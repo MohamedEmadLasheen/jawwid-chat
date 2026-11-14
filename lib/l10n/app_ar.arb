@@ -2147,5 +2147,9 @@
   "signupLegalChanged": "تغيّرت الشروط. يُرجى قراءتها والموافقة عليها من جديد.",
   "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."},
   "legalLoadFailed": "تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.",
-  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."}
+  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."},
+  "billingReviewModeNotice": "حساب تجريبي لمراجعة المتجر: لا يمكن إجراء أي دفع حقيقي. خيار البطاقة يفتح صفحة تشرح الدفع الفعلي بالبطاقة، والتحويل البنكي يعرض بيانات تجريبية فقط.",
+  "@billingReviewModeNotice": {"description": "OA-12: top of the pay sheet for the App Review demo family (GET /me/billing reviewMode). The server makes card a demo page and refuses receipts."},
+  "billingReviewModeTransferNotice": "حساب تجريبي لمراجعة المتجر: هذه البيانات البنكية ليست حقيقية. لا يمكن إجراء أي تحويل ولا إرسال أي إيصال من هذا الحساب.",
+  "@billingReviewModeTransferNotice": {"description": "OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode)."}
 }
