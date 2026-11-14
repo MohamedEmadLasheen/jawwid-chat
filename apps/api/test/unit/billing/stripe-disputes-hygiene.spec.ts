@@ -51,6 +51,29 @@ describe('S3: every Checkout Session Chat opens says it is Chat\'s', () => {
   });
 });
 
+describe('Checkout offers card only (bank transfer is manual and in-app)', () => {
+  const input: CheckoutInput = {
+    requestId: REQUEST, organizationId: ORG, amountMinor: 150000, currency: 'AED', productName: 'Quran — renewal', description: null,
+    successUrl: 'https://x/s', cancelUrl: 'https://x/c', expiresAt: new Date(1_900_000_000_000), locale: 'ar', idempotencyKey: 'k',
+  };
+
+  it('always sends allowed_payment_method_types exactly [card] and never the removed payment_method_types, with or without a customer', () => {
+    expect(checkoutCreateParams(input).allowed_payment_method_types).toEqual(['card']);
+    expect(checkoutCreateParams({ ...input, customerId: 'cus_A1' }).allowed_payment_method_types).toEqual(['card']);
+    // Stripe API 2026-09-30.endive answers 400 to payment_method_types on Checkout Session create.
+    expect('payment_method_types' in checkoutCreateParams(input)).toBe(false);
+  });
+
+  it('a caller cannot add another method: extra input fields never reach the params, and each call gets its own array', () => {
+    const hostile = { ...input, allowed_payment_method_types: ['card', 'us_bank_account'], payment_method_types: ['card', 'us_bank_account'], paymentMethodTypes: ['link'] } as unknown as CheckoutInput;
+    expect(checkoutCreateParams(hostile).allowed_payment_method_types).toEqual(['card']);
+    expect(JSON.stringify(checkoutCreateParams(hostile))).not.toMatch(/us_bank_account|link/);
+    const first = checkoutCreateParams(input);
+    first.allowed_payment_method_types!.push('link');
+    expect(checkoutCreateParams(input).allowed_payment_method_types).toEqual(['card']);
+  });
+});
+
 describe('S6: the Stripe line item never carries the child\'s name', () => {
   it('is the request\'s label only', () => {
     expect(checkoutProductName({ label: 'Quran — renewal', childName: 'Amina Example-Surname' } as { label: string })).toBe('Quran — renewal');
