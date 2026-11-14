@@ -631,4 +631,39 @@ describe('O-3: a teacher\'s account deletion request', () => {
        WHERE te.name = 'teacher_many' AND q.state = 'pending'`;
     expect(n).toBe(51);
   }, 90_000);
+
+  it('15. the open-work gate is not a session setting: chat.erasing_on_request alone erases nobody (B9, P3-1)', async () => {
+    // A teacher with work open, with and without a pending request: setting the
+    // setting by hand and calling the erasure is refused either way. Only
+    // chat.complete_account_deletion_request, which completes the request in the
+    // same transaction, passes the gate (test 5 and 7 prove that path still works).
+    for (const withRequest of [false, true]) {
+      const t = await newTeacher(withRequest ? 'guc_req' : 'guc');
+      await lessonAhead(t.id);
+      if (withRequest) {
+        const { token } = await login(t.subject);
+        expect(await call(token, 'POST', '/me/account/delete', { password: PASSWORD })).toMatchObject({ status: 200, json: { deleted: false } });
+      }
+      await expect(g.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`select set_config('chat.erasing_on_request', $1, true)`, t.accountId);
+        await tx.$queryRawUnsafe(`select chat.erase_account($1::uuid, 'QA probe', '{}'::text[])`, t.accountId);
+      })).rejects.toThrow(/TEACHER_DELETION_BLOCKED/);
+      expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ name: `teacher_${withRequest ? 'guc_req' : 'guc'}`, isActive: true });
+      expect((await requestsOf(t.accountId)).map((r) => r.state)).toEqual(withRequest ? ['pending'] : []);
+    }
+  });
+
+  it('16. a completion with no method is refused by the function itself, not only by a table constraint (B9, P3-2)', async () => {
+    const t = await newTeacher('nullvia');
+    await lessonAhead(t.id);
+    const { token } = await login(t.subject);
+    const r = await call(token, 'POST', '/me/account/delete', { password: PASSWORD });
+    const id = (r.json.request as { id: string }).id;
+    for (const staff of [null, m.teachersManager.id]) {
+      await expect(g.prisma.$queryRawUnsafe(`select chat.complete_account_deletion_request($1::uuid, $2::uuid, null::text)`, id, staff))
+        .rejects.toThrow(/a deletion request is completed by staff or at its deadline/);
+    }
+    expect((await requestsOf(t.accountId)).map((x) => x.state)).toEqual(['pending']);
+    expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ isActive: true });
+  });
 });

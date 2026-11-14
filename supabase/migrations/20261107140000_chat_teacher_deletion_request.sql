@@ -518,7 +518,8 @@ begin
   if not chat.caller_is_server_side() then
     raise exception 'only the server completes a deletion request' using errcode = 'insufficient_privilege';
   end if;
-  if p_via not in ('staff', 'deadline') or (p_via = 'staff') <> (p_staff is not null) then
+  -- `p_via is null` first: NULL is neither a method nor refused by `not in` (B9, P3-2).
+  if p_via is null or p_via not in ('staff', 'deadline') or (p_via = 'staff') <> (p_staff is not null) then
     raise exception 'a deletion request is completed by staff or at its deadline' using errcode = 'check_violation';
   end if;
   -- The account first, then the request: the order chat.erase_account (the
@@ -671,7 +672,14 @@ begin
     perform 1 from chat.teacher where account_id = v_account.id for update;
     v_blocked := chat.teacher_deletion_open_items(v_account.id);
     if cardinality(v_blocked) > 0 then
-      if coalesce(current_setting('chat.erasing_on_request', true), '') = v_account.id::text then
+      -- The setting names the account, AND a request for it was completed by staff or
+      -- at its deadline in this very transaction (chat.complete_account_deletion_request
+      -- closes it just before calling here): a session that only sets the setting
+      -- passes nothing (B9, P3-1).
+      if coalesce(current_setting('chat.erasing_on_request', true), '') = v_account.id::text
+         and exists (select 1 from chat.account_deletion_request q
+                      where q.account_id = v_account.id and q.state = 'completed'
+                        and q.completed_via in ('staff', 'deadline') and q.completed_at = now()) then
         v_forced := true;
         v_left := chat.teacher_deletion_left_open(v_account.id);
       else
