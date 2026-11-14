@@ -10,7 +10,10 @@
  *    is refused (503, the existing "pay by bank transfer" answer), before Stripe is asked;
  *  - less than Stripe's minimum for the currency (also what is LEFT after a
  *    part payment) is refused for card, never sent to Stripe;
- *  - an instalment the ledger already covers gets no 1-minor-unit request.
+ *  - an instalment the ledger already covers gets no 1-minor-unit request;
+ *  - with OA-12 review mode (#585): a review organization keeps the demo card
+ *    page for a request S5 would refuse, and never sees the S5 refusal; the
+ *    W63 card pause still wins over both.
  *
  * Synthetic people only (G-20).
  */
@@ -31,6 +34,8 @@ import { LessonModule } from '../../src/lessons/lesson.module';
 import { BillingModule } from '../../src/billing/billing.module';
 import { ParentRecordModule } from '../../src/parent-profile/parent-record.module';
 import { STRIPE_GATEWAY } from '../../src/billing/stripe.gateway';
+import { CARD_PAUSED_KEY } from '../../src/billing/card-pause';
+import { REVIEW_ORGANIZATIONS_KEY } from '../../src/billing/review-mode';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
@@ -389,5 +394,63 @@ describe('regression: every mismatched currency -- card refused before Stripe is
   // C3 B5: refusing to RECORD a confirmed Stripe payment in one of the 13 would lose money Stripe took; production has
   // never run a card payment and S5 prevents new ones, so no hardening of confirm() -- decision in reports/B4.md.
   it.todo('C3 B5: webhook hardening for a pre-S5 session in a mismatched currency (decided: not implemented; see B4.md)');
+});
+
+describe('with OA-12 review mode and the W63 card pause (#585 on main)', () => {
+  async function setConfig(key: string, value: unknown | undefined) {
+    if (value === undefined) await g.prisma.config.deleteMany({ where: { key } });
+    else await g.prisma.config.upsert({ where: { key }, create: { key, value: value as object }, update: { value: value as object } });
+  }
+  const demoUrl = (lang: string) => `${base}/pay/review-demo?lang=${lang}`;
+
+  it('a review organization gets the demo card page for a request S5 refuses (PKR, below the minimum), never the S5 refusal; the pause wins over both; Stripe never asked', async () => {
+    const { f, child } = freshFamily();
+    const pkr = await request(f.id, child.id, 25000, 'PKR');
+    const small = await request(f.id, child.id, 150, 'AED');
+    const both = [pkr, small];
+    const formOf = (r: { link: string }) => `action="./${tokenOf(r.link)}/checkout?lang=en"`;
+    const calls = stripe.sessions.size;
+
+    // Control, outside review mode: S5 refuses both, the link page offers no card form.
+    for (const r of both) expect(await (await fetch(`${base}/pay/${tokenOf(r.link)}?lang=en`)).text()).not.toContain('/checkout');
+
+    await setConfig(REVIEW_ORGANIZATIONS_KEY, [orgId]);
+    try {
+      for (const r of both) {
+        const page = await fetch(`${base}/pay/${tokenOf(r.link)}?lang=en`);
+        expect(page.status).toBe(200);
+        expect(await page.text()).toContain(formOf(r));
+        const post = await fetch(`${base}/pay/${tokenOf(r.link)}/checkout?lang=en`, { method: 'POST', redirect: 'manual' });
+        expect([r.id, post.status, post.headers.get('location')]).toEqual([r.id, 303, demoUrl('en')]);
+        const inApp = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
+        expect([r.id, inApp.status]).toEqual([r.id, 201]);
+        expect(inApp.json.url).toMatch(/\/pay\/review-demo\?lang=(ar|en)$/);
+        expect(JSON.stringify(inApp.json)).not.toMatch(/CARD_(CURRENCY|AMOUNT)_/);
+      }
+
+      // W63: the operator's pause wins in review mode too, for these requests as for any.
+      await setConfig(CARD_PAUSED_KEY, true);
+      try {
+        for (const r of both) {
+          expect(await (await fetch(`${base}/pay/${tokenOf(r.link)}?lang=en`)).text()).not.toContain('/checkout');
+          const post = await fetch(`${base}/pay/${tokenOf(r.link)}/checkout?lang=en`, { method: 'POST', redirect: 'manual' });
+          expect([r.id, post.status]).toEqual([r.id, 503]);
+          const inApp = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
+          expect([r.id, inApp.status, inApp.code]).toEqual([r.id, 503, CommErrorCode.PAYMENTS_UNAVAILABLE]);
+          expect(JSON.stringify(inApp.json)).not.toMatch(/CARD_(CURRENCY|AMOUNT)_/);
+        }
+      } finally {
+        await setConfig(CARD_PAUSED_KEY, undefined);
+      }
+    } finally {
+      await setConfig(REVIEW_ORGANIZATIONS_KEY, undefined);
+    }
+
+    expect(stripe.sessions.size).toBe(calls);
+    expect(await g.prisma.paymentCheckout.count({ where: { requestId: { in: both.map((r) => r.id) } } })).toBe(0);
+    // Review mode off again: S5 refuses as before.
+    const after = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: pkr.id });
+    expect(after.json.error?.detail).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: 'PKR' });
+  });
 });
 
