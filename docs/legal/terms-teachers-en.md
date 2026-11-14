@@ -157,9 +157,9 @@ If a Child appears to be in immediate danger, also tell the Academy straight awa
 
 12.1 You can delete your account in the app (Settings → Delete account, with your password) or through the public web page the Academy provides for this.
 
-12.2 Deletion is refused while you still have future lessons, assigned Students, or open payroll for this month or last month. In that case the app tells you to contact the Academy so that your Students can be handed over and your pay settled first.
+12.2 If you still have future lessons, assigned Students, or open payroll for this month or last month, you request deletion in the same places. The app shows the date by which your account will be deleted (the web page shows it after you submit). The Academy then hands over your Students and settles your pay, and your account is deleted within 30 days of the request at the latest, even if something is still open. Until then your account works as usual, and you can cancel the request in the app.
 
-12.3 When deletion goes ahead, it takes effect immediately. Your sign-in, password, devices, notifications, phone number and e-mail, professional profile, certificate files and payout account details are deleted, and your name is replaced with "Deleted user". Your Teachers-department manager is told.
+12.3 When deletion goes ahead, it takes effect immediately. Your sign-in, password, devices, notifications, phone number and e-mail, professional profile, certificate files and payout account details (the payout account details at the time set out in the Privacy Policy, section 10.4.1) are deleted, and your name is replaced with "Deleted user". Your Teachers-department manager is told.
 
 12.4 The Academy keeps the messages you sent (shown as "Deleted user"), lesson reports and other educational records, pay and disciplinary records, and the audit log. The Privacy Policy explains this in full.
 

@@ -4,6 +4,10 @@
 pull requests #528 (review accounts), #524 (Android full-screen check) and #449 (push taps).
 Nothing here has been entered in a console. The owner pastes the text.
 
+**LR-71 pre-audit fixes, 2026-11-10:** the teacher-deletion text (§1, §2, §3) and the byte counts (§2.2) now
+match the launch candidate `claude/merge-rehearsal-3-2026-11-10` @ `0aec87f1` (#498: a teacher with work open
+requests deletion). Line numbers in rows changed then are as of the launch candidate.
+
 **Where it goes**
 - App Store Connect → the app → the version → **App Review Information**:
   - **Sign-In Information** holds the parent account.
@@ -25,15 +29,16 @@ paragraph (§2.1).
 
 | Claim in the text | Evidence |
 |---|---|
-| Parents and teachers sign in to the app. Sales-team staff and the organization's super admin can sign in too, with Chats, Calls, Payments and Settings only. No other staff role can sign in. | `lib/shared/models/user_role.dart:6-12`; `lib/core/data/http/http_auth_repository.dart:311-331` (any other staff role is refused); `lib/app/shells/app_shell.dart:108-110` |
+| Parents and teachers sign in to the app. Sales-team staff and the organization's super admin can sign in too, with Chats, Calls, Payments and Settings only. No other staff role can sign in. | `lib/shared/models/user_role.dart:6-12`; `lib/core/data/http/http_auth_repository.dart:307-340` (any other staff role is refused; as of the launch candidate); `lib/app/shells/app_shell.dart:108-111` |
 | Accounts are created by the academy. A parent signs up only if the academy enrolled their child, with a code the supervisor sends on WhatsApp | `lib/features/auth/presentation/parent_signup_screen.dart:20-25` |
 | The review accounts need no code. They sign in with email and password on the normal screen | `review-accounts.md` ("No WhatsApp code"); #528 ("parent2 signs in with email and password alone") |
 | Three accounts: `parent@`, `teacher@`, `parent2@` | `review-accounts.md` table; #528 adds `parent2@<domain>` ("Laila Hamdi", her own family, only a 1:1 chat with the made-up supervisor) |
 | A review-only organization, all data made up, nothing reaches real staff | `review-accounts.md` intro |
 | Settings → Language | `lib/features/settings/presentation/settings_screen.dart:149-154` |
-| Settings → Delete account (password, then a confirmation) for parents and teachers | `settings_screen.dart:277-286`; `lib/app/router.dart:92`; strings `deleteAccountPasswordLabel`, `deleteAccountAction`, `deleteAccountConfirm` (`lib/l10n/app_en.arb:3468-3472`) |
-| What deletion erases and keeps | Privacy policy on `main` (`docs/legal/privacy-policy-en.md`): §10.2 (deleted; sessions ended; name replaced by "Deleted user"), §10.3 (kept: messages, children's records, payments with the payer's and the child's names, call records, ended-session records with a hashed IP and the user agent, and more), §10.6.3 (backups up to 56 days). The in-app screen (`deleteAccountGoes`, `deleteAccountKeptParent`, `app_en.arb:3462-3464`) is shorter; the Notes follow the policy, so they say no less than the screen |
-| The teacher account cannot be deleted while it has students | `deleteAccountTeacherBlocked` (`app_en.arb:3482`); `review-accounts.md` ("The teacher account cannot be deleted while a child is assigned to it") |
+| Settings → Delete account (password, then a confirmation) for parents and teachers | `settings_screen.dart:281-285`; `lib/app/router.dart:92`; strings `deleteAccountPasswordLabel`, `deleteAccountAction`, `deleteAccountConfirm` (`lib/l10n/app_en.arb:3487-3491`) |
+| What deletion erases and keeps | Privacy policy on `main` (`docs/legal/privacy-policy-en.md`): §10.2 (deleted; sessions ended; name replaced by "Deleted user"), §10.3 (kept: messages, children's records, payments with the payer's and the child's names, call records, ended-session records with a hashed IP and the user agent, and more), §10.6.3 (backups up to 56 days). The in-app screen (`deleteAccountGoes`, `deleteAccountKeptParent`, `app_en.arb:3479-3483`, as of the launch candidate) is shorter; the Notes follow the policy, so they say no less than the screen |
+| The teacher account has a student, so the same screen offers "Request account deletion": after the password, a confirmation shows the date; the account is deleted within 30 days at the latest (by staff, or by the server at the deadline), and "Cancel request" withdraws it. No "contact the academy" | #498 (owner decision O-3): `apps/api/src/account-deletion/account-deletion.controller.ts:20-24`, `:56-73`; `lib/features/settings/presentation/delete_account_screen.dart:95-110`; strings `deleteAccountRequestAction`, `deleteAccountRequestConfirm`, `deleteAccountRequestCancel` (`app_en.arb:3503-3513`); `docs/release/app-review-notes-account-deletion.md` §1-§2. `deleteAccountTeacherBlocked` no longer exists |
+| A re-run of the provisioning command re-creates a deleted teacher and moves the child back to it | `apps/api/src/cli/review-cohort.ts:68-77`, `:631-640` (`chat.transfer_learner`); `review-accounts.md` (re-run rules) says the same |
 | A re-run of the provisioning command re-creates a deleted parent | `review-accounts.md` ("It restores a deleted parent account"); #528 does the same for `parent2` |
 | Calls are voice only and not recorded | `lib/core/call_media/livekit_media_room.dart:13-16` (audio only); `apps/api/src/communication/calls/call.service.ts:29` ("No audio is recorded") |
 | A call starts from the phone icon in a chat's header | `lib/features/messages/presentation/chat_screen.dart:1686-1694` |
@@ -41,8 +46,8 @@ paragraph (§2.1).
 | A family-group call rings the other members, so a reviewer needs the parent and the teacher on two devices | the same; the review family group seats the parent, the teacher and the made-up supervisor (`review-accounts.md`) |
 | The supervisor has no login, so nobody answers a call in the parent's direct chat with the supervisor | `review-accounts.md` ("Synthetic staff with no login") |
 | On iPhone, a call rings through CallKit while the app is closed | `ios/Runner/AppDelegate.swift:215-235`; `ios/Runner/CallKitBridge.swift:174`. **Only if** production sets `APNS_VOIP_ENABLED=true` (`apps/api/src/communication/notifications/push.provider.selector.ts:51-67`, default off). See §4 |
-| The call's audio continues in the background | iOS `UIBackgroundModes` `audio` (`ios/Runner/Info.plist:48-50`); Android `CallForegroundService` (`android/app/src/main/AndroidManifest.xml:72-76`). **Not verified on a device** (see `ios-background-modes.md`) |
-| Parent tab names: "Subscriptions" and "Amount due", then "Pay" | `lib/app/shells/app_shell.dart:108`, `:119`; `app_en.arb:1747` (`tabSubscriptions`), `:2064` (`billingAmountDueTitle`), `:2068` (`billingPay`) |
+| The call's audio continues in the background | iOS `UIBackgroundModes` `audio` (`ios/Runner/Info.plist:49-51`, as of the launch candidate); Android `CallForegroundService` (`android/app/src/main/AndroidManifest.xml:78-85`, as of the launch candidate). **Not verified on a device** (see `ios-background-modes.md`) |
+| Parent tab names: "Subscriptions" and "Amount due", then "Pay" | `lib/app/shells/app_shell.dart:108-109`, `:120`; `app_en.arb:1748` (`tabSubscriptions`), `:2065` (`billingAmountDueTitle`), `:2069` (`billingPay`) (as of the launch candidate) |
 
 ### Apple Guideline 2.5.19 (staff features)
 
@@ -82,7 +87,7 @@ ACCOUNTS
 2. Teacher: teacher@{{REVIEW_DOMAIN}} / {{REVIEW_TEACHER_PASSWORD}}. The same child's teacher, in the same family group.
 3. Deletion test: parent2@{{REVIEW_DOMAIN}} / {{REVIEW_DELETION_PARENT_PASSWORD}}. A separate fictional family. Please use this account to test account deletion.
 
-ACCOUNT DELETION: Settings > Delete account > enter the password > Delete my account > confirm. It takes effect at once and cannot be undone. Deleted: the photo, the contact details, the password and the notifications; every signed-in session is ended. The name becomes "Deleted user" in conversations but stays on payment records. Kept: messages already sent (as "Deleted user"); payments and invoices, with the payer's and the child's names, for 7 years; the children's records at the academy; call records; and other records, such as ended-session records (hashed IP address and user agent). Deleted data may remain in encrypted backups for up to 56 days. Details: our privacy policy, section 10. We re-create the deletion-test account after each review. The teacher account cannot be deleted while it has students; the app asks the teacher to contact the academy.
+ACCOUNT DELETION: Settings > Delete account > enter the password > Delete my account > confirm. It takes effect at once and cannot be undone. Deleted: the photo, the contact details, the password and the notifications; every signed-in session is ended. The name becomes "Deleted user" in conversations but stays on payment records. Kept: messages already sent (as "Deleted user"); payments and invoices, with the payer's and the child's names, for 7 years; the children's records at the academy; call records; and other records, such as ended-session records (hashed IP address and user agent). Deleted data may remain in encrypted backups for up to 56 days. Details: our privacy policy, section 10. We re-create the deletion-test account after each review. The teacher account has a student, so the same screen offers Request account deletion instead: the app shows the date, and the account is deleted within 30 days at the latest unless the request is cancelled in the same screen. We re-create the teacher account if it is deleted.
 
 CALLS: voice only, no video, not recorded. A call needs two devices: sign in as the parent on one and as the teacher on the other, open the family group chat and tap the phone icon at the top; the other device rings, also when the app is closed (CallKit on iPhone). The direct chat with the supervisor would ring a fictional staff member who has no login, so nobody answers there. During a call the audio continues when the app goes to the background or the screen locks.
 
@@ -92,7 +97,7 @@ STAFF: the academy's supervisors, managers and administrators work in a separate
 ```
 <!-- APPLE-NOTES-END -->
 
-**Length:** 2949 bytes without the payments paragraph. 3452 bytes with the longest option. See §2.2.
+**Length:** 3118 bytes without the payments paragraph. 3681 bytes with the longest option (C). See §2.2.
 
 ### 2.1 The payments paragraph: an OPEN choice (owner decision OA-12)
 
@@ -135,16 +140,27 @@ Notes for the owner:
 
 | Text | Bytes (= characters; the text is ASCII) |
 |---|---|
-| The Notes block without the payments paragraph | 2949 |
-| With Option A (card): the block, a blank line and the paragraph | 3452 |
-| With Option B | 3368 |
+| The Notes block without the payments paragraph | 3118 |
+| With Option A (card): the block, a blank line and the paragraph | 3620 |
+| With Option B | 3536 |
+| With Option C (the OA-12 paragraph from #585, 563 bytes counted on the launch candidate) | 3681 |
 | Apple's limit | 4000 bytes |
-| Play "Any other information" text (§3) without the payments sentence | 1091 (about 1330 with it) |
+| Play "Any other information" text (§3) without the payments sentence | 1263 (about 1530 with the longest sentence) |
+
+**LR-71 recount, 2026-11-10:** the teacher-deletion sentence added 168 bytes to the Notes and 192 to the Play
+text. Counted by marker, so the range survives edits above it: the Notes block is
+`sed -n '/^Jawwid is the communication app/,/^\[PAYMENTS PARAGRAPH\]$/p' review-notes.md | sed '$d' | wc -c`
+(lines 81-95 at this commit), the Play text is
+`sed -n '/^Sign in with the email and password above/,/^\[PAYMENTS SENTENCE\]$/p' review-notes.md | sed '$d' | wc -c`
+(lines 184-187), and the paragraph lines were counted on their own; the paste blocks are pure ASCII (checked with a non-ASCII search).
+All options are under 4000, but **none keeps the 500 bytes spare** asked for below (Option C leaves 319): shorten
+the STAFF paragraph before pasting (§4 check 7), never the deletion paragraph. The older counts here were made
+with a slightly different line range, so they differ by about 1 to 20 bytes from this method.
 
 Counted with `sed -n <lines> review-notes.md | wc -c`. Each count includes the line breaks. Only the
 paste blocks were checked for non-ASCII characters (none). Apple's limit was read from the App Store
-Connect help page on 2026-11-09, and only as a summary ("up to 4000 bytes"). Keep at least 500 bytes spare,
-as the counts above do (548 with Option A). Do not shorten the deletion paragraph to save space: it must
+Connect help page on 2026-11-09, and only as a summary ("up to 4000 bytes"). Keep at least 500 bytes spare
+(the counts above no longer do: see the LR-71 recount). Do not shorten the deletion paragraph to save space: it must
 not say less is kept than the privacy policy does.
 
 Each count includes the placeholders as they are written here. The real domain and passwords change the
@@ -171,7 +187,7 @@ the Parent account entry".
 Sign in with the email and password above on the first screen; no WhatsApp or SMS code is needed. Jawwid is a Quran academy's app for parents and teachers; academy staff use a separate web portal, except the sales team and the senior administrator, who see only Chats, Calls, Payments and Settings (no review account for that role). All data is fictional, in a review-only organization.
 Parent: one child with weekly live lessons, a family group chat with the supervisor and teacher, and a direct chat with the supervisor. Teacher: that child's teacher, in the same family group.
 Calls are voice only and not recorded. To test one, sign in as the parent and the teacher on two devices, open the family group chat and tap the phone icon; the other device rings. The supervisor has no login, so a call in the direct chat is not answered.
-Account deletion: use the Deletion test account. Settings > Delete account > password > Delete my account > confirm. It is immediate; we re-create the account after review. The same is available on the web at {{ACCOUNT_DELETION_URL}}.
+Account deletion: use the Deletion test account. Settings > Delete account > password > Delete my account > confirm. It is immediate; we re-create the account after review. The Teacher account has a student, so it sees Request account deletion instead: the date is shown and the account is deleted within 30 days at the latest, unless cancelled in the same screen. The same is available on the web at {{ACCOUNT_DELETION_URL}}.
 [PAYMENTS SENTENCE]
 ```
 

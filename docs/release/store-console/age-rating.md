@@ -25,7 +25,7 @@ Yes or No.
 
 | Question | Answer | Reasoning and evidence |
 |---|---|---|
-| Parental Controls | **No** | The app lock (Face ID, fingerprint or passcode: `ios/Runner/Info.plist:65-69`) protects the parent's account. It does not let a parent restrict what a child sees, so it is not a parental control. |
+| Parental Controls | **No** | The app lock (Face ID, fingerprint or passcode: `ios/Runner/Info.plist:69-70`, as of the launch candidate) protects the parent's account. It does not let a parent restrict what a child sees, so it is not a parental control. |
 | Age Assurance | **No** `[OWNER DECISION: storefronts, LR-17 / LD-15]` | The app does not check age. If the owner distributes in Texas, Utah or Louisiana, the Declared Age Range API becomes required and this changes to Yes once it is built (launch item LR-17). |
 
 ### 1.2 Capabilities

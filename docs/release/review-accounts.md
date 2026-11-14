@@ -62,7 +62,9 @@ Run it again after every review, and whenever an account misbehaves. It is safe 
 - **It restores a deleted parent account.** Deleting an account in the app erases the login at once. The family and
   the child stay. The command creates the parent again with the same email and gives it back its place in the
   family group.
-- **The teacher account cannot be deleted** while a child is assigned to it, so it never needs restoring.
+- **It restores a deleted teacher account.** With a child assigned, deleting the teacher is a request: the account
+  keeps working and is deleted within 30 days (by staff, or automatically at the deadline). The next run creates
+  the teacher again and moves the child back to it.
 - **Run one copy at a time.** Two runs at once could create duplicate rows.
 
 After a parent deletion, the review organization keeps a "family without an account" task that nobody works on. It

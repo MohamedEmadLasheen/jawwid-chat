@@ -5,6 +5,12 @@
 fix LR-73 (#508), and every passage changed in the re-check was verified directly in the code. Paths are
 relative to the repository root, cited as `file:line`.
 
+**LR-71 pre-audit fixes, 2026-11-10:** re-checked against the launch candidate
+`claude/merge-rehearsal-3-2026-11-10` @ `0aec87f1`, which this file now describes (it is merged after the launch
+PRs). Changed: Sentry session tracking is off in the candidate (#526; §2, §3.8, §7 O-3); the child's name no
+longer goes to Stripe (#580; §6); and the drifted `crash_reporting.dart` and `Info.plist` citations. Those
+citations are **lines as of the launch candidate**; every other citation is still as of `bc47d376`.
+
 **Where it goes:** App Store Connect → the app → **App Privacy** → Get Started / Edit.
 
 **Rules this file follows**
@@ -15,7 +21,7 @@ relative to the repository root, cited as `file:line`.
   broker, and the privacy manifest says `NSPrivacyTracking = false` (`ios/Runner/PrivacyInfo.xcprivacy:20-23`).
   The app does not need App Tracking Transparency.
 - **Everything collected is "linked to the user"**: it is stored against the account. Even the crash
-  reports carry a hash of the account id (`lib/core/crash/crash_reporting.dart:60-70`).
+  reports carry a hash of the account id (`lib/core/crash/crash_reporting.dart:67-76`).
 - **Over-declaring is safer than under-declaring.** Where the code makes an answer uncertain, this
   file declares the type and says why.
 - `[OWNER DECISION: ...]` marks an answer that waits for the owner or counsel. **OPEN** marks the same
@@ -60,7 +66,7 @@ relative to the repository root, cited as `file:line`.
 | Purchases | Purchase History | Yes | Yes | No | App Functionality |
 | Usage Data | Product Interaction | Yes | Yes | No | App Functionality, Analytics |
 | Usage Data | Advertising Data | **No** | — | — | — |
-| Usage Data | Other Usage Data | **No** (Sentry session tracking decided off in #526, pending merge: §3.8, §7) | — | — | — |
+| Usage Data | Other Usage Data | **No** (Sentry session tracking is off: #526, in the launch candidate; §3.8, §7) | — | — | — |
 | Diagnostics | Crash Data | Yes | Yes | No | App Functionality |
 | Diagnostics | Performance Data | **No** | — | — | — |
 | Diagnostics | Other Diagnostic Data | Yes | Yes | No | App Functionality |
@@ -136,7 +142,7 @@ until counsel decides.
 
 **Precise Location: No.**
 - No location API is used. `Info.plist` has no `NSLocation…UsageDescription` key (its usage strings are
-  camera, photos, microphone and Face ID only: `ios/Runner/Info.plist:52-69`), and `pubspec.yaml` has no
+  camera, photos, microphone and Face ID only: `ios/Runner/Info.plist:56-70`), and `pubspec.yaml` has no
   location or GPS plugin.
 
 **Coarse Location: Yes.** What the code really collects:
@@ -176,7 +182,7 @@ Apple's definition ("including … the contents of the … message") covers in-a
   (`lib/core/media/media_picker.dart`; upload `lib/core/data/http/http_message_repository.dart:215`).
 - Profile photos (`lib/features/profile/data/profile_photo_repository.dart:101`, `:131`).
 - Chat wallpaper images (`lib/features/messages/data/chat_theme_repository.dart:58`, `:82`).
-- Usage strings: `ios/Runner/Info.plist:55-58`.
+- Usage strings: `ios/Runner/Info.plist:56-63`.
 
 **Audio Data: Yes.**
 - Voice messages recorded in chat (`lib/core/audio/voice_recorder.dart:80`) and the sound of recorded videos.
@@ -211,7 +217,7 @@ also complaints to the academy (`lib/core/data/http/http_moderation_repository.d
 ### 3.6 Identifiers
 
 **User ID: Yes.** The account id, used on every request, and its SHA-256 hash attached to crash reports
-(`lib/core/crash/crash_reporting.dart:64`, `:70`).
+(`lib/core/crash/crash_reporting.dart:70`, `:76`).
 
 **Device ID: Yes.**
 - The push token (APNs, and the VoIP token) registered with Jawwid's server
@@ -250,12 +256,11 @@ and **invoices to download**, and sends what they pay for:
 
 **Advertising Data: No.** No ads.
 
-**Other Usage Data: No.** **Decided: off in #526 (pending merge); see §7.** On main today,
-`SentryFlutter.init` does not set `enableAutoSessionTracking` (`lib/core/crash/crash_reporting.dart:36-51`),
-and the Sentry SDK turns automatic session tracking on by default, so release builds may send app-session
-start and end events (release health). The lead decided to turn it off in code (#526), so this answer
-stays No. Before you press Publish, confirm #526 is merged and in the submitted build; if it is not, the
-session data must be declared (Other Usage Data, or Other Diagnostic Data, App Functionality, here and in
+**Other Usage Data: No.** **Done in the launch candidate (#526); see §7.** The Sentry SDK turns automatic
+session tracking on by default; the app turns it off (`enableAutoSessionTracking = false`,
+`lib/core/crash/crash_reporting.dart:49`), so release builds send no app-session start and end events
+(release health), and this answer stays No. If a build without #526 were ever submitted, the session data
+would have to be declared (Other Usage Data, or Other Diagnostic Data, App Functionality, here and in
 `google-data-safety.md`).
 
 ### 3.9 Diagnostics (Sentry)
@@ -263,20 +268,20 @@ session data must be declared (Other Usage Data, or Other Diagnostic Data, App F
 Crash reporting runs **only in a release build with a Sentry DSN** (`lib/core/crash/crash_reporting.dart:24-28`).
 Store builds must carry the DSN (launch item LR-21), so answer as if it is on.
 
-**Crash Data: Yes.** The crash stack with scrubbed messages (`crash_reporting.dart:98-118`).
-Linked: it carries the hashed account id (`:64`).
+**Crash Data: Yes.** The crash stack with scrubbed messages (`crash_reporting.dart:104-120`).
+Linked: it carries the hashed account id (`:70`, `:76`).
 
 **Other Diagnostic Data: Yes.** Sentry adds the device model and OS version to each event, and the app
-keeps the last navigation steps (screen names only) as breadcrumbs (`crash_reporting.dart:45-49`, `:83-96`).
+keeps the last navigation steps (screen names only) as breadcrumbs (`crash_reporting.dart:55-58`, `:89-102`).
 
 **Performance Data: No.** Performance tracing is off (`tracesSampleRate = null`,
-`enableAutoPerformanceTracing = false`: `crash_reporting.dart:44-45`). No screenshots or view hierarchy
-are attached (`:42-43`). `sendDefaultPii = false` (`:41`).
+`enableAutoPerformanceTracing = false`: `crash_reporting.dart:53-54`). No screenshots or view hierarchy
+are attached (`:51-52`). `sendDefaultPii = false` (`:50`). The options are set at `:45-60`.
 
 Purpose: **App Functionality** only, for Crash Data and Other Diagnostic Data. Apple's definition of App
 Functionality includes "minimize app crashes". Analytics is **not** declared for them: the reports go only
 to Sentry, are used to find and fix crashes, and there is no analytics SDK and no tracing
-(`crash_reporting.dart:44-45`). The manifest says the same (`ios/Runner/PrivacyInfo.xcprivacy:124-135`, `:223-234`).
+(`crash_reporting.dart:53-54`). The manifest says the same (`ios/Runner/PrivacyInfo.xcprivacy:124-135`, `:223-234`).
 Google declares "App functionality, Analytics" for the same data, because Google's Analytics purpose
 covers diagnosing and fixing crashes; the stores define purposes differently (`google-data-safety.md` §2.3).
 Do not add Analytics here to match Google.
@@ -290,7 +295,7 @@ Do not add Analytics here to match Google.
 | Browsing History | The in-app web view shows only the academy's own lesson activities and refuses other pages | `lib/features/materials/presentation/activity_view_mobile.dart:62-68` |
 | Search History | Searches are answered in real time and not stored; server logs keep the route template only | Data inventory §1, "Application logs" |
 | Environment Scanning, Hands, Head | No AR, no camera analysis | — |
-| Face ID | The system answers yes or no; the app never receives biometric data | `ios/Runner/Info.plist:65-69` |
+| Face ID | The system answers yes or no; the app never receives biometric data | `ios/Runner/Info.plist:69-70` |
 
 ---
 
@@ -331,8 +336,10 @@ and check that every SDK's declared types appear in this label.
 
 - [ ] The privacy report from the release archive has no type that is missing here.
 - [ ] Counsel has answered §3.4 (Sensitive Info).
-- [ ] If LD-8 is not done (the child's name in the Stripe line item), nothing changes here: Stripe is a
-      processor, and Apple's label does not ask about sharing with processors.
+- [x] LD-8 is done in the launch candidate (#580): the Stripe line item is the payment request's label
+      only, never the child's name (`apps/api/src/billing/checkout.service.ts:120-131`, lines as of the
+      launch candidate). Nothing changes here either way: Stripe is a processor, and Apple's label does not
+      ask about sharing with processors. The label is typed by staff, who must not type a child's name in it.
 - [ ] The Privacy Policy (`docs/legal/privacy-policy-*.md`) says the same as this label.
 - [ ] The privacy report shows no Performance Data from the Sentry Cocoa SDK's own manifest. It could not
       be read without a build (machine rule); if it is listed, declare Performance Data, App Functionality.
@@ -346,7 +353,7 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 |---|---|---|---|---|
 | O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §3.2; `google-data-safety.md` §2 |
 | O-2 | Sensitive Info: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §3.4; `google-data-safety.md` §2 |
-| O-3 | Other Usage Data: Sentry automatic session tracking | No | **Decided: off in #526 (pending merge).** Confirm #526 is in the submitted build; if not, declare it | §3.8; `google-data-safety.md` §2.2 |
+| O-3 | Other Usage Data: Sentry automatic session tracking | No | **Done in the launch candidate (#526):** `crash_reporting.dart:49`. Closed | §3.8; `google-data-safety.md` §2.2 |
 | O-4 | Privacy Policy and User Privacy Choices URLs | placeholders | **OPEN.** LR-04, LD-16 | §4 |
 
 The target audience, storefronts, Families, Child Safety Standards and Advertising ID items are Play
