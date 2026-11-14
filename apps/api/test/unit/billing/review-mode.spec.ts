@@ -84,6 +84,20 @@ describe('reading chat.config', () => {
     expect(await inReviewMode(configWith(ORG), ORG)).toBe(false);
   });
 
+  it('C7 P3-1: the log names at most 10 positions, then only how many more (a broken 5000-entry row stays one short line)', async () => {
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    try {
+      const broken = [ORG, ...Array.from({ length: 5000 }, () => 'x')];
+      expect(await readReviewOrganizationIds(configWith(broken))).toEqual(new Set([ORG]));
+      const said = error.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(said).toMatch(/ignored 5000 entries/);
+      expect(said).toMatch(/and 4990 more/);
+      expect(said.length).toBeLessThan(400);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('P2-1: an array with a bad entry keeps the valid ids, and says so at ERROR level (index only, never the value)', async () => {
     const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     try {

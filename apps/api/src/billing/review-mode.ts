@@ -93,6 +93,9 @@ export function isReviewOrganization(organizationId: string | null | undefined, 
  * bank details or a write -- a request whose database is failing fails anyway.
  * Absent is empty; malformed is empty and logged.
  */
+/** C7 P3-1: this runs on every billing request; a badly broken row must not write a megabyte per request. */
+const MAX_LOGGED_POSITIONS = 10;
+
 export async function readReviewOrganizationIds(db: ConfigReader): Promise<ReadonlySet<string>> {
   const row = await db.config.findUnique({ where: { key: REVIEW_ORGANIZATIONS_KEY } });
   if (!row) return NONE;
@@ -105,7 +108,8 @@ export async function readReviewOrganizationIds(db: ConfigReader): Promise<Reado
   if (bad.length > 0) {
     log.error(
       `${REVIEW_ORGANIZATIONS_KEY}: ignored ${bad.length} entr${bad.length === 1 ? 'y' : 'ies'} that ${bad.length === 1 ? 'is' : 'are'} not an organization uuid ` +
-        `(position ${bad.join(', ')}); the ${ids.size} valid id(s) stay in review mode. Fix the row by hand`,
+        `(position ${bad.slice(0, MAX_LOGGED_POSITIONS).join(', ')}${bad.length > MAX_LOGGED_POSITIONS ? ` and ${bad.length - MAX_LOGGED_POSITIONS} more` : ''}); ` +
+        `the ${ids.size} valid id(s) stay in review mode. Fix the row by hand`,
     );
   }
   return ids;
