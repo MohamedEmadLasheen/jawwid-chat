@@ -3,38 +3,55 @@ import { minorDigits } from './money';
 
 /**
  * S5: the currency rules a CARD payment must meet before Stripe is asked. Pure.
+ * Every rule below is in exactly one of three classes (Stripe pages read
+ * 2026-11-14; copies with sha256 in the S5 session report).
  *
- * Only what Stripe's own pages say is a hard rule here (read 2026-11-14):
- *
+ * CONFIRMED Stripe requirements (quoted from Stripe's own pages; enforced):
  *  - https://docs.stripe.com/currencies, "Supported presentment currencies":
- *    the per-account-country card list. STRIPE_CARD_CURRENCIES is its union
- *    over every account country (the Stripe account's country is not recorded
- *    in this repository; BHD, JOD, KWD, OMR and TND appear for AE accounts
- *    only). A currency outside every list cannot be a card charge.
- *  - same page, "Zero-decimal currencies": "the charge and the amount are the
- *    same, without requiring multiplication" (16 codes); "Special cases": ISK
- *    and UGX are represented "as a two-decimal value, where the decimal amount
- *    is always 00"; "Currencies are two-decimal currencies unless otherwise
- *    specified."
+ *    "Stripe users in the selected country can process charges in the
+ *    following list of currencies ... This list of currencies applies to card
+ *    payments." STRIPE_CARD_CURRENCIES is the union over the 45 account
+ *    countries in the page's data (the account's country is not recorded in
+ *    this repository). BHD, JOD, KWD, OMR and TND are listed for AE only.
+ *  - same page: "Currencies are two-decimal currencies unless otherwise
+ *    specified." Zero-decimal: "the charge and the amount are the same,
+ *    without requiring multiplication" (16 codes). Special cases: ISK and UGX
+ *    are represented "as a two-decimal value, where the decimal amount is
+ *    always 00".
  *  - https://support.stripe.com/questions/which-payments-methods-and-products-are-available-in-the-uae:
  *    "We also support charges in the following three-decimal currencies:
  *    Bahraini dinar (BHD), Jordanian dinar (JOD), Kuwaiti dinar (KWD), Omani
  *    rial (OMR), Tunisian dinar (TND)".
  *  - docs.stripe.com/currencies, "Minimum and maximum charge amounts": the
- *    minimum table (31 rows) and "12 digits for most card payments, for a
+ *    31-row minimum table, and "12 digits for most card payments, for a
  *    maximum of 999,999,999,999 in minor units".
+ *  - Consequence enforced here: Chat stores amounts in `minorDigits(currency)`
+ *    (Intl/CLDR); where that differs from Stripe's `amount` (13 currencies:
+ *    AFN ALL COP HUF IDR ISK LAK LBP MMK PKR SOS UGX YER) the stored number
+ *    sent unchanged would charge 1/100 of what is owed, so card is refused for
+ *    them (bank transfer only) until the gateway converts amounts both ways.
  *
- * NOT enforced (not on Stripe's official pages when read): a "three-decimal
- * amounts must be divisible by 10" rule; a minimum for a currency without a
- * row (SAR, EGP, KWD, ...); the settlement-currency equivalent minimum for a
- * converted charge. Stripe's own refusal stays the backstop for those: open()
- * answers 503 "pay by bank transfer" without the parent seeing Stripe's text.
+ * CONSERVATIVE Chat restriction (not on Stripe's official pages; enforced on
+ * purpose, and labelled so):
+ *  - three-decimal amounts must end in 0 (a multiple of 10 in Chat's and
+ *    Stripe's minor unit). Several third-party Stripe integrations document
+ *    that Stripe rejects e.g. KWD 29005; Stripe's current pages say nothing.
+ *    If Stripe does reject it, refusing first gives the parent the same
+ *    answer (pay by bank transfer) without a Stripe error; if it does not,
+ *    the cost is that card is refused for amounts whose last fils digit is
+ *    not 0 (whole-dinar fees are unaffected) -- bank transfer still works.
+ *    Remove THREE_DECIMAL_MULTIPLE's check if Stripe confirms otherwise.
  *
- * Chat stores every amount in minor units of `minorDigits(currency)` (Intl,
- * CLDR). Where that differs from what Stripe's `amount` means (PKR, IDR, HUF,
- * ISK, UGX, ...), sending the stored number unchanged would charge 1/100 of
- * what is owed, so a card is refused for that currency (bank transfer only)
- * until the gateway converts amounts both ways.
+ * UNVERIFIED and NOT enforced (Stripe's own refusal is the backstop; open()
+ * answers 503 "pay by bank transfer", Stripe's text never reaches a parent):
+ *  - a minimum for a currency without a row (SAR, EGP, KWD, QAR, TRY, ...);
+ *  - "Charges requiring conversion into your account's default settlement
+ *    currency must meet the equivalent minimum of the settlement currency"
+ *    (CONFIRMED text, but Chat knows neither the settlement currency nor the
+ *    rate);
+ *  - the per-network maxima ("9 digits for American Express in most
+ *    currencies", "10 digits for ... Cartes Bancaires"): the card network is
+ *    unknown until the parent pays on Stripe's page.
  *
  * Bank transfers, cash and every row that already exists are untouched by
  * these rules: they apply to opening a card payment only.
@@ -74,6 +91,9 @@ const STRIPE_MINIMUM_MAJOR: Readonly<Record<string, string>> = {
 /** "12 digits for most card payments, for a maximum of 999,999,999,999 in minor units". */
 export const STRIPE_CARD_MAX_MINOR = 999_999_999_999;
 
+/** CONSERVATIVE (see the header): a three-decimal card amount is a multiple of this. */
+export const THREE_DECIMAL_MULTIPLE = 10;
+
 let iso: ReadonlySet<string> | null = null;
 
 /** A real ISO 4217 code, as the runtime's ICU knows them. */
@@ -104,7 +124,8 @@ export type CardRefusal =
   | { reason: 'CARD_CURRENCY_UNSUPPORTED'; currency: string }
   | { reason: 'CARD_CURRENCY_PRECISION'; currency: string }
   | { reason: 'CARD_AMOUNT_BELOW_MINIMUM'; currency: string; minimumMinor: number }
-  | { reason: 'CARD_AMOUNT_ABOVE_MAXIMUM'; currency: string; maximumMinor: number };
+  | { reason: 'CARD_AMOUNT_ABOVE_MAXIMUM'; currency: string; maximumMinor: number }
+  | { reason: 'CARD_AMOUNT_THREE_DECIMAL_ROUNDING'; currency: string; multipleOf: number };
 
 /** Why a card charge of `amountMinor` (Chat's minor units) in `currency` cannot be asked of Stripe; null if it can. */
 export function cardRefusal(currency: string, amountMinor: number): CardRefusal | null {
@@ -113,6 +134,10 @@ export function cardRefusal(currency: string, amountMinor: number): CardRefusal 
   const minimum = stripeMinimumMinor(currency) ?? 1;
   if (amountMinor < minimum) return { reason: 'CARD_AMOUNT_BELOW_MINIMUM', currency, minimumMinor: minimum };
   if (amountMinor > STRIPE_CARD_MAX_MINOR) return { reason: 'CARD_AMOUNT_ABOVE_MAXIMUM', currency, maximumMinor: STRIPE_CARD_MAX_MINOR };
+  // CONSERVATIVE Chat restriction, not a CONFIRMED Stripe rule (see the header).
+  if (STRIPE_THREE_DECIMAL.has(currency) && amountMinor % THREE_DECIMAL_MULTIPLE !== 0) {
+    return { reason: 'CARD_AMOUNT_THREE_DECIMAL_ROUNDING', currency, multipleOf: THREE_DECIMAL_MULTIPLE };
+  }
   return null;
 }
 
@@ -135,6 +160,8 @@ export function cardRefusalError(refusal: CardRefusal): CommError {
       ? 'this amount is below the smallest card payment; pay by bank transfer'
       : refusal.reason === 'CARD_AMOUNT_ABOVE_MAXIMUM'
         ? 'this amount is above the largest card payment; pay by bank transfer'
-        : 'card payment is not available in this currency; pay by bank transfer';
+        : refusal.reason === 'CARD_AMOUNT_THREE_DECIMAL_ROUNDING'
+          ? 'this amount cannot be paid by card in this currency; pay by bank transfer'
+          : 'card payment is not available in this currency; pay by bank transfer';
   return new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, message, 503, { ...refusal });
 }

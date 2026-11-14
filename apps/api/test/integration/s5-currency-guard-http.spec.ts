@@ -272,3 +272,64 @@ describe('instalments: no 1-minor-unit request', () => {
     expect(await g.prisma.paymentRequest.count({ where: { instalmentId: inst.id } })).toBe(0);
   });
 });
+
+/** The 13 card currencies Chat counts in other minor units than Stripe (see the unit spec). */
+const MISMATCHED = ['AFN', 'ALL', 'COP', 'HUF', 'IDR', 'ISK', 'LAK', 'LBP', 'MMK', 'PKR', 'SOS', 'UGX', 'YER'] as const;
+
+describe('regression: every mismatched currency -- card refused before Stripe is called; bank transfer unaffected', () => {
+  // A fresh family per case: the per-parent checkout rate limit (429) must never be what answers.
+  it.each(MISMATCHED)('%s', async (c) => {
+    const { f, child } = freshFamily();
+    const r = await request(f.id, child.id, 250000, c);
+    const before = stripe.sessions.size;
+
+    const inApp = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
+    expect(inApp.status).toBe(503);
+    expect(inApp.code).toBe(CommErrorCode.PAYMENTS_UNAVAILABLE);
+    expect(inApp.json.error?.detail).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: c });
+
+    const page = await fetch(`${base}/pay/${tokenOf(r.link)}`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).not.toContain('/checkout');
+    const post = await fetch(`${base}/pay/${tokenOf(r.link)}/checkout`, { method: 'POST', redirect: 'manual' });
+    expect(post.status).toBe(503);
+
+    // Stripe was never asked: no session, no checkout row.
+    expect(stripe.sessions.size).toBe(before);
+    expect(await g.prisma.paymentCheckout.count({ where: { requestId: r.id } })).toBe(0);
+
+    const transfer = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, {
+      method: 'bank_transfer', amountMinor: 250000, paidOn: PAID_ON, requestId: r.id,
+    });
+    expect(transfer.status).toBe(201);
+    const paid = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: r.id } });
+    expect(paid.paidAt).not.toBeNull();
+    expect(await g.prisma.payment.count({ where: { requestId: r.id, method: 'bank_transfer', amountMinor: 250000n, currency: c } })).toBe(1);
+  });
+
+  it.each([
+    ['USD', 5000], ['AED', 5000], ['JPY', 5000], ['KWD', 12340],
+  ])('control %s %d: Stripe\'s page opens for exactly that amount', async (c, amount) => {
+    const { f, child } = freshFamily();
+    const r = await request(f.id, child.id, amount as number, c as string);
+    const res = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
+    expect(res.status).toBe(201);
+    const s = sessionsFor(r.id);
+    expect(s).toHaveLength(1);
+    expect(s[0]!.input).toMatchObject({ amountMinor: amount, currency: c });
+    expect(s[0]!.params.line_items![0]!.price_data).toMatchObject({ currency: (c as string).toLowerCase(), unit_amount: amount });
+  });
+
+  it('KWD 12.345 (last digit not 0): CONSERVATIVE refusal before Stripe; a bank transfer still records', async () => {
+    const { f, child } = freshFamily();
+    const r = await request(f.id, child.id, 12345, 'KWD');
+    const res = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
+    expect(res.status).toBe(503);
+    expect(res.json.error?.detail).toEqual({ reason: 'CARD_AMOUNT_THREE_DECIMAL_ROUNDING', currency: 'KWD', multipleOf: 10 });
+    expect(sessionsFor(r.id)).toHaveLength(0);
+    const transfer = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, {
+      method: 'bank_transfer', amountMinor: 12345, paidOn: PAID_ON, requestId: r.id,
+    });
+    expect(transfer.status).toBe(201);
+  });
+});

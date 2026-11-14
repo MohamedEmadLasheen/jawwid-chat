@@ -2,11 +2,16 @@
  * S5: the currency rules a card payment must meet before Stripe is asked, and
  * the ISO 4217 check every new amount's currency meets. Pure. The tables are
  * Stripe's own (docs.stripe.com/currencies, read 2026-11-14); see
- * src/billing/currency-rules.ts for the quotes.
+ * src/billing/currency-rules.ts for the quotes. Three classes, kept apart in
+ * the describe names: CONFIRMED Stripe requirements, the CONSERVATIVE Chat
+ * restriction (three-decimal amounts end in 0), and UNVERIFIED rules that are
+ * deliberately not enforced (asserted as "allowed" where they would bite).
  */
 import { CommError, CommErrorCode } from '@platform/errors';
+import { minorDigits } from '../../../src/billing/money';
 import {
   STRIPE_CARD_CURRENCIES,
+  cardCurrencyRefusal,
   STRIPE_CARD_MAX_MINOR,
   cardRefusal,
   isIsoCurrency,
@@ -74,7 +79,7 @@ describe('cardRefusal: what Chat refuses before asking Stripe', () => {
     expect(cardRefusal('USD', 50)).toBeNull();
     expect(cardRefusal('JPY', 50)).toBeNull();
     expect(cardRefusal('EGP', 1)).toBeNull(); // no verified minimum: Stripe decides
-    expect(cardRefusal('KWD', 12345)).toBeNull(); // the divisible-by-10 rule is not verified, so not enforced
+    expect(cardRefusal('KWD', 12340)).toBeNull();
   });
 
   it('refuses a currency Stripe does not accept for cards (bank transfer only)', () => {
@@ -116,5 +121,49 @@ describe('cardRefusal: what Chat refuses before asking Stripe', () => {
     for (const c of ['AED', 'SAR', 'EGP', 'USD', 'EUR', 'GBP', 'QAR', 'TRY', 'BHD', 'KWD', 'OMR', 'JOD', 'TND']) {
       expect(STRIPE_CARD_CURRENCIES.has(c)).toBe(true);
     }
+  });
+});
+
+/** The 13 card currencies whose minor unit Chat (Intl/CLDR) counts differently from Stripe's `amount`. */
+const MISMATCHED = ['AFN', 'ALL', 'COP', 'HUF', 'IDR', 'ISK', 'LAK', 'LBP', 'MMK', 'PKR', 'SOS', 'UGX', 'YER'] as const;
+
+describe('the 13 mismatched currencies (CONFIRMED Stripe two-decimal amount; Chat stores whole units)', () => {
+  it.each(MISMATCHED)('%s: Stripe takes cards in it, two-decimal amount; Chat counts 0 decimals; card refused at any amount', (c) => {
+    expect(STRIPE_CARD_CURRENCIES.has(c)).toBe(true);
+    expect(stripeApiDigits(c)).toBe(2);
+    expect(minorDigits(c)).toBe(0);
+    expect(cardCurrencyRefusal(c)).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: c });
+    for (const amount of [1, 100, 250000, 999_999_999]) {
+      expect(cardRefusal(c, amount)).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: c });
+    }
+  });
+
+  it('no other card currency is mismatched (the list is exactly 13)', () => {
+    const found = [...STRIPE_CARD_CURRENCIES].filter((c) => cardCurrencyRefusal(c)?.reason === 'CARD_CURRENCY_PRECISION');
+    // STD is on Stripe's list but obsolete in ISO 4217: creation refuses it (requireCurrency), so it never reaches a card.
+    expect(found.filter((c) => c !== 'STD').sort()).toEqual([...MISMATCHED].sort());
+  });
+
+  it.each([
+    ['USD', 5000], ['AED', 5000], ['JPY', 5000], ['KWD', 12340],
+  ])('control %s: same scale both sides, an ordinary amount is a card payment', (c, amount) => {
+    expect(minorDigits(c as string)).toBe(stripeApiDigits(c as string));
+    expect(cardCurrencyRefusal(c as string)).toBeNull();
+    expect(cardRefusal(c as string, amount as number)).toBeNull();
+  });
+});
+
+describe('three-decimal currencies: CONSERVATIVE Chat restriction (last digit 0), not a CONFIRMED Stripe rule', () => {
+  it.each(['BHD', 'JOD', 'KWD', 'OMR', 'TND'])('%s: 12345 refused (bank transfer only), 12340 and 10 allowed', (c) => {
+    expect(cardRefusal(c, 12345)).toEqual({ reason: 'CARD_AMOUNT_THREE_DECIMAL_ROUNDING', currency: c, multipleOf: 10 });
+    expect(cardRefusal(c, 1)).toEqual({ reason: 'CARD_AMOUNT_THREE_DECIMAL_ROUNDING', currency: c, multipleOf: 10 });
+    expect(cardRefusal(c, 12340)).toBeNull();
+    expect(cardRefusal(c, 10)).toBeNull();
+  });
+
+  it('applies to no two- or zero-decimal currency', () => {
+    expect(cardRefusal('AED', 12345)).toBeNull();
+    expect(cardRefusal('JPY', 12345)).toBeNull();
+    expect(cardRefusal('EGP', 12345)).toBeNull();
   });
 });
