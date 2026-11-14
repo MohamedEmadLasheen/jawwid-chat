@@ -31,7 +31,7 @@ import { LessonModule } from '../../src/lessons/lesson.module';
 import { AdminModule } from '../../src/admin/admin.module';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
 import {
-  REVIEW_AUDIT_ACTION, REVIEW_ORG_SLUG, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
+  REVIEW_AUDIT_ACTION, REVIEW_ORG_SLUG, REVIEW_PEOPLE, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
 } from '../../src/cli/review-cohort';
 import { parseArgs, publicSummary } from '../../src/cli/provision-review-cohort';
 import { buildGraph, truncate } from './harness';
@@ -492,6 +492,29 @@ describe('2. over HTTP, as a store reviewer', () => {
 // ===========================================================================
 // Last: it leaves the child with another teacher.
 describe('3. a child moved to a live teacher is never moved back by a run', () => {
+  // B10 P3-3: TEACHER_CHANGED (moveChildFromErasedTeacher) must stay exercised even where an earlier guard refuses
+  // most live teachers. A live teacher that merely carries the review teacher's NAME (and has no login) is not an
+  // erased teacher of the review organization, so the run refuses it with TEACHER_CHANGED, before moving anyone.
+  it('a live teacher with the review teacher\u2019s name is not an erased one: the run refuses (TEACHER_CHANGED)', async () => {
+    if (!m) m = await provisionReviewCohort(g.prisma, opts);
+    const same = await g.prisma.teacher.create({
+      data: { organizationId: m.organizationId, name: REVIEW_PEOPLE.teacher, isActive: true },
+    });
+    await g.prisma.$queryRaw`
+      select count(*)::int as n
+        from chat.transfer_learner(${m.learnerId}::uuid, ${same.id}::uuid, 'other', 'review spec', null, ${m.staff.teachersManagerId}::uuid)`;
+    try {
+      await expect(provisionReviewCohort(g.prisma, opts)).rejects.toMatchObject({ code: 'TEACHER_CHANGED' });
+      expect((await g.prisma.learner.findUniqueOrThrow({ where: { id: m.learnerId } })).teacherId).toBe(same.id);
+    } finally {
+      // Put the child back with the real review teacher so the next test starts from the cohort's own state.
+      await g.prisma.$queryRaw`
+        select count(*)::int as n
+          from chat.transfer_learner(${m.learnerId}::uuid, ${m.teacher.teacherId}::uuid, 'other', 'review spec restore', null, ${m.staff.teachersManagerId}::uuid)`;
+    }
+    expect((await g.prisma.learner.findUniqueOrThrow({ where: { id: m.learnerId } })).teacherId).toBe(m.teacher.teacherId);
+  });
+
   it('the run refuses (TEACHER_CHANGED) and changes no assignment', async () => {
     if (!m) m = await provisionReviewCohort(g.prisma, opts);
     const other = await g.prisma.teacher.create({
