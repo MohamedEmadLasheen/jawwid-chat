@@ -1,3 +1,5 @@
+import 'currency_digits.dart';
+
 /// PD-17 (2026-10-21): a parent's own payments, from `GET /me/billing`.
 ///
 /// PD-27 (2026-10-22) adds how money arrives and what the parent gets back: payment
@@ -543,12 +545,16 @@ class BankAccount {
   final String? note;
 }
 
-/// How many decimals a currency's minor unit has (ISO 4217). Two unless known otherwise.
-int minorDigits(String currency) => switch (currency.toUpperCase()) {
-      'KWD' || 'BHD' || 'OMR' || 'JOD' => 3,
-      'JPY' => 0,
-      _ => 2,
-    };
+/// How many decimals a currency's minor unit has, in the API's scale (the scale of
+/// every amountMinor it sends and stores): [zeroDecimalCurrencies] none,
+/// [threeDecimalCurrencies] three, every other code two. Kept equal to the API by
+/// test/fixtures/currency_minor_digits.json (currency_digits.dart).
+int minorDigits(String currency) {
+  final code = currency.toUpperCase();
+  if (zeroDecimalCurrencies.contains(code)) return 0;
+  if (threeDecimalCurrencies.contains(code)) return 3;
+  return 2;
+}
 
 /// A calendar day `YYYY-MM-DD`, as a local date at midnight -- never shifted by a zone,
 /// because a due date is a day, not an instant.
