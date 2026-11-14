@@ -221,7 +221,7 @@ recorded them.
 
 ## Account deletion (PD-56, O-3)
 
-Source: `apps/api/src/platform/auth/auth.errors.ts`. API-CONTRACT §1.1c.
+Source: `apps/api/src/platform/auth/auth.errors.ts`. API-CONTRACT §1.1d.
 
 | Code | HTTP | Meaning |
 |---|---|---|

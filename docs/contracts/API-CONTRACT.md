@@ -102,7 +102,7 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `AUTH.ACCOUNT_LOCKED` | 403 | Login: temporarily locked after repeated failures. Terminal until unlock. |
 | `AUTH.SESSION_REVOKED` | 401 | Refresh token revoked, rotated-and-reused, or session deleted. Terminal. |
 | `AUTH.FORBIDDEN` | 403 | Authenticated but lacks the permission key (used only where no `COMM.*` code is more specific). |
-| `AUTH.DELETION_REQUEST_NOT_PENDING` | 409 | PD-56 O-3: cancelling a teacher's account deletion request when none is pending (§1.1c). `AUTH.TEACHER_DELETION_BLOCKED` is retired: a teacher with work open gets a request, never a refusal. |
+| `AUTH.DELETION_REQUEST_NOT_PENDING` | 409 | PD-56 O-3: cancelling a teacher's account deletion request when none is pending (§1.1d). `AUTH.TEACHER_DELETION_BLOCKED` is retired: a teacher with work open gets a request, never a refusal. |
 | `COMMON.VALIDATION` | 400 | Body / query fails schema validation. `message` names the field. |
 | `COMMON.NOT_FOUND` | 404 | Unknown route or resource with no domain-specific code. |
 | `COMMON.IDEMPOTENCY_CONFLICT` | 409 | Same `Idempotency-Key`, different request body. |
@@ -145,7 +145,7 @@ Text that a parent or a teacher writes for other people is checked against a wor
 - **Switch:** chat.config `moderation.content_filter.enabled` (default `true`; only a JSON `false` turns it off, read with the usual 30 s cache). No deploy is needed.
 - **Images** are not scanned. A reported image reaches the moderation queue as part of the report (PD-57).
 
-### 1.1c Account deletion (PD-56; O-3, owner 2026-11-07)
+### 1.1d Account deletion (PD-56; O-3, owner 2026-11-07)
 
 A parent or a teacher deletes their own account in the app (Apple 5.1.1(v), Google Play). "The teacher requests deletion in the app; staff close the lessons and payroll; the account is deleted within 30 days."
 
