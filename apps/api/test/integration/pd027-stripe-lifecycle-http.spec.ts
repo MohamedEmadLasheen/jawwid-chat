@@ -86,6 +86,15 @@ async function webhook(event: { body: string; signature: string }) {
   return { status: r.status, json: (await r.json().catch(() => ({}))) as Json };
 }
 
+/**
+ * True if a stored row (as JSON text) carries a card detail or Stripe's message. Generated values (UUIDs, Stripe ids,
+ * timestamps with microseconds) are removed first: they are random, and "4242" appears in them by chance.
+ */
+function cardDataIn(rowJson: string): boolean {
+  const generated = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{4}-\d{2}-\d{2}T[\d:.]+[+-]\d{2}:\d{2}|\b(?:cs|cus|pi|evt)_\w+/gi;
+  return /Your card|4242/.test(rowJson.replace(generated, ''));
+}
+
 function tokenOf(link: string): string {
   return link.slice(link.lastIndexOf('/') + 1);
 }
@@ -291,6 +300,35 @@ describe('a successful card payment', () => {
   });
 });
 
+describe('the card-data check on a stored checkout row', () => {
+  // The old check was `expect(row).not.toMatch(/Your card|4242/)` on the whole row as JSON. The row holds generated
+  // UUIDs, a session id and microsecond timestamps, so "4242" shows up in them by chance (about 1 run in 400).
+  const old = /Your card|4242/;
+  const noise = {
+    stripe_session_id: 'cs_test_4242_ab4242cd',
+    organization_id: '4242a8f1-4242-4242-8242-424242424242',
+    request_id: '0a4242f1-9c1d-4e0b-8b7d-1d4242c3f0aa',
+    created_at: '2026-11-14T10:42:42.424242+00:00',
+    expires_at: '2026-11-14T11:12:42.004242+00:00',
+    updated_at: '2026-11-14T10:42:42.424242+00:00',
+    stripe_customer_id: 'cus_4242abcd4242ef',
+    last_failed_at: '2026-11-14T10:42:42.424242+00:00',
+  };
+  const row = (failureCode: string) => JSON.stringify([{ j: JSON.stringify({ ...noise, amount_minor: 120000, currency: 'AED', status: 'open', failure_count: 1, failure_code: failureCode }) }]);
+
+  it('generated ids and timestamps that happen to contain 4242 are not a leak (the old pattern called them one)', () => {
+    expect(old.test(row('insufficient_funds'))).toBe(true); // the false positive, reproduced on a crafted row
+    expect(cardDataIn(row('insufficient_funds'))).toBe(false);
+  });
+
+  it('a real leak is still found: Stripe\'s message, or a card number, in any free-text column', () => {
+    expect(cardDataIn(row('Your card has insufficient funds.'))).toBe(true);
+    expect(cardDataIn(row('4242424242424242'))).toBe(true);
+    expect(cardDataIn(row('last4 4242'))).toBe(true);
+    expect(cardDataIn(JSON.stringify([{ j: JSON.stringify({ ...noise, status: 'open', note: 'Your card was declined' }) }]))).toBe(true);
+  });
+});
+
 describe('a payment that fails', () => {
   it('a declined card: counted once per event, Stripe\'s code kept (never its message), nothing recorded, the parent told why', async () => {
     const { f, child } = freshFamily();
@@ -304,7 +342,7 @@ describe('a payment that fails', () => {
     expect(c).toMatchObject({ status: 'open', failureCount: 1, failureCode: 'insufficient_funds' });
     expect(c.lastFailedAt).toBeInstanceOf(Date);
     const row = JSON.stringify(await g.prisma.$queryRaw`SELECT to_jsonb(c)::text AS j FROM chat.payment_checkout c WHERE stripe_session_id = ${sessionId}`);
-    expect(row).not.toMatch(/Your card|4242/);
+    expect(cardDataIn(row)).toBe(false);
     expect(await g.prisma.payment.count({ where: { requestId: request.id } })).toBe(0);
 
     // A second decline on the same page.
