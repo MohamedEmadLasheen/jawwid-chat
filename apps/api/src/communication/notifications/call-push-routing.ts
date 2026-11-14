@@ -141,6 +141,11 @@ export function buildPushData(input: {
   notificationId: string;
   conversationId?: string | null;
   dedupeKey: string;
+  /**
+   * The recipient's own Notification Center entry's button (PD-34): what a tap
+   * on the push opens. Never for a call -- a call's payload is unchanged.
+   */
+  action?: unknown;
 }): Record<string, string> {
   const isCall = isCallNotification(input.eventType);
   const callId = isCall ? callIdFromDedupeKey(input.dedupeKey) : null;
@@ -150,5 +155,31 @@ export function buildPushData(input: {
     notificationId: input.notificationId,
     ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     ...(callId ? { callId } : {}),
+    ...(isCall ? {} : pushAction(input.action)),
   };
+}
+
+/**
+ * The ids a tap may open, and nothing else (PD-32 amendment, 2026-11-03).
+ *
+ * A push is not behind sign-in, so only the action's KIND and the ids its
+ * screen needs travel: never a name, text or amount. Every id opens a screen
+ * that re-reads it through the signed-in account's own authorized route, so an
+ * id is a pointer, not a permission. Anything not on the list, or not shaped
+ * like an id, is dropped rather than passed through.
+ */
+export const PUSH_ACTION_IDS = ['feedbackId', 'conversationId', 'learnerId', 'lessonId', 'taskId'] as const;
+const ACTION_KIND = /^[a-z][a-z0-9_]{0,39}$/;
+const ACTION_ID = /^[0-9A-Za-z-]{1,64}$/;
+
+export function pushAction(action: unknown): Record<string, string> {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) return {};
+  const a = action as Record<string, unknown>;
+  if (typeof a.kind !== 'string' || !ACTION_KIND.test(a.kind)) return {};
+  const out: Record<string, string> = { actionKind: a.kind };
+  for (const key of PUSH_ACTION_IDS) {
+    const v = a[key];
+    if (typeof v === 'string' && ACTION_ID.test(v)) out[key] = v;
+  }
+  return out;
 }

@@ -30,6 +30,7 @@ import 'package:jawwid_chat/features/conversations/application/realtime_keeper.d
 import 'package:jawwid_chat/features/notifications/data/notifications_repository.dart';
 import 'package:jawwid_chat/features/notifications/domain/inbox.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
+import 'package:jawwid_chat/shared/models/teacher_feedback.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
 class _NoTokens implements TokenProvider {
@@ -56,9 +57,27 @@ InboxEntry _entry(String id, InboxAction action) => InboxEntry(
 void main() {
   late FakeBackend backend;
   late ProviderContainer container;
+  late FakeFeedbackRepository feedback;
 
   setUp(() async {
     backend = FakeBackend(role: UserRole.parent);
+    feedback = FakeFeedbackRepository(
+      children: const [FeedbackChild(learnerId: 'child-1', name: 'Ahmad', teacherName: 'Ustadh Yusuf')],
+      items: [
+        FeedbackItem(
+          id: 'fb-1',
+          learnerId: 'child-1',
+          childName: 'Ahmad',
+          category: FeedbackCategory.complaint,
+          body: 'The lesson was cut short.',
+          status: FeedbackStatus.inReview,
+          response: 'We spoke with the teacher.',
+          respondedAt: DateTime.utc(2026, 11, 2),
+          replyUnread: true,
+          createdAt: DateTime.utc(2026, 11, 1),
+        ),
+      ],
+    );
     final tokens = InMemoryTokenStore();
     final auth = FakeAuthRepository(backend: backend, tokens: tokens);
     container = ProviderContainer(
@@ -74,12 +93,14 @@ void main() {
         realtimeTokenProvider.overrideWithValue(_NoTokens()),
         chatRealtimeProvider.overrideWithValue(null),
         realtimeKeeperProvider.overrideWithValue(null),
+        feedbackRepositoryProvider.overrideWithValue(feedback),
         notificationsRepositoryProvider.overrideWithValue(FakeNotificationsRepository(
           entries: [
             _entry('pay', const InboxAction(InboxActionKind.viewPayments)),
             _entry('calls', const InboxAction(InboxActionKind.openCalls)),
             _entry('stories', const InboxAction(InboxActionKind.openStories)),
             _entry('lesson', const InboxAction(InboxActionKind.viewLesson, lessonId: 'l1', learnerId: 'child-1')),
+            _entry('feedback', const InboxAction(InboxActionKind.openFeedback, feedbackId: 'fb-1')),
           ],
           tabs: const [InboxTab.all],
         )),
@@ -160,6 +181,16 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(location(), Routes.childSchedule('child-1'));
     expect(router().canPop(), isTrue);
+  });
+
+  testWidgets('PD-32 amendment: a feedback notice opens that exact item, its reply shown and counted as opened', (tester) async {
+    await pumpApp(tester);
+    await openFrom(tester, 'feedback');
+    expect(tester.takeException(), isNull);
+    expect(location(), Routes.feedbackItem('fb-1'));
+    expect(router().canPop(), isTrue);
+    expect(find.text('We spoke with the teacher.'), findsOneWidget);
+    expect(feedback.seenReplies, ['fb-1']);
   });
 
   test('the tab list matches the shell: every page directly in the ShellRoute is a tab', () {

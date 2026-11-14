@@ -4170,6 +4170,15 @@ class L10nEn extends L10n {
   String get feedbackResponseLabel => 'Reply from the administration';
 
   @override
+  String get feedbackNewReply => 'New reply from the administration';
+
+  @override
+  String get feedbackOpenReply => 'Tap to read it';
+
+  @override
+  String get feedbackItemGone => 'This feedback is no longer available.';
+
+  @override
   String get feedbackCategoryLabel => 'What kind of feedback is it?';
 
   @override
@@ -4525,6 +4534,9 @@ class L10nEn extends L10n {
 
   @override
   String get notificationsActionOpenTask => 'Open my To do';
+
+  @override
+  String get notificationsActionOpenFeedback => 'View feedback';
 
   @override
   String get lessonAudioAboutTitle => 'About lesson audio';
