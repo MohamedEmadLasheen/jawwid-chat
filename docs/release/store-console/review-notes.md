@@ -105,7 +105,7 @@ The policy reasoning is in `docs/release/app-review-notes-payments.md`.
 **Option C: review payment mode (the owner's decision).**
 
 ```text
-PAYMENTS: the academy sells only live one-to-one Quran lessons (one teacher, one student, real time, not recorded); no digital content or app features are sold. Under Guideline 3.1.3(d), parents pay a lesson package by card (Stripe Checkout, in the browser) or by bank transfer with a receipt upload. For this review account our server disables payment: Subscriptions tab > Amount due shows a demo lesson package > Pay. Card opens a page explaining the live Stripe checkout; bank transfer shows demo bank details and cannot send a receipt. No charge is possible.
+PAYMENTS: the academy sells only live one-to-one Quran lessons (one teacher, one student, real time, not recorded); no digital content or app features are sold. Under Guideline 3.1.3(d), parents pay a lesson package by card (Stripe Checkout, in the browser) or by bank transfer with a receipt upload. For this review account our server disables payment: Packages tab > Amount due shows a demo lesson package > Pay. Card opens a page explaining the live Stripe checkout; bank transfer shows demo bank details and cannot send a receipt. No charge is possible.
 ```
 
 - What the reviewer sees is in `review-accounts.md` (the table under "Review payment mode"). Each sentence above
