@@ -5439,6 +5439,10 @@ class L10nAr extends L10n {
       'لا يمكن الإبلاغ عن هذا النوع من الرسائل.';
 
   @override
+  String get reportErrorNotReportablePerson =>
+      'لا يمكن الإبلاغ عن هذا الحساب داخل التطبيق. إن كانت لديك ملاحظة، فأرسلها من الإعدادات ← تواصل مع الدعم.';
+
+  @override
   String get reportErrorRateLimited =>
       'أرسلت عدة بلاغات مؤخرًا. فضلًا حاول مرة أخرى بعد قليل.';
 
@@ -5538,7 +5542,7 @@ class L10nAr extends L10n {
 
   @override
   String get blockErrorNotAllowed =>
-      'لا يمكن حظر هذا الشخص. إن كانت لديك ملاحظة أو مشكلة، فيرجى التواصل مع الدعم.';
+      'لا يمكن حظر هذا الشخص. إن كانت لديك ملاحظة، فأرسلها من الإعدادات ← تواصل مع الدعم.';
 
   @override
   String blockErrorNotAllowedWithEmail(String email) {

@@ -5344,6 +5344,10 @@ class L10nEn extends L10n {
       'This kind of message cannot be reported.';
 
   @override
+  String get reportErrorNotReportablePerson =>
+      'This account can\'t be reported in the app. If you have a concern, send it through Settings → Contact support.';
+
+  @override
   String get reportErrorRateLimited =>
       'You have sent several reports recently. Please try again a little later.';
 
@@ -5445,7 +5449,7 @@ class L10nEn extends L10n {
 
   @override
   String get blockErrorNotAllowed =>
-      'This person can\'t be blocked. If you have a concern, please contact support.';
+      'This person can\'t be blocked. If you have a concern, send it through Settings → Contact support.';
 
   @override
   String blockErrorNotAllowedWithEmail(String email) {

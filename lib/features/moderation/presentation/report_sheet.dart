@@ -116,7 +116,9 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
     return switch (error.code) {
       ModerationErrors.targetNotVisible => l10n.reportErrorNotVisible,
       ModerationErrors.self => l10n.reportErrorSelf,
-      ModerationErrors.notReportable => l10n.reportErrorNotReportable,
+      ModerationErrors.notReportable => widget.target is PersonReportTarget
+          ? l10n.reportErrorNotReportablePerson
+          : l10n.reportErrorNotReportable,
       ModerationErrors.noteRequired => null, // The note field says it.
       ModerationErrors.rateLimited => l10n.reportErrorRateLimited,
       ModerationErrors.termsNotAccepted => l10n.reportErrorTerms,
