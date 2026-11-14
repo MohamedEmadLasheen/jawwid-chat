@@ -19,7 +19,11 @@ import '../../../shared/models/user_role.dart';
 /// then shows the request: "Requested on X; your account will be deleted by Y", with
 /// "Cancel request". The server decides which it is; `GET /me/account/deletion` says so first.
 class DeleteAccountScreen extends ConsumerStatefulWidget {
-  const DeleteAccountScreen({super.key});
+  const DeleteAccountScreen({super.key, this.doneMessenger});
+
+  /// Where "account deleted" is shown; the screen's own messenger when null. PD-58: opened
+  /// from the Terms of Use gate, whose own messenger goes with the session.
+  final ScaffoldMessengerState? doneMessenger;
 
   @override
   ConsumerState<DeleteAccountScreen> createState() => _DeleteAccountScreenState();
@@ -114,7 +118,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       _error = null;
     });
     // Read before the await: signing out unmounts this screen.
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = widget.doneMessenger ?? ScaffoldMessenger.of(context);
     final auth = ref.read(authControllerProvider.notifier);
     final AccountDeletionOutcome outcome;
     try {

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Conversation, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -7,10 +7,13 @@ import type { AuditService } from '../platform/audit.service';
 import type { SubscriptionLockReader } from '../platform/subscription-lock';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { NotificationService } from '../communication/notifications/notification.service';
+import { NotificationPipeline } from '../communication/notifications/notification-pipeline.service';
+import { lockScreenTemplate } from '../billing/lock-screen-push';
 import { CardKind } from '../communication/contracts/vocab';
 import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
 import { BillingService } from '../billing/billing.service';
+import { inReviewMode, reviewModeRefusal } from '../billing/review-mode';
 import type { CardLanguage } from '../lessons/lesson-card';
 
 type Tx = Prisma.TransactionClient;
@@ -64,6 +67,8 @@ export class SubscriptionEffects {
     private readonly billing: BillingService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(SUBSCRIPTION_LOCK) private readonly locks: SubscriptionLockReader,
+    // Lock-screen names (billing/lock-screen-push.ts). Without it every push is the generic one.
+    @Optional() private readonly pipeline?: NotificationPipeline,
   ) {}
 
   /** The worker's pass: recompute every child, announce what changed, make the holds follow. */
@@ -206,6 +211,9 @@ export class SubscriptionEffects {
    */
   async requestRenewal(actorId: string, learnerId: string) {
     const { contact } = await this.billing.requireParent(actorId);
+    // OA-12: an App Review account never writes a renewal request, an audit row,
+    // a chat card or a staff task -- refused before anything is looked up.
+    if (await inReviewMode(this.prisma, contact.organizationId)) throw reviewModeRefusal();
     if (!isUuid(learnerId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'child not found');
     const learner = await this.prisma.learner.findFirst({
       where: { id: learnerId.toLowerCase(), familyId: contact.familyId },
@@ -374,7 +382,13 @@ export class SubscriptionEffects {
     return family?.language === 'en' ? 'en' : 'ar';
   }
 
-  /** A push to every active parent of the family and to the child's supervisor. */
+  /**
+   * A push to every active parent of the family and to the child's supervisor.
+   * The lock screen shows the generic text; the child's name and the reason
+   * reach it only for someone who turned names on (billing/lock-screen-push.ts).
+   * The delivery row keeps `templateKey` as its event type and dedupe key, and
+   * its variables, for the Center entry.
+   */
   private async pushFamily(
     dedupe: string,
     learner: { id: string; name: string; familyId: string },
@@ -391,7 +405,7 @@ export class SubscriptionEffects {
     for (const p of [...parents, ...supervisor]) {
       await this.notifications.schedule({
         dedupeKey: `${templateKey}:${dedupe}:${p.id}`,
-        templateKey,
+        templateKey: await lockScreenTemplate(this.pipeline, p.id, templateKey),
         eventType: templateKey,
         recipientId: p.id,
         locale: lang,

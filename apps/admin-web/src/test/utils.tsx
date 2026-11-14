@@ -16,14 +16,15 @@ export function createTestQueryClient(): QueryClient {
 
 export function renderWithProviders(
   ui: ReactElement,
-  { locale = 'en' as Locale, route = '/', staff }: {
+  { locale = 'en' as Locale, route = '/', staff, queryClient = createTestQueryClient() }: {
     locale?: Locale
     route?: string
     /** Seeds the session cache so role-gated UI can be exercised. */
     staff?: Staff
+    /** Defaults to the test client (gcTime 0); pass the app's client to test real caching. */
+    queryClient?: QueryClient
   } = {},
 ) {
-  const queryClient = createTestQueryClient()
   if (staff) queryClient.setQueryData(qk.me, staff)
 
   const Inner = ({ children }: { children: ReactNode }) =>

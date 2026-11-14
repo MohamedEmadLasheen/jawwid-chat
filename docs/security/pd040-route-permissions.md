@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-597 routes.
+598 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -418,6 +418,7 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/parent-profiles/:contactId/avatar/upload` | parents.edit | `parent-profile/parent-record.controller.ts#ParentRecordController.authorizePhotoUpload` |
 | GET | `/api/v1/pay/:token` | public | `billing/pay-link.controller.ts#PayLinkController.page` |
 | POST | `/api/v1/pay/:token/checkout` | public | `billing/pay-link.controller.ts#PayLinkController.startCheckout` |
+| GET | `/api/v1/pay/review-demo` | public | `billing/pay-link.controller.ts#PayLinkController.reviewDemo` |
 | GET | `/api/v1/payment-attempts` | billing.view | `billing/transactions.controller.ts#TransactionsController.attempts` |
 | GET | `/api/v1/payment-receipts` | billing.view | `billing/payments.controller.ts#PaymentsController.receipts` |
 | POST | `/api/v1/payment-receipts/:id/approve` | billing.record | `billing/payments.controller.ts#PaymentsController.approveReceipt` |

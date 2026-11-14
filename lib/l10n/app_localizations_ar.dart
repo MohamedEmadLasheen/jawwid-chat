@@ -3643,6 +3643,14 @@ class L10nAr extends L10n {
       'تم دفع هذا المبلغ أو لم يعد مطلوبًا. تم تحديث القائمة.';
 
   @override
+  String get billingReceiptPendingNotice =>
+      'يوجد إيصال تحويل لهذا الطلب بانتظار مراجعة الأكاديمية. إن دفعت بالبطاقة أيضًا فقد يُخصم المبلغ مرتين.';
+
+  @override
+  String get billingReceiptPendingCardPaused =>
+      'سيُتاح الدفع بالبطاقة مجددًا إذا تعذّر على الأكاديمية تأكيد التحويل.';
+
+  @override
   String get billingCouldNotOpen => 'تعذّر فتح الصفحة. حاول مرة أخرى.';
 
   @override
@@ -5624,4 +5632,78 @@ class L10nAr extends L10n {
 
   @override
   String get blockedPeopleLoadError => 'تعذّر تحميل قائمة المحظورين.';
+
+  @override
+  String get legalGateTitle => 'قبل المتابعة';
+
+  @override
+  String get legalGateIntro =>
+      'لمتابعة استخدام جَوِّد، يُرجى قراءة الوثائق التالية والموافقة على كلٍّ منها.';
+
+  @override
+  String get legalDocTermsTitle => 'شروط الاستخدام';
+
+  @override
+  String get legalDocCodeOfConductTitle => 'ميثاق السلوك';
+
+  @override
+  String get legalDocOtherTitle => 'وثيقة قانونية';
+
+  @override
+  String get legalAgreeTerms => 'قرأتُ شروط الاستخدام وأوافق عليها';
+
+  @override
+  String get legalAgreeCodeOfConduct => 'قرأتُ ميثاق السلوك وأوافق عليه';
+
+  @override
+  String get legalAgreeOther => 'قرأتُ هذه الوثيقة وأوافق عليها';
+
+  @override
+  String get legalGateOpen => 'فتح';
+
+  @override
+  String legalGateOpenDocument(String document) {
+    return 'فتح $document';
+  }
+
+  @override
+  String get legalGateAgree => 'أوافق';
+
+  @override
+  String get legalGateChanged =>
+      'تغيّرت هذه الوثائق. يُرجى قراءتها والموافقة عليها من جديد.';
+
+  @override
+  String get legalGateSupportSession =>
+      'لا يمكن لجلسة الدعم الموافقة نيابةً عن صاحب الحساب. يجب أن يوافق صاحب الحساب بنفسه.';
+
+  @override
+  String get legalGateFailed => 'تعذّر حفظ موافقتك. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get legalUnavailableTitle => 'غير متاح مؤقتًا';
+
+  @override
+  String get legalUnavailableBody =>
+      'لا يمكننا عرض شروط الاستخدام الآن. يُرجى المحاولة بعد قليل.';
+
+  @override
+  String get signupLegalUnavailable =>
+      'إنشاء الحساب غير متاح مؤقتًا. يُرجى المحاولة بعد قليل.';
+
+  @override
+  String get signupLegalChanged =>
+      'تغيّرت الشروط. يُرجى قراءتها والموافقة عليها من جديد.';
+
+  @override
+  String get legalLoadFailed =>
+      'تعذّر تحميل شروط الاستخدام. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get billingReviewModeNotice =>
+      'حساب تجريبي لمراجعة المتجر: لا يمكن إجراء أي دفع حقيقي. خيار البطاقة يفتح صفحة تشرح الدفع الفعلي بالبطاقة، والتحويل البنكي يعرض بيانات تجريبية فقط.';
+
+  @override
+  String get billingReviewModeTransferNotice =>
+      'حساب تجريبي لمراجعة المتجر: هذه البيانات البنكية ليست حقيقية. لا يمكن إجراء أي تحويل ولا إرسال أي إيصال من هذا الحساب.';
 }

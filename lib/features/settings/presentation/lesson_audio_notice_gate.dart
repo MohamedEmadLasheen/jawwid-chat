@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../legal/application/legal_gate_state.dart';
 import '../data/parent_notice_repository.dart';
 import 'lesson_audio_about_screen.dart';
 
@@ -28,9 +29,22 @@ class _LessonAudioNoticeGateState extends ConsumerState<LessonAudioNoticeGate> {
     WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_maybeAsk()));
   }
 
+  /// Set while waiting for the Terms of Use gate to close.
+  ProviderSubscription<bool>? _legalWait;
+
   Future<void> _maybeAsk() async {
     final repo = ref.read(parentNoticeRepositoryProvider);
     if (repo == null) return;
+    // PD-58 (roadmap §7.5): the Terms of Use gate first; the notice once it has closed.
+    if (ref.read(legalGateShownProvider)) {
+      _legalWait ??= ref.listenManual<bool>(legalGateShownProvider, (_, shown) {
+        if (shown) return;
+        _legalWait?.close();
+        _legalWait = null;
+        unawaited(_maybeAsk());
+      });
+      return;
+    }
     // PARENT-001: hold the app-lock offer until the notice is decided and closed.
     final busy = ref.read(lessonAudioNoticeBusyProvider.notifier)..set(true);
     try {

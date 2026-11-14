@@ -8,7 +8,9 @@ build can therefore never ship without its privacy and terms links.
 ## The command
 
 ```bash
-API_BASE_URL=https://api.example.org/api/v1 \
+BUILD_NAME=1.0.1 BUILD_NUMBER=2 \
+SENTRY_DSN='<the app DSN>' \
+API_BASE_URL=https://api.jawwid.com/api/v1 \
 PRIVACY_POLICY_URL='https://example.org/{lang}/privacy' \
 TERMS_URL='https://example.org/{lang}/terms' \
 SUPPORT_URL='https://example.org/{lang}/help' \
@@ -21,16 +23,18 @@ Use `android` instead of `ios` for Google Play, or `check` to run only the check
 
 | Variable | Required | Meaning |
 |---|---|---|
-| `API_BASE_URL` | yes | the production API, ending in `/api/v1`; compiled in (`JAWWID_API_BASE_URL`) |
+| `BUILD_NAME` | yes | the version shown to users, `x.y.z` digits only; passed as `--build-name`. `pubspec.yaml`'s version is not used |
+| `BUILD_NUMBER` | yes | a positive integer, higher than the last upload to App Store Connect / Play (they refuse a repeat); passed as `--build-number` |
+| `API_BASE_URL` | yes | the production API, https, ending in `/api/v1`; compiled in (`JAWWID_API_BASE_URL`). The host is refused if any label (split on `.` and `-`) is staging, stage, dev, develop, test, testing, qa, uat, sandbox, preview, local, localhost, example, ngrok or internal, or if it is an IP literal or has user info. The accepted host is printed in the summary |
 | `PRIVACY_POLICY_URL` | yes | the owner's privacy policy; `{lang}` becomes `ar` or `en` |
 | `TERMS_URL` | yes | the owner's terms of use; `{lang}` as above |
 | `SUPPORT_URL` | yes | the support / help page (Apple 1.2 and 1.5: published contact information); an https URL, `{lang}` as above. The app shows it as "Help and support" in Settings and under the sign-in form |
 | `SUPPORT_EMAIL` | yes | the support address, like `support@example.org`. The app shows it as "Contact support" (opens the mail app) in Settings and under the sign-in form, and names it where a person cannot be blocked |
-| `LESSONS_ORIGIN` | no | PD-29 lesson audio (`JAWWID_LESSONS_ORIGIN`); unset means no audio |
-| `SENTRY_DSN` | no, but set it for the store | the app's Sentry DSN (S-07); unset means the build reports no crashes, and the script warns |
+| `LESSONS_ORIGIN` | no | PD-29 lesson audio (`JAWWID_LESSONS_ORIGIN`); unset means no audio. If set, the same host rule as `API_BASE_URL` applies |
+| `SENTRY_DSN` | yes | the app's Sentry DSN (S-07), https. A store build without it is refused. The script never prints it |
 | `SENTRY_ENVIRONMENT` | no | the Sentry environment; `production` by default |
 
-None of these is a secret. The script refuses to start when `SUPPORT_URL` is missing or not
+The script refuses to start when `SUPPORT_URL` is missing or not
 https, or `SUPPORT_EMAIL` is missing or not an address. A non-store build (a plain
 `flutter run`, `scripts/mobile/build-teacher-web.sh`) may leave them unset: the app then hides
 the matching row instead of showing a broken one.
@@ -41,6 +45,47 @@ the matching row instead of showing a broken one.
 - **`android`** runs `flutter build appbundle --release`. It needs
   `android/key.properties`, which is never committed; without it the script
   stops before building. The release `signingConfig` is store-compliance PR-D.
+
+## Debug symbols (LR-22)
+
+The build passes `--split-debug-info=build/symbols/<ios|android>/<BUILD_NAME>+<BUILD_NUMBER>`
+(no `--obfuscate`), so Dart stack traces in Sentry are only readable with those symbols. Keep the
+folder for every build you ship, and for iOS also the dSYMs
+(`build/ios/archive/Runner.xcarchive/dSYMs`). The script prints both locations when it finishes.
+
+**CI builds** (`.github/workflows/release-store-builds.yml`, `docs/release/signed-builds-ci.md`) upload
+them automatically, **before** the store upload so a failure stops the release: sentry-cli 3.8.2
+(SHA-256 pinned, `scripts/mobile/install-sentry-cli.sh`) with the `store-release` Environment's
+`SENTRY_AUTH_TOKEN` secret and `SENTRY_ORG` / `SENTRY_PROJECT` (and optional `SENTRY_URL`) variables,
+all passed through the environment:
+
+- Android: `sentry-cli debug-files upload build/symbols/android/<BUILD_NAME>+<BUILD_NUMBER>`, and
+  `sentry-cli upload-proguard build/app/outputs/mapping/release/mapping.txt` when the R8 mapping file
+  exists (both commands checked against the sentry-cli 3.0 release notes). Until the app declares
+  `io.sentry.proguard-uuid` (Sentry Android Gradle plugin; a follow-up in
+  `docs/release/signed-builds-ci.md` §7), Sentry cannot match the mapping to an event, so Java/Kotlin
+  frames stay obfuscated; Dart frames are not affected;
+- iOS: `sentry-cli debug-files upload` on the archive's `dSYMs` and on
+  `build/symbols/ios/<BUILD_NAME>+<BUILD_NUMBER>`.
+
+The token reaches sentry-cli only through `SENTRY_AUTH_TOKEN` in the step's environment (never a
+command-line flag or a config file), it logs at `warn`, its output is kept in a file that is never
+printed (one summary line per upload), and the symbols and that file are deleted at the end of the job
+whatever happens. The symbols go to Sentry only: not to a GitHub artifact, and not inside the `.ipa`
+(`uploadSymbols` is false).
+
+For a build made by hand, upload them yourself, with your own Sentry auth token in your shell (never in
+the repo or the script). `ORG` and `PROJECT` are the Sentry organisation and project slugs:
+
+```bash
+export SENTRY_AUTH_TOKEN=...   # yours; do not commit or paste it anywhere
+sentry-cli debug-files upload --org ORG --project PROJECT \
+  build/ios/archive/Runner.xcarchive/dSYMs
+sentry-cli debug-files upload --org ORG --project PROJECT \
+  build/symbols/ios/1.0.1+2
+sentry-cli debug-files upload --org ORG --project PROJECT \
+  build/symbols/android/1.0.1+2
+```
 
 ## What the iOS build carries
 
@@ -62,7 +107,7 @@ the matching row instead of showing a broken one.
   build.
 - iPhone only for Phase 1 (`TARGETED_DEVICE_FAMILY = 1`; the department
   head's decision, 2026-11-02).
-- Background modes: `voip`, `remote-notification` and `audio` (calls).
+- Background modes: `voip` and `audio` (calls). No `remote-notification`: the server sends iOS no silent push (LR-24, #531).
 - Notification permission: asked when push registration starts, which is when a
   session begins (after sign-in), never at launch (`AppDelegate.startRegistering`).
   The push PRs (#449 with #408) replace this: the app explains first and asks only
@@ -88,7 +133,8 @@ the matching row instead of showing a broken one.
     refuses to build without it);
   - the manifest gains `USE_FULL_SCREEN_INTENT`, which needs the Play Console
     full-screen-intent declaration.
-  - With #411, a call foreground service (`microphone|phoneCall`), which needs the
+  - With #411, a call foreground service (type `microphone` only; LR-14 removed `phoneCall`
+    because the app has no Telecom ConnectionService), which needs the
     foreground-service declaration and a video.
 
 ## Store listings

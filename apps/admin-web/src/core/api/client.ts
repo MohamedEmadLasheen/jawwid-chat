@@ -46,6 +46,20 @@ export function setUnauthenticatedHandler(handler: () => void): void {
   onUnauthenticated = handler
 }
 
+/** PD-58: the code a gated route answers (403) while Terms of Use are outstanding. */
+export const TERMS_NOT_ACCEPTED_CODE = 'COMM.TERMS_NOT_ACCEPTED'
+
+let onTermsRequired: ((required: unknown) => void) | null = null
+
+/**
+ * Registered by the session layer: a 403 COMM.TERMS_NOT_ACCEPTED from ANY
+ * request refreshes the identity so the Terms gate appears. `required` is the
+ * error's `detail.required` (may be undefined).
+ */
+export function setTermsRequiredHandler(handler: (required: unknown) => void): void {
+  onTermsRequired = handler
+}
+
 let refreshing: Promise<boolean> | null = null
 
 /**
@@ -77,6 +91,9 @@ export function refreshSession(): Promise<boolean> {
       })
       // No `remembered`: the rotated token goes back where the old one was.
       tokenStore.set(pair)
+      // PD-58: the rotated pair says if Terms are outstanding; fail closed on
+      // anything but an explicit "accepted".
+      if (pair.legal && (pair.legal as { state?: unknown }).state !== 'accepted') onTermsRequired?.(undefined)
       return true
     } catch (error) {
       // Only the server REFUSING the token ends the session. A network failure
@@ -107,6 +124,8 @@ interface RefreshedSessionDto {
   accessToken: string
   refreshToken: string
   session?: SessionInfoDto
+  /** PD-58: absent on an API that predates the Terms gate. */
+  legal?: unknown
 }
 
 /**
@@ -175,6 +194,10 @@ async function parse<T>(response: Response, options: RequestOptions): Promise<T>
     if (apiError.isUnauthenticated && !options.anonymous) {
       tokenStore.clear()
       onUnauthenticated?.()
+    }
+    if (apiError.status === 403 && apiError.code === TERMS_NOT_ACCEPTED_CODE && !options.anonymous) {
+      const detail = apiError.detail as { required?: unknown } | null
+      onTermsRequired?.(detail?.required)
     }
     throw apiError
   }

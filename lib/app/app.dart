@@ -6,6 +6,7 @@ import '../design/theme.dart';
 import '../features/app_lock/presentation/app_lock_gate.dart';
 import '../features/auth/presentation/web_portal_gate.dart';
 import '../features/calls/presentation/call_presenter.dart';
+import '../features/legal/presentation/legal_gate.dart';
 import '../features/rewards/presentation/reward_celebration.dart';
 import '../features/settings/application/theme_mode_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -89,10 +90,12 @@ class JawwidApp extends ConsumerWidget {
           //
           // PD-55: a reward's celebration plays over all of it -- a call included --
           // and never takes a tap (`reward_celebration.dart`).
+          //
+          // PD-58: the Terms of Use gate, under the app lock -- see [sessionGates].
           child: RewardCelebrationHost(
             child: WebPortalGate(
               child: CallPresenter(
-                child: AppLockGate(child: child ?? const SizedBox.shrink()),
+                child: sessionGates(child ?? const SizedBox.shrink()),
               ),
             ),
           ),
@@ -100,6 +103,20 @@ class JawwidApp extends ConsumerWidget {
       },
     );
   }
+
+  /// The gates between a signed-in session and the router, outermost first.
+  ///
+  /// PD-23 `AppLockGate` is OUTSIDE PD-58 `LegalGate`, on purpose:
+  ///  * a locked device shows the lock screen over the legal gate, so nothing of the account
+  ///    (its documents, Delete account) is readable or reachable before the device unlocks;
+  ///  * the lock screen, its unlock and its own Sign out are never covered by the legal gate,
+  ///    and the legal gate offers Sign out itself;
+  ///  * the legal gate still covers every route and every dialog a route opens, as the
+  ///    developer guide's "before AppLockGate" asks of it: it is the next thing the router's
+  ///    output meets, and the app-lock offer waits while it is up (`legalGateShownProvider`).
+  /// `WebPortalGate` stays outermost: an account the browser portal is not for gets that
+  /// screen and never this one. Public for the tests, which mount exactly this.
+  static Widget sessionGates(Widget child) => AppLockGate(child: LegalGate(child: child));
 
   /// Resolve the device locale against what we support, defaulting to Arabic.
   static Locale resolveLocale(Locale? device, Iterable<Locale> supported) {

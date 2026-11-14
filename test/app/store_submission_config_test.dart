@@ -40,6 +40,17 @@ void main() {
     expect(read('android/app/src/main/AndroidManifest.xml'), contains('android:allowBackup="false"'));
   });
 
+  test('the call foreground service is typed microphone only, with no phoneCall (Play FGS policy, LR-14)', () {
+    final manifest = read('android/app/src/main/AndroidManifest.xml');
+    expect(manifest, contains('android:foregroundServiceType="microphone"'));
+    expect(manifest, contains('android.permission.FOREGROUND_SERVICE_MICROPHONE'));
+    expect(manifest, isNot(contains('phoneCall')));
+    expect(manifest, isNot(contains('FOREGROUND_SERVICE_PHONE_CALL')));
+    expect(manifest, isNot(contains('MANAGE_OWN_CALLS')));
+    final service = read('android/app/src/main/kotlin/com/jawwid/jawwid_chat/CallForegroundService.kt');
+    expect(service, isNot(contains('FOREGROUND_SERVICE_TYPE_PHONE_CALL')));
+  });
+
   test('iOS can save an exported board picture to Photos without being terminated', () {
     // A PNG export goes to the share sheet (board_export.dart), whose "Save Image" adds it
     // to Photos. Without this key iOS terminates the app at that tap.
@@ -68,5 +79,41 @@ void main() {
     final reported = bridge.indexOf('reportNewIncomingCall(with: existing', dup);
     expect(reported, isNonNegative);
     expect(reported - dup, lessThan(400));
+  });
+
+  test('the app is held portrait, and only the full-screen board turns (LR-39, PD-55 rev2)', () {
+    // The screens were never checked in landscape. Landscape stays allowed in Info.plist
+    // (and is not forbidden in the Android manifest) because the full-screen board
+    // must be able to turn; the app itself is held portrait from main().
+    final main = read('lib/main.dart');
+    final binding = main.indexOf('WidgetsFlutterBinding.ensureInitialized();');
+    final lock = main.indexOf('await lockAppOrientation();');
+    expect(lock, greaterThan(binding));
+    expect(main.indexOf('runApp(', lock), isNonNegative);
+
+    // The router must report what lands on top, or a call over the board could turn.
+    expect(read('lib/app/router.dart'), contains('observers: [...crashReportingObservers(), orientationObserver]'));
+
+    final board = read('lib/features/whiteboards/presentation/board_editor_screen.dart');
+    expect(board, contains('on ? allowBoardFullScreenOrientations() : lockAppOrientation()'));
+    final dispose = board.indexOf('void dispose()');
+    expect(board.indexOf('lockAppOrientation()', dispose), isNonNegative);
+
+    final plist = read('ios/Runner/Info.plist');
+    final start = plist.indexOf('<key>UISupportedInterfaceOrientations</key>');
+    final array = plist.substring(start, plist.indexOf('</array>', start));
+    expect(array, contains('UIInterfaceOrientationLandscapeLeft'));
+    expect(array, contains('UIInterfaceOrientationLandscapeRight'));
+  });
+
+  test('iOS declares only the background modes it uses: voip and audio (LR-24)', () {
+    // App Review rejects a background mode with no use. The server sends iOS no silent
+    // (content-available) push, so remote-notification has none; add it back only with one.
+    final plist = read('ios/Runner/Info.plist');
+    final start = plist.indexOf('<key>UIBackgroundModes</key>');
+    expect(start, isNonNegative);
+    final array = plist.substring(start, plist.indexOf('</array>', start));
+    final modes = RegExp(r'<string>([^<]+)</string>').allMatches(array).map((m) => m.group(1)).toList();
+    expect(modes, ['voip', 'audio']);
   });
 }

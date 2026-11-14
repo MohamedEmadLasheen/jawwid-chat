@@ -2,6 +2,8 @@
 
 Owner: release-qa, refreshed 2026-11-05 against `main` @ `c4563a20` and against the live DigitalOcean and GitHub state (read-only: `doctl apps list`, `doctl databases list`, `doctl spaces keys list`, `gh api …/environments`). Launch sizes and the staging Redis are ADR-013.
 
+*Corrected 2026-11-08 (LR-30):* the GitHub facts were re-checked against `main` @ `9bb0418d` and the live GitHub state (read-only `gh api …/environments` and `gh run list`). The corrections are marked in place below. The Monitoring row (❌) was re-checked and is still accurate: the production spec has only the `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` alerts, and no uptime-check workflow exists.
+
 **Phase 1** means the system app is submitted to the App Store and Google Play, against a production backend on DigitalOcean App Platform (ADR-010, ADR-012). Materials are frozen and are not part of it.
 
 Status: 🔴 **NOT READY.** Two different kinds of work remain, and they close separately:
@@ -31,7 +33,7 @@ Frankfurt, so it is to be recreated in Frankfurt while still empty.
 | No real users | Store builds on manual release (App Store Connect) and managed publishing (Google Play) until the cutover. |
 | Redis | `LAUNCH_PHASE=review` (production Environment variable): the private in-app `redis` component, `REDIS_URL=redis://redis:6379`. The resolver refuses anything else in review, and at `launch` drops the component and requires managed Valkey, verified before any change (ADR-015). |
 | Monthly cost (review period) | DigitalOcean: API $12 + worker $5 + Admin Web $5 + in-app Redis $5 + Spaces $5 = **$32**, before tax. Supabase Free $0. A staging app is not included (about $27 more if it runs). Not yet created: managed Valkey ($15), DigitalOcean Postgres ($15.15). |
-| Cutover at launch | Rehearse once; then stop the API and worker, take a final `backup-db.sh`, run the DigitalOcean preflight, `restore-db.sh` into the DigitalOcean cluster, replace `DATABASE_URL`, remove the pool overrides; provision managed Valkey and switch to `LAUNCH_PHASE=launch` (`production-runbook.md` §1c); deploy, smoke test. Only then make the store release public. About 15–30 minutes. |
+| Cutover at launch | Rehearse once; then stop the API and worker, take a final `backup-db.sh`, run the DigitalOcean preflight, `restore-db.sh` into the DigitalOcean cluster, replace `DATABASE_URL`, remove the pool overrides; provision managed Valkey, set the live Stripe secrets (`pd027-stripe-lifecycle.md` §5.1) and switch to `LAUNCH_PHASE=launch` (`production-runbook.md` §1c); deploy, smoke test. Only then make the store release public. About 15–30 minutes. |
 
 **Filling the GitHub configuration.** `python3 -I scripts/infra/production-setup.py status` lists every value the production deploy reads, whether it is set, and who provides it. `fixed` sets the values the repository already knows (hostnames, `LAUNCH_PHASE=review`, pool sizes, storage endpoint, APNs bundle and team, the review-period `REDIS_URL`), `generate` creates the four random app secrets without anyone seeing them, and `ask` / `file` take the owner's own secrets through gh's hidden prompt or from a file. It never prints a secret.
 
@@ -47,11 +49,11 @@ Legend for the **Owner provides** column: the account, key or decision only the 
 | **Redis** | ✅ | `REDIS_URL` + `QUEUE_PREFIX`. Used by realtime (`communication/realtime/redis.provider.ts`, the Socket.IO adapter), presence, typing and rate limiters. Nothing durable lives in it: the outbox is in Postgres (`architecture.md`), so AOF is not required; `noeviction` is recommended; Redis ≥ 6.2 is required (`production-runbook.md` §1a). **Staging** runs it as a private in-app component (`redis`, Valkey 8.1, `REDIS_URL=redis://redis:6379`, ADR-013). **Production** runs the same in-app component during the review period only (`LAUNCH_PHASE=review`), and managed Valkey from `LAUNCH_PHASE=launch`, which the deploy verifies before changing anything (ADR-015, `production-runbook.md` §1c). Multi-instance realtime is unproven (RISK-4), so production runs **one** API instance until it is proven. | Review period: the variable `LAUNCH_PHASE=review`. At launch: a managed Valkey 1 GiB cluster in `fra1`, Trusted Sources limited to the app, eviction policy `noeviction`, a token with database read access, then `LAUNCH_PHASE=launch`. Staging: nothing. |
 | **Object storage (Spaces)** | ✅ | The S3 adapter `communication/attachments/s3-object-storage.ts`; a partial configuration refuses to boot. `scripts/infra/storage-versioning.sh` turns on versioning, 30-day expiry of old versions and 1-day abandoned uploads. The production deploy verifies them and refuses to release without them. Spaces only (R2 has no versioning). | A private bucket in `fra1`, created **before** anything is uploaded, plus two Spaces keys: the app's, limited to the bucket, and a separate admin key (`STORAGE_ADMIN_*`, deploy check only) with `GetBucketVersioning` / `GetLifecycleConfiguration`. `STORAGE_*` values and `STORAGE_SIGNING_SECRET`. Run `storage-versioning.sh apply`, then `--verify-expiry` (step 7). |
 | **Domains and TLS** | ✅ | The spec names `${API_DOMAIN}` (primary) and `${ADMIN_WEB_DOMAIN}` (alias), minimum TLS 1.2. App Platform issues the certificates once DNS resolves. The store apps must use this HTTPS origin, never a local one (the local test stack's CA does not apply). | The domain and DNS CNAMEs. The variables `PRODUCTION_API_BASE_URL`, `PRODUCTION_REALTIME_URL`, `PRODUCTION_ADMIN_WEB_URL`, `PRODUCTION_CORS_ALLOWED_ORIGINS`, `TRUSTED_PROXY_HOPS` (step 3). |
-| **Secrets** | ✅ | Every value is in `infra/env/manifest.tsv` (marked secret or variable, and required, optional or forbidden per environment), templated in `infra/env/production.env.example`, inventoried in `secrets.md` §2 and judged by `scripts/infra/check-env.sh`. That script rejects placeholders, wildcard CORS, sandbox APNs, `NODE_ENV≠production` and TLS-off database URLs. CI scans the full git history for secrets. | Production requires: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RESET_CODE_HASH_SECRET`, the storage keys and `STORAGE_SIGNING_SECRET`, `APNS_PRIVATE_KEY`, `FCM_SERVICE_ACCOUNT_JSON`, `LIVEKIT_API_KEY`/`SECRET`, `SENTRY_DSN`, `SMTP_URL`. Optional: `STRIPE_*`, `TEACHER_PAYOUT_KEYS`, `LESSON_APPROVALS_SIGNING_KEY`, `WHATSAPP_ACCESS_TOKEN`, and the `CORE_*` group (ADR-013). |
+| **Secrets** | ✅ | Every value is in `infra/env/manifest.tsv` (marked secret or variable, and required, optional or forbidden per environment), templated in `infra/env/production.env.example`, inventoried in `secrets.md` §2 and judged by `scripts/infra/check-env.sh`. That script rejects placeholders, wildcard CORS, sandbox APNs, `NODE_ENV≠production` and TLS-off database URLs. CI scans the full git history for secrets. | Production requires: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RESET_CODE_HASH_SECRET`, the storage keys and `STORAGE_SIGNING_SECRET`, `APNS_PRIVATE_KEY`, `FCM_SERVICE_ACCOUNT_JSON`, `LIVEKIT_API_KEY`/`SECRET`, `SENTRY_DSN`, `SMTP_URL`. Optional: `STRIPE_*` (until `LAUNCH_PHASE=launch`, which requires both), `TEACHER_PAYOUT_KEYS`, `LESSON_APPROVALS_SIGNING_KEY`, `WHATSAPP_ACCESS_TOKEN`, and the `CORE_*` group (ADR-013). |
 | **APNs (iOS push)** | 🟡 | Server: `notifications/apns.provider.ts`, selected by `push.provider.selector.ts`. The deploy hard-codes `APNS_PRODUCTION=true`, and `check-env.sh` forbids anything else. Without a key it falls back to logging, which is what the local test stack runs: no push is delivered there, recorded as the LAUNCH BLOCKER on rows D-14/D-17b. VoIP (call ring with the app closed) is gated by `APNS_VOIP_ENABLED`: in the manifest (optional, default off), the app spec and both deploy workflows. Turn it on in staging first, once the iOS CallKit build is proven on a device (S-06). | An Apple **APNs auth key (.p8)** from the paid developer team: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`. The bundle id must match the store app. |
 | **FCM (Android push)** | 🟡 | Server: `notifications/fcm.provider.ts` (data-only, high priority) and call routing in `call-push-routing.ts` (Android receives every kind). App: built natively (#408, merged; #449 open), and a release build refuses to start without `android/app/google-services.json`, which does not exist yet (S-05 in the gate). | A Firebase project with the Android app registered (`com.jawwid.jawwid_chat`, or the final id). `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_JSON`, and the `google-services.json` for the build. |
 | **LiveKit (calls)** | ✅ | `communication/calls/media-token.ts` (microphone only, 120 s TTL from `chat.config`) and `media-room-control.ts`. `.github/workflows/livekit-probe.yml` verifies an environment's credentials. Only the staging LiveKit exists. After provisioning, run `rt037-media-revocation.spec.ts` §G against it (`LIVEKIT_REAL_URL`) to close gate G-06. | A LiveKit Cloud project, or a self-hosted server with TURN. `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` in the `production` Environment. |
-| **Stripe (live)** | ✅ | `billing/stripe.gateway.ts`, `stripe-webhook.controller.ts`, `checkout.service.ts`. Unset means card payments are off and the webhook answers 503. The endpoint and its events are in `docs/admin/pd027-payments.md`. Card refunds reach Stripe once per refund id (#358). Production refuses to boot with a test key or without the webhook secret (`stripe-config.ts`, PD-56). | Chat's Stripe account, a **restricted live key** (Checkout Sessions write, Refunds write, Customers write, PaymentIntents read, Charges read; `pd027-stripe-lifecycle.md` §5), `STRIPE_SECRET_KEY`, the live webhook's `STRIPE_WEBHOOK_SECRET`, and `PAYMENT_LINK_BASE_URL`. |
+| **Stripe (live)** | ✅ | `billing/stripe.gateway.ts`, `stripe-webhook.controller.ts`, `checkout.service.ts`. Unset means card payments are off and the webhook answers 503. The endpoint and its events are in `docs/admin/pd027-payments.md`. Card refunds reach Stripe once per refund id (#358). In production, a set key must be live (`sk_live_`/`rk_live_`; a test or publishable key is refused) and needs a well-formed `whsec_` webhook secret; the deploy (`check-env.sh`) and the API and worker at boot (`stripe-config.ts`, PD-56) both refuse otherwise, never printing a value. **Phase rule:** optional at `LAUNCH_PHASE=review` (cards off), **required** at `LAUNCH_PHASE=launch`: the launch deploy refuses without both secrets. | Chat's Stripe account, a **restricted live key** (Checkout Sessions write, Refunds write, Customers write, PaymentIntents read, Charges read; `pd027-stripe-lifecycle.md` §5), `STRIPE_SECRET_KEY`, the live webhook's `STRIPE_WEBHOOK_SECRET`, and `PAYMENT_LINK_BASE_URL`, all before `LAUNCH_PHASE=launch`. |
 | **E-mail (SMTP)** | ✅ | `account-recovery/recovery-delivery.ts` (nodemailer). It carries first-login and reset codes for staff and teachers (PD-40/43) and parents' recovery (PD-25). `SMTP_URL` + `RECOVERY_MAIL_FROM` are **required**; the deploy refuses without them. | An SMTP provider and a sending domain with SPF and DKIM. |
 | **Error tracking (Sentry)** | 🟡 | API and worker: `infra/observability/sentry-error-tracker.ts` behind a privacy allowlist (`monitoring.md` §3a). `SENTRY_DSN` is required in production. Flutter app: built (`lib/core/crash/crash_reporting.dart`, S-07); `build-store.sh` passes the app DSN. | A Sentry organisation, a project per component, and the DSNs. |
 | **Monitoring and alerts** | ❌ | Code: structured JSON logs with redaction, and `/health/live` + `/health/ready`. The spec provisions only App Platform's `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` alerts. `monitoring.md` §5's alert table is "a target, not a running system". No uptime check, metrics, dashboards or OpenTelemetry. | At minimum, for Phase 1: an external uptime check on `/health/ready`; App Platform CPU, memory and restart alerts; Sentry alert rules; database storage and connection alerts. Someone to receive them (on-call, runbook §9 "not yet defined"). |
@@ -63,6 +65,8 @@ Legend for the **Owner provides** column: the account, key or decision only the 
 These are the code-side half of Phase 1. Gate ids refer to `docs/qa/release-gate.md` §2a.
 
 The verdicts below are copied from the gate on 2026-11-05; the gate wins if they differ.
+
+*Corrected 2026-11-08 (LR-30):* the push gates S-11, S-12, S-13 and S-15 are marked "PASS (code, tests)" in `docs/qa/release-gate.md`, but that evidence is from an uncommitted tree built on PR #449 and PR #408, not from `main`. On `main` they have **not** passed. This checklist does not count them as passed.
 
 | Item | Code | State on `main` | Owner provides |
 |---|---|---|---|
@@ -87,6 +91,37 @@ The verdicts below are copied from the gate on 2026-11-05; the gate wins if they
 
 Everything the repository can do is done. The rest needs accounts, money or
 DNS, so it is the owner's. In this order — each step names what it unblocks.
+> **Corrected 2026-11-08 (LR-30).** The paragraph below this note was written on 2026-11-05 and
+> is partly out of date. What GitHub shows on 2026-11-08 (read-only: `gh api …/environments`,
+> `gh run list`):
+>
+> - **Three Environments exist, not two:** `staging` (created 2026-09-24), `production`
+>   (created 2026-10-31) and `backup` (created 2026-11-06). `staging` and `production` each have
+>   a required reviewer and a branch policy. `backup` has **no** protection rules.
+> - **What the Environments hold, by count only (read by the lead on 2026-11-08 with
+>   `gh api repos/MohamedEmadLasheen/jawwid-chat/environments/<name>/{secrets,variables} --jq .total_count`;
+>   no names or values were read):**
+>   - `production`: 19 secrets, 12 variables;
+>   - `staging`: 2 secrets, 1 variable;
+>   - `backup`: 0 secrets, 0 variables. Repository-level Actions secrets: also 0 (read the same way).
+>
+>   This is **consistent with** every backup failure below. The failing step was not read, so it is not proven to be the only cause.
+>
+>   The 2026-11-05 statement below that `production` "holds nothing" is therefore **out of date**.
+> - **Deploy production has never run** (`gh run list --workflow deploy-production.yml` is empty).
+> - **Deploy staging has never succeeded.** 34 runs failed, the last on 2026-10-06 (run
+>   37508314286, on push). The only run since, 42095782131 on 2026-11-05 (started by hand), was
+>   cancelled.
+> - **Every backup run so far has failed:** the daily backup on 2026-11-06, 2026-11-07 and
+>   2026-11-08 (runs 42188163423, 42352744376, 42460966243) and the first weekly backup on
+>   2026-11-08 (run 42465417108). Both workflows run in the `backup` Environment and stop at
+>   their first step when its credentials are missing (`BACKUP_DATABASE_URL`,
+>   `BACKUP_ENCRYPTION_PASSPHRASE`, and for the weekly copy the backup bucket key and
+>   location). The run logs were not read in this check, so which value is missing is not
+>   confirmed here; the owner's step 6 and RISK-6 (b) below remain open.
+> - The DigitalOcean facts below were not re-checked on 2026-11-08 (no `doctl` access in this
+>   check).
+
 Re-verified on 2026-11-05. In GitHub, the `staging` Environment holds only
 `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. The `production`
 Environment exists (created 2026-10-31, required reviewer, deployments limited
@@ -137,6 +172,10 @@ Spaces bucket, no Spaces key and no Valkey. The domain is chosen (step 3).
    `production` has a required reviewer and deployments limited to `main`. The
    production workflow's safety depends on these rules, and no file can
    enforce them, so keep them.
+   *Corrected 2026-11-08 (LR-30):* a third Environment, `backup`, also exists
+   (created 2026-11-06) and has no protection rules. The backup workflows read
+   their credentials from it; until it holds them, every backup run fails (see
+   the note above).
 5. **Add the deploy credentials to both Environments:**
    * `DIGITALOCEAN_ACCESS_TOKEN`: a DigitalOcean personal access token with
      read, create and update on apps (plus read on projects if step 1 set
@@ -222,6 +261,7 @@ nothing. It never reports a deployment that did not happen (ADR-003).
 ## Blockers
 
 **BLOCKER-1 · No hosting.** The provider was chosen on 2026-10-22: DigitalOcean App Platform (ADR-010). The app spec and release step are in the repository (ADR-012). The project holds a Postgres cluster, and nothing else is provisioned. Owner: product owner, via **Owner steps that remain** above. Until then, every deploy run stops at its first step with the missing item named, and changes nothing (ADR-003). A red `Deploy staging` run is the expected outcome, not a regression. It must not be "fixed" by relaxing a guard.
+*Corrected 2026-11-08 (LR-30):* nothing has ever been deployed. `Deploy production` has never run, and `Deploy staging` has never succeeded (last failure 2026-10-06; the one run since, on 2026-11-05, was cancelled).
 
 **BLOCKER-2 · No git remote. ✅ CLOSED 2026-09-24.**
 
@@ -239,6 +279,7 @@ nothing. It never reports a deployment that did not happen (ADR-003).
 - **RISK-4 · Multi-instance realtime is unproven.** Production must run one API instance until two instances are shown, on staging, to deliver every event through the Redis adapter.
 - **RISK-5 · Shared working trees.** Several agents work in one repository. Verify the committed tree, never the working copy.
 - **RISK-6 · Backups between deploys rest entirely on the provider.** 🟡 Mitigated in code: `backup-weekly.yml` takes an encrypted dump every Sunday and keeps 8 weeks in Spaces (`backup-recovery.md` §3b), whether or not anyone deploys. Open until (a) the provider's daily backups and 7-day PITR are confirmed on the production cluster, (b) the `backup` Environment, read-only role and dedicated bucket key exist (`backup-recovery.md` §3b) and the weekly job has run once, and (c) the §5a restore drill from a weekly copy has passed.
+  *Corrected 2026-11-08 (LR-30):* the `backup` Environment now exists, but every scheduled backup so far has failed (daily: 2026-11-06, 11-07, 11-08; weekly: 2026-11-08). No backup has been taken by either workflow, so (b) is not met.
 
 ## What would make this green (Phase 1 order)
 

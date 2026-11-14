@@ -35,6 +35,7 @@ import { buildGraph, truncate } from './harness';
 import { FakeStripe } from './fake-stripe';
 import { CheckoutService } from '../../src/billing/checkout.service';
 import { PaymentLedger } from '../../src/billing/payment-ledger.service';
+import { TemplateService } from '@communication/notifications/template.service';
 import { OBJECT_STORAGE } from '../../src/platform/tokens';
 import type { ObjectStorage } from '../../src/communication/attachments/object-storage';
 
@@ -415,7 +416,21 @@ describe('PD-27 over HTTP', () => {
     expect(rejected.json.receipt).toMatchObject({ status: 'rejected', rejectReason: 'The amount on the receipt is unreadable' });
     const seen = await http(f.parent.subject, 'GET', '/me/billing');
     expect(seen.json.receipts.find((r: any) => r.id === pending.id)).toMatchObject({ status: 'rejected', rejectReason: 'The amount on the receipt is unreadable' });
-    expect(await g.prisma.notification.count({ where: { templateKey: 'payment_receipt_rejected', recipientId: f.parent.id } })).toBe(1);
+    expect(await g.prisma.notification.count({ where: { eventType: 'payment_receipt_rejected', recipientId: f.parent.id } })).toBe(1);
+    // The lock screen: what the push provider is given (the delivery row's
+    // template, rendered as the dispatcher renders it) names no amount and no
+    // reason -- the reason is a staff member's free text.
+    const delivery = await g.prisma.notification.findFirstOrThrow({ where: { eventType: 'payment_receipt_rejected', recipientId: f.parent.id } });
+    const templates = new TemplateService(g.prisma);
+    const pushText = await templates.render(delivery.templateKey, delivery.locale, delivery.variables as Record<string, unknown>);
+    expect(pushText).not.toBeNull();
+    expect(`${pushText!.title} ${pushText!.body}`).not.toMatch(/unreadable|\d/i);
+    // The Center entry (behind sign-in) still carries the amount and the reason.
+    const entry = await g.prisma.notificationItem.findUniqueOrThrow({ where: { dedupeKey: delivery.dedupeKey } });
+    expect(entry.templateKey).toBe('inbox.payment_receipt_rejected');
+    expect(entry.variables).toMatchObject({ reason: 'The amount on the receipt is unreadable', amount: expect.any(String) });
+    const inboxText = await templates.render(entry.templateKey, entry.locale, entry.variables as Record<string, unknown>);
+    expect(inboxText!.body).toContain('The amount on the receipt is unreadable');
   });
 
   it('voids and refunds: a cash mistake is voided (its invoice with it, the request owed again); a card payment is refunded through Stripe, once', async () => {
@@ -1129,5 +1144,147 @@ describe('ADMIN-007: billing settings edits are versioned', () => {
     // Each before is the previous after: no edit claims to have overwritten a value it never saw.
     expect((rows[1]!.before as any).currency).toBe('AED');
     expect((rows[2]!.before as any).currency).toBe((rows[1]!.after as any).currency);
+  });
+});
+
+/**
+ * W63: the card kill switch. After the public launch there was no fast way to
+ * stop card payments short of revoking the key in Stripe. An operator pause
+ * (chat.config billing.card_paused) turns card off everywhere it is offered
+ * and refuses a new Checkout, while Stripe's webhooks keep recording what was
+ * already under way.
+ */
+describe('W63: card payments paused by an operator', () => {
+  const KEY = 'billing.card_paused';
+  const unpause = () => g.prisma.config.deleteMany({ where: { key: KEY } });
+  const pauseRows = () => g.prisma.auditLog.findMany({ where: { action: 'billing.card_pause_set', entityId: orgId }, orderBy: { id: 'asc' } });
+  beforeAll(unpause);
+  afterAll(unpause);
+
+  async function lessonRequest(f: SeedManifest['families'][number], label: string) {
+    const created = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, {
+      purpose: 'renewal', label, amountMinor: 3000, currency: 'AED', learnerId: f.children[0]!.id, lessonsIncluded: 8,
+    });
+    expect(created.status).toBe(201);
+    return created.json.request;
+  }
+
+  it('only the super admin and the Operations Manager pause or resume; anything but true or false is refused', async () => {
+    const { f, teacher } = familyOf(28);
+    for (const who of [m.salesManager.subject, teacher.subject, f.parent.subject]) {
+      expect([who, (await http(who, 'POST', '/billing/settings', { cardPaused: true })).code]).toEqual([who, CommErrorCode.BILLING_DENIED]);
+    }
+    expect((await http(m.superAdmin.subject, 'POST', '/billing/settings', { cardPaused: 'yes' })).code).toBe(CommErrorCode.VALIDATION);
+    expect(await g.prisma.config.count({ where: { key: KEY } })).toBe(0);
+    expect(await pauseRows()).toHaveLength(0);
+    // Read-only staff see the state, and may not change it.
+    expect((await http(m.salesManager.subject, 'GET', '/billing/settings')).json).toMatchObject({
+      cardPaused: false, cardConfigured: true, cardAvailable: true, canEdit: false,
+    });
+  });
+
+  it('paused: no card anywhere and no new Checkout; a payment already under way is still recorded; resumed: card is back; each switch is audited', async () => {
+    const { f } = familyOf(29);
+    const inFlight = await lessonRequest(f, 'Renewal in flight');
+    const later = await lessonRequest(f, 'Renewal later');
+    // The parent opened Stripe's page before the pause.
+    const sessionId = await payByCard(tokenOf(inFlight.link));
+    const settingsRowsBefore = await g.prisma.auditLog.count({ where: { action: 'billing.settings_set' } });
+
+    const paused = await http(m.superAdmin.subject, 'POST', '/billing/settings', { cardPaused: true });
+    expect(paused.status).toBe(201);
+    expect(paused.json).toMatchObject({ cardPaused: true, cardConfigured: true, cardAvailable: false });
+    let rows = await pauseRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorId: m.superAdmin.id, entity: 'organization', before: { cardPaused: false }, after: { cardPaused: true }, reason: 'card payments paused',
+    });
+    expect(rows[0]!.at).toBeInstanceOf(Date);
+    // The switch alone writes its own row, not a settings row.
+    expect(await g.prisma.auditLog.count({ where: { action: 'billing.settings_set' } })).toBe(settingsRowsBefore);
+
+    // cardAvailable is false wherever it is computed.
+    expect((await http(m.salesManager.subject, 'GET', '/billing/settings')).json).toMatchObject({ cardPaused: true, cardAvailable: false });
+    expect((await http(f.parent.subject, 'GET', '/me/billing')).json.cardAvailable).toBe(false);
+    expect((await http(m.superAdmin.subject, 'GET', `/families/${f.id}/billing`)).json.cardAvailable).toBe(false);
+    const page = await (await fetch(`${base}/pay/${tokenOf(later.link)}?lang=en`)).text();
+    expect(page).not.toContain('/checkout?lang=');
+
+    // A new Checkout is refused the existing way (the app falls back to bank transfer); Stripe is not called.
+    const inApp = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: later.id });
+    expect(inApp.status).toBe(503);
+    expect(inApp.code).toBe(CommErrorCode.PAYMENTS_UNAVAILABLE);
+    const viaLink = await fetch(`${base}/pay/${tokenOf(later.link)}/checkout`, { method: 'POST', redirect: 'manual' });
+    expect(viaLink.status).toBe(503);
+    expect(checkoutInputs(later.id)).toHaveLength(0);
+    // ...and the session opened before the pause was not expired by the refusal.
+    expect(stripe.expired).not.toContain(sessionId);
+
+    // Stripe's webhook for the payment under way still records it.
+    expect((await webhook(stripe.completedEvent(stripe.complete(sessionId)))).json.outcome).toBe('recorded');
+    expect(await g.prisma.payment.count({ where: { requestId: inFlight.id, method: 'card' } })).toBe(1);
+
+    // The Operations Manager resumes.
+    const resumed = await http(m.operationsManager.subject, 'POST', '/billing/settings', { cardPaused: false });
+    expect(resumed.status).toBe(201);
+    expect(resumed.json).toMatchObject({ cardPaused: false, cardAvailable: true });
+    rows = await pauseRows();
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({
+      actorId: m.operationsManager.id, before: { cardPaused: true }, after: { cardPaused: false }, reason: 'card payments resumed',
+    });
+    expect((await http(f.parent.subject, 'GET', '/me/billing')).json.cardAvailable).toBe(true);
+    expect(await (await fetch(`${base}/pay/${tokenOf(later.link)}?lang=en`)).text()).toContain('/checkout?lang=');
+    const again = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: later.id });
+    expect(again.status).toBe(201);
+    expect(checkoutInputs(later.id)).toHaveLength(1);
+  });
+
+  it('a stored value that is not true or false fails safe: card is paused', async () => {
+    const { f } = familyOf(29);
+    await g.prisma.config.upsert({ where: { key: KEY }, create: { key: KEY, value: 'yes' }, update: { value: 'yes' } });
+    try {
+      expect((await http(m.salesManager.subject, 'GET', '/billing/settings')).json).toMatchObject({ cardPaused: true, cardAvailable: false });
+      expect((await http(f.parent.subject, 'GET', '/me/billing')).json.cardAvailable).toBe(false);
+      // Setting it again repairs it.
+      const repaired = await http(m.superAdmin.subject, 'POST', '/billing/settings', { cardPaused: false });
+      expect(repaired.json).toMatchObject({ cardPaused: false, cardAvailable: true });
+      expect((await pauseRows()).at(-1)).toMatchObject({ before: { cardPaused: true }, after: { cardPaused: false } });
+    } finally {
+      await unpause();
+    }
+  });
+
+  it('LR-46 P3-1: paused, a card tap on an unpaid instalment writes nothing (no payment request) and gets the pause error; unpaused, it opens Checkout as before', async () => {
+    const { f, supervisor } = familyOf(28);
+    await http(m.superAdmin.subject, 'POST', `/families/${f.id}/billing`, { currency: 'AED' });
+    const plan = await http(supervisor.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Paused plan', amountMinor: 20000, firstDueDate: '2026-11-01', learnerId: f.children[0]!.id, lessonsIncluded: 8,
+    });
+    expect(plan.status).toBe(201);
+    const inst = plan.json.instalments.find((i: any) => i.label.startsWith('Paused plan'));
+    expect(inst).toMatchObject({ payableInApp: true });
+    const requestsBefore = await g.prisma.paymentRequest.count();
+    expect(await g.prisma.paymentRequest.count({ where: { instalmentId: inst.id } })).toBe(0);
+
+    // Set directly (the switch's own route and audit are covered above).
+    await g.prisma.config.upsert({ where: { key: KEY }, create: { key: KEY, value: true }, update: { value: true } });
+    try {
+      const card = await http(f.parent.subject, 'POST', '/me/billing/checkout', { instalmentId: inst.id });
+      expect(card.status).toBe(503);
+      expect(card.code).toBe(CommErrorCode.PAYMENTS_UNAVAILABLE);
+      expect(await g.prisma.paymentRequest.count({ where: { instalmentId: inst.id } })).toBe(0);
+      expect(await g.prisma.paymentRequest.count()).toBe(requestsBefore);
+    } finally {
+      await unpause();
+    }
+
+    // Unpaused: unchanged -- the instalment's request is made and Checkout opens.
+    const again = await http(f.parent.subject, 'POST', '/me/billing/checkout', { instalmentId: inst.id });
+    expect(again.status).toBe(201);
+    expect(again.json.url).toEqual(expect.any(String));
+    const made = await g.prisma.paymentRequest.findMany({ where: { instalmentId: inst.id } });
+    expect(made).toHaveLength(1);
+    expect(checkoutInputs(made[0]!.id)).toHaveLength(1);
   });
 });

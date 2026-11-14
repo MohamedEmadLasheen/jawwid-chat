@@ -78,6 +78,24 @@ export const messages = {
     'common.reconnected': 'Reconnected.',
     'common.forbidden': "You don't have permission to access this.",
     'common.signOut': 'Sign out',
+
+    // PD-58 Terms of Use gate. DRAFT: pending owner wording (N-3) -- every legal.* title and agreement label below.
+    'legal.title': 'Terms of Use', // DRAFT: pending owner wording (N-3)
+    'legal.intro': 'Please read and accept the documents below to continue.', // DRAFT: pending owner wording (N-3)
+    'legal.doc.terms': 'Terms of Use', // DRAFT: pending owner wording (N-3)
+    'legal.doc.code_of_conduct': 'Code of Conduct', // DRAFT: pending owner wording (N-3)
+    'legal.agree.terms': 'I have read and agree to the Terms of Use', // DRAFT: pending owner wording (N-3)
+    'legal.agree.code_of_conduct': 'I have read and agree to the Code of Conduct', // DRAFT: pending owner wording (N-3)
+    'legal.agree.generic': 'I have read and agree to: {title}', // DRAFT: pending owner wording (N-3)
+    'legal.open': 'Open',
+    'legal.openLabel': 'Open {title} in a new tab',
+    'legal.agree': 'Agree', // DRAFT: pending owner wording (N-3)
+    'legal.agreeing': 'Saving…',
+    'legal.error.stale': 'The documents changed since you opened this page. They have been reloaded: please read and tick them again.',
+    'legal.error.support': 'This is a support session. Only the account holder can accept the Terms of Use, by signing in as themselves.',
+    'legal.error.generic': 'Could not save your agreement. Try again later.',
+    'legal.unavailable.title': 'The Terms of Use are temporarily unavailable',
+    'legal.unavailable.body': 'You cannot continue until this is fixed. Please try again later or contact the technical team.',
     'story.compose': 'New story',
     'story.title': 'Title (optional)',
     'story.body': 'What do you want to say?',
@@ -218,6 +236,24 @@ export const messages = {
     'common.reconnected': 'تمت إعادة الاتصال.',
     'common.forbidden': 'ليس لديك صلاحية للوصول إلى هذا.',
     'common.signOut': 'تسجيل الخروج',
+
+    // PD-58 Terms of Use gate. DRAFT: pending owner wording (N-3) -- every legal.* title and agreement label below.
+    'legal.title': 'شروط الاستخدام', // DRAFT: pending owner wording (N-3)
+    'legal.intro': 'يرجى قراءة المستندات التالية والموافقة عليها للمتابعة.', // DRAFT: pending owner wording (N-3)
+    'legal.doc.terms': 'شروط الاستخدام', // DRAFT: pending owner wording (N-3)
+    'legal.doc.code_of_conduct': 'ميثاق السلوك', // DRAFT: pending owner wording (N-3)
+    'legal.agree.terms': 'قرأتُ شروط الاستخدام وأوافق عليها', // DRAFT: pending owner wording (N-3)
+    'legal.agree.code_of_conduct': 'قرأتُ ميثاق السلوك وأوافق عليه', // DRAFT: pending owner wording (N-3)
+    'legal.agree.generic': 'قرأتُ وأوافق على: {title}', // DRAFT: pending owner wording (N-3)
+    'legal.open': 'فتح',
+    'legal.openLabel': 'فتح {title} في تبويب جديد',
+    'legal.agree': 'أوافق', // DRAFT: pending owner wording (N-3)
+    'legal.agreeing': 'جارٍ الحفظ…',
+    'legal.error.stale': 'تغيّرت المستندات منذ فتحت هذه الصفحة. أُعيد تحميلها: يرجى قراءتها وتحديد الموافقة عليها من جديد.',
+    'legal.error.support': 'هذه جلسة دعم. لا يمكن لغير صاحب الحساب قبول شروط الاستخدام، وذلك بتسجيل دخوله بنفسه.',
+    'legal.error.generic': 'تعذّر حفظ موافقتك. حاول مرة أخرى لاحقًا.',
+    'legal.unavailable.title': 'شروط الاستخدام غير متاحة مؤقتًا',
+    'legal.unavailable.body': 'لا يمكنك المتابعة حتى يُصلَح ذلك. يرجى المحاولة لاحقًا أو التواصل مع الفريق التقني.',
     'story.compose': 'حالة جديدة',
     'story.title': 'العنوان (اختياري)',
     'story.body': 'ماذا تريد أن تقول؟',

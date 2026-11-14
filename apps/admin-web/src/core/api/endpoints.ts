@@ -3,6 +3,7 @@ import { persistenceSupported, tokenStore } from '@/core/auth/tokens'
 import { deviceLabel } from '@/core/auth/device'
 import { ApiError } from './errors'
 import type { Staff } from '@/shared/types/domain'
+import { parseLegal } from '@/features/legal/legal'
 
 /* ---------------------------------------------------------------- session */
 
@@ -17,9 +18,13 @@ export interface ActorDto {
   organizationId: string | null
   /** PD-40: the caller's permission keys (UX only: the server decides every request). */
   permissions?: string[]
+  /** PD-58: the Terms of Use block (absent on an API that predates the gate). */
+  legal?: unknown
 }
 
 interface TokenPairDto {
+  /** PD-58: same shape as `actor.legal`. */
+  legal?: unknown
   tokenType: 'Bearer'
   accessToken: string
   expiresIn: number
@@ -38,6 +43,7 @@ export const NOT_STAFF_CODE = 'admin.not_staff'
  * refusal, never a default role. The server enforces the same independently.
  */
 export function toStaff(actor: ActorDto): Staff {
+  const legal = parseLegal(actor.legal)
   if (actor.kind !== 'staff' || !actor.staffRole) {
     throw new ApiError({
       status: 403,
@@ -54,6 +60,7 @@ export function toStaff(actor: ActorDto): Staff {
     is_active: actor.isActive,
     locale: actor.locale,
     ...(actor.permissions ? { permissions: actor.permissions } : {}),
+    ...(legal ? { legal } : {}),
   }
 }
 
@@ -87,7 +94,7 @@ export const sessionApi = {
     })
     tokenStore.set(pair, { remembered: pair.session?.remembered === true })
     try {
-      return toStaff(pair.actor)
+      return toStaff({ ...pair.actor, legal: pair.actor.legal ?? pair.legal })
     } catch (refusal) {
       // A parent/teacher login is valid, just not here: end the session it
       // just opened so no token outlives the refusal.

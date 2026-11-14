@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -13,6 +14,7 @@ import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_feedback_repository.dart';
 import '../core/data/http/http_group_repository.dart';
+import '../core/data/http/http_legal_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_moderation_repository.dart';
@@ -38,6 +40,7 @@ import '../core/storage/secure_token_store.dart';
 import '../core/storage/token_store_factory.dart';
 import '../core/time/time_zone_api.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/auth/application/pending_sign_out.dart';
 import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
@@ -45,6 +48,7 @@ import '../features/calls/data/fake_scheduled_call_repository.dart';
 import '../features/calls/data/http_account_call_history.dart';
 import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
+import '../features/legal/application/legal_wire.dart';
 import '../features/materials/data/materials_repository.dart';
 import '../features/messages/application/chat_typing_channel.dart';
 import '../features/messages/application/drafts_controller.dart';
@@ -144,6 +148,11 @@ List<Override> _httpOverrides() {
   // one seen at launch — which means reaching AuthController, not just clearing the actor id.
   final termination = SessionTermination();
 
+  // PD-58: the same kind of wire for the Terms of Use -- a 403 TERMS_NOT_ACCEPTED seen by the
+  // transport on ANY route, and a token pair's `legal` block, reach AuthController, whose
+  // principal the legal gate reads.
+  final legal = LegalWire();
+
   late final ApiClient client;
 
   // Login, refresh and the parent's sign-up go over the public transport, which has no
@@ -164,6 +173,7 @@ List<Override> _httpOverrides() {
     // then runs under one Web Lock, so no two tabs present the same token. A phone has one
     // process and needs none.
     exclusive: tokenStore is BrowserTokenStore ? tokenStore.exclusive : null,
+    onLegal: legal.report,
     onEnded: (error) async {
       // The actor id goes first and unconditionally, so the transport stops naming a
       // principal even in the window before the controller has been built.
@@ -172,8 +182,24 @@ List<Override> _httpOverrides() {
     },
   );
 
-  client = buildApiClient(config: config, tokens: tokens);
+  client = buildApiClient(config: config, tokens: tokens, onTermsNotAccepted: legal.refused);
   final drafts = platformDraftStore();
+
+  // LR-46 follow-up: a sign-out made offline is ended on the server later (app start,
+  // connectivity back, backoff, before a new sign-in). Phone only: the PD-28 browser portal
+  // keeps its tokens under its own rules (BrowserTokenStore) and has no push binding.
+  final pendingSignOut = tokenStore is BrowserTokenStore
+      ? null
+      : PendingSignOutRetrier(
+          store: SecurePendingSignOutStore(),
+          server: auth,
+          // Read only to compare: an entry holding the live session's token is never sent.
+          liveTokens: tokenStore,
+          reconnected: Connectivity()
+              .onConnectivityChanged
+              .where((results) => results.any((result) => result != ConnectivityResult.none))
+              .map((_) {}),
+        );
 
   return [
     // The language choice survives a restart (see PersistedLocaleController).
@@ -308,10 +334,12 @@ List<Override> _httpOverrides() {
     ),
     // TEACHER-023: change your own password, on the same authenticated client.
     passwordChangeRepositoryProvider.overrideWithValue(
-      HttpPasswordChangeRepository(client: client, tokens: tokenStore),
+      HttpPasswordChangeRepository(client: client, tokens: tokenStore, onLegal: legal.report),
     ),
     // PD-56: delete your own account, on the same authenticated client.
     accountDeletionRepositoryProvider.overrideWithValue(HttpAccountDeletionRepository(client: client)),
+    // PD-58: the Terms of Use gate's reads and acceptance, on the same authenticated client.
+    legalRepositoryProvider.overrideWithValue(HttpLegalRepository(client: client)),
     accountCallHistoryProvider.overrideWithValue(
       // Named after the OTHER participant, so the viewer's own id is read per call.
       HttpAccountCallHistory(client: client, viewerActorId: session.actorId),
@@ -373,6 +401,8 @@ List<Override> _httpOverrides() {
             session.adopt(role: principal.role, actorId: principal.id),
         onSessionCleared: session.clear,
         termination: termination,
+        legal: legal,
+        pendingSignOut: pendingSignOut,
       ),
     ),
   ];

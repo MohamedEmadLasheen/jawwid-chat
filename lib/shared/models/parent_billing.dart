@@ -21,6 +21,7 @@ class ParentBilling {
     this.receipts = const [],
     this.bankAccount,
     this.cardAvailable = false,
+    this.reviewMode = false,
     this.subscriptions = const [],
   });
 
@@ -53,6 +54,11 @@ class ParentBilling {
 
   /// False on a deployment without Stripe: no card option anywhere.
   final bool cardAvailable;
+
+  /// OA-12: the App Review demo family (`GET /me/billing` -> `reviewMode: true`; the
+  /// server omits it for every other family). The SERVER enforces the mode; the app only
+  /// says so and does not offer Send.
+  final bool reviewMode;
 
   /// PD-30: each child's subscription -- plan, lessons left, grace, locked and why. Empty
   /// from a server that predates PD-30. Never carries an exception (the parent never sees
