@@ -62,7 +62,20 @@ export const STRIPE_ZERO_DECIMAL: ReadonlySet<string> = new Set([
   'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
 ]);
 
-/** Zero-decimal in name, two-decimal in Stripe's API ("Special cases"). */
+/**
+ * Zero-decimal in name, two-decimal in Stripe's API ("Special cases").
+ *
+ * UGX is in BOTH places on docs.stripe.com/currencies: the zero-decimal list
+ * ("For the following zero-decimal currencies, the charge and the amount are
+ * the same ... BIF CLP ... UGX ...") and Special cases ("UGX transitioned to a
+ * zero-decimal currency, but backwards compatibility requires you to represent
+ * it as a two-decimal value, where the decimal amount is always 00. For
+ * example, to charge 5 UGX, provide an amount value of 500."). The specific
+ * entry wins here (2 digits). Chat counts UGX in 0 digits (Intl), so card is
+ * refused for UGX (CARD_CURRENCY_PRECISION). Read the other way (0 digits),
+ * card would be allowed and correct; CONSERVATIVE choice: refuse card until
+ * Stripe's own amount for UGX is confirmed (bank transfer unaffected).
+ */
 const STRIPE_TWO_DECIMAL_REPRESENTED: ReadonlySet<string> = new Set(['ISK', 'UGX']);
 
 /** support.stripe.com (UAE): the three-decimal currencies. */

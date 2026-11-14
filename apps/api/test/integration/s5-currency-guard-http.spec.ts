@@ -278,9 +278,10 @@ const MISMATCHED = ['AFN', 'ALL', 'COP', 'HUF', 'IDR', 'ISK', 'LAK', 'LBP', 'MMK
 
 describe('regression: every mismatched currency -- card refused before Stripe is called; bank transfer unaffected', () => {
   // A fresh family per case: the per-parent checkout rate limit (429) must never be what answers.
-  it.each(MISMATCHED)('%s', async (c) => {
+  it.each(MISMATCHED)('%s: created (sent lower-case, stored upper-case); card refused in the app, on the link page and for its instalment; bank transfer and cash record', async (c) => {
     const { f, child } = freshFamily();
-    const r = await request(f.id, child.id, 250000, c);
+    const r = await request(f.id, child.id, 250000, c.toLowerCase()); // C3 B8 + B9
+    expect((await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: r.id } })).currency).toBe(c);
     const before = stripe.sessions.size;
 
     const inApp = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
@@ -298,17 +299,36 @@ describe('regression: every mismatched currency -- card refused before Stripe is
     expect(stripe.sessions.size).toBe(before);
     expect(await g.prisma.paymentCheckout.count({ where: { requestId: r.id } })).toBe(0);
 
-    const transfer = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, {
-      method: 'bank_transfer', amountMinor: 250000, paidOn: PAID_ON, requestId: r.id,
+    // C3 B4: a request made for an instalment in the same currency (ensureInstalmentRequest) is refused the same way.
+    const plan = await http(m.salesManager.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Term fee', amountMinor: 100000, currency: c, firstDueDate: '2026-12-01',
     });
-    expect(transfer.status).toBe(201);
+    expect(plan.status).toBe(201);
+    const inst = await g.prisma.familyInstalment.findFirstOrThrow({ where: { familyId: f.id, currency: c } });
+    const forInst = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payment-requests`, { instalmentId: inst.id });
+    expect(forInst.status).toBe(201);
+    const instLink = forInst.json.request as { id: string; link: string };
+    const instPost = await fetch(`${base}/pay/${tokenOf(instLink.link)}/checkout`, { method: 'POST', redirect: 'manual' });
+    expect(instPost.status).toBe(503);
+
+    // Stripe was never asked for either request: no session, no checkout row.
+    expect(stripe.sessions.size).toBe(before);
+    expect(await g.prisma.paymentCheckout.count({ where: { requestId: { in: [r.id, instLink.id] } } })).toBe(0);
+
+    // C3 B3: cash and a bank transfer record in full.
+    for (const [method, amountMinor] of [['cash', 100000], ['bank_transfer', 150000]] as const) {
+      const recorded = await http(m.salesManager.subject, 'POST', `/families/${f.id}/payments`, {
+        method, amountMinor, paidOn: PAID_ON, requestId: r.id,
+      });
+      expect(recorded.status).toBe(201);
+    }
     const paid = await g.prisma.paymentRequest.findUniqueOrThrow({ where: { id: r.id } });
     expect(paid.paidAt).not.toBeNull();
-    expect(await g.prisma.payment.count({ where: { requestId: r.id, method: 'bank_transfer', amountMinor: 250000n, currency: c } })).toBe(1);
+    expect(await g.prisma.payment.count({ where: { requestId: r.id, currency: c, voidedAt: null } })).toBe(2);
   });
 
   it.each([
-    ['USD', 5000], ['AED', 5000], ['JPY', 5000], ['KWD', 12340],
+    ['USD', 50], ['AED', 5000], ['JPY', 50], ['KWD', 12340],
   ])('control %s %d: Stripe\'s page opens for exactly that amount', async (c, amount) => {
     const { f, child } = freshFamily();
     const r = await request(f.id, child.id, amount as number, c as string);
@@ -332,4 +352,42 @@ describe('regression: every mismatched currency -- card refused before Stripe is
     });
     expect(transfer.status).toBe(201);
   });
+
+  it('C3 B5b: a page opened before the guard (PKR) is neither reused nor expired by a refused tap; it lapses on its own (documented residual)', async () => {
+    const { f, child } = freshFamily();
+    const r = await request(f.id, child.id, 250000, 'PKR');
+    const stale = `cs_test_pre_s5_${r.id.slice(0, 8)}`;
+    await g.prisma.paymentCheckout.create({
+      data: {
+        stripeSessionId: stale, organizationId: orgId, requestId: r.id, amountMinor: 250000n, currency: 'PKR',
+        expiresAt: new Date(Date.now() + 30 * 60_000),
+      },
+    });
+    const res = await http(f.parent.subject, 'POST', '/me/billing/checkout', { requestId: r.id });
+    expect(res.status).toBe(503);
+    expect(res.json.error?.detail).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: 'PKR' });
+    expect(res.json.url).toBeUndefined();
+    expect(stripe.expired).not.toContain(stale);
+    expect((await g.prisma.paymentCheckout.findUniqueOrThrow({ where: { stripeSessionId: stale } })).status).toBe('open');
+  });
+
+  it('C3 B6: a refund of a card payment in PKR is NOT guarded (money Stripe took must be refundable); the amount goes to Stripe unchanged -- the pre-converter behaviour, documented', async () => {
+    const { f } = freshFamily();
+    const pi = `pi_test_pre_s5_${f.id.slice(0, 8)}`;
+    const payment = await g.prisma.payment.create({
+      data: {
+        organizationId: orgId, familyId: f.id, method: 'card', amountMinor: 250000n, currency: 'PKR',
+        paidOn: new Date(`${PAID_ON}T00:00:00Z`), stripePaymentIntentId: pi, stripeCheckoutSessionId: `cs_test_pre_s5_${f.id.slice(0, 8)}`,
+      },
+    });
+    const calls = stripe.refundCalls.length;
+    const res = await http(m.superAdmin.subject, 'POST', `/payments/${payment.id}/refunds`, { amountMinor: 1000, reason: 'S5 refund probe' });
+    expect(res.status).toBe(201);
+    expect(stripe.refundCalls.slice(calls)).toEqual([expect.objectContaining({ paymentIntentId: pi, amountMinor: 1000 })]);
+  });
+
+  // C3 B5: refusing to RECORD a confirmed Stripe payment in one of the 13 would lose money Stripe took; production has
+  // never run a card payment and S5 prevents new ones, so no hardening of confirm() -- decision in reports/B4.md.
+  it.todo('C3 B5: webhook hardening for a pre-S5 session in a mismatched currency (decided: not implemented; see B4.md)');
 });
+

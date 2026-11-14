@@ -13,12 +13,14 @@ import {
   STRIPE_CARD_CURRENCIES,
   cardCurrencyRefusal,
   STRIPE_CARD_MAX_MINOR,
+  STRIPE_ZERO_DECIMAL,
   cardRefusal,
   isIsoCurrency,
   stripeApiDigits,
   stripeMinimumMinor,
 } from '../../../src/billing/currency-rules';
 import { requireCurrency } from '../../../src/billing/validate';
+import { checkoutCreateParams } from '../../../src/billing/stripe.gateway';
 
 describe('ISO 4217: every new amount names a real currency', () => {
   it.each(['AED', 'EGP', 'SAR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'IQD', 'SYP'])('%s is a currency', (c) => {
@@ -133,7 +135,7 @@ describe('the 13 mismatched currencies (CONFIRMED Stripe two-decimal amount; Cha
     expect(stripeApiDigits(c)).toBe(2);
     expect(minorDigits(c)).toBe(0);
     expect(cardCurrencyRefusal(c)).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: c });
-    for (const amount of [1, 100, 250000, 999_999_999]) {
+    for (const amount of [1, 100, 1000, 100000, 250000, 999_999_999, 999_999_999_999]) { // C3 A2: precision wins over min/max
       expect(cardRefusal(c, amount)).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: c });
     }
   });
@@ -165,5 +167,37 @@ describe('three-decimal currencies: CONSERVATIVE Chat restriction (last digit 0)
     expect(cardRefusal('AED', 12345)).toBeNull();
     expect(cardRefusal('JPY', 12345)).toBeNull();
     expect(cardRefusal('EGP', 12345)).toBeNull();
+  });
+});
+
+describe('C3 reconciliation (B4)', () => {
+  it('A3: KWD 10.000 (whole dinars) is a card amount; KWD 0.001 is refused by the CONSERVATIVE rule, not by a minimum', () => {
+    expect(cardRefusal('KWD', 1_000_000)).toBeNull();
+    expect(stripeMinimumMinor('KWD')).toBeNull();
+    expect(cardRefusal('KWD', 1)?.reason).toBe('CARD_AMOUNT_THREE_DECIMAL_ROUNDING');
+  });
+
+  it('A4: the guard itself is case-sensitive -- callers upper-case first (requireCurrency does)', () => {
+    expect(cardCurrencyRefusal('pkr')).toEqual({ reason: 'CARD_CURRENCY_UNSUPPORTED', currency: 'pkr' });
+    expect(cardCurrencyRefusal(requireCurrency('pkr'))).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: 'PKR' });
+  });
+
+  it('A5 / UGX: Stripe lists it as zero-decimal AND as a two-decimal special case; Chat counts 0 -- card refused either way it is read (CONSERVATIVE)', () => {
+    expect(STRIPE_ZERO_DECIMAL.has('UGX')).toBe(true);
+    expect(stripeApiDigits('UGX')).toBe(2); // the Special cases entry wins in stripeApiDigits
+    expect(minorDigits('UGX')).toBe(0);
+    expect(cardRefusal('UGX', 500)).toEqual({ reason: 'CARD_CURRENCY_PRECISION', currency: 'UGX' });
+  });
+
+  it('A6: what Chat sends to Stripe -- lower-case currency, the stored integer unchanged (the seam a converter would change)', () => {
+    const base = {
+      requestId: '00000000-0000-4000-8000-000000000001', organizationId: '00000000-0000-4000-8000-000000000002',
+      productName: 'x', description: null, successUrl: 'https://example.test/s', cancelUrl: 'https://example.test/c',
+      expiresAt: new Date('2026-12-01T00:00:00Z'), locale: 'en' as const, idempotencyKey: 'k',
+    };
+    for (const [currency, amountMinor] of [['USD', 100000], ['PKR', 1000]] as const) {
+      const price = checkoutCreateParams({ ...base, currency, amountMinor }).line_items![0]!.price_data!;
+      expect(price).toMatchObject({ currency: currency.toLowerCase(), unit_amount: amountMinor });
+    }
   });
 });
