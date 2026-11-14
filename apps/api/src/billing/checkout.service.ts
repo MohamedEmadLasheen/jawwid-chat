@@ -26,6 +26,7 @@ import { WEBHOOK_REFUND_REASON } from './idempotency';
 import { isCardPaused } from './card-pause';
 import { pendingReceiptMinor, receiptPendingRefusal } from './payments-read.service';
 import { isUuid } from '../communication/conversations/conversation.service';
+import { inReviewMode, reviewDemoUrl } from './review-mode';
 
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 /** Stripe refuses a session that expires sooner than 30 minutes. */
@@ -229,11 +230,15 @@ export class CheckoutService {
 
   /** The Stripe Checkout URL for what the request still owes. */
   async open(request: PaymentRequest, opts: { locale: 'ar' | 'en'; returnUrl: string; inApp?: boolean }): Promise<string> {
+    // W63: the operator's pause (card-pause.ts) comes first and wins everywhere, App Review mode
+    // included. Only new payments stop; webhooks and the reconciler go on.
+    if (await isCardPaused(this.prisma)) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
+    // OA-12: an App Review organization never reaches Stripe -- no session, no
+    // customer, no payment_checkout row -- only the static demo page.
+    if (await inReviewMode(this.prisma, request.organizationId)) return reviewDemoUrl(opts.locale);
     if (!this.stripe.checkoutAvailable) {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not configured on this deployment', 503);
     }
-    // W63: the operator's pause (card-pause.ts). Only new payments stop; webhooks and the reconciler go on.
-    if (await isCardPaused(this.prisma)) throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are paused; pay by bank transfer', 503);
     this.requirePayable(request);
 
     // A loop or abuse is refused first: one plain read, before any claim or Stripe call.

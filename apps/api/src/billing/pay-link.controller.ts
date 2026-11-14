@@ -9,6 +9,7 @@ import { CheckoutService } from './checkout.service';
 import { BANK_ACCOUNT_KEY, PaymentLedger } from './payment-ledger.service';
 import { renderPayPage, type PayLang, type PayPageModel } from './pay-page';
 import { RECEIPT_PENDING, lastCardFailures, pendingReceiptMinor } from './payments-read.service';
+import { inReviewMode, renderReviewDemoPage, reviewDemoBankAccount, REVIEW_DEMO_PAGE } from './review-mode';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -41,33 +42,50 @@ export class PayLinkController {
     private readonly checkout: CheckoutService,
   ) {}
 
+  /**
+   * OA-12: where an App Review account's card payment lands instead of Stripe.
+   * Static (the same for everyone, names nobody), so it needs no capability.
+   * Declared before ':token' so it is matched first.
+   */
+  @Get(REVIEW_DEMO_PAGE)
+  reviewDemo(@Query('lang') lang: string | undefined, @Res() res: HtmlResponse) {
+    const nonce = randomBytes(16).toString('base64');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Security-Policy', payPageCsp(nonce));
+    res.status(200).send(renderReviewDemoPage(langOf(lang), nonce));
+  }
+
   @Get(':token')
   async page(@Param('token') token: string, @Query('lang') lang: string | undefined, @Query('checkout') checkout: string | undefined, @Res() res: HtmlResponse) {
-    const model = await this.model(token, checkout === 'success' || checkout === 'cancelled' ? checkout : null);
-    this.send(res, model.status === 'not_found' ? 404 : 200, model, token, langOf(lang));
+    const l = langOf(lang);
+    const model = await this.model(token, checkout === 'success' || checkout === 'cancelled' ? checkout : null, l);
+    this.send(res, model.status === 'not_found' ? 404 : 200, model, token, l);
   }
 
   @Post(':token/checkout')
   async startCheckout(@Param('token') token: string, @Query('lang') lang: string | undefined, @Res() res: HtmlResponse) {
     const l = langOf(lang);
     const request = TOKEN_RE.test(token) ? await this.prisma.paymentRequest.findUnique({ where: { token } }) : null;
-    if (!request) return this.send(res, 404, await this.model(token, null), token, l);
+    if (!request) return this.send(res, 404, await this.model(token, null, l), token, l);
     try {
       const url = await this.checkout.open(request, { locale: l, returnUrl: PaymentLedger.linkFor(token) });
       res.setHeader('Cache-Control', 'no-store');
       return res.redirect(303, url);
     } catch (e) {
       if (!(e instanceof CommError)) throw e;
-      const model = await this.model(token, null);
+      const model = await this.model(token, null, l);
       // W61 S2: the page already says a transfer receipt is waiting (its own notice); no second line.
       model.error = e.detail?.reason === RECEIPT_PENDING ? null : l === 'ar' ? arabicError(e.status) : e.message;
       return this.send(res, e.status === 503 ? 503 : 409, model, token, l);
     }
   }
 
-  private async model(token: string, checkout: PayPageModel['checkout']): Promise<PayPageModel> {
+  private async model(token: string, checkout: PayPageModel['checkout'], lang: PayLang): Promise<PayPageModel> {
     const request = TOKEN_RE.test(token) ? await this.prisma.paymentRequest.findUnique({ where: { token } }) : null;
-    const [bank] = await Promise.all([this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } })]);
+    // OA-12: a review organization's link never shows the real bank account (it is not even read).
+    const review = request ? await inReviewMode(this.prisma, request.organizationId) : false;
+    const [bank] = await Promise.all([review ? Promise.resolve(null) : this.prisma.config.findUnique({ where: { key: BANK_ACCOUNT_KEY } })]);
     if (!request) {
       return {
         status: 'not_found', payerName: null, childFirstName: null, label: '', purpose: 'other', planMonths: null,
@@ -101,12 +119,14 @@ export class PayLinkController {
       remainingMinor: Math.max(0, amount - paid),
       currency: request.currency,
       expiresAt: request.expiresAt.toISOString(),
-      bankAccount: parseBankAccount(bank?.value),
-      cardAvailable: this.checkout.available && !(await isCardPaused(this.prisma)),
+      bankAccount: review ? reviewDemoBankAccount(lang) : parseBankAccount(bank?.value),
+      // OA-12 + W63: review mode offers the demo card page, but the operator's pause wins there too.
+      cardAvailable: (review || this.checkout.available) && !(await isCardPaused(this.prisma)),
       checkout,
       error: null,
       cardFailure: failure?.code ?? null,
       pendingReceiptMinor: pendingReceipts,
+      ...(review ? { reviewMode: true } : {}),
     };
   }
 
@@ -114,12 +134,13 @@ export class PayLinkController {
     const nonce = randomBytes(16).toString('base64');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader(
-      'Content-Security-Policy',
-      `default-src 'none'; style-src 'nonce-${nonce}'; img-src data:; form-action 'self' https://checkout.stripe.com; base-uri 'none'; frame-ancestors 'none'`,
-    );
+    res.setHeader('Content-Security-Policy', payPageCsp(nonce));
     res.status(status).send(renderPayPage(model, lang, { token, nonce }));
   }
+}
+
+function payPageCsp(nonce: string): string {
+  return `default-src 'none'; style-src 'nonce-${nonce}'; img-src data:; form-action 'self' https://checkout.stripe.com; base-uri 'none'; frame-ancestors 'none'`;
 }
 
 function langOf(v: string | undefined): PayLang {
