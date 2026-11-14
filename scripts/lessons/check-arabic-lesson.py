@@ -240,10 +240,12 @@ def words_of(sentence):
 
 
 def bare(word):
-    """A word's bare letters, a tanween fath's carrier alif or alif maqsura dropped (كِتَابًا = كِتَابْ)."""
-    if is_str(word) and len(word) > 1 and word[-1] in ('ا', 'ى') and word[-2] == chr(0x64B):
-        word = word[:-1]
-    return ''.join(letters_of(word))
+    """A word's bare letters, a tanween fath's carrier alif or alif maqsura dropped, the fathatan written
+    before it (كِتَابًا) or on it (كِتَاباً): all three are كِتَابْ's letters."""
+    letters = letters_of(word) if is_str(word) else []
+    carried = is_str(word) and len(word) > 1 and (
+        (word[-1] in ('ا', 'ى') and word[-2] == chr(0x64B)) or (word[-1] == chr(0x64B) and word[-2] in ('ا', 'ى')))
+    return ''.join(letters[:-1] if carried else letters)
 
 
 def all_carry(text, vowel):
@@ -424,6 +426,10 @@ def check_reading(lesson, number, quran_grams=None):
             if not ws or not is_int(q.get('blank')) or not 0 <= q['blank'] < len(ws):
                 err(f'{qw}: sentence and blank must name a sentence item and one of its words')
                 continue
+            # The blank is the verb, word 0: "the blank's place" below is a token index, and means "the same
+            # grammatical role" only for verb-first sentences (review of #292).
+            if q['blank'] != 0:
+                err(f'{qw}: a missing-word question blanks the verb, word 0 (blank {q["blank"]} is refused)')
             right = [i for i, o in enumerate(opts) if o == ws[q['blank']]]
             if right != [q['answer']] or not all(is_word(o) for o in opts):
                 err(f'{qw}: exactly one option must complete the sentence verbatim; the right ones are {right}')
@@ -898,6 +904,9 @@ def selftest():
                      {'id': 'q2', 'kind': 'missing', 'sentence': 'sentences-002', 'blank': 0, 'options': ['نَامَتِ', 'الْوَلَدُ'], 'answer': 0, 'review': None}],
         }
     toy_quran = {tuple(RASM.rasm('نَامَتِ الْقِطَّةُ الصَّغِيرَةُ').split())}
+    # Bare letters: a tanween fath's alif is no letter of its own, written before or on the fathatan.
+    if not (bare('كِتَابًا') == bare('كِتَابْ') == bare('كِتَاباً') and bare('هُدًى') == bare('هُدْ') and bare('كِتَابَا') != bare('كِتَابْ')):
+        failed.append('reading-bare-letters: the tanween fath\'s alif is not normalised')
     rcases = {
         'reading-clean': (lambda c: None, None, None),
         'reading-breaks-the-stage-vowel': (lambda c: c['stages'][0]['items'][0].update(text='بَتِ'), "breaks the stage's vowel", None),
@@ -923,9 +932,8 @@ def selftest():
         'reading-missing-subject-from-another-sentence': (lambda c: c['quiz'][1].update(blank=1, options=['الْقِطَّةُ', 'الْوَلَدُ'], answer=0), "the blank's place", None),
         'reading-missing-option-pausal': (lambda c: c['quiz'][1].update(options=['نَامَتِ', 'تُفَّاحًا']), 'last word', None),
         'reading-missing-option-own-sentence': (lambda c: c['stages'][2]['items'][1].update(text='نَامَتِ الْقِطَّةُ الْوَلَدُ الصَّغِيرَةْ.'), 'own sentence', None),
-        'reading-missing-option-same-word': (lambda c: c['stages'][2]['items'][0].update(text='أَكَلَ الْوَلَدُ كِتَابًا', finalMarkException='the tanween fath')
-                                             or c['stages'][2]['items'][1].update(text='نَامَتِ كِتَابْ الصَّغِيرَةْ.')
-                                             or c['quiz'][1].update(sentence='sentences-001', blank=2, options=['كِتَابًا', 'كِتَابْ'], answer=0), 'another form', None),
+        'reading-missing-option-same-word': (lambda c: c['stages'][2]['items'][0].update(text='أَكَلَ نَامَتْ الْوَلَدُ تُفَّاحًا') or c['quiz'][1].update(options=['نَامَتِ', 'نَامَتْ']), 'another form', None),
+        'reading-missing-blank-not-the-verb': (lambda c: c['quiz'][1].update(blank=1, options=['الْقِطَّةُ', 'الْوَلَدُ'], answer=0), 'blanks the verb', None),
         'reading-missing-option-another-name': (lambda c: c.update(names=['نَامَتْ', 'الْوَلَدْ']), 'another name', None),
         'reading-title-not-vowelled': (lambda c: c['passages'][0]['title'].update(text='القطة'), 'not fully vowelled', None),
         'reading-stage-name-not-pausal': (lambda c: c['stages'][2].update(name='جُمَلٌ'), 'not the pausal sukun', None),
