@@ -29,12 +29,18 @@ import { escapeHtml, type PayLang } from './pay-page';
  * this module). No route writes it: /billing/settings writes only
  * billing.bank_account and billing.invoice_issuer (payments.service.ts setSettings).
  *
- * Malformed (not an array of uuids) is "no review organization": public
- * behaviour, and an error in the log. A typo in the key can therefore only
- * ever make a review account behave like a real one -- never a real family
- * behave like a demo. A failed READ is different: it propagates (the request
- * answers 500), so a database hiccup can never fall back to public behaviour
- * for a review account.
+ * Malformed:
+ *  - not an array at all: "no review organization" (public behaviour), and an
+ *    error in the log -- there is no id to trust;
+ *  - an array with entries that are not uuid strings (B5 P2-1): those entries
+ *    are ignored, every valid uuid entry stays listed, and an error is logged
+ *    (the count and positions, never the values). One typo must not switch
+ *    review mode off for the organizations listed correctly -- that would show
+ *    App Review the real bank account. An ignored entry names no organization,
+ *    so this can never put a real family in the demo: only an organization
+ *    whose own uuid is written in the array is ever in review mode.
+ * A failed READ is different: it propagates (the request answers 500), so a
+ * database hiccup can never fall back to public behaviour for a review account.
  *
  * Staff side (insurance, not only "the review organization has no staff
  * logins"): every staff money write (BillingService.requireRecorder), refunds,
@@ -60,11 +66,16 @@ const log = new Logger('ReviewMode');
 /** The one table read (as quran/audio-gate.ts takes it): PrismaService, a transaction, or a test double. */
 type ConfigReader = { config: { findUnique(args: object): Promise<{ value: unknown } | null> } };
 
-/** The organization ids the value lists (lower case), or null when it is not an array of uuids. */
+const isUuidEntry = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);
+
+/**
+ * The organization ids the value lists (lower case), or null when it is not an
+ * array. Entries that are not uuid strings are skipped (B5 P2-1): they name no
+ * organization. Exact match only -- no trimming, no nesting.
+ */
 export function parseReviewOrganizationIds(value: unknown): ReadonlySet<string> | null {
   if (!Array.isArray(value)) return null;
-  if (!value.every((v) => typeof v === 'string' && UUID_RE.test(v))) return null;
-  return new Set((value as string[]).map((v) => v.toLowerCase()));
+  return new Set(value.filter(isUuidEntry).map((v) => v.toLowerCase()));
 }
 
 /**
@@ -89,6 +100,13 @@ export async function readReviewOrganizationIds(db: ConfigReader): Promise<Reado
   if (!ids) {
     log.error(`${REVIEW_ORGANIZATIONS_KEY} is not a JSON array of organization ids; no organization is in review mode`);
     return NONE;
+  }
+  const bad = (row.value as unknown[]).flatMap((v, i) => (isUuidEntry(v) ? [] : [i]));
+  if (bad.length > 0) {
+    log.error(
+      `${REVIEW_ORGANIZATIONS_KEY}: ignored ${bad.length} entr${bad.length === 1 ? 'y' : 'ies'} that ${bad.length === 1 ? 'is' : 'are'} not an organization uuid ` +
+        `(position ${bad.join(', ')}); the ${ids.size} valid id(s) stay in review mode. Fix the row by hand`,
+    );
   }
   return ids;
 }

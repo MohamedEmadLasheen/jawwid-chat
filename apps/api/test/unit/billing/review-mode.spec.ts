@@ -3,6 +3,7 @@
  * database- and HTTP-backed proofs are in
  * test/integration/review-payment-mode.spec.ts.
  */
+import { Logger } from '@nestjs/common';
 import { CommError, CommErrorCode } from '../../../src/platform/errors';
 import { renderPayPage, type PayPageModel } from '../../../src/billing/pay-page';
 import {
@@ -35,8 +36,8 @@ describe('isReviewOrganization (pure)', () => {
     expect(isReviewOrganization(ORG, [])).toBe(false);
   });
 
-  it('absent, null or malformed is public behaviour (false)', () => {
-    for (const bad of [undefined, null, ORG, { ids: [ORG] }, [ORG, 'not-a-uuid'], [ORG, 7], [[ORG]], 'true', 1]) {
+  it('absent, null or not an array is public behaviour (false)', () => {
+    for (const bad of [undefined, null, ORG, { ids: [ORG] }, [[ORG]], [` ${ORG}`], 'true', 1]) {
       expect([bad, isReviewOrganization(ORG, bad)]).toEqual([bad, false]);
     }
     expect(isReviewOrganization(null, [ORG])).toBe(false);
@@ -44,11 +45,24 @@ describe('isReviewOrganization (pure)', () => {
     expect(isReviewOrganization('', [ORG])).toBe(false);
   });
 
-  it('parse: a whole array of uuids, or nothing', () => {
+  it('parse: an array keeps every valid uuid entry; a non-array is nothing', () => {
     expect(parseReviewOrganizationIds([ORG, OTHER])).toEqual(new Set([ORG, OTHER]));
     expect(parseReviewOrganizationIds([])).toEqual(new Set());
-    expect(parseReviewOrganizationIds([ORG, 'x'])).toBeNull();
     expect(parseReviewOrganizationIds({})).toBeNull();
+    expect(parseReviewOrganizationIds(ORG)).toBeNull();
+  });
+
+  // B5 P2-1: one bad entry must not switch review mode off for the organizations
+  // listed correctly (that showed App Review the real bank account). A bad entry
+  // names no organization, so ignoring it can never put a real family in the demo.
+  it('P2-1: a malformed ENTRY is ignored; the valid entries stay in review mode', () => {
+    expect(parseReviewOrganizationIds([ORG, 'not-a-uuid'])).toEqual(new Set([ORG]));
+    expect(parseReviewOrganizationIds([ORG, 7, null, { id: OTHER }, [OTHER], ` ${OTHER}`])).toEqual(new Set([ORG]));
+    expect(parseReviewOrganizationIds(['not-a-uuid'])).toEqual(new Set());
+    expect(isReviewOrganization(ORG, [ORG, 'not-a-uuid'])).toBe(true);
+    expect(isReviewOrganization(ORG.toUpperCase(), ['x', ORG])).toBe(true);
+    // Never the reverse: an organization the array does not name validly is public.
+    expect(isReviewOrganization(OTHER, [ORG, 'not-a-uuid', ` ${OTHER}`, [OTHER]])).toBe(false);
   });
 });
 
@@ -65,9 +79,28 @@ describe('reading chat.config', () => {
     expect(await inReviewMode(configWith(undefined), ORG)).toBe(false);
   });
 
-  it('malformed: nobody (public behaviour)', async () => {
+  it('not an array: nobody (public behaviour)', async () => {
     expect(await inReviewMode(configWith({ ids: [ORG] }), ORG)).toBe(false);
-    expect(await inReviewMode(configWith([ORG, 'nope']), ORG)).toBe(false);
+    expect(await inReviewMode(configWith(ORG), ORG)).toBe(false);
+  });
+
+  it('P2-1: an array with a bad entry keeps the valid ids, and says so at ERROR level (index only, never the value)', async () => {
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    try {
+      expect(await readReviewOrganizationIds(configWith([ORG, 'nope', 7]))).toEqual(new Set([ORG]));
+      expect(await inReviewMode(configWith([ORG, 'nope']), ORG)).toBe(true);
+      expect(await inReviewMode(configWith([ORG, 'nope']), OTHER)).toBe(false);
+      expect(error).toHaveBeenCalled();
+      const said = error.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(said).toContain(REVIEW_ORGANIZATIONS_KEY);
+      expect(said).toMatch(/ignored 2 entr/);
+      expect(said).not.toContain('nope');
+      error.mockClear();
+      expect(await readReviewOrganizationIds(configWith([ORG]))).toEqual(new Set([ORG]));
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it('a failed read propagates (the request fails), never public behaviour', async () => {
@@ -148,9 +181,11 @@ describe('the staff guard', () => {
   });
 
   it('lets every other organization through: another listed, absent, malformed, no organization', async () => {
-    for (const value of [[OTHER], [], undefined, { ids: [ORG] }, [ORG, 'nope']]) {
+    for (const value of [[OTHER], [], undefined, { ids: [ORG] }, [OTHER, 'nope'], ['nope']]) {
       await expect(refuseReviewOrganizationStaff(configWith(value), ORG)).resolves.toBeUndefined();
     }
+    // B5 P2-1: a bad entry beside the organization's own id no longer lets its staff through.
+    await expect(refuseReviewOrganizationStaff(configWith([ORG, 'nope']), ORG)).rejects.toMatchObject({ code: CommErrorCode.BILLING_DENIED, status: 403 });
     await expect(refuseReviewOrganizationStaff(configWith([ORG]), null)).resolves.toBeUndefined();
   });
 });
