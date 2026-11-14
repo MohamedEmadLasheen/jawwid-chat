@@ -9,6 +9,7 @@ import { CheckoutService } from './checkout.service';
 import { BANK_ACCOUNT_KEY, PaymentLedger } from './payment-ledger.service';
 import { renderPayPage, type PayLang, type PayPageModel } from './pay-page';
 import { RECEIPT_PENDING, lastCardFailures, pendingReceiptMinor } from './payments-read.service';
+import { cardRefusal } from './currency-rules';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -102,7 +103,7 @@ export class PayLinkController {
       currency: request.currency,
       expiresAt: request.expiresAt.toISOString(),
       bankAccount: parseBankAccount(bank?.value),
-      cardAvailable: this.checkout.available && !(await isCardPaused(this.prisma)),
+      cardAvailable: this.checkout.available && !(await isCardPaused(this.prisma)) && cardRefusal(request.currency, Math.max(0, amount - paid)) === null,
       checkout,
       error: null,
       cardFailure: failure?.code ?? null,

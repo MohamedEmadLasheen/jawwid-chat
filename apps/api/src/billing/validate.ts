@@ -1,5 +1,6 @@
 import { CommError, CommErrorCode } from '../platform/errors';
 import { isUuid } from '../communication/conversations/conversation.service';
+import { isIsoCurrency } from './currency-rules';
 
 /** Request-body checks shared by PD-17 billing and PD-27 payments: one wording, one rule. */
 
@@ -45,6 +46,8 @@ export function optionalDate(field: string, value: unknown): string | null {
 export function requireCurrency(value: unknown): string {
   const c = typeof value === 'string' ? value.trim().toUpperCase() : '';
   if (!CURRENCY_RE.test(c)) throw invalid('currency: a three-letter ISO 4217 code, e.g. AED');
+  // S5: three letters is not enough -- "XYZ" names no money anyone can pay.
+  if (!isIsoCurrency(c)) throw invalid('currency: not an ISO 4217 currency code, e.g. AED');
   return c;
 }
 

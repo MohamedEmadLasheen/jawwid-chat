@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import type { FamilyInstalment, Invoice, Payment, PaymentRequest, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
+import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { currentRequestOrigin } from '../platform/request-origin';
@@ -415,6 +416,8 @@ export class PaymentLedger {
       });
     }
     const remaining = Number(instalment.amountMinor) - (await this.standingSum(tx, { instalmentId: instalment.id }));
+    // S5: nothing left to ask for is no request -- never a 1-minor-unit one.
+    if (remaining <= 0) throw new CommError(CommErrorCode.BILLING_STATE, 'this instalment is already paid', 409);
     const learner = instalment.learnerId
       ? await tx.learner.findUnique({ where: { id: instalment.learnerId }, select: { name: true } })
       : null;
@@ -428,7 +431,7 @@ export class PaymentLedger {
         instalmentId: instalment.id,
         purpose: 'instalment',
         label: instalment.label,
-        amountMinor: BigInt(Math.max(1, remaining)),
+        amountMinor: BigInt(remaining),
         currency: instalment.currency,
         expiresAt: new Date(Date.now() + expiresInDays * 86_400_000),
         createdBy,
