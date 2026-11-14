@@ -120,6 +120,8 @@ export interface TokenPair {
   readonly expiresInSeconds: number;
   readonly sessionId: string;
   readonly sessionCreatedAt: Date;
+  /** The signed-in account (PD-58: whose Terms of Use standing the response carries). Never sent as is. */
+  readonly accountId: string;
   readonly actor: Actor;
   /** PD-23: "keep me signed in" is in effect for this session. */
   readonly remembered: boolean;
@@ -521,6 +523,7 @@ export class AuthService {
       expiresInSeconds: config.accessTtlSeconds,
       sessionId: session.id,
       sessionCreatedAt: session.createdAt,
+      accountId: account.id,
       actor,
       remembered: policy.remembered,
       expiresAt: window.expiresAt,

@@ -34,6 +34,7 @@ import { OrgStructureService } from '../../src/org/org-structure.service';
 import { ParentNoticeService } from '../../src/lesson-audio/parent-notice.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { LegalService } from '../../src/legal/legal.service';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -54,7 +55,7 @@ const enrolment = new NewStudentEnrolmentService(
 );
 const details = new EnrollmentService(g.prisma, g.authz, g.conversations, lessons, scheduling, audit);
 const auth = new AuthService(g.prisma, new PrismaIdentityService(g.prisma), audit);
-const signup = new ParentSignupService(g.prisma, audit);
+const signup = new ParentSignupService(g.prisma, audit, new LegalService(g.prisma));
 
 const MIN = 60_000;
 const PASSWORD = 'pd16-parent-password';

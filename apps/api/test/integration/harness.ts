@@ -483,7 +483,18 @@ export async function legacyHeldMessage(
   });
 }
 
-/** Order matters: children before parents. */
+/**
+ * Order matters: children before parents.
+ *
+ * PD-58: chat.terms_acceptance and chat.legal_document_version are here
+ * because their rows are immutable (no DELETE, ever) and the acceptance's
+ * account foreign key is ON DELETE RESTRICT: a spec that recorded acceptances
+ * could not delete its accounts afterwards, and one that published fixture
+ * versions could not remove them. The truncate runs under chat.test_truncate,
+ * the only way their guards let it go. The `legal.current.*` configuration
+ * rows go in the same transaction: left behind, they would name versions that
+ * no longer exist, and every later suite's gated route would answer 503.
+ */
 export async function truncate(prisma: PrismaService): Promise<void> {
   const sql = `
     truncate chat.story_cta_click, chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
@@ -498,7 +509,8 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.payment_refund, chat.invoice, chat.invoice_counter, chat.payment_checkout,
              chat.payment_receipt, chat.payment, chat.payment_request, chat.stripe_event,
              chat.family_instalment, chat.family_billing, chat.parent_file,
-             chat.actor_time_zone
+             chat.actor_time_zone,
+             chat.terms_acceptance, chat.legal_document_version
     restart identity cascade`;
   // A truncate that cannot get its locks is a session another suite left open
   // in a transaction. Waiting for it hangs every later suite at its hook (seen
@@ -535,6 +547,7 @@ async function truncateOnce(prisma: PrismaService, sql: string): Promise<void> {
       // chat.staff reaches them, so the harness says it is the harness.
       prisma.$executeRawUnsafe(`select set_config('chat.test_truncate', 'on', true)`),
       prisma.$executeRawUnsafe(sql),
+      prisma.$executeRawUnsafe(`delete from chat.config where key like 'legal.current.%'`),
     ]);
   } catch (e) {
     if (!/lock timeout/i.test(String((e as Error).message))) throw e;

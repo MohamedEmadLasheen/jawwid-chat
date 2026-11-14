@@ -24,6 +24,7 @@ import {
   teacherActor,
   withAuthEnv,
 } from './support/fake-db';
+import { fakeLegal, NO_LEGAL_SERVICE } from './support/fake-legal';
 
 jest.setTimeout(60_000);
 
@@ -40,7 +41,15 @@ const EXPECTED_KEYS = [
   'canMessage',
   'organizationId',
   'permissions',
+  'legal',
 ].sort();
+
+const NONE = { state: 'accepted' as const, required: [], unavailable: [] };
+const REQUIRED = {
+  state: 'required' as const,
+  unavailable: [],
+  required: [{ documentKey: 'terms_family' as const, version: 'qa-fixture-v1', urlAr: 'https://jawwid.test/ar', urlEn: 'https://jawwid.test/en' }],
+};
 
 describe('GET /me', () => {
   /** PD-40: the profile chat.staff_access_profile would answer -- staff hold keys, nobody else does. */
@@ -50,11 +59,11 @@ describe('GET /me', () => {
         ? { tier: 'manager', departmentKind: 'operations', placement: 'manager', permissions: new Set(['org.view', 'chat.use']) }
         : NO_ACCESS,
   } as unknown as PermissionService;
-  const controller = new MeController(access);
+  const controller = new MeController(access, fakeLegal(REQUIRED));
 
   it('returns the actor the guard attached, and nothing else decides it', async () => {
     const actor = contactActor({ displayName: 'أم أحمد', familyId: 'family-7' });
-    const dto = await controller.me({ headers: {}, actor });
+    const dto = await controller.me({ headers: {}, actor, accountId: 'account-1' });
 
     expect(dto.actorId).toBe(actor.actorId);
     expect(dto.kind).toBe('contact');
@@ -73,23 +82,32 @@ describe('GET /me', () => {
   });
 
   it('a staff actor carries its server-asserted role; the client never infers one', async () => {
-    const dto = await controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }) });
+    const dto = await controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }), accountId: 'account-1' });
     expect(dto.staffRole).toBe('manager');
     expect(dto.familyId).toBeNull();
     expect(dto.canMessage).toBeNull();
   });
 
   it('a teacher carries no staffRole -- a teacher is not a staff role', async () => {
-    const dto = await controller.me({ headers: {}, actor: teacherActor() });
+    const dto = await controller.me({ headers: {}, actor: teacherActor(), accountId: 'account-1' });
     expect(dto.kind).toBe('teacher');
     expect(dto.staffRole).toBeNull();
   });
 
   it('PD-40: a staff member gets the keys chat.staff_access_profile answers, sorted; a parent gets none', async () => {
-    const dto = await controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }) });
+    const dto = await controller.me({ headers: {}, actor: staffActor({ staffRole: 'manager' }), accountId: 'account-1' });
     expect(dto.permissions).toEqual(['chat.use', 'org.view']);
-    expect((await controller.me({ headers: {}, actor: contactActor() })).permissions).toEqual([]);
-    expect((await controller.me({ headers: {}, actor: teacherActor() })).permissions).toEqual([]);
+    expect((await controller.me({ headers: {}, actor: contactActor(), accountId: 'account-1' })).permissions).toEqual([]);
+    expect((await controller.me({ headers: {}, actor: teacherActor(), accountId: 'account-1' })).permissions).toEqual([]);
+  });
+
+  it('PD-58: carries the documents the account must still accept, from LegalService', async () => {
+    const dto = await controller.me({ headers: {}, actor: contactActor(), accountId: 'account-1' });
+    expect(dto.legal).toEqual(REQUIRED);
+  });
+
+  it('PD-58: is 401 without the authenticated account, never a default standing', async () => {
+    await expect(controller.me({ headers: {}, actor: contactActor() })).rejects.toThrow(AuthError);
   });
 
   it('the default permissions array is frozen, so a caller cannot grow it in place', () => {
@@ -100,8 +118,8 @@ describe('GET /me', () => {
 
 describe('the DTO boundary carries no private data', () => {
   it('publishes exactly the documented keys, and no more', () => {
-    expect(Object.keys(toActorDto(contactActor())).sort()).toEqual(EXPECTED_KEYS);
-    expect(Object.keys(toActorDto(staffActor())).sort()).toEqual(EXPECTED_KEYS);
+    expect(Object.keys(toActorDto(contactActor(), NONE)).sort()).toEqual(EXPECTED_KEYS);
+    expect(Object.keys(toActorDto(staffActor(), NONE)).sort()).toEqual(EXPECTED_KEYS);
   });
 
   it('a field added to Actor upstream does NOT reach the client', () => {
@@ -116,7 +134,7 @@ describe('the DTO boundary carries no private data', () => {
       contactFile: { phones: ['+20100'], emails: ['a@b.c'] },
     } as unknown as Actor;
 
-    const dto = toActorDto(contaminated);
+    const dto = toActorDto(contaminated, NONE);
     const serialised = JSON.stringify(dto);
 
     expect(Object.keys(dto).sort()).toEqual(EXPECTED_KEYS);
@@ -139,16 +157,20 @@ describe('the DTO boundary carries no private data', () => {
       remembered: false,
       expiresAt: new Date('2026-10-11T00:00:00.000Z'),
       absoluteExpiresAt: null,
-    });
+      accountId: 'account-1',
+    }, REQUIRED);
 
     expect(dto.tokenType).toBe('Bearer');
+    expect(dto.legal).toEqual(REQUIRED);
+    expect(dto.actor.legal).toEqual(REQUIRED);
+    expect(JSON.stringify(dto)).not.toContain('account-1');
     expect(dto.expiresIn).toBe(900);
     expect(Object.keys(dto.session).sort()).toEqual(['absoluteExpiresAt', 'createdAt', 'expiresAt', 'id', 'remembered']);
     expect(dto.session.expiresAt).toBe('2026-10-11T00:00:00.000Z');
     expect(dto.session.absoluteExpiresAt).toBeNull();
     expect(dto.session.createdAt).toBe('2026-09-11T00:00:00.000Z');
     expect(Object.keys(dto).sort()).toEqual(
-      ['accessToken', 'actor', 'expiresIn', 'refreshToken', 'session', 'tokenType'].sort(),
+      ['accessToken', 'actor', 'expiresIn', 'legal', 'refreshToken', 'session', 'tokenType'].sort(),
     );
     expect(JSON.stringify(dto)).not.toContain('refreshTokenHash');
   });
@@ -165,7 +187,7 @@ describe('the login response', () => {
     db = new FakeDb();
     identity = new FakeIdentity();
     auth = buildAuth(db, identity);
-    controller = new AuthController(auth, new LoginRateLimiter(new FakeRateLimitStore()));
+    controller = new AuthController(auth, new LoginRateLimiter(new FakeRateLimitStore()), NO_LEGAL_SERVICE);
     const account = await db.addAccount({ subject: 'parent-dto' }, PASSWORD);
     identity.give(account.id, contactActor());
   });

@@ -5,6 +5,7 @@ import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard
 import { NotForStaff, Requires } from '../platform/permissions/route-access';
 import type { Actor } from '../platform/types';
 import { WhiteboardService } from './whiteboard.service';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * PD-39: a teacher's own boards (docs/product/pd039-whiteboard-design.md §4.5,
@@ -37,6 +38,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post()
   @HttpCode(201)
   create(@Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -52,6 +54,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/rename')
   @HttpCode(200)
   rename(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -60,6 +63,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/duplicate')
   @HttpCode(201)
   duplicate(@Param('id') id: string, @CurrentActor() actor: Actor) {
@@ -69,6 +73,7 @@ export class WhiteboardController {
   /** To Deleted boards for 30 days; there is no permanent delete (§10 5b). */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/trash')
   @HttpCode(200)
   moveToTrash(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -77,6 +82,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/restore')
   @HttpCode(200)
   restore(@Param('id') id: string, @CurrentActor() actor: Actor) {
@@ -85,6 +91,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/pages/order')
   @HttpCode(200)
   reorderPages(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -93,6 +100,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/pages')
   @HttpCode(201)
   addPage(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -102,6 +110,7 @@ export class WhiteboardController {
   /** The autosave: one page's drawing. */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/pages/:pageId')
   @HttpCode(200)
   savePage(@Param('id') id: string, @Param('pageId') pageId: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -110,6 +119,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/pages/:pageId/duplicate')
   @HttpCode(201)
   duplicatePage(@Param('id') id: string, @Param('pageId') pageId: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -118,6 +128,7 @@ export class WhiteboardController {
 
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/pages/:pageId/delete')
   @HttpCode(200)
   deletePage(@Param('id') id: string, @Param('pageId') pageId: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -130,6 +141,7 @@ export class WhiteboardController {
   /** A signed PUT for one image, for a key the server chose. */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/assets/grant')
   @HttpCode(201)
   grantImage(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -139,6 +151,7 @@ export class WhiteboardController {
   /** The upload checked and kept: only then may a page name the image. */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/assets/:assetId/confirm')
   @HttpCode(200)
   confirmImage(@Param('id') id: string, @Param('assetId') assetId: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -157,6 +170,7 @@ export class WhiteboardController {
   /** A signed PUT per page for a PDF export. */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/exports/grant')
   @HttpCode(201)
   grantExport(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -166,6 +180,7 @@ export class WhiteboardController {
   /** An export given up on: its pages and uploads deleted, so it stops counting as in flight. */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Delete(':id/exports')
   @HttpCode(200)
   releaseExport(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor) {
@@ -175,6 +190,7 @@ export class WhiteboardController {
   /** The PDF itself, composed from the uploaded pages; nothing of it is kept. */
   @NotForStaff()
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/exports/compose')
   @HttpCode(200)
   @Header('Cache-Control', 'private, no-store')
@@ -238,6 +254,7 @@ export class TeacherBoardsController {
 
   @Requires('whiteboards.retention')
   @RateLimited(ActionScope.WHITEBOARD_WRITE)
+  @RequiresLegal()
   @Post(':id/copy')
   @HttpCode(201)
   copy(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentActor() actor: Actor, @Headers('idempotency-key') key?: string) {

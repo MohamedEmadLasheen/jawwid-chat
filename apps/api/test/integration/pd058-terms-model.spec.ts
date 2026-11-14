@@ -183,6 +183,7 @@ describe('PD-58: the structure', () => {
       'legal_document_version.effective_at:timestamp with time zone:NO',
       'legal_document_version.created_at:timestamp with time zone:NO',
       'legal_document_version.created_by:uuid:YES',
+      'legal_document_version.publish_seq:bigint:NO', // ENG-10 (20261107130000): publication order
       'terms_acceptance.account_id:uuid:NO',
       'terms_acceptance.document_key:text:NO',
       'terms_acceptance.version:text:NO',
