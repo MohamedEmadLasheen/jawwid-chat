@@ -4,7 +4,6 @@
 -- Roll back the API first (TeacherDeletionRequestService writes and sweeps
 -- these). chat.erase_account goes back to 20261104100000's text: a teacher with
 -- anything open is refused again (TEACHER_DELETION_BLOCKED), with no request.
--- Work tasks already raised stay (chat.work_task is never deleted).
 --
 -- A request row is the record that a deletion was asked for and when. This file
 -- REFUSES while any of its tables holds a row, unless the operator says, in the same
@@ -12,10 +11,30 @@
 --
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107140000_chat_teacher_deletion_request.down.sql
 --
---   # only after exporting both tables, and with the owner's authorization:
+--   # only after exporting, and with the owner's authorization:
+--   \copy chat.account_deletion_request to 'account-deletion-request.csv' csv header
+--   \copy chat.erased_teacher_handover to 'erased-teacher-handover.csv' csv header
+--   \copy (select p.* from chat.teacher_payout_account p join chat.teacher te on te.id = p.teacher_id join chat.account a on a.id = te.account_id where a.subject like 'erased:%') to 'erased-teacher-payout.csv' csv header
 --   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" \
 --     -c "select set_config('chat.rollback_discards_deletion_requests', 'on', true)" \
 --     -f db/rollback/20261107140000_chat_teacher_deletion_request.down.sql
+--
+-- With that setting, before the tables go (B9, review of #498):
+--   * every PENDING request is written to chat.audit_log
+--     (account_deletion_request.discarded: account, teacher, requested and
+--     deadline times, what was open). The audit log is never deleted, so the
+--     teacher's ask outlives the table; its open task stays for staff to honour.
+--   * an ERASED teacher's payout account, kept only while their payroll was open
+--     (chat.erased_teacher_sweep deleted it later), is deleted now, one audit row
+--     each: after this rollback nothing would ever delete it, and the restored
+--     chat.erase_account deletes it at once. Export it first (above) if wages are
+--     still owed.
+--   * work tasks stay as they are: chat.work_task is never deleted (its guard
+--     refuses), and the open ones are still real work -- a learner who needs a
+--     teacher, payroll to pay, a deletion to honour. Staff complete them by hand;
+--     nothing completes them automatically any more.
+-- The last statement removes this migration from chat.schema_migrations, so
+-- scripts/db/apply.sh applies it again on the next deploy (B9, P2-1).
 
 set local lock_timeout = '5s';
 
@@ -31,10 +50,48 @@ begin
     if to_regclass('chat.' || v_tbl) is not null then
       execute format('select exists (select 1 from chat.%I)', v_tbl) into v_rows;
       if v_rows then
-        raise exception 'chat.% holds rows: export them, then set chat.rollback_discards_deletion_requests', v_tbl;
+        raise exception 'chat.% holds rows: export them and erased teachers'' payout accounts (this file''s header), then set chat.rollback_discards_deletion_requests', v_tbl;
       end if;
     end if;
   end loop;
+end
+$$;
+
+
+-- With the discard setting: what the rows stood for is settled before they go (see the header).
+do $$
+declare
+  r       record;
+  v_req   integer := 0;
+  v_pay   integer := 0;
+begin
+  if to_regclass('chat.account_deletion_request') is null then
+    return;  -- already rolled back: nothing to settle
+  end if;
+  for r in execute 'select id, account_id, teacher_id, requested_at, deadline_at, open_items
+                      from chat.account_deletion_request where state = ''pending'' order by requested_at, id' loop
+    insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
+    values (null, 'account_deletion_request.discarded', 'account_deletion_request', r.id,
+            jsonb_build_object('state', 'pending'),
+            jsonb_build_object('accountId', r.account_id, 'teacherId', r.teacher_id, 'requestedAt', r.requested_at,
+                               'deadlineAt', r.deadline_at, 'openItems', to_jsonb(r.open_items)),
+            'rollback of 20261107140000: the request is no longer tracked; its open task stays for staff to honour');
+    v_req := v_req + 1;
+  end loop;
+  for r in
+    select p.teacher_id
+      from chat.teacher_payout_account p
+      join chat.teacher te on te.id = p.teacher_id
+      join chat.account a on a.id = te.account_id and a.subject like 'erased:%'
+     order by p.teacher_id
+  loop
+    delete from chat.teacher_payout_account where teacher_id = r.teacher_id;
+    insert into chat.audit_log (actor_id, action, entity, entity_id, before, after, reason)
+    values (null, 'teacher_payout_account.deleted', 'teacher', r.teacher_id, null, null,
+            'rollback of 20261107140000: an erased teacher''s payout account is not kept without the sweep that deleted it');
+    v_pay := v_pay + 1;
+  end loop;
+  raise notice 'rollback of 20261107140000: % pending request(s) recorded in the audit log, % erased teacher payout account(s) deleted', v_req, v_pay;
 end
 $$;
 
@@ -225,3 +282,5 @@ delete from chat.notification_rule r
  where r.key in ('teacher_deletion_day21', 'teacher_deletion_day28')
    and not exists (select 1 from chat.notification n where n.rule_key = r.key)
    and not exists (select 1 from chat.notification_item i where i.rule_key = r.key);
+
+delete from chat.schema_migrations where version = '20261107140000_chat_teacher_deletion_request';
