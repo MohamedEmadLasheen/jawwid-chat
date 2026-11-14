@@ -117,8 +117,8 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 > card (Stripe Checkout, opened in the browser) or by bank transfer, uploading the transfer
 > receipt for the academy to confirm. Lessons are not recorded.
 >
-> Where to see it: sign in with the parent demo account below → Settings → Payments → Amount due
-> → Pay. The pay sheet states what is bought ("Live one-to-one Quran lessons: one teacher and one
+> Where to see it: sign in with the parent demo account below → the Subscriptions tab (bottom bar)
+> → Amount due → Pay. The pay sheet states what is bought ("Live one-to-one Quran lessons: one teacher and one
 > student, in real time. Lessons are not recorded.").
 >
 > Demo accounts: [parent], [teacher] (supplied in the Sign-In Information fields).
@@ -130,7 +130,14 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 > app. Under the Payments policy's 1:1 online paid services rule (education classes), these are
 > paid by card (Stripe) or bank transfer rather than Google Play Billing. No group class, digital
 > content or app feature is sold; any other charge cannot be paid in the app. To see it: parent
-> demo account → Settings → Payments → Amount due → Pay.
+> demo account → the Subscriptions tab (bottom bar) → Amount due → Pay.
+
+Path checked on `main` @ `bc47d376` (2026-11-09): the old Settings → Payments address is retired and only
+forwards to the Subscriptions tab (`lib/app/router.dart:136-142`, `:396-403`); Settings has no Payments
+entry; the parent's bottom bar shows Subscriptions («الاشتراكات») third, before Settings
+(`lib/app/shells/app_shell.dart:96-108`); the tab opens the "Amount due" section with a "Pay" button on each
+item (`lib/features/billing/presentation/my_payments_screen.dart:315-320`, `payment_sections.dart:164-170`).
+If LR-15 renames the tab before submission, change both paste texts to the new name.
 
 ## 6. Before submission (owner, in the consoles)
 
