@@ -9,7 +9,8 @@ created by this change.** Creating each one in §3 is a separate owner decision.
 
 **What changed in OT-2b.** The first version (#547) encrypted each build with `age` and left it as a
 GitHub artifact for the owner to upload by hand. That is gone: no build output is kept as a GitHub
-artifact any more. Instead, after the same checks and signature verification, the workflow uploads the
+artifact any more, except the one-time first-bundle mode (§3.3a: no Google sign-in, the verified `.aab`
+kept 1 day for the manual first upload in Play Console). Instead, after the same checks and signature verification, the workflow uploads the
 debug symbols to Sentry and then the build itself, **only** to:
 - **Google Play: the internal testing track, as a draft release** (nobody receives it until a person
   releases it in Play Console), signed in through **Workload Identity Federation** (no Google key exists);
@@ -224,7 +225,8 @@ Details:
   the **internal** track; on Apple the build lands in App Store Connect/TestFlight and is never sent for
   App Review or released. Any other track, status, staged release, review submission or release call is
   refused by `scripts/qa/check-store-upload-guards.sh` (§5.2), which CI runs on every change.
-- It keeps **no build output as a GitHub artifact**.
+- It keeps **no build output as a GitHub artifact**, except in first-bundle mode (§3.3a), where the
+  verified `.aab` is attached to the run for 1 day and Google is never signed in to.
 - It does **not** create, rotate or download any key, certificate or profile on its own behalf, except
   what `xcodebuild -allowProvisioningUpdates` does in the Apple account (§6, risk 5).
 - It never runs on a pull request, a push, a schedule or another workflow's completion.
@@ -355,13 +357,45 @@ first).
 (it is the narrowest permission that names testing releases). **UNVERIFIED:** that Google requires the
 **first** bundle of a new app to be uploaded by hand in Play Console; if so, the job stops with
 `STOP: Google requires a first manual upload; do NOT do it from the development Mac; tell the lead`, and
-the lead arranges that first upload as a separate, owner-approved step (this workflow keeps no copy of the
-bundle). **UNVERIFIED:** that Play accepts only `draft` releases while the app has never been published
+the lead arranges that first upload as a separate, owner-approved step: §3.3a below. **UNVERIFIED:** that Play accepts only `draft` releases while the app has never been published
 (the workflow only ever sends `draft`, so this does not block it), and how a track update treats
 releases already on the internal track (a draft changes nothing for testers either way).
 
 To release a draft to internal testers: Play Console → the app → Testing → Internal testing → the draft →
 review and release it.
+
+### 3.3a The first upload of a new app (first-bundle mode)
+
+Google refuses Play Developer API uploads for an app that has never had a bundle uploaded by hand in
+Play Console (reported by several build services; no official Google statement found). For that one
+upload, and only with the owner's approval of the run:
+
+1. jawwid-bot starts **Release store builds** with `platform` = `android` and `android_delivery` =
+   `first-bundle-artifact` (preflight refuses that mode with any other platform). The owner approves the
+   `store-release` deployment as usual.
+2. The android job builds, signs, verifies and records the release evidence exactly as in `play` mode,
+   uploads the symbols to Sentry, and then **does not sign in to Google and does not call the Play API**.
+   It re-checks the .aab against the SHA-256 recorded by the signature step and attaches exactly that
+   file to the run as the artifact `jawwid-android-first-bundle`, kept **1 day**. The SHA-256 is in the
+   run summary.
+3. The owner downloads the artifact from the run page, unzips it (GitHub wraps it in a .zip), checks
+   the .aab's SHA-256 against the summary if wanted, and uploads it in Play Console → the app →
+   Testing → **Internal testing** → Create new release. Play App Signing records the upload key from it.
+4. The owner tells the lead, who deletes the artifact at once (owner-approved):
+   `gh api -X DELETE repos/MohamedEmadLasheen/jawwid-chat/actions/artifacts/<id>` (the id is in
+   `gh api repos/MohamedEmadLasheen/jawwid-chat/actions/runs/<run>/artifacts`).
+5. Every later build uses `android_delivery` = `play` (the default) with a higher `build_number`.
+
+**Exposure.** The repository is public, so while the artifact exists (at most 1 day, normally minutes)
+any signed-in GitHub user can download it. The .aab holds no secret: it carries only values every
+installed copy of the app carries (API URL, legal URLs, the Sentry DSN, the Firebase client config),
+the upload certificate, which is public by design, and the bundle's `BUNDLE-METADATA` (typically the R8
+mapping file and dependency metadata, which installed copies do not carry; not secret, and the source is
+public anyway). Never the keystore or its passwords.
+
+First-bundle mode still requires `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT` to be set and
+well-formed (the job's input check does not depend on the mode), although it never signs in to Google. The guard
+(`scripts/qa/check-store-upload-guards.sh`, FB) pins this as the workflow's only artifact.
 
 ### 3.4 (c) Apple: App Store Connect
 
@@ -508,7 +542,7 @@ files. It fails if:
   `aps-environment` check, the Xcode selection that skips pre-release Xcode, the two lines that find
   Transporter, the one `play-upload.sh` line that accepts an earlier `completed` release) and the word
   `production` in `build-store.sh` (its production-host check);
-- `upload-artifact` appears;
+- `upload-artifact` appears anywhere but the one pinned first-bundle step (FB, §3.3a);
 - an action is not pinned to a full commit SHA;
 - an expression (`${{ … }}`) is written inside a `run` block;
 - a script in `scripts/mobile/` other than `play-upload.sh` talks to the Play Developer API, or anything
@@ -606,7 +640,7 @@ arguments exit 2. It also keeps the helper's required-reason list and background
    and the scripts never use `set -x`. The `xcodebuild` and uploader logs (the former lists the base64
    dart-defines that carry the Sentry DSN) stay on the runner; only error/result lines are printed.
    sentry-cli's output is never printed (§1, "Sentry and the log"). `play-upload.sh` prints only status
-   codes. No build output is kept as an artifact.
+   codes. No build output is kept as an artifact, except the first-bundle `.aab` for at most 1 day (§3.3a).
 5. **Apple, UNVERIFIED until the first run:** that Xcode 26 still cloud-signs with the WWDC21 flags; that
    the archive's development signing works on a runner with no Apple account (`-allowProvisioningUpdates`
    may create development certificates that accumulate; revoke the CI-created ones periodically); that
@@ -636,7 +670,8 @@ arguments exit 2. It also keeps the helper's required-reason list and background
    and a separate `android-upload` job (Environment `store-release`, `id-token: write` only there) that
    never checks out or runs the build commit's code. But the upload job needs the verified `.aab`, and
    the only ways GitHub hands a file from one job to another are artifacts and caches, both refused
-   here (no build output is kept on GitHub; a cache can be written by other workflows). Signing in
+   here (no build output is kept on GitHub, the 1-day first-bundle attachment of §3.3a aside, which no
+   job reads back; a cache can be written by other workflows). Signing in
    **before** the build does not help either: the token would then sit in the job while the build runs.
    So no clean separation exists today.
 
