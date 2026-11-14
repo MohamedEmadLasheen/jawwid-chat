@@ -561,6 +561,48 @@ void main() {
       expect(server.calls, ['logout access-a']);
     });
 
+    test('after a sign-in: once more at once, then on the backoff until it ends', () async {
+      server.logoutReplies.addAll([_offline, const AppError(AppErrorKind.server)]);
+      final r = retrier();
+      await r.add(session('a', live: true));
+
+      await r.flushBeforeSignIn();
+      expect(server.calls, ['logout access-a']);
+
+      r.retryAfterSignIn();
+      await _settle();
+      expect(server.calls, ['logout access-a', 'logout access-a'],
+          reason: 'not yet due, and tried anyway: the sign-in just reached the server');
+      final kept = (await store.read()).single;
+      expect(timers.where((t) => t.isActive), isNotEmpty);
+
+      now = kept.notBefore!;
+      timers.last.callback();
+      await _settle();
+
+      expect(server.calls, hasLength(3));
+      expect(await store.read(), isEmpty);
+    });
+
+    test('after a sign-in, a retry queues behind the attempt still out, never beside it', () async {
+      final gate = Completer<void>();
+      server.refreshGate = gate.future;
+      server.refreshReplies.add(session('b', live: true));
+      final r = retrier();
+      await r.add(session('a', live: false));
+
+      unawaited(r.flushBeforeSignIn());
+      await _settle();
+      r.retryAfterSignIn();
+      await _settle();
+      gate.complete();
+      await _settle();
+
+      expect(server.calls, ['refresh refresh-a', 'logout access-b'],
+          reason: 'one refresh, presented once: the queued retry finds the entry gone');
+      expect(await store.read(), isEmpty);
+    });
+
     test('a sign-in never waits on a hung flush beyond its bound', () async {
       final hung = Completer<void>();
       final r = PendingSignOutRetrier(

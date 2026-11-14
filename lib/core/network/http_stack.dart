@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../shared/models/auth.dart';
 import '../../shared/models/legal.dart';
 import '../data/repositories.dart';
 import '../errors/app_error.dart';
@@ -83,24 +84,69 @@ class StoredTokenProvider implements TokenProvider, RenewalReporting {
     return flight;
   }
 
+  /// Refresh tokens this provider has presented and seen retired, while the store could not
+  /// be made to forget them (W49b). Never presented again by this instance.
+  final Set<String> _retired = {};
+
   Future<Renewal> _exchange() async {
     final session = await _store.read();
     if (session == null) return const Renewal.ended();
+    if (_retired.contains(session.refreshToken)) return const Renewal.ended();
 
+    final AuthSession renewed;
     try {
-      final renewed = await _auth.refresh(session.refreshToken);
-      await _store.write(renewed);
-      final legal = renewed.legal;
-      if (legal != null) _onLegal?.call(legal);
-      return Renewal.renewed(renewed.accessToken);
+      renewed = await _auth.refresh(session.refreshToken);
     } on AppError catch (error) {
       // Only a refresh that provably never arrived keeps the session. Anything else may have
       // been processed -- the token rotated server-side and only the answer lost -- and
       // presenting it again would be the reuse that revokes the whole account. Ending this
       // session locally is the safe reading of an ambiguous failure.
       if (error.neverReachedServer) return Renewal.unreachable(error);
+      // The session end [ApiClient] reports next clears the store, as it always has.
+      _retired.add(session.refreshToken);
       return const Renewal.ended();
+    } catch (_) {
+      // Not an AppError (an answer that did not decode): just as ambiguous, and it must not
+      // escape -- an error thrown out of the refresh interceptor reaches its callers as a
+      // transient failure, which a sign-out keeps as "not reached" WITH the retired token.
+      return _retire(session.refreshToken);
     }
+
+    // The server has rotated: `session.refreshToken` is retired from here on, whatever
+    // happens below. If the keychain refuses the new pair, the store still holds the retired
+    // token -- the next refresh, the next launch's restore, or a pending sign-out recorded
+    // from it would present it, and the server reads that as theft and revokes every session
+    // on the account. So a refused write ends the session locally (W49b): the store is
+    // cleared, and nothing that could still present the retired token survives.
+    try {
+      await _store.write(renewed);
+    } catch (_) {
+      return _retire(session.refreshToken);
+    }
+
+    final legal = renewed.legal;
+    if (legal != null) {
+      try {
+        _onLegal?.call(legal);
+      } catch (_) {
+        // The pair is stored; a listener that throws must not turn a renewal into a failure.
+      }
+    }
+    return Renewal.renewed(renewed.accessToken);
+  }
+
+  /// Ends the session locally after [refreshToken] was (or may have been) retired by the
+  /// server: remembers it so this instance never presents it again, and clears the store so
+  /// nothing else reads it back. [ApiClient] then reports the session ended. Never throws.
+  Future<Renewal> _retire(String refreshToken) async {
+    _retired.add(refreshToken);
+    try {
+      await _store.clear();
+    } catch (_) {
+      // The keychain refused the delete too. `_retired` still stops this instance, and the
+      // session end that follows retries the clear.
+    }
+    return const Renewal.ended();
   }
 
   @override

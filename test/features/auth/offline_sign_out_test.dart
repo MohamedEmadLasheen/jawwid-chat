@@ -18,8 +18,14 @@ class _Repo implements AuthRepository, SignOutReporting, SignOutServer {
 
   SignOutOutcome outcome = SignOutOutcome.ended;
 
+  /// When set, the sign-out call throws it instead of answering [outcome].
+  Object? signOutThrows;
+
   /// Null is a 2xx.
   AppError? logoutError;
+
+  /// Consumed in order before [logoutError]: one reply per `logoutWith`, null a 2xx.
+  final logoutReplies = <AppError?>[];
 
   /// When set, `logoutWith` waits on it: a hung network.
   Future<void>? logoutHangs;
@@ -59,6 +65,8 @@ class _Repo implements AuthRepository, SignOutReporting, SignOutServer {
   @override
   Future<SignOutOutcome> signOutReporting() async {
     log.add('sign-out');
+    final thrown = signOutThrows;
+    if (thrown != null) throw thrown;
     return outcome;
   }
 
@@ -67,7 +75,7 @@ class _Repo implements AuthRepository, SignOutReporting, SignOutServer {
     log.add('logout $accessToken');
     final hang = logoutHangs;
     if (hang != null) await hang;
-    final error = logoutError;
+    final error = logoutReplies.isNotEmpty ? logoutReplies.removeAt(0) : logoutError;
     if (error != null) throw error;
   }
 }
@@ -100,17 +108,26 @@ void main() {
   late int clearCalls;
   late ProviderContainer container;
   late NotifierProvider<AuthController, AuthState> provider;
+  late DateTime now;
+
+  /// The backoff timers the retrier armed, newest last. Never fired unless a test does.
+  late List<void Function()> armed;
 
   setUp(() {
     repo = _Repo();
     tokens = InMemoryTokenStore();
     pending = InMemoryPendingSignOutStore();
     clearCalls = 0;
+    now = t0;
+    armed = [];
     retrier = PendingSignOutRetrier(
       store: pending,
       server: repo,
-      clock: () => t0,
-      timer: (_, _) => _NoTimer(),
+      clock: () => now,
+      timer: (_, callback) {
+        armed.add(callback);
+        return _NoTimer();
+      },
       signInWait: const Duration(milliseconds: 50),
     );
     provider = NotifierProvider<AuthController, AuthState>(
@@ -127,6 +144,25 @@ void main() {
   tearDown(() => container.dispose());
 
   AuthController controller() => container.read(provider.notifier);
+
+  /// Lets the background retry (never awaited by a sign-in) run to the end.
+  Future<void> settle() async {
+    for (var i = 0; i < 30; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  PendingSignOut oldEntry() => PendingSignOut(
+        session: AuthSession(
+          accessToken: 'access-old',
+          refreshToken: 'refresh-old',
+          accessTokenExpiresAt: t0.add(const Duration(minutes: 10)),
+        ),
+        createdAt: t0,
+        attempts: 1,
+        // Not yet due, so the app-start flush leaves it for the sign-in.
+        notBefore: t0.add(const Duration(minutes: 1)),
+      );
 
   Future<void> signedIn() async {
     await controller().signIn(username: 'parent', password: 'secret');
@@ -206,9 +242,70 @@ void main() {
     await controller().signIn(username: 'parent', password: 'secret');
 
     expect(container.read(provider), isA<AuthAuthenticated>());
+    await settle();
     final kept = (await pending.read()).single;
     expect(kept.attempts, 1, reason: 'offline: not counted toward the ceiling');
-    expect(kept.offlineFailures, 1);
+    expect(kept.offlineFailures, 2, reason: 'tried before the sign-in and once more after it');
+  });
+
+  test('a sign-out that throws something other than an AppError leaves the session pending', () async {
+    await signedIn();
+    repo.signOutThrows = StateError('a response that did not decode');
+
+    await controller().signOut();
+
+    expect(container.read(provider), isA<AuthSignedOut>());
+    expect(await tokens.read(), isNull);
+    expect((await pending.read()).single.session.refreshToken, 'refresh-new');
+  });
+
+  test('a sign-out refused with a verdict leaves nothing pending', () async {
+    await signedIn();
+    repo.signOutThrows = const AppError(AppErrorKind.sessionRevoked);
+
+    await controller().signOut();
+
+    expect(container.read(provider), isA<AuthSignedOut>());
+    expect(await pending.read(), isEmpty, reason: 'the server answered: the session is over');
+  });
+
+  test('a transient AppError thrown by the sign-out leaves the session pending', () async {
+    await signedIn();
+    repo.signOutThrows = const AppError(AppErrorKind.network, code: AppError.connectFailed);
+
+    await controller().signOut();
+
+    expect((await pending.read()).single.session.refreshToken, 'refresh-new');
+  });
+
+  test('a pending sign-out is tried before the new sign-in, then after it until it ends', () async {
+    await pending.write([oldEntry()]);
+    repo.logoutReplies.addAll([
+      const AppError(AppErrorKind.network, code: AppError.connectFailed), // before the sign-in
+      const AppError(AppErrorKind.server), // just after it
+      // then a 2xx, on the backoff
+    ]);
+
+    await controller().signIn(username: 'parent', password: 'secret');
+
+    expect(container.read(provider), isA<AuthAuthenticated>());
+    expect(repo.log.indexOf('logout access-old'), lessThan(repo.log.indexOf('login')),
+        reason: 'attempted before the new account exists');
+
+    await settle();
+    expect(repo.log.where((c) => c == 'logout access-old'), hasLength(2),
+        reason: 'retried in the background once the sign-in reached the server');
+    final kept = (await pending.read()).single;
+    expect(kept.session.refreshToken, 'refresh-old');
+    expect(armed, isNotEmpty, reason: 'the backoff keeps it going');
+
+    now = kept.notBefore!;
+    armed.last();
+    await settle();
+
+    expect(repo.log.where((c) => c == 'logout access-old'), hasLength(3));
+    expect(await pending.read(), isEmpty);
+    expect(container.read(provider), isA<AuthAuthenticated>(), reason: 'the new session is untouched');
   });
 
   test('a token clear that fails withdraws the pending entry: one holder per refresh token', () async {
@@ -270,5 +367,26 @@ void main() {
 
     expect(container.read(provider), isA<AuthAuthenticated>());
     hung.complete();
+  });
+
+  test('a hung pre-sign-in attempt: sign-in goes ahead, and the retry after it still ends the session', () async {
+    final hung = Completer<void>();
+    repo.logoutHangs = hung.future;
+    await pending.write([oldEntry()]);
+    // The hung attempt finally fails offline; the one queued behind it by the sign-in gets a 2xx.
+    repo.logoutReplies.add(const AppError(AppErrorKind.network, code: AppError.connectFailed));
+
+    // Awaited while the attempt is still hung: the sign-in is bounded, not blocked.
+    await controller().signIn(username: 'parent', password: 'secret');
+
+    expect(container.read(provider), isA<AuthAuthenticated>());
+    expect(repo.log.first, 'logout access-old', reason: 'sent before the sign-in');
+    expect(await pending.read(), hasLength(1), reason: 'not ended yet: the residual window');
+
+    hung.complete();
+    await settle();
+
+    expect(repo.log.where((c) => c == 'logout access-old'), hasLength(2));
+    expect(await pending.read(), isEmpty);
   });
 }
