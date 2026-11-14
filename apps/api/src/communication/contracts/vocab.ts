@@ -201,6 +201,17 @@ export const CallEndReason = {
 } as const;
 export type CallEndReason = (typeof CallEndReason)[keyof typeof CallEndReason];
 
+/**
+ * OA-12: why the SERVER took a participant off a call that goes on
+ * (`call.participant_left` with a `reason`). A participant_left without one is
+ * media presence -- LiveKit saw them leave -- and means nothing more.
+ */
+export const CallParticipantLeftReason = {
+  /** Another family's guardian on a lesson call (CallService.separateLessonLearners). */
+  ONE_LEARNER_LESSON: 'one_learner_lesson',
+} as const;
+export type CallParticipantLeftReason = (typeof CallParticipantLeftReason)[keyof typeof CallParticipantLeftReason];
+
 export const NotificationStatus = {
   SCHEDULED: 'scheduled',
   SENT: 'sent',

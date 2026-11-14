@@ -119,6 +119,12 @@ abstract final class WireErrors {
   static const callNotRinging = 'COMM.CALL_NOT_RINGING';
   static const callAlreadyDeclined = 'COMM.CALL_ALREADY_DECLINED';
 
+  /// OA-12: one learner per paid lesson call. During one of the teacher's lessons a call
+  /// with that lesson's family may not also seat another family's guardian. Refused on
+  /// start, answer and media token; never retried. Shown in words, never as "not
+  /// available" (`CallUiFailure.oneLearnerLesson`).
+  static const lessonOneLearner = 'COMM.LESSON_ONE_LEARNER';
+
   // PD-58 Terms of Use (docs/communication/error-codes.md "Terms of Use (PD-58)"). None is
   // in [terminal]: each has its own handling (the legal gate, a reload, a message), and
   // a TERMS_NOT_ACCEPTED refusal stops being true once the person accepts.

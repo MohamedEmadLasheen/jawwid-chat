@@ -674,6 +674,20 @@ export enum CommErrorCode {
    */
   CALL_UNAVAILABLE = 'COMM.CALL_UNAVAILABLE',
   /**
+   * OA-12 (store payments: one teacher, one learner per paid lesson). While one
+   * of the teacher's lessons is in its call window, a call in a lesson
+   * conversation (Student Group or family group, never a class group) that
+   * seats that teacher (still on the call) and that lesson's family may not
+   * also seat a guardian of another family -- another learner. Refused on start (and in the call capability) and when that
+   * guardian answers or asks for media. The lesson's own parents, the teacher
+   * and staff are never refused it. 403; not retried. (A call already live
+   * when the window opens is corrected by CallService.separateLessonLearners,
+   * which announces `call.participant_left` with reason one_learner_lesson; a
+   * guardian it took off who asks again for media, or answers, gets this code
+   * while the window is open, CALL_PARTICIPANT_LEFT after.)
+   */
+  LESSON_ONE_LEARNER = 'COMM.LESSON_ONE_LEARNER',
+  /**
    * TEACHER-027: the database could not serve the request in time (unreachable,
    * no pool connection, a transaction or statement timeout). Nothing was
    * committed. 503 with Retry-After; retry the same request.
