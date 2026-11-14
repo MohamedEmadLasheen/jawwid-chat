@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite storage-admin-keys launch-redis pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates app-spec backup-client backup-encryption backup-offsite storage-admin-keys launch-redis pd-registry quran-dataset geo-dataset pd040-routes lesson-writer lessons-supply-chain app-icons actions-pinned ci-wiring"
 
 title() {
   case "$1" in
@@ -209,6 +209,7 @@ title() {
     lesson-writer) echo "PD-46 · chat.lesson is written only through LessonWriter" ;;
     lessons-supply-chain) echo "The lessons engine: exact pins from the registry, no install scripts, no markers, nothing imported from outside; lesson content resolves in the verified text; the family bundle carries no withheld lesson text; the API's voice-over text is current" ;;
     app-icons)     echo "PD-56 · the app icon and launch image are Jawwid's, never Flutter's template; the 1024 icon is opaque" ;;
+    actions-pinned) echo "Every GitHub Action is pinned to a full commit SHA" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -518,6 +519,188 @@ gate_app_icons() {
   # block. The selftest runs first and proves each rule can fail.
   bash scripts/qa/check-store-upload-guards.sh selftest || return 1
   bash scripts/qa/check-store-upload-guards.sh check
+}
+
+gate_actions_pinned() {
+  # P3-11. A tag (`@v4`) or branch (`@main`) is a moving pointer: whoever
+  # controls the action's repository can repoint it, and the next run executes
+  # their code with this repository's secrets. Every `uses:` must name a full
+  # 40-hex commit (`owner/repo@<sha> # vX.Y.Z`). Local actions (`./...`) and
+  # `docker://image@sha256:<64 hex>` are allowed. A PR that adds an unpinned
+  # action must pin it to the commit its tag resolves to.
+  #
+  # Scanned: .github/workflows/*.yml|*.yaml and .github/actions/**/action.yml|
+  # action.yaml. The scan is python, not grep (see the header). It fails closed:
+  # a `uses:` written in a form it does not recognise (a flow mapping, a block
+  # scalar) fails, and so does a tree with no workflow at all. The selftest
+  # runs first and proves the gate fails on `@v4`, `@main` and the other
+  # floating forms, and passes on a pinned line.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the actions-pinned gate cannot run, so it FAILS"
+    return 2
+  fi
+  actions_pinned selftest || return 1
+  actions_pinned check .
+}
+
+# actions_pinned selftest | check ROOT
+actions_pinned() {
+  "$PYTHON" -I - "$@" <<'PY'
+import os, re, shutil, sys, tempfile
+
+SHA = "0123456789abcdef0123456789abcdef01234567"
+DIGEST = "sha256:" + "ab" * 32
+
+# A `uses:` key: `uses: x`, `- uses: x`, optionally quoted key or value.
+USES = re.compile(r"""^\s*(?:-\s+)?(["']?)uses\1\s*:\s*(.*)$""")
+ANY_USES = re.compile(r"""(?:^|[^A-Za-z0-9_-])["']?uses["']?\s*:""")
+PINNED = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?@[0-9a-f]{40}$")
+DOCKER = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
+
+
+def files(root):
+    out = []
+    wf = os.path.join(root, ".github", "workflows")
+    if os.path.isdir(wf):
+        for n in sorted(os.listdir(wf)):
+            p = os.path.join(wf, n)
+            if n.endswith((".yml", ".yaml")) and os.path.isfile(p):
+                out.append(p)
+    acts = os.path.join(root, ".github", "actions")
+    for d, dirs, names in os.walk(acts):
+        dirs.sort()
+        for n in sorted(names):
+            if n in ("action.yml", "action.yaml"):
+                out.append(os.path.join(d, n))
+    return out
+
+
+def strip_comment(line):
+    # YAML: a comment starts at a `#` that begins the line or follows a space.
+    m = re.search(r"(^|\s)#", line)
+    return line[:m.start()] if m else line
+
+
+def allowed(ref):
+    return ref.startswith("./") or bool(DOCKER.match(ref)) or bool(PINNED.match(ref))
+
+
+def check(root):
+    """Returns (number of files scanned, list of 'path:line: problem')."""
+    found = files(root)
+    bad = []
+    for path in found:
+        rel = os.path.relpath(path, root)
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.read().split("\n")
+        for n, raw in enumerate(lines, 1):
+            line = strip_comment(raw)
+            if not ANY_USES.search(line):
+                continue
+            m = USES.match(line)
+            ref = m.group(2).strip() if m else ""
+            if len(ref) >= 2 and ref[0] == ref[-1] and ref[0] in "\"'":
+                ref = ref[1:-1].strip()
+            if not m or not ref or ref[0] in "|>{[&*!":
+                bad.append("%s:%d: a `uses:` in a form this gate cannot read; write it as `uses: owner/repo@<40-hex sha>`" % (rel, n))
+            elif not allowed(ref):
+                bad.append("%s:%d: %s is not pinned to a full commit SHA" % (rel, n, ref))
+    return len(found), bad
+
+
+def report(root):
+    count, bad = check(root)
+    if count == 0:
+        print("actions-pinned: no workflow found under %s/.github -- nothing was checked, so it FAILS" % root)
+        return 1
+    if bad:
+        print("::error::actions-pinned FAIL -- pin each action to the commit its tag resolves to (`owner/repo@<sha> # vX.Y.Z`):")
+        for b in bad:
+            print("  " + b)
+        return 1
+    print("actions-pinned pass (%d files, every action pinned to a commit)" % count)
+    return 0
+
+
+def selftest():
+    # (where, the `uses:` line, should it pass?)
+    cases = [
+        ("wf", "      - uses: actions/checkout@v4", False),
+        ("wf", "      - uses: actions/checkout@main", False),
+        ("wf", "      - uses: actions/checkout@v4.2.1", False),
+        ("wf", "      - uses: actions/checkout", False),
+        ("wf", "      - uses: actions/checkout@" + SHA[:39], False),
+        ("wf", "      - uses: actions/checkout@" + SHA.upper(), False),
+        ("wf", "      - uses: actions/checkout@" + SHA + "0", False),
+        ("wf", "      - uses: \"actions/checkout@v4\"", False),
+        ("wf", "      - 'uses': actions/checkout@main", False),
+        ("wf", "      - {uses: actions/checkout@v4}", False),
+        ("wf", "        uses: >-", False),
+        ("wf", "    uses: org/repo/.github/workflows/build.yml@main", False),
+        ("wf", "      - uses: docker://alpine:3.19", False),
+        ("wf", "      - uses: docker://alpine@sha256:" + "AB" * 32, False),
+        ("act", "    - uses: actions/setup-node@v4", False),
+        ("wf", "      - uses: actions/checkout@" + SHA + " # v4.2.1", True),
+        ("wf", "      - uses: 'actions/checkout@" + SHA + "'", True),
+        ("wf", "        uses: github/codeql-action/init@" + SHA, True),
+        ("wf", "    uses: org/repo/.github/workflows/build.yml@" + SHA, True),
+        ("wf", "      - uses: ./.github/actions/setup", True),
+        ("wf", "      - uses: docker://alpine@" + DIGEST, True),
+        ("wf", "      # - uses: actions/checkout@v4", True),
+        ("wf", "        run: echo refuses: nothing  # uses: actions/checkout@v4", True),
+        ("act", "    - uses: actions/setup-node@" + SHA + " # v4.4.0", True),
+    ]
+    failures = 0
+    for where, line, ok in cases:
+        tmp = tempfile.mkdtemp()
+        try:
+            wf = os.path.join(tmp, ".github", "workflows")
+            os.makedirs(wf)
+            with open(os.path.join(wf, "ci.yml"), "w") as f:
+                f.write("name: t\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n")
+                if where == "wf":
+                    f.write(line + "\n")
+            if where == "act":
+                act = os.path.join(tmp, ".github", "actions", "setup")
+                os.makedirs(act)
+                with open(os.path.join(act, "action.yml"), "w") as f:
+                    f.write("name: s\nruns:\n  using: composite\n  steps:\n" + line + "\n")
+            _, bad = check(tmp)
+            if (not bad) != ok:
+                failures += 1
+                print("selftest: expected %s, got %s: %s (%s)"
+                      % ("PASS" if ok else "FAIL", "PASS" if not bad else "FAIL", line.strip(), where))
+        finally:
+            shutil.rmtree(tmp)
+    # A tree with no workflow at all must fail, never pass for want of input.
+    tmp = tempfile.mkdtemp()
+    try:
+        devnull = open(os.devnull, "w")
+        saved, sys.stdout = sys.stdout, devnull
+        try:
+            rc = report(tmp)
+        finally:
+            sys.stdout = saved
+            devnull.close()
+        if rc == 0:
+            failures += 1
+            print("selftest: an empty tree passed")
+    finally:
+        shutil.rmtree(tmp)
+    if failures:
+        print("::error::actions-pinned selftest FAIL (%d case(s))" % failures)
+        return 1
+    print("actions-pinned selftest pass (%d cases)" % (len(cases) + 1))
+    return 0
+
+
+if len(sys.argv) >= 2 and sys.argv[1] == "selftest":
+    sys.exit(selftest())
+if len(sys.argv) == 3 and sys.argv[1] == "check":
+    sys.exit(report(sys.argv[2]))
+sys.stderr.write("usage: actions_pinned selftest | check ROOT\n")
+sys.exit(2)
+PY
 }
 
 gate_ci_wiring() {
