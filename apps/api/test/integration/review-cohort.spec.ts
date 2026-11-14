@@ -1,13 +1,14 @@
 /**
  * App Store / Google Play review accounts (src/cli/review-cohort.ts).
  *
- * Section 1 checks the database the command leaves behind: two logins and only
- * two, in their own organization, staff with no login, upcoming lessons, the
- * chats, no password anywhere but as a hash, nothing written into the default
- * organization, and a second run that changes nothing -- or repairs a locked
- * or deleted parent account.
+ * Section 1 checks the database the command leaves behind: three logins and
+ * only three (a parent, a teacher, and a disposable parent for the deletion
+ * test with its own family), in their own organization, staff with no login,
+ * upcoming lessons, the chats, no password anywhere but as a hash, nothing
+ * written into the default organization, and a second run that changes
+ * nothing -- or repairs a locked or deleted parent account.
  *
- * Section 2 signs both accounts in through the real POST /auth/login (no
+ * Section 2 signs all three accounts in through the real POST /auth/login (no
  * WhatsApp code, no bypass) and checks what each sees and may do over HTTP:
  * their own chats and lessons, and a refusal from every admin route.
  *
@@ -27,7 +28,7 @@ import { LessonModule } from '../../src/lessons/lesson.module';
 import { AdminModule } from '../../src/admin/admin.module';
 import { AccountAdminModule } from '../../src/account-admin/account-admin.module';
 import {
-  REVIEW_AUDIT_ACTION, REVIEW_ORG_SLUG, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
+  REVIEW_AUDIT_ACTION, REVIEW_DELETION_PEOPLE, REVIEW_ORG_SLUG, REVIEW_REVOKE_REASON, REVIEW_SCHEDULE, ReviewCohortRefusal, provisionReviewCohort, type ReviewCohortManifest, type ReviewCohortOptions,
 } from '../../src/cli/review-cohort';
 import { parseArgs, publicSummary } from '../../src/cli/provision-review-cohort';
 import { buildGraph, truncate } from './harness';
@@ -46,6 +47,7 @@ const inheritedRedisUrl = process.env.REDIS_URL;
 const DOMAIN = 'review.qa.jawwid.test';
 const PARENT_PW = 'review-parent-spec-pw-1';
 const TEACHER_PW = 'review-teacher-spec-pw-2';
+const DELETION_PW = 'review-parent2-spec-pw-3';
 
 const g = buildGraph();
 let opts: ReviewCohortOptions;
@@ -87,8 +89,10 @@ beforeAll(async () => {
     emailDomain: DOMAIN,
     parentPassword: PARENT_PW,
     teacherPassword: TEACHER_PW,
+    deletionParentPassword: DELETION_PW,
     parentPasswordHash: await hashPassword(PARENT_PW),
     teacherPasswordHash: await hashPassword(TEACHER_PW),
+    deletionParentPasswordHash: await hashPassword(DELETION_PW),
   };
 }, 60_000);
 
@@ -111,6 +115,10 @@ describe('1. what the command leaves in the database', () => {
       provisionReviewCohort(g.prisma, { ...opts, ...o }).then(() => null, (e: unknown) => (e as ReviewCohortRefusal).code);
     expect(await refusal({ parentPassword: 'short' })).toBe('PASSWORD');
     expect(await refusal({ teacherPassword: PARENT_PW })).toBe('PASSWORD');
+    expect(await refusal({ deletionParentPassword: 'short' })).toBe('PASSWORD');
+    expect(await refusal({ deletionParentPassword: PARENT_PW })).toBe('PASSWORD');
+    expect(await refusal({ deletionParentPassword: TEACHER_PW })).toBe('PASSWORD');
+    expect(await refusal({ deletionParentPassword: undefined as unknown as string })).toBe('PASSWORD');
     expect(await refusal({ emailDomain: 'not a domain' })).toBe('USAGE');
     const exit = jest.spyOn(process, 'exit').mockImplementation(((code: number) => { throw new Error(`exit ${code}`); }) as never);
     const stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -118,14 +126,20 @@ describe('1. what the command leaves in the database', () => {
       const secret = 'Distinctive-Secret-77';
       expect(() => parseArgs(['--parent-password', secret])).toThrow('exit 2');
       expect(() => parseArgs(['--password', secret])).toThrow('exit 2');
+      expect(() => parseArgs(['--deletion-parent-password', secret])).toThrow('exit 2');
       // A password typed where no flag is expected is not echoed either.
       expect(() => parseArgs(['--teacher-password-file', '/f', secret])).toThrow('exit 2');
-      expect(stderr.mock.calls.length).toBe(3);
+      expect(() => parseArgs(['--deletion-parent-password-file', '/f', secret])).toThrow('exit 2');
+      expect(stderr.mock.calls.length).toBe(5);
       for (const [line] of stderr.mock.calls) expect(String(line)).not.toContain(secret);
     } finally {
       exit.mockRestore();
       stderr.mockRestore();
     }
+    // The three password files are parsed into their own fields.
+    expect(parseArgs([
+      '--parent-password-file', '/a', '--teacher-password-file', '/b', '--deletion-parent-password-file', '/c',
+    ])).toMatchObject({ parentPasswordFile: '/a', teacherPasswordFile: '/b', deletionParentPasswordFile: '/c' });
   });
 
   it('a separate organization, not the default one', async () => {
@@ -134,9 +148,10 @@ describe('1. what the command leaves in the database', () => {
     expect(org.id).not.toBe(defaultOrg);
   });
 
-  it('exactly two logins, a parent and a teacher; no staff login and no super admin', async () => {
+  it('exactly three logins, two parents and a teacher; no staff login and no super admin', async () => {
     const accounts = await g.prisma.account.findMany({ where: { organizationId: m.organizationId } });
     expect(accounts.map((a) => [a.subject, a.kind]).sort()).toEqual([
+      [`parent2@${DOMAIN}`, 'family'],
       [`parent@${DOMAIN}`, 'family'],
       [`teacher@${DOMAIN}`, 'teacher'],
     ]);
@@ -152,20 +167,53 @@ describe('1. what the command leaves in the database', () => {
     expect(await verifyPassword(PARENT_PW, parent.passwordHash)).toBe(true);
     expect(await verifyPassword(TEACHER_PW, teacher.passwordHash)).toBe(true);
     expect(await verifyPassword(TEACHER_PW, parent.passwordHash)).toBe(false);
+    const deletion = await g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: m.deletionParent.accountId } });
+    expect(await verifyPassword(DELETION_PW, deletion.passwordHash)).toBe(true);
+    expect(await verifyPassword(PARENT_PW, deletion.passwordHash)).toBe(false);
   });
 
   it('no password appears in any row the command wrote, nor in what it prints', async () => {
     const tables = Object.keys(await countsFor(m.organizationId));
     for (const t of [...tables, 'audit_log', 'outbox_event']) {
       const [{ n }] = await g.prisma.$queryRawUnsafe<Array<{ n: number }>>(
-        `select count(*)::int as n from chat."${t}" x where x::text like $1 or x::text like $2`, `%${PARENT_PW}%`, `%${TEACHER_PW}%`,
+        `select count(*)::int as n from chat."${t}" x where x::text like $1 or x::text like $2 or x::text like $3`,
+        `%${PARENT_PW}%`, `%${TEACHER_PW}%`, `%${DELETION_PW}%`,
       );
       expect([t, n]).toEqual([t, 0]);
     }
     const printed = JSON.stringify(publicSummary('localhost:5432/x', m));
     expect(printed).not.toContain(PARENT_PW);
     expect(printed).not.toContain(TEACHER_PW);
+    expect(printed).not.toContain(DELETION_PW);
     expect(printed).not.toMatch(/argon2/);
+    expect(printed).toContain(`parent2@${DOMAIN}`);
+  });
+
+  it('the disposable parent has its own family and child, no teacher, no lessons, and only a 1:1 with the supervisor', async () => {
+    const d = m.deletionParent;
+    expect(d.subject).toBe(`parent2@${DOMAIN}`);
+    expect(d.created).toBe(true);
+    expect(d.familyId).not.toBe(m.familyId);
+    const family = await g.prisma.family.findUniqueOrThrow({ where: { id: d.familyId } });
+    expect(family.organizationId).toBe(m.organizationId);
+    expect(family.displayName).toBe(REVIEW_DELETION_PEOPLE.family);
+    expect(family.primaryContactId).toBe(d.contactId);
+    const contact = await g.prisma.contact.findUniqueOrThrow({ where: { id: d.contactId } });
+    expect([contact.accountId, contact.rolePreset, contact.name]).toEqual([d.accountId, 'primary_guardian', REVIEW_DELETION_PEOPLE.parent]);
+    const learner = await g.prisma.learner.findUniqueOrThrow({ where: { id: d.learnerId } });
+    expect([learner.familyId, learner.name, learner.teacherId]).toEqual([d.familyId, REVIEW_DELETION_PEOPLE.child, null]);
+    expect((await g.prisma.learnerSupervision.findUniqueOrThrow({ where: { learnerId: d.learnerId } })).supervisorId)
+      .toBe(m.staff.supervisorId);
+    expect(await g.prisma.lesson.count({ where: { learnerId: d.learnerId } })).toBe(0);
+    expect(await g.prisma.learnerScheduleSlot.count({ where: { learnerId: d.learnerId } })).toBe(0);
+    // Its only conversation is the 1:1 with the supervisor, which has the sample lines.
+    const seats = await g.prisma.conversationMember.findMany({ where: { actorId: d.contactId, leftAt: null } });
+    expect(seats.map((s) => s.conversationId)).toEqual([d.directId]);
+    expect(await g.prisma.message.count({ where: { conversationId: d.directId, type: 'text' } })).toBeGreaterThanOrEqual(2);
+    // It shares nothing with the review family's conversations.
+    for (const id of [m.familyGroupId, m.parentDirectId, m.teacherDirectId]) {
+      expect(await g.prisma.conversationMember.count({ where: { conversationId: id, actorId: d.contactId } })).toBe(0);
+    }
   });
 
   it('the child is taught by the teacher review account, supervised, with no subscription (so never locked)', async () => {
@@ -204,16 +252,26 @@ describe('1. what the command leaves in the database', () => {
   it('a second run changes nothing', async () => {
     const before = await countsFor(m.organizationId);
     const again = await provisionReviewCohort(g.prisma, opts);
-    expect(again).toEqual({ ...m, parent: { ...m.parent, created: false }, teacher: { ...m.teacher, created: false } });
+    expect(again).toEqual({
+      ...m,
+      parent: { ...m.parent, created: false },
+      teacher: { ...m.teacher, created: false },
+      deletionParent: { ...m.deletionParent, created: false },
+    });
     expect(await countsFor(m.organizationId)).toEqual(before);
     expect(await countsFor(defaultOrg)).toEqual(defaultBefore);
   });
 
   it('the production path hashes the passwords itself; an unchanged password writes no new hash', async () => {
     const before = await g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: m.parent.accountId } });
-    await provisionReviewCohort(g.prisma, { emailDomain: DOMAIN, parentPassword: PARENT_PW, teacherPassword: TEACHER_PW });
+    const deletionBefore = await g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: m.deletionParent.accountId } });
+    await provisionReviewCohort(g.prisma, {
+      emailDomain: DOMAIN, parentPassword: PARENT_PW, teacherPassword: TEACHER_PW, deletionParentPassword: DELETION_PW,
+    });
     const after = await g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: m.parent.accountId } });
     expect(after.passwordHash).toBe(before.passwordHash);
+    const deletionAfter = await g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: m.deletionParent.accountId } });
+    expect(deletionAfter.passwordHash).toBe(deletionBefore.passwordHash);
   });
 
   it('refuses a different login domain before writing anything', async () => {
@@ -225,7 +283,8 @@ describe('1. what the command leaves in the database', () => {
 
   it('every credential change is audited -- that it happened, never what', async () => {
     const rows = await g.prisma.auditLog.findMany({ where: { action: REVIEW_AUDIT_ACTION } });
-    expect(rows.map((r) => r.entityId).sort()).toEqual([m.parent.accountId, m.teacher.accountId].sort());
+    expect(rows.map((r) => r.entityId).sort())
+      .toEqual([m.parent.accountId, m.teacher.accountId, m.deletionParent.accountId].sort());
     expect(rows.every((r) => r.actorId === null && (r.after as { passwordSet: boolean }).passwordSet)).toBe(true);
   });
 
@@ -271,12 +330,51 @@ describe('1. what the command leaves in the database', () => {
     expect(seat).not.toBeNull();
     const family = await g.prisma.family.findUniqueOrThrow({ where: { id: m.familyId } });
     expect(family.primaryContactId).toBe(after.parent.contactId);
-    expect(await g.prisma.account.count({ where: { organizationId: m.organizationId, isActive: true } })).toBe(2);
+    expect(await g.prisma.account.count({ where: { organizationId: m.organizationId, isActive: true } })).toBe(3);
     // The sample lines are not sent a second time by the new parent.
     const lines = await g.prisma.message.findMany({ where: { conversationId: m.familyGroupId, clientMessageId: { startsWith: 'review-' } } });
     expect(new Set(lines.map((l) => l.clientMessageId)).size).toBe(lines.length);
     expect(await countsFor(defaultOrg)).toEqual(defaultBefore);
     m = after;
+  });
+
+  it('the disposable parent, deleted by a reviewer, is created again in its own family; the other two accounts are untouched', async () => {
+    const before = m.deletionParent;
+    const othersBefore = { parent: m.parent, teacher: m.teacher, familyGroupId: m.familyGroupId };
+    await g.prisma.$queryRaw`select chat.erase_account(${before.accountId}::uuid, 'review spec', '{}'::text[])`;
+    // Deleted: the login is gone and its email is free.
+    expect(await g.prisma.account.findUnique({ where: { subject: `parent2@${DOMAIN}` } })).toBeNull();
+
+    const after = await provisionReviewCohort(g.prisma, opts);
+    expect(after.deletionParent.created).toBe(true);
+    expect(after.deletionParent.subject).toBe(`parent2@${DOMAIN}`);
+    expect(after.deletionParent.accountId).not.toBe(before.accountId);
+    expect(after.deletionParent.contactId).not.toBe(before.contactId);
+    expect(after.deletionParent.familyId).toBe(before.familyId);
+    expect(after.deletionParent.learnerId).toBe(before.learnerId);
+    const family = await g.prisma.family.findUniqueOrThrow({ where: { id: before.familyId } });
+    expect(family.primaryContactId).toBe(after.deletionParent.contactId);
+    const cred = await g.prisma.accountCredential.findUniqueOrThrow({ where: { accountId: after.deletionParent.accountId } });
+    expect(await verifyPassword(DELETION_PW, cred.passwordHash)).toBe(true);
+    // A fresh 1:1 with the supervisor, with the sample lines, for the new parent.
+    const seat = await g.prisma.conversationMember.findFirst({
+      where: { conversationId: after.deletionParent.directId, actorId: after.deletionParent.contactId, leftAt: null },
+    });
+    expect(seat).not.toBeNull();
+    expect(await g.prisma.message.count({ where: { conversationId: after.deletionParent.directId, type: 'text' } }))
+      .toBeGreaterThanOrEqual(2);
+    // The parent and the teacher review accounts are exactly as they were.
+    expect({ parent: after.parent, teacher: after.teacher, familyGroupId: after.familyGroupId })
+      .toEqual({ ...othersBefore, parent: { ...othersBefore.parent, created: false }, teacher: { ...othersBefore.teacher, created: false } });
+    expect(await g.prisma.account.count({ where: { organizationId: m.organizationId, isActive: true } })).toBe(3);
+    expect(await countsFor(defaultOrg)).toEqual(defaultBefore);
+
+    // And a run after that changes nothing again.
+    const settled = await countsFor(m.organizationId);
+    const again = await provisionReviewCohort(g.prisma, opts);
+    expect(again.deletionParent).toEqual({ ...after.deletionParent, created: false });
+    expect(await countsFor(m.organizationId)).toEqual(settled);
+    m = again;
   });
 
   it('the teacher review account cannot be deleted while the child is assigned to it', async () => {
@@ -324,9 +422,10 @@ describe('2. over HTTP, as a store reviewer', () => {
     });
     return { status: r.status, json: (await r.json().catch(() => ({}))) as Record<string, unknown> };
   }
-  async function as(who: 'parent' | 'teacher', method: string, path: string, body?: unknown) {
+  const PASSWORDS = { parent: PARENT_PW, teacher: TEACHER_PW, parent2: DELETION_PW } as const;
+  async function as(who: keyof typeof PASSWORDS, method: string, path: string, body?: unknown) {
     if (!tokens.has(who)) {
-      const r = await login(`${who}@${DOMAIN}`, who === 'parent' ? PARENT_PW : TEACHER_PW);
+      const r = await login(`${who}@${DOMAIN}`, PASSWORDS[who]);
       expect(r.status).toBe(200);
       tokens.set(who, r.json.accessToken as string);
     }
@@ -339,13 +438,20 @@ describe('2. over HTTP, as a store reviewer', () => {
   }
   const ids = (json: Record<string, unknown>) => (json.conversations as Array<{ id: string }>).map((c) => c.id);
 
-  it('both sign in with email and password alone -- no code is asked for', async () => {
-    for (const [who, pw] of [['parent', PARENT_PW], ['teacher', TEACHER_PW]] as const) {
+  it('all three sign in with email and password alone -- no code is asked for', async () => {
+    for (const [who, pw] of Object.entries(PASSWORDS)) {
       const r = await login(`${who}@${DOMAIN}`, pw);
       expect(r.status).toBe(200);
       expect(String(r.json.accessToken).split('.')).toHaveLength(3);
     }
     expect((await login(`parent@${DOMAIN}`, TEACHER_PW)).status).toBe(401);
+    expect((await login(`parent2@${DOMAIN}`, PARENT_PW)).status).toBe(401);
+  });
+
+  it('the disposable parent sees only its 1:1 with the supervisor', async () => {
+    const r = await as('parent2', 'GET', '/conversations');
+    expect(r.status).toBe(200);
+    expect(ids(r.json)).toEqual([m.deletionParent.directId]);
   });
 
   it('the parent sees the family group and the 1:1 with the supervisor, and nothing else', async () => {
@@ -378,8 +484,8 @@ describe('2. over HTTP, as a store reviewer', () => {
     }
   });
 
-  it('every admin route refuses both accounts', async () => {
-    for (const who of ['parent', 'teacher'] as const) {
+  it('every admin route refuses all three accounts', async () => {
+    for (const who of ['parent', 'teacher', 'parent2'] as const) {
       for (const path of ['/admin/overview', '/admin/users', '/admin/conversations']) {
         const r = await as(who, 'GET', path);
         expect([who, path, r.status]).toEqual([who, path, 403]);
@@ -397,16 +503,19 @@ describe('2. over HTTP, as a store reviewer', () => {
     }
   });
 
-  it('account administration and staff-only lesson routes refuse both accounts', async () => {
-    for (const who of ['parent', 'teacher'] as const) {
-      const other = who === 'parent' ? m.teacher.accountId : m.parent.accountId;
-      for (const [method, path, body] of [
+  it('account administration and staff-only lesson routes refuse all three accounts', async () => {
+    for (const who of ['parent', 'teacher', 'parent2'] as const) {
+      const other = who === 'teacher' ? m.parent.accountId : m.teacher.accountId;
+      const routes = [
         ['GET', '/admin/accounts', undefined],
         ['POST', `/admin/accounts/${other}/password-reset`, { reason: 'review spec' }],
         ['GET', '/admin/family-access-grants', undefined],
         ['POST', `/teachers/${m.teacher.teacherId}/availability`, { timezone: 'Africa/Cairo', windows: [] }],
         ['POST', `/learners/${m.learnerId}/schedule`, { slots: [] }],
-      ] as const) {
+      ] as const;
+      // The disposable parent has no tie to the review teacher or child, so
+      // those two routes may rightly answer it 404; the admin routes may not.
+      for (const [method, path, body] of who === 'parent2' ? routes.slice(0, 3) : routes) {
         const r = await as(who, method, path, body);
         expect([who, path, r.status >= 400 && r.status < 500 && r.status !== 404 ? 'refused' : r.status])
           .toEqual([who, path, 'refused']);
