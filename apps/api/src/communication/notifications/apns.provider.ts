@@ -1,6 +1,21 @@
 import { Logger } from '@nestjs/common';
 import apn from '@parse/node-apn';
 import type { PushMessage, PushProvider, PushResult } from './push.provider';
+import { pushGroupKey } from './push-grouping';
+
+/**
+ * LR-11b: the `apns-collapse-id` for an ALERT push, so a newer push of the
+ * same event type for the same chat (or call) REPLACES the older banner
+ * instead of stacking. The grouping rule itself is `pushGroupKey`, shared
+ * with Android tags.
+ *
+ * VoIP: never. A PushKit wake is not a banner, and collapsing a ring is not
+ * something to experiment with.
+ */
+export function apnsCollapseId(message: PushMessage): string | undefined {
+  if (message.isVoip) return undefined;
+  return pushGroupKey({ data: message.data, held: message.held });
+}
 
 /**
  * APNs, behind the existing [PushProvider] seam.
@@ -96,6 +111,8 @@ export class ApnsPushProvider implements PushProvider {
       notification.alert = { title: message.title, body: message.body };
       notification.sound = 'default';
       notification.payload = { ...message.data };
+      const collapseId = apnsCollapseId(message);
+      if (collapseId) notification.collapseId = collapseId;
     }
 
     let responses;
