@@ -24,6 +24,7 @@ import {
 } from './stripe.gateway';
 import { WEBHOOK_REFUND_REASON } from './idempotency';
 import { isCardPaused } from './card-pause';
+import { cardCurrencyRefusal, cardRefusal, cardRefusalError } from './currency-rules';
 import { pendingReceiptMinor, receiptPendingRefusal } from './payments-read.service';
 import { isUuid } from '../communication/conversations/conversation.service';
 import { inReviewMode, reviewDemoUrl } from './review-mode';
@@ -240,6 +241,9 @@ export class CheckoutService {
       throw new CommError(CommErrorCode.PAYMENTS_UNAVAILABLE, 'card payments are not configured on this deployment', 503);
     }
     this.requirePayable(request);
+    // S5: a currency Stripe takes no card in (or counts in other minor units): refused before any claim or Stripe call.
+    const byCurrency = cardCurrencyRefusal(request.currency);
+    if (byCurrency) throw cardRefusalError(byCurrency);
 
     // A loop or abuse is refused first: one plain read, before any claim or Stripe call.
     const recent = await this.prisma.paymentCheckout.count({
@@ -399,6 +403,9 @@ export class CheckoutService {
     // W61 S2: transfer receipts the academy has not checked yet already cover the rest -- a card would charge twice.
     const pendingMinor = await pendingReceiptMinor(this.prisma, fresh);
     if (pendingMinor >= remaining) throw receiptPendingRefusal(pendingMinor, remaining);
+    // S5: what is charged is what is LEFT; below Stripe's minimum it is never sent (bank transfer only).
+    const refusal = cardRefusal(fresh.currency, remaining);
+    if (refusal) throw cardRefusalError(refusal);
 
     const attempts = await this.prisma.paymentCheckout.count({ where: { requestId: fresh.id } });
     const lessons = isPayableInApp(fresh, await loadPackageFacts(this.prisma, { requests: [fresh] }));
