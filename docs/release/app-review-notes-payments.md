@@ -104,8 +104,37 @@ Stripe configured (`cardAvailable`); bank transfer always does.
   - Existing plans that were made with their lessons were linked by the migration.
   - **Any other existing open instalment or balance is no longer payable in the app.** Staff
     collect it outside the app, or re-create it naming the child's package.
+- **R-5 Both, the review accounts cannot pay (OA-12, owner decision 2026-11-10).** The review
+  accounts run in the server-enforced review payment mode (§3a). A reviewer sees the pay sheet,
+  what is bought and both payment methods, but cannot complete a payment. App Review may ask to
+  see a real card payment. If it does, answer with the screen recording of §6 item 3, made on a
+  real (non-review) account. **UNVERIFIED:** whether either store objects to a demo-only payment
+  flow; no policy page was re-read for this change.
+
+## 3a. The review payment mode (OA-12)
+
+**Owner decision (2026-11-10).** Reviewers never see Jawwid's real bank details, cannot make a
+real bank transfer, and cannot upload or store a real receipt. No real charge, invoice, payment
+request, payment obligation or staff task is created for a review account. Public families are
+unaffected. The server enforces it, not the app's UI.
+
+- The switch, its value and what each route does: `docs/release/review-accounts.md`, "Review
+  payment mode". The code: `apps/api/src/billing/review-mode.ts`.
+- What the reviewer sees: Packages tab → Amount due → "Lesson package (demo): 8 live
+  one-to-one lessons" → Pay. The pay sheet says it is a demo account and still shows the
+  live one-to-one description. **Card** opens, in the browser, a page that says (in Arabic and
+  English): "In the live app this opens Stripe's secure checkout page in the browser to pay this
+  lesson package by card. The review account cannot make a payment." **Bank transfer** shows
+  demo bank details, a notice that no transfer or receipt is possible, and Send is off.
+- How real parents pay: by card, on Stripe Checkout opened in the browser, or by bank transfer,
+  uploading the receipt for the academy to confirm (§2).
+- The notes to paste are §4 and §5 below, and Option C of `store-console/review-notes.md` §2.1.
 
 ## 4. App Store Connect: App Review Information → Notes (paste)
+
+**With the review payment mode on (OA-12), use Option C of `store-console/review-notes.md` §2.1
+instead of the text below**: it says that payment is disabled for the review account. The text
+below describes a review account that can pay, which is no longer the case.
 
 > Jawwid is a Quran academy. In the app, families buy only **live one-to-one Quran lessons**:
 > each lesson is a real-time audio call between one teacher and one student. There are no group
@@ -125,6 +154,15 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 
 ## 5. Google Play Console (paste where asked: App access instructions, or a policy appeal)
 
+With the review payment mode on (OA-12), add this sentence to the text below:
+
+> For the review account, payment is disabled on our server: Amount due shows a demo lesson
+> package, card opens a page that explains the live Stripe checkout, and bank transfer shows demo
+> bank details and cannot send a receipt. No charge is possible.
+
+**UNVERIFIED for this change:** the Payments policy pages were not re-read; the wording relies on
+§1 (read 2026-11-05).
+
 > Jawwid sells only live one-to-one Quran lessons, each between one teacher and one student, as
 > real-time audio calls. Lessons are not recorded and cannot be replayed or accessed again in the
 > app. Under the Payments policy's 1:1 online paid services rule (education classes), these are
@@ -136,7 +174,8 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 
 1. The store listings (both stores) describe the service as live one-to-one lessons, never as
    access to content or the app.
-2. Demo parent and teacher accounts on the production backend, with an open lesson-package
-   request so the reviewer can reach the pay sheet.
+2. Demo parent and teacher accounts on the production backend, with the review payment mode
+   switched on for their organization (§3a, OA-12), so the reviewer reaches the pay sheet through
+   the demo amount due. No real lesson-package request is created for the review family.
 3. A short screen recording of a lesson call and of the pay sheet, kept ready for an appeal.
 4. Re-read the three policy pages above on the day of submission; they change.

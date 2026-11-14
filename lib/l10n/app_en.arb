@@ -2161,6 +2161,14 @@
   "@billingNoLongerOpen": {
     "description": "PD-27: Settings -> Payments."
   },
+  "billingReceiptPendingNotice": "A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.",
+  "@billingReceiptPendingNotice": {
+    "description": "W61 S2: pay sheet -- a bank-transfer receipt for this payment is waiting for the academy."
+  },
+  "billingReceiptPendingCardPaused": "Card payment will be available again if the academy cannot confirm the transfer.",
+  "@billingReceiptPendingCardPaused": {
+    "description": "W61 S2: pay sheet -- the waiting receipts cover what is left, so the card is paused until they are decided."
+  },
   "billingCouldNotOpen": "Couldn't open the page. Try again.",
   "@billingCouldNotOpen": {
     "description": "PD-27: Settings -> Payments."
@@ -3695,5 +3703,9 @@
   "signupLegalChanged": "The terms have changed. Please read them and agree again.",
   "@signupLegalChanged": {"description": "PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded."},
   "legalLoadFailed": "We couldn't load the terms of use. Please try again.",
-  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."}
+  "@legalLoadFailed": {"description": "PD-58: Try again on the \"temporarily unavailable\" notice (GET /me/legal) failed (no network, server error)."},
+  "billingReviewModeNotice": "App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.",
+  "@billingReviewModeNotice": {"description": "OA-12: top of the pay sheet for the App Review demo family (GET /me/billing reviewMode). The server makes card a demo page and refuses receipts."},
+  "billingReviewModeTransferNotice": "App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.",
+  "@billingReviewModeTransferNotice": {"description": "OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode)."}
 }
