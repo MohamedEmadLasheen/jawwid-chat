@@ -209,22 +209,21 @@ that fails loudly instead of skipping the backup and migrating an empty
 database. The variable defaults to "skip allowed" so that the script alone
 unblocks the first deploy.
 
-**Pending the owner (workflow follow-up, `.github/` is owner-only).** The
-workflows do not set `FIRST_DEPLOY` yet. Until they do, every deploy behaves as
-a first deploy here. The change is one `env:` entry on the backup step:
-`FIRST_DEPLOY: ${{ inputs.first_deploy }}` in `deploy-production.yml` and
-`deploy-staging.yml`, and `FIRST_DEPLOY: 'false'` in the scheduled backups
-(`backup-daily.yml`, `backup-weekly.yml`). It should be in place before the
-first production deploy that carries real data.
+**The workflows set it (#518, merged 2026-11-08).** The backup step receives
+`FIRST_DEPLOY: ${{ inputs.first_deploy == true && 'true' || 'false' }}` in
+`deploy-production.yml` and `deploy-staging.yml`, and `FIRST_DEPLOY: 'false'`
+in the scheduled backups (`backup-daily.yml`, `backup-weekly.yml`). Only a
+deploy started with `first_deploy` ticked may skip the backup.
 
 **If you see `NO BACKUP TAKEN` on anything other than a first deploy, stop.**
 It means `DATABASE_URL` points at a database with no Jawwid Chat schema, which
-is almost certainly the wrong database. Until the workflow follow-up lands, the
-scheduled backups (`backup-daily.yml`, `backup-weekly.yml`) still fail in that
-case, one step later: the step after the backup finds no archive and fails
-("Only encrypted archives leave the runner" in the daily one,
-`backup-offsite.sh upload` in the weekly one). With `FIRST_DEPLOY: 'false'` they
-fail at the backup step itself, with the clear error above. In
+is almost certainly the wrong database. The scheduled backups
+(`backup-daily.yml`, `backup-weekly.yml`) run with `FIRST_DEPLOY: 'false'`, so
+in that case they fail at the backup step itself, with the clear error above.
+Until the first production deploy creates the schema, they fail on every
+scheduled run (nightly for the daily one, Sundays for the weekly one);
+today they stop even earlier, at "The backup credentials are present", because
+the `backup` Environment has no secrets yet. In
 a deploy, the "Upload the pre-deployment backup" step only warns when there is
 no file (`upload-artifact` defaults to `if-no-files-found: warn`), so the
 deploy continues to the migrations.

@@ -385,6 +385,35 @@ abstract interface class AuthRepository {
   Stream<void> get sessionRevoked;
 }
 
+/// What a server sign-out came to (LR-46 follow-up).
+enum SignOutOutcome {
+  /// The server gave a verdict: it ended the session, or answered that it is already over
+  /// or cannot be ended by asking again. Nothing is left to retry.
+  ended,
+
+  /// No verdict: offline, a timeout, a 5xx, rate limited. The server session may still be
+  /// live, and with it the device's push binding (#537).
+  unreached,
+}
+
+/// An [AuthRepository] that can say whether its sign-out reached the server. `AuthController`
+/// keeps an [SignOutOutcome.unreached] session as a pending sign-out to retry.
+abstract interface class SignOutReporting {
+  /// The same single-flighted flow as [AuthRepository.signOut]; it never throws.
+  Future<SignOutOutcome> signOutReporting();
+}
+
+/// The two calls a pending sign-out is retried with. Both go over the public transport, so
+/// neither can reach the live session's refresh authority: the pending session is not the
+/// live one, and must never be renewed by it.
+abstract interface class SignOutServer {
+  /// `POST /auth/refresh`. ROTATES: the caller must persist the answer before anything else.
+  Future<AuthSession> refresh(String refreshToken);
+
+  /// `POST /auth/logout`, presenting [accessToken] explicitly. Throws an `AppError` on refusal.
+  Future<void> logoutWith(String accessToken);
+}
+
 /// PD-16: a parent whose account the academy created (when their child was enrolled) sets
 /// their own password. Both calls are PUBLIC -- they go over the same transport as sign-in,
 /// never the authenticated client -- and neither says whether an e-mail is known.

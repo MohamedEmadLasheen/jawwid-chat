@@ -17,6 +17,9 @@
 #   scripts/mobile/build-store.sh ios       # flutter build ipa (signed by Xcode: team KX683HAR3Y)
 #   scripts/mobile/build-store.sh android   # flutter build appbundle (android/key.properties)
 #   scripts/mobile/build-store.sh check     # only the checks, no build
+#   scripts/mobile/build-store.sh ios-config  # checks, then `flutter build ios --config-only` with the
+#                                             # same flags: CI archives and signs with xcodebuild itself
+#                                             # (.github/workflows/release-store-builds.yml)
 #
 # The API and lessons hosts must look like production (no staging, dev, test, qa, uat, sandbox,
 # preview, local, localhost, example, ngrok, internal label, no IP literal). Debug symbols are kept
@@ -30,8 +33,8 @@ set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  ios | android | check) : ;;
-  *) echo "usage: $0 ios|android|check" >&2; exit 2 ;;
+  ios | android | check | ios-config) : ;;
+  *) echo "usage: $0 ios|android|check|ios-config" >&2; exit 2 ;;
 esac
 
 fail() { echo "build-store: $*" >&2; exit 1; }
@@ -128,9 +131,20 @@ DEFINES=(
 )
 
 cd "$ROOT"
-SYMBOLS="build/symbols/$TARGET/$BUILD_NAME+$BUILD_NUMBER"
+PLATFORM="$TARGET"
+[ "$TARGET" = ios-config ] && PLATFORM=ios
+SYMBOLS="build/symbols/$PLATFORM/$BUILD_NAME+$BUILD_NUMBER"
 mkdir -p "$SYMBOLS"
 "$FLUTTER" pub get --enforce-lockfile
+if [ "$TARGET" = ios-config ]; then
+  # Writes the version, the dart-defines and the symbols path into ios/Flutter/Generated.xcconfig
+  # without building or signing. `xcodebuild archive` then compiles the Dart code with exactly
+  # these values, so the defines live in this file only (CI must not repeat them).
+  "$FLUTTER" build ios --release --config-only --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER" --split-debug-info="$SYMBOLS" "${DEFINES[@]}"
+  echo "build-store: iOS project configured for $BUILD_NAME+$BUILD_NUMBER; archive it with xcodebuild"
+  echo "build-store: Dart symbols will be written to: $ROOT/$SYMBOLS"
+  exit 0
+fi
 if [ "$TARGET" = ios ]; then
   "$FLUTTER" build ipa --release --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER" --split-debug-info="$SYMBOLS" "${DEFINES[@]}"
 else

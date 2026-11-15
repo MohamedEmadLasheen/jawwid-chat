@@ -60,4 +60,19 @@ void main() {
     expect(keepNavigationOnly(Breadcrumb(category: 'console', message: 'a@b.co'), Hint()), isNull);
     expect(keepNavigationOnly(Breadcrumb(category: 'navigation', data: {'to': '/settings'}), Hint())!.data, {'to': '/settings'});
   });
+
+  test('LR-23: what a report may carry -- no sessions, no PII, no screenshots, no tracing', () {
+    final options = SentryFlutterOptions();
+    expect(options.enableAutoSessionTracking, isTrue, reason: 'Sentry tracks sessions by default');
+    configureCrashReporting(options);
+    // Neither store label declares app-session data; crash reports are all this is for.
+    expect(options.enableAutoSessionTracking, isFalse);
+    expect(options.sendDefaultPii, isFalse);
+    expect(options.attachScreenshot, isFalse);
+    expect(options.attachViewHierarchy, isFalse);
+    expect(options.tracesSampleRate, isNull);
+    expect(options.enableAutoPerformanceTracing, isFalse);
+    expect(options.enableUserInteractionBreadcrumbs, isFalse);
+    expect(options.enableAutoNativeBreadcrumbs, isFalse);
+  });
 }

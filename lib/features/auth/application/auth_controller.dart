@@ -10,6 +10,7 @@ import '../../../shared/models/auth.dart';
 import '../../../shared/models/legal.dart';
 import '../../legal/application/legal_wire.dart';
 import '../domain/auth_state.dart';
+import 'pending_sign_out.dart';
 import 'session_termination.dart';
 
 /// Owns the session for the whole app.
@@ -27,9 +28,11 @@ class AuthController extends Notifier<AuthState> {
     Future<void> Function()? onSessionCleared,
     SessionTermination? termination,
     LegalWire? legal,
+    PendingSignOutRetrier? pendingSignOut,
     RedactingLogger logger = const RedactingLogger(),
   })  : _repository = repository,
         _legalWire = legal,
+        _pendingSignOut = pendingSignOut,
         _tokens = tokens,
         _clearLocalData = clearLocalData,
         _onPrincipal = onPrincipal,
@@ -62,6 +65,15 @@ class AuthController extends Notifier<AuthState> {
   /// and every 403 `COMM.TERMS_NOT_ACCEPTED`. Bound in [build], like [_termination].
   final LegalWire? _legalWire;
 
+  /// LR-46 follow-up: a sign-out the server never heard (offline) is kept here and retried,
+  /// so the server session -- and the device's push binding (#537) -- does not outlive it.
+  /// Null where there is nothing to keep it in (the PD-28 browser, the fixture build).
+  final PendingSignOutRetrier? _pendingSignOut;
+
+  /// The refresh token [_endServerSession] just handed to [_pendingSignOut], until the local
+  /// clear that follows it has run. Never logged.
+  String? _recordedPending;
+
   /// The identity refresh a TERMS_NOT_ACCEPTED refusal asked for, while it is out.
   Future<void>? _termsCheck;
 
@@ -91,7 +103,11 @@ class AuthController extends Notifier<AuthState> {
       _termination?.unbind(onSessionEnded);
       _legalWire?.unbind(adoptLegal);
       _revocationWatch?.cancel();
+      unawaited(_pendingSignOut?.dispose());
     });
+    // App start: retry any sign-out left pending by an earlier run, and again whenever
+    // connectivity returns. Never awaited -- it must not hold the splash.
+    _pendingSignOut?.start();
     return const AuthUnknown();
   }
 
@@ -169,6 +185,11 @@ class AuthController extends Notifier<AuthState> {
   Future<void> signIn({required String username, required String password, bool remember = false}) async {
     state = const AuthSigningIn();
 
+    // A previous account's sign-out still pending on this device goes first, so its session
+    // (and push binding) is ended before the new one exists. Best effort, bounded, never
+    // throws: it can delay a sign-in by a few seconds at most and never prevent one.
+    await _pendingSignOut?.flushBeforeSignIn();
+
     try {
       final session = await _repository.signIn(
         username: username,
@@ -218,16 +239,45 @@ class AuthController extends Notifier<AuthState> {
       await _endSession(SignedOutReason.none);
       return;
     }
+    await _endServerSession('sign-out call failed');
+    await _endSession(SignedOutReason.none);
+  }
+
+  /// `POST /auth/logout` for the session about to be cleared locally. Never throws and never
+  /// blocks the local sign-out. When the server gave no verdict (offline, a 5xx), the session
+  /// is handed to [_pendingSignOut] BEFORE the tokens are cleared, to be ended later.
+  Future<void> _endServerSession(String failureLog) async {
+    _recordedPending = null;
+    var outcome = SignOutOutcome.ended;
     try {
-      await _repository.signOut();
+      // SignOutReporting is not an AuthRepository subtype, so `is` would not promote.
+      if (_repository case final SignOutReporting reporting) {
+        outcome = await reporting.signOutReporting();
+      } else {
+        await _repository.signOut();
+      }
     } catch (error) {
       // A failed sign-out call must not strand the user signed in locally -- whatever it
       // threw.
-      _logger.warn('sign-out call failed', data: {
+      _logger.warn(failureLog, data: {
         'kind': error is AppError ? error.kind.name : error.runtimeType.toString(),
       });
+      if (error is AppError && error.isTransient) outcome = SignOutOutcome.unreached;
     }
-    await _endSession(SignedOutReason.none);
+
+    final pending = _pendingSignOut;
+    if (outcome != SignOutOutcome.unreached || pending == null) return;
+    try {
+      // Read AFTER the call: an expired access token was renewed (rotated) on the way, and
+      // only the successor is still worth anything.
+      final session = await _tokens.read();
+      if (session != null) {
+        await pending.add(session);
+        _recordedPending = session.refreshToken;
+      }
+    } catch (error) {
+      _logger.warn('pending sign-out not recorded', data: {'type': error.runtimeType.toString()});
+    }
   }
 
   /// Re-read the authenticated principal from the backend.
@@ -312,15 +362,7 @@ class AuthController extends Notifier<AuthState> {
 
   /// `POST /auth/logout` for a session about to be dropped locally. Never throws and never
   /// blocks the sign-out: a session the client can no longer name expires on its own.
-  Future<void> _logoutBestEffort() async {
-    try {
-      await _repository.signOut();
-    } catch (error) {
-      _logger.warn('logout of a refused session failed', data: {
-        'kind': error is AppError ? error.kind.name : error.runtimeType.toString(),
-      });
-    }
-  }
+  Future<void> _logoutBestEffort() => _endServerSession('logout of a refused session failed');
 
   /// Called when any layer observes that the backend has ended this session.
   Future<void> onSessionEnded(AppError error) =>
@@ -369,8 +411,23 @@ class AuthController extends Notifier<AuthState> {
     unawaited(_revocationWatch?.cancel());
     _revocationWatch = null;
 
+    final recorded = _recordedPending;
+    _recordedPending = null;
+    try {
+      await _tokens.clear();
+    } catch (error) {
+      _logger.warn('session cleanup step failed', data: {
+        'step': 'tokens',
+        'type': error.runtimeType.toString(),
+      });
+      // The live store still holds the session just recorded as pending. Two holders of one
+      // refresh token -- the next launch's restore and the retrier -- would each refresh it,
+      // and the second is a reuse that revokes every session on the account. The live store
+      // keeps it; the pending entry goes.
+      if (recorded != null) await _pendingSignOut?.withdraw(recorded);
+    }
+
     for (final (step, run) in [
-      ('tokens', _tokens.clear),
       ('local data', _clearLocalData),
       ('principal', _onSessionCleared ?? () async {}),
     ]) {

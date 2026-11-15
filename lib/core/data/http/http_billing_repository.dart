@@ -324,6 +324,8 @@ ParentBilling parseParentBilling(Map<String, Object?> d) {
             note: text(bank?['note']),
           ),
     cardAvailable: d['cardAvailable'] == true,
+    // OA-12: only an explicit `true` is review mode; absent (every public family) is not.
+    reviewMode: d['reviewMode'] == true,
     subscriptions: subscriptions,
   );
 }
