@@ -510,7 +510,15 @@ PY
   "$PYTHON" -I scripts/lessons/tts/tts.py selftest
 }
 
-gate_app_icons() { python3 scripts/qa/check-app-icons.py; }
+gate_app_icons() {
+  python3 scripts/qa/check-app-icons.py || return 1
+  # OT-2b, in this PD-56 store-build gate: the store-upload workflow and scripts/mobile can only
+  # put a build on a testing channel (Play internal track as a draft, TestFlight); manual trigger
+  # only, id-token only in the Android job, pinned actions, no artifacts, no expression in a run
+  # block. The selftest runs first and proves each rule can fail.
+  bash scripts/qa/check-store-upload-guards.sh selftest || return 1
+  bash scripts/qa/check-store-upload-guards.sh check
+}
 
 gate_ci_wiring() {
   # The anti-drift check: a gate added here but never called from CI would pass

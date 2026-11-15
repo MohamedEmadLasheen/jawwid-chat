@@ -53,8 +53,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Confirmation
+        # Inputs reach the shell only through env, never pasted into the script text.
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          [ "${{ inputs.confirm }}" = "DEPLOY" ] || {
+          # A full 40-character commit SHA, nothing else (it is also used as an image tag and a ref).
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::image_tag must be a full 40-character commit SHA. Nothing was deployed."
+            exit 1
+          }
+          [ "$CONFIRM" = "DEPLOY" ] || {
             echo "::error::Confirmation text did not match. Nothing was deployed."
             exit 1
           }
@@ -63,10 +72,12 @@ jobs:
 
       - name: The tag must be an ancestor of main
         # Blocks deploying a commit that was never merged and never reviewed.
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           git fetch --depth=200 origin main
-          if ! git merge-base --is-ancestor "${{ inputs.image_tag }}" origin/main; then
-            echo "::error::${{ inputs.image_tag }} is not on main. Production deploys reviewed commits only."
+          if ! git merge-base --is-ancestor "$IMAGE_TAG" origin/main; then
+            echo "::error::$IMAGE_TAG is not on main. Production deploys reviewed commits only."
             exit 1
           fi
 
@@ -94,8 +105,10 @@ jobs:
       - name: The API image for this commit exists
         # Production deploys what staging built and tested; it never builds the
         # API itself. A tag staging never built stops here, before anything.
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/api:${{ inputs.image_tag }}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/api:${IMAGE_TAG}"
           docker buildx imagetools inspect "$IMAGE" >/dev/null \
             || { echo "::error::$IMAGE does not exist -- deploy this commit to staging first"; exit 1; }
 
@@ -435,13 +448,15 @@ jobs:
 
       - name: Record the release
         if: success()
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           {
             echo "### Production release"
             echo ""
             echo "| field | value |"
             echo "|---|---|"
-            echo "| commit | \`${{ inputs.image_tag }}\` |"
+            echo "| commit | \`${IMAGE_TAG}\` |"
             echo "| run | ${{ github.run_number }} |"
             echo "| deployed by | ${{ github.actor }} |"
             echo "| launch phase | ${{ vars.LAUNCH_PHASE }} |"

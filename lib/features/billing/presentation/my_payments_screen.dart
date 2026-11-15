@@ -17,6 +17,7 @@ import '../../profile/presentation/profile_sections.dart';
 import '../application/my_billing_provider.dart';
 import '../domain/amount_due.dart';
 import '../domain/money_format.dart';
+import '../domain/review_mode.dart';
 import 'bank_transfer_screen.dart';
 import 'pay_sheet.dart';
 import 'payment_sections.dart';
@@ -178,9 +179,14 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
 
   Future<void> _pay(DueItem item, ParentBilling billing) async {
     final l10n = L10n.of(context);
-    final outcome = await showPaySheet(context, item: item, cardAvailable: billing.cardAvailable);
+    // OA-12: the App Review demo family (the server enforces it; the app says so).
+    final review = isReviewMode(billing);
+    final outcome = await showPaySheet(context, item: item, cardAvailable: billing.cardAvailable, reviewMode: review);
     if (!mounted || outcome == null) return;
     switch (outcome) {
+      // The demo page paid nothing: there is nothing to confirm.
+      case PayOutcome.cardOpened when review:
+        break;
       case PayOutcome.cardOpened:
         setState(() {
           _confirming.add(item.key);
@@ -191,7 +197,7 @@ class _MyPaymentsScreenState extends ConsumerState<MyPaymentsScreen> {
         unawaited(_refresh());
       case PayOutcome.bankTransfer:
         final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(
-          builder: (_) => BankTransferScreen(item: item, bankAccount: billing.bankAccount, today: billing.today),
+          builder: (_) => BankTransferScreen(item: item, bankAccount: billing.bankAccount, today: billing.today, reviewMode: review),
         ));
         if (mounted && sent == true) _snack(l10n.billingReceiptSent);
     }

@@ -13,6 +13,7 @@ import { CardKind } from '../communication/contracts/vocab';
 import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
 import { BillingService } from '../billing/billing.service';
+import { inReviewMode, reviewModeRefusal } from '../billing/review-mode';
 import type { CardLanguage } from '../lessons/lesson-card';
 
 type Tx = Prisma.TransactionClient;
@@ -210,6 +211,9 @@ export class SubscriptionEffects {
    */
   async requestRenewal(actorId: string, learnerId: string) {
     const { contact } = await this.billing.requireParent(actorId);
+    // OA-12: an App Review account never writes a renewal request, an audit row,
+    // a chat card or a staff task -- refused before anything is looked up.
+    if (await inReviewMode(this.prisma, contact.organizationId)) throw reviewModeRefusal();
     if (!isUuid(learnerId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'child not found');
     const learner = await this.prisma.learner.findFirst({
       where: { id: learnerId.toLowerCase(), familyId: contact.familyId },

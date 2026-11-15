@@ -16,6 +16,7 @@ import '../../profile/presentation/profile_sections.dart';
 import '../application/my_billing_provider.dart';
 import '../domain/amount_due.dart';
 import '../domain/money_format.dart';
+import '../domain/review_mode.dart';
 import 'my_payments_screen.dart';
 
 /// PD-27: pay by bank transfer, on one page -- the academy's bank details (each with
@@ -24,9 +25,13 @@ import 'my_payments_screen.dart';
 /// note. The receipt is pending until the academy verifies it; nothing here marks
 /// anything paid. Pops with `true` once the receipt is sent.
 class BankTransferScreen extends ConsumerStatefulWidget {
-  const BankTransferScreen({super.key, required this.item, required this.bankAccount, this.today});
+  const BankTransferScreen({super.key, required this.item, required this.bankAccount, this.today, this.reviewMode = false});
 
   final DueItem item;
+
+  /// OA-12: the App Review demo family. The details shown are the server's demo
+  /// ones; the page says so and Send is off (the server refuses it anyway).
+  final bool reviewMode;
 
   /// Null when the academy has not set it: the parent is told to ask, and may still
   /// upload a receipt for a transfer made from details they were given.
@@ -147,6 +152,8 @@ class _BankTransferScreenState extends ConsumerState<BankTransferScreen> {
       setState(() {
         _busy = false;
         _error = switch (appError.kind) {
+          // OA-12: the server's refusal for the App Review demo account.
+          _ when isReviewModeRefusal(appError) => l10n.billingReviewModeTransferNotice,
           _ when refused => l10n.billingReceiptNotAccepted,
           AppErrorKind.validation => l10n.billingReceiptInvalid,
           _ => billingFailureText(appError, l10n),
@@ -173,6 +180,11 @@ class _BankTransferScreenState extends ConsumerState<BankTransferScreen> {
       body: ListView(
         padding: const EdgeInsetsDirectional.only(bottom: Spacing.spacing9),
         children: [
+          if (widget.reviewMode)
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing4, Spacing.spacing4, Spacing.spacing4, 0),
+              child: ReviewModeNotice(key: const ValueKey('review-mode-notice'), text: l10n.billingReviewModeTransferNotice),
+            ),
           Card(
             margin: const EdgeInsets.all(Spacing.spacing4),
             child: Padding(
@@ -316,7 +328,7 @@ class _BankTransferScreenState extends ConsumerState<BankTransferScreen> {
                   ),
                 FilledButton(
                   key: const ValueKey('receipt-send'),
-                  onPressed: _busy ? null : _send,
+                  onPressed: _busy || widget.reviewMode ? null : _send,
                   child: _busy
                       ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : Text(l10n.billingReceiptSend),
@@ -325,6 +337,37 @@ class _BankTransferScreenState extends ConsumerState<BankTransferScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// OA-12: the App Review demo notice -- an info banner, said before anything else.
+class ReviewModeNotice extends StatelessWidget {
+  const ReviewModeNotice({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = JawwidTokens.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(Spacing.spacing4),
+        decoration: BoxDecoration(
+          color: tokens.colorStatusInfoBg,
+          borderRadius: const BorderRadius.all(Radii.radiusMd),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, color: tokens.colorStatusInfoFg),
+            const SizedBox(width: Spacing.spacing3),
+            Expanded(child: Text(text, style: theme.textTheme.bodyMedium?.copyWith(color: tokens.colorStatusInfoFg))),
+          ],
+        ),
       ),
     );
   }

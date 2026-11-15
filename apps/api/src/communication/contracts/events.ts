@@ -412,6 +412,13 @@ export interface CallParticipantPayload {
   callId: string;
   conversationId: string;
   actorId: string;
+  /**
+   * OA-12, `call.participant_left` only: set when the SERVER took this
+   * participant off a call that goes on (CallParticipantLeftReason), and then
+   * delivered to every participant's own room -- the removed one included --
+   * rather than the conversation room. Absent on media presence.
+   */
+  reason?: string;
 }
 
 export interface InboxChangedPayload {
