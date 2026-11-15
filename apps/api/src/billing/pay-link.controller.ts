@@ -10,6 +10,7 @@ import { BANK_ACCOUNT_KEY, PaymentLedger } from './payment-ledger.service';
 import { renderPayPage, type PayLang, type PayPageModel } from './pay-page';
 import { RECEIPT_PENDING, lastCardFailures, pendingReceiptMinor } from './payments-read.service';
 import { inReviewMode, renderReviewDemoPage, reviewDemoBankAccount, REVIEW_DEMO_PAGE } from './review-mode';
+import { cardRefusal } from './currency-rules';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -121,7 +122,10 @@ export class PayLinkController {
       expiresAt: request.expiresAt.toISOString(),
       bankAccount: review ? reviewDemoBankAccount(lang) : parseBankAccount(bank?.value),
       // OA-12 + W63: review mode offers the demo card page, but the operator's pause wins there too.
-      cardAvailable: (review || this.checkout.available) && !(await isCardPaused(this.prisma)),
+      // S5: outside review mode, no card form for a request Stripe cannot take (currency-rules.ts); review
+      // mode never reaches Stripe, exactly as CheckoutService.open() answers its demo page first.
+      cardAvailable: (review || (this.checkout.available && cardRefusal(request.currency, Math.max(0, amount - paid)) === null))
+        && !(await isCardPaused(this.prisma)),
       checkout,
       error: null,
       cardFailure: failure?.code ?? null,

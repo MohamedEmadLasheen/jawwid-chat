@@ -566,6 +566,15 @@ describe('Stripe Billing events (invoices, subscriptions) change nothing', () =>
   });
 });
 
+describe('Checkout is pinned to card', () => {
+  it('the pay link opens a session that offers card only', async () => {
+    const { f, child } = freshFamily();
+    const request = await lessonRequest(f.id, child.id);
+    const sessionId = await payByCard(tokenOf(request.link));
+    expect(stripe.sessions.get(sessionId)!.params.allowed_payment_method_types).toEqual(['card']);
+  });
+});
+
 describe('S3 + S6: Chat marks its own Stripe objects, and puts no child\'s name on them', () => {
   it('the Checkout Session and its payment intent carry system jawwid-chat; the line item is the request\'s label, never the child\'s name', async () => {
     const { f, child } = freshFamily();
