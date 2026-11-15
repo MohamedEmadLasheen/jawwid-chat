@@ -1,11 +1,12 @@
 import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Conversation, Message, Prisma } from '@prisma/client';
+import { Conversation, ConversationMember, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { ContentFilterService } from '../../platform/content-filter/content-filter.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
+import { retryOnTransactionConflict } from '../../platform/transaction-retry';
 import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import type {
@@ -49,6 +50,7 @@ import { currentImpersonationId } from '../../platform/request-context';
 import { MentionService } from '../mentions/mention.service';
 import { buildReceiptView, isCountableReader, isDirectTeacherParent } from './receipt-view';
 import { withOwedMakeups } from './owed-makeup';
+import { ListCursor, parseListCursor } from './list-cursor';
 import { MESSAGE_MAX_CHARACTERS, messageTooLong } from './message-length';
 import { blockedBy, hasBlocked, hideableByBlock, notHiddenByBlock } from '../../platform/blocks';
 
@@ -107,6 +109,26 @@ export interface ListMessagesInput {
   before?: string;
   after?: string;
   limit?: number;
+}
+
+type MemberFacts = Pick<ConversationMember, 'id' | 'actorId' | 'memberRole' | 'isSilent'>;
+const memberFacts = (m: MemberFacts | null) => (m ? `${m.id}:${m.actorId}:${m.memberRole}:${m.isSilent}` : '-');
+
+/**
+ * RT-014: has membership moved between the send's pre-check and its locked
+ * read? The sender's own row (present, role, silence) and the whole live set
+ * (which canSend reads for BR-1 and admin presence, and which names the
+ * recipients). Exported for its unit test.
+ */
+export function membershipMoved(
+  senderBefore: MemberFacts | null,
+  senderNow: MemberFacts | null,
+  liveBefore: readonly MemberFacts[],
+  liveNow: readonly MemberFacts[],
+): boolean {
+  if (memberFacts(senderBefore) !== memberFacts(senderNow)) return true;
+  const set = (rows: readonly MemberFacts[]) => rows.map(memberFacts).sort().join('|');
+  return set(liveBefore) !== set(liveNow);
 }
 
 /** PARENT-003: one answer for every client, naming the limit. */
@@ -193,7 +215,27 @@ export class MessageService {
   // Send
   // -------------------------------------------------------------------
 
+  /**
+   * RT-014: the send locks the conversation's member rows, then the
+   * conversation row. Some writers take them the other way round -- a room
+   * sync whose member insert takes KEY SHARE on the conversation (foreign-key
+   * check) before it removes someone, chat.erase_account, a seat sweep
+   * removing two seats of one conversation -- so the two can deadlock, and
+   * Postgres cancels one of them (40P01). When it cancels the send, the whole
+   * send runs once more from the start: the pre-check, then the transaction.
+   *
+   * Safe to repeat: the cancelled transaction is rolled back whole, and
+   * nothing before it writes. Nothing after it can raise a deadlock either
+   * (plain reads), so a retry never follows a committed message. And with a
+   * clientMessageId the retry's idempotency fast path, then the unique index,
+   * returns the one message rather than a second. A second deadlock is a
+   * retryable 503 (DATABASE_UNAVAILABLE), never a 500.
+   */
   async send(input: SendMessageInput): Promise<MessageDto> {
+    return retryOnTransactionConflict(() => this.sendOnce(input));
+  }
+
+  private async sendOnce(input: SendMessageInput): Promise<MessageDto> {
     const now = new Date();
     const actor = await this.conversations.requireActor(input.senderId);
     const conv = await this.conversations.requireConversation(input.conversationId);
@@ -293,18 +335,19 @@ export class MessageService {
 
     // PD-36: resolved before the transaction; a mention of anyone this sender
     // may not reach here refuses the whole send. Never on a forward.
-    const plannedMentions =
+    const planMentions = (against: ReadonlyArray<Pick<ConversationMember, 'actorId' | 'actorKind'>>) =>
       this.mentions && !input.forwardedFromMessageId
-        ? await this.mentions.plan({
+        ? this.mentions.plan({
             actor,
             conversation: conv,
             body: input.body,
             visibility,
             raw: input.mentions,
-            members,
+            members: against,
             now,
           })
-        : [];
+        : Promise.resolve([]);
+    let plannedMentions = await planMentions(members);
     let mentionsLimited = false;
 
     // PD-14 (2026-10-20): every message is published when it is sent. Nothing
@@ -313,16 +356,26 @@ export class MessageService {
     const stickyMinutes = await this.config.get('handoff.grace_minutes');
     const activeHandler = await this.conversations.responsibleSupervisor(conv);
 
-    // Recipients: live members other than the author. Internal notes never
-    // reach a contact or a teacher.
-    const recipients = members.filter(
-      (m) =>
-        m.actorId !== actor.actorId &&
-        (visibility === Visibility.CUSTOMER || m.actorKind === ActorKind.STAFF),
-    );
-
     try {
       const created = await this.prisma.$transaction(async (tx) => {
+        // RT-014: the membership this send is decided on is held until it
+        // commits. FOR SHARE on every live member row of the conversation,
+        // taken BEFORE the conversation row: a plain removal updates its
+        // member row first and only then takes the conversation row (the
+        // announcement it posts locks it), so the opposite order would
+        // deadlock with it. Writers that take a lock this send needs before
+        // they update a member row (a member insert's foreign-key KEY SHARE on
+        // the conversation, erase_account's account lock, a sweep removing two
+        // seats of one conversation) can still deadlock with it; `send`
+        // retries once for them. Id order, as the delivery locks take the same
+        // rows (RT-009). A removal that committed first is skipped here (its
+        // row no longer matches `left_at IS NULL` once re-checked); one that
+        // arrives later waits for this commit, so the message is ordered
+        // strictly before it.
+        await tx.$queryRaw`
+          SELECT 1 FROM chat.conversation_member
+           WHERE conversation_id = ${conv.id}::uuid AND left_at IS NULL
+           ORDER BY id FOR SHARE`;
         // Serialize sequence assignment. Ordering is decided by the server,
         // never by a device clock.
         // The locked row is also the authority for the message's tenant
@@ -341,13 +394,47 @@ export class MessageService {
         // before their deactivation commits.
         await this.conversations.assertActorLive(tx, actor);
 
+        // RT-014: membership as it stands under those locks is the authority.
+        // The decision above was made on reads taken before this transaction;
+        // when they no longer match -- the sender's own seat, or anyone's
+        // presence, role or silence -- the same decision is taken again on the
+        // locked state, and refuses with the same error a fresh send would.
+        const liveNow = await tx.conversationMember.findMany({
+          where: { conversationId: conv.id, leftAt: null },
+        });
+        const memberNow = liveNow.find((m) => m.actorId === actor.actorId) ?? null;
+        let onBehalfMode = decision.onBehalfMode;
+        if (membershipMoved(membership, memberNow, members, liveNow)) {
+          const again = await this.authz.canSend(
+            actor,
+            conv,
+            memberNow,
+            { visibility, requestedMode: input.requestedMode },
+            now,
+            family?.ownerId ?? null,
+            liveNow.map((m) => m.actorKind),
+            await this.conversations.liveMembersOf(conv.id, tx),
+          );
+          if (!again.allowed) throw new CommError(again.code, again.reason);
+          onBehalfMode = again.onBehalfMode;
+          plannedMentions = await planMentions(liveNow);
+        }
+
+        // Recipients: live members other than the author, as locked above.
+        // Internal notes never reach a contact or a teacher.
+        const recipients = liveNow.filter(
+          (m) =>
+            m.actorId !== actor.actorId &&
+            (visibility === Visibility.CUSTOMER || m.actorKind === ActorKind.STAFF),
+        );
+
         const message = await tx.message.create({
           data: {
             organizationId,
             conversationId: conv.id,
             authorType: actor.kind,
             authorId: actor.kind === ActorKind.SYSTEM ? null : actor.actorId,
-            onBehalfMode: decision.onBehalfMode,
+            onBehalfMode,
             type,
             body: input.body ?? null,
             visibility,
@@ -448,16 +535,16 @@ export class MessageService {
         });
 
         if (
-          decision.onBehalfMode === OnBehalfMode.ASSIST ||
-          decision.onBehalfMode === OnBehalfMode.ESCALATION
+          onBehalfMode === OnBehalfMode.ASSIST ||
+          onBehalfMode === OnBehalfMode.ESCALATION
         ) {
           await this.audit.audit(tx, {
             actorId: actor.actorId,
-            action: `message.${decision.onBehalfMode}`,
+            action: `message.${onBehalfMode}`,
             entity: 'conversation',
             entityId: conv.id,
             after: { messageId: message.id },
-            reason: `staff replied with on_behalf_mode=${decision.onBehalfMode}`,
+            reason: `staff replied with on_behalf_mode=${onBehalfMode}`,
           });
         }
 
@@ -556,6 +643,9 @@ export class MessageService {
   async list(
     input: ListMessagesInput,
   ): Promise<{ messages: MessageDto[]; nextBefore: string | null }> {
+    // LR-38: the cursors are checked first, so a malformed one is a 400 and
+    // never a BigInt SyntaxError (500), and before+after is refused, not merged.
+    const cursor = parseListCursor(input.before, input.after);
     const actor = await this.conversations.requireActor(input.actorId);
     const conv = await this.conversations.requireConversation(input.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
@@ -567,10 +657,10 @@ export class MessageService {
     const defaultLimit = await this.config.get('communication.page_size_default');
     const limit = Math.min(input.limit ?? defaultLimit, maxLimit);
 
-    const ascending = input.after !== undefined;
+    const ascending = cursor.after !== undefined;
     // A card that owes a make-up reads its live make-up's time (owed-makeup.ts).
     const rows = await withOwedMakeups(this.prisma, await this.prisma.message.findMany({
-      where: this.visibilityFilter(actor, conv.id, input),
+      where: this.visibilityFilter(actor, conv.id, cursor),
       include: MESSAGE_INCLUDE,
       orderBy: { seq: ascending ? 'asc' : 'desc' },
       take: limit,
@@ -619,12 +709,13 @@ export class MessageService {
   private visibilityFilter(
     actor: Actor,
     conversationId: string | { in: string[] },
-    input: ListMessagesInput,
+    cursor: ListCursor = {},
   ): Prisma.MessageWhereInput {
     const where: Prisma.MessageWhereInput = { conversationId };
 
-    if (input.before) where.seq = { lt: BigInt(input.before) };
-    if (input.after) where.seq = { gt: BigInt(input.after) };
+    // Already validated by parseListCursor: at most one of the two is set.
+    if (cursor.before !== undefined) where.seq = { lt: cursor.before };
+    if (cursor.after !== undefined) where.seq = { gt: cursor.after };
 
     if (!this.authz.canReadInternal(actor)) {
       where.visibility = Visibility.CUSTOMER;
@@ -658,7 +749,7 @@ export class MessageService {
     const found = await Promise.all(
       conversationIds.map((id) =>
         this.prisma.message.findFirst({
-          where: this.visibilityFilter(actor, id, {} as ListMessagesInput),
+          where: this.visibilityFilter(actor, id),
           orderBy: { seq: 'desc' },
           // RQA-F4: a card's kind, so a list row can name it ("Lesson report").
           include: { card: { select: { kind: true } } },
@@ -1190,7 +1281,7 @@ export class MessageService {
     const pins = await this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, orderBy: { pinnedAt: 'asc' } });
     if (pins.length === 0) return { pins: [] };
     const rows = await this.prisma.message.findMany({
-      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
+      where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
       include: MESSAGE_INCLUDE,
     });
     const dtos = await this.dtosFor(rows, conv.id, actor);
@@ -1234,7 +1325,7 @@ export class MessageService {
       const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
       if (!(await this.conversations.canReadResolved(actor, conv, membership)).allowed) continue;
       const rows = await this.prisma.message.findMany({
-        where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: ids } }] },
+        where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: ids } }] },
         include: MESSAGE_INCLUDE,
       });
       for (const d of await this.dtosFor(rows, conv.id, actor)) dtos.set(d.id, { ...d, starred: true });
@@ -1317,7 +1408,7 @@ export class MessageService {
         LIMIT ${window}`;
       if (candidates.length > 0) {
         const visible = await this.prisma.message.findMany({
-          where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+          where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: candidates.map((c) => c.id) } }] },
           include: MESSAGE_INCLUDE,
           orderBy: { seq: 'desc' },
           take: page - hits.length,
@@ -1376,7 +1467,7 @@ export class MessageService {
       if (candidates.length > 0) {
         rows.push(
           ...(await this.prisma.message.findMany({
-            where: { AND: [this.visibilityFilter(actor, { in: ids }, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+            where: { AND: [this.visibilityFilter(actor, { in: ids }), { id: { in: candidates.map((c) => c.id) } }] },
             include: MESSAGE_INCLUDE,
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: limit - rows.length,
@@ -1427,7 +1518,7 @@ export class MessageService {
       const rows = await this.prisma.message.findMany({
         where: {
           AND: [
-            this.visibilityFilter(actor, conversationId, {} as ListMessagesInput),
+            this.visibilityFilter(actor, conversationId),
             upToSeq === null ? {} : { seq: { lte: upToSeq } },
           ],
         },
@@ -1709,7 +1800,7 @@ export class MessageService {
     if (!loaded) return null;
     const { actor, conv } = loaded;
     const message = await this.prisma.message.findFirst({
-      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: loaded.message.id, deletedForAll: false }] },
+      where: { AND: [this.visibilityFilter(actor, conv.id), { id: loaded.message.id, deletedForAll: false }] },
       include: { attachments: { orderBy: { createdAt: 'asc' } } },
     });
     return message ? { actor, conv, message } : null;
@@ -1739,7 +1830,7 @@ export class MessageService {
 
     const { actor, conv, message } = await this.loadForActor(attachment.message.id, actorId);
     const visible = await this.prisma.message.count({
-      where: { ...this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), id: attachment.message.id },
+      where: { ...this.visibilityFilter(actor, conv.id), id: attachment.message.id },
     });
     if (visible === 0) throw absent();
     // PD-57: the bytes of a message the viewer's block hides are not served to them.

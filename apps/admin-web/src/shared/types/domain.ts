@@ -42,5 +42,10 @@ export interface Staff {
   permissions?: string[]
   /** ADMIN-008: the account's own language (`/me.locale`), the interface's until this person picks another. */
   locale?: string
+  /**
+   * PD-58: the Terms of Use block /me reports. Absent from an API that predates
+   * the gate -- and then there is no gate.
+   */
+  legal?: import('@/features/legal/legal').LegalBlock
 }
 

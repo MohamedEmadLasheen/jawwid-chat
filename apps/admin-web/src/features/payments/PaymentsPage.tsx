@@ -50,6 +50,8 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
         : 'receipts'
   // A link straight to the events tab waits for the server's word before falling back.
   const waiting = asked === 'events' && ledger.isLoading
+  // W63: a paused card is said on every tab, not only in Settings.
+  const cardPaused = useBillingSettings().data?.cardPaused === true
   const choose = (next: Tab) => {
     const p = new URLSearchParams(params)
     if (next === 'receipts') p.delete('tab')
@@ -60,6 +62,11 @@ export function PaymentsPage({ eyebrow }: { eyebrow?: string }) {
     <div className="page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(PAY.title)} subtitle={tx(PAY.subtitle)} />
+        {cardPaused && (
+          <div className="banner banner--danger" role="status" data-testid="card-paused-banner">
+            <strong>{tx(PAY.cardPausedBanner)}</strong>
+          </div>
+        )}
         <div className="pay-tabs">
           <FilterChips<Tab>
             variant="tabs"
@@ -308,6 +315,7 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
   const [reminders, setReminders] = useState(() => settings.reminders.map((r) => ({ ...r })))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
+  const [confirmPause, setConfirmPause] = useState(false)
   const editable = settings.canEdit
 
   const submit = () => {
@@ -348,18 +356,33 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
           <h2 id="pay-card" className="tf-section__title">
             {tx(PAY.card)}
           </h2>
-          <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
-            {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
-          </Badge>
+          {settings.cardPaused ? (
+            <Badge tone="danger" dot>
+              {tx(PAY.cardPausedBadge)}
+            </Badge>
+          ) : (
+            <Badge tone={settings.cardAvailable ? 'ok' : 'outline'} dot>
+              {tx(settings.cardAvailable ? PAY.cardOn : PAY.cardOff)}
+            </Badge>
+          )}
         </div>
-        {settings.cardAvailable && (
+        {(settings.cardAvailable || (settings.cardPaused && settings.cardConfigured)) && (
           <p className="pf-entry__meta">
             <Badge tone={settings.webhookConfigured ? 'ok' : 'danger'} dot>
               {tx(settings.webhookConfigured ? PAY.webhookOn : PAY.webhookOff)}
             </Badge>
           </p>
         )}
+        {/* W63: the kill switch. Shown when there is something to pause (Stripe configured) or to undo. */}
+        {editable && (settings.cardConfigured || settings.cardPaused) && (
+          <div className="tf-actions">
+            <button type="button" className={settings.cardPaused ? 'btn btn--primary' : 'btn btn--danger'} onClick={() => setConfirmPause(true)}>
+              {tx(settings.cardPaused ? PAY.resumeCard : PAY.pauseCard)}
+            </button>
+          </div>
+        )}
       </section>
+      {confirmPause && <CardPauseDialog paused={settings.cardPaused} onClose={() => setConfirmPause(false)} />}
 
       <section className="card panel tf-section" aria-labelledby="pay-bank">
         <div className="tf-section__head">
@@ -467,5 +490,25 @@ function SettingsForm({ settings }: { settings: BillingSettings }) {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * W63: confirm before pausing or resuming card payments. Sends only
+ * `{ cardPaused }`; the server checks the role again and writes the audit row.
+ */
+function CardPauseDialog({ paused, onClose }: { paused: boolean; onClose: () => void }) {
+  const tx = useCopy()
+  const save = useSaveBillingSettings()
+  const submit = () => save.mutate({ cardPaused: !paused }, { onSuccess: onClose })
+  return (
+    <Dialog
+      title={tx(paused ? PAY.resumeCardTitle : PAY.pauseCardTitle)}
+      onClose={onClose}
+      footer={<Footer onCancel={onClose} onSave={submit} pending={save.isPending} saveLabel={tx(paused ? PAY.resumeCard : PAY.pauseCard)} />}
+    >
+      <ServerError error={save.error} />
+      <p className="field__hint">{tx(paused ? PAY.resumeCardHint : PAY.pauseCardHint)}</p>
+    </Dialog>
   )
 }

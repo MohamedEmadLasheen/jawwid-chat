@@ -171,9 +171,15 @@ class FakeMic implements MicrophonePermission {
   MicrophoneAccess access;
   int calls = 0;
 
+  /// When set, `ensure` waits on this instead: the OS prompt is still open,
+  /// and the test decides when (and how) the person answers it.
+  Completer<MicrophoneAccess>? pending;
+
   @override
   Future<MicrophoneAccess> ensure() async {
     calls++;
+    final prompt = pending;
+    if (prompt != null) return prompt.future;
     return access;
   }
 }

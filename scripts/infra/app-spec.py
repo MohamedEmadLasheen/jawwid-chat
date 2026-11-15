@@ -345,6 +345,11 @@ def host_of(url: str, source: str) -> str:
     return host
 
 
+# A GitHub username, a colon, then the token: what App Platform needs for a
+# private GHCR image (registry_credentials).
+GHCR_CREDENTIALS_SHAPE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?:[^\s:]+")
+
+
 def resolve(env: str, template: str, environ: dict, manifest_path: str = MANIFEST):
     """Return (spec_text, set_names, dropped_names, errors). Never returns a value
     anywhere but inside spec_text."""
@@ -407,6 +412,12 @@ def resolve(env: str, template: str, environ: dict, manifest_path: str = MANIFES
                 value = value_of(name)
                 if not value:
                     errors.append(f"MISSING {name}")
+                elif name == "GHCR_PULL_CREDENTIALS" and not GHCR_CREDENTIALS_SHAPE.fullmatch(value):
+                    # DigitalOcean only says "credentials must be of the format
+                    # $username:$password", and only at release time, after the
+                    # backup and migrations. Refuse here instead. Never echo it.
+                    errors.append("GHCR_PULL_CREDENTIALS must be <github-username>:<classic token> "
+                                  "(one colon, no spaces or line breaks); the stored value is not")
                 else:
                     filled.append(name)
                     line = vm.group(1) + json.dumps(value)
@@ -835,6 +846,18 @@ def cmd_selftest() -> int:
         del missing["GHCR_PULL_CREDENTIALS"]
         _, _, _, errors = resolve("staging", spec, missing)
         expect("MISSING GHCR_PULL_CREDENTIALS" in errors, "unset registry credentials are refused")
+        for shape, label in (("tokenonly", "a token without the username"),
+                             ("user:token\n", "a value with a line break"),
+                             (" user:token", "a value with a leading space"),
+                             (":token", "an empty username"),
+                             ("user:", "an empty token")):
+            _, _, _, errors = resolve("staging", spec, dict(environ, GHCR_PULL_CREDENTIALS=shape))
+            expect(any(e.startswith("GHCR_PULL_CREDENTIALS must be") for e in errors),
+                   f"malformed registry credentials are refused: {label}")
+            expect(not any(shape.strip() in e for e in errors if shape.strip()),
+                   f"the refusal never echoes the value: {label}")
+        _, _, _, errors = resolve("staging", spec, dict(environ, GHCR_PULL_CREDENTIALS="some-user:ghp_abc123"))
+        expect(not any("GHCR_PULL_CREDENTIALS" in e for e in errors), "well-formed registry credentials pass")
         plain = dict(environ, API_ORIGIN="http://api.staging.invalid")
         _, _, _, errors = resolve("staging", spec, plain)
         expect(any("https://" in e for e in errors), "a non-https API origin is refused")
