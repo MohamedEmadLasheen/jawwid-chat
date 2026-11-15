@@ -1523,7 +1523,7 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 | `call.accepted` | `{ callId, conversationId, actorId }` | conversation room | **`accept`** — the HTTP answer, an APPLICATION act. |
 | `call.declined` | `{ callId, conversationId, actorId }` | conversation room | `decline` |
 | `call.participant_joined` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only** (`MediaPresenceService`) — MEDIA presence, something observed in the room. **Never `accept`.** |
-| `call.participant_left` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only.** Records a departure; does **not** end the call. |
+| `call.participant_left` | `{ callId, conversationId, actorId, reason? }` | conversation room; with `reason`, each participant's actor room | **`POST /livekit/webhook`**, records a departure; does **not** end the call. **OA-12:** with `reason: "one_learner_lesson"` the server took that guardian off a lesson call (`CallService.separateLessonLearners`); the call goes on for everyone else. |
 | `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | conversation room | `end`, the ring-timeout sweep, and `decline` (terminal since 2026-09-27) |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | actor room | **nobody** — `in_app` channel is a no-op in `deliver()`. Phase 1 decides. |
 | **`session.revoked`** (Phase 1, new) | `{ sessionId }` | actor room, then the session's sockets are disconnected | `DELETE /me/sessions/:id`, refresh-reuse detection |
@@ -1565,7 +1565,7 @@ Reconnect: re-subscribe, then (only once rejoined) `GET …/messages?after=<last
 | S-8 | `Idempotency-Key` accepted but not enforced; a double-submit of a non-message mutation (membership add, assignment) is not deduplicated. | no server-side handling found | Idempotency store keyed by (actor, key) with body hash. | 1+ |
 | S-9 | Non-`CommError` failures (validation, unknown routes, DB constraint violations such as a missing `reason` or a BR-1 trigger) return Nest default bodies / 500s, leaking internals and breaking the error contract. | `main.ts` (only `CommErrorFilter`), `setMembership` | Catch-all filter → `COMMON.*` codes; request validation. | 1 |
 | S-10 | RT-013 (internal notes announced to contacts) — **addressed**: the worker routes `visibility: 'internal'` to staff actor rooms only. Recorded as closed. | `outbox.worker.ts#publish` | — | done |
-| S-11 | RT-006: `signUrlsForMessages(messageIds)` takes no actor; safe only because the sole caller already filtered by `visibilityFilter`. | `attachment.service.ts` | Pass the actor; assert message visibility inside. | 1 |
+| S-11 | RT-006: `signUrlsForMessages(messageIds)` takes no actor; safe only because the sole caller already filtered by `visibilityFilter`. | `attachment.service.ts` | Pass the actor; assert message visibility inside. **Corrected 2026-11-08 (LR-30): closed on `main`.** The helper takes the actor and returns only actor-bound links to `GET /media/attachments/:id`, which re-checks read access on every request (`media.controller.ts:50-62`; commit `4d028e11`, PR #38). Evidence: `docs/red-team/findings.md` RT-006. | 1 |
 | S-12 | Client-controlled `authorId` trust surfaces in tests only; approvals list embeds full `MessageDto` (with receipts) for staff — acceptable once S-5 lands. | `approval.service.ts` | Follows S-5. | 1 |
 
 ---

@@ -388,6 +388,31 @@ void main() {
       expect(permission.calls, 1);
       expect(calls.tokenRequests, isEmpty);
     });
+
+    test('LR-74: onMicrophoneGranted runs once, after the grant and before the token',
+        () async {
+      build();
+      final seen = <String>[];
+      await client.connect(
+        callId: _callId,
+        onMicrophoneGranted: () => seen.add(
+          'granted after ${permission.calls} ask(s), '
+          '${calls.tokenRequests.length} token request(s)',
+        ),
+      );
+
+      expect(seen, ['granted after 1 ask(s), 0 token request(s)']);
+    });
+
+    test('LR-74: a refused or unavailable microphone never reports a grant',
+        () async {
+      for (final access in [MicrophoneAccess.denied, MicrophoneAccess.unavailable]) {
+        build(access: access);
+        var granted = 0;
+        await client.connect(callId: _callId, onMicrophoneGranted: () => granted++);
+        expect(granted, 0, reason: '$access');
+      }
+    });
   });
 
   // -----------------------------------------------------------------------

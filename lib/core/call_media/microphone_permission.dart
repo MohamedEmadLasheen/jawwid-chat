@@ -38,6 +38,41 @@ abstract interface class MicrophonePermission {
   Future<MicrophoneAccess> ensure();
 }
 
+/// ONE MICROPHONE QUESTION AT A TIME (LR-74).
+///
+/// Everybody who asks while a question is open shares it: the second caller
+/// gets the first caller's answer, and the platform is asked once. Once the
+/// answer is in, the next [ensure] asks again (a grant is not cached -- it can
+/// be revoked in Settings at any time).
+///
+/// WHY. `record_android` keeps ONE pending permission result, and Android hands
+/// a second concurrent request an empty -- that is, denied -- result. A
+/// scheduled call this device started asks while it rings; if the other side
+/// answers while that prompt is still open, the media join asks too, and
+/// without this the join read "denied" although the person tapped Allow, and
+/// the first question never completed. The platform's prompt is per process,
+/// so the sharing is per device, not per call.
+class SharedMicrophonePermission implements MicrophonePermission {
+  SharedMicrophonePermission(this._inner);
+
+  final MicrophonePermission _inner;
+  Future<MicrophoneAccess>? _open;
+
+  @override
+  Future<MicrophoneAccess> ensure() {
+    final open = _open;
+    if (open != null) return open;
+    final asked = Future<MicrophoneAccess>.sync(_inner.ensure);
+    _open = asked;
+    // Cleared on the answer (or an error), never before: a caller arriving in
+    // between still shares this one.
+    asked.whenComplete(() {
+      if (identical(_open, asked)) _open = null;
+    }).ignore();
+    return asked;
+  }
+}
+
 /// [MicrophonePermission] over the `record` plugin already in this project.
 ///
 /// Reused rather than adding a second permission mechanism: `record` is here for

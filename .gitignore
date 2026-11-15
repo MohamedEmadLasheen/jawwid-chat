@@ -47,6 +47,10 @@ npm-debug.log*
 /ios/build/
 *.mobileprovision
 *.p12
+*.pfx
+# APNs auth keys (AuthKey_XXXXXXXXXX.p8). scripts/infra/scan-secrets.sh also
+# flags any of these extensions that is tracked anyway (git add -f).
+*.p8
 
 # macOS
 .DS_Store

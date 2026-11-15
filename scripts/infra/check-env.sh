@@ -74,6 +74,14 @@ lookup() {
   awk -F'\t' -v k="$1" '$1 == k { print substr($0, index($0, "\t") + 1); exit }' "$SNAPSHOT"
 }
 
+# Leading and trailing whitespace removed (bash 3.2: no extglob needed).
+trim() {
+  local v="$1"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  printf '%s' "$v"
+}
+
 errors=0
 warnings=0
 checked=0
@@ -143,14 +151,47 @@ if [ "$ENVIRONMENT" = "production" ]; then
     echo "  FORBIDDEN   APNS_PRODUCTION must be 'true' -- sandbox APNs drops production tokens"
     errors=$((errors + 1))
   fi
-  # PD-56: the API refuses to boot with these too (apps/api/src/billing/stripe-config.ts);
-  # caught here, before the backup and the migrations, rather than after them.
-  case "$(lookup STRIPE_SECRET_KEY)" in
-    sk_test_* | rk_test_*)
-      echo "  FORBIDDEN   STRIPE_SECRET_KEY is a Stripe TEST key -- no money would move"
-      errors=$((errors + 1)) ;;
-  esac
-  if [ -n "$(lookup STRIPE_SECRET_KEY)" ] && [ -z "$(lookup STRIPE_WEBHOOK_SECRET)" ]; then
+  # PD-56 / Stripe M1: the API refuses to boot with a wrong Stripe setup too
+  # (apps/api/src/billing/stripe-config.ts, the same rules); caught here, before
+  # the backup and the migrations, rather than after them. Values are trimmed
+  # as the API trims them, matched in shell variables, and never printed.
+  #
+  # LAUNCH_PHASE (deploy-production.yml passes the production Environment
+  # variable to this step; app-spec.py refuses anything but review|launch):
+  #   review  the store-review period: Stripe optional (unset = cards off);
+  #   launch  the public launch takes card payments: BOTH secrets required.
+  stripe_key="$(trim "$(lookup STRIPE_SECRET_KEY)")"
+  stripe_whsec="$(trim "$(lookup STRIPE_WEBHOOK_SECRET)")"
+  # The prefix is the safety check; after it any non-whitespace character is
+  # accepted (Stripe promises no character set). Portable POSIX ERE classes.
+  stripe_live_re='^(sk|rk)_live_[^[:space:]]+$'
+  stripe_whsec_re='^whsec_[^[:space:]]+$'
+  if [ -n "$stripe_key" ]; then
+    case "$stripe_key" in
+      sk_test_* | rk_test_*)
+        echo "  FORBIDDEN   STRIPE_SECRET_KEY is a Stripe TEST key -- no money would move"
+        errors=$((errors + 1)) ;;
+      *)
+        if ! [[ "$stripe_key" =~ $stripe_live_re ]]; then
+          echo "  FORBIDDEN   STRIPE_SECRET_KEY is not a live secret or restricted key (sk_live_/rk_live_)"
+          errors=$((errors + 1))
+        fi ;;
+    esac
+  fi
+  if [ -n "$stripe_whsec" ] && ! [[ "$stripe_whsec" =~ $stripe_whsec_re ]]; then
+    echo "  FORBIDDEN   STRIPE_WEBHOOK_SECRET is not a webhook signing secret (whsec_) -- no payment could be recorded"
+    errors=$((errors + 1))
+  fi
+  if [ "$(lookup LAUNCH_PHASE)" = "launch" ]; then
+    if [ -z "$stripe_key" ]; then
+      echo "  MISSING     STRIPE_SECRET_KEY (payments, required at LAUNCH_PHASE=launch: the public launch takes cards)"
+      errors=$((errors + 1))
+    fi
+    if [ -z "$stripe_whsec" ]; then
+      echo "  MISSING     STRIPE_WEBHOOK_SECRET (payments, required at LAUNCH_PHASE=launch: card payments must be recorded)"
+      errors=$((errors + 1))
+    fi
+  elif [ -n "$stripe_key" ] && [ -z "$stripe_whsec" ]; then
     echo "  FORBIDDEN   STRIPE_WEBHOOK_SECRET is missing -- card payments could never be recorded"
     errors=$((errors + 1))
   fi

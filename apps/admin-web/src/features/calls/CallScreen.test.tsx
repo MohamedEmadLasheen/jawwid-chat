@@ -93,14 +93,14 @@ function Where() {
   return <output data-testid="where">{l.pathname + l.search}</output>
 }
 
-function renderScreen(isGroup = false) {
+function renderScreen(isGroup = false, staff = ADMIN) {
   return renderWithProviders(
     <CallProvider createMedia={createMedia}>
       <ConversationCallControls conversationId="conv-1" peerLabel="Parent P" isGroup={isGroup} />
       <CallOverlay />
       <Where />
     </CallProvider>,
-    { staff: ADMIN },
+    { staff },
   )
 }
 
@@ -291,6 +291,25 @@ describe('an incoming call rings, wherever the admin is', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Decline' }))
     expect(await screen.findByText('Call declined')).toBeTruthy()
     expect(media).toBeNull()
+  })
+
+  it('PD-58: never rings over the Terms gate or the unavailable page (Answer would be refused anyway)', async () => {
+    stubApi({ canCall: true })
+    const doc = { documentKey: 'terms_staff', version: 'v1', urlAr: 'https://x.test/ar', urlEn: 'https://x.test/en' }
+    for (const legal of [
+      { state: 'required' as const, required: [doc], unavailable: [] },
+      { state: 'unavailable' as const, required: [], unavailable: ['terms_staff'] },
+    ]) {
+      const view = renderScreen(false, makeStaff({ id: 'staff_a', role: 'admin', legal }))
+      act(() =>
+        fakeSocket.serverEmits('call.incoming', { callId: 'call-7', conversationId: 'conv-2', type: 'direct', initiatorName: 'Parent P' }),
+      )
+      // Give the event time to render if it were going to.
+      await new Promise((r) => setTimeout(r, 20))
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Answer' })).toBeNull()
+      view.unmount()
+    }
   })
 
   it('a malformed event is ignored', async () => {

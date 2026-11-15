@@ -50,15 +50,69 @@ issue them.
 
 Two of these are enforced mechanically rather than by discipline:
 
-- `scripts/infra/scan-secrets.sh` — runs in CI over the worktree **and git
-  history**. Reports file and rule; never prints the matching text, because
-  echoing a leaked key into a CI log copies the leak into a second system.
+- `scripts/infra/scan-secrets.sh` — runs in CI over the worktree. Its history
+  rule (`.env` file names ever added) sees **no history in CI today**, because the
+  CI checkout is shallow (see §7). Reports file and rule; never
+  prints the matching text, because echoing a leaked key into a CI log copies
+  the leak into a second system. What it looks for is in §3.1.
 - `scripts/infra/check-web-env.sh` — refuses a web build whose `VITE_*`
   variables, or whose built bundle, look like they carry a credential.
 
 The health endpoints and probe errors are sanitised for the same reason: a
 driver error routinely quotes the DSN that failed, and a DSN contains a
 password, so `health.service.ts` returns the error *class*, never its message.
+
+### 3.1 What `scan-secrets.sh` looks for
+
+Tests: `test/scripts/scan_secrets_test.dart` runs the real script against
+throwaway fixture repositories, one case per rule, plus the look-alike shapes
+this repository legitimately contains, which must stay clean.
+
+| Rule | Scope | Matches |
+|---|---|---|
+| tracked env file | file names | `.env`, `.env.*`, `*.env` (not `*.env.example`, `infra/env/*.example`) |
+| tracked key or keystore file | file names, any content | `*.p8` (APNs), `*.p12` / `*.pfx`, `*.jks` / `*.keystore`, `*.mobileprovision` — all also in `.gitignore`; this catches one added with `git add -f`. Needed because the content rules skip binary files. |
+| private key block | text | `-----BEGIN … PRIVATE KEY-----` |
+| supabase service_role jwt | text | a JWT whose payload names `service_role` |
+| google service account | text | `"type": "service_account"` |
+| aws access key id | text | `AKIA` + 16 |
+| slack token / github token | text | `xox?-…`, `gh?_…` |
+| postgres url with password | text | `postgres://user:pass@` (password ≥ 6) |
+| livekit secret assignment | text | `LIVEKIT_API_SECRET = "…"` |
+| stripe secret key | text | `sk_live_`, `sk_test_`, `rk_live_`, `rk_test_` + ≥ 20 letters/digits |
+| stripe webhook secret | text | `whsec_` + ≥ 24 base64 characters |
+| digitalocean token | text | `dop_v1_` / `doo_v1_` / `dor_v1_` + 64 hex |
+| google api key | text | `AIza` + 35 |
+| meta access token | text | `EAA` + ≥ 90 letters/digits, starting a token (not inside a base64 blob) |
+| sentry dsn with secret | text | the legacy `https://<32 hex>:<32 hex>@` form. A modern DSN (public key only) is meant for clients and is not flagged. |
+| sentry auth token | text | `sntrys_` / `sntryu_` + ≥ 40 |
+| smtp url with password | text | `smtp(s)://user:pass@` |
+| redis url with password | text | `redis(s)://[user]:pass@` |
+| server secret in client code | `lib/`, `apps/admin-web/src` | the names of server-only secrets |
+
+Deliberate exclusions, each one documented in the script:
+
+- Paths that describe secrets without holding them: `docs/infrastructure/`,
+  `infra/env/`, the scanner itself, `docs/JAWWID_CHAT_BRIEF*`.
+- Every text rule: a line pointing at `@localhost`, `@127.0.0.1` or a compose
+  service (`@postgres:`, `@db:`, `@redis:`) is a development default.
+- SMTP and Redis rules only: a password that starts with `$`, `%`, `{` or `<`
+  (a `$VAR`, `${VAR}` or `<password>` placeholder), the literal password
+  `password`, and a host under a reserved TLD (`.invalid`, `.example`, `.test`,
+  `.localhost`). The older rules were not relaxed.
+- Short or underscore-separated Stripe-shaped strings (`sk_test_unit`,
+  `whsec_unit_test_secret`, `rk_live_x`) used by the API's tests do not match:
+  real key bodies are long and letters/digits only.
+
+When these rules were added (W17), `git grep` with each pattern and the
+exclusions above found nothing in the tree, and no file with a key or keystore
+extension was tracked.
+
+**A Firebase client config will trip `google api key`.** `firebase_options.dart`
+and `google-services.json` carry an `AIza…` key that is public by design (it
+ships in the app). If one is ever committed, restrict the key to the app's
+bundle ID / SHA-1 in Google Cloud first, then add that one file to
+`EXCLUDE_PATH` in the same PR with a comment saying why.
 
 ## 4. Rotation
 
@@ -193,3 +247,18 @@ project was provisioned, and what to repeat if it is ever rebuilt.
 - `scan-secrets.sh` is a tripwire covering this project's realistic failure
   modes, not a comprehensive scanner. Adding a managed scanner is worthwhile once
   the repository is hosted.
+- **CI checks no git history today.** CI (`.github/workflows/ci.yml` →
+  `scripts/qa/guards.sh secret-scan` → `scan-secrets.sh --history`) checks out with
+  `actions/checkout` and no `fetch-depth`, i.e. depth 1: only the tip commit exists
+  on the runner. The §3.1 content rules run over that worktree, and rule 4 (`.env`
+  file names ever added) sees only that one commit. So anything committed in one
+  commit and deleted in the next (a `.env`, a Stripe key, a private key, a
+  keystore) is invisible to CI, though it stays in every clone. Even with full
+  history, rule 4 checks `.env` file names only. Closing this needs either the content rules run over
+  `git log -p` (slow on a large history; must still print only commit and rule)
+  or a managed history scanner as a CI step, and in either case `fetch-depth: 0` on
+  that job's checkout. Both are `.github/` changes that need the Code Owner. Until then, after any suspected leak, scan history
+  by hand and follow §5 regardless of what CI says.
+- Binary files are not searched for content (`git grep -I`). Key and keystore
+  files are caught by name instead (§3.1); a credential inside some other binary
+  format (an archive, a `.sqlite` file) is not caught.

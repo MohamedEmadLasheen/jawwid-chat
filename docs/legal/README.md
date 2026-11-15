@@ -17,6 +17,8 @@
 | Blocking, Suspension and Enforcement Policy | `blocking-and-enforcement-policy-ar.md` | `blocking-and-enforcement-policy-en.md` | — | Incorporated by reference |
 | Child Safety and Parental Responsibility Policy | `child-safety-policy-ar.md` | `child-safety-policy-en.md` | — | Incorporated by reference; also the published child safety standards |
 | Privacy Policy | `privacy-policy-ar.md` | `privacy-policy-en.md` | — | Notice (never a click-through) |
+| Help and Support | `support-ar.md` | `support-en.md` | — | Information page (Support URL); drafted 2026-11-09 |
+| Account deletion (information) | `account-deletion-ar.md` | `account-deletion-en.md` | — | Information page (Play "Delete account URL"); links to the API form; drafted 2026-11-09 |
 
 There are separate Teacher Terms and Staff Terms because of owner decision A-3 (`docs/release/google-play-blocker-roadmap-2026-11-03.md` §7). A-3 requires separate terms per account kind plus one shared Code of Conduct, and PR #462 stores them that way.
 
@@ -30,6 +32,9 @@ There are separate Teacher Terms and Staff Terms because of owner decision A-3 (
 | `app-store-compliance-checklist.md` | Google Play and Apple requirements, and the state of each |
 | `public-hosting-requirements.md` | How and where the documents must be published, and how to check them |
 | `outstanding-information-and-decisions.md` | Placeholders, owner decisions (LD-n), legal-review items (L-n), developer confirmations, blockers |
+| `owner-confirmation-sheet.md` | Every placeholder with a proposed value, its source and where it is used, for the owner to confirm (OA-08); plus the decisions for the owner and counsel |
+| `apply-confirmed-values.md` | The placeholder → value → files table the lead applies in one commit |
+| `publishing-gap-check.md` | Which pages exist in both languages; the deletion and support pages against Google Play and Apple |
 | `pd048-lesson-audio-parent-notice.md` | The owner-approved PD-48 wording. It is carried verbatim in Privacy Policy §14 and Terms of Use §9 |
 
 ## Rules for editing

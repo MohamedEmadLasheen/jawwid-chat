@@ -195,7 +195,15 @@ class CallMediaClient {
   ///
   /// Safe to call twice. A second call while connecting or connected does
   /// nothing rather than opening a second room.
-  Future<void> connect({required String callId}) async {
+  ///
+  /// [onMicrophoneGranted] runs once, the moment step 1 answers "granted" and
+  /// before anything else. It is the earliest point at which the layer above
+  /// may start an Android MICROPHONE foreground service (LR-74): Android 14+
+  /// refuses one without RECORD_AUDIO, so it must not come sooner.
+  Future<void> connect({
+    required String callId,
+    void Function()? onMicrophoneGranted,
+  }) async {
     if (_disposed || _connecting) return;
     if (_snapshot.phase != CallMediaPhase.idle &&
         _snapshot.phase != CallMediaPhase.disconnected &&
@@ -224,6 +232,7 @@ class CallMediaClient {
         );
         return;
       }
+      onMicrophoneGranted?.call();
 
       final CallMediaGrant grant;
       try {

@@ -12,6 +12,7 @@ import type {
   AttemptStatus,
   CardAttempt,
   CardAttemptRow,
+  Overpaid,
   PaymentMethod,
   PaymentReconciliation,
   PlanMonths,
@@ -32,6 +33,7 @@ import {
   EVENT_TYPES,
   LED,
   METHOD,
+  OVERPAID_WHY,
   PAY,
   PURPOSE_LABEL,
   TRANSACTION_STATUS,
@@ -41,6 +43,7 @@ import {
   describeError,
   formatDay,
   formatMoney,
+  paymentCreditsLessons,
   useCopy,
 } from './copy'
 import {
@@ -51,7 +54,7 @@ import {
   useTransaction,
   useTransactions,
 } from './hooks'
-import { Field, InvoiceDownloadButton, RequestStatusBadge, ServerError } from './PaymentParts'
+import { Field, InvoiceDownloadButton, RefundNote, RequestStatusBadge, ServerError } from './PaymentParts'
 import './payments.css'
 
 /**
@@ -82,6 +85,16 @@ const OUTCOME_TONE: Record<string, Tone> = {
   checkout_failed: 'warn',
   refund_deferred: 'warn',
   unknown_session: 'warn',
+  refund_failed_after_record: 'danger',
+  // A dispute is a flag for a person (the ledger is unchanged): opened and money withdrawn are urgent.
+  dispute_opened: 'danger',
+  dispute_funds_withdrawn: 'danger',
+  dispute_closed_lost: 'danger',
+  dispute_updated: 'warn',
+  dispute_closed_unknown: 'warn',
+  dispute_closed_won: 'ok',
+  dispute_closed_prevented: 'ok',
+  dispute_funds_reinstated: 'ok',
 }
 
 const raw = (s: string): Pair => ({ en: s, ar: s })
@@ -100,6 +113,16 @@ export function TransactionStatusBadge({ status }: { status: TransactionStatus }
   return (
     <Badge tone={STATUS_TONE[status]} dot>
       {tx(TRANSACTION_STATUS[status])}
+    </Badge>
+  )
+}
+
+/** M3: money recorded beyond what was owed -- staff refund it or credit it. */
+function OverpaidBadge({ overpaid }: { overpaid: Overpaid }) {
+  const tx = useCopy()
+  return (
+    <Badge tone={overpaid.settled ? 'outline' : 'danger'}>
+      {tx(overpaid.settled ? LED.overpaidSettled : LED.overpaid)}
     </Badge>
   )
 }
@@ -364,6 +387,12 @@ function TransactionRow({ t, onOpen }: { t: Transaction; onOpen: () => void }) {
       <td className="pay-num">{t.refundedMinor > 0 ? money(t.refundedMinor) : '—'}</td>
       <td>
         <TransactionStatusBadge status={t.status} />
+        {t.overpaid && (
+          <>
+            {' '}
+            <OverpaidBadge overpaid={t.overpaid} />
+          </>
+        )}
       </td>
       <td>{formatDay(t.paidOn, locale)}</td>
       <td>{t.invoice ? <bdi dir="ltr">{t.invoice.number}</bdi> : '—'}</td>
@@ -459,6 +488,17 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
           <dd className="pf-amount">{money(p.amountMinor)}</dd>
           <dt>{tx(LED.colRefunded)}</dt>
           <dd className="pf-amount">{money(p.refundedMinor)}</dd>
+          {p.overpaid && (
+            <>
+              <dt>
+                <OverpaidBadge overpaid={p.overpaid} />
+              </dt>
+              <dd>
+                <span className="pf-amount">{tx(LED.overpaidBy, { amount: money(p.overpaid.amountMinor) })}</span>
+                {OVERPAID_WHY[p.overpaid.why] && <span className="pay-sub">{tx(OVERPAID_WHY[p.overpaid.why]!)}</span>}
+              </dd>
+            </>
+          )}
           <dt>{tx(LED.colPaidOn)}</dt>
           <dd>{formatDay(p.paidOn, locale)}</dd>
           <dt>{tx(LED.recordedAt)}</dt>
@@ -493,6 +533,18 @@ function TransactionDetailBody({ d }: { d: TransactionDetail }) {
             </>
           )}
         </dl>
+        {p.refundedMinor > 0 && (
+          <RefundNote
+            as="p"
+            wording={
+              paymentCreditsLessons({ trialId: p.trialId, instalmentId: p.instalmentId, purpose: p.request?.purpose ?? d.request?.purpose ?? null })
+                ? 'lessons'
+                : 'plain'
+            }
+            amountMinor={p.refundedMinor}
+            currency={p.currency}
+          />
+        )}
       </Section>
 
       {p.stripe && (
