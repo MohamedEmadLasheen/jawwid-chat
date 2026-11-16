@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type PaymentCheckout } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { familyInScope } from './billing-access';
 import { BillingService } from './billing.service';
 import { CheckoutService, errorCategory } from './checkout.service';
-import { STRIPE_GATEWAY, type StripeGateway } from './stripe.gateway';
+import { STRIPE_GATEWAY, type CheckoutSession, type StripeGateway } from './stripe.gateway';
 
 /** An attempt this old with no webhook is asked about (Stripe normally answers within seconds). */
 const STALE_AFTER_MS = 10 * 60_000;
@@ -39,7 +39,8 @@ export interface PaymentReconciliation {
  *
  *   sweep()            the worker, every STRIPE_RECONCILE_MS: card attempts still
  *                      open 10 minutes on -> asked of Stripe (paid: recorded;
- *                      expired: marked); refunds that arrived before their
+ *                      expired: marked; not found and its own expiry over an
+ *                      hour past: marked expired, audited); refunds that arrived before their
  *                      payment -> synced once the payment exists.
  *   reconcileNow()     the same, now, for the actor's academy (canVerify).
  *   reconcilePayment() one card payment beside Stripe's own numbers; any refund
@@ -73,8 +74,26 @@ export class StripeReconciler {
     });
     for (const c of stale) {
       result.checked++;
+      let session: CheckoutSession;
       try {
-        const session = await this.stripe.retrieveCheckout(c.stripeSessionId);
+        session = await this.stripe.retrieveCheckout(c.stripeSessionId);
+      } catch (e) {
+        // W76b: Stripe cannot be asked about it (it no longer has the session,
+        // or is down). Closed only when its own expiry is long past and Stripe
+        // can no longer take payment on it (audited); otherwise left open and
+        // asked again next pass -- a transient error never closes a live page.
+        // Only a failed LOOK-UP gets here: a failure recording what Stripe
+        // answered (below) never closes a row.
+        if (await this.closeUnconfirmed(c, e)) {
+          result.expired++;
+          this.log.warn(`stripe reconcile: checkout not found at Stripe (${errorCategory(e)}) and long expired; marked expired (audited)`);
+        } else {
+          result.errors++;
+          this.log.warn(`stripe reconcile: checkout not checked (${errorCategory(e)})`);
+        }
+        continue;
+      }
+      try {
         if (session.status === 'complete' && session.paymentStatus === 'paid') {
           const outcome = await this.checkout.confirmFound(session);
           if (outcome === 'recorded') {
@@ -121,6 +140,16 @@ export class StripeReconciler {
       this.log.log(`stripe reconcile: checked=${result.checked} recorded=${result.recorded} expired=${result.expired} refunds=${result.refundsRecorded} errors=${result.errors}`);
     }
     return result;
+  }
+
+  /** CheckoutService.closeUnconfirmed, never throwing: a database failure here is one more error of the pass. */
+  private async closeUnconfirmed(c: PaymentCheckout, cause: unknown): Promise<boolean> {
+    try {
+      return await this.checkout.closeUnconfirmed(c, cause);
+    } catch (e) {
+      this.log.warn(`stripe reconcile: a long-expired checkout was not closed (${errorCategory(e)})`);
+      return false;
+    }
   }
 
   /** POST /stripe/reconcile -- the sweep, now, for the actor's own academy. */

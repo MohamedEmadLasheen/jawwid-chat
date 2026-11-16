@@ -53,8 +53,29 @@ The build passes `--split-debug-info=build/symbols/<ios|android>/<BUILD_NAME>+<B
 folder for every build you ship, and for iOS also the dSYMs
 (`build/ios/archive/Runner.xcarchive/dSYMs`). The script prints both locations when it finishes.
 
-Upload them by hand, with your own Sentry auth token in your shell (never in the repo or the
-script). `ORG` and `PROJECT` are the Sentry organisation and project slugs:
+**CI builds** (`.github/workflows/release-store-builds.yml`, `docs/release/signed-builds-ci.md`) upload
+them automatically, **before** the store upload so a failure stops the release: sentry-cli 3.8.2
+(SHA-256 pinned, `scripts/mobile/install-sentry-cli.sh`) with the `store-release` Environment's
+`SENTRY_AUTH_TOKEN` secret and `SENTRY_ORG` / `SENTRY_PROJECT` (and optional `SENTRY_URL`) variables,
+all passed through the environment:
+
+- Android: `sentry-cli debug-files upload build/symbols/android/<BUILD_NAME>+<BUILD_NUMBER>`, and
+  `sentry-cli upload-proguard build/app/outputs/mapping/release/mapping.txt` when the R8 mapping file
+  exists (both commands checked against the sentry-cli 3.0 release notes). Until the app declares
+  `io.sentry.proguard-uuid` (Sentry Android Gradle plugin; a follow-up in
+  `docs/release/signed-builds-ci.md` §7), Sentry cannot match the mapping to an event, so Java/Kotlin
+  frames stay obfuscated; Dart frames are not affected;
+- iOS: `sentry-cli debug-files upload` on the archive's `dSYMs` and on
+  `build/symbols/ios/<BUILD_NAME>+<BUILD_NUMBER>`.
+
+The token reaches sentry-cli only through `SENTRY_AUTH_TOKEN` in the step's environment (never a
+command-line flag or a config file), it logs at `warn`, its output is kept in a file that is never
+printed (one summary line per upload), and the symbols and that file are deleted at the end of the job
+whatever happens. The symbols go to Sentry only: not to a GitHub artifact, and not inside the `.ipa`
+(`uploadSymbols` is false).
+
+For a build made by hand, upload them yourself, with your own Sentry auth token in your shell (never in
+the repo or the script). `ORG` and `PROJECT` are the Sentry organisation and project slugs:
 
 ```bash
 export SENTRY_AUTH_TOKEN=...   # yours; do not commit or paste it anywhere

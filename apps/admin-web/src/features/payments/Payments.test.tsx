@@ -71,6 +71,8 @@ function settings(over: Partial<BillingSettings> = {}): BillingSettings {
     bankAccount: { bankName: 'Bank Example', accountName: 'Academy Example LLC', iban: 'AE07 0331 2345 6789 0123 456', accountNumber: null, swift: 'EXAMAEAD', note: null },
     issuer: { name: 'Academy Example LLC', address: 'Example Street 1', taxId: null },
     cardAvailable: false,
+    cardConfigured: false,
+    cardPaused: false,
     reminders: [
       { key: 'payment_d7', offsetDays: -7, enabled: true },
       { key: 'payment_d0', offsetDays: 0, enabled: true },
@@ -284,6 +286,89 @@ describe('Payments > Settings', () => {
     expect(screen.getByText('Stripe connected')).toBeInTheDocument()
     expect(screen.getByText('Webhook configured')).toBeInTheDocument()
     expect(screen.getByText(/Only the super admin and the Operations Manager change these settings/)).toBeInTheDocument()
+  })
+
+  it('W63: the Operations Manager pauses card payments after confirming; only { cardPaused } is sent; the page then says so', async () => {
+    access()
+    on('GET', /\/billing\/settings$/, () => json(settings({ cardConfigured: true, cardAvailable: true, webhookConfigured: true })))
+    on('POST', /\/billing\/settings$/, (_u, init) => {
+      const { cardPaused } = JSON.parse(String(init.body)) as { cardPaused: boolean }
+      return json(settings({ cardConfigured: true, webhookConfigured: true, cardPaused, cardAvailable: !cardPaused }))
+    })
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=settings' })
+
+    const card = await screen.findByRole('region', { name: 'Card payments' })
+    expect(within(card).getByText('Stripe connected')).toBeInTheDocument()
+    expect(screen.queryByTestId('card-paused-banner')).not.toBeInTheDocument()
+
+    // Cancel: nothing is sent.
+    await userEvent.click(within(card).getByRole('button', { name: 'Pause card payments' }))
+    let dialog = screen.getByRole('dialog', { name: 'Pause card payments?' })
+    expect(within(dialog).getByText(/Payments already made on Stripe, refunds and disputes are still recorded/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(calls('POST', /\/billing\/settings$/)).toHaveLength(0)
+
+    // Confirm: exactly the switch.
+    await userEvent.click(within(card).getByRole('button', { name: 'Pause card payments' }))
+    dialog = screen.getByRole('dialog', { name: 'Pause card payments?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Pause card payments' }))
+    await waitFor(() => expect(calls('POST', /\/billing\/settings$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/billing\/settings$/)[0])).toEqual({ cardPaused: true })
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByTestId('card-paused-banner')).toHaveTextContent('Card payments paused.')
+    expect(within(card).getByText('Card payments paused')).toBeInTheDocument()
+    expect(within(card).queryByText('Stripe connected')).not.toBeInTheDocument()
+
+    // Resume, the same way.
+    await userEvent.click(within(card).getByRole('button', { name: 'Resume card payments' }))
+    dialog = screen.getByRole('dialog', { name: 'Resume card payments?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Resume card payments' }))
+    await waitFor(() => expect(calls('POST', /\/billing\/settings$/)).toHaveLength(2))
+    expect(bodyOf(calls('POST', /\/billing\/settings$/)[1])).toEqual({ cardPaused: false })
+    await waitFor(() => expect(screen.queryByTestId('card-paused-banner')).not.toBeInTheDocument())
+    expect(within(card).getByText('Stripe connected')).toBeInTheDocument()
+  })
+
+  it('W63: a refused pause stays in the dialog with the server\'s error', async () => {
+    access()
+    on('GET', /\/billing\/settings$/, () => json(settings({ cardConfigured: true, cardAvailable: true })))
+    on('POST', /\/billing\/settings$/, () => json({ error: { code: 'billing_denied', message: 'payment settings are set by the super admin or the Operations Manager' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=settings' })
+    const card = await screen.findByRole('region', { name: 'Card payments' })
+    await userEvent.click(within(card).getByRole('button', { name: 'Pause card payments' }))
+    const dialog = screen.getByRole('dialog', { name: 'Pause card payments?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Pause card payments' }))
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByTestId('card-paused-banner')).not.toBeInTheDocument()
+  })
+
+  it('W63: no switch for read-only staff, nor when Stripe is not configured; a pause still shows to read-only staff', async () => {
+    access()
+    on('GET', /\/billing\/settings$/, () => json(settings({ canEdit: false, cardConfigured: true, cardPaused: true, cardAvailable: false })))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/payments?tab=settings' })
+    const card = await screen.findByRole('region', { name: 'Card payments' })
+    expect(within(card).getByText('Card payments paused')).toBeInTheDocument()
+    expect(screen.getByTestId('card-paused-banner')).toBeInTheDocument()
+    expect(within(card).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('W63: an editor sees no switch when Stripe is not configured', async () => {
+    access()
+    on('GET', /\/billing\/settings$/, () => json(settings()))
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/payments?tab=settings' })
+    const card = await screen.findByRole('region', { name: 'Card payments' })
+    expect(within(card).getByText('Not configured: no card option anywhere.')).toBeInTheDocument()
+    expect(within(card).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('W63: "Card payments paused" is shown on every tab, in Arabic too', async () => {
+    access()
+    on('GET', /\/billing\/settings$/, () => json(settings({ cardConfigured: true, cardPaused: true, cardAvailable: false })))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/payments', locale: 'ar' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'المدفوعات' })).toBeInTheDocument()
+    expect(await screen.findByTestId('card-paused-banner')).toHaveTextContent('الدفع بالبطاقة متوقف مؤقتًا')
   })
 
   it('words each reminder offset in both languages', () => {

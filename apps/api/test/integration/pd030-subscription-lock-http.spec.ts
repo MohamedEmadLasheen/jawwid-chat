@@ -894,7 +894,8 @@ describe('PD-30 over HTTP', () => {
     // 4. The teacher: no reason, no amount, no pay flag, no financial card, no push.
     const asTeacher = await http(teacher.subject, 'GET', `/conversations/${groupId}`);
     expect(asTeacher.json.paymentLock).toEqual({ readOnly: false, canPay: false, children: [{ id: child.id, name: child.name }] });
-    const financial = /overdue|instalment|used up|Subscriptions|Term · 2\/3|5000|متأخر|القسط|انتهت|الاشتراكات/i;
+    // `5000` as a whole number only: a random UUID can contain the digits (d0ce5000-...), which made this flaky.
+    const financial = /overdue|instalment|used up|Subscriptions|Term · 2\/3|(?<![0-9a-f-])5000(?![0-9a-f-])|متأخر|القسط|انتهت|الاشتراكات/i;
     const teacherThread = (await http(teacher.subject, 'GET', `/conversations/${groupId}/messages`)).json;
     expect(JSON.stringify(teacherThread)).not.toMatch(financial);
     expect((await http(teacher.subject, 'GET', `/conversations/${directId}`)).status).toBeGreaterThanOrEqual(400);

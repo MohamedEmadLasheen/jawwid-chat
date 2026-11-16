@@ -16,8 +16,8 @@ the consoles, never in this repository, a ticket or a chat (`docs/release/review
 Three more placeholders are not secret and are filled or replaced before pasting: `[PAYMENTS PARAGRAPH]`
 (§2.1), `[PAYMENTS SENTENCE]` and `{{ACCOUNT_DELETION_URL}}` (§3). Every other word is ready to paste.
 
-**Before pasting:** the §4 checks must pass on the submitted build, and the owner chooses the payments
-paragraph (§2.1).
+**Before pasting:** the §4 checks must pass on the submitted build. The payments paragraph is Option C of §2.1
+(owner decision OA-12, 2026-11-10) once the review payment mode is on for the review organization.
 
 ---
 
@@ -94,10 +94,30 @@ STAFF: the academy's supervisors, managers and administrators work in a separate
 
 **Length:** 2949 bytes without the payments paragraph. 3452 bytes with the longest option. See §2.2.
 
-### 2.1 The payments paragraph: an OPEN choice (owner decision OA-12)
+### 2.1 The payments paragraph (owner decision OA-12, 2026-11-10)
 
-`[OWNER DECISION: OA-12]`. The policy reasoning is in `docs/release/app-review-notes-payments.md`. Pick
-the option that matches the submitted build and the review data.
+**OA-12 is decided:** the review accounts use the server-enforced **review payment mode**
+(`docs/release/review-accounts.md`, "Review payment mode"). Reviewers see a demo amount due and the pay sheet, never
+the real bank details, and cannot pay, transfer or send a receipt. **Use Option C** once the mode is switched on for
+the review organization on the production backend. Until then, use Option B. Options A and B are kept for reference.
+The policy reasoning is in `docs/release/app-review-notes-payments.md`.
+
+**Option C: review payment mode (the owner's decision).**
+
+```text
+PAYMENTS: the academy sells only live one-to-one Quran lessons (one teacher, one student, real time, not recorded); no digital content or app features are sold. Under Guideline 3.1.3(d), parents pay a lesson package by card (Stripe Checkout, in the browser) or by bank transfer with a receipt upload. For this review account our server disables payment: Subscriptions tab > Amount due shows a demo lesson package > Pay. Card opens a page explaining the live Stripe checkout; bank transfer shows demo bank details and cannot send a receipt. No charge is possible.
+```
+
+- What the reviewer sees is in `review-accounts.md` (the table under "Review payment mode"). Each sentence above
+  matches a row there.
+- **Length: estimated by hand, not counted** (the counting command was not run for this change). The paragraph is
+  about 560 bytes, so the Notes come to about 3510 bytes, under Apple's 4000 but slightly under the 500 bytes spare
+  that §2.2 asks for. Count it before pasting; if it is over 3500, shorten the STAFF paragraph first.
+- **UNVERIFIED for this change:** the Apple and Google policy pages were not re-read. The wording relies on the
+  repository's reading of 2026-11-05 (`app-review-notes-payments.md` §1) and 2026-11-09 (this file). Re-read them on
+  the day of submission.
+
+Earlier options (before OA-12 was decided). Pick only if the review payment mode is not on.
 
 **Option A: the review family has something to pay.** Use this only if the review organization has an
 open lesson-package request (`app-review-notes-payments.md` §6 item 2; LR-05). Use the first sentence
@@ -176,6 +196,8 @@ Account deletion: use the Deletion test account. Settings > Delete account > pas
 ```
 
 `[PAYMENTS SENTENCE]` (OA-12, the same choice as §2.1):
+- **Option C (the owner's decision, once the review payment mode is on):** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid by card on Stripe's page in the browser or by bank transfer with a receipt, under the 1:1 online paid services rule. For this review account our server disables payment: Parent account > Subscriptions tab > Amount due > Pay shows a demo; no charge, transfer or receipt is possible.`
+  The 1:1 rule's wording was not re-read for this change (**UNVERIFIED**; see `app-review-notes-payments.md` §1).
 - **Option A:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid by card on Stripe's page or by bank transfer under the 1:1 online paid services rule. Parent account > Subscriptions tab > Amount due > Pay.`
 - **Option B:** `Payments: only live one-to-one Quran lessons are sold (one teacher, one student, real time, not recorded), paid outside Google Play Billing under the 1:1 online paid services rule. The review family has nothing to pay.`
 
@@ -202,3 +224,4 @@ Each check needs a release build on the production backend (LR-01) with the revi
 | 5 | Lock the screen during a call; both sides still hear each other (iPhone and Android 14+) | Fix before submitting (iOS `audio` mode; Android LR-14 service) |
 | 6 | The payments path in the chosen option opens the screens it names, with the names it uses | Correct the words to match the build |
 | 7 | Count the bytes again after filling in the domain (§2.2) | Shorten the STAFF paragraph first |
+| 8 | Option C only: as the review parent, Amount due shows the demo lesson package; Pay by card opens the demo page in the browser (not Stripe); the bank-transfer page shows the demo notice and demo bank details, and Send is off | Switch the review payment mode on (`review-accounts.md`), or use Option B |

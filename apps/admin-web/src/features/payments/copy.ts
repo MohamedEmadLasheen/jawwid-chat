@@ -95,6 +95,23 @@ export const PAY = {
   card: { en: 'Card payments', ar: 'الدفع بالبطاقة' },
   cardOn: { en: 'Stripe connected', ar: 'Stripe متصل' },
   cardOff: { en: 'Not configured: no card option anywhere.', ar: 'غير مُعَد: لا يظهر خيار البطاقة في أي مكان.' },
+  cardPausedBadge: { en: 'Card payments paused', ar: 'الدفع بالبطاقة متوقف مؤقتًا' },
+  cardPausedBanner: {
+    en: 'Card payments paused. Parents see bank transfer only; payments already made on Stripe are still recorded.',
+    ar: 'الدفع بالبطاقة متوقف مؤقتًا. لا يرى أولياء الأمور إلا التحويل البنكي، وما دُفع على Stripe قبل ذلك ما زال يُسجَّل.',
+  },
+  pauseCard: { en: 'Pause card payments', ar: 'إيقاف الدفع بالبطاقة مؤقتًا' },
+  resumeCard: { en: 'Resume card payments', ar: 'استئناف الدفع بالبطاقة' },
+  pauseCardTitle: { en: 'Pause card payments?', ar: 'إيقاف الدفع بالبطاقة مؤقتًا؟' },
+  pauseCardHint: {
+    en: 'From now on no parent can start a card payment, in the app or from a payment link; they are offered bank transfer instead. Payments already made on Stripe, refunds and disputes are still recorded. This change is audited.',
+    ar: 'من الآن لن يستطيع أي ولي أمر بدء دفع بالبطاقة، لا في التطبيق ولا من رابط الدفع، ويظهر له التحويل البنكي بدلًا منه. ما دُفع على Stripe قبل ذلك والاستردادات والنزاعات تظل تُسجَّل. يُسجَّل هذا التغيير في سجل التدقيق.',
+  },
+  resumeCardTitle: { en: 'Resume card payments?', ar: 'استئناف الدفع بالبطاقة؟' },
+  resumeCardHint: {
+    en: 'Parents can pay by card again, in the app and from payment links. This change is audited.',
+    ar: 'سيستطيع أولياء الأمور الدفع بالبطاقة مجددًا في التطبيق ومن روابط الدفع. يُسجَّل هذا التغيير في سجل التدقيق.',
+  },
   webhookOn: { en: 'Webhook configured', ar: 'الـWebhook مُعَد' },
   webhookOff: {
     en: 'Webhook not configured: card payments cannot be confirmed, so none is recorded.',
@@ -204,6 +221,15 @@ export const PAY = {
   recordedByLine: { en: 'recorded by {name}', ar: 'سجّله {name}' },
   byStripe: { en: 'confirmed by Stripe', ar: 'أكّده Stripe' },
   refunded: { en: 'refunded {amount}', ar: 'مُسترد {amount}' },
+  /** W61 S4: a refund gives money back and never takes lessons back (product decision: no automatic lesson reversal). */
+  refundedLessonsStay: { en: 'Refunded {amount}; the lesson package stays credited', ar: 'تم استرداد {amount}، وتبقى حصص الباقة مضافة كما هي' },
+  /** W61 S4: a refund of a payment that bought no lessons (a trial, a balance, anything else). */
+  refundedPlain: { en: 'Refunded {amount}', ar: 'تم استرداد {amount}' },
+  /** W61 S4: where the payment's purpose is not known (the parent profile's list). */
+  refundedNeutral: {
+    en: 'Refunded {amount}. Refunds do not remove lessons already credited.',
+    ar: 'تم استرداد {amount}. لا يُلغي الاسترداد الحصص المضافة من قبل.',
+  },
   invoiceNo: { en: 'Invoice {number}', ar: 'فاتورة {number}' },
   voidedLine: { en: 'Voided by {name}: {reason}', ar: 'ألغاه {name}: {reason}' },
   refundLine: { en: 'Refund {amount}, {date} ({source}): {reason}', ar: 'استرداد {amount}، {date} ({source}): {reason}' },
@@ -314,6 +340,14 @@ export const INVOICE_STATUS: Record<InvoiceStatus, Pair> = {
   void: { en: 'Void', ar: 'ملغاة' },
 }
 
+/** Why a payment was more than owed (the server's `overpaid.why`). */
+export const OVERPAID_WHY: Record<string, Pair> = {
+  request_paid: { en: 'The request was already paid when this money arrived.', ar: 'كان الطلب مدفوعًا عند وصول هذا المبلغ.' },
+  request_cancelled: { en: 'The request was cancelled when this money arrived.', ar: 'كان الطلب ملغًى عند وصول هذا المبلغ.' },
+  instalment_closed: { en: 'The instalment was already paid another way, or voided.', ar: 'كان القسط مدفوعًا بطريقة أخرى أو ملغًى.' },
+  more_than_owed: { en: 'This payment is more than what was still owed.', ar: 'هذه الدفعة أكبر مما كان مستحقًا.' },
+}
+
 /**
  * PD-27 completion: the transaction ledger -- Transactions, Card attempts and
  * Stripe events (docs/admin/pd027-stripe-lifecycle.md §3.6). Read only; the
@@ -352,6 +386,9 @@ export const LED = {
   colPaidOn: { en: 'Paid on', ar: 'تاريخ الدفع' },
   colInvoice: { en: 'Invoice', ar: 'الفاتورة' },
   beforeAssign: { en: 'New student (not assigned yet)', ar: 'طالب جديد (لم يُسنَد بعد)' },
+  overpaid: { en: 'Overpaid: refund or credit', ar: 'مبلغ زائد: يُردّ أو يُضاف رصيدًا' },
+  overpaidSettled: { en: 'Overpaid (settled)', ar: 'مبلغ زائد (تمت تسويته)' },
+  overpaidBy: { en: 'Overpaid by {amount}', ar: 'زيادة بمبلغ {amount}' },
   details: { en: 'Details', ar: 'التفاصيل' },
   detailsNamed: { en: 'Details of the payment of {amount}, {date}', ar: 'تفاصيل الدفعة بمبلغ {amount}، {date}' },
   loadMore: { en: 'Load more', ar: 'تحميل المزيد' },
@@ -479,7 +516,18 @@ export const EVENT_OUTCOME: Record<string, Pair> = {
   refund_recorded: { en: 'Refund recorded', ar: 'سُجّل الاسترداد' },
   refund_deferred: { en: 'Refund waiting for its payment', ar: 'استرداد بانتظار دفعته' },
   refund_not_final: { en: 'Refund not final', ar: 'استرداد غير نهائي' },
+  refund_failed_after_record: { en: 'Refund failed at Stripe after recording', ar: 'فشل الاسترداد في Stripe بعد تسجيله' },
   payment_failed: { en: 'Card declined', ar: 'رُفضت البطاقة' },
+  dispute_opened: { en: 'Dispute opened', ar: 'فُتح اعتراض على الدفعة' },
+  dispute_updated: { en: 'Dispute updated', ar: 'تحديث على الاعتراض' },
+  dispute_funds_withdrawn: { en: 'Dispute: funds withdrawn', ar: 'الاعتراض: سُحب المبلغ' },
+  dispute_funds_reinstated: { en: 'Dispute: funds returned', ar: 'الاعتراض: أُعيد المبلغ' },
+  dispute_closed_won: { en: 'Dispute closed: won', ar: 'أُغلق الاعتراض: لصالحنا' },
+  dispute_closed_lost: { en: 'Dispute closed: lost', ar: 'أُغلق الاعتراض: لغير صالحنا' },
+  dispute_closed_prevented: { en: 'Dispute closed: prevented', ar: 'أُغلق الاعتراض: مُنع' },
+  dispute_closed_warning_closed: { en: 'Dispute inquiry closed', ar: 'أُغلق الاستفسار عن الدفعة' },
+  dispute_closed_unknown: { en: 'Dispute closed', ar: 'أُغلق الاعتراض' },
+  not_chat: { en: 'Not a Chat payment', ar: 'ليست دفعة من Chat' },
   ignored_not_chat: { en: 'Ignored: not from Chat', ar: 'تُجوهل: ليس من Chat' },
   ignored: { en: 'Ignored', ar: 'تُجوهل' },
 }
@@ -495,6 +543,7 @@ export const EVENT_TYPES: readonly string[] = [
   'refund.created',
   'refund.updated',
   'charge.refunded',
+  'charge.dispute.',
   'invoice.',
   'customer.subscription.',
 ]
@@ -585,6 +634,16 @@ export function reminderLabel(offsetDays: number, locale: 'ar' | 'en'): string {
 /** What the link still asks for: the remaining amount, or the whole when nothing is paid. */
 export function owed(request: Pick<PaymentRequest, 'amountMinor' | 'remainingMinor' | 'paidMinor'>): number {
   return request.paidMinor > 0 ? request.remainingMinor : request.amountMinor
+}
+
+/**
+ * W61 S4: whether a payment credited lessons: a subscription or renewal, or an instalment
+ * (of a lesson package). A trial's payment, a balance and anything else did not.
+ */
+export function paymentCreditsLessons(p: { trialId: string | null; instalmentId: string | null; purpose: RequestPurpose | null }): boolean {
+  if (p.trialId) return false
+  if (p.purpose === null) return p.instalmentId !== null
+  return p.purpose === 'subscription' || p.purpose === 'renewal' || p.purpose === 'instalment'
 }
 
 /**
