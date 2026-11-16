@@ -5181,12 +5181,16 @@ class L10nEn extends L10n {
       'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.';
 
   @override
+  String get deleteAccountGoesOnRequest =>
+      'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.';
+
+  @override
   String get deleteAccountKeptParent =>
       'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.';
 
   @override
   String get deleteAccountKeptTeacher =>
-      'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
+      'Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
 
   @override
   String get deleteAccountPasswordLabel => 'Your password';
@@ -5213,8 +5217,45 @@ class L10nEn extends L10n {
   String get deleteAccountDone => 'Your account has been deleted.';
 
   @override
-  String get deleteAccountTeacherBlocked =>
-      'Please contact the academy to close your lessons and payroll before deleting your account.';
+  String get deleteAccountRequestIntro =>
+      'You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.';
+
+  @override
+  String get deleteAccountRequestAction => 'Request account deletion';
+
+  @override
+  String deleteAccountRequestConfirm(String date) {
+    return 'Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by $date at the latest. You can cancel the request until then.';
+  }
+
+  @override
+  String get deleteAccountRequested => 'Your deletion request is recorded.';
+
+  @override
+  String get deleteAccountRequestStatusTitle => 'Deletion requested';
+
+  @override
+  String deleteAccountRequestStatus(String requested, String deadline) {
+    return 'Requested on $requested; your account will be deleted by $deadline.';
+  }
+
+  @override
+  String get deleteAccountRequestCancel => 'Cancel request';
+
+  @override
+  String get deleteAccountRequestCancelConfirm =>
+      'Cancel your deletion request? Your account stays as it is.';
+
+  @override
+  String get deleteAccountRequestKeep => 'Keep the request';
+
+  @override
+  String get deleteAccountRequestCancelled =>
+      'Your deletion request was cancelled.';
+
+  @override
+  String get deleteAccountRequestCancelFailed =>
+      'The request could not be cancelled. Try again.';
 
   @override
   String get locationRowTitle => 'Location';

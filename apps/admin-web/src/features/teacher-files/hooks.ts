@@ -65,6 +65,25 @@ export function useReissueFirstLogin(teacherId: string) {
   return useMutation({ mutationFn: () => teacherFileApi.reissueFirstLogin(teacherId), gcTime: 0 })
 }
 
+/** PD-56 O-3: the teacher's account deletion request (the banner shows a pending one). */
+export function useDeletionRequest(teacherId: string) {
+  return useQuery({
+    queryKey: [...teacherFileKeys.detail(teacherId), 'deletion-request'],
+    queryFn: () => teacherFileApi.deletionRequest(teacherId),
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+/** "Close and delete account": the erasure runs; the file reloads as "Deleted user". */
+export function useCompleteDeletionRequest(teacherId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => teacherFileApi.completeDeletionRequest(teacherId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: teacherFileKeys.all }),
+  })
+}
+
 /** PD-43: what offboarding would meet. Read fresh each time the dialog opens. */
 export function useOffboardPreview(teacherId: string) {
   return useQuery({
