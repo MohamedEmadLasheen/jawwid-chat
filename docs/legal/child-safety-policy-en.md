@@ -3,19 +3,19 @@ document_key: policy_child_safety
 title: "Child Safety and Parental Responsibility Policy"
 language: en
 counterpart: child-safety-policy-ar.md
-version: "{{VERSION}}"
-draft_revision: "0.1 (2026-11-06)"
+version: "1.0"
+draft_revision: "1.0 owner-review copy (2026-11-16)"
 effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for qualified legal review. Not published and not in force."
+status: "DRAFT for owner approval. Not published and not in force."
 ---
 
 # Child Safety and Parental Responsibility Policy
 
-**Version** {{VERSION}} · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](child-safety-policy-ar.md)
+**Version** 1.0 · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](child-safety-policy-ar.md)
 
 ## 1. Scope and commitment
 
-1.1 Jawwid Academy ("Jawwid", the "Academy", "we") is operated by {{ENTITY_NAME}}, registered in {{ENTITY_COUNTRY}} under number {{ENTITY_REG_NO}}, at {{ENTITY_ADDRESS}}. The Academy teaches children the Quran (memorisation and recitation), Arabic and Islamic studies in live one-to-one online lessons.
+1.1 Jawwid Academy ("Jawwid", the "Academy", "we") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089), mailing address {{AJMAN_MAILING_ADDRESS}}. The Academy teaches children the Quran (memorisation and recitation), Arabic and Islamic studies in live one-to-one online lessons.
 
 1.2 This Policy applies to the Service: the Jawwid apps for Android and iOS, the teacher web portal, the Admin Web and the lessons. It binds every Parent, Teacher and member of Academy Staff, including supervisors, managers, administrators and the Super Admin.
 
@@ -31,15 +31,15 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 
 1.5 When the Academy becomes aware of CSAM or of CSAE, it removes the content from the Service for users, preserves the evidence as the law requires, suspends the accounts involved and then closes them indefinitely (the Academy will not reactivate them or accept a new enrolment from the same person), and reports the matter to the competent authorities as set out in section 9 and section 10.
 
-1.6 This Policy works together with the Terms of Use, the Teacher Terms, the Staff Terms, the Code of Conduct, the Reporting and Complaints Policy, the Blocking, Suspension and Enforcement Policy and the Privacy Policy. Where any of them is less protective of a child than this Policy, this Policy applies.
+1.6 This Policy works together with the Terms of Use, the Privacy Policy and the terms that bind Teachers and Staff. Where any of them is less protective of a child than this Policy, this Policy applies.
 
-1.7 Child-safety point of contact: {{SAFEGUARDING_CONTACT_NAME}}, {{SAFEGUARDING_EMAIL}}. This person speaks for the Academy on its child-safety practice and can answer questions about these standards.
+1.7 Child-safety point of contact: the Academy's Child Safety Lead, at info@jawwid.com. Child-safety messages to this address are read every day. The Child Safety Lead speaks for the Academy on its child-safety practice and can answer questions about these standards.
 
 ## 2. Ages served and who holds the account
 
 2.1 The Academy's lessons are designed primarily for children aged 5 to 12. A child may be enrolled from the age of 3. Older students may also be enrolled; in this Policy, "Child" means any Student under 18 years of age, and every protection in this Policy applies to every Child.
 
-2.2 Children do not have accounts and do not sign in. Every family account is held by an adult Parent: a parent or legal guardian aged at least {{MIN_ACCOUNT_HOLDER_AGE}}. The Parent is the account holder for all of the family's children and is responsible for everything done under the family account.
+2.2 Children do not have accounts and do not sign in. Every family account is held by an adult Parent: a parent or legal guardian aged at least 18. The Parent is the account holder for all of the family's children and is responsible for everything done under the family account.
 
 2.3 Teacher and Staff accounts are held only by adults engaged by the Academy.
 
@@ -54,13 +54,11 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 
 3.3 The Academy keeps a record of each child's enrolment made at the Parent's request. The Parent may withdraw consent at any time, as set out in clause 3.4.
 
-3.4 The Parent may withdraw consent at any time, by asking the Academy to end the child's enrolment ({{SUPPORT_EMAIL}} or the family's conversation with the Academy) or by deleting the family account in the app (Settings → Delete account) or on the Academy's account-deletion web page. Withdrawing consent stops future lessons and future processing for teaching purposes.
+3.4 The Parent may withdraw consent at any time, by asking the Academy to end the child's enrolment (info@jawwid.com or the family's conversation with the Academy) or by deleting the family account in the app (Settings → Delete account) or on the Academy's account-deletion web page. Withdrawing consent stops future lessons and future processing for teaching purposes.
 
-3.5 Withdrawing consent does not delete every record. At present, the child's records kept by the Academy (the child's profile, lesson records, lesson reports and rewards) are kept after the family account is deleted, and messages already sent remain in the conversations, shown as from "Deleted user". A Parent may ask for a copy of their child's information, for its correction or deletion, or for processing to stop, by writing to {{PRIVACY_EMAIL}}. The Privacy Policy explains what is kept, why, and how such requests are handled.
+3.5 Withdrawing consent does not delete every record. At present, the child's records kept by the Academy (the child's profile, lesson records, lesson reports and rewards) are kept after the family account is deleted, and messages already sent remain in the conversations, shown as from "Deleted user". A Parent may ask for a copy of their child's information, for its correction or deletion, or for processing to stop, by writing to info@jawwid.com. The Privacy Policy explains what is kept, why, and how such requests are handled.
 
 3.6 Consent to a certificate Story is separate and is described in clause 7.4.
-
-> **Drafting note (remove before publication):** (1) Whether children's records are kept after a family account is deleted, for how long and on what legal basis is open owner decision LD-6 (retention periods: LD-7); clause 3.5 states today's behaviour and must be updated when they are decided. (2) The minimum account-holder age is LD-5. (3) For legal review, do not overstate: the UAE Child Digital Safety Decree-Law No. 26 of 2025 (in force 1 January 2026, with a transition period: explicit, documented, withdrawable parental consent for under-13 data; no targeted advertising; protective defaults; reporting tools; prompt CSAM reporting); UAE Federal Law No. 3 of 2016 (Wadeema) duty to report for those entrusted with a child's education; Qatar Law No. 13 of 2016, Art. 17 (notice and express parental consent for child-directed services; parental copy, deletion, stopping processing); Oman PDPL Art. 6 (guardian approval); Saudi PDPL Implementing Regulation (guardian consent for minors). Counsel should confirm whether the current consent record (enrolment by staff on the Parent's instruction) is sufficient, or whether a separate in-app consent step is needed. (4) A separate, recorded parental consent for children's data is owner decision LD-13; until it is built, this clause must not claim it.
 
 ## 4. Children's use of the Service
 
@@ -107,15 +105,13 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 (b) The child's Teacher sees the student profile and lesson records of the Teacher's own students only.
 (c) Academy Staff see what their role requires, for the families they serve; the Super Admin can see all records.
 (d) Parents of other families never see a family's children, except a certificate Story shared with the Parent's consent (clause 7.4).
-(e) Our card-payment provider receives the child's name as part of the description of a lesson-package payment. The Privacy Policy lists every service provider and what each receives.
-
-> **Drafting note (remove before publication):** Whether the child's name should be sent to the card-payment provider is an open owner decision (owner decision LD-8). If the name is removed, delete clause 6.3(e).
+(e) No payment provider receives a child's information: card payments are not offered in the Service. The Privacy Policy lists every service provider and what each receives.
 
 6.4 **No advertising, analytics or tracking; protective defaults.** The Service shows no advertising (targeted or otherwise), uses no analytics or advertising identifiers, and does not track children or families across other apps or websites. Privacy-protective settings, such as hidden names on the lock screen (clause 4.4), are the default. Error and crash reports are sent to an error-diagnostics service without names, e-mail addresses or message contents.
 
 6.5 **No location.** The Service never uses GPS or device location. A Parent may enter, by hand, the family's country and region (state, emirate, governorate or province). Teachers and Parents of other families never see it, and it is not shared with any third party.
 
-6.6 The Privacy Policy describes in full what information is collected, why, who receives it, where it is stored, how long it is kept and how to exercise privacy rights. Privacy requests may be sent to {{PRIVACY_EMAIL}}.
+6.6 The Privacy Policy describes in full what information is collected, why, who receives it, where it is stored, how long it is kept and how to exercise privacy rights. Privacy requests may be sent to info@jawwid.com.
 
 ## 7. Children's images, recordings and personal details
 
@@ -131,11 +127,9 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 
 8.1 The Academy will apply safer-recruitment checks, appropriate to the role and to the law of the country where the person works, to every Teacher and member of Staff who can contact children or see children's information, before that person is given access.
 
-8.2 The Academy will train every Teacher and member of Staff in this Policy and in recognising and reporting child-safety concerns, before they start and at regular intervals [TO CONFIRM].
+8.2 The Academy will train every Teacher and member of Staff in this Policy and in recognising and reporting child-safety concerns, before they start and at regular intervals.
 
-8.3 Every Teacher and member of Staff must accept the Teacher Terms or the Staff Terms and the Code of Conduct, which incorporate this Policy.
-
-> **Drafting note (remove before publication):** Clauses 8.1 and 8.2 are owner policy, not current practice confirmed in the repository. The owner must confirm which checks (for example identity, references, criminal-record or equivalent checks per country) and which training are actually carried out, and how often, before publication. Do not publish a commitment the Academy does not keep.
+8.3 Every Teacher and member of Staff is bound by this Policy under the terms of their engagement with the Academy.
 
 ## 9. Safeguarding procedure
 
@@ -153,33 +147,27 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 
 9.7 **Referral to the authorities.** Where the law requires it, or where the Academy considers it necessary to protect a child, the Academy reports suspected CSAM, grooming, sextortion or abuse to the competent authorities, through the channel the authority sets, and co-operates with them. Suspected CSAM is never sent by e-mail or chat, including to the authorities, except through the authority's own channel.
 
-9.8 **Outcome.** Accounts found to have been involved in CSAE or CSAM are closed indefinitely, and the Academy will not reactivate them or accept a new enrolment from the same person. Other outcomes follow the Blocking, Suspension and Enforcement Policy, which also explains how a decision may be appealed.
+9.8 **Outcome.** Accounts found to have been involved in CSAE or CSAM are closed indefinitely, and the Academy will not reactivate them or accept a new enrolment from the same person. Other outcomes follow section 17 of the Terms of Use, which also explains how a decision may be appealed.
 
 9.9 **Answering the reporter.** The person who reported is always answered in the app. To protect the child and any investigation, the answer does not give details of the action taken.
 
-> **Drafting note (remove before publication):** This section follows the internal DRAFT `docs/security/child-safety-escalation.md`. Which reporting duties apply in which country, to whom and within what deadline, and how long preserved evidence is kept, are for the owner and qualified legal counsel (that document, §6, §7 and §10). The phrase "as the law requires" must stay until they decide.
-
-> **Drafting note (remove before publication):** Preserving attachments under a legal hold is planned (engineering MG-6/L-ENG-12); clause 9.4 must not promise that file copies are preserved until it is built. No terminal account state or sign-up deny-list exists in code; proposal P-6 (outstanding register). Clauses 1.5 and 9.8 depend on it.
-
 ## 10. How to report suspected abuse or exploitation
 
-10.1 **Emergencies.** If a child is in immediate danger, contact your local emergency services first: {{EMERGENCY_CONTACTS}}. Then tell the Academy.
+10.1 **Emergencies.** If a child is in immediate danger, contact the emergency number in your country first. Then tell the Academy.
 
 10.2 **In the app.** Press and hold a message, or open a person's profile, choose **Report**, and select the reason **"A child's safety"**. You may add a note. Child-safety reports go straight to the people named in clause 9.1. You can also block the person (section 11).
 
-10.3 **By e-mail.** Write to the child-safety point of contact at {{SAFEGUARDING_EMAIL}}. Please describe what happened, when, and who was involved. **Do not attach, forward or copy any image or video that may show a child being abused**; tell us where it is in the Service so that we can act on it.
+10.3 **By e-mail.** Write to the Academy's Child Safety Lead at info@jawwid.com (read every day). Please describe what happened, when, and who was involved. **Do not attach, forward or copy any image or video that may show a child being abused**; tell us where it is in the Service so that we can act on it.
 
-10.4 **External reporting lines.** You may also report directly to the police or to the child-protection authorities in your country: {{CHILD_PROTECTION_REPORTING_LINES}}. Reports of child sexual abuse material can also be made to a recognised national hotline, such as a member of the INHOPE network or, for the United States, the NCMEC CyberTipline.
+10.4 **External reporting lines.** You may also report directly to the police or the child-protection authority where you live. Reports of child sexual abuse material can also be made to a recognised national hotline, such as a member of the INHOPE network or, for the United States, the NCMEC CyberTipline.
 
 10.5 A child-safety concern can always be reported by e-mail, whether or not the person reporting has an account or has accepted any terms.
 
-10.6 A report made in good faith is never held against the person who made it, even if no concern is found. Deliberately false reports are a breach of the Code of Conduct.
-
-> **Drafting note (remove before publication):** The emergency numbers and the national reporting lines must be filled in for each country the Academy serves and confirmed by legal review. The in-app reason label "A child's safety" is still pending owner approval of report labels (N-4). Whether an in-app child-safety report is allowed before the user accepts the terms is open decision LD-11.
+10.6 A report made in good faith is never held against the person who made it, even if no concern is found. Deliberately false reports are a breach of the Terms of Use.
 
 ## 11. Reporting and blocking tools in the app
 
-11.1 Every user can report a message or a person. Every report is acknowledged in the app. We aim to review every report and answer the reporter within 24 hours; child-safety reports are escalated immediately (clause 9.1). The record of a report is never deleted. The Reporting and Complaints Policy describes the process.
+11.1 Every user can report a message or a person. Every report is acknowledged in the app. We review every report within 24 hours and remove objectionable content within that time; child-safety reports are escalated immediately (clause 9.1). The record of a report is never deleted. Section 12 of the Terms of Use describes the process.
 
 11.2 A Parent or a Teacher can block another user. The blocked person's messages, notifications and calls no longer reach the person who blocked them. So that lessons are not disrupted, lesson calls, lesson cards and the Academy's administrative messages continue, and the Academy's official account, managers and the Super Admin cannot be blocked. Every block is notified to the responsible manager, so that the Academy can check whether a child needs protection.
 
@@ -213,16 +201,14 @@ status: "DRAFT for qualified legal review. Not published and not in force."
 
 13.3 Messages sent in a support session are labelled "Sent by support" to everyone in the conversation. At present the person is not shown a notice when a session starts.
 
-> **Drafting note (remove before publication):** Two owner decisions are open on support sessions (PD-21): whether the user is notified when a session starts (LD-3), and whether a second person must approve one. Clause 13.3 describes today's behaviour and must change if either decision changes it.
-
 13.4 The Privacy Policy describes support sessions in full.
 
 ## 14. Review of this Policy
 
-14.1 The Academy reviews this Policy at least once a year [TO CONFIRM], after every serious child-safety incident, and whenever the Service or the law changes in a way that affects children.
+14.1 The Academy reviews this Policy at least once a year, after every serious child-safety incident, and whenever the Service or the law changes in a way that affects children.
 
 14.2 The Academy will tell Parents, Teachers and Staff in the app about any material change before it takes effect.
 
-14.3 Questions about this Policy may be sent to {{SAFEGUARDING_EMAIL}}. Other questions may be sent to {{SUPPORT_EMAIL}}.
+14.3 Questions about this Policy, and any other questions, may be sent to info@jawwid.com.
 
-14.4 This document is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails [legal review — LD-17].
+14.4 This document is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails.
