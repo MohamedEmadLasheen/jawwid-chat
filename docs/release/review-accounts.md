@@ -27,12 +27,39 @@ laptop.
   bypasses the code.
 - **Lessons.** Three 30-minute lessons a week, on Monday, Wednesday and Friday at 16:00 Cairo time. The worker keeps
   creating the upcoming ones for as long as the schedule stands.
-- **No real payments (OA-12, owner decision 2026-11-10).** The children have no subscription, so the payment lock never
-  applies (PD-30). Once the review organization is listed in the review payment mode (next section), the parent sees a
-  demo amount due and can open the pay sheet, but the server makes every payment a demo: nothing can be paid, sent
-  or stored.
+- **A demo payment, never a real one (OA-12, owner decision 2026-11-10).** The command creates no lesson package,
+  instalment, payment request or invoice for either family, so the payment lock never applies (PD-30). Instead it
+  switches on the **App Review payment mode** for the review organization (next section). The API then shows each
+  review parent one synthetic amount due that is never stored ("Lesson package (demo): 8 live one-to-one lessons",
+  USD 80.00), so a reviewer can open the pay sheet. Every payment is a demo: "Pay by card" opens a static page that
+  explains what the live app does, and never Stripe; the bank details are clearly fake; a bank-transfer receipt is
+  refused. The server enforces this (`apps/api/src/billing/review-mode.ts`, PR #585). The test checks that nothing
+  payable is stored, and that `GET /me/billing` lists nothing payable except that demo item.
 - **No lesson content yet.** There are no past lessons or lesson reports, because those need the owner to approve
   the content. The sample messages are everyday academy talk.
+
+## It switches on the App Review payment mode for its own organization
+
+Every run makes the `chat.config` row `review.sandbox_organization_ids` (a JSON array of organization ids, read by
+`apps/api/src/billing/review-mode.ts`) contain the review organization's id:
+
+- **Only after the organization checks pass** (section "It writes only into its own organization"). A run refused with `NOT_REVIEW_ORGANIZATION`, or one
+  stopped earlier (a deactivated or default organization), never writes the row.
+- **It adds; it never replaces.** Any id already in the array stays as it is. If the review organization's id is
+  already there (in any letter case), nothing is written, so a second run leaves the row exactly as it was.
+- **It touches no other config key.** The read and the write are one transaction, under a lock on that key, so two
+  runs cannot each add to an old copy.
+- **A value that is not a JSON array of organization ids is never overwritten.** The run stops with
+  `REVIEW_MODE_CONFIG`; the API already treats such a value as "no organization in review mode". Fix the row by hand
+  (make it an array of uuid strings), then run again.
+- It is done right after the organization checks, before the accounts. A later refusal leaves the organization
+  listed; that only ever restricts the review accounts further.
+- The command's return value carries the array as written (`reviewModeOrganizationIds`). The workflow's printed
+  summary does not show it yet: check the row in the database, or `reviewMode: true` on a review parent's
+  `GET /me/billing`.
+
+Until PR #585 (the payment mode itself) is deployed, the row is written but nothing reads it: the review parents
+then see no amount due at all.
 
 ## Review payment mode (OA-12)
 
@@ -48,9 +75,8 @@ in the app is only a courtesy. The code is `apps/api/src/billing/review-mode.ts`
 | `review.sandbox_organization_ids` | A JSON **array** of organization ids (uuid strings) | `["3f0c…-…"]` (the "Jawwid App Review" organization's id) |
 
 - **No route writes it.** `/billing/settings` writes only `billing.bank_account` and `billing.invoice_issuer`, and
-  there is no generic config route. The review-cohort command will set it, in a separate, owner-approved change and
-  run. That change should *add* the review organization's id to the array (keeping any id already there), never
-  replace the array, and print the value it wrote.
+  there is no generic config route. Only the review-cohort command writes it (previous section): it *adds* the review
+  organization's id to the array (keeping any id already there) and never replaces the array.
 - **Absent:** no organization is in review mode.
 - **Malformed** (not an array, or any entry that is not a uuid): treated as "no review
   organization", so every family behaves as a real one, and the API logs an error. **Unreadable** (the
@@ -128,6 +154,36 @@ For local and CI testing the command itself is unchanged: `node dist/cli/provisi
 --deletion-parent-password-file <file>`, each file chmod 600. `--target` must match `DATABASE_URL`; outside local,
 test and CI it refuses without `--allow-non-local`; a password is never accepted on the command line.
 
+## It writes only into its own organization
+
+The organization is found by its slug `app-review`. The database has no column that marks an organization as the
+review one, so the slug alone is not trusted (LR-46 P3-10). Before it writes anything, the command checks that the
+organization with that slug:
+
+- is named exactly "Jawwid App Review", the name the command gives it when it creates it; and
+- has no login other than `parent@`, `teacher@` and `parent2@` of the right kind (or a login a reviewer deleted);
+- has no staff other than the three synthetic ones;
+- has no teacher other than "Hassan Mourad", except a teacher whose login was deleted (deletion keeps the teacher
+  row and renames it "Deleted user"; it is accepted because its login is deleted, not because of that name); and
+- has no family other than "Adel family" and "Hamdi family" (checked by name).
+
+Only logins, staff, teachers and families are checked. Contacts, children, departments and conversations are not:
+a contact or child added by hand to one of the two review families is not caught.
+
+If any check fails, it stops with `NOT_REVIEW_ORGANIZATION` and writes nothing. That means a real organization
+took the slug, or someone added people to the review organization by hand. Investigate; do not rename or empty the
+organization to make the run pass.
+
+"Writes nothing" is promised for `NOT_REVIEW_ORGANIZATION`, not for every refusal. Later refusals
+(`DOMAIN_CHANGED`, `STAFF_ACCOUNT`, `SUBJECT_TAKEN`, `ACCOUNT_DEACTIVATED` and the rest) can come after the run has
+already written staff, departments and, for some, a login and its password into the review organization. The
+checks and the writes are also not one transaction, so someone added in the moment between them is not seen.
+
+It also never takes an account from another organization. If `parent@<domain>`, `teacher@<domain>` or
+`parent2@<domain>` already belongs to any other organization, the run stops with `SUBJECT_TAKEN`. That account is
+left exactly as it was: not moved, no new password, and no seat in any review chat. Choose a domain no real account
+uses.
+
 ## Run it again
 
 Run the workflow again after every review, and whenever an account misbehaves. It is safe to repeat:
@@ -153,22 +209,44 @@ is harmless.
 
 ## Review notes (paste into both consoles; the credentials go in their own fields)
 
+The canonical paste-ready text is `store-console/review-notes.md` (§2 for App Store Connect, §3 for Play, each
+its payments paragraph to be aligned with the OA-12 decision; see "Still open"). Paste from that file; the summary
+below only describes what the review accounts hold.
+
 > Sign in with the parent or the teacher account from the credentials field. Sign-in is email and password; no
 > verification code is needed. The parent account has one child with weekly lessons, a family group chat with the
 > child's supervisor and teacher, and a direct chat with the supervisor. The teacher account is that child's teacher.
 > The two accounts can message each other in the family group. To test account deletion, please use the third
 > account (parent2), which exists for that purpose; deleting it does not affect the other two. All people and data
-> in these accounts are fictional. Deleting an account in the app takes effect immediately.
+> in these accounts are fictional. Deleting an account in the app takes effect immediately. The parent account shows
+> one demo amount due so the payment screens can be reviewed; payments are disabled for these accounts, so no card is
+> charged, the bank details are a demo, and no receipt can be sent.
 
 ## Still open (owner)
 
 These need an owner decision or action before the review data is complete (LR-05, LR-09f):
 
-- **Switch on the review payment mode.** Approve the review-cohort command change that writes
-  `review.sandbox_organization_ids` (section "Review payment mode"), and run it on the production backend. Until then
-  the review family sees no amount due, and the store notes must use the "nothing to pay" text.
+- **Switch on the review payment mode.** Approve this change (the review-cohort command now writes
+  `review.sandbox_organization_ids`: section "It switches on the App Review payment mode"), then run the workflow
+  once more on the production backend after PR #585 is deployed. That run lists the review organization in the
+  payment mode; until then the review parents see no amount due.
 - **Past lessons and lesson reports.** There are none yet. They need the owner's approval of the report content,
   which may name surahs, and then a follow-up PR.
+- **Store notes for payments (OA-12).** OA-12 is decided (2026-11-10): a demo amount due from the API, never a
+  stored request. The paste-ready notes in `store-console/review-notes.md` must use the demo-payment text, not the
+  "nothing to pay" one.
+- **Docs that still describe a stored payable item (to align with OA-12).** These assume a payable request written
+  into the review cohort. The reviewer instead sees the API's synthetic demo item; a follow-up must align them (this
+  change may not edit them):
+  - `app-review-notes-payments.md` §4 (Apple, "Amount due → Pay"), §5 (Play) and §6 item 2 (an open
+    lesson-package request so the reviewer can reach the pay sheet).
+  - `store-console/play-declarations.md` §2: the paste ("Amount due → Pay") and the owner note below it ("Either
+    add an open lesson-package request ... or delete the Payments paragraph").
+  - `store-console/README.md` item 8 ("A payable lesson-package request in the review cohort | Yes").
+  - `store-console/listing-copy.md` screenshot 5 (the pay sheet, taken from "An open request in the review
+    cohort").
+  - `store-console/review-notes.md` §2.1 Option A paste ("Amount due > Pay"), its recommendation ("Option A, with
+    a payable request in the review cohort"), and the §3 Play Option A sentence.
 - **An exception to OD-04.** In Chat, only Core's assignment ingestion may set a child's teacher. Ingestion does not
   exist yet, so the command sets the teacher of its one taught synthetic child (Yahya; the deletion-test child has
   no teacher) through the same stand-in the QA seed uses,
