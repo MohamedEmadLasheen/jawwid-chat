@@ -367,7 +367,7 @@
   "childGroupLabel": "Group",
   "childTeacherLabel": "Teacher",
   "childLevelLabel": "Level",
-  "childSubscriptionLabel": "Subscription",
+  "childSubscriptionLabel": "Lesson package",
   "childScheduleLabel": "Schedule",
   "childrenEmpty": "No children are linked to your account yet.",
   "contactInfoTitle": "Contact information",
@@ -1204,8 +1204,8 @@
   "cardTrialCancelledTitle": "Trial cancelled",
   "cardTrialReportTitle": "Trial report",
   "cardTrialNoShowTitle": "The student did not attend the trial lesson.",
-  "cardTrialSubscribedTitle": "The student has subscribed.",
-  "cardTrialNotSubscribedTitle": "The student did not subscribe.",
+  "cardTrialSubscribedTitle": "The student has enrolled.",
+  "cardTrialNotSubscribedTitle": "The student did not enrol.",
   "cardTrialLevel": "Level",
   "cardTrialCorrectionTitle": "Outcome corrected",
   "cardTrialNewOutcome": "Now",
@@ -1581,7 +1581,7 @@
   },
   "signupOpen": "New parent? Create your account",
   "signupTitle": "Create your parent account",
-  "signupEmailIntro": "Enter the e-mail address you gave the academy when you subscribed.",
+  "signupEmailIntro": "Enter the e-mail address you gave the academy when you enrolled.",
   "signupEmailLabel": "E-mail",
   "signupEmailInvalid": "Enter a valid e-mail address.",
   "signupSendCode": "Get my code",
@@ -1746,7 +1746,7 @@
   "billingDeniedTitle": "Payments are shown to the family's parents",
   "billingDeniedBody": "If you have a question, ask the academy.",
   "tabPayments": "Payments",
-  "tabSubscriptions": "Subscriptions",
+  "tabSubscriptions": "Packages",
   "@tabSubscriptions": {
     "description": "PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments."
   },
@@ -1780,7 +1780,7 @@
       }
     }
   },
-  "subscriptionNone": "No subscription yet",
+  "subscriptionNone": "No lesson package yet",
   "@subscriptionNone": {
     "description": "PD-30: a child with no subscription on record."
   },
@@ -1806,7 +1806,7 @@
   "@subscriptionStateOpen": {
     "description": "PD-30: a child's subscription chip: lessons go on."
   },
-  "subscriptionStateGrace": "Renewal due",
+  "subscriptionStateGrace": "Next package due",
   "@subscriptionStateGrace": {
     "description": "PD-30: a child's subscription chip: lessons used up, grace lessons left."
   },
@@ -1830,11 +1830,11 @@
       }
     }
   },
-  "subscriptionRequestRenewal": "Request renewal",
+  "subscriptionRequestRenewal": "Request the next package",
   "@subscriptionRequestRenewal": {
     "description": "PD-30: a locked child with nothing to pay yet: ask the academy to renew."
   },
-  "subscriptionRenewalRequested": "Renewal requested",
+  "subscriptionRenewalRequested": "Next package requested",
   "@subscriptionRenewalRequested": {
     "description": "PD-30: the renewal was asked for today."
   },
@@ -1879,7 +1879,7 @@
   "@lockBannerGeneric": {
     "description": "PD-30 D-3: the banner's line everyone reads, the teacher included. Nothing financial."
   },
-  "lockBannerOpenSubscriptions": "Go to Subscriptions",
+  "lockBannerOpenSubscriptions": "Go to Packages",
   "@lockBannerOpenSubscriptions": {
     "description": "PD-30: the banner's button, a parent only."
   },
@@ -1927,7 +1927,7 @@
   "@cardSubscriptionLockedTitle": {
     "description": "PD-30: the family's direct-chat card when a child is locked."
   },
-  "cardSubscriptionLockedHint": "Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.",
+  "cardSubscriptionLockedHint": "Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.",
   "@cardSubscriptionLockedHint": {
     "description": "PD-30 D-3: the last line of the family's direct-chat card."
   },
@@ -3471,9 +3471,11 @@
   "@deleteAccountIntro": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountGoes": "Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.",
   "@deleteAccountGoes": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
+  "deleteAccountGoesOnRequest": "Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.",
+  "@deleteAccountGoesOnRequest": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: what goes when the requested deletion happens (within 30 days), in place of deleteAccountGoes, which says deleted now."},
   "deleteAccountKeptParent": "Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.",
   "@deleteAccountKeptParent": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
-  "deleteAccountKeptTeacher": "Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.",
+  "deleteAccountKeptTeacher": "Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.",
   "@deleteAccountKeptTeacher": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountPasswordLabel": "Your password",
   "@deleteAccountPasswordLabel": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
@@ -3489,8 +3491,28 @@
   "@deleteAccountFailed": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
   "deleteAccountDone": "Your account has been deleted.",
   "@deleteAccountDone": {"description": "PD-56 (store compliance): Settings → Delete account, for a parent or a teacher."},
-  "deleteAccountTeacherBlocked": "Please contact the academy to close your lessons and payroll before deleting your account.",
-  "@deleteAccountTeacherBlocked": {"description": "PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet."},
+  "deleteAccountRequestIntro": "You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.",
+  "@deleteAccountRequestIntro": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestAction": "Request account deletion",
+  "@deleteAccountRequestAction": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestConfirm": "Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by {date} at the latest. You can cancel the request until then.",
+  "@deleteAccountRequestConfirm": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.", "placeholders": {"date": {"type": "String"}}},
+  "deleteAccountRequested": "Your deletion request is recorded.",
+  "@deleteAccountRequested": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestStatusTitle": "Deletion requested",
+  "@deleteAccountRequestStatusTitle": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestStatus": "Requested on {requested}; your account will be deleted by {deadline}.",
+  "@deleteAccountRequestStatus": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.", "placeholders": {"requested": {"type": "String"}, "deadline": {"type": "String"}}},
+  "deleteAccountRequestCancel": "Cancel request",
+  "@deleteAccountRequestCancel": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestCancelConfirm": "Cancel your deletion request? Your account stays as it is.",
+  "@deleteAccountRequestCancelConfirm": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestKeep": "Keep the request",
+  "@deleteAccountRequestKeep": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestCancelled": "Your deletion request was cancelled.",
+  "@deleteAccountRequestCancelled": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
+  "deleteAccountRequestCancelFailed": "The request could not be cancelled. Try again.",
+  "@deleteAccountRequestCancelFailed": {"description": "PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days."},
   "locationRowTitle": "Location",
   "@locationRowTitle": {"description": "PD-45 PR-4: the Location row of the parent's own profile."},
   "locationRowEmpty": "Not set",

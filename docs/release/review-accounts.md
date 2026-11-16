@@ -50,8 +50,10 @@ Every run makes the `chat.config` row `review.sandbox_organization_ids` (a JSON 
 - **It touches no other config key.** The read and the write are one transaction, under a lock on that key, so two
   runs cannot each add to an old copy.
 - **A value that is not a JSON array of organization ids is never overwritten.** The run stops with
-  `REVIEW_MODE_CONFIG`; the API already treats such a value as "no organization in review mode". Fix the row by hand
-  (make it an array of uuid strings), then run again.
+  `REVIEW_MODE_CONFIG`, also when only one entry of the array is not a uuid string. The API treats a non-array as "no
+  organization in review mode", and an array with bad entries as its valid ids only (it logs the bad entries; see
+  "Malformed" below), so a review organization already listed beside a bad entry stays in review mode. Fix the row by
+  hand (make it an array of uuid strings), then run again.
 - It is done right after the organization checks, before the accounts. A later refusal leaves the organization
   listed; that only ever restricts the review accounts further.
 - The command's return value carries the array as written (`reviewModeOrganizationIds`). The workflow's printed
@@ -78,10 +80,16 @@ in the app is only a courtesy. The code is `apps/api/src/billing/review-mode.ts`
   there is no generic config route. Only the review-cohort command writes it (previous section): it *adds* the review
   organization's id to the array (keeping any id already there) and never replaces the array.
 - **Absent:** no organization is in review mode.
-- **Malformed** (not an array, or any entry that is not a uuid): treated as "no review
-  organization", so every family behaves as a real one, and the API logs an error. **Unreadable** (the
-  database read fails): the request fails with 500; it never falls back to public behaviour. A mistake in this row can only
-  make the review account behave like a real one. It can never make a real family see the demo.
+- **Not an array** (a string, an object, a number): treated as "no review organization" (public behaviour), and an
+  error is logged.
+- **An array with entries that are not uuid strings** (B5 P2-1): those entries are ignored and logged (count and
+  position, never the value); every valid uuid in the array stays in review mode. A typo beside the review
+  organization's id therefore never switches its review mode off, and an ignored entry names no organization, so it can
+  never put a real family in the demo.
+- **Unreadable** (the database read fails): the request fails with 500; it never falls back to public behaviour. A
+  mistake in this row can only make a review account behave like a real one (no money can move: a review family has
+  nothing payable). It can never make a real family see the demo: only an organization whose own uuid is in the array
+  is in review mode.
 - It is read on every request, so a change applies at once, without a restart.
 
 **What a parent of a review organization gets:**
@@ -222,7 +230,12 @@ Run the workflow again after every review, and whenever an account misbehaves. I
 - **It restores a deleted parent account**, either parent. Deleting an account in the app erases the login at once.
   The family and the child stay. The command creates the parent again with the same email and gives it back its
   place: the family group for `parent`, a new 1:1 with the supervisor for `parent2`.
-- **The teacher account cannot be deleted** while a child is assigned to it, so it never needs restoring.
+- **It restores a deleted teacher account.** With the child assigned, deleting the teacher account is a request
+  (PD-56 O-3): the login still signs in until staff, or the worker at the 30-day deadline, erases it. The next run
+  creates the teacher again with the same email and moves the child to it the way a Teachers manager would
+  (`chat.transfer_learner`): the family group seat and the lessons ahead follow, and the weekly times are set again.
+  A child whose teacher is anyone live is refused (`TEACHER_CHANGED`, or `NOT_REVIEW_ORGANIZATION` for a teacher the
+  cohort does not have), never moved.
 - **Run one copy at a time.** Two runs at once could create duplicate rows. The workflow never runs two at once: it
   holds a second run as pending until the first one ends. GitHub keeps only one pending run, so a third run cancels
   the pending second one (nothing is changed by a cancelled pending run). Start the next run after the last one ends.

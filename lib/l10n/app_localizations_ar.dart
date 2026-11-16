@@ -810,7 +810,7 @@ class L10nAr extends L10n {
   String get childLevelLabel => 'المستوى';
 
   @override
-  String get childSubscriptionLabel => 'الاشتراك';
+  String get childSubscriptionLabel => 'باقة الدروس';
 
   @override
   String get childScheduleLabel => 'المواعيد';
@@ -2049,10 +2049,10 @@ class L10nAr extends L10n {
   String get cardTrialNoShowTitle => 'لم يحضر الطالب الحصة التجريبية.';
 
   @override
-  String get cardTrialSubscribedTitle => 'اشترك الطالب.';
+  String get cardTrialSubscribedTitle => 'التحق الطالب بالدروس.';
 
   @override
-  String get cardTrialNotSubscribedTitle => 'لم يشترك الطالب.';
+  String get cardTrialNotSubscribedTitle => 'لم يلتحق الطالب بالدروس.';
 
   @override
   String get cardTrialLevel => 'المستوى';
@@ -2891,7 +2891,7 @@ class L10nAr extends L10n {
 
   @override
   String get signupEmailIntro =>
-      'أدخل البريد الإلكتروني الذي سجّلته لدى الأكاديمية عند الاشتراك.';
+      'أدخل البريد الإلكتروني الذي سجّلته عند التحاقكم بالأكاديمية.';
 
   @override
   String get signupEmailLabel => 'البريد الإلكتروني';
@@ -3277,7 +3277,7 @@ class L10nAr extends L10n {
   String get tabPayments => 'المدفوعات';
 
   @override
-  String get tabSubscriptions => 'الاشتراكات';
+  String get tabSubscriptions => 'الباقات';
 
   @override
   String subscriptionMonthCount(int months) {
@@ -3314,7 +3314,7 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get subscriptionNone => 'لا يوجد اشتراك بعد';
+  String get subscriptionNone => 'لا توجد باقة حصص بعد';
 
   @override
   String subscriptionLessonsLeft(int count) {
@@ -3350,7 +3350,7 @@ class L10nAr extends L10n {
   String get subscriptionStateOpen => 'فعّال';
 
   @override
-  String get subscriptionStateGrace => 'بانتظار التجديد';
+  String get subscriptionStateGrace => 'بانتظار الباقة التالية';
 
   @override
   String get subscriptionStateLocked => 'متوقف';
@@ -3364,10 +3364,10 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get subscriptionRequestRenewal => 'طلب التجديد';
+  String get subscriptionRequestRenewal => 'طلب الباقة التالية';
 
   @override
-  String get subscriptionRenewalRequested => 'تم طلب التجديد';
+  String get subscriptionRenewalRequested => 'تم طلب الباقة التالية';
 
   @override
   String get lockBannerTitle => 'حجز الحصص الجديدة متوقف مؤقتًا';
@@ -3392,7 +3392,7 @@ class L10nAr extends L10n {
       'المحادثة تبقى مفتوحة، والحصص المحجوزة مسبقًا تُقام في موعدها.';
 
   @override
-  String get lockBannerOpenSubscriptions => 'عرض الاشتراكات';
+  String get lockBannerOpenSubscriptions => 'عرض الباقات';
 
   @override
   String reportLessonOf(int number, int total) {
@@ -3422,7 +3422,7 @@ class L10nAr extends L10n {
 
   @override
   String get cardSubscriptionLockedHint =>
-      'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».';
+      'الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، اطلبوا الباقة التالية أو ادفعوا القسط من «الباقات».';
 
   @override
   String get cardSubscriptionUnlockedTitle => 'عادت الحصص الجديدة';
@@ -5280,12 +5280,16 @@ class L10nAr extends L10n {
       'يُحذف فورًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك.';
 
   @override
+  String get deleteAccountGoesOnRequest =>
+      'يُحذف مع حسابك خلال 30 يومًا: اسمك وصورتك (ويظهر اسمك «مستخدم محذوف»)، وبيانات التواصل المحفوظة لدى الأكاديمية، وكلمة المرور وجميع الجلسات، وإشعاراتك. وحتى ذلك الحين، يعمل حسابك كالمعتاد.';
+
+  @override
   String get deleteAccountKeptParent =>
       'يُحتفظ به: المدفوعات والفواتير لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»)، وسجلات أبنائك لدى الأكاديمية. ويُبلَّغ فريق العمل لمتابعتها.';
 
   @override
   String get deleteAccountKeptTeacher =>
-      'يُحتفظ به: سجلات الرواتب لمدة 7 سنوات، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.';
+      'يُحتفظ به: سجلات الرواتب، والرسائل التي أرسلتها (باسم «مستخدم محذوف»). ويبقى طلابك مع الأكاديمية، ويُبلَّغ فريق العمل لنقلهم.';
 
   @override
   String get deleteAccountPasswordLabel => 'كلمة المرور';
@@ -5310,8 +5314,44 @@ class L10nAr extends L10n {
   String get deleteAccountDone => 'تم حذف حسابك.';
 
   @override
-  String get deleteAccountTeacherBlocked =>
-      'يُرجى التواصل مع الأكاديمية لإغلاق حصصك ورواتبك قبل حذف حسابك.';
+  String get deleteAccountRequestIntro =>
+      'ما زالت لديك حصص أو طلاب أو رواتب مفتوحة. يمكنك طلب حذف حسابك الآن: تغلقها الأكاديمية، ويُحذف حسابك خلال 30 يومًا على الأكثر.';
+
+  @override
+  String get deleteAccountRequestAction => 'طلب حذف الحساب';
+
+  @override
+  String deleteAccountRequestConfirm(String date) {
+    return 'هل تريد طلب حذف حسابك؟ تغلق الأكاديمية حصصك ورواتبك، ويُحذف حسابك في موعد أقصاه $date. ويمكنك إلغاء الطلب حتى ذلك الحين.';
+  }
+
+  @override
+  String get deleteAccountRequested => 'سُجّل طلب حذف حسابك.';
+
+  @override
+  String get deleteAccountRequestStatusTitle => 'طُلب حذف الحساب';
+
+  @override
+  String deleteAccountRequestStatus(String requested, String deadline) {
+    return 'طُلب في $requested، وسيُحذف حسابك في موعد أقصاه $deadline.';
+  }
+
+  @override
+  String get deleteAccountRequestCancel => 'إلغاء الطلب';
+
+  @override
+  String get deleteAccountRequestCancelConfirm =>
+      'هل تريد إلغاء طلب حذف حسابك؟ سيبقى حسابك كما هو.';
+
+  @override
+  String get deleteAccountRequestKeep => 'إبقاء الطلب';
+
+  @override
+  String get deleteAccountRequestCancelled => 'أُلغي طلب حذف حسابك.';
+
+  @override
+  String get deleteAccountRequestCancelFailed =>
+      'تعذّر إلغاء الطلب. حاول مرة أخرى.';
 
   @override
   String get locationRowTitle => 'الموقع';

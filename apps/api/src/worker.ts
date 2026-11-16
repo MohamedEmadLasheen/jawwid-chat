@@ -25,6 +25,7 @@ import { TaskService } from './tasks/task.service';
 import { DepartmentRoomService } from './org/department-room.service';
 import { WhiteboardService } from './whiteboards/whiteboard.service';
 import { ReportEscalationService } from './moderation/report-escalation.service';
+import { TeacherDeletionRequestService } from './account-deletion/teacher-deletion-request.service';
 import { PrismaService } from './platform/prisma.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { createErrorTracker, setProcessErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
@@ -166,6 +167,14 @@ const CASE_DUE_SWEEP_MS = 10 * 60_000;
 const REPORT_ESCALATION_SWEEP_MS = Number(process.env.REPORT_ESCALATION_SWEEP_MS ?? 5 * 60_000);
 
 /**
+ * PD-56 O-3: how often teachers' deletion requests are checked: the day-21 and
+ * day-28 reminders (once per request and day, chat.account_deletion_reminder,
+ * and once per recipient by the dedupe key), and, past the 30-day deadline,
+ * the erasure. Bounds only how late either is.
+ */
+const DELETION_REQUEST_SWEEP_MS = Number(process.env.DELETION_REQUEST_SWEEP_MS ?? 10 * 60_000);
+
+/**
  * PD-47: how often the task sources are swept -- missing tasks raised, done
  * ones completed on re-read evidence (chat.work_task_sweep). The source
  * triggers already do both in the source's own transaction; this is the
@@ -261,6 +270,7 @@ async function bootstrap(): Promise<void> {
   const departmentRooms = app.get(DepartmentRoomService);
   const whiteboards = app.get(WhiteboardService);
   const reportEscalation = app.get(ReportEscalationService);
+  const deletionRequests = app.get(TeacherDeletionRequestService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
   // and trial groups seat each teacher's own supervisor; off, the department.
   // Re-seated at boot when the boot turned the switch over (onApplicationBootstrap),
@@ -320,6 +330,7 @@ async function bootstrap(): Promise<void> {
   let nextSeatSweep = 0;
   let nextCaseDueSweep = 0;
   let nextReportEscalationSweep = 0;
+  let nextDeletionRequestSweep = 0;
   let nextTaskSweep = 0;
   let nextLessonAnnounceSweep = 0;
   let lastTaskIssues = 0;
@@ -588,6 +599,19 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextReportEscalationSweep = Date.now() + REPORT_ESCALATION_SWEEP_MS;
+      }
+    }
+
+    // PD-56 O-3: deletion requests -- reminded at days 21 and 28, erased at the deadline.
+    if (Date.now() >= nextDeletionRequestSweep) {
+      draining = true;
+      try {
+        await deletionRequests.sweep();
+      } catch (e) {
+        report(log, 'deletion request sweep', 'account.deletion_request', e);
+      } finally {
+        draining = false;
+        nextDeletionRequestSweep = Date.now() + DELETION_REQUEST_SWEEP_MS;
       }
     }
 

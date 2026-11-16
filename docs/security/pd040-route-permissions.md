@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-594 routes.
+598 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -301,6 +301,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/materials/recitations/:surah/open` | materials.view | `materials/materials.controller.ts#MaterialsController.openRecitation` |
 | GET | `/api/v1/me` | self-service | `platform/auth/auth.controller.ts#MeController.me` |
 | POST | `/api/v1/me/account/delete` | self-service | `account-deletion/account-deletion.controller.ts#AccountDeletionController.delete` |
+| GET | `/api/v1/me/account/deletion` | self-service | `account-deletion/account-deletion.controller.ts#AccountDeletionController.status` |
+| POST | `/api/v1/me/account/deletion-request/cancel` | self-service | `account-deletion/account-deletion.controller.ts#AccountDeletionController.cancel` |
 | DELETE | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.remove` |
 | POST | `/api/v1/me/avatar` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.commit` |
 | POST | `/api/v1/me/avatar/upload` | self-service | `communication/api/profile-photo.controller.ts#ProfilePhotoController.upload` |
@@ -504,6 +506,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | GET | `/api/v1/teacher-boards/teachers` | whiteboards.view | whiteboards.retention | `whiteboards/whiteboard.controller.ts#TeacherBoardsController.teachers` |
 | GET | `/api/v1/teacher-files` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.list` |
 | GET | `/api/v1/teacher-files/:teacherId` | teacher_files.view | `teacher-file/teacher-file.controller.ts#TeacherFileController.detail` |
+| GET | `/api/v1/teacher-files/:teacherId/deletion-request` | teacher_files.view | `teacher-file/teacher-deletion-request.controller.ts#TeacherDeletionRequestController.read` |
+| POST | `/api/v1/teacher-files/:teacherId/deletion-request/complete` | teachers.offboard | `teacher-file/teacher-deletion-request.controller.ts#TeacherDeletionRequestController.complete` |
 | POST | `/api/v1/teacher-files/:teacherId/entries` | teacher_supervision.record | teacher_attendance.record | teacher_attendance.decide | `teacher-file/teacher-file.controller.ts#TeacherFileController.addEntry` |
 | GET | `/api/v1/teacher-files/:teacherId/finance` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.finance` |
 | POST | `/api/v1/teacher-files/:teacherId/finance/adjustments` | teacher_files.finance | `teacher-file/teacher-file.controller.ts#TeacherFileController.addAdjustment` |

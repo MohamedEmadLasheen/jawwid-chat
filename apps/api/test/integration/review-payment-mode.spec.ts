@@ -268,7 +268,7 @@ describe('OA-12: the App Review payment mode', () => {
       expect(absent.json.bankAccount).toMatchObject({ accountName: REAL_BANK.accountName, iban: REAL_BANK.iban });
       expect(absent.json.requests.some((r: any) => r.id === REVIEW_DEMO_REQUEST_ID)).toBe(false);
 
-      for (const value of [[randomUUID()], [], 'not an array', [orgId, 'not-a-uuid'], { ids: [orgId] }]) {
+      for (const value of [[randomUUID()], [], 'not an array', [randomUUID(), 'not-a-uuid'], ['not-a-uuid'], { ids: [orgId] }]) {
         await setReviewOrganizations(value);
         const now = await http(f.parent.subject, 'GET', '/me/billing');
         expect([JSON.stringify(value), now.status, now.text]).toEqual([JSON.stringify(value), 200, absent.text]);
@@ -336,6 +336,21 @@ describe('OA-12: the App Review payment mode', () => {
       }
       // Never written.
       expect(await g.prisma.paymentRequest.count({ where: { id: REVIEW_DEMO_REQUEST_ID } })).toBe(0);
+    });
+
+    it('B5 P2-1: a bad entry beside the review organization does not switch review mode off -- never the real bank', async () => {
+      for (const value of [[orgId, 'not-a-uuid'], ['x', orgId.toUpperCase(), 7]]) {
+        await setReviewOrganizations(value);
+        for (const f of [m.families[0]!, m.families[1]!]) {
+          const mine = await http(f.parent.subject, 'GET', '/me/billing');
+          expect([JSON.stringify(value), mine.status, mine.json.reviewMode]).toEqual([JSON.stringify(value), 200, true]);
+          expect(mine.json.requests.some((r: any) => r.id === REVIEW_DEMO_REQUEST_ID)).toBe(true);
+          expectNoRealBank(mine.text, `/me/billing ${JSON.stringify(value)}`);
+        }
+        const page = await fetch(`${base}/pay/${token}?lang=en`);
+        expectNoRealBank(await page.text(), `pay link ${JSON.stringify(value)}`);
+      }
+      await setReviewOrganizations([orgId.toUpperCase()]);
     });
 
     it('W63 wins in review mode too: with card payments paused, /me/billing offers no card and checkout is refused (503), with no Stripe call', async () => {
