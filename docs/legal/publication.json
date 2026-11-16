@@ -1,0 +1,34 @@
+{
+  "_comment": "Generator config for the public legal pages (LR-04, docs/release/legal-pages-hosting.md, Option A). Read by scripts/legal/legal_pages.py. THE SWITCH: 'publish' stays false until the owner's confirmed values are applied and counsel has reviewed the text (docs/legal/apply-confirmed-values.md). While it is false the build is skipped and Admin Web answers 404 at /legal/. Setting it to true does not force anything out: the generator still refuses every page that carries a placeholder, a review marker, a drafting note or a draft status.",
+  "publish": false,
+  "base_url": "https://admin.chat.jawwid.com/legal",
+  "source_dir": "docs/legal",
+  "output_dir": "apps/admin-web/legal-web",
+  "pd048_source": "docs/legal/pd048-lesson-audio-parent-notice.md",
+  "labels": {
+    "ar": {
+      "site": "أكاديمية جَوِّد",
+      "index_title": "الوثائق القانونية",
+      "other_language": "English",
+      "all_documents": "كل الوثائق"
+    },
+    "en": {
+      "site": "Jawwid Academy",
+      "index_title": "Legal documents",
+      "other_language": "العربية",
+      "all_documents": "All documents"
+    }
+  },
+  "documents": [
+    {"source": "privacy-policy", "slug": "privacy", "nav": true, "pd048": true},
+    {"source": "terms-of-use", "slug": "terms", "nav": true, "pd048": true, "gate_key": "terms_family"},
+    {"source": "user-conduct-policy", "slug": "code-of-conduct", "nav": true, "gate_key": "code_of_conduct"},
+    {"source": "terms-teachers", "slug": "terms/teachers", "nav": true, "gate_key": "terms_teacher"},
+    {"source": "terms-staff", "slug": "terms/staff", "nav": false, "gate_key": "terms_staff"},
+    {"source": "reporting-and-complaints-policy", "slug": "reporting", "nav": true},
+    {"source": "blocking-and-enforcement-policy", "slug": "enforcement", "nav": true},
+    {"source": "child-safety-policy", "slug": "child-safety", "nav": true},
+    {"source": "support", "slug": "support", "nav": true},
+    {"source": "account-deletion", "slug": "account-deletion", "nav": true}
+  ]
+}
