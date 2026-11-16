@@ -1,7 +1,7 @@
 {
   "_comment": "Written by scripts/legal/legal_pages.py build; never edit by hand. The SHA-256 of every versioned legal page ever published (LR-02d, R-12). Such a page never changes and is never removed: a change to its text needs a new version.",
   "pages": {
-    "ar/terms/1.0/index.html": "bf322a57e8f3a7e49a352b2a0e0ec8333f675d7c8852aa81076f93e1b8b9364a",
+    "ar/terms/1.0/index.html": "41f366d2eae85ac9a5750cbbeec25a935d02dee00ca3627742e98f766f18bace",
     "en/terms/1.0/index.html": "907d5f65b9e158a2d59f837ad7d3810df690c1e27d6cd1ba2335919c69979c4c"
   }
 }
