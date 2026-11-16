@@ -4,20 +4,19 @@ title: "Privacy Policy"
 language: en
 counterpart: privacy-policy-ar.md
 version: "1.0"
-draft_revision: "1.0 owner-review copy (2026-11-16)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for owner approval. Not published and not in force."
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # Privacy Policy
 
-**Version** 1.0 · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](privacy-policy-ar.md)
+**Version** 1.0 · **Effective** 2026-11-17 · **Language:** English · [العربية](privacy-policy-ar.md)
 
 This Privacy Policy explains what personal data Jawwid Academy collects, why, who receives it, where it is kept, how long it is kept, and what rights you have. It is a notice: you are not asked to accept it as a contract. It is always available in the app, in the teacher web portal and on the account deletion page.
 
 ## 1. Who we are
 
-1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Its mailing and correspondence address (not its registered address) is {{UAE_MAILING_ADDRESS}}.
+1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089).
 
 1.2 Jawwid LLC is the **controller** of the personal data described in this Policy. That means it decides why and how the data is used and is responsible for it.
 
@@ -703,7 +702,7 @@ Child-safety concerns are handled as described in the Child Safety and Parental 
 
 | Version | Effective | Summary |
 |---|---|---|
-| 1.0 | {{EFFECTIVE_DATE}} | First published version |
+| 1.0 | 2026-11-17 | First published version |
 
 ## 18. Contact and complaints
 
@@ -713,7 +712,7 @@ Child-safety concerns are handled as described in the Child Safety and Parental 
 
 18.3 **General support:** info@jawwid.com, or our [Help and Support](support-en.md) page.
 
-18.4 **By post:** Jawwid LLC, {{UAE_MAILING_ADDRESS}} (mailing and correspondence address, not the registered address).
+18.4 **Who answers:** Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Write to info@jawwid.com, or to the Academy in the app.
 
 18.5 **Complaints.** If you are unhappy with how we have handled your personal data, please contact us first so that we can try to put it right. You also have the right to complain to the data protection authority of the country where you live (section 15).
 

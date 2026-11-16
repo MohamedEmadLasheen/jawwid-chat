@@ -146,7 +146,7 @@ Support: {{SUPPORT_URL}}
 | App lock | `ios/Runner/Info.plist:65-69`; `android/app/src/main/AndroidManifest.xml:14-17` |
 | Names hidden on the lock screen by default | `docs/legal/data-inventory-and-retention-matrix.md` §2 (APNs row: `notification.lock_screen_names_default: false`) |
 | Report and block | PD-57: `lib/core/data/http/http_moderation_repository.dart:21`; `lib/core/data/http/http_block_repository.dart:23` |
-| Delete account in Settings | `lib/features/settings/presentation/settings_screen.dart:277-285`. **Teachers:** true only after launch item LR-03 (PR #498); today a teacher with lessons ahead is refused |
+| Delete account in Settings | `lib/features/settings/presentation/settings_screen.dart:277-285`. **Teachers:** a teacher with students, lessons or payroll open records a deletion request instead, and the account is deleted within 30 days at the latest (`deleteAccountRequestIntro`, `lib/l10n/app_en.arb:3494`; published Account deletion 1.5) |
 | Arabic and English | `ios/Runner/Info.plist:9-13`; `lib/l10n/` |
 | Account needed; activation with the registered e-mail | `lib/core/data/http/http_parent_signup_repository.dart:18`, `:49-50` |
 

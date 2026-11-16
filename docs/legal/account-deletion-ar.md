@@ -4,14 +4,13 @@ title: "حذف حسابك في جَوِّد"
 language: ar
 counterpart: account-deletion-en.md
 version: "1.0"
-draft_revision: "1.0 owner-review copy (2026-11-16)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for owner approval. Not published and not in force."
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # حذف حسابك في جَوِّد
 
-**الإصدار** 1.0 · **تاريخ النفاذ** {{EFFECTIVE_DATE}} · **اللغة:** العربية · [English](account-deletion-en.md)
+**الإصدار** 1.0 · **تاريخ النفاذ** 2026-11-17 · **اللغة:** العربية · [English](account-deletion-en.md)
 
 تشرح هذه الصفحة كيفية حذف حسابك في تطبيق **«جَوِّد: أكاديمية القرآن»**، تطبيق أكاديمية جَوِّد الذي تنشره شركة Jawwid LLC. ولا تحتاج إلى التطبيق لحذف حسابك. ويتضمن البند 10 من [سياسة الخصوصية](privacy-policy-ar.md) التفاصيل كاملة.
 
@@ -69,6 +68,6 @@ status: "DRAFT for owner approval. Not published and not in force."
 
 4.1 الأسئلة المتعلقة بالحذف أو ببياناتك الشخصية: info@jawwid.com. ولأي مساعدة أخرى: صفحة [المساعدة والدعم](support-ar.md).
 
-4.2 شركة Jawwid LLC، العنوان البريدي وعنوان المراسلات (وليس العنوان المسجَّل): {{UAE_MAILING_ADDRESS}}.
+4.2 تتولى شركة Jawwid LLC، وهي شركة ذات مسؤولية محدودة مؤسَّسة في ولاية وايومنغ بالولايات المتحدة الأمريكية (رقم القيد في وايومنغ 2025-001768089)، تشغيلَ أكاديمية جَوِّد. ويمكنك أيضًا مراسلة الأكاديمية في التطبيق.
 
 4.3 **اللغة.** تُنشر هذه الصفحة باللغتين العربية والإنجليزية بالمعنى نفسه. وعند التعارض بينهما، تُرجَّح النسخة العربية.

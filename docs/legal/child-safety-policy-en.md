@@ -4,18 +4,17 @@ title: "Child Safety and Parental Responsibility Policy"
 language: en
 counterpart: child-safety-policy-ar.md
 version: "1.0"
-draft_revision: "1.0 owner-review copy (2026-11-16)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for owner approval. Not published and not in force."
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # Child Safety and Parental Responsibility Policy
 
-**Version** 1.0 · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](child-safety-policy-ar.md)
+**Version** 1.0 · **Effective** 2026-11-17 · **Language:** English · [العربية](child-safety-policy-ar.md)
 
 ## 1. Scope and commitment
 
-1.1 Jawwid Academy ("Jawwid", the "Academy", "we") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089); mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}. The Academy teaches children the Quran (memorisation and recitation), Arabic and Islamic studies in live one-to-one online lessons.
+1.1 Jawwid Academy ("Jawwid", the "Academy", "we") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). The Academy teaches children the Quran (memorisation and recitation), Arabic and Islamic studies in live one-to-one online lessons.
 
 1.2 This Policy applies to the Service: the Jawwid apps for Android and iOS, the teacher web portal, the Admin Web and the lessons. It binds every Parent, Teacher and member of Academy Staff, including supervisors, managers, administrators and the Super Admin.
 

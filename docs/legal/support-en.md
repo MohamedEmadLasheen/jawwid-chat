@@ -4,14 +4,13 @@ title: "Help and Support"
 language: en
 counterpart: support-ar.md
 version: "1.0"
-draft_revision: "1.0 owner-review copy (2026-11-16)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for owner approval. Not published and not in force."
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # Help and Support
 
-**Version** 1.0 · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](support-ar.md)
+**Version** 1.0 · **Effective** 2026-11-17 · **Language:** English · [العربية](support-ar.md)
 
 This page explains how to reach Jawwid Academy ("Jawwid", "the Academy", "we") for help with the Jawwid app, the teacher web portal, your lessons, payments, your account and your personal data. The Academy is operated by Jawwid LLC.
 
@@ -52,6 +51,6 @@ This page explains how to reach Jawwid Academy ("Jawwid", "the Academy", "we") f
 
 ## 6. Who we are
 
-6.1 Jawwid Academy is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}. E-mail: info@jawwid.com.
+6.1 Jawwid Academy is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). E-mail: info@jawwid.com, or write to the Academy in the app (section 2).
 
 6.2 **Language.** This page is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails.

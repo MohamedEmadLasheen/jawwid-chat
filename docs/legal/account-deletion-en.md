@@ -4,14 +4,13 @@ title: "Delete your Jawwid account"
 language: en
 counterpart: account-deletion-ar.md
 version: "1.0"
-draft_revision: "1.0 owner-review copy (2026-11-16)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for owner approval. Not published and not in force."
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # Delete your Jawwid account
 
-**Version** 1.0 · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](account-deletion-ar.md)
+**Version** 1.0 · **Effective** 2026-11-17 · **Language:** English · [العربية](account-deletion-ar.md)
 
 This page explains how to delete your account in **Jawwid: Quran Academy**, the app of Jawwid Academy, published by Jawwid LLC. You do not need the app to delete your account. Section 10 of the [Privacy Policy](privacy-policy-en.md) gives the full detail.
 
@@ -69,6 +68,6 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 4.1 Questions about deletion or your personal data: info@jawwid.com. Other help: the [Help and Support](support-en.md) page.
 
-4.2 Jawwid LLC, mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}.
+4.2 Jawwid Academy is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). You can also write to the Academy in the app.
 
 4.3 **Language.** This page is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails.

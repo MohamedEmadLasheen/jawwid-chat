@@ -33,7 +33,7 @@ Three more placeholders are not secret and are filled or replaced before pasting
 | Settings → Language | `lib/features/settings/presentation/settings_screen.dart:149-154` |
 | Settings → Delete account (password, then a confirmation) for parents and teachers | `settings_screen.dart:277-286`; `lib/app/router.dart:92`; strings `deleteAccountPasswordLabel`, `deleteAccountAction`, `deleteAccountConfirm` (`lib/l10n/app_en.arb:3468-3472`) |
 | What deletion erases and keeps | Privacy policy on `main` (`docs/legal/privacy-policy-en.md`): §10.2 (deleted; sessions ended; name replaced by "Deleted user"), §10.3 (kept: messages, children's records, payments with the payer's and the child's names, call records, ended-session records with a hashed IP and the user agent, and more), §10.6.3 (backups up to 56 days). The in-app screen (`deleteAccountGoes`, `deleteAccountKeptParent`, `app_en.arb:3462-3464`) is shorter; the Notes follow the policy, so they say no less than the screen |
-| The teacher account cannot be deleted while it has students | `deleteAccountTeacherBlocked` (`app_en.arb:3482`); `review-accounts.md` ("The teacher account cannot be deleted while a child is assigned to it") |
+| A teacher with students, lessons or payroll open requests deletion; the account is deleted within 30 days at the latest | `deleteAccountRequestIntro`, `deleteAccountRequestConfirm` (`lib/l10n/app_en.arb:3494-3498`); `supabase/migrations/20261107140000_chat_teacher_deletion_request.sql`; Account deletion 1.5 and Privacy Policy 10.4.1 (published 2026-11-17) |
 | A re-run of the provisioning command re-creates a deleted parent | `review-accounts.md` ("It restores a deleted parent account"); #528 does the same for `parent2` |
 | Calls are voice only and not recorded | `lib/core/call_media/livekit_media_room.dart:13-16` (audio only); `apps/api/src/communication/calls/call.service.ts:29` ("No audio is recorded") |
 | A call starts from the phone icon in a chat's header | `lib/features/messages/presentation/chat_screen.dart:1686-1694` |
@@ -82,7 +82,7 @@ ACCOUNTS
 2. Teacher: teacher@{{REVIEW_DOMAIN}} / {{REVIEW_TEACHER_PASSWORD}}. The same child's teacher, in the same family group.
 3. Deletion test: parent2@{{REVIEW_DOMAIN}} / {{REVIEW_DELETION_PARENT_PASSWORD}}. A separate fictional family. Please use this account to test account deletion.
 
-ACCOUNT DELETION: Settings > Delete account > enter the password > Delete my account > confirm. It takes effect at once and cannot be undone. Deleted: the photo, the contact details, the password and the notifications; every signed-in session is ended. The name becomes "Deleted user" in conversations but stays on payment records. Kept: messages already sent (as "Deleted user"); payments and invoices, with the payer's and the child's names, for 7 years; the children's records at the academy; call records; and other records, such as ended-session records (hashed IP address and user agent). Deleted data may remain in encrypted backups for up to 56 days. Details: our privacy policy, section 10. We re-create the deletion-test account after each review. The teacher account cannot be deleted while it has students; the app asks the teacher to contact the academy.
+ACCOUNT DELETION: Settings > Delete account > enter the password > Delete my account > confirm. It takes effect at once and cannot be undone. Deleted: the photo, the contact details, the password and the notifications; every signed-in session is ended. The name becomes "Deleted user" in conversations but stays on payment records. Kept: messages already sent (as "Deleted user"); payments and invoices, with the payer's and the child's names, for 7 years; the children's records at the academy; call records; and other records, such as ended-session records (hashed IP address and user agent). Deleted data may remain in encrypted backups for up to 56 days. Details: our privacy policy, section 10. We re-create the deletion-test account after each review. A teacher who still has students, lessons or payroll open requests deletion instead; the account is then deleted within 30 days at the latest.
 
 CALLS: voice only, no video, not recorded. A call needs two devices: sign in as the parent on one and as the teacher on the other, open the family group chat and tap the phone icon at the top; the other device rings, also when the app is closed (CallKit on iPhone). The direct chat with the supervisor would ring a fictional staff member who has no login, so nobody answers there. During a call the audio continues when the app goes to the background or the screen locks.
 
@@ -92,7 +92,7 @@ STAFF: the academy's supervisors, managers and administrators work in a separate
 ```
 <!-- APPLE-NOTES-END -->
 
-**Length:** 2949 bytes without the payments paragraph. 3452 bytes with the longest option. See §2.2.
+**Length:** 2982 bytes without the payments paragraph. 3541 bytes with the longest option (C). See §2.2.
 
 ### 2.1 The payments paragraph (owner decision OA-12, 2026-11-10)
 
@@ -110,9 +110,8 @@ PAYMENTS: the academy sells only live one-to-one Quran lessons (one teacher, one
 
 - What the reviewer sees is in `review-accounts.md` (the table under "Review payment mode"). Each sentence above
   matches a row there.
-- **Length: estimated by hand, not counted** (the counting command was not run for this change). The paragraph is
-  about 560 bytes, so the Notes come to about 3510 bytes, under Apple's 4000 but slightly under the 500 bytes spare
-  that §2.2 asks for. Count it before pasting; if it is over 3500, shorten the STAFF paragraph first.
+- **Length: counted 2026-11-17:** the Notes come to 3541 bytes with this paragraph, under Apple's 4000 but
+  slightly under the 500 bytes spare that §2.2 asks for. If it must be shorter, shorten the STAFF paragraph first.
 - **UNVERIFIED for this change:** the Apple and Google policy pages were not re-read. The wording relies on the
   repository's reading of 2026-11-05 (`app-review-notes-payments.md` §1) and 2026-11-09 (this file). Re-read them on
   the day of submission.
@@ -156,16 +155,17 @@ Notes for the owner:
 
 | Text | Bytes (= characters; the text is ASCII) |
 |---|---|
-| The Notes block without the payments paragraph | 2949 |
-| With Option A (card): the block, a blank line and the paragraph | 3452 |
-| With Option B | 3368 |
+| The Notes block without the payments paragraph | 2982 |
+| With Option A (card): the block, a blank line and the paragraph | 3480 |
+| With Option C | 3541 |
+| With Option B | 3396 |
 | Apple's limit | 4000 bytes |
 | Play "Any other information" text (§3) without the payments sentence | 1091 (about 1330 with it) |
 
 Counted with `sed -n <lines> review-notes.md | wc -c`. Each count includes the line breaks. Only the
 paste blocks were checked for non-ASCII characters (none). Apple's limit was read from the App Store
 Connect help page on 2026-11-09, and only as a summary ("up to 4000 bytes"). Keep at least 500 bytes spare,
-as the counts above do (548 with Option A). Do not shorten the deletion paragraph to save space: it must
+as the counts above do with Options A and B (520 with Option A; Option C leaves 459). Do not shorten the deletion paragraph to save space: it must
 not say less is kept than the privacy policy does.
 
 Each count includes the placeholders as they are written here. The real domain and passwords change the
