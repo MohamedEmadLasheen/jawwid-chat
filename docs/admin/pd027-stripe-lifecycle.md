@@ -3,6 +3,9 @@
 Status: implemented on branch `claude/stripe-jawwid-chat-integration-f3e06a`. Not deployed.
 Builds on `pd027-payments.md` (the PD-27 contract) and `pd030-subscriptions.md`. It does **not**
 replace either, and it adds no second payment system.
+The owner-executable steps for turning Stripe on at the public launch (shared account pre-checks, the
+webhook endpoint and its events, the restricted key, the GitHub Environment, the M4 live smoke test and the
+rollback) are in `docs/release/stripe-launch-runbook.md`; §5 below is the reference it builds on.
 
 ## 1. What was already there (verified in code, 2026-11-07)
 
@@ -410,8 +413,10 @@ Run in **staging with Stripe test mode** first. Test cards: `4242 4242 4242 4242
 3. Open a checkout and abandon it. After 45 minutes, the attempt shows as expired.
 4. Refund part of a payment from Admin, then refund the rest from the Stripe Dashboard. Each is recorded
    once, and the transaction shows "refunded".
-5. Stripe Dashboard → the webhook → **Resend** an old event. Admin → Stripe events shows `duplicate`, and
-   nothing changes.
+5. Stripe Dashboard → the webhook → **Resend** an old event. The Dashboard's delivery log shows a 200 with
+   the body `{"received":true,"outcome":"duplicate"}`, and the API log prints `stripe webhook: <type> ->
+   duplicate`. Admin → Stripe events does **not** gain a row (the table is keyed by event id; a redelivery
+   is detected before anything is written), and nothing else changes.
 6. Disable the webhook endpoint for a few minutes and pay. Within about 15 minutes the worker log shows
    `stripe reconcile: a paid checkout had no webhook; recorded from Stripe`, and the payment is there
    once. Re-enable the endpoint: its late delivery shows `already_recorded`.

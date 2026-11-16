@@ -293,6 +293,20 @@ export class OutboxWorker {
 
       case CommEvent.CALL_PARTICIPANT_JOINED:
       case CommEvent.CALL_PARTICIPANT_LEFT: {
+        // OA-12: a participant_left WITH a reason is not presence -- the server
+        // took them off a call that goes on. It is lifecycle for the people on
+        // the call, the removed one above all (their app shows why instead of
+        // "connection lost"), so it goes where call.ended goes: each
+        // participant's own actor room, read from the call's rows.
+        if (type === CommEvent.CALL_PARTICIPANT_LEFT && typeof payload.reason === 'string') {
+          const participants = await this.callParticipantIds(payload);
+          if (participants.length === 0) {
+            this.log.error(`${type} resolved no call participants and was NOT delivered`);
+            return;
+          }
+          await this.realtime.toUsers(participants, type, payload as never);
+          return;
+        }
         // Media presence, unchanged: the conversation room, exactly as before.
         if (!conversationId) {
           this.log.error(

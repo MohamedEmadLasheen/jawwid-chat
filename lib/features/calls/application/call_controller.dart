@@ -57,7 +57,7 @@ enum CallUiPhase {
   failed,
 }
 
-/// Why a call could not be established, reduced to the three things a person can
+/// Why a call could not be established, reduced to the few things a person can
 /// act on. Never a `COMM.*` code, and never a technical message.
 /// Who placed the call, as THIS device saw it happen: [CallController.start] is
 /// outgoing, a `call.incoming` is incoming. Presentation only — it picks the
@@ -75,6 +75,13 @@ enum CallUiFailure {
 
   /// A transport or media failure. Retryable.
   network,
+
+  /// OA-12: the server refused because a lesson call seats one learner
+  /// ([WireErrors.lessonOneLearner]). Says so plainly rather than "not
+  /// available": to whoever started the call in neutral words, and to a
+  /// guardian answering another child's lesson call, that every child has
+  /// their own lesson.
+  oneLearnerLesson,
 }
 
 /// Everything the call interface renders, in one value.
@@ -218,6 +225,10 @@ class CallUiState {
 ///
 /// Terminality arrives from exactly two places: the server's `call.ended` /
 /// `call.declined` events, and a successful terminal request we ourselves made.
+/// OA-12 adds one more SERVER word, for this device only: the server took THIS
+/// guardian off a lesson call (`call.participant_left` naming us with reason
+/// `one_learner_lesson`, or our rejoin refused with COMM.LESSON_ONE_LEARNER).
+/// The call goes on for the others; it is over here.
 ///
 /// IDEMPOTENT AND ORDER-FREE. `call.declined` and `call.ended` are written in ONE
 /// server transaction and share a `created_at`, so their delivery order is not a
@@ -795,6 +806,17 @@ class CallController extends Notifier<CallUiState> {
       case CallResumed(:final callId):
         if (callId != state.callId || state.isTerminal) return;
         state = state.copyWith(clearInterrupted: true);
+
+      case CallParticipantLeft(:final callId, :final actorId, :final reason):
+        // Presence never ends a call (see the class note). The one exception
+        // is the SERVER's word that it took THIS participant off a lesson call
+        // (OA-12): the call goes on for the others, and is over here -- with
+        // the reason, so the person reads why and not "connection lost".
+        if (callId != state.callId || state.isTerminal) return;
+        if (reason != CallParticipantLeftReason.oneLearnerLesson) return;
+        final me = ref.read(viewerActorIdProvider)?.call();
+        if (me == null || me.isEmpty || actorId != me) return;
+        _goTerminal(outcome: state.outcome, reason: CallEndReason.oneLearnerLesson, authoritative: true);
     }
   }
 
@@ -1008,7 +1030,16 @@ class CallController extends Notifier<CallUiState> {
         next = next.copyWith(phase: CallUiPhase.live, clearFailure: true);
 
       case CallMediaPhase.failed:
-        final failure = _classifyMedia(snapshot.failure);
+        final failure = snapshot.refusalCode == WireErrors.lessonOneLearner
+            ? CallUiFailure.oneLearnerLesson
+            : _classifyMedia(snapshot.failure);
+        if (_rejoining && failure == CallUiFailure.oneLearnerLesson) {
+          // OA-12: the server took this guardian off a lesson call (the media
+          // dropped first) and refuses the rejoin for that reason. The call is
+          // over HERE -- it goes on for the others -- and says why.
+          _goTerminal(outcome: state.outcome, reason: CallEndReason.oneLearnerLesson, authoritative: true);
+          return;
+        }
         if (_rejoining && _rejoinFoundCallOver(snapshot)) {
           // CHATSCHED-013: the SERVER refused the rejoin because the call ended
           // while we were away (a phone offline past the grace never hears
@@ -1093,6 +1124,7 @@ class CallController extends Notifier<CallUiState> {
   CallUiFailure _classify(Object error) {
     if (error is! AppError) return CallUiFailure.network;
     final code = error.code;
+    if (code == WireErrors.lessonOneLearner) return CallUiFailure.oneLearnerLesson;
     if (code != null && _notAllowedCodes.contains(code)) {
       return CallUiFailure.notAllowed;
     }

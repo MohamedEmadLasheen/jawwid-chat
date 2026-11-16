@@ -46,6 +46,24 @@ fail() { echo "::error title=Release refused::$*"; exit 1; }
 command -v doctl >/dev/null 2>&1 || fail "doctl is not installed"
 command -v jq >/dev/null 2>&1 || fail "jq is not installed"
 
+# doctl -o json writes {"errors":[{"detail":"..."}]} to STDOUT when a call fails,
+# and the jq filters below index an array. Without this the real DigitalOcean
+# message (403, quota, invalid spec) is lost behind "jq: Cannot index object
+# with number". Prints only DigitalOcean's error detail, never the token.
+do_json() {
+  local out rc=0
+  out="$(doctl "$@")" || rc=$?
+  if printf '%s' "$out" | jq -e 'type == "object" and has("errors")' >/dev/null 2>&1; then
+    echo "::error title=Release refused::doctl $1 $2 failed: $(printf '%s' "$out" | jq -r '[.errors[]?.detail] | join("; ")')" >&2
+    return 1
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "::error title=Release refused::doctl $1 $2 exited $rc" >&2
+    return 1
+  fi
+  printf '%s' "$out"
+}
+
 EXPECTED_NAME="jawwid-chat-$ENVIRONMENT"
 spec_name="$(sed -n 's/^name: *//p' "$SPEC" | head -1)"
 [ "$spec_name" = "$EXPECTED_NAME" ] \
@@ -59,14 +77,14 @@ if [ -z "$APP_ID" ]; then
 
   # Refuse to create a duplicate: an app of this name already existing means
   # the secret is what is missing, not the app.
-  existing="$(doctl apps list -o json | jq -r --arg n "$EXPECTED_NAME" '[.[]? | select(.spec.name == $n) | .id] | join(" ")')"
+  existing="$(do_json apps list -o json | jq -r --arg n "$EXPECTED_NAME" '[.[]? | select(.spec.name == $n) | .id] | join(" ")')"
   [ -z "$existing" ] \
     || fail "an app named $EXPECTED_NAME already exists ($existing). Set DIGITALOCEAN_APP_ID to it instead of creating another."
 
   echo "Creating $EXPECTED_NAME (first deploy)"
   create_args=(apps create --spec "$SPEC" --wait -o json)
   [ -n "${DIGITALOCEAN_PROJECT_ID:-}" ] && create_args+=(--project-id "$DIGITALOCEAN_PROJECT_ID")
-  APP_ID="$(doctl "${create_args[@]}" | jq -r '.[0].id // empty')"
+  APP_ID="$(do_json "${create_args[@]}" | jq -r '.[0].id // empty')"
   [ -n "$APP_ID" ] || fail "doctl apps create returned no app id"
   echo "::notice title=Save the app id::Created $EXPECTED_NAME with id $APP_ID. Set it as the DIGITALOCEAN_APP_ID secret of the $ENVIRONMENT GitHub Environment; every later run requires it."
   {
@@ -79,7 +97,7 @@ else
   [ "$FIRST" != "true" ] \
     || fail "first_deploy=true but DIGITALOCEAN_APP_ID is already set. Refusing to create a second $EXPECTED_NAME."
 
-  live_name="$(doctl apps get "$APP_ID" -o json | jq -r '.[0].spec.name // empty')"
+  live_name="$(do_json apps get "$APP_ID" -o json | jq -r '.[0].spec.name // empty')"
   [ "$live_name" = "$EXPECTED_NAME" ] \
     || fail "DIGITALOCEAN_APP_ID names app '${live_name:-<not found>}', not '$EXPECTED_NAME'. Wrong environment's secret?"
 
@@ -87,11 +105,11 @@ else
   # --update-sources makes the platform pull the images even when the spec is
   # byte-identical to the live one (re-running a release); --wait blocks until
   # the deployment settles, either way.
-  doctl apps update "$APP_ID" --spec "$SPEC" --update-sources --wait -o json >/dev/null
+  do_json apps update "$APP_ID" --spec "$SPEC" --update-sources --wait -o json >/dev/null
 fi
 
 # What is ACTIVE, not what was requested.
-app_json="$(doctl apps get "$APP_ID" -o json)"
+app_json="$(do_json apps get "$APP_ID" -o json)"
 phase="$(printf '%s' "$app_json" | jq -r '.[0].active_deployment.phase // empty')"
 tag_of() {
   printf '%s' "$app_json" | jq -r --arg c "$1" \

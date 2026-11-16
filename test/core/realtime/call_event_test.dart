@@ -263,15 +263,35 @@ void main() {
     });
 
     test('call.participant_joined is NOT handled here', () {
-      // It is declared server-side and emitted by nothing: only something that
-      // has observed media presence may emit it, and that is a LiveKit webhook
-      // which does not exist. W2 must not invent it, and must not let
+      // Media presence: only the LiveKit webhook emits it, and W2 must not let
       // call.accepted stand in for it.
       expect(
         decodeCallEvent('call.participant_joined', _participant()),
         isNull,
       );
-      expect(decodeCallEvent('call.participant_left', _participant()), isNull);
+    });
+
+    test('OA-12: call.participant_left decodes, with the server\'s reason when it took them off', () {
+      final removed = decodeCallEvent(
+        CallEventNames.participantLeft,
+        _participant(overrides: {'reason': 'one_learner_lesson'}),
+      ) as CallParticipantLeft;
+      expect([removed.callId, removed.conversationId, removed.actorId, removed.reason],
+          [_callId, _conversationId, _actorId, CallParticipantLeftReason.oneLearnerLesson]);
+
+      // Presence (no reason), and a reason this build does not know, carry none.
+      final presence = decodeCallEvent(CallEventNames.participantLeft, _participant()) as CallParticipantLeft;
+      expect(presence.reason, isNull);
+      final unknown = decodeCallEvent(
+        CallEventNames.participantLeft,
+        _participant(overrides: {'reason': 'something_new'}),
+      ) as CallParticipantLeft;
+      expect(unknown.reason, isNull);
+
+      expect(
+        () => decodeCallEvent(CallEventNames.participantLeft, _participant(overrides: {'actorId': ''})),
+        throwsA(isA<CallEventFormatException>()),
+      );
     });
 
     test('an unknown call-shaped name does not crash the decoder', () {

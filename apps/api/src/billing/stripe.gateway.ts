@@ -256,6 +256,10 @@ export function checkoutCreateParams(input: CheckoutInput): Stripe.Checkout.Sess
   return {
     mode: 'payment',
     client_reference_id: input.requestId,
+    // Card only: Chat's bank transfer is manual and in-app, and the currency guard assumes card rules.
+    // Stripe API 2026-09-30.endive removed payment_method_types from Checkout (400); this filter also
+    // holds against methods enabled in the Dashboard. Never taken from the caller's input.
+    allowed_payment_method_types: ['card'],
     line_items: [
       {
         quantity: 1,
