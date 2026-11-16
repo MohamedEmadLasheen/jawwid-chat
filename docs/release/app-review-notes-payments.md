@@ -151,7 +151,7 @@ unaffected. The server enforces it, not the app's UI.
 
 - The switch, its value and what each route does: `docs/release/review-accounts.md`, "Review
   payment mode". The code: `apps/api/src/billing/review-mode.ts`.
-- What the reviewer sees: Subscriptions tab → Amount due → "Lesson package (demo): 8 live
+- What the reviewer sees: Packages tab → Amount due → "Lesson package (demo): 8 live
   one-to-one lessons" → Pay. The pay sheet says it is a demo account and still shows the
   live one-to-one description. **Card** opens, in the browser, a page that says (in Arabic and
   English): "In the live app this opens Stripe's secure checkout page in the browser to pay this

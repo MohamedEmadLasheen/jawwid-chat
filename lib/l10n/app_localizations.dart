@@ -1432,7 +1432,7 @@ abstract class L10n {
   /// No description provided for @childSubscriptionLabel.
   ///
   /// In en, this message translates to:
-  /// **'Subscription'**
+  /// **'Lesson package'**
   String get childSubscriptionLabel;
 
   /// No description provided for @childScheduleLabel.
@@ -3490,13 +3490,13 @@ abstract class L10n {
   /// No description provided for @cardTrialSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'The student has subscribed.'**
+  /// **'The student has enrolled.'**
   String get cardTrialSubscribedTitle;
 
   /// No description provided for @cardTrialNotSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'The student did not subscribe.'**
+  /// **'The student did not enrol.'**
   String get cardTrialNotSubscribedTitle;
 
   /// No description provided for @cardTrialLevel.
@@ -4984,7 +4984,7 @@ abstract class L10n {
   /// No description provided for @signupEmailIntro.
   ///
   /// In en, this message translates to:
-  /// **'Enter the e-mail address you gave the academy when you subscribed.'**
+  /// **'Enter the e-mail address you gave the academy when you enrolled.'**
   String get signupEmailIntro;
 
   /// No description provided for @signupEmailLabel.
@@ -5584,7 +5584,7 @@ abstract class L10n {
   /// PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments.
   ///
   /// In en, this message translates to:
-  /// **'Subscriptions'**
+  /// **'Packages'**
   String get tabSubscriptions;
 
   /// PD-30: a plan's length, as in "3 Months — 24 Lessons".
@@ -5608,7 +5608,7 @@ abstract class L10n {
   /// PD-30: a child with no subscription on record.
   ///
   /// In en, this message translates to:
-  /// **'No subscription yet'**
+  /// **'No lesson package yet'**
   String get subscriptionNone;
 
   /// PD-30: a child's lessons left in their subscriptions.
@@ -5632,7 +5632,7 @@ abstract class L10n {
   /// PD-30: a child's subscription chip: lessons used up, grace lessons left.
   ///
   /// In en, this message translates to:
-  /// **'Renewal due'**
+  /// **'Next package due'**
   String get subscriptionStateGrace;
 
   /// PD-30: a child's subscription chip: locked for payment.
@@ -5656,13 +5656,13 @@ abstract class L10n {
   /// PD-30: a locked child with nothing to pay yet: ask the academy to renew.
   ///
   /// In en, this message translates to:
-  /// **'Request renewal'**
+  /// **'Request the next package'**
   String get subscriptionRequestRenewal;
 
   /// PD-30: the renewal was asked for today.
   ///
   /// In en, this message translates to:
-  /// **'Renewal requested'**
+  /// **'Next package requested'**
   String get subscriptionRenewalRequested;
 
   /// PD-30 D-3 (owner, 2026-11-06): the informational banner above the composer when a child's new lesson bookings are paused. The chat stays open.
@@ -5698,7 +5698,7 @@ abstract class L10n {
   /// PD-30: the banner's button, a parent only.
   ///
   /// In en, this message translates to:
-  /// **'Go to Subscriptions'**
+  /// **'Go to Packages'**
   String get lockBannerOpenSubscriptions;
 
   /// PD-30: the report's lesson number within the child's subscription.
@@ -5746,7 +5746,7 @@ abstract class L10n {
   /// PD-30 D-3: the last line of the family's direct-chat card.
   ///
   /// In en, this message translates to:
-  /// **'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'**
+  /// **'Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.'**
   String get cardSubscriptionLockedHint;
 
   /// PD-30: the group card when a locked child's lessons resume.
@@ -8935,6 +8935,12 @@ abstract class L10n {
   /// **'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.'**
   String get deleteAccountGoes;
 
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: what goes when the requested deletion happens (within 30 days), in place of deleteAccountGoes, which says deleted now.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.'**
+  String get deleteAccountGoesOnRequest;
+
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
@@ -8944,7 +8950,7 @@ abstract class L10n {
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
-  /// **'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
+  /// **'Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
   String get deleteAccountKeptTeacher;
 
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
@@ -8989,11 +8995,71 @@ abstract class L10n {
   /// **'Your account has been deleted.'**
   String get deleteAccountDone;
 
-  /// PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet.
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
   ///
   /// In en, this message translates to:
-  /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
-  String get deleteAccountTeacherBlocked;
+  /// **'You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.'**
+  String get deleteAccountRequestIntro;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Request account deletion'**
+  String get deleteAccountRequestAction;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by {date} at the latest. You can cancel the request until then.'**
+  String deleteAccountRequestConfirm(String date);
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deletion request is recorded.'**
+  String get deleteAccountRequested;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion requested'**
+  String get deleteAccountRequestStatusTitle;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested on {requested}; your account will be deleted by {deadline}.'**
+  String deleteAccountRequestStatus(String requested, String deadline);
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel request'**
+  String get deleteAccountRequestCancel;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel your deletion request? Your account stays as it is.'**
+  String get deleteAccountRequestCancelConfirm;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the request'**
+  String get deleteAccountRequestKeep;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deletion request was cancelled.'**
+  String get deleteAccountRequestCancelled;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be cancelled. Try again.'**
+  String get deleteAccountRequestCancelFailed;
 
   /// PD-45 PR-4: the Location row of the parent's own profile.
   ///
