@@ -20,8 +20,8 @@ import 'fake_voice_devices.dart';
 
 /// PD-30 in the chat, after D-3 (owner, 2026-11-06): the chat stays open and only new lesson
 /// bookings pause. A group with such a child shows an informational strip ABOVE the composer,
-/// never in its place. A parent reads the reason for each child and gets "Go to Subscriptions"
-/// ("عرض الاشتراكات"); a teacher reads only that new lessons are paused and the chat stays open
+/// never in its place. A parent reads the reason for each child and gets "Go to Packages"
+/// ("عرض الباقات"; LR-15: never "Subscriptions"); a teacher reads only that new lessons are paused and the chat stays open
 /// -- nothing financial, even if a server sent it.
 void main() {
   late FakeBackend backend;
@@ -129,10 +129,10 @@ void main() {
   const enLine = 'The chat stays open, and lessons already booked go ahead.';
   const arLine = 'المحادثة تبقى مفتوحة، والحصص المحجوزة مسبقًا تُقام في موعدها.';
   // Anything that tells the family's financial state.
-  final financialText = RegExp(r'used up|overdue|instalment|Subscriptions|انتهت|متأخر|القسط|الاشتراكات|2/3');
+  final financialText = RegExp(r'used up|overdue|instalment|Subscriptions|Packages|انتهت|متأخر|القسط|الاشتراكات|الباقات|2/3');
 
   group('D-3: the banner sits above the composer; the chat stays open', () {
-    testWidgets('a parent: each child with the reason, Go to Subscriptions at that child, and the composer', (tester) async {
+    testWidgets('a parent: each child with the reason, Go to Packages at that child, and the composer', (tester) async {
       final opened = <String>[];
       await tester.pumpWidget(harness(role: UserRole.parent, conversation: locked(parentLock), onOpenSubscriptions: opened.add));
       await tester.pumpAndSettle();
@@ -143,7 +143,8 @@ void main() {
       // Overdue from the day after the due date.
       expect(find.text('Sara: instalment 2/3 overdue since Oct 2, 2026'), findsOneWidget);
       expect(find.text(enLine), findsOneWidget);
-      expect(find.text('Go to Subscriptions'), findsNWidgets(2));
+      expect(find.text('Go to Packages'), findsNWidgets(2));
+      expect(find.textContaining('Subscri'), findsNothing);
       // The composer stays, below the banner -- even though this lock says readOnly
       // (no server sends that any more; an old one must not close the chat).
       expect(find.byType(TextField), findsOneWidget);
@@ -156,7 +157,7 @@ void main() {
       expect(opened, ['k2']);
     });
 
-    testWidgets('a parent, in Arabic: the reason and «عرض الاشتراكات»', (tester) async {
+    testWidgets('a parent, in Arabic: the reason and «عرض الباقات»', (tester) async {
       await tester.pumpWidget(harness(role: UserRole.parent, conversation: locked(parentLock), onOpenSubscriptions: (_) {}, locale: const Locale('ar')));
       await tester.pumpAndSettle();
 
@@ -164,8 +165,9 @@ void main() {
       expect(find.text('Adam: انتهت الحصص'), findsOneWidget);
       expect(find.textContaining('Sara: القسط 2/3 متأخر منذ'), findsOneWidget);
       expect(find.text(arLine), findsOneWidget);
-      expect(find.text('عرض الاشتراكات'), findsNWidgets(2));
-      expect(find.text('الذهاب إلى الاشتراكات'), findsNothing);
+      expect(find.text('عرض الباقات'), findsNWidgets(2));
+      expect(find.text('الذهاب إلى الباقات'), findsNothing);
+      expect(find.textContaining('اشتراك'), findsNothing);
       expect(find.byType(TextField), findsOneWidget);
     });
 
@@ -283,7 +285,7 @@ void main() {
       expect(find.textContaining('Instalment 2/3 overdue since'), findsOneWidget);
       expect(find.textContaining('Oct 2'), findsOneWidget);
       expect(
-        find.text('Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'),
+        find.text('Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.'),
         findsOneWidget,
       );
 
@@ -304,7 +306,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('توقّف حجز الحصص الجديدة — الدفع'), findsOneWidget);
       expect(
-        find.text('الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، جدّدوا الاشتراك أو ادفعوا القسط من «الاشتراكات».'),
+        find.text('الحصص المحجوزة مسبقًا تُقام في موعدها. لحجز حصص جديدة، اطلبوا الباقة التالية أو ادفعوا القسط من «الباقات».'),
         findsOneWidget,
       );
 

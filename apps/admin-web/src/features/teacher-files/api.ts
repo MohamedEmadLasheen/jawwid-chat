@@ -287,6 +287,11 @@ export const teacherFileApi = {
     api.patch<ChangedSignIn>(`/teachers/${encodeURIComponent(teacherId)}/sign-in`, body),
   reissueFirstLogin: (teacherId: string) =>
     api.post<ReissuedCode>(`/teachers/${encodeURIComponent(teacherId)}/first-login-code`, {}),
+  // PD-56 O-3: the teacher asked to delete their account; staff close and delete it.
+  deletionRequest: (teacherId: string) =>
+    api.get<TeacherDeletionRequest>(`/teacher-files/${encodeURIComponent(teacherId)}/deletion-request`),
+  completeDeletionRequest: (teacherId: string) =>
+    api.post<{ requestId: string }>(`/teacher-files/${encodeURIComponent(teacherId)}/deletion-request/complete`, { confirm: true }),
   offboardPreview: (teacherId: string) => api.get<OffboardPreview>(`/teachers/${encodeURIComponent(teacherId)}/offboard-preview`),
   offboard: (teacherId: string, body: { reason: string; cancelOpenLessons?: boolean }) =>
     api.post<Offboarded>(`/teachers/${encodeURIComponent(teacherId)}/offboard`, body),
@@ -299,6 +304,24 @@ export const teacherFileApi = {
     api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),
   addEntry: (teacherId: string, body: NewEntry) =>
     api.post<{ id: string; kind: string; createdAt: string }>(`/teacher-files/${encodeURIComponent(teacherId)}/entries`, body),
+}
+
+/** PD-56 O-3: a teacher's account deletion request, as the Teacher File's banner reads it. */
+export interface TeacherDeletionRequest {
+  request: {
+    id: string
+    state: 'pending' | 'completed' | 'cancelled'
+    requestedAt: string
+    deadlineAt: string
+    openItems: string[]
+    completedAt: string | null
+    completedVia: 'staff' | 'deadline' | 'holder' | null
+    cancelledAt: string | null
+  } | null
+  /** What is still on the teacher now (pending only): what "Close and delete" would leave flagged. */
+  leftOpen: { futureLessons: number; assignedLearners: number; openPayroll: boolean } | null
+  /** The super admin or the Teachers manager (the route re-checks). */
+  canComplete: boolean
 }
 
 export const teacherFileKeys = {
