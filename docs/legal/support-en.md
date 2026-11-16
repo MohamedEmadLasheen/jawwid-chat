@@ -52,6 +52,6 @@ This page explains how to reach Jawwid Academy ("Jawwid", "the Academy", "we") f
 
 ## 6. Who we are
 
-6.1 Jawwid Academy is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Mailing address for business contact: {{AJMAN_MAILING_ADDRESS}}. E-mail: info@jawwid.com.
+6.1 Jawwid Academy is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}. E-mail: info@jawwid.com.
 
 6.2 **Language.** This page is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails.

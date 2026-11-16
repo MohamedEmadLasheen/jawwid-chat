@@ -15,7 +15,7 @@ status: "DRAFT for owner approval. Not published and not in force."
 
 ## 1. Scope and commitment
 
-1.1 Jawwid Academy ("Jawwid", the "Academy", "we") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089), mailing address {{AJMAN_MAILING_ADDRESS}}. The Academy teaches children the Quran (memorisation and recitation), Arabic and Islamic studies in live one-to-one online lessons.
+1.1 Jawwid Academy ("Jawwid", the "Academy", "we") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089); mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}. The Academy teaches children the Quran (memorisation and recitation), Arabic and Islamic studies in live one-to-one online lessons.
 
 1.2 This Policy applies to the Service: the Jawwid apps for Android and iOS, the teacher web portal, the Admin Web and the lessons. It binds every Parent, Teacher and member of Academy Staff, including supervisors, managers, administrators and the Super Admin.
 
@@ -123,13 +123,13 @@ status: "DRAFT for owner approval. Not published and not in force."
 
 7.4 **Certificates in Stories.** The Academy may publish a child's certificate as an announcement (Story) only after a Parent of the child's family has given consent, and only while that consent stands. The consent, who gave it and how, is recorded. A Parent may withdraw it at any time by telling the Academy; once consent is withdrawn, or if none was given, no Story is published. A Story's media is deleted 72 hours after the Story ends.
 
-## 8. Staff vetting and training
+## 8. Teachers and Staff
 
-8.1 The Academy will apply safer-recruitment checks, appropriate to the role and to the law of the country where the person works, to every Teacher and member of Staff who can contact children or see children's information, before that person is given access.
+8.1 **Who can teach.** Teacher and Staff accounts are created only by authorised Academy staff; no one can sign up as a Teacher. A Teacher is added by the Academy's Teachers Manager, a teacher supervisor or the Super Admin. Each Teacher is supervised by a teacher supervisor or, until one is assigned, by the Teachers Manager. A Teacher teaches only the students and groups the Academy assigns to them.
 
-8.2 The Academy will train every Teacher and member of Staff in this Policy and in recognising and reporting child-safety concerns, before they start and at regular intervals.
+8.2 **Qualifications and supervision.** A certificate a Teacher uploads to their profile (for example an ijazah) is not treated as verified until authorised staff have reviewed and approved it. Complaints about a Teacher, and a Teacher's lateness and absences, are recorded in the Teacher's record and decided by the Academy's supervisors and managers. Clause 9.5 applies to a Teacher who is the subject of a child-safety report.
 
-8.3 Every Teacher and member of Staff is bound by this Policy under the terms of their engagement with the Academy.
+8.3 Every Teacher and member of Staff must follow this Policy.
 
 ## 9. Safeguarding procedure
 

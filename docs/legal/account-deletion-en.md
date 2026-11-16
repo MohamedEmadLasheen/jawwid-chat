@@ -69,6 +69,6 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 4.1 Questions about deletion or your personal data: info@jawwid.com. Other help: the [Help and Support](support-en.md) page.
 
-4.2 Jawwid LLC, mailing address: {{AJMAN_MAILING_ADDRESS}}.
+4.2 Jawwid LLC, mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}.
 
 4.3 **Language.** This page is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails.

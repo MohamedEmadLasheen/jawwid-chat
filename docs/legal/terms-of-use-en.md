@@ -17,7 +17,7 @@ These Terms of Use apply to parents and legal guardians who hold a family accoun
 
 ## 1. About these Terms and how you accept them
 
-1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Mailing address for business contact: {{AJMAN_MAILING_ADDRESS}}. Registered agent in Wyoming: 30 N Gould St Ste R, Sheridan, WY 82801, United States.
+1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Mailing and correspondence address (not the registered address): {{UAE_MAILING_ADDRESS}}. Registered agent in Wyoming (registered agent's address only): 30 N Gould St Ste R, Sheridan, WY 82801, United States.
 
 1.2 These Terms are an agreement between you, as a Parent, and the Academy. They govern your use of the Service and your children's use of it under your account.
 

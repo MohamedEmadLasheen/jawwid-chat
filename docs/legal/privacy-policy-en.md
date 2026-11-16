@@ -17,7 +17,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 ## 1. Who we are
 
-1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Its mailing address for business contact is {{AJMAN_MAILING_ADDRESS}}.
+1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Its mailing and correspondence address (not its registered address) is {{UAE_MAILING_ADDRESS}}.
 
 1.2 Jawwid LLC is the **controller** of the personal data described in this Policy. That means it decides why and how the data is used and is responsible for it.
 
@@ -713,7 +713,7 @@ Child-safety concerns are handled as described in the Child Safety and Parental 
 
 18.3 **General support:** info@jawwid.com, or our [Help and Support](support-en.md) page.
 
-18.4 **By post:** Jawwid LLC, {{AJMAN_MAILING_ADDRESS}} (mailing address).
+18.4 **By post:** Jawwid LLC, {{UAE_MAILING_ADDRESS}} (mailing and correspondence address, not the registered address).
 
 18.5 **Complaints.** If you are unhappy with how we have handled your personal data, please contact us first so that we can try to put it right. You also have the right to complain to the data protection authority of the country where you live (section 15).
 
