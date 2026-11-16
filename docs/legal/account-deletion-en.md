@@ -39,7 +39,7 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 (c) the contact details the Academy's staff hold for you (phone, e-mail and region), and the staff note;
 
-(d) your location prompt and your own family contact keys; and
+(d) your location prompt and your own contact-matching keys; and
 
 (e) any block you made, and any block made against you.
 
@@ -51,8 +51,8 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 | Record | How long it is kept |
 |---|---|
-| Payments, invoices, receipts and payment requests, including the payer's and the child's names | 7 years |
-| The audit log of staff actions | 7 years |
+| Payments, invoices, receipts and payment requests, including the payer's and the child's names | 7 years (not yet deleted automatically) |
+| The audit log of staff actions | 7 years (not yet deleted automatically) |
 | For a teacher: pay and supervision records, including recorded violations and suspensions | Kept as the Academy's employment records; not deleted automatically |
 | Messages and attachments you sent, shown as from "Deleted user" | For as long as the conversation is kept for the other people in it; not deleted automatically |
 | Your children's records at the Academy (profiles, lessons, lesson reports and rewards), and your family's country and region on the family record | Kept as the Academy's records; not deleted automatically |

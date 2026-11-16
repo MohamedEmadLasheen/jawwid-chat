@@ -84,7 +84,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 4.2.2 **Contact details held by staff** (phone, e-mail and region), with an internal staff note. The Academy records them when you enrol, and our staff may update them later. Only authorised staff can see them, within their department and the families they serve. Teachers never can.
 
-4.2.3 **Family contact keys:** a keyed hash of each e-mail address and phone number in the family. We use it to match a new enrolment to a family that already exists, without comparing the readable details.
+4.2.3 **Contact-matching keys:** a keyed hash of each e-mail address and phone number in the family. We use it to match a new enrolment to a family that already exists, without comparing the readable details.
 
 4.2.4 **Information from the Academy's enrolment systems:** when a family enrols or a subscription starts, the Academy's separate enrolment and subscription systems send the Service the details needed to set up the family and its lessons.
 
@@ -445,7 +445,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 (d) your location prompt;
 
-(e) your own family contact keys; and
+(e) your own contact-matching keys; and
 
 (f) any block you made, and any block made against you.
 
@@ -465,8 +465,8 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 |---|---|
 | **Messages and attachments you sent**, shown as from "Deleted user" | They are part of conversations that other people (the family, teachers and staff) still rely on, and they may be needed to deal with reports and safety concerns |
 | **Your children's records**: profiles, lessons, lesson reports and rewards | They are kept as the Academy's records, including when the last parent of the family deletes the account |
-| **Payments, invoices, receipts and payment requests**, including the payer's and the child's names | Accounting and tax duties, refunds and disputes. Kept for 7 years |
-| **The audit log** | Accountability for staff actions and security. Kept for 7 years |
+| **Payments, invoices, receipts and payment requests**, including the payer's and the child's names | Accounting and tax duties, refunds and disputes. Kept for 7 years (not yet deleted automatically) |
+| **The audit log** | Accountability for staff actions and security. Kept for 7 years (not yet deleted automatically) |
 | **Consent and acceptance records** (section 4.14) | Evidence of what was accepted, acknowledged or consented to, and when |
 | **Reports** you made or that were made about you | Safety, moderation and possible legal proceedings. Report records are not deleted. If the person who made a report deletes their account, the report is kept but no longer linked to that person |
 | **Your family's country and region** on the family record | The country and region recorded for your family stay on the family record, which the Academy keeps with your children's records (row above). The location prompt and the region in the contact details held by staff are deleted (section 10.2) |
@@ -534,12 +534,12 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 | Reports | Kept after deletion (section 10.3) | Not deleted automatically today; subject to any legal hold |
 | Blocks | Until either person's account is deleted | Deleted with the account |
 | Feedback to the administration | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
-| Payments, invoices, receipts | 7 years | Accounting and tax |
-| Audit log and support-session log | 7 years (audit log); support-session log not deleted automatically today | Accountability |
+| Payments, invoices, receipts | 7 years | Accounting and tax. Not yet deleted automatically |
+| Audit log and support-session log | 7 years (audit log); support-session log not deleted automatically today | Accountability. Not yet deleted automatically |
 | Teacher pay and supervision records | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
 | Consent and acceptance records | Kept after deletion | Evidence. Not deleted automatically today |
 | Sign-in session records | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
-| Trial-request details | Until the account is deleted, then as in section 10.3 | Not removed by account deletion today. Not deleted automatically today |
+| Trial-request details | Until you ask us to delete them (section 13) | Not removed by account deletion today. Not deleted automatically today, except the location given for a trial (see Parent location above) |
 | Time zone | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
 | Server logs | Kept by our hosting provider under its log-retention rules | Contain no IP addresses, names or message contents |
 | Error and crash reports (Sentry) | Sentry's retention period | Hashed account number only |

@@ -151,9 +151,9 @@ under-declaring.
 - **What is kept, and why** (data inventory §4): messages the person sent (shown as "Deleted user"),
   children's lesson records, payment records ("7 years", L-6), the audit log, reports and consent records,
   and backups for up to 56 days. The Privacy Policy discloses it (§10).
-- **Open:** a teacher with lessons ahead is refused today and told to contact the academy (LR-03, PR #498
-  turns this into a 30-day request). Staff accounts cannot delete in the app (LR-20). Google allows a
-  stated delay; it does not allow "contact us". Do not submit until LR-03 is merged.
+- **Teachers with open work:** deletion records a request and the account is deleted within 30 days at the
+  latest (`supabase/migrations/20261107140000_chat_teacher_deletion_request.sql:1-12`; Privacy Policy 10.4.1;
+  Account deletion 1.5). Staff accounts are closed by the Academy (LR-20).
 
 ## 4. Stripe and the child's name (not applicable at launch)
 

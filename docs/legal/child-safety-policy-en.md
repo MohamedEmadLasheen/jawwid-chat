@@ -187,7 +187,7 @@ status: "DRAFT for owner approval. Not published and not in force."
 (c) keep all information about children and families confidential, use it only for their work, and share it only with those who need it to protect the child; and
 (d) co-operate fully with the Academy and with the competent authorities.
 
-12.3 A breach of this Policy by a Teacher or member of Staff is serious misconduct and may lead to immediate suspension, termination and referral to the authorities.
+12.3 A breach of this Policy by a Teacher or member of Staff is serious misconduct and may lead to immediate suspension, the end of their engagement with the Academy and the closure of their account, and referral to the authorities.
 
 ## 13. Support sessions and children's information
 
