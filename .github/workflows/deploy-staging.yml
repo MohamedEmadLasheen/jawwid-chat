@@ -64,19 +64,20 @@ jobs:
 
       - id: meta
         name: Resolve release identity
-        # Inputs reach the shell only through env, never pasted into the script text.
+        # The input reaches the shell only through env, never through ${{ }}
+        # inside the script, so it cannot inject shell.
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          INPUT_TAG: ${{ inputs.image_tag }}
         run: |
-          if [ -n "$IMAGE_TAG" ]; then
-            [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::image_tag must be a full 40-character commit SHA"; exit 1; }
-            echo "tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-            echo "reusing existing image ${IMAGE_TAG}"
+          if [ -n "$INPUT_TAG" ]; then
+            [[ "$INPUT_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1; }
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            echo "reusing existing image $INPUT_TAG"
           else
             echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           fi
           # The Admin Web image is per environment (ADR-006), so its tag says so.
-          echo "admin_web_tag=staging-${IMAGE_TAG:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "admin_web_tag=staging-${INPUT_TAG:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the registry
