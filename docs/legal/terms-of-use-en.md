@@ -213,11 +213,11 @@ You activate your account in the app by entering that code and setting your pass
 
 10.1 **Your Child's schedule.** Your Child has regular weekly lesson times. You can see them in the app.
 
-10.2 **Apologies.** If your Child cannot attend, send an apology in the app before the lesson starts. Please send it at least 2 hours before the lesson. An apology sent before the start is recorded as an excused absence and does not use your lesson balance.
+10.2 **Apologies.** If your Child cannot attend, send an apology in the app before the lesson starts. Please send it at least 2 hours before the lesson. An apology sent before the start is recorded as an excused absence. Within the monthly allowance in clause 10.9, an excused absence does not use your lesson balance.
 
-10.3 **Late apologies.** In an emergency you may send a late apology after the lesson has started, within the time the app allows. A supervisor decides whether it is excused. Until then the lesson counts as an absence.
+10.3 **Late apologies.** In an emergency you may send a late apology after the lesson has started, within the time the app allows. A supervisor reviews it and decides whether it is excused. Until then the lesson counts as an absence. If the supervisor accepts it, the lesson is an excused absence: it counts toward the monthly allowance in clause 10.9 and, within that allowance, does not use your lesson balance. If the supervisor does not accept it, clause 10.4 applies.
 
-10.4 **Absence without an apology.** If your Child does not attend and no apology was sent, the lesson is recorded as a student absence and uses one lesson from your balance.
+10.4 **Absence without an apology.** If your Child does not attend and no apology was sent, or a late apology was not accepted, the lesson is recorded as a student absence and uses one lesson from your balance. Such an absence does not count toward the monthly allowance in clause 10.9.
 
 10.5 **Teacher apologies.** If the Teacher cannot teach a lesson, you are owed a make-up lesson, which you can book in the app in one of the Teacher's free times. If no make-up is booked, the Academy will offer another remedy, such as a substitute Teacher or a credit.
 
@@ -225,7 +225,21 @@ You activate your account in the app by entering that code and setting your pass
 
 10.7 **Changing the weekly time.** A change to your Child's regular weekly time is a request. The Teachers department decides it.
 
-10.8 **What uses a lesson.** A lesson held, and a lesson your Child missed without an excused apology, each use one lesson from your Lesson package.
+10.8 **What uses a lesson.** A lesson held, a lesson your Child missed without an excused apology, and an excused absence beyond the monthly allowance in clause 10.9, each use one lesson from your Lesson package and count as lessons used.
+
+10.9 **Monthly allowance of excused absences.**
+
+(a) Each Child has an allowance of two excused absences in each calendar month that do not use your lesson balance. The allowance belongs to each Child separately: it is not shared between brothers and sisters or across the family account. It starts again at the beginning of each calendar month, and an allowance not used in one month does not carry over to the next.
+
+(b) An excused absence is a lesson your Child misses for which an apology is accepted through the in-app apology process: an apology sent before the lesson starts (clause 10.2), or a late apology accepted by a supervisor (clause 10.3). Every excused absence counts toward the allowance. A lesson counts in the calendar month in which it was scheduled to start.
+
+(c) The first and second excused absences of a Child in a calendar month do not use your lesson balance. From the third excused absence of the same Child in the same calendar month, each missed lesson uses one lesson from your balance and counts as a lesson used. It is therefore not an unused lesson for the purposes of a refund under clause 14.1.
+
+(d) An absence without an apology, or with a late apology that is not accepted, always uses one lesson (clause 10.4) and does not count toward the allowance.
+
+(e) A lesson the Teacher cannot teach or cancels is not a student absence. It never counts toward the allowance and never uses your Child's lesson balance, and clause 10.5 applies to it unchanged.
+
+(f) Nothing in this clause limits your rights under clauses 14.3 and 14.4.
 
 ## 11. Communication and messaging
 
@@ -293,7 +307,7 @@ You activate your account in the app by entering that code and setting your pass
 
 ## 14. Refunds and cancelling a package
 
-14.1 Unused lessons in a paid Lesson package are refunded in proportion on request. Lessons held, and lessons your Child missed without an excused apology, are not refunded. We answer a refund request within 30 days.
+14.1 Unused lessons in a paid Lesson package are refunded in proportion on request. Lessons held, lessons your Child missed without an excused apology, and excused absences beyond the monthly allowance in clause 10.9 count as lessons used and are not refunded. We answer a refund request within 30 days.
 
 14.2 Refunds are made by authorised Academy staff, to the original method of payment where possible.
 
