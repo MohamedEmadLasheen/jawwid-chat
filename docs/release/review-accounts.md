@@ -47,10 +47,16 @@ in the app is only a courtesy. The code is `apps/api/src/billing/review-mode.ts`
   run. That change should *add* the review organization's id to the array (keeping any id already there), never
   replace the array, and print the value it wrote.
 - **Absent:** no organization is in review mode.
-- **Malformed** (not an array, or any entry that is not a uuid): treated as "no review
-  organization", so every family behaves as a real one, and the API logs an error. **Unreadable** (the
-  database read fails): the request fails with 500; it never falls back to public behaviour. A mistake in this row can only
-  make the review account behave like a real one. It can never make a real family see the demo.
+- **Not an array** (a string, an object, a number): treated as "no review organization" (public behaviour), and an
+  error is logged.
+- **An array with entries that are not uuid strings** (B5 P2-1): those entries are ignored and logged (count and
+  position, never the value); every valid uuid in the array stays in review mode. A typo beside the review
+  organization's id therefore never switches its review mode off, and an ignored entry names no organization, so it can
+  never put a real family in the demo.
+- **Unreadable** (the database read fails): the request fails with 500; it never falls back to public behaviour. A
+  mistake in this row can only make a review account behave like a real one (no money can move: a review family has
+  nothing payable). It can never make a real family see the demo: only an organization whose own uuid is in the array
+  is in review mode.
 - It is read on every request, so a change applies at once, without a restart.
 
 **What a parent of a review organization gets:**
