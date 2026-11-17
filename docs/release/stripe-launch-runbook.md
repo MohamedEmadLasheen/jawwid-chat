@@ -104,6 +104,23 @@ Add destination, type "Webhook endpoint").
   Stripe shows under Developers → Logs for any Chat request) and choose that version in the endpoint's
   "API version" picker (UNVERIFIED label). The string the review quoted is `2026-09-30.endive`; confirm it
   against the file rather than copying it from here. Pinning affects only Chat's endpoint, never Core's.
+  **Verified 2026-11-17 (installed `stripe` 23.0.1, `apiVersion.js`: `2026-09-30.endive`).** The launch
+  endpoint was created on the account default, which the Dashboard shows as `2020-08-27`. That is
+  **supported**: an endpoint's version changes only the shape of the payload Stripe POSTs, and the
+  handlers read only ids, status, amount, currency, metadata, the decline code and `payment_intent`
+  from it (every one of those fields is in the 2020-08-27 types as well); the charge, card and refund
+  details always come from an SDK call, which uses the SDK's pinned version. `stripe-webhook-version-and-isolation.spec.ts`
+  feeds the handlers both payload shapes. So the endpoint may stay as it is. Pinning is still the safer
+  state (a change of the account default would otherwise change the payload shape under Chat), but the
+  version of an existing endpoint cannot be edited: it means creating a new destination with the same
+  15 events and the version chosen, copying its new `whsec_` into `STRIPE_WEBHOOK_SECRET`, and
+  disabling the old one **only after** a deploy has picked the new secret up. Do that only if you want
+  the pin; it is not a launch blocker.
+  One caution: the 2020-08-27 SDK knows no `refund.created`, `refund.updated` or `refund.failed` events
+  (its refund event was `charge.refund.updated`). If Stripe does not deliver them to a 2020-08-27
+  endpoint, refunds are still recorded: `charge.refunded` is subscribed, lists every refund of the
+  payment from Stripe, and the reconciler does the same. §6.5 (the smoke-test refund) is where this is
+  confirmed: look for a `refund_recorded` row from either event.
 - **Events to send:** exactly these, and nothing else.
 
 | Event | Handled where (on `main` unless noted) | Outcome recorded |
@@ -340,7 +357,9 @@ card payment → **Refund** (`ParentProfilePage.tsx:502` `canRefund`, `PaymentPa
 Expected:
 - the transaction reads **Refunded** (`copy.ts:313`), one refund line "through Stripe";
 - Stripe events: `refund.created` (and possibly `refund.updated`, `charge.refunded`) with outcomes
-  `refund_recorded` / `already_recorded`, never a second refund row;
+  `refund_recorded` / `already_recorded`, never a second refund row. On an endpoint still on API version
+  `2020-08-27` Stripe may send no `refund.*` events (§2): then a `charge.refunded` row with
+  `refund_recorded` is the pass, and the refund line below must still be there exactly once;
 - the parent app shows the refund in the payment history.
 
 Stripe side: the refund on the payment, with the same amount. Do **not** also refund from the Stripe
