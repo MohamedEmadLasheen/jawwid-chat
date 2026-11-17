@@ -145,6 +145,22 @@ Copy it without surrounding spaces.
 
 ## 3. Create a restricted live key
 
+> **Owner decision, 2026-11-17: Chat uses the exact same live Stripe credential Core already uses.**
+> No key is created, rolled or revoked, so **skip the key creation below** (and the §3 test-key rehearsal).
+> What stays true: the permission table in this section is the **minimum Chat needs**. It matters only if
+> the existing key is a *restricted* key (`rk_live_…`): then compare it, read-only, with the table (Dashboard
+> → API keys → that key → its permissions list; never reveal or roll it) and stop if a row is missing,
+> because adding a permission to a key Core uses changes Core's key. A standard `sk_live_…` key has every
+> permission and passes the deploy guard (`^(sk|rk)_live_\S+$`). The webhook signing secret is **not**
+> shared: it belongs to Chat's own endpoint (§2); never use Core's. Chat's requests carry their own
+> `Stripe-Version`, which does not change the account default or Core. Cost of sharing, accepted by the
+> owner: Chat's secret store holds Core's credential, so a leak from Chat is a leak of Core's Stripe
+> access, and if Core ever rolls the key Chat must be given the new value (card payments fail with
+> `stripe checkout refused` until it is).
+> Setting it: the value must come from wherever Core already keeps it (Core's own secret store or the
+> owner's password manager; Stripe does not show a standard secret key again), entered at the hidden
+> prompt of §4. It is never pasted into chat, a brief or a file.
+
 Developers → API keys → **Create restricted key** (UNVERIFIED). Name it for Chat (for example
 "Jawwid Chat API, production"). Give it exactly the permissions below and leave every other resource at
 **None**. Each row names the Stripe SDK call in `stripe.gateway.ts` that needs it and the caller on `main`.
