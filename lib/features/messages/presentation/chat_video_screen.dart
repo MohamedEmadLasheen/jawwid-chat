@@ -63,6 +63,7 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final tokens = JawwidTokens.of(context);
+    final theme = Theme.of(context);
     final surface = _player.surface;
     final total = _status.duration;
     final at = _dragging != null && total != null
@@ -74,10 +75,25 @@ class _ChatVideoScreenState extends ConsumerState<ChatVideoScreen> {
       appBar: AppBar(
         backgroundColor: tokens.colorMediaSurface,
         foregroundColor: tokens.colorMediaOnSurface,
+        // PARENT-024: the app's AppBarTheme sets a titleTextStyle (dark text), which wins over
+        // foregroundColor, so the title was dark grey on black. Restate it in the media colour.
+        titleTextStyle: (theme.appBarTheme.titleTextStyle ?? theme.textTheme.titleLarge)
+            ?.copyWith(color: tokens.colorMediaOnSurface),
         title: Text(widget.title ?? l10n.attachmentVideoLabel),
       ),
       body: _status.hasFailed
-          ? JawwidErrorView(title: l10n.storyVideoFailed)
+          // PARENT-024: JawwidErrorView draws its title in the theme's (dark) text colour; on the
+          // black media surface it must be the media on-surface colour. Scoped here only, so the
+          // shared widget is unchanged everywhere else.
+          ? Theme(
+              data: theme.copyWith(
+                textTheme: theme.textTheme.apply(
+                  bodyColor: tokens.colorMediaOnSurface,
+                  displayColor: tokens.colorMediaOnSurface,
+                ),
+              ),
+              child: JawwidErrorView(title: l10n.storyVideoFailed),
+            )
           : Column(
               children: [
                 Expanded(

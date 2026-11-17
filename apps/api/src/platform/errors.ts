@@ -353,6 +353,11 @@ export enum CommErrorCode {
   /** PD-27: card payments are not configured on this deployment (no STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET). 503. */
   PAYMENTS_UNAVAILABLE = 'COMM.PAYMENTS_UNAVAILABLE',
   /**
+   * PD-27 S1: another tap is opening Stripe's page for this same request right
+   * now. 409; nothing was opened. Not "paid" or "closed": try again in a moment.
+   */
+  CHECKOUT_OPENING = 'COMM.CHECKOUT_OPENING',
+  /**
    * Store payments policy: this request is not for live one-to-one lessons (e.g.
    * purpose `other`), so the app's card checkout and bank-transfer receipt refuse
    * it (App Store 3.1.3(d), Google Play 1:1 services). 409. Never retry in the app.
@@ -668,6 +673,20 @@ export enum CommErrorCode {
    * not a lesson call): answered like a busy line, nobody is rung. 409.
    */
   CALL_UNAVAILABLE = 'COMM.CALL_UNAVAILABLE',
+  /**
+   * OA-12 (store payments: one teacher, one learner per paid lesson). While one
+   * of the teacher's lessons is in its call window, a call in a lesson
+   * conversation (Student Group or family group, never a class group) that
+   * seats that teacher (still on the call) and that lesson's family may not
+   * also seat a guardian of another family -- another learner. Refused on start (and in the call capability) and when that
+   * guardian answers or asks for media. The lesson's own parents, the teacher
+   * and staff are never refused it. 403; not retried. (A call already live
+   * when the window opens is corrected by CallService.separateLessonLearners,
+   * which announces `call.participant_left` with reason one_learner_lesson; a
+   * guardian it took off who asks again for media, or answers, gets this code
+   * while the window is open, CALL_PARTICIPANT_LEFT after.)
+   */
+  LESSON_ONE_LEARNER = 'COMM.LESSON_ONE_LEARNER',
   /**
    * TEACHER-027: the database could not serve the request in time (unreachable,
    * no pool connection, a transaction or statement timeout). Nothing was

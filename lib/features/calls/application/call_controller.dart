@@ -6,6 +6,7 @@ import '../../../app/providers.dart';
 import '../../../core/call_media/audio_route.dart';
 import '../../../core/call_media/call_media_client.dart';
 import '../../../core/call_media/media_room.dart';
+import '../../../core/call_media/microphone_permission.dart';
 import '../../../core/call_native/call_native_providers.dart';
 import '../../../core/call_native/call_presentation.dart';
 import '../../../core/data/repositories.dart';
@@ -56,7 +57,7 @@ enum CallUiPhase {
   failed,
 }
 
-/// Why a call could not be established, reduced to the three things a person can
+/// Why a call could not be established, reduced to the few things a person can
 /// act on. Never a `COMM.*` code, and never a technical message.
 /// Who placed the call, as THIS device saw it happen: [CallController.start] is
 /// outgoing, a `call.incoming` is incoming. Presentation only — it picks the
@@ -74,6 +75,13 @@ enum CallUiFailure {
 
   /// A transport or media failure. Retryable.
   network,
+
+  /// OA-12: the server refused because a lesson call seats one learner
+  /// ([WireErrors.lessonOneLearner]). Says so plainly rather than "not
+  /// available": to whoever started the call in neutral words, and to a
+  /// guardian answering another child's lesson call, that every child has
+  /// their own lesson.
+  oneLearnerLesson,
 }
 
 /// Everything the call interface renders, in one value.
@@ -217,6 +225,10 @@ class CallUiState {
 ///
 /// Terminality arrives from exactly two places: the server's `call.ended` /
 /// `call.declined` events, and a successful terminal request we ourselves made.
+/// OA-12 adds one more SERVER word, for this device only: the server took THIS
+/// guardian off a lesson call (`call.participant_left` naming us with reason
+/// `one_learner_lesson`, or our rejoin refused with COMM.LESSON_ONE_LEARNER).
+/// The call goes on for the others; it is over here.
 ///
 /// IDEMPOTENT AND ORDER-FREE. `call.declined` and `call.ended` are written in ONE
 /// server transaction and share a `created_at`, so their delivery order is not a
@@ -326,6 +338,10 @@ class CallController extends Notifier<CallUiState> {
 
     ref.onDispose(() {
       _rejoiner.stop();
+      // LR-74: a sign-out or user switch mid-call must not leave the
+      // ongoing-call service (and its notification) running for a call this
+      // session no longer owns.
+      _finishOngoing();
       unawaited(_eventSub?.cancel());
       _eventSub = null;
       unawaited(_nativeSub?.cancel());
@@ -355,6 +371,15 @@ class CallController extends Notifier<CallUiState> {
   /// The server decides whether it may happen. The capability answer that drew
   /// the button is advisory and may already be stale, so a refusal here is
   /// normal and is rendered as [CallUiFailure.notAllowed] — never as a retry.
+  ///
+  /// THE MICROPHONE IS ASKED BEFORE DIALLING (LR-74). The caller joins media
+  /// when the callee answers, and by then the caller's app may be behind the
+  /// lock screen, where neither a permission prompt nor (Android 12+) a
+  /// foreground-service start is possible. So the question is asked here, while
+  /// the person who just pressed Call is looking at the app -- which is also
+  /// what `screens/call.md` §7 asks for ("before dialling rather than after").
+  /// A refusal rings nobody. Once the call is ringing, the ongoing-call service
+  /// starts at once, still in front, so the answer can come in the background.
   Future<void> start({
     required String conversationId,
     required String peerLabel,
@@ -373,6 +398,15 @@ class CallController extends Notifier<CallUiState> {
       speakerPreferred: _audio?.speakerPreferred ?? false,
     );
 
+    final access = await _askMicrophone();
+    if (!_alive || state.phase != CallUiPhase.starting) return;
+    if (access != null && access != MicrophoneAccess.granted) {
+      // No call exists on the server yet, so there is nothing to end: the
+      // failure holds no callId, and "Try again" asks again.
+      state = state.copyWith(phase: CallUiPhase.failed, failure: CallUiFailure.microphone);
+      return;
+    }
+
     try {
       final started = await calls.start(conversationId: conversationId);
       if (!_alive || state.phase != CallUiPhase.starting) return;
@@ -383,6 +417,7 @@ class CallController extends Notifier<CallUiState> {
         phase: CallUiPhase.outgoingRinging,
         callId: started.callId,
       );
+      if (access == MicrophoneAccess.granted) _startOngoing(started.callId);
     } catch (error) {
       if (!_alive) return;
       state = state.copyWith(phase: CallUiPhase.failed, failure: _classify(error));
@@ -467,6 +502,13 @@ class CallController extends Notifier<CallUiState> {
           canSwitchSpeaker: _audio?.canSwitch ?? false,
           speakerPreferred: _audio?.speakerPreferred ?? false,
         );
+        // LR-74: as [start] -- the microphone, and with it the ongoing-call
+        // service, while this member is still in front. The server already
+        // rings the others, so a refusal here changes nothing; the answer's
+        // media join reports it as it always has. An answer that arrives
+        // while this prompt is still open SHARES it ([callMicrophoneProvider]):
+        // a second concurrent platform request would read "denied".
+        unawaited(_prepareOutgoing(join.callId));
         return ScheduledJoinResult.joined;
 
       case ScheduledJoinMode.joined:
@@ -640,6 +682,7 @@ class CallController extends Notifier<CallUiState> {
 
     await _teardownMedia();
     if (!_alive) return;
+    _finishOngoing();
     final isGroup = state.isGroup;
     state = CallUiState(canSwitchSpeaker: _audio?.canSwitch ?? false);
     await start(
@@ -672,8 +715,16 @@ class CallController extends Notifier<CallUiState> {
   }
 
   /// Leave the terminal screen and return to idle.
+  ///
+  /// A FAILED call may still hold its media (a hang-up that never reached the
+  /// server, while live): it never passed through [_goTerminal], so the
+  /// microphone would keep sending with no screen and no notification. It is
+  /// released here. For an ended call this is a no-op -- already torn down.
   void dismiss() {
     if (!state.isTerminal) return;
+    _rejoiner.stop();
+    unawaited(_teardownMedia());
+    _finishOngoing();
     state = CallUiState(canSwitchSpeaker: _audio?.canSwitch ?? false);
   }
 
@@ -755,6 +806,17 @@ class CallController extends Notifier<CallUiState> {
       case CallResumed(:final callId):
         if (callId != state.callId || state.isTerminal) return;
         state = state.copyWith(clearInterrupted: true);
+
+      case CallParticipantLeft(:final callId, :final actorId, :final reason):
+        // Presence never ends a call (see the class note). The one exception
+        // is the SERVER's word that it took THIS participant off a lesson call
+        // (OA-12): the call goes on for the others, and is over here -- with
+        // the reason, so the person reads why and not "connection lost".
+        if (callId != state.callId || state.isTerminal) return;
+        if (reason != CallParticipantLeftReason.oneLearnerLesson) return;
+        final me = ref.read(viewerActorIdProvider)?.call();
+        if (me == null || me.isEmpty || actorId != me) return;
+        _goTerminal(outcome: state.outcome, reason: CallEndReason.oneLearnerLesson, authoritative: true);
     }
   }
 
@@ -884,12 +946,65 @@ class CallController extends Notifier<CallUiState> {
     _leavingMedia = false;
     _mediaSub = media.snapshots.listen(_onMediaSnapshot);
     // S-06: from here the microphone is in a call; Android keeps it alive in the
-    // background. Started while the app is in front (the user just answered or
-    // called), which is when Android allows a microphone foreground service.
+    // background. LR-74: only once the microphone is GRANTED -- Android 14+
+    // refuses a microphone foreground service without RECORD_AUDIO, and the
+    // refusal would leave the whole call with no service at all. W4 asks
+    // before it joins anything, and tells us here the moment it is granted.
+    await media.connect(
+      callId: callId,
+      onMicrophoneGranted: () {
+        if (!identical(_media, media)) return;
+        _startOngoing(callId);
+      },
+    );
+  }
+
+  /// LR-74: the outgoing half of [_startOngoing] -- ask, and start only on a
+  /// grant. A build without a microphone seam asks nothing and starts nothing.
+  Future<void> _prepareOutgoing(String callId) async {
+    final access = await _askMicrophone();
+    if (access == MicrophoneAccess.granted) _startOngoing(callId);
+  }
+
+  /// The microphone question -- the SAME shared one the media client asks
+  /// ([callMicrophoneProvider]), so the two never prompt at once.
+  ///
+  /// Null only when the permission provider itself cannot be built. The
+  /// try/catch covers exactly that read and nothing else: an error from
+  /// `ensure()` is not caught here (the `record` implementation never throws;
+  /// it answers [MicrophoneAccess.unavailable] instead).
+  Future<MicrophoneAccess?> _askMicrophone() async {
+    final MicrophonePermission microphone;
+    try {
+      microphone = ref.read(callMicrophoneProvider);
+    } catch (_) {
+      return null;
+    }
+    return microphone.ensure();
+  }
+
+  /// S-06: start the ongoing-call presentation (Android: the foreground
+  /// service with the MICROPHONE type) for [callId], once.
+  ///
+  /// Callers reach here only after the microphone was granted (LR-74). A call
+  /// that ended, or was replaced, while the question was open is not started:
+  /// its terminal path has already run, and nothing would ever stop it.
+  void _startOngoing(String callId) {
+    if (!_alive || state.isTerminal || state.callId != callId) return;
     if (_ongoing.add(callId)) {
       unawaited(_native?.callConnected(callId: callId, title: state.peerLabel ?? ''));
     }
-    await media.connect(callId: callId);
+  }
+
+  /// Leaving a FAILED call's screen (dismiss, retry) takes its ongoing-call
+  /// service down too. An ended call already did, in [_goTerminal]; a failed one
+  /// (a hang-up that never reached the server, a media failure) never passes
+  /// through there, and without this its notification would outlive the screen.
+  void _finishOngoing() {
+    for (final callId in _ongoing.toList()) {
+      _ongoing.remove(callId);
+      unawaited(_native?.callFinished(callId: callId));
+    }
   }
 
   void _onMediaSnapshot(CallMediaSnapshot snapshot) {
@@ -915,7 +1030,16 @@ class CallController extends Notifier<CallUiState> {
         next = next.copyWith(phase: CallUiPhase.live, clearFailure: true);
 
       case CallMediaPhase.failed:
-        final failure = _classifyMedia(snapshot.failure);
+        final failure = snapshot.refusalCode == WireErrors.lessonOneLearner
+            ? CallUiFailure.oneLearnerLesson
+            : _classifyMedia(snapshot.failure);
+        if (_rejoining && failure == CallUiFailure.oneLearnerLesson) {
+          // OA-12: the server took this guardian off a lesson call (the media
+          // dropped first) and refuses the rejoin for that reason. The call is
+          // over HERE -- it goes on for the others -- and says why.
+          _goTerminal(outcome: state.outcome, reason: CallEndReason.oneLearnerLesson, authoritative: true);
+          return;
+        }
         if (_rejoining && _rejoinFoundCallOver(snapshot)) {
           // CHATSCHED-013: the SERVER refused the rejoin because the call ended
           // while we were away (a phone offline past the grace never hears
@@ -1000,6 +1124,7 @@ class CallController extends Notifier<CallUiState> {
   CallUiFailure _classify(Object error) {
     if (error is! AppError) return CallUiFailure.network;
     final code = error.code;
+    if (code == WireErrors.lessonOneLearner) return CallUiFailure.oneLearnerLesson;
     if (code != null && _notAllowedCodes.contains(code)) {
       return CallUiFailure.notAllowed;
     }

@@ -64,15 +64,19 @@ jobs:
 
       - id: meta
         name: Resolve release identity
+        # Inputs reach the shell only through env, never pasted into the script text.
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          if [ -n "${{ inputs.image_tag }}" ]; then
-            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-            echo "reusing existing image ${{ inputs.image_tag }}"
+          if [ -n "$IMAGE_TAG" ]; then
+            [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::image_tag must be a full 40-character commit SHA"; exit 1; }
+            echo "tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+            echo "reusing existing image ${IMAGE_TAG}"
           else
             echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           fi
           # The Admin Web image is per environment (ADR-006), so its tag says so.
-          echo "admin_web_tag=staging-${{ inputs.image_tag || github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "admin_web_tag=staging-${IMAGE_TAG:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the registry
@@ -345,6 +349,9 @@ jobs:
           # itself: without this the backup fails against Postgres 17 and the
           # deployment stops here. backup-db.sh runs pg_dump from this image.
           PG_IMAGE: postgres:17-alpine
+          # LR-77 (#516): only a first deploy may skip the backup of a schema that does
+          # not exist yet; any other run fails if the schema is missing (wrong DATABASE_URL?).
+          FIRST_DEPLOY: ${{ inputs.first_deploy == true && 'true' || 'false' }}
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Apply database migrations

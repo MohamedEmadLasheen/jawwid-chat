@@ -739,6 +739,18 @@ abstract class L10n {
   /// **'This call is not available.'**
   String get callFailedNotAllowed;
 
+  /// No description provided for @callFailedOneLearnerLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson is for one student. Every other child has their own lesson.'**
+  String get callFailedOneLearnerLesson;
+
+  /// No description provided for @callFailedOneLearnerLessonStart.
+  ///
+  /// In en, this message translates to:
+  /// **'During a lesson, a call is for one student only.'**
+  String get callFailedOneLearnerLessonStart;
+
   /// No description provided for @callFailedNetwork.
   ///
   /// In en, this message translates to:
@@ -1420,7 +1432,7 @@ abstract class L10n {
   /// No description provided for @childSubscriptionLabel.
   ///
   /// In en, this message translates to:
-  /// **'Subscription'**
+  /// **'Lesson package'**
   String get childSubscriptionLabel;
 
   /// No description provided for @childScheduleLabel.
@@ -3478,13 +3490,13 @@ abstract class L10n {
   /// No description provided for @cardTrialSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'The student has subscribed.'**
+  /// **'The student has enrolled.'**
   String get cardTrialSubscribedTitle;
 
   /// No description provided for @cardTrialNotSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'The student did not subscribe.'**
+  /// **'The student did not enrol.'**
   String get cardTrialNotSubscribedTitle;
 
   /// No description provided for @cardTrialLevel.
@@ -4972,7 +4984,7 @@ abstract class L10n {
   /// No description provided for @signupEmailIntro.
   ///
   /// In en, this message translates to:
-  /// **'Enter the e-mail address you gave the academy when you subscribed.'**
+  /// **'Enter the e-mail address you gave the academy when you enrolled.'**
   String get signupEmailIntro;
 
   /// No description provided for @signupEmailLabel.
@@ -5572,7 +5584,7 @@ abstract class L10n {
   /// PD-30: the parent's bottom tab and screen for each child's subscription and the family's payments.
   ///
   /// In en, this message translates to:
-  /// **'Subscriptions'**
+  /// **'Packages'**
   String get tabSubscriptions;
 
   /// PD-30: a plan's length, as in "3 Months — 24 Lessons".
@@ -5596,7 +5608,7 @@ abstract class L10n {
   /// PD-30: a child with no subscription on record.
   ///
   /// In en, this message translates to:
-  /// **'No subscription yet'**
+  /// **'No lesson package yet'**
   String get subscriptionNone;
 
   /// PD-30: a child's lessons left in their subscriptions.
@@ -5620,7 +5632,7 @@ abstract class L10n {
   /// PD-30: a child's subscription chip: lessons used up, grace lessons left.
   ///
   /// In en, this message translates to:
-  /// **'Renewal due'**
+  /// **'Next package due'**
   String get subscriptionStateGrace;
 
   /// PD-30: a child's subscription chip: locked for payment.
@@ -5644,13 +5656,13 @@ abstract class L10n {
   /// PD-30: a locked child with nothing to pay yet: ask the academy to renew.
   ///
   /// In en, this message translates to:
-  /// **'Request renewal'**
+  /// **'Request the next package'**
   String get subscriptionRequestRenewal;
 
   /// PD-30: the renewal was asked for today.
   ///
   /// In en, this message translates to:
-  /// **'Renewal requested'**
+  /// **'Next package requested'**
   String get subscriptionRenewalRequested;
 
   /// PD-30 D-3 (owner, 2026-11-06): the informational banner above the composer when a child's new lesson bookings are paused. The chat stays open.
@@ -5686,7 +5698,7 @@ abstract class L10n {
   /// PD-30: the banner's button, a parent only.
   ///
   /// In en, this message translates to:
-  /// **'Go to Subscriptions'**
+  /// **'Go to Packages'**
   String get lockBannerOpenSubscriptions;
 
   /// PD-30: the report's lesson number within the child's subscription.
@@ -5734,7 +5746,7 @@ abstract class L10n {
   /// PD-30 D-3: the last line of the family's direct-chat card.
   ///
   /// In en, this message translates to:
-  /// **'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.'**
+  /// **'Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.'**
   String get cardSubscriptionLockedHint;
 
   /// PD-30: the group card when a locked child's lessons resume.
@@ -6108,6 +6120,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'This has already been paid or is no longer open. The list has been refreshed.'**
   String get billingNoLongerOpen;
+
+  /// W61 S2: pay sheet -- a bank-transfer receipt for this payment is waiting for the academy.
+  ///
+  /// In en, this message translates to:
+  /// **'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.'**
+  String get billingReceiptPendingNotice;
+
+  /// W61 S2: pay sheet -- the waiting receipts cover what is left, so the card is paused until they are decided.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment will be available again if the academy cannot confirm the transfer.'**
+  String get billingReceiptPendingCardPaused;
 
   /// PD-27: Settings -> Payments.
   ///
@@ -8887,6 +8911,12 @@ abstract class L10n {
   /// **'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.'**
   String get deleteAccountGoes;
 
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: what goes when the requested deletion happens (within 30 days), in place of deleteAccountGoes, which says deleted now.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.'**
+  String get deleteAccountGoesOnRequest;
+
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
@@ -8896,7 +8926,7 @@ abstract class L10n {
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
   ///
   /// In en, this message translates to:
-  /// **'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
+  /// **'Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.'**
   String get deleteAccountKeptTeacher;
 
   /// PD-56 (store compliance): Settings → Delete account, for a parent or a teacher.
@@ -8941,11 +8971,71 @@ abstract class L10n {
   /// **'Your account has been deleted.'**
   String get deleteAccountDone;
 
-  /// PD-56: a teacher with a lesson, a student or payroll still open cannot delete their account yet.
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
   ///
   /// In en, this message translates to:
-  /// **'Please contact the academy to close your lessons and payroll before deleting your account.'**
-  String get deleteAccountTeacherBlocked;
+  /// **'You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.'**
+  String get deleteAccountRequestIntro;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Request account deletion'**
+  String get deleteAccountRequestAction;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by {date} at the latest. You can cancel the request until then.'**
+  String deleteAccountRequestConfirm(String date);
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deletion request is recorded.'**
+  String get deleteAccountRequested;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion requested'**
+  String get deleteAccountRequestStatusTitle;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days. The dates are already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested on {requested}; your account will be deleted by {deadline}.'**
+  String deleteAccountRequestStatus(String requested, String deadline);
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel request'**
+  String get deleteAccountRequestCancel;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel your deletion request? Your account stays as it is.'**
+  String get deleteAccountRequestCancelConfirm;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the request'**
+  String get deleteAccountRequestKeep;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deletion request was cancelled.'**
+  String get deleteAccountRequestCancelled;
+
+  /// PD-56 O-3: Settings → Delete account, for a teacher with lessons, students or payroll still open: a deletion request, deleted within 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be cancelled. Try again.'**
+  String get deleteAccountRequestCancelFailed;
 
   /// PD-45 PR-4: the Location row of the parent's own profile.
   ///
@@ -9438,6 +9528,132 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'We couldn\'t load the people you blocked.'**
   String get blockedPeopleLoadError;
+
+  /// PD-58: title of the full-screen Terms of Use gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you continue'**
+  String get legalGateTitle;
+
+  /// PD-58: the line under the gate title.
+  ///
+  /// In en, this message translates to:
+  /// **'To keep using Jawwid, please read the documents below and agree to each one.'**
+  String get legalGateIntro;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: the title of the account kind's terms (family, teacher or staff) on the gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Use'**
+  String get legalDocTermsTitle;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: the title of the Code of Conduct on the gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Code of Conduct'**
+  String get legalDocCodeOfConductTitle;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: the title of a document this app version does not know by name.
+  ///
+  /// In en, this message translates to:
+  /// **'Legal document'**
+  String get legalDocOtherTitle;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: checkbox label for the terms (developer guide §1.5 suggestion). Never pre-ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to the Terms of Use'**
+  String get legalAgreeTerms;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: checkbox label for the Code of Conduct (developer guide §1.5 suggestion). Never pre-ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to the Code of Conduct'**
+  String get legalAgreeCodeOfConduct;
+
+  /// DRAFT: pending owner wording (N-3). PD-58: checkbox label for a document this app version does not know by name.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to this document'**
+  String get legalAgreeOther;
+
+  /// PD-58: the link that opens a document in the browser, in the app's language.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get legalGateOpen;
+
+  /// PD-58: screen-reader label of the Open link; {document} is the document's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {document}'**
+  String legalGateOpenDocument(String document);
+
+  /// PD-58: the gate's button; enabled only once every box is ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Agree'**
+  String get legalGateAgree;
+
+  /// PD-58: COMM.LEGAL_VERSION_STALE (409) or COMM.LEGAL_WRONG_DOCUMENTS (400): the list was reloaded and the boxes cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'These documents have changed. Please read them and agree again.'**
+  String get legalGateChanged;
+
+  /// PD-58: COMM.SUPPORT_SESSION_FORBIDDEN (403) on accept: staff in a support session cannot accept for the person.
+  ///
+  /// In en, this message translates to:
+  /// **'A support session can\'t agree on the account holder\'s behalf. The account holder must agree themselves.'**
+  String get legalGateSupportSession;
+
+  /// PD-58: any other failure on accept (COMM.LEGAL_NOT_CONFIGURED 503, no network).
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t save your agreement. Please try again.'**
+  String get legalGateFailed;
+
+  /// PD-58: legal state "unavailable": the server cannot decide the terms. Never treated as accepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporarily unavailable'**
+  String get legalUnavailableTitle;
+
+  /// PD-58: body of the "temporarily unavailable" notice.
+  ///
+  /// In en, this message translates to:
+  /// **'We can\'t show the terms of use right now. Please try again in a little while.'**
+  String get legalUnavailableBody;
+
+  /// PD-58: sign-up when GET /auth/signup/legal fails (503 COMM.LEGAL_NOT_CONFIGURED): nothing is submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating an account is temporarily unavailable. Please try again in a little while.'**
+  String get signupLegalUnavailable;
+
+  /// PD-58: sign-up verify refused with COMM.LEGAL_VERSION_STALE, COMM.LEGAL_WRONG_DOCUMENTS or COMM.LEGAL_REQUIRED: the documents were reloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'The terms have changed. Please read them and agree again.'**
+  String get signupLegalChanged;
+
+  /// PD-58: Try again on the "temporarily unavailable" notice (GET /me/legal) failed (no network, server error).
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t load the terms of use. Please try again.'**
+  String get legalLoadFailed;
+
+  /// OA-12: top of the pay sheet for the App Review demo family (GET /me/billing reviewMode). The server makes card a demo page and refuses receipts.
+  ///
+  /// In en, this message translates to:
+  /// **'App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.'**
+  String get billingReviewModeNotice;
+
+  /// OA-12: top of the bank-transfer page for the App Review demo family (Send is off), and the text of the server's refusal (403 COMM.BILLING_DENIED, detail.reviewMode).
+  ///
+  /// In en, this message translates to:
+  /// **'App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.'**
+  String get billingReviewModeTransferNotice;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

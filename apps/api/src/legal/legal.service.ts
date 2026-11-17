@@ -170,7 +170,7 @@ export class LegalService implements OnModuleInit {
    *   - the `legal.current.<key>` row and the version it names (V);
    *   - the FLOOR (P-3): the latest version that requires acceptance at or
    *     before V. Versions are ordered by publish_seq, the database's own
-   *     publication order (20261107130000) -- never by effective_at, which the
+   *     publication order (20261117110000) -- never by effective_at, which the
    *     publisher supplies, nor by the name, which is free text. When no
    *     requiring version is found (the ENG-09 guard makes that impossible),
    *     the floor is V itself -- fail closed;

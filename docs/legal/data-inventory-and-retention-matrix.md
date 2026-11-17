@@ -93,7 +93,7 @@ Jawwid Core is a separate system. It is out of scope and was not read. Anything 
 
 **When it happens:** in one database transaction, immediately.
 
-**Teachers:** a teacher's deletion is refused while a future lesson, an assigned student, or this or last month's payroll is open (`TEACHER_DELETION_BLOCKED`). The teacher is told to contact the academy.
+**Teachers:** a teacher with a future lesson, an assigned student, or this or last month's payroll open requests deletion in the app or on the web page (O-3, owner 2026-11-07; `chat.account_deletion_request`, migration `20261107140000`). Staff close the lessons and payroll; the account is deleted by staff, or by the worker at the 30-day deadline whatever is left. Lessons ahead and students still assigned then stay on "Deleted user" (weekly times ended, family reminders stopped, one staff task per learner); payroll rows are kept, and the payout account is kept until `chat.teacher_payroll_open` is false (no lesson on record since the start of last month and no pay adjustment for last month or later), then deleted by the worker. That is a calendar rule: nothing records that wages were paid, so the `erased_teacher_payroll` task asks staff to pay before then (Privacy Policy §10.4.1, [legal review]). The same erasure runs, so retention is unchanged. A teacher with nothing open is deleted at once.
 
 | Data | Result |
 |---|---|

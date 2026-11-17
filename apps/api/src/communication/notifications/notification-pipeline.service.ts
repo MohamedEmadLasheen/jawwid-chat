@@ -1090,7 +1090,12 @@ export class NotificationPipeline implements ScheduledDeliveryListener {
     return 'scheduled';
   }
 
-  private async showsNames(recipientId: string): Promise<boolean> {
+  /**
+   * Did the recipient turn lock-screen names on (else the academy default)?
+   * Public for producers that schedule on NotificationService directly
+   * (billing/lock-screen-push.ts), so their pushes follow the same rule.
+   */
+  async showsNames(recipientId: string): Promise<boolean> {
     const own = await this.prisma.notificationSettings.findUnique({ where: { actorId: recipientId }, select: { showPreviews: true } });
     if (own?.showPreviews !== null && own?.showPreviews !== undefined) return own.showPreviews;
     return Boolean(await this.config.get('notification.lock_screen_names_default'));

@@ -12,6 +12,10 @@ cd "$(dirname "$0")/../.."
 : "${PSQL:?set PSQL, e.g. PSQL=\"psql -v ON_ERROR_STOP=1 \$DATABASE_URL\"}"
 shopt -s nullglob
 files=(data/quran/*.txt)
+# Off again before $PSQL is expanded unquoted below: a connection string ending
+# in ?sslmode=require is a glob pattern, and nullglob would delete it (psql then
+# falls back to a local socket).
+shopt -u nullglob
 if [ "${#files[@]}" -eq 0 ]; then
   echo "load-quran: no dataset vendored in data/quran/; nothing to load"
   exit 0

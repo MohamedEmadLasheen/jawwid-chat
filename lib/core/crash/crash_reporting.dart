@@ -33,24 +33,30 @@ Future<void> runWithCrashReporting(FutureOr<void> Function() appRunner) async {
     await appRunner();
     return;
   }
-  await SentryFlutter.init(
-    (options) {
-      options
-        ..dsn = _dsn.trim()
-        ..environment = _environment
-        ..sendDefaultPii = false
-        ..attachScreenshot = false
-        ..attachViewHierarchy = false
-        ..tracesSampleRate = null
-        ..enableAutoPerformanceTracing = false
-        ..enableUserInteractionBreadcrumbs = false
-        ..enableAutoNativeBreadcrumbs = false
-        ..maxBreadcrumbs = 30
-        ..beforeBreadcrumb = keepNavigationOnly
-        ..beforeSend = (event, hint) => scrubEvent(event);
-    },
-    appRunner: appRunner,
-  );
+  await SentryFlutter.init(configureCrashReporting, appRunner: appRunner);
+}
+
+/// What a crash report may carry. Public only so a test can read the options back.
+///
+/// LR-23 / LR-71: no automatic session tracking either. Sentry turns it on by default and
+/// would send app-session data (an install id, session starts and ends) that neither the
+/// App Privacy label nor the Data safety form declares; crash reports are all this is for.
+@visibleForTesting
+void configureCrashReporting(SentryFlutterOptions options) {
+  options
+    ..dsn = _dsn.trim()
+    ..environment = _environment
+    ..enableAutoSessionTracking = false
+    ..sendDefaultPii = false
+    ..attachScreenshot = false
+    ..attachViewHierarchy = false
+    ..tracesSampleRate = null
+    ..enableAutoPerformanceTracing = false
+    ..enableUserInteractionBreadcrumbs = false
+    ..enableAutoNativeBreadcrumbs = false
+    ..maxBreadcrumbs = 30
+    ..beforeBreadcrumb = keepNavigationOnly
+    ..beforeSend = (event, hint) => scrubEvent(event);
 }
 
 /// The navigation breadcrumbs, when crash reporting is on; nothing otherwise.

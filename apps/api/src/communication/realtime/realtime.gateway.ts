@@ -197,6 +197,26 @@ function lockScopeOf(sockets: readonly AuthedSocket[], conversationId?: string) 
   };
 }
 
+/**
+ * RT-019: the most message ids one legacy `message.delivered { messageIds }`
+ * frame may carry. 100 is the default largest message page the API hands a
+ * client (`communication.page_size_max`; the starred list is clamped to 100
+ * too), so a client acknowledging what it has just received needs no more in
+ * one frame, and can split a larger backlog into several. Fixed rather than
+ * read from config, so the bound cannot be configured away.
+ */
+export const MAX_DELIVERED_MESSAGE_IDS = 100;
+
+/**
+ * RT-019: the legacy frame's ids, de-duplicated, or null when the payload is
+ * not a non-empty array of at most MAX_DELIVERED_MESSAGE_IDS UUID strings.
+ */
+function deliveredMessageIds(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_DELIVERED_MESSAGE_IDS) return null;
+  if (!raw.every(isUuid)) return null;
+  return [...new Set(raw as string[])];
+}
+
 /** The sessions a socket answers to: the one it connected with, plus rotated successors. */
 function sessionIdsOf(client: { rooms: Iterable<string> }): string[] {
   const prefix = room.session('');
@@ -1000,15 +1020,20 @@ export class RealtimeGateway
         return { ok: false, updated: 0 };
       }
     }
-    const actor = client.actor;
-    if (!actor || !body?.messageIds?.length) return { ok: false, updated: 0 };
+    // RT-019: the frame is checked before anything else runs -- a non-empty
+    // array of at most MAX_DELIVERED_MESSAGE_IDS message ids, every one a UUID
+    // string -- and refused whole otherwise (never truncated: a silently
+    // partial acknowledgement is worse than a refusal the client can see).
+    const messageIds = deliveredMessageIds(body?.messageIds);
+    if (!messageIds || !client.actor) return { ok: false, updated: 0 };
+    // RT-009: the identity as it is now, as for the cursor form.
+    const current = await this.currentActor(client);
+    if (!current) return { ok: false, updated: 0 };
+    // RT-019: one frame spends the same per-actor receipt budget as a cursor move.
+    if (!(await this.withinReceiptBudget(current.actorId))) return { ok: false, updated: 0 };
     // Scoped to this actor's own receipt rows; a client cannot acknowledge for
     // somebody else.
-    const updated = await this.messages.markState(
-      body.messageIds,
-      actor.actorId,
-      ReceiptState.DELIVERED,
-    );
+    const updated = await this.messages.markState(messageIds, current.actorId, ReceiptState.DELIVERED);
     return { ok: true, updated };
   }
 

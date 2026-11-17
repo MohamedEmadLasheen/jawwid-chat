@@ -6,7 +6,8 @@ import { AuthError, AuthErrorCode } from '../platform/auth/auth.errors';
 import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy, sourceAddress, type ClientAddressPolicy } from '../platform/auth/client-address';
 import { LoginRateLimiter } from '../platform/auth/login-rate-limit';
 import { SelfService } from '../platform/permissions/route-access';
-import { AccountDeletionService } from './account-deletion.service';
+import { AccountDeletionService, type DeletionOutcome } from './account-deletion.service';
+import { TeacherDeletionRequestService } from './teacher-deletion-request.service';
 import { renderDeletionPage, type DeletionLang, type DeletionPageState } from './account-deletion-page';
 import { formTokenValid, issueFormToken } from './deletion-form-token';
 
@@ -15,6 +16,12 @@ import { formTokenValid, issueFormToken } from './deletion-form-token';
  * teacher deletes their own account (Apple 5.1.1(v)). The password is asked
  * again; the same limiter as a password change. A support session cannot
  * reach it: it is a write the support-session allowlist does not name.
+ *
+ * O-3 (owner, 2026-11-07): a teacher with a lesson, a student or payroll open
+ * is not refused. The answer is `{deleted: false, request}`: a deletion
+ * request, deleted by its deadline (30 days). Asking again returns the same
+ * request. `GET /me/account/deletion` says beforehand which it will be;
+ * `POST /me/account/deletion-request/cancel` withdraws a pending request.
  */
 @Controller('me/account')
 @UseFilters(CommErrorFilter)
@@ -23,6 +30,7 @@ export class AccountDeletionController {
 
   constructor(
     private readonly deletion: AccountDeletionService,
+    private readonly requests: TeacherDeletionRequestService,
     private readonly rateLimit: LoginRateLimiter,
     @Optional() @Inject(CLIENT_ADDRESS_POLICY) addressPolicy?: ClientAddressPolicy,
   ) {
@@ -32,15 +40,36 @@ export class AccountDeletionController {
   @SelfService()
   @Post('delete')
   @HttpCode(200)
-  async delete(@Req() request: AuthenticatedRequest, @Body() body: unknown, @Ip() ip?: string): Promise<{ deleted: true }> {
+  async delete(@Req() request: AuthenticatedRequest, @Body() body: unknown, @Ip() ip?: string): Promise<DeletionOutcome> {
     if (!request.accountId) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
     const password = passwordOf(body);
     if (!password) throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
     const key = `account-delete:${request.accountId}`;
     await this.rateLimit.reserve(key, sourceAddress(ip, this.addressPolicy));
-    await this.deletion.deleteOwn(request.accountId, password);
-    await this.rateLimit.clearIdentifier(key);
-    return { deleted: true };
+    const outcome = await this.deletion.deleteOwn(request.accountId, password);
+    // A request (O-3) keeps its attempt counted: request-then-cancel cycles
+    // stay within the limit (review of 00ccd748). A deleted account has no use for it.
+    if (outcome.deleted) await this.rateLimit.clearIdentifier(key);
+    return outcome;
+  }
+
+  /** O-3: whether deleting is immediate, the teacher's request, and the deadline a request would have. */
+  @SelfService()
+  @Get('deletion')
+  status(@Req() request: AuthenticatedRequest) {
+    if (!request.accountId) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+    return this.requests.status(request.accountId);
+  }
+
+  /** O-3: the holder withdraws their pending request. Only their own: the route takes no id. */
+  @SelfService()
+  @Post('deletion-request/cancel')
+  @HttpCode(200)
+  async cancel(@Req() request: AuthenticatedRequest, @Ip() ip?: string) {
+    if (!request.accountId) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+    // Limited as the request is, and never cleared on success.
+    await this.rateLimit.reserve(`account-deletion-cancel:${request.accountId}`, sourceAddress(ip, this.addressPolicy));
+    return { request: await this.requests.cancel(request.accountId) };
   }
 }
 
@@ -86,20 +115,20 @@ export class AccountDeletionPageController {
     const key = `account-delete-web:${username.toLowerCase()}`;
     try {
       await this.rateLimit.reserve(key, sourceAddress(ip, this.addressPolicy));
-      await this.deletion.deleteBySignIn(username, password);
-      await this.rateLimit.clearIdentifier(key);
+      const outcome = await this.deletion.deleteBySignIn(username, password);
+      if (outcome.deleted) await this.rateLimit.clearIdentifier(key);
+      // O-3: a teacher with work open -- a request, deleted by its deadline.
+      if (!outcome.deleted) return send(res, 200, l, { kind: 'requested', deadlineAt: outcome.request.deadlineAt });
       return send(res, 200, l, { kind: 'done' });
     } catch (e) {
       if (!(e instanceof AuthError)) throw e;
       // Unknown, wrong password and locked read the same -- the page never says
-      // whether an account exists. Past the password: staff, or a teacher with
-      // something still open.
+      // whether an account exists. Past the password: staff.
       const error: NonNullable<Extract<DeletionPageState, { kind: 'form' }>['error']> =
         e.code === AuthErrorCode.RATE_LIMITED ? 'rate_limited'
         : e.code === AuthErrorCode.FORBIDDEN ? 'staff'
-        : e.code === AuthErrorCode.TEACHER_DELETION_BLOCKED ? 'teacher_blocked'
         : 'invalid';
-      const status = { rate_limited: 429, staff: 403, teacher_blocked: 409 } as Record<string, number>;
+      const status = { rate_limited: 429, staff: 403 } as Record<string, number>;
       return send(res, status[error] ?? 401, l, { kind: 'form', error });
     }
   }

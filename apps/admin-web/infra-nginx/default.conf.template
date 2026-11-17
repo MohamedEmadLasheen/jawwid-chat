@@ -15,10 +15,13 @@
 #   /index.html  never cached: it names the bundles of THIS release
 #   /teacher/  the PD-28 portal: Flutter's names are not hashed, so every file
 #              is revalidated (ETag, a 304 when unchanged)
+#   /legal/    LR-04: the public legal pages; revalidated, so a new version is
+#              seen at once
 map $uri $jawwid_cache_control {
     ~^/assets/        "public, immutable";
     /index.html       "no-store, must-revalidate";
     ~^/teacher(/|$)   "no-cache";
+    ~^/legal(/|$)     "no-cache";
     default           "";
 }
 
@@ -53,7 +56,13 @@ map $uri $jawwid_cache_control {
 # iframe, never in a top-level tab. Any other link opens in the browser.
 # Admin Web's policy also names the store in `img-src` (an image item's signed
 # URL). frame-ancestors stays 'none': nothing may frame the console.
+#
+# LR-04: the public legal pages under /legal/ (docs/release/legal-pages-hosting.md,
+# Option A) are static HTML rendered by scripts/legal/legal_pages.py: no script,
+# no inline style, no image or font from anywhere else, no form. Their policy
+# allows only this origin's stylesheet and images and nothing else at all.
 map $uri $jawwid_csp {
+    ~^/legal(/|$)    "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
     ~^/teacher(/|$)  "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; frame-src ${API_ORIGIN} ${MATERIALS_FRAME_ORIGINS}; img-src 'self' data: blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data: ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
     default          "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; frame-src ${API_ORIGIN} ${MATERIALS_FRAME_ORIGINS}; img-src 'self' data: blob: ${STORAGE_ORIGIN}; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'";
 }
@@ -129,6 +138,24 @@ server {
 
     location /teacher/ {
         try_files $uri $uri/index.html /teacher/index.html =404;
+    }
+
+    # LR-04: the public legal pages, copied into the image from legal-web/
+    # (scripts/legal/legal_pages.py). A missing page is a 404 -- never the
+    # Admin Web app, never a placeholder: there is no fallback to an
+    # index.html. While publication is switched off the image holds no
+    # /legal/ directory at all, so /legal/ and everything below it is a 404.
+    # The generator writes an index.html into every directory it creates,
+    # so `$uri` naming a directory never reaches a 403. Headers come from
+    # the server level ($jawwid_csp, $jawwid_cache_control); no add_header
+    # here. scripts/legal/legal_pages.py check asserts this block.
+    location = /legal {
+        absolute_redirect off;
+        return 301 /legal/;
+    }
+
+    location /legal/ {
+        try_files $uri $uri/index.html =404;
     }
 
     # SPA routing: unknown paths are client routes, not 404s.

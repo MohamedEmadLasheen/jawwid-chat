@@ -1,16 +1,16 @@
--- Roll back 20261107130000_chat_pd058_publish_order (PD-58, ENG-10: the order
+-- Roll back 20261117110000_chat_pd058_publish_order (PD-58, ENG-10: the order
 -- versions were published in).
 --
 -- Restores chat.guard_legal_document_version to 20261107110000's body and drops
 -- chat.legal_document_version.publish_seq. Roll back the API with it: the
 -- ENG-10 API orders versions by publish_seq.
 --
---   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261107130000_chat_pd058_publish_order.down.sql
+--   psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261117110000_chat_pd058_publish_order.down.sql
 --
 -- No row is removed: the published versions stay. Dropping the column loses only
 -- the publication order of versions published since; their created_at remains.
 -- Then delete the ledger row: delete from chat.schema_migrations where version =
--- '20261107130000_chat_pd058_publish_order';
+-- '20261117110000_chat_pd058_publish_order';
 
 create or replace function chat.guard_legal_document_version()
 returns trigger

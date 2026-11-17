@@ -109,8 +109,8 @@ abstract interface class CallPresentation {
   });
 
   /// Store blocker S-06: this device's microphone is in a call. Android keeps
-  /// the call alive in the background with a foreground service (types
-  /// microphone and phoneCall) and an ongoing-call notification whose hang-up
+  /// the call alive in the background with a foreground service (type
+  /// microphone) and an ongoing-call notification whose hang-up
   /// comes back as [NativeCallActionKind.end]. iOS: CallKit already does; a
   /// no-op there. Idempotent by [callId].
   Future<void> callConnected({required String callId, required String title});

@@ -38,6 +38,8 @@ What changes from PD-30 (2026-10-26):
      `subscription_unlocked` templates (migration `20261106170000_chat_pd030_d3_push_wording`).
    - The app's banner is informational and sits above the composer, never in its place.
    - **A parent** reads the reason for each child and gets "Go to Subscriptions" ("عرض الاشتراكات").
+     Note (2026-11-10): superseded by "Go to Packages" («عرض الباقات») (LR-15, OA-12 D2) once the owner
+     approves PR #593; until then this wording stands.
    - **A teacher** never sees payment details, overdue instalments or the family's financial
      status: only that new lessons are paused and the chat stays open. The server sends a teacher
      no reason, and the app shows none even if one arrived (`payment_lock_banner.dart`, `financial`).

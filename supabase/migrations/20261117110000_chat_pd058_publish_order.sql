@@ -31,8 +31,8 @@
 --
 -- No row is inserted; no wording, URL or version name is here (N-3).
 -- Idempotent: applying this file again changes nothing.
--- Rollback: db/rollback/20261107130000_chat_pd058_publish_order.down.sql
--- Slot: 20261107130000, reserved for ENG-10 by the lead on 2026-11-07.
+-- Rollback: db/rollback/20261117110000_chat_pd058_publish_order.down.sql
+-- Slot: 20261117110000, reserved for ENG-10 by the lead on 2026-11-07.
 -- =============================================================================
 
 do $$

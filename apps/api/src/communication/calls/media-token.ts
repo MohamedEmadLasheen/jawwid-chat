@@ -48,6 +48,7 @@ export class LiveKitTokenIssuer implements MediaTokenIssuer {
   private readonly apiKey = process.env.LIVEKIT_API_KEY ?? '';
   private readonly apiSecret = process.env.LIVEKIT_API_SECRET ?? '';
   private readonly url = process.env.LIVEKIT_URL ?? '';
+  private readonly appEnv = (process.env.APP_ENV ?? '').trim().toLowerCase();
 
   async issue(grant: MediaGrant): Promise<{ token: string; url: string; expiresAt: string }> {
     // The URL is checked alongside the credentials, and was not before. A
@@ -85,6 +86,18 @@ export class LiveKitTokenIssuer implements MediaTokenIssuer {
         'LIVEKIT_URL must be a WebSocket URL (wss://…) — it is given to the ' +
           'client to connect with. The https:// form is the control-plane ' +
           'endpoint and is derived from it where needed.',
+      );
+    }
+
+    // LR-32: in production the client must connect over TLS. A ws:// URL would
+    // carry media signalling -- including this very token -- unencrypted.
+    // Local stacks run LiveKit without TLS, so ws:// stays allowed elsewhere.
+    // APP_ENV is read the way the rest of the API reads it (trimmed,
+    // case-insensitive); like the check above, the message never quotes the URL.
+    if (this.appEnv === 'production' && !this.url.startsWith('wss://')) {
+      throw new Error(
+        'LIVEKIT_URL must use wss:// when APP_ENV=production — a ws:// URL would ' +
+          'send media signalling unencrypted.',
       );
     }
 

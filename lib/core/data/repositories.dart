@@ -1,5 +1,6 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
+import '../../shared/models/legal.dart';
 import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/my_calendar.dart';
@@ -384,6 +385,35 @@ abstract interface class AuthRepository {
   Stream<void> get sessionRevoked;
 }
 
+/// What a server sign-out came to (LR-46 follow-up).
+enum SignOutOutcome {
+  /// The server gave a verdict: it ended the session, or answered that it is already over
+  /// or cannot be ended by asking again. Nothing is left to retry.
+  ended,
+
+  /// No verdict: offline, a timeout, a 5xx, rate limited. The server session may still be
+  /// live, and with it the device's push binding (#537).
+  unreached,
+}
+
+/// An [AuthRepository] that can say whether its sign-out reached the server. `AuthController`
+/// keeps an [SignOutOutcome.unreached] session as a pending sign-out to retry.
+abstract interface class SignOutReporting {
+  /// The same single-flighted flow as [AuthRepository.signOut]; it never throws.
+  Future<SignOutOutcome> signOutReporting();
+}
+
+/// The two calls a pending sign-out is retried with. Both go over the public transport, so
+/// neither can reach the live session's refresh authority: the pending session is not the
+/// live one, and must never be renewed by it.
+abstract interface class SignOutServer {
+  /// `POST /auth/refresh`. ROTATES: the caller must persist the answer before anything else.
+  Future<AuthSession> refresh(String refreshToken);
+
+  /// `POST /auth/logout`, presenting [accessToken] explicitly. Throws an `AppError` on refusal.
+  Future<void> logoutWith(String accessToken);
+}
+
 /// PD-16: a parent whose account the academy created (when their child was enrolled) sets
 /// their own password. Both calls are PUBLIC -- they go over the same transport as sign-in,
 /// never the authenticated client -- and neither says whether an e-mail is known.
@@ -392,10 +422,27 @@ abstract interface class ParentSignupRepository {
   /// send the parent on WhatsApp. Succeeds the same way for any e-mail.
   Future<void> requestCode(String email);
 
+  /// PD-58: `GET /auth/signup/legal` -- the family Terms of Use and the Code of Conduct in
+  /// force, to accept on the sign-up screen. **Null when the server answers 404** (the API
+  /// before ENG-10): no legal step, and nothing legal is sent. An empty list is "nothing in
+  /// force" (outside production). A 503 `COMM.LEGAL_NOT_CONFIGURED`, or an answer this build
+  /// cannot read, is THROWN -- never read as "nothing to accept".
+  Future<List<LegalDocument>?> signupLegal();
+
   /// `POST /auth/signup/verify` -- sets the password. The caller then signs in normally.
   /// [lessonAudioNotice]: the version of the PD-48 lesson-audio notice the parent ticked,
   /// recorded as their acknowledgement so the next sign-in does not ask again.
-  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice});
+  /// PD-58: [acceptLegal] -- exactly what [signupLegal] listed and the parent ticked -- with
+  /// [client] and [locale]. Null sends none of the three.
+  Future<void> verify({
+    required String email,
+    required String code,
+    required String password,
+    int? lessonAudioNotice,
+    List<LegalDocument>? acceptLegal,
+    String? client,
+    String? locale,
+  });
 }
 
 /// The build with no sign-up server (fixtures, tests that do not override it).
@@ -405,9 +452,47 @@ class NoParentSignupRepository implements ParentSignupRepository {
   @override
   Future<void> requestCode(String email) => throw UnsupportedError('no sign-up server in this build');
 
+  /// No server, no documents: the same as the API before ENG-10.
   @override
-  Future<void> verify({required String email, required String code, required String password, int? lessonAudioNotice}) =>
+  Future<List<LegalDocument>?> signupLegal() async => null;
+
+  @override
+  Future<void> verify({
+    required String email,
+    required String code,
+    required String password,
+    int? lessonAudioNotice,
+    List<LegalDocument>? acceptLegal,
+    String? client,
+    String? locale,
+  }) =>
       throw UnsupportedError('no sign-up server in this build');
+}
+
+/// PD-58 (API-CONTRACT §1.1c): the signed-in account's Terms of Use. On the AUTHENTICATED
+/// client; neither route is ever gated -- they are how an account gets through the gate.
+abstract interface class LegalRepository {
+  /// `GET /me/legal` -- the `legal` block now (its `documents` are not needed here).
+  Future<LegalStatus> current();
+
+  /// `POST /me/legal/accept {documents: [{documentKey, version}], client, locale}`, and the
+  /// answer's `legal` block. [documents] is exactly the required set. A refusal is an
+  /// AppError with the server's code (`COMM.LEGAL_WRONG_DOCUMENTS`, `COMM.LEGAL_VERSION_STALE`,
+  /// `COMM.SUPPORT_SESSION_FORBIDDEN`, `COMM.LEGAL_NOT_CONFIGURED`).
+  Future<LegalStatus> accept({required List<LegalDocument> documents, required String client, required String locale});
+}
+
+/// The build with no account server (fixtures, tests that do not override it). Its fixture
+/// identities carry no `legal` block, so no gate ever asks this.
+class NoLegalRepository implements LegalRepository {
+  const NoLegalRepository();
+
+  @override
+  Future<LegalStatus> current() => throw UnsupportedError('no account server in this build');
+
+  @override
+  Future<LegalStatus> accept({required List<LegalDocument> documents, required String client, required String locale}) =>
+      throw UnsupportedError('no account server in this build');
 }
 
 /// PD-21: a parent or teacher finishes a password reset the academy issued. The
@@ -431,15 +516,83 @@ abstract interface class PasswordChangeRepository {
   Future<void> change({required String currentPassword, required String newPassword});
 }
 
+/// PD-56 O-3 (owner, 2026-11-07): a teacher's request to delete their account while lessons,
+/// students or payroll are still open. The academy closes them; the account is deleted by
+/// [deadlineAt] (30 days after [requestedAt]) whatever is left.
+class AccountDeletionRequest {
+  const AccountDeletionRequest({
+    required this.id,
+    required this.state,
+    required this.requestedAt,
+    required this.deadlineAt,
+    this.cancelledAt,
+    this.completedAt,
+  });
+
+  final String id;
+
+  /// `pending`, `completed` or `cancelled`.
+  final String state;
+  final DateTime requestedAt;
+  final DateTime deadlineAt;
+  final DateTime? cancelledAt;
+  final DateTime? completedAt;
+
+  bool get isPending => state == 'pending';
+
+  static AccountDeletionRequest fromJson(Map<String, Object?> json) {
+    DateTime? at(Object? v) => v is String ? DateTime.tryParse(v) : null;
+    return AccountDeletionRequest(
+      id: json['id'] as String,
+      state: json['state'] as String,
+      requestedAt: at(json['requestedAt'])!,
+      deadlineAt: at(json['deadlineAt'])!,
+      cancelledAt: at(json['cancelledAt']),
+      completedAt: at(json['completedAt']),
+    );
+  }
+}
+
+/// `GET /me/account/deletion`: what deleting would do now.
+class AccountDeletionStatus {
+  const AccountDeletionStatus({required this.immediate, required this.deadlineIfRequested, this.request});
+
+  /// True: nothing is open, the account is deleted at once. False: a teacher with work open,
+  /// whose deletion is a request.
+  final bool immediate;
+
+  /// The pending request, else the latest one, else null.
+  final AccountDeletionRequest? request;
+
+  /// The deadline a request made now would have (the server's clock, +30 days).
+  final DateTime deadlineIfRequested;
+}
+
+/// What `POST /me/account/delete` did: deleted (every session already ended), or recorded a
+/// teacher's [request] (nothing deleted yet, the session stays).
+class AccountDeletionOutcome {
+  const AccountDeletionOutcome.deleted() : deleted = true, request = null;
+  const AccountDeletionOutcome.requested(AccountDeletionRequest this.request) : deleted = false;
+
+  final bool deleted;
+  final AccountDeletionRequest? request;
+}
+
 /// PD-56 (store compliance): a parent or a teacher deletes their own account. On the
 /// AUTHENTICATED client; the password is asked again.
 abstract interface class AccountDeletionRepository {
   /// `POST /me/account/delete`. A refusal is an AppError with the server's code
   /// (`AUTH.INVALID_CREDENTIALS` for a wrong password, `AUTH.ACCOUNT_LOCKED`,
-  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account,
-  /// `AUTH.TEACHER_DELETION_BLOCKED` while a teacher has lessons, students or payroll open). On success every session
-  /// of the account has already ended on the server.
-  Future<void> deleteAccount({required String password});
+  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account). Deleted: every session of
+  /// the account has already ended on the server. A teacher with lessons, students or payroll
+  /// open gets a request instead (O-3); asking again returns the same one.
+  Future<AccountDeletionOutcome> deleteAccount({required String password});
+
+  /// `GET /me/account/deletion`.
+  Future<AccountDeletionStatus> status();
+
+  /// `POST /me/account/deletion-request/cancel`. `AUTH.DELETION_REQUEST_NOT_PENDING` when none is pending.
+  Future<AccountDeletionRequest> cancelRequest();
 }
 
 /// The build with no account server (fixtures, tests that do not override it).
@@ -447,7 +600,14 @@ class NoAccountDeletionRepository implements AccountDeletionRepository {
   const NoAccountDeletionRepository();
 
   @override
-  Future<void> deleteAccount({required String password}) => throw UnsupportedError('no account server in this build');
+  Future<AccountDeletionOutcome> deleteAccount({required String password}) =>
+      throw UnsupportedError('no account server in this build');
+
+  @override
+  Future<AccountDeletionStatus> status() => throw UnsupportedError('no account server in this build');
+
+  @override
+  Future<AccountDeletionRequest> cancelRequest() => throw UnsupportedError('no account server in this build');
 }
 
 /// The build with no account server (fixtures, tests that do not override it).
