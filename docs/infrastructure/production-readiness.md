@@ -271,6 +271,14 @@ nothing. It never reports a deployment that did not happen (ADR-003).
 
 **BLOCKER-5 · The store builds are not submittable** (2026-11-02; narrowed 2026-11-05). Account deletion, the privacy manifest, release signing, the iOS release entitlement and app crash reporting are built. What remains: the call ring with the app closed (S-06), Android push delivery on a device with the owner's Firebase project (S-05), decision O-3 on teacher deletion (S-01), and the owner's signing and DSN credentials. `docs/qa/release-gate.md` §2a is authoritative.
 
+**BLOCKER-6 · The production database admin password (`doadmin`) was exposed and is not rotated.** Opened 2026-11-17. Owner decision the same day: **deferred to the security-hardening phase; it must be closed before the public launch** (before the `LAUNCH_PHASE=launch` deploy and the switch of the store release from manual to public).
+
+- **What is exposed.** The `doadmin` password of the DigitalOcean Managed PostgreSQL cluster `db-pgsql-nyc3-58796` (Frankfurt, database `jawwid_chat`). The same role is what `DATABASE_URL` uses for the API, the worker, the deploy's role check, backup and migrations. The cluster has **no Trusted Sources**, so anyone holding the password can connect from the internet. How far it spread is not known.
+- **What to do (the agreed plan).** (1) In the DigitalOcean control panel reset the `doadmin` password. (2) Store the new Public-network connection string, with database `jawwid_chat` and `sslmode=require`, as the `production` secret `DATABASE_URL`, entered at a hidden prompt after a `select 1` login test (nothing printed, logged or stored). (3) Re-run the production deploy of the same image, which re-injects the secret into **both** the `api` and `worker` components. (4) Afterwards list `pg_stat_activity` (read-only) and terminate any session that is not the app or the owner.
+- **Why step 4 matters.** DigitalOcean warns that a reset does **not** terminate existing connections: the reset stops new logins with the old password, but an already-open session stays alive until it closes. The deploy restarts the app's own sessions; any others have to be found and ended.
+- **Why not a replacement user now.** Every object is owned by `doadmin` and the deploy relies on its ability to grant `BYPASSRLS`; a new DigitalOcean user has no such rights, and `pg_dump` of the row-level-security tables fails without them. The structural fix is the `chat_app` / `chat_service` role split in `docs/security/RLS-STRATEGY.md` section 3 (`DATABASE_APP_URL` is not wired into the production deploy yet). That is a separate project.
+- **Related and also open:** restrict the cluster's Trusted Sources (hard while migrations and backups run from GitHub-hosted runners), and the `backup` Environment's `BACKUP_DATABASE_URL` read-only role (RISK-6).
+
 ## Risks
 
 - **RISK-1 · Prisma client drift. ✅ CLOSED.** The CI `api` job typechecks and is green on main.
