@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
@@ -62,6 +64,13 @@ object JawwidPush {
 
     /** A decline older than the ring is moot: the call is over on the server. */
     private const val PENDING_DECLINE_MAX_AGE_MS = RING_TIMEOUT_MS
+
+    /** LR-79: how long after a post the ring is checked for in the active notifications. */
+    private const val RING_VERIFY_DELAY_MS = 2_000L
+
+    /** LR-79: the rings posted and not yet verified, ended or timed out. */
+    private val ringWatch = RingWatch(RING_TIMEOUT_MS)
+
     private const val PREFS = "jawwid_push"
     private const val KEY_PENDING_DECLINES = "pending_declines"
 
@@ -134,19 +143,79 @@ object JawwidPush {
             .setTimeoutAfter(RING_TIMEOUT_MS)
             .setContentIntent(open)
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, decline, answer))
-            // ALWAYS. A CallStyle notification must have a full-screen intent (or come
-            // from a foreground service): without one, Android 12+ throws
-            // IllegalArgumentException from notify() and nothing rings at all. Where
-            // the app may not use full-screen intents (Android 14+, the user or Play
-            // revoked it), the system itself downgrades the request to a heads-up
-            // notification -- still with Answer and Decline.
+            // ALWAYS, even when the grant is denied (LR-27, CallRing.mode). A CallStyle
+            // notification must request a full-screen intent (or come from a foreground
+            // service): without one, Android 12+ throws IllegalArgumentException from
+            // notify() and nothing rings at all. Where the app may not use full-screen
+            // intents (Android 14+, the user or Play revoked it), the system removes the
+            // intent and shows the ring as a sticky heads-up notification -- still with
+            // Answer and Decline. That relies on USE_FULL_SCREEN_INTENT being declared in
+            // the manifest.
             .setFullScreenIntent(open, true)
             // Lock screen (#408 review): the caller's name is not shown to whoever
             // holds the phone; the public version says only "Incoming call".
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicVersion(context, CHANNEL_CALLS, R.string.call_incoming))
 
-        notify(context, notificationId(callId), builder)
+        val id = notificationId(callId)
+        if (!mayUseFullScreenIntent(context)) {
+            android.util.Log.w(TAG, "notification $id: full-screen intent not granted, the ring shows as a heads-up")
+        }
+        if (notify(context, id, builder)) {
+            ringWatch.posted(callId, System.currentTimeMillis())
+            verifyRingLater(context.applicationContext, callId, id, builder)
+        }
+    }
+
+    /**
+     * LR-27: whether an incoming call can take over the screen. Below Android 14 always;
+     * from Android 14 on only while the user (or Play) has not revoked the grant. When false
+     * the ring is a heads-up notification; the app may ask the user to allow full-screen
+     * calls (the `fullScreenIntentAllowed` method on jawwid/call_native returns this).
+     */
+    fun mayUseFullScreenIntent(context: Context): Boolean {
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: false
+        } else {
+            true
+        }
+        return CallRing.mode(Build.VERSION.SDK_INT, granted) == CallRing.Mode.FULL_SCREEN
+    }
+
+    /**
+     * LR-79: Android 14 can drop a CallStyle notification that notify() accepted. Shortly
+     * after the post, check that the ring is showing; if it is missing and the call is still
+     * ringing, post it once more and check that once. Every check runs on the main thread,
+     * as does every path that ends a ring (cancelCall), so a ring ended in between is never
+     * re-posted.
+     */
+    private fun verifyRingLater(context: Context, callId: String, id: Int, builder: NotificationCompat.Builder) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            when (ringWatch.check(callId, isShowing(context, id), System.currentTimeMillis())) {
+                RingWatch.Verdict.SHOWING -> android.util.Log.i(TAG, "notification $id verified showing")
+                RingWatch.Verdict.REPOSTED_SHOWING -> android.util.Log.i(TAG, "notification $id showing after one re-post")
+                RingWatch.Verdict.LOST -> android.util.Log.e(TAG, "notification $id still missing after one re-post; not retried")
+                RingWatch.Verdict.ENDED -> Unit // answered, declined, dismissed or timed out: nothing to do
+                RingWatch.Verdict.REPOST -> {
+                    android.util.Log.w(TAG, "notification $id missing after the post; re-posting once")
+                    // The ring ends when the server's ring ends, not one check later.
+                    builder.setTimeoutAfter(RING_TIMEOUT_MS - RING_VERIFY_DELAY_MS)
+                    notify(context, id, builder)
+                    verifyRingLater(context, callId, id, builder)
+                }
+            }
+        }, RING_VERIFY_DELAY_MS)
+    }
+
+    /** Whether notification [id] (untagged, as rings are) is showing. Unknown counts as showing: never a blind re-post. */
+    private fun isShowing(context: Context, id: Int): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return true
+        return try {
+            manager.activeNotifications.any { it.id == id && it.tag == null }
+        } catch (e: RuntimeException) {
+            android.util.Log.w(TAG, "notification $id: active notifications unreadable", e)
+            true
+        }
     }
 
     /**
@@ -211,6 +280,7 @@ object JawwidPush {
 
     /** Sign-out (PD-32): this app's notifications leave the tray, a ringing call's included. */
     fun clearMessages(context: Context) {
+        ringWatch.clear()
         NotificationManagerCompat.from(context).cancelAll()
     }
 
@@ -222,26 +292,32 @@ object JawwidPush {
             .setContentText(context.getString(text))
             .build()
 
-    private fun notify(context: Context, id: Int, builder: NotificationCompat.Builder) {
+    /** True when notify() accepted the notification (LR-79: only then is the ring watched). */
+    private fun notify(context: Context, id: Int, builder: NotificationCompat.Builder): Boolean {
         val manager = NotificationManagerCompat.from(context)
         // POST_NOTIFICATIONS refused (Android 13+): nothing can be shown, and nothing is thrown.
         if (!manager.areNotificationsEnabled()) {
             android.util.Log.w(TAG, "notification $id not shown: notifications are off for the app")
-            return
+            return false
         }
-        try {
+        return try {
             manager.notify(id, builder.build())
             android.util.Log.i(TAG, "notification $id posted")
+            true
         } catch (e: SecurityException) {
             // The permission was revoked between the check and the post.
             android.util.Log.w(TAG, "notification $id refused", e)
+            false
         } catch (e: IllegalArgumentException) {
             // A malformed notification must never take the messaging service down.
             android.util.Log.e(TAG, "notification $id malformed", e)
+            false
         }
     }
 
+    /** Every deliberate end of a ring comes through here (LR-79: it is then never re-posted). */
     fun cancelCall(context: Context, callId: String) {
+        ringWatch.ended(callId)
         NotificationManagerCompat.from(context).cancel(notificationId(callId))
     }
 
