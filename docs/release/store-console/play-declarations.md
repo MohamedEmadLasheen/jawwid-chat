@@ -72,7 +72,7 @@ password; no verification code). They exist only after launch items LR-01 (produ
 > these accounts are fictional.
 >
 > Payments: the academy sells only live one-to-one Quran lessons (one teacher, one student, in real time,
-> not recorded), paid by card on Stripe's page or by bank transfer. To see it: parent account →
+> not recorded), paid by bank transfer (card payments are paused at launch). To see it: parent account →
 > {{PAYMENTS_TAB_NAME}} tab (bottom bar) → Amount due → Pay.
 >
 > Reporting and blocking: long-press a message → Report, or open a person's profile → Report or Block.
@@ -81,8 +81,8 @@ password; no verification code). They exist only after launch items LR-01 (produ
 > {{ACCOUNT_DELETION_URL}}.
 
 Notes for the owner:
-- `{{PAYMENTS_TAB_NAME}}` is "Subscriptions" in today's app (`lib/app/router.dart:140-142`). Launch item
-  LR-15 recommends renaming it to lesson-package wording; use whatever name the submitted build shows.
+- `{{PAYMENTS_TAB_NAME}}` is "Packages" (LR-15; `tabSubscriptions` in `lib/l10n/app_en.arb`). Check it
+  against the submitted build and use whatever name that build shows.
 - **The review child has no payment due today** (`review-accounts.md`, "No payments"), so a reviewer
   cannot reach Pay. Either add an open lesson-package request to the review cohort before submitting
   (`app-review-notes-payments.md` §6 item 2), or delete the "Payments" paragraph above.
@@ -107,7 +107,7 @@ Notes for the owner:
 | Government apps | **No** | Jawwid is not a government body and does not act for one. |
 | COVID-19 contact tracing and status apps | **No** | — |
 | Health apps | **My app does not have any health features** | No health or medical feature. |
-| Financial features | **My app doesn't provide any financial features** | Families pay the academy for its own lessons (Stripe Checkout in the browser, or a bank-transfer receipt: `lib/core/data/http/http_billing_repository.dart:31-81`). That is a merchant taking payment, not a financial service: no banking, loans, wallet, money transfer between users, investment or crypto. |
+| Financial features | **My app doesn't provide any financial features** | Families pay the academy for its own lessons (a bank-transfer receipt, `lib/core/data/http/http_billing_repository.dart:76-81`; card payments are paused at launch, so none is offered). That is a merchant taking payment, not a financial service: no banking, loans, wallet, money transfer between users, investment or crypto. |
 | Data safety | See `google-data-safety.md` | — |
 | Content rating | See `age-rating.md` §2 | — |
 | Privacy policy URL | `{{PRIVACY_POLICY_URL}}` | LR-04 |
@@ -258,5 +258,5 @@ launch candidate) are in `google-data-safety.md` §6.
 | O-4 | Child Safety Standards | "Not required for this category", with the prepared answer if the Console asks | **OPEN.** Owner: whether Play's Child Safety Standards apply to this app (compliance checklist G-5); the designate and mailbox are LD-19. The app has user-generated content and messaging, so prepare the answer either way | §4 |
 | O-5 | Advertising ID | No | **OPEN** pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6) | §3; `google-data-safety.md` §2.1 |
 | O-6 | Merged-manifest permissions | §7 tables | **OPEN**, same check as O-5: confirm Firebase's `WAKE_LOCK` and `c2dm RECEIVE`, and that nothing else is added | §7 |
-| O-7 | Review payment paragraph | Either seed a payable request or delete the paragraph | **OPEN.** Owner (§2 note); live card payments are LR-34 | §2 |
+| O-7 | Review payment paragraph | Either seed a payable request or delete the paragraph | **OPEN.** Owner (§2 note); card payments are paused at launch (LR-34), so the paragraph has no card clause | §2 |
 | O-8 | Category | Education | **OPEN.** Owner. Also weighs on the full-screen-intent case (§6) | §8 |

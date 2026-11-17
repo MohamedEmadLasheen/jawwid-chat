@@ -24,8 +24,8 @@ to the live question.
 - **Collected:** the data leaves the device to Jawwid or a third party. Data processed only in memory
   for the live request can be marked **ephemeral**.
 - **Shared:** sent to a third party. Sending to a **service provider** that processes it on Jawwid's
-  behalf (DigitalOcean, LiveKit, Sentry, Firebase Cloud Messaging, Apple, the e-mail provider, Stripe for
-  the payment) is **not** sharing under Google's definition. So the answer is "not shared" for every type
+  behalf (DigitalOcean, LiveKit, Sentry, Firebase Cloud Messaging, Apple, the e-mail provider, and Stripe
+  if cards are ever switched on) is **not** sharing under Google's definition. So the answer is "not shared" for every type
   (§4 records the closed Stripe question).
 - **Optional:** the person can use the app without giving it.
 - `[OWNER DECISION: ...]` marks an answer that waits for the owner or counsel. **OPEN** marks the same
@@ -62,7 +62,7 @@ Every row: **Shared = No**, **purposes never include Advertising or marketing or
 | Personal info | Race and ethnicity, Political or religious beliefs, Sexual orientation | **No** `[OWNER DECISION: counsel decides whether enrolment in Quran lessons is "religious beliefs"; if yes, declare "Political or religious beliefs", required, App functionality]` **OPEN: L-10 / L-14 / LD-13 (§6)** | — | — | — | No field records belief (see `apple-app-privacy.md` §3.4) |
 | Personal info | Other info | Yes | No | Optional (teachers only) | App functionality | A teacher's professional profile: bio, specialization, qualifications, experience, languages and certificate details (`http_teacher_profile_repository.dart:72-79`, `:120-125`). Declared here because it describes the person, not only content they post. Today only the teacher sees it (`lib/app/router.dart:558`). Certificate images and PDFs (`lib/shared/models/teacher_profile.dart:155-162`: PDF, JPEG, PNG) are the same kind of data as the Photos and Files and docs rows, which are already Yes. |
 | Financial info | Purchase history | Yes | No | Optional (only families who pay in the app) | App functionality | `lib/core/data/http/http_billing_repository.dart:27`, `:31-32`, `:76-81`, `:92-93`; invoices and receipts shown (`lib/features/billing/presentation/my_payments_screen.dart:323-330`); Sales staff record payments (`lib/core/data/http/http_sales_payments_repository.dart:64`) |
-| Financial info | User payment info | **No** **OPEN: counsel (§6)** | — | — | — | Card details are typed on Stripe's page in the browser, outside the app (`http_billing_repository.dart:31-32`). The app only shows Stripe's masked summary (card brand, last 4 digits, wallet) on each invoice (`:125-133`, `:226`); it never collects or sends card data. If counsel prefers to over-declare, mark it Yes. |
+| Financial info | User payment info | **No** (card payments off at launch) | — | — | — | Cards are paused at launch, so no card data exists. If cards are switched on, card details are typed on Stripe's page in the browser, outside the app (`http_billing_repository.dart:31-32`), and the app only shows Stripe's masked summary (card brand, last 4 digits, wallet) on each invoice (`:125-133`, `:226`); it never collects or sends card data. If counsel prefers to over-declare, mark it Yes. |
 | Financial info | Credit score | **No** | — | — | — | — |
 | Financial info | Other financial info | Yes | No | Optional | App functionality | Bank-transfer receipt (photo or PDF), amount and date (`lib/features/billing/presentation/bank_transfer_screen.dart:21-25`; `http_billing_repository.dart:40-81`) |
 | Health and fitness | Health info, Fitness info | **No** | — | — | — | — |
@@ -110,9 +110,9 @@ Every row: **Shared = No**, **purposes never include Advertising or marketing or
 | SDK | Data it sends | Declared above as |
 |---|---|---|
 | Firebase Cloud Messaging (`android/app/build.gradle.kts:123-125`) | Installation ID, FCM token, the notification payload in transit | Device or other IDs |
-| Sentry (`sentry_flutter`, `pubspec.yaml:129`) | Crash stack, device model and OS, hashed account id, navigation breadcrumbs. Automatic session tracking, on by default in the SDK, is turned off (`crash_reporting.dart:49`, `enableAutoSessionTracking = false`; **done in #526, in the launch candidate**), so no app-session events (release health) are sent; see §6 O-5 | Crash logs, Diagnostics, User IDs |
+| Sentry (`sentry_flutter`, `pubspec.yaml:129`) | Crash stack, device model and OS, hashed account id, navigation breadcrumbs. Automatic session tracking, on by default in the SDK, is turned off (`crash_reporting.dart:49`, `enableAutoSessionTracking = false`; **done and merged in #526**), so no app-session events (release health) are sent; see §6 O-5 | Crash logs, Diagnostics, User IDs |
 | LiveKit (`livekit_client`, `pubspec.yaml:38`) | Live microphone audio (relayed, not recorded), participant id | Voice or sound recordings, User IDs |
-| Stripe | Nothing from the app's code: Checkout opens in the browser | — (see §4) |
+| Stripe | Nothing from the app's code. Cards are paused at launch; if switched on, Checkout opens in the browser | — (see §4) |
 | No advertising, analytics, attribution or social-login SDK | — | `docs/legal/data-inventory-and-retention-matrix.md` §2, "Not used" |
 
 ### 2.3 Crash logs and diagnostics: why the purposes differ from Apple's (LR-71)
@@ -166,17 +166,16 @@ under-declaring.
   `lib/features/settings/presentation/delete_account_screen.dart:95-110`; Privacy Policy §10.4.1). Google
   allows a stated delay; there is no "contact us" step. Staff accounts cannot delete in the app (LR-20).
 
-## 4. Stripe and the child's name: closed (LD-8 done in #580)
+## 4. Stripe and the child's name (not applicable at launch; closed if cards are switched on)
 
-In the launch candidate the payment line item sent to Stripe is the payment request's label only, never
+**Card payments are paused at launch** (`billing.card_paused`, `apps/api/src/billing/card-pause.ts`), so nothing reaches Stripe and no store copy claims card payment. Everything below applies only if the owner switches cards on, and the Privacy Policy is updated first.
+
+If cards are on, the payment line item sent to Stripe is the payment request's label only, never
 the child's name; the period and the "live one-to-one lessons" wording travel in the description
-(`apps/api/src/billing/checkout.service.ts:120-131`, `checkoutProductName`, and `:310-311`;
-`apps/api/src/billing/in-app-payability.ts:120-130`; lines as of the launch candidate; #580, commit
-`7934ae49`). So Name is **not shared**, whatever counsel decides on Stripe's role (L-4, still open for its
+(`apps/api/src/billing/checkout.service.ts:190-192`, `checkoutProductName`, and `:422-423`; #580). So Name is **not shared**, whatever counsel decides on Stripe's role (L-4, still open for its
 own sake). The label is free text typed by staff: staff must not type a child's name into it.
 
-If a build without #580 were ever submitted, `origin/main`'s `checkout.service.ts:147` still puts the
-child's name in the line item, and this question reopens: declare Name as "Shared", purpose "App
+If a build without #580 were ever submitted with cards on, the child's name would be in the line item, and this question reopens: declare Name as "Shared", purpose "App
 functionality", if counsel treats Stripe as a third party for it. The data inventory (§2) still cites
 `checkout.service.ts:129` for the child's name; that file is outside this change (see the LR-71 PR).
 
@@ -196,10 +195,10 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|
-| O-1 | User payment info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §2 |
+| O-1 | User payment info: does the stored card brand, last four digits and wallet count? | No | **Closed for launch:** card payments are off, so none is stored. Re-open (counsel) before cards go live | §2 |
 | O-2 | Political or religious beliefs: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §2 |
 | O-3 | Families Policy question | Not asked (audience 18+) | **OPEN.** Owner: target audience N-1 / LD-5; counsel: L-15 (SDK terms for child-directed use) | §1; `play-declarations.md` §1 |
 | O-4 | Advertising ID not collected | Not collected | **OPEN** pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6) | §2.1; `play-declarations.md` §3 |
-| O-5 | Sentry automatic session tracking | Not declared beyond Crash logs and Diagnostics | **Done in the launch candidate (#526):** `enableAutoSessionTracking = false` (`crash_reporting.dart:49`), so nothing more is declared. Closed | §2, §2.2; `apple-app-privacy.md` §3.8 |
-| O-6 | Name "Shared" because of the child's name in the Stripe line item | Not shared | **Closed: LD-8 done in #580** (the line item is the request's label only, `checkout.service.ts:120-131` as of the launch candidate). Counsel L-4 stays open for Stripe's role, but no longer changes this answer | §4 |
+| O-5 | Sentry automatic session tracking | Not declared beyond Crash logs and Diagnostics | **Done and merged (#526):** `enableAutoSessionTracking = false` (`crash_reporting.dart:49`), so nothing more is declared. Closed | §2, §2.2; `apple-app-privacy.md` §3.8 |
+| O-6 | Name "Shared" because of the child's name in the Stripe line item | Not shared | **Closed for launch** (cards are paused, nothing is sent to Stripe). If cards go live: LD-8 is done in #580 (the line item is the request's label only, `checkout.service.ts:190-192`); counsel L-4 stays open for Stripe's role but does not change this answer | §4 |
 | O-7 | Delete account URL | placeholder | **OPEN.** LR-04, LD-16 | §1, §3.2 |

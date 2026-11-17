@@ -8,7 +8,7 @@ relative to the repository root, cited as `file:line`.
 **LR-71 pre-audit fixes, 2026-11-10:** re-checked against the launch candidate
 `claude/merge-rehearsal-3-2026-11-10` @ `0aec87f1`, which this file now describes (it is merged after the launch
 PRs). Changed: Sentry session tracking is off in the candidate (#526; §2, §3.8, §7 O-3); the child's name no
-longer goes to Stripe (#580; §6); and the drifted `crash_reporting.dart` and `Info.plist` citations. Those
+longer goes to Stripe, should cards be switched on (#580; §6); and the drifted `crash_reporting.dart` and `Info.plist` citations. Those
 citations are **lines as of the launch candidate**; every other citation is still as of `bc47d376`.
 
 **Where it goes:** App Store Connect → the app → **App Privacy** → Get Started / Edit.
@@ -46,7 +46,7 @@ citations are **lines as of the launch candidate**; every other citation is stil
 | Contact Info | Physical Address | **No** | — | — | — |
 | Contact Info | Other User Contact Info | **No** | — | — | — |
 | Health & Fitness | Health, Fitness | **No** | — | — | — |
-| Financial Info | Payment Info | **No** `[OWNER DECISION: counsel, §3.2; OPEN, §7]` | — | — | — |
+| Financial Info | Payment Info | **No** (card payments off at launch, §3.2) | — | — | — |
 | Financial Info | Credit Info | **No** | — | — | — |
 | Financial Info | Other Financial Info | Yes | Yes | No | App Functionality |
 | Location | Precise Location | **No** | — | — | — |
@@ -66,7 +66,7 @@ citations are **lines as of the launch candidate**; every other citation is stil
 | Purchases | Purchase History | Yes | Yes | No | App Functionality |
 | Usage Data | Product Interaction | Yes | Yes | No | App Functionality, Analytics |
 | Usage Data | Advertising Data | **No** | — | — | — |
-| Usage Data | Other Usage Data | **No** (Sentry session tracking is off: #526, in the launch candidate; §3.8, §7) | — | — | — |
+| Usage Data | Other Usage Data | **No** (Sentry session tracking is off: #526, merged; §3.8, §7) | — | — | — |
 | Diagnostics | Crash Data | Yes | Yes | No | App Functionality |
 | Diagnostics | Performance Data | **No** | — | — | — |
 | Diagnostics | Other Diagnostic Data | Yes | Yes | No | App Functionality |
@@ -117,17 +117,16 @@ country and a region, declared as Coarse Location (§3.3).
 
 ### 3.2 Financial Info
 
-**Payment Info: No.** Card details are typed on Stripe's hosted Checkout page, which opens **in the
+**Payment Info: No.** Cards are paused at launch (`billing.card_paused`), so none is offered. If cards are later switched on, card details are typed on Stripe's hosted Checkout page, which opens **in the
 browser**, outside the app (`lib/core/data/http/http_billing_repository.dart:31-32`;
 `docs/release/app-review-notes-payments.md` §4). Jawwid never receives the card number
 (data inventory §2, Stripe; §3, "Payment card data").
-After a card payment, the server stores and shows the **card brand, the last four digits and the wallet type**
+If cards are on, after a card payment the server stores and shows the **card brand, the last four digits and the wallet type**
 returned by Stripe on each invoice, linked to the family (`http_billing_repository.dart:125-133`, `:226`). The
 answer stays **No**, because the app never collects or sends card data; it only displays Stripe's own masked
 summary of a payment made outside the app. The invoice itself is declared under Purchase History. If counsel
 prefers to over-declare, change this to Yes, linked, App Functionality; the label is not otherwise affected.
-**OPEN (counsel; see §7):** whether the stored card summary counts as Payment Info. The answer stays No
-until counsel decides.
+**Launch (2026-11-16): card payments are off in production (no Stripe keys, `LAUNCH_PHASE=review`), so no card data and no card summary exists; Payment Info = No is settled for launch.** Re-assess before card payments are switched on (the Privacy Policy is updated first, clause 4.11.2). The text above describes the later card-payment flow.
 
 **Other Financial Info: Yes.**
 - For a bank transfer, the parent uploads the **transfer receipt** (a photo, a camera shot or a PDF),
@@ -231,7 +230,7 @@ also complaints to the academy (`lib/core/data/http/http_moderation_repository.d
 **Purchase History: Yes.** The app shows the parent their payment requests, payments, transfer receipts
 and **invoices to download**, and sends what they pay for:
 - `GET /me/billing` (`lib/core/data/http/http_billing_repository.dart:27`);
-- card checkout for a lesson package (`:31-32`), transfer receipt with the amount and date (`:76-81`),
+- card checkout for a lesson package (`:31-32`; paused at launch), transfer receipt with the amount and date (`:76-81`),
   invoice download link (`:92-93`);
 - the "Invoices" and "Receipts" sections (`lib/features/billing/presentation/my_payments_screen.dart:323-330`);
 - Sales staff record instalment payments in the app (`lib/core/data/http/http_sales_payments_repository.dart:64`).
@@ -256,7 +255,7 @@ and **invoices to download**, and sends what they pay for:
 
 **Advertising Data: No.** No ads.
 
-**Other Usage Data: No.** **Done in the launch candidate (#526); see §7.** The Sentry SDK turns automatic
+**Other Usage Data: No.** **Done and merged (#526); see §7.** The Sentry SDK turns automatic
 session tracking on by default; the app turns it off (`enableAutoSessionTracking = false`,
 `lib/core/crash/crash_reporting.dart:49`), so release builds send no app-session start and end events
 (release health), and this answer stays No. If a build without #526 were ever submitted, the session data
@@ -336,9 +335,8 @@ and check that every SDK's declared types appear in this label.
 
 - [ ] The privacy report from the release archive has no type that is missing here.
 - [ ] Counsel has answered §3.4 (Sensitive Info).
-- [x] LD-8 is done in the launch candidate (#580): the Stripe line item is the payment request's label
-      only, never the child's name (`apps/api/src/billing/checkout.service.ts:120-131`, lines as of the
-      launch candidate). Nothing changes here either way: Stripe is a processor, and Apple's label does not
+- [x] LD-8 is done (#580), and matters only if cards are switched on (paused at launch): the Stripe line item is the payment request's label
+      only, never the child's name (`apps/api/src/billing/checkout.service.ts:190-192`, `checkoutProductName`). Nothing changes here either way: Stripe is a processor, and Apple's label does not
       ask about sharing with processors. The label is typed by staff, who must not type a child's name in it.
 - [ ] The Privacy Policy (`docs/legal/privacy-policy-*.md`) says the same as this label.
 - [ ] The privacy report shows no Performance Data from the Sentry Cocoa SDK's own manifest. It could not
@@ -351,9 +349,9 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|
-| O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §3.2; `google-data-safety.md` §2 |
+| O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **Closed for launch:** card payments are off, so none is stored. Re-open (counsel) before cards go live | §3.2; `google-data-safety.md` §2 |
 | O-2 | Sensitive Info: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §3.4; `google-data-safety.md` §2 |
-| O-3 | Other Usage Data: Sentry automatic session tracking | No | **Done in the launch candidate (#526):** `crash_reporting.dart:49`. Closed | §3.8; `google-data-safety.md` §2.2 |
+| O-3 | Other Usage Data: Sentry automatic session tracking | No | **Done and merged (#526):** `crash_reporting.dart:49`. Closed | §3.8; `google-data-safety.md` §2.2 |
 | O-4 | Privacy Policy and User Privacy Choices URLs | placeholders | **OPEN.** LR-04, LD-16 | §4 |
 
 The target audience, storefronts, Families, Child Safety Standards and Advertising ID items are Play

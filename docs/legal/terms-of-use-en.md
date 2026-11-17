@@ -3,37 +3,34 @@ document_key: terms_family
 title: "Terms of Use"
 language: en
 counterpart: terms-of-use-ar.md
-version: "{{VERSION}}"
-draft_revision: "0.1 (2026-11-06)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for qualified legal review. Not published and not in force."
+version: "1.0"
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # Terms of Use
 
-**Version** {{VERSION}} · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](terms-of-use-ar.md)
+**Version** 1.0 · **Effective** 2026-11-17 · **Language:** English · [العربية](terms-of-use-ar.md)
 
-These Terms of Use apply to parents and legal guardians who hold a family account with Jawwid Academy, and to the children they enrol. Teachers and academy staff have their own terms (the Teacher Terms and the Staff Terms).
+These Terms of Use apply to parents and legal guardians who hold a family account with Jawwid Academy, and to the children they enrol. Teachers and academy staff are bound by separate terms with the Academy.
 
 ## 1. About these Terms and how you accept them
 
-1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by {{ENTITY_NAME}}, registered in {{ENTITY_COUNTRY}} under number {{ENTITY_REG_NO}}, with its address at {{ENTITY_ADDRESS}}.
+1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Registered agent in Wyoming (registered agent's address only): 30 N Gould St Ste R, Sheridan, WY 82801, United States.
 
 1.2 These Terms are an agreement between you, as a Parent, and the Academy. They govern your use of the Service and your children's use of it under your account.
 
-1.3 The Code of Conduct forms part of these Terms. The following policies also apply and are incorporated by reference: the Reporting and Complaints Policy; the Blocking, Suspension and Enforcement Policy; and the Child Safety and Parental Responsibility Policy.
+1.3 The Child Safety and Parental Responsibility Policy forms part of these Terms. The rules of conduct in section 7, and the reporting, blocking and enforcement rules in sections 12 and 17, apply to you and to everyone who uses the Service under your account.
 
 1.4 The Privacy Policy is a separate notice. It explains how we handle personal data about you and your children. You are not asked to accept it as a contract; we ask you to read it, and it is always available in the app.
 
-1.5 You accept these Terms and the Code of Conduct electronically in the app, when you activate your account (see clause 4.2) or, if your account already exists, when the app next asks you. We record which version you accepted, the time of acceptance (from our server's clock), the app or portal you used and its language.
+1.5 You accept these Terms when you activate your account (see clause 4.2) or use the Service. The Terms are available on the sign-in screen, during activation and in Settings. Where the app asks you to confirm your acceptance, we record which version you accepted, the time of acceptance (from our server's clock), the app or portal you used and its language.
 
-1.6 You must accept the current Terms and the Code of Conduct before you send or upload any Content in the Service. Until you accept, you can still read what is already in your account, sign out and delete your account, and you can always raise a child-safety concern by e-mail to {{SAFEGUARDING_EMAIL}}.
+1.6 If the app asks you to accept the current Terms, you must accept them before you send or upload any Content in the Service. Until you accept, you can still read what is already in your account, sign out and delete your account, and you can always raise a child-safety concern by e-mail to info@jawwid.com.
 
-1.7 When we make a material change to these Terms or the Code of Conduct, we will ask you to accept the new version (see section 21). Until you accept it, clause 1.6 applies again.
+1.7 When we make a material change to these Terms, we will ask you to accept the new version (see section 21). Until you accept it, clause 1.6 applies again.
 
 1.8 The lesson-audio notice described in section 9 has its own separate acknowledgement in the app. Accepting these Terms does not replace that acknowledgement.
-
-> **Drafting note (remove before publication):** The recording of acceptance (version, server time, client, language) is built in PR #462, which is still a draft and not on `main`. Clauses 1.5 to 1.7 must not be published until that change is merged and released. Whether the in-app child-safety report stays available before acceptance is owner decision LD-11; clause 1.6 must follow it.
 
 ## 2. Definitions
 
@@ -91,7 +88,7 @@ In these Terms:
 
 4.1 To hold a family account you must:
 
-(a) be at least {{MIN_ACCOUNT_HOLDER_AGE}} years old;
+(a) be at least 18 years old;
 
 (b) be the parent or legal guardian of each Child you enrol; and
 
@@ -105,7 +102,7 @@ In these Terms:
 
 (c) gives you a one-time activation code (currently through your family's supervisor).
 
-You activate your account in the app by entering that code and setting your password. You accept these Terms and the Code of Conduct at that activation step.
+You activate your account in the app by entering that code and setting your password. You accept these Terms at that activation step.
 
 4.3 You must give accurate and complete information, including your name, your sign-in e-mail address, your phone number, your Child's name, age or date of birth and level, and your country and region. You must keep it up to date.
 
@@ -123,7 +120,7 @@ You activate your account in the app by entering that code and setting your pass
 
 (a) supervise your Child during lessons and whenever your Child uses the app;
 
-(b) make sure your Child follows the Code of Conduct;
+(b) make sure your Child follows the rules in section 7;
 
 (c) not let anyone other than your Child, or another adult you trust to supervise, use the Service on your account;
 
@@ -139,7 +136,7 @@ You activate your account in the app by entering that code and setting your pass
 
 6.2 We recommend that you turn on the app lock in Settings, so the app asks for your fingerprint, face recognition, passcode or screen lock when you return to it.
 
-6.3 Tell us immediately through the app or at {{SUPPORT_EMAIL}} if you think someone else has used your account.
+6.3 Tell us immediately through the app or at info@jawwid.com if you think someone else has used your account.
 
 6.4 You are responsible for activity on your account, unless it results from our own failure or from a support session (clause 6.5).
 
@@ -157,13 +154,11 @@ You activate your account in the app by entering that code and setting your pass
 
 (f) The Privacy Policy explains support sessions in more detail.
 
-> **Drafting note (remove before publication):** Today there is no notice to the user when a support session starts and no second-person approval. Whether to add either is owner decision LD-3; this clause states the current behaviour and must be updated if it changes.
-
 ## 7. Permitted and prohibited use
 
 7.1 You may use the Service only for your Child's education with the Academy and for communication with the Academy about it.
 
-7.2 You and your Child must follow the Code of Conduct. In summary, you must not, and must not let your Child:
+7.2 You and your Child must follow these rules, which are the Academy's Code of Conduct. You must not, and must not let your Child:
 
 (a) harass, bully, threaten, insult or discriminate against anyone;
 
@@ -185,7 +180,7 @@ You activate your account in the app by entering that code and setting your pass
 
 (j) misuse Reports or Blocks, for example by filing reports you know to be false.
 
-7.3 The Code of Conduct sets out these rules in full. If this summary and the Code of Conduct differ, the Code of Conduct applies.
+7.3 **Zero tolerance.** There is no tolerance for objectionable Content or abusive users in the Service. Objectionable Content includes everything listed in clause 7.2, and any Content that sexualises, exploits or endangers a child. Academy Staff are present in every conversation between families and Teachers. We act on Reports of objectionable Content within 24 hours: we remove the Content and, where the Content or the behaviour breaks these Terms, we take action against the user who sent it under section 17, up to closing the account. Child-safety concerns are handled at once under the Child Safety and Parental Responsibility Policy.
 
 ## 8. Educational services
 
@@ -217,11 +212,11 @@ You activate your account in the app by entering that code and setting your pass
 
 10.1 **Your Child's schedule.** Your Child has regular weekly lesson times. You can see them in the app.
 
-10.2 **Apologies.** If your Child cannot attend, send an apology in the app before the lesson starts. Please send it at least {{CANCELLATION_NOTICE_HOURS}} hours before the lesson. An apology sent before the start is recorded as an excused absence and does not use your lesson balance.
+10.2 **Apologies.** If your Child cannot attend, send an apology in the app before the lesson starts. Please send it at least 2 hours before the lesson. An apology sent before the start is recorded as an excused absence and does not use your lesson balance.
 
-10.3 **Late apologies.** In an emergency you may send a late apology after the lesson has started, within the time the app allows. A supervisor decides whether it is excused. Until then the lesson counts as an absence.
+10.3 **Late apologies.** In an emergency you may send a late apology after the lesson has started, within the time the app allows. A supervisor reviews it and decides whether it is excused. Until then the lesson counts as an absence. If the supervisor accepts it, the lesson is an excused absence and does not use your lesson balance. If the supervisor does not accept it, clause 10.4 applies.
 
-10.4 **Absence without an apology.** If your Child does not attend and no apology was sent, the lesson is recorded as a student absence and uses one lesson from your balance.
+10.4 **Absence that is not excused.** If your Child does not attend and the absence is not excused (clauses 10.2 and 10.3, or excused by your Child's supervisor), including when a late apology was not accepted, the lesson is recorded as a student absence and uses one lesson from your balance.
 
 10.5 **Teacher apologies.** If the Teacher cannot teach a lesson, you are owed a make-up lesson, which you can book in the app in one of the Teacher's free times. If no make-up is booked, the Academy will offer another remedy, such as a substitute Teacher or a credit.
 
@@ -229,9 +224,7 @@ You activate your account in the app by entering that code and setting your pass
 
 10.7 **Changing the weekly time.** A change to your Child's regular weekly time is a request. The Teachers department decides it.
 
-10.8 **What uses a lesson.** A lesson held, and a lesson your Child missed without an excused apology, each use one lesson from your Lesson package.
-
-> **Drafting note (remove before publication):** {{CANCELLATION_NOTICE_HOURS}} is an owner decision. The app today records any apology made before the start as excused (no lesson used), and does not yet offer a make-up after a student's apology (it waits for "the academy's notice rule"). If the owner sets a notice period with consequences for short notice, clauses 10.2 and 10.8 and the app must say the same thing.
+10.8 **What uses a lesson from your balance.** A lesson held, and a lesson your Child missed that was not excused, each use one lesson from your Lesson package and count as lessons used.
 
 ## 11. Communication and messaging
 
@@ -251,25 +244,25 @@ You activate your account in the app by entering that code and setting your pass
 
 ## 12. Reports, blocking and safety
 
-12.1 **Reporting.** You can report a message or a person in the app. Choose a reason: harassment, inappropriate content, spam, a child's safety, or other (with a note). We acknowledge every Report in the app. We aim to review every report and answer the reporter within 24 hours; child-safety reports are escalated immediately, to the Super Admin and the staff responsible for child safety. We always reply to the person who reported.
+12.1 **Reporting.** You can report a message or a person in the app. Choose a reason: harassment, inappropriate content, spam, a child's safety, or other (with a note). We acknowledge every Report in the app. We review every Report within 24 hours and, where the Content is objectionable, remove it within that time (clause 7.3); child-safety reports are escalated immediately, to the Super Admin and the staff responsible for child safety. We always reply to the person who reported.
 
 12.2 **Blocking.** You can block a person you are in a conversation with. You will then no longer see their messages, notifications or calls. You can unblock them at any time.
 
 12.3 **Blocking does not stop lessons.** A Block never interrupts your Child's education. Lesson calls still ring, lesson cards and system messages still appear, and the Academy's administrative channel stays open. The Academy's official account, managers and the Super Admin cannot be blocked. When you block someone, the responsible manager is told so that we can help.
 
-12.4 If you are worried about a Teacher or anyone else, please use a Report. If you are worried that a Child is in immediate danger, contact your local emergency services first, then the Academy at {{SAFEGUARDING_EMAIL}}.
+12.4 If you are worried about a Teacher or anyone else, please use a Report. If you are worried that a Child is in immediate danger, contact your local emergency services first, then the Academy at info@jawwid.com.
 
-12.5 The Reporting and Complaints Policy and the Blocking, Suspension and Enforcement Policy explain these tools in full.
+12.5 Section 17 explains the steps we may take after a Report, and how to appeal a decision.
 
 ## 13. Payments, packages and renewals
 
 13.1 **What you pay for.** You pay for Lesson packages for each Child. Each package states the number of lessons included, the period and the price. In-app payment is offered only for live one-to-one lesson packages.
 
-13.2 **Payment requests.** We send you a payment request in the app (and sometimes as a payment link) showing the amount, the currency and what it is for.
+13.2 **Payment requests.** We send you a payment request in the app showing the amount, the currency and what it is for.
 
 13.3 **Payment methods.**
 
-(a) **Card.** Card payments are taken by our payment provider, Stripe, on Stripe's own secure page. You enter your card details and e-mail there. The Academy never sees your card number.
+(a) **Card.** Card payments are not offered in the app at present. If the Academy offers card payments later, they will be taken by a payment provider on its own secure page, the Academy will never see your card number, and we will update these Terms and the Privacy Policy first.
 
 (b) **Bank transfer.** The app shows the Academy's bank details and the amount. After you transfer, upload your receipt (an image or PDF). The payment is pending until our staff verify it.
 
@@ -293,23 +286,19 @@ You activate your account in the app by entering that code and setting your pass
 
 13.9 **Renewals.** Lesson packages do not renew automatically, and we do not charge your card automatically. You can ask to renew in the app; a new package starts only when you pay a new payment request.
 
-> **Drafting note (remove before publication):** No automatic renewal or saved-card charging was found in the code (Stripe Checkout runs in one-time `payment` mode; renewal is a parent's request, then a new payment request). TO CONFIRM with the owner that no other channel (for example Jawwid Core) renews or charges automatically.
-
 13.10 **Prices.** Prices are shown in the payment request. Any taxes are as shown or as required by law.
 
 13.11 **Paying the Academy only.** Pay only the Academy, only by the methods in clause 13.3. Never pay a Teacher directly.
 
 ## 14. Refunds and cancelling a package
 
-14.1 Refunds and the cancellation of a Lesson package are handled under the following rules: {{REFUND_RULES}}.
+14.1 Unused lessons in a paid Lesson package are refunded in proportion on request. Lessons held, and lessons your Child missed that were not excused, are not refunded. We answer a refund request within 30 days.
 
-14.2 Refunds are made by authorised Academy staff, or through Stripe for card payments, to the original method of payment where possible.
+14.2 Refunds are made by authorised Academy staff, to the original method of payment where possible.
 
 14.3 Nothing in these Terms takes away any right you have under the mandatory consumer protection law of the country where you live, including any right to a refund or remedy that cannot be excluded by agreement.
 
 14.4 In particular, where that law gives you a right to cancel a service contract within a set period before the service has been used, or a right to a refund if the service is delayed beyond a set period, those rights apply in addition to the rules in clause 14.1, and the rules in clause 14.1 never reduce them.
-
-> **Drafting note (remove before publication):** No customer-facing refund or cancellation policy exists. {{REFUND_RULES}} is an owner business decision (for example: unused lessons, the period after which no refund is due, the treatment of grace lessons and instalments), and must be checked against consumer law in each target country, including any cooling-off right for distance contracts. Clause 14.4 preserves, for example, the Saudi E-Commerce Law: Art. 13 (7-day right to cancel a service contract if the service has not yet been used) and Art. 14 (refund right if delivery is delayed more than 15 days). {{REFUND_RULES}} sits on top of these mandatory rights.
 
 ## 15. Intellectual property
 
@@ -327,11 +316,11 @@ You activate your account in the app by entering that code and setting your pass
 
 16.3 You confirm that you have the right to share the Content you send, including photos of your Child.
 
-16.4 We may remove Content that breaks these Terms or the Code of Conduct.
+16.4 We may remove Content that breaks these Terms.
 
 ## 17. Suspension and termination
 
-17.1 If these Terms or the Code of Conduct are broken, we may take proportionate steps under the Blocking, Suspension and Enforcement Policy, normally in this order:
+17.1 If these Terms are broken, we may take proportionate steps, normally in this order:
 
 (a) removing the Content;
 
@@ -341,19 +330,13 @@ You activate your account in the app by entering that code and setting your pass
 
 (d) a temporary Suspension of the account, which signs it out of all devices; and
 
-(e) Termination: the account is closed indefinitely and the Academy will not reactivate it or accept a new enrolment from the same person.
-
-> **Drafting note (remove before publication):** No terminal account state or sign-up deny-list exists in code; proposal P-6 (outstanding register).
+(e) Termination: the account is closed, and the Academy may refuse a new enrolment from the same person.
 
 17.2 In serious cases, such as risks to a child's safety, threats, sexual content involving minors or grooming, we may go straight to Suspension or Termination and may inform the competent authorities. We may restrict an account urgently while we investigate.
 
-17.3 If your Child's lessons are paused, the Academy will tell you that the Child's lessons are paused, in these words: "Lessons for [child's name] are temporarily paused. The academy will contact you."
+17.3 If your Child's lessons are paused, the Academy will tell you and will contact you about what happens next.
 
-> **Drafting note (remove before publication):** The message is not yet built; the delivery channel for a suspended family is open (DEV-CONFIRM #27).
-
-17.4 We will tell you the reason for any measure taken under clause 17.1 unless doing so would put a child or others at risk or would break the law. Every enforcement measure (removal of content, a Warning, a restriction, a Suspension or a Termination) can be appealed by e-mail to {{SUPPORT_EMAIL}} within 14 days [TO CONFIRM]. A staff member who was not involved in the original decision will review it.
-
-> **Drafting note (remove before publication):** There is no in-app appeal; appeals are by e-mail only (owner decision LD-10). The 14-day window is TO CONFIRM.
+17.4 We will tell you the reason for any measure taken under clause 17.1 unless doing so would put a child or others at risk or would break the law. Every enforcement measure (removal of content, a Warning, a restriction, a Suspension or a Termination) can be appealed by e-mail to info@jawwid.com within 14 days. A staff member who was not involved in the original decision will review it.
 
 17.5 You may stop using the Service at any time and may delete your account under section 18.
 
@@ -361,7 +344,7 @@ You activate your account in the app by entering that code and setting your pass
 
 ## 18. Deleting your account
 
-18.1 You can delete your account at any time in the app (Settings → Delete account, with your password), or through the public web page the Academy provides for this, without reinstalling the app.
+18.1 You can delete your account at any time in the app (Settings → Delete account, with your password), or on the web without the app. The [Account Deletion](account-deletion-en.md) page explains both ways.
 
 18.2 Deletion takes effect immediately. Your sign-in, password, devices, notifications, profile photo, "about" text, contact details held by Staff (phone, e-mail and region), the location prompt and your contact-matching keys are deleted. Your name is replaced with "Deleted user". The country and region recorded for your family stay on the family record, which the Academy keeps with your children's records.
 
@@ -371,15 +354,13 @@ You activate your account in the app by entering that code and setting your pass
 
 (b) your children's records, such as their profiles, lessons, attendance, reports and rewards, which are the Academy's educational records;
 
-(c) payments, invoices and receipts, for the period required by accounting and tax law;
+(c) payments, invoices and receipts, for 7 years;
 
 (d) Reports, call records, support-session records, consent records and the audit log.
 
 18.4 Deleting your account does not by itself cancel a Lesson package, settle any amount due or create a refund. Please contact the Academy about these.
 
 18.5 The Privacy Policy explains in full what is deleted, what is kept, for how long, and how backups are handled.
-
-> **Drafting note (remove before publication):** Keeping children's records after the Parent deletes the account is pending an owner/legal decision (owner decision LD-6). Clause 18.3(b) must follow that decision.
 
 ## 19. Disclaimers and limitation of liability
 
@@ -399,7 +380,7 @@ You activate your account in the app by entering that code and setting your pass
 
 ## 20. Indemnity
 
-20.1 If you breach these Terms or the Code of Conduct, and a third party makes a claim against the Academy because of that breach, you will compensate the Academy for the reasonable losses and costs it suffers as a direct result, to the extent permitted by applicable law.
+20.1 If you breach these Terms, and a third party makes a claim against the Academy because of that breach, you will compensate the Academy for the reasonable losses and costs it suffers as a direct result, to the extent permitted by applicable law.
 
 ## 21. Changes to the Service and to these Terms
 
@@ -411,25 +392,21 @@ You activate your account in the app by entering that code and setting your pass
 
 ## 22. Governing law and disputes
 
-22.1 These Terms are governed by {{GOVERNING_LAW}}.
+22.1 These Terms are governed by the laws of the State of Wyoming, United States.
 
 22.2 If you have a complaint, please contact us first (section 24). We will try to resolve it amicably.
 
-22.3 If a dispute is not resolved amicably, it will be decided by {{DISPUTE_FORUM}}.
+22.3 If a dispute is not resolved amicably, it will be decided by the competent courts of the State of Wyoming, United States.
 
 22.4 If you are a consumer, you keep the protection of the mandatory laws of the country where you live, and you may bring a claim in the courts of that country where its law allows.
 
 22.5 Nothing in these Terms requires a consumer to submit a dispute to arbitration.
 
-> **Drafting note (remove before publication):** {{DISPUTE_FORUM}} must not impose arbitration on consumers. For example, UAE Federal Decree-Law No. 14 of 2023 (e-commerce), Art. 9(2)(b), forbids arbitration clauses in consumer contracts below AED 50,000. Legal counsel to confirm the forum for each target country.
-
 ## 23. Language
 
 23.1 These Terms are published in Arabic and English. Both versions are intended to have the same meaning.
 
-23.2 If the two versions conflict, the Arabic version prevails for consumers who live in an Arabic-speaking country. For everyone else, the version in the language you used to accept these Terms prevails.
-
-> **Drafting note (remove before publication):** Language precedence is item L-3 for legal review (Arabic prevails for consumers in Arabic-speaking markets; local consumer law may require Arabic). The rule for other users in clause 23.2 is the drafter's proposal.
+23.2 If the two versions conflict, the Arabic version prevails.
 
 ## 24. Contact and complaints
 
@@ -437,19 +414,19 @@ You activate your account in the app by entering that code and setting your pass
 
 (a) in the app, through your conversation with the Academy or the feedback option;
 
-(b) by e-mail at {{SUPPORT_EMAIL}}; and
+(b) by e-mail at info@jawwid.com; and
 
-(c) for child-safety concerns, at {{SAFEGUARDING_EMAIL}}.
+(c) for child-safety concerns, at the same address, info@jawwid.com, which is read every day.
 
-24.2 Further help is available at {{SUPPORT_URL}}.
+24.2 Further help is available on our [Help and Support](support-en.md) page.
 
-24.3 We aim to answer complaints about the service or billing within {{COMPLAINT_RESPONSE_DAYS}} days. The Reporting and Complaints Policy explains how complaints are handled.
+24.3 We acknowledge every complaint and aim to answer complaints about the service or billing within 30 days. If you disagree with a decision about your account or your Content, you can appeal under clause 17.4.
 
-24.4 For questions about personal data, see the Privacy Policy or e-mail {{PRIVACY_EMAIL}}.
+24.4 For questions about personal data, see the Privacy Policy or e-mail info@jawwid.com.
 
 ## 25. General
 
-25.1 These Terms, the Code of Conduct and the policies incorporated in clause 1.3 are the whole agreement between you and the Academy about the Service.
+25.1 These Terms and the Child Safety and Parental Responsibility Policy are the whole agreement between you and the Academy about the Service.
 
 25.2 If any part of these Terms is found invalid, the rest remains in force.
 

@@ -3,37 +3,34 @@ document_key: privacy_policy
 title: "Privacy Policy"
 language: en
 counterpart: privacy-policy-ar.md
-version: "{{VERSION}}"
-draft_revision: "0.1 (2026-11-06)"
-effective_date: "{{EFFECTIVE_DATE}}"
-status: "DRAFT for qualified legal review. Not published and not in force."
+version: "1.0"
+effective_date: "2026-11-17"
+status: "Published"
 ---
 
 # Privacy Policy
 
-**Version** {{VERSION}} · **Effective** {{EFFECTIVE_DATE}} · **Language:** English · [العربية](privacy-policy-ar.md)
+**Version** 1.0 · **Effective** 2026-11-17 · **Language:** English · [العربية](privacy-policy-ar.md)
 
 This Privacy Policy explains what personal data Jawwid Academy collects, why, who receives it, where it is kept, how long it is kept, and what rights you have. It is a notice: you are not asked to accept it as a contract. It is always available in the app, in the teacher web portal and on the account deletion page.
 
 ## 1. Who we are
 
-1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by {{ENTITY_NAME}}, registered in {{ENTITY_COUNTRY}}, with its address at {{ENTITY_ADDRESS}}.
+1.1 Jawwid Academy ("Jawwid", "the Academy", "we", "us") is operated by Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089).
 
-1.2 {{ENTITY_NAME}} is the **controller** of the personal data described in this Policy. That means it decides why and how the data is used and is responsible for it.
+1.2 Jawwid LLC is the **controller** of the personal data described in this Policy. That means it decides why and how the data is used and is responsible for it.
 
 1.3 Our teachers and staff use personal data only on the Academy's behalf and under its rules.
 
-1.4 We also use **service providers** (section 11). They handle data on our instructions to host the Service, deliver calls and notifications, take card payments, and report technical faults. We require our service providers, by contract, to protect personal data and use it only to provide their service to us [TO CONFIRM — contracts under review]. This does not apply where a provider has its own legal duties. For example, our card-payment provider has its own duties to prevent fraud and to follow card-network rules (section 11.3).
+1.4 We also use **service providers** (section 11). They handle data on our instructions to host the Service, deliver calls, notifications and e-mails, and report technical faults. Some providers also have their own legal duties for the data they hold, which they meet under their own privacy notices (section 10.7).
 
-1.5 To contact us about privacy, write to {{PRIVACY_EMAIL}}. Our data protection officer can be reached at {{DPO_CONTACT}}.
-
-> **Drafting note (remove before publication):** The legal entity, its country, its address and the privacy contacts are owner decision LD-1. Whether a data protection officer is required, and in which countries, is for [legal review]. Delete clause 1.5's second sentence if none is appointed.
+1.5 To contact us about privacy, write to info@jawwid.com.
 
 ## 2. Who this policy covers
 
 2.1 This Policy covers personal data about:
 
-(a) **Parents**: parents and legal guardians who hold a family account;
+(a) **Parents**: parents and legal guardians, aged 18 or over, who hold a family account;
 
 (b) **Children**: the learners a parent enrols with the Academy (Students). A child has no account of their own and uses the Service on the parent's device, under the parent's supervision;
 
@@ -47,11 +44,9 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 2.2 The **Service** means the Jawwid apps for Android and iOS, the teacher web portal, the Admin Web used by our staff, and the lessons we provide through them.
 
-2.3 Records held by the Academy's separate enrolment and subscription systems are described in their own notice [TO CONFIRM]. Some information reaches the Service from those systems when a family enrols (section 4.2).
+2.3 Some information reaches the Service from the Academy's separate enrolment and subscription systems when a family enrols (section 4.2.4).
 
-2.4 This Policy does not cover services that other companies run under their own name, such as the payment page of our card-payment provider. Their own privacy notices apply to what you give them directly.
-
-> **Drafting note (remove before publication):** Whether this Policy also covers the jawwid.com website is [TO CONFIRM]. The target audience and the minimum age of an account holder ({{MIN_ACCOUNT_HOLDER_AGE}}, proposed 18) are owner decision LD-5.
+2.4 This Policy does not cover services that other companies run under their own name, such as WhatsApp. Their own privacy notices apply to what you give them directly.
 
 ## 3. Summary
 
@@ -62,11 +57,11 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 > - **No advertising, no analytics, no tracking.** We do not use advertising identifiers, GPS or device location, or cookies. We never sell personal data (sections 4.15 and 11.6).
 > - **Teachers never see your contact details, location or payments.** Teachers and parents talk only in groups where academy staff are present.
 > - **Your country and region** are typed by you, used for three stated purposes, and shared with no third party (section 4.3).
-> - **Card details** are entered on our payment provider's page. We never see your card number. We do not send your child's name to the provider (section 4.11).
+> - **No card payments in the app.** Lesson packages are paid by bank transfer, or in cash where the Academy offers it, and recorded by the Academy. No payment provider receives your data or your child's name (section 4.11).
 > - **Staff support sessions** let an authorised staff member see the app as you see it, for at most 60 minutes, with a written reason and a permanent log. You are not notified today (section 9).
 > - **Deleting your account** is immediate (for a teacher with work still open, within 30 days of the request: section 10.4.1). Some records are kept, for example the messages you sent (shown as "Deleted user"), your children's records, and financial records (section 10).
 > - **Your data is hosted in Frankfurt, Germany.** Some service providers are in other countries, including the United States (section 11).
-> - **You have rights** to access, correct and delete your data and to complain. Write to {{PRIVACY_EMAIL}} (section 13).
+> - **You have rights** to access, correct and delete your data and to complain. Write to info@jawwid.com (section 13).
 
 ## 4. Information we collect
 
@@ -78,7 +73,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 4.1.3 **How the activation code reaches you today.** The code is not yet sent automatically. The supervisor responsible for your family reads the code in our staff tools and sends it to you over WhatsApp. This means your phone number and the code pass through WhatsApp (section 11). A code stays valid until it is used or replaced by a new one. We limit how many codes can be requested and how many wrong codes can be entered.
 
-4.1.4 **Account recovery and password reset.** One-time codes for recovery and password reset are sent to your e-mail address through our e-mail delivery provider. For parents, they may also be sent automatically to your phone number through WhatsApp, where that option is turned on [TO CONFIRM].
+4.1.4 **Account recovery and password reset.** One-time codes for recovery and password reset are sent to your e-mail address through our e-mail delivery provider. For parents, they may also be sent automatically to your phone number through WhatsApp, where that option is turned on.
 
 4.1.5 To slow down abuse, we keep a hash (a one-way code) of a sign-in name that fails to activate, for 7 days.
 
@@ -88,9 +83,9 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 4.2.2 **Contact details held by staff** (phone, e-mail and region), with an internal staff note. The Academy records them when you enrol, and our staff may update them later. Only authorised staff can see them, within their department and the families they serve. Teachers never can.
 
-4.2.3 **Family contact keys:** a keyed hash of each e-mail address and phone number in the family. We use it to match a new enrolment to a family that already exists, without comparing the readable details.
+4.2.3 **Contact-matching keys:** a keyed hash of each e-mail address and phone number in the family. We use it to match a new enrolment to a family that already exists, without comparing the readable details.
 
-4.2.4 **Information from the Academy's enrolment systems:** when a family enrols or a subscription starts, the Academy's separate enrolment and subscription systems send the Service the details needed to set up the family and its lessons [TO CONFIRM].
+4.2.4 **Information from the Academy's enrolment systems:** when a family enrols or a subscription starts, the Academy's separate enrolment and subscription systems send the Service the details needed to set up the family and its lessons.
 
 4.2.5 **Trial requests:** if you ask for a trial lesson, we record your name, e-mail address and phone number; each child's name, level and a note; and your country.
 
@@ -110,7 +105,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 (c) to read and show phone numbers in the right national format.
 
-4.3.4 **Who can see it.** The Super Admin; Operations staff, for the families they serve; and the Sales team. **Teachers never see it, and other parents never see it** [TO CONFIRM].
+4.3.4 **Who can see it.** The Super Admin; Operations staff, for the families they serve; and the Sales team. **Teachers never see it, and other parents never see it**.
 
 4.3.5 **It is not shared with any third party.**
 
@@ -180,7 +175,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 ### 4.10 Reports, blocks and feedback
 
-4.10.1 **Reports:** who reported, who or what was reported, the reason, any note, as evidence a snapshot of the reported message's text and a reference to its attachments, and how the report was resolved. Reports are handled as described in the Reporting and Complaints Policy.
+4.10.1 **Reports:** who reported, who or what was reported, the reason, any note, as evidence a snapshot of the reported message's text and a reference to its attachments, and how the report was resolved. Reports are handled as described in the Terms of Use (section 12).
 
 4.10.2 **Blocks:** who blocked whom and when. Each block is notified to the responsible manager.
 
@@ -190,11 +185,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 4.11.1 **What we keep:** payment requests (including the child's name, the payer's name and the amounts); payments, instalments, refunds, invoices and receipts; and receipts you upload for a bank transfer. Payments may also be made in cash.
 
-4.11.2 **Card payments.** Card payments are made on the hosted payment page of our card-payment provider, Stripe. **You enter your card details, e-mail address and billing details directly with Stripe. We never see or store your card number.** We keep only the reference numbers Stripe gives us for the payment, the payment intent and any refund.
-
-4.11.3 **What Stripe receives from us:** the amount; the currency; a line-item name, which is the name the Academy gave the payment request (we do not add your child's name); a description of the lesson period (for example "live one-to-one"); our internal reference numbers for the payment request; the page language; and, once per family, a customer record that holds only our internal reference numbers for your family and for the Academy (no name or e-mail address).
-
-> **Drafting note (remove before publication):** LD-8 is done in the code (PR #580): the Stripe line item is the payment request's label only (`apps/api/src/billing/checkout.service.ts`, `checkoutProductName`, lines 120-131 as of the launch candidate), so clause 4.11.3, the summary, clause 6.7 and the section 11 table no longer say the child's name is sent. The family's Stripe customer is created with metadata only, the family id and the organization id (`apps/api/src/billing/stripe.gateway.ts`, `createCustomer`; `checkout.service.ts`, `customerFor`), as clause 4.11.3 and the section 11 table say. The label is typed by staff: staff must not type a child's name into it. If #580 is not in the published build, restore the earlier wording.
+4.11.2 **No card payments today.** The Service does not take card payments at present, so no card-payment provider receives your data. If we offer card payments later, they will be made on the hosted page of a card-payment provider, we will never see or store your card number, and we will update this Policy before card payments start (section 17.3).
 
 ### 4.12 Device and push information
 
@@ -226,7 +217,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 (b) any consent to show a child's certificate in an academy announcement; and
 
-(c) the acceptance of the Terms of Use, the Teacher Terms or the Staff Terms, and of the Code of Conduct, with the version, the time on our server, the app or portal used and its language [TO CONFIRM].
+(c) where the app asks for it, the acceptance of the terms that apply to the account, with the version, the time on our server, the app or portal used and its language.
 
 4.14.2 These records are evidence of what was agreed or acknowledged and when. They are kept after an account is deleted (section 10.3).
 
@@ -263,7 +254,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 | Academy announcements (Stories) to the right audience | Country and region (4.3); views and button taps (section 8) | (a); (d) |
 | Showing phone numbers in the right national format | Country and region (4.3); contact details (4.2.2) | (a); (d) |
 | Payments, invoices, receipts, refunds and accounting | Payments (4.11) | (a); (c) |
-| Safety and moderation: reports, blocks, child safety, enforcing the Code of Conduct | Reports and blocks (4.10); messages (4.9); call records (4.8.4) | (c); (d); (e) for emergencies |
+| Safety and moderation: reports, blocks, child safety, enforcing the Terms of Use | Reports and blocks (4.10); messages (4.9); call records (4.8.4) | (c); (d); (e) for emergencies |
 | Helping you through a staff support session | What the app shows you (section 9) | (a); (d) |
 | Employing, paying and supervising teachers | Teacher information (4.5) | (a); (c) |
 | Running the Academy; accountability of staff actions | Staff information (4.6); audit log | (c); (d) |
@@ -287,8 +278,6 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 6.4 **Parental consent.** The Academy enrols each child at the parent's request. Parents do not add children in the app themselves. By asking us to enrol a child, the parent, as the child's guardian, consents on the child's behalf to the child taking part in lessons and to the Academy processing the child's information as described in this Policy and in the Child Safety and Parental Responsibility Policy.
 
-> **Drafting note (remove before publication):** Today no separate consent for children's data is recorded. The lesson-audio acknowledgement is a notice, and the terms acceptance is a contract; neither is a consent to process the child's data. Several target-market laws expect a guardian's explicit consent. A separate, recorded and withdrawable consent is recommended (owner decision LD-13; wording [legal review]). Update clauses 6.4 and 6.10 when it is built.
-
 6.5 **Who can see a child's information:**
 
 (a) the parent and the other adults in the same family account;
@@ -299,11 +288,11 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 
 (d) the Super Admin.
 
-The child's date of birth or stated age is seen by the parent and authorised staff [TO CONFIRM].
+The child's date of birth or stated age is seen by the parent and authorised staff.
 
 6.6 **Who cannot see it.** Other parents and other families never see a child's information, except a certificate Story that the Parent agreed to publish (section 4.7.3). Teachers never see the parent's phone number, e-mail address, location or the family's payments; they see only their own students' student profiles.
 
-6.7 **The child's name at the payment provider.** We do not send the child's name to our card-payment provider when a lesson package is paid by card (section 4.11.3).
+6.7 **No payment provider.** No card payments are taken in the Service today, so no payment provider receives a child's name or any other information about a child (section 4.11.2).
 
 6.8 **How we protect it.** The safeguards in section 12 apply, together with these:
 
@@ -329,7 +318,7 @@ The child's date of birth or stated age is seen by the parent and authorised sta
 
 6.10 **Parents' rights over the child's data.** The parent can exercise, for the child, every right described in section 13: access, correction, deletion (subject to section 10) and withdrawal of consent.
 
-(a) **To withdraw consent,** ask the Academy to withdraw the child (write to {{SUPPORT_EMAIL}} or {{PRIVACY_EMAIL}}, or use your Family group), or delete your account. There is no button in the app to remove a single child.
+(a) **To withdraw consent,** ask the Academy to withdraw the child (write to info@jawwid.com, or use your Family group), or delete your account. There is no button in the app to remove a single child.
 
 (b) **What withdrawal means.** Without the child's information we cannot teach the child.
 
@@ -351,7 +340,7 @@ The child's date of birth or stated age is seen by the parent and authorised sta
 
 (c) **Legal obligation.** Where a law requires us to process or keep data, for example accounting, tax and child-protection duties, or answering a lawful request from an authority.
 
-(d) **Legitimate interests.** Where the applicable law recognises this basis: our interest in keeping the Service secure, preventing abuse, keeping children safe, fixing faults, keeping evidence, and running the Academy, balanced against your rights. Some laws, for example the law of Oman, do not recognise this basis [legal review]. For people protected by those laws, we rely on another basis that the law does recognise, such as the contract or consent.
+(d) **Legitimate interests.** Where the applicable law recognises this basis: our interest in keeping the Service secure, preventing abuse, keeping children safe, fixing faults, keeping evidence, and running the Academy, balanced against your rights. Some laws, for example the law of Oman, do not recognise this basis. For people protected by those laws, we rely on another basis that the law does recognise, such as the contract or consent.
 
 (e) **Vital interests.** To protect someone's life or physical safety, for example in a child-safety emergency.
 
@@ -363,7 +352,7 @@ The child's date of birth or stated age is seen by the parent and authorised sta
 
 8.3 We do not send marketing messages today, and we do not share your data with others for their marketing.
 
-8.4 If we introduce marketing messages in the future, we will send them only to people who have opted in, and you will be able to opt out at any time [legal review].
+8.4 If we introduce marketing messages in the future, we will send them only to people who have opted in, and you will be able to opt out at any time.
 
 ## 9. Staff support sessions
 
@@ -429,21 +418,19 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 (e) The Super Admin can see every session; other staff members see only their own.
 
-> **Drafting note (remove before publication):** Today the user is not told about a support session, and no second person approves it. Whether to notify the user (for example in the Notification Center after each session), whether to add a second approval, and whether the Super Admin reviews the log regularly are owner decision LD-3. Section 9 states the current behaviour and must be updated if it changes. [legal review]
-
 ## 10. Retention and account deletion
 
 ### 10.1 How to delete your account
 
 10.1.1 **In the app:** Settings → Delete account. You confirm with your password.
 
-10.1.2 **On the web:** on our account deletion page at {{ACCOUNT_DELETION_URL}}, with your sign-in name and password. You do not need to install the app.
+10.1.2 **On the web:** on our account deletion page at https://api.chat.jawwid.com/api/v1/account-deletion?lang=en, with your sign-in name and password. You do not need to install the app.
 
 10.1.3 Parents and teachers can delete their own accounts. A staff account is closed by the Super Admin or the staff member's department manager (section 10.5).
 
 10.1.4 Deletion is final and cannot be undone. Before you confirm, the app tells you what will be deleted and what will be kept.
 
-10.1.5 If you cannot sign in, write to {{PRIVACY_EMAIL}}. We will verify your identity before acting (section 13.4).
+10.1.5 If you cannot sign in, write to info@jawwid.com. We will verify your identity before acting (section 13.4).
 
 ### 10.2 What is deleted immediately
 
@@ -457,7 +444,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 (d) your location prompt;
 
-(e) your own family contact keys; and
+(e) your own contact-matching keys; and
 
 (f) any block you made, and any block made against you.
 
@@ -476,25 +463,23 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 | Record | Why it is kept |
 |---|---|
 | **Messages and attachments you sent**, shown as from "Deleted user" | They are part of conversations that other people (the family, teachers and staff) still rely on, and they may be needed to deal with reports and safety concerns |
-| **Your children's records**: profiles, lessons, lesson reports and rewards | They are kept as the Academy's records, including when the last parent of the family deletes the account (see the drafting note below) |
-| **Payments, invoices, receipts and payment requests**, including the payer's and the child's names | Accounting and tax duties, refunds and disputes. Stated period: 7 years [legal review] |
-| **The audit log** | Accountability for staff actions and security. Stated period: 7 years [legal review] |
+| **Your children's records**: profiles, lessons, lesson reports and rewards | They are kept as the Academy's records, including when the last parent of the family deletes the account |
+| **Payments, invoices, receipts and payment requests**, including the payer's and the child's names | Accounting and tax duties, refunds and disputes. Kept for 7 years (not yet deleted automatically) |
+| **The audit log** | Accountability for staff actions and security. Kept for 7 years (not yet deleted automatically) |
 | **Consent and acceptance records** (section 4.14) | Evidence of what was accepted, acknowledged or consented to, and when |
 | **Reports** you made or that were made about you | Safety, moderation and possible legal proceedings. Report records are not deleted. If the person who made a report deletes their account, the report is kept but no longer linked to that person |
 | **Your family's country and region** on the family record | The country and region recorded for your family stay on the family record, which the Academy keeps with your children's records (row above). The location prompt and the region in the contact details held by staff are deleted (section 10.2) |
 | **Call records** | Lesson attendance and safeguarding |
 | **The support-session log** (section 9.9) | Accountability for staff access |
 | **The whiteboard access log** | Accountability and safeguarding |
-| **Ended sign-in session records** (keyed hash of the IP address, user agent and times) | Security [TO CONFIRM — period] |
-| **Trial-request details** (section 4.2.5) | **Today, deleting an account does not remove them** [TO CONFIRM]. You can ask us to delete them (section 13) |
-
-> **Drafting note (remove before publication):** Keeping children's records after the last parent leaves is owner decision LD-6. The engineering proposal is to keep only what a retention period requires (lesson and payment history), delete the photo and "about" text, and anonymise the child's name at the end of that period. The "7 years" for financial records and the audit log is stated in the app but is not yet enforced by an automatic deletion; the period and its basis in each country are for [legal review]. All other periods are owner decision LD-7.
+| **Ended sign-in session records** (keyed hash of the IP address, user agent and times) | Security. Not deleted automatically today |
+| **Trial-request details** (section 4.2.5) | **Today, deleting an account does not remove them.** You can ask us to delete them (section 13) |
 
 ### 10.4 Teachers
 
-10.4.1 A teacher cannot delete their account while any of these is still open: a future lesson, an assigned student, or this month's or last month's payroll. The teacher is asked to contact the Academy so that their students can be moved and payroll completed.
+10.4.1 A teacher who still has a future lesson, an assigned student, or this month's or last month's payroll open can request deletion in the app (Settings → Delete account) or on the web page in section 10.1.2. The app shows the date by which the account will be deleted. The Academy then moves the teacher's students and completes their payroll, and the account is deleted within 30 days of the request at the latest, even if something is still open. Until then the teacher can cancel the request in the app. If this month's or last month's payroll is still open when the account is deleted, we keep the teacher's bank details (payout account) until neither month has any of their lessons on record or any change to their pay. In practice, that is the end of the month after the last month with such a lesson or pay change. We then delete the bank details automatically. We do not wait for a record that the wages were paid, because our systems do not record that; our staff are given a task to pay any wages owed before then. A teacher with nothing open is deleted at once.
 
-10.4.2 When a teacher's account is deleted, we delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account, and the Teachers department manager is told.
+10.4.2 When a teacher's account is deleted, we delete the teacher's phone number, e-mail address, professional profile, certificate files and payout account (the payout account at the time set out in section 10.4.1), and the Teachers department manager is told.
 
 10.4.3 Pay and supervision records are kept (section 10.3). The whiteboards of a teacher who has left are deleted 12 months after the teacher leaves.
 
@@ -508,7 +493,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 10.6.2 Most backups are kept for 30 days. A weekly off-site copy is kept for up to 56 days. Previous versions of stored files are kept for 30 days.
 
-10.6.3 Data you delete may remain in encrypted backups for up to 56 days. It may also remain in any additional copy the Academy keeps under its backup procedure until that copy is destroyed [TO CONFIRM].
+10.6.3 Data you delete may remain in encrypted backups for up to 56 days.
 
 10.6.4 We use backups only to restore the Service after a failure.
 
@@ -516,15 +501,15 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 10.7.1 Deleting your account in the Service does not automatically delete data held by our service providers. This is what happens at each of them:
 
-(a) **Stripe** keeps its own records of card payments under its own legal duties and its own privacy notice. We do not create a customer record for you at Stripe.
+(a) **Card payments:** none are taken in the Service today, so no payment provider holds data about you from us.
 
-(b) **Sentry's** error and crash reports contain only a one-way hash of your account number. They are deleted under Sentry's own retention period [TO CONFIRM].
+(b) **Sentry's** error and crash reports contain only a one-way hash of your account number. They are deleted under Sentry's own retention period.
 
-(c) **Our audio provider** stores no audio. It keeps call-room records and logs for its own retention period [TO CONFIRM].
+(c) **Our audio provider** stores no audio. It keeps call-room records and logs for its own retention period.
 
 (d) **Push tokens** are deleted from our systems, so we no longer send notifications to them. Apple and Google discard unused tokens under their own rules.
 
-(e) **Our e-mail delivery provider and WhatsApp** keep delivery records under their own terms [TO CONFIRM].
+(e) **Our e-mail delivery provider and WhatsApp** keep delivery records under their own terms.
 
 10.7.2 You can ask us for help with a request to any of them (section 13).
 
@@ -533,40 +518,38 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 | Category | Period | Basis and notes |
 |---|---|---|
 | Account, profile and contact details | Until the account is deleted | Deleted or replaced at deletion (section 10.2) |
-| Parent location (country and region) | Until the account is deleted; the country and region on the family record are then kept as in section 10.3 | Period to be set [TO CONFIRM]. Location given for a trial: 90 days after a trial with no subscription |
+| Parent location (country and region) | Until the account is deleted; the country and region on the family record are then kept as in section 10.3 | Not deleted automatically today. Location given for a trial: 90 days after a trial with no subscription |
 | Sign-up failure records (hash) | 7 days | Abuse prevention |
 | Push notification delivery records | 90 days | Then deleted automatically |
 | Notification Center entries | 365 days | Then deleted automatically; deleted earlier if the account is deleted |
-| Story media | 72 hours after the Story expires | Story records and views: until the account is deleted, then as in section 10.3. Period to be set [TO CONFIRM] |
+| Story media | 72 hours after the Story expires | Story records and views: until the account is deleted, then as in section 10.3. Not deleted automatically today |
 | Whiteboards in the trash | 30 days | Then deleted automatically |
 | Whiteboards of a teacher who has left | 12 months | Then deleted automatically |
-| Whiteboard access log | Not deleted today | Kept as in section 10.3. Period to be set [TO CONFIRM] |
-| Children's records | Kept after the parent's account is deleted | Section 10.3. Period to be set [TO CONFIRM] |
-| Messages, attachments and edits | Kept after the author's account is deleted | Section 10.3. Period to be set [TO CONFIRM] |
-| Lesson records, reports and rewards | Until the account is deleted, then as in section 10.3 | Period to be set [TO CONFIRM] |
-| Call records | Until the account is deleted, then as in section 10.3 | Period to be set [TO CONFIRM] |
-| Reports | Kept after deletion (section 10.3) | Period to be set [TO CONFIRM]; subject to any legal hold |
+| Whiteboard access log | Not deleted today | Kept as in section 10.3 |
+| Children's records | Kept after the parent's account is deleted | Section 10.3. Not deleted automatically today |
+| Messages, attachments and edits | Kept after the author's account is deleted | Section 10.3. Not deleted automatically today |
+| Lesson records, reports and rewards | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
+| Call records | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
+| Reports | Kept after deletion (section 10.3) | Not deleted automatically today; subject to any legal hold |
 | Blocks | Until either person's account is deleted | Deleted with the account |
-| Feedback to the administration | Until the account is deleted, then as in section 10.3 | Period to be set [TO CONFIRM] |
-| Payments, invoices, receipts | 7 years (stated) | Accounting and tax [legal review]; not yet deleted automatically |
-| Audit log and support-session log | 7 years (stated, audit log) | Accountability [legal review]; not yet deleted automatically |
-| Teacher pay and supervision records | Until the account is deleted, then as in section 10.3 | Period to be set [TO CONFIRM] |
-| Consent and acceptance records | Kept after deletion | Evidence. Period to be set [TO CONFIRM] |
-| Sign-in session records | Until the account is deleted, then as in section 10.3 | Period to be set [TO CONFIRM] |
-| Trial-request details | Until the account is deleted, then as in section 10.3 | Not removed by account deletion today. Period to be set [TO CONFIRM] |
-| Time zone | Until the account is deleted, then as in section 10.3 | Period to be set [TO CONFIRM] |
-| Server logs | Period to be set [TO CONFIRM] | Contain no IP addresses, names or message contents |
-| Error and crash reports (Sentry) | Sentry's retention period [TO CONFIRM] | Hashed account number only |
+| Feedback to the administration | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
+| Payments, invoices, receipts | 7 years | Accounting and tax. Not yet deleted automatically |
+| Audit log and support-session log | 7 years (audit log); support-session log not deleted automatically today | Accountability. Not yet deleted automatically |
+| Teacher pay and supervision records | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
+| Consent and acceptance records | Kept after deletion | Evidence. Not deleted automatically today |
+| Sign-in session records | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
+| Trial-request details | Until you ask us to delete them (section 13) | Not removed by account deletion today. Not deleted automatically today, except the location given for a trial (see Parent location above) |
+| Time zone | Until the account is deleted, then as in section 10.3 | Not deleted automatically today |
+| Server logs | Kept by our hosting provider under its log-retention rules | Contain no IP addresses, names or message contents |
+| Error and crash reports (Sentry) | Sentry's retention period | Hashed account number only |
 | Previous versions of stored files | 30 days | Then deleted automatically |
-| Encrypted backups | Up to 56 days | Plus any additional copy kept under our backup procedure until destroyed [TO CONFIRM] |
+| Encrypted backups | Up to 56 days | Used only to restore the Service after a failure |
 
 ### 10.9 "Delete for everyone"
 
-10.9.1 When you delete a message "for everyone", it is hidden from everyone in the conversation. Its text and attachments stay in our records [TO CONFIRM]. We keep them so that reports and safety concerns about the message can still be handled.
+10.9.1 When you delete a message "for everyone", it is hidden from everyone in the conversation. Its text and attachments stay in our records. We keep them so that reports and safety concerns about the message can still be handled.
 
 10.9.2 "Delete for me" hides the message only for you.
-
-> **Drafting note (remove before publication):** How long the text and attachments of a message deleted for everyone are kept is owner decision LD-7.
 
 ## 11. Sharing, service providers and international transfers
 
@@ -577,22 +560,19 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 | Provider | Role | Data it receives | Purpose | Location |
 |---|---|---|---|---|
 | DigitalOcean (application hosting, file storage and database) | Service provider | All data held by the Service | Hosting and storage | Frankfurt, Germany (EU) |
-| Supabase (database hosting, interim) | Service provider | The database | Database hosting | Frankfurt, Germany (EU) [TO CONFIRM whether in use at publication] |
-| GitHub | Service provider | Encrypted database backups (30 days) | Backups | United States [TO CONFIRM] |
-| LiveKit Cloud | Service provider | Live audio streams; internal account number; display name in the call; room name; join and leave times. No recording | Audio calls and live lessons | [TO CONFIRM] |
+| Supabase (database hosting, interim) | Service provider | The database | Database hosting | Frankfurt, Germany (EU) |
+| GitHub | Service provider | Encrypted database backups (30 days) | Backups | United States |
+| LiveKit Cloud | Service provider | Live audio streams; internal account number; display name in the call; room name; join and leave times. No recording | Audio calls and live lessons | May be outside your country, including the United States |
 | Apple Push Notification service | Service provider | Device token; notification title and text | Notifications and call rings on iPhone and iPad | United States / global |
 | Google Firebase Cloud Messaging | Service provider | Device token; notification title, text and data | Notifications and call rings on Android | Global |
-| Stripe | Service provider for the payment; independent controller for its own legal duties [legal review] | Amount; currency; line item with the name the Academy gave the payment request (not the child's name); lesson period; our reference numbers; page language; a customer record per family holding only our reference numbers for the family and the Academy (no name). The card details, e-mail and billing details you enter on its page | Card payments and refunds | United States / Ireland [TO CONFIRM] |
-| Sentry | Service provider | Error and crash details; hashed account number; device model and operating system; names of the screens visited before a crash. No names, e-mails, IP addresses or message contents | Fixing errors and crashes | [TO CONFIRM] |
-| Our speech provider | Service provider | Only the text of our lessons. No personal data | Lesson pronunciation audio (section 14) | [TO CONFIRM] |
-| Our e-mail delivery provider | Service provider | E-mail address and one-time code | Account recovery and password reset | [TO CONFIRM] |
-| WhatsApp (Meta) | Communication channel | Parent's phone number and a one-time code: sent by your family's supervisor for account activation (section 4.1.3) and, where turned on, automatically for account recovery [TO CONFIRM] | Account activation and recovery | [TO CONFIRM] |
+| Sentry | Service provider | Error and crash details; hashed account number; device model and operating system; names of the screens visited before a crash. No names, e-mails, IP addresses or message contents | Fixing errors and crashes | May be outside your country, including the United States |
+| Our speech provider | Service provider | Only the text of our lessons. No personal data | Lesson pronunciation audio (section 14) | May be outside your country, including the United States |
+| Our e-mail delivery provider | Service provider | E-mail address and one-time code | Account recovery and password reset | May be outside your country, including the United States |
+| WhatsApp (Meta) | Communication channel | Parent's phone number and a one-time code: sent by your family's supervisor for account activation (section 4.1.3) and, where turned on, automatically for account recovery | Account activation and recovery | May be outside your country, including the United States |
 
-11.3 **Stripe's own duties.** Stripe acts on our instructions to take payments. For the card details you give it directly, and for its own legal, fraud-prevention and card-network duties, Stripe acts under its own privacy notice [legal review].
+11.3 **No payment provider.** We do not take card payments in the Service today, so no payment provider receives personal data from us. If this changes, we will update this Policy first (section 17.3).
 
-11.4 **International transfers.** Some providers are outside the country where you live, and some are outside the European Union, including in the United States. Where the applicable law sets conditions on sending personal data abroad, we rely on the safeguards required by the applicable law, such as contractual clauses approved by the competent authority [legal review]. We require our service providers, by contract, to protect personal data and use it only to provide their service to us [TO CONFIRM — contracts under review]. You can ask us for more information about these safeguards (section 18).
-
-> **Drafting note (remove before publication):** The register of service providers (processors) and the data processing agreements with them are pending (item L-4). Clauses 1.4 and 11.4 must not state that contracts or transfer safeguards are in place until they are confirmed. The standard contractual clauses issued by the Saudi Data and Artificial Intelligence Authority (SDAIA) are one option where Saudi law requires them [legal review].
+11.4 **International transfers.** Some providers are outside the country where you live, and some are outside the European Union, including in the United States. Where the applicable law sets conditions on sending personal data abroad, we follow them. You can ask us for more information about these transfers (section 18).
 
 11.5 **Inside the Academy.** Within the Academy, personal data is available only to teachers and staff who need it for their role (sections 4 and 6).
 
@@ -660,19 +640,17 @@ Child-safety concerns are handled as described in the Child Safety and Parental 
 
 (a) You can correct much of your profile and delete your account yourself in the app (section 10.1).
 
-(b) For every other request, write to {{PRIVACY_EMAIL}}.
+(b) For every other request, write to info@jawwid.com.
 
 13.3 **Copies of your data.** There is no self-service download of your data today. We answer access and portability requests by hand.
 
-> **Drafting note (remove before publication):** The process and format for answering data-access and export requests is owner decision LD-9.
-
 13.4 **Verifying your identity.** Before we act on a request, we check that it comes from you or from someone allowed to act for you. We may ask you to confirm the request from the e-mail address on your account or in the app.
 
-13.5 **When we answer.** We answer within the period the applicable law requires, and in any case within 30 days [TO CONFIRM]. If the law allows us more time for a complex request, we will tell you why.
+13.5 **When we answer.** We answer within the period the applicable law requires, and in any case within 30 days. If the law allows us more time for a complex request, we will tell you why.
 
 13.6 **Parents act for their children.** A parent exercises these rights for the child (section 6.10).
 
-13.7 **No charge.** We do not charge for a request, unless the law allows a fee for requests that are clearly unfounded or excessive [TO CONFIRM].
+13.7 **No charge.** We do not charge for a request, unless the law allows a fee for requests that are clearly unfounded or excessive.
 
 13.8 **When we cannot agree.** If we cannot do what you ask, we will explain why, for example because the law requires us to keep a record.
 
@@ -684,21 +662,19 @@ Child-safety concerns are handled as described in the Child Safety and Parental 
 
 15.1 We serve families in several countries. The data protection law of the country where you live may apply to us because we serve you, even though we are not established there. This section gives information specific to each country. It does not say that any registration, permit or permission has been obtained.
 
-15.2 **United Arab Emirates.** The main law is Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data. Religious belief is sensitive data under that law. Its executive regulations have not yet been issued, so some details (such as response periods and transfer rules) are not yet set. The UAE also has Federal Decree-Law No. 26 of 2025 on Child Digital Safety. Regulator and complaint route: [TO CONFIRM].
+15.2 **United Arab Emirates.** The main law is Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data. Religious belief is sensitive data under that law. Its executive regulations have not yet been issued, so some details (such as response periods and transfer rules) are not yet set. The UAE also has Federal Decree-Law No. 26 of 2025 on Child Digital Safety.
 
-15.3 **Kingdom of Saudi Arabia.** The main law is the Personal Data Protection Law (Royal Decree M/19 of 1443H, as amended) and its implementing regulations. The regulator is the Saudi Data and Artificial Intelligence Authority (SDAIA). Religious belief is sensitive data. Processing a minor's data needs the guardian's consent. Complaints: [TO CONFIRM].
+15.3 **Kingdom of Saudi Arabia.** The main law is the Personal Data Protection Law (Royal Decree M/19 of 1443H, as amended) and its implementing regulations. The regulator is the Saudi Data and Artificial Intelligence Authority (SDAIA). Religious belief is sensitive data. Processing a minor's data needs the guardian's consent.
 
-15.4 **State of Kuwait.** Kuwait has no general data protection law. Law No. 20 of 2014 on Electronic Transactions contains data protection provisions. The Communication and Information Technology Regulatory Authority (CITRA) has issued a data privacy regulation; whether it applies to us is for [legal review]. Complaints: [TO CONFIRM].
+15.4 **State of Kuwait.** Kuwait has no general data protection law. Law No. 20 of 2014 on Electronic Transactions contains data protection provisions. The Communication and Information Technology Regulatory Authority (CITRA) has issued a data privacy regulation; we follow it where it applies to us.
 
-15.5 **State of Qatar.** The main law is Law No. 13 of 2016 on the Protection of Personal Data Privacy. It sets special rules for data of a special nature, including religious data, and for websites directed at children, including the parent's right to a copy of the child's data, to its deletion and to stop its processing. Regulator: the National Cyber Security Agency [TO CONFIRM]. Complaints: [TO CONFIRM].
+15.5 **State of Qatar.** The main law is Law No. 13 of 2016 on the Protection of Personal Data Privacy. It sets special rules for data of a special nature, including religious data, and for websites directed at children, including the parent's right to a copy of the child's data, to its deletion and to stop its processing.
 
-15.6 **Kingdom of Bahrain.** The main law is Law No. 30 of 2018 on the Protection of Personal Data. Whether it applies to us is for [legal review]. Regulator: the Personal Data Protection Authority [TO CONFIRM]. Complaints: [TO CONFIRM].
+15.6 **Kingdom of Bahrain.** The main law is Law No. 30 of 2018 on the Protection of Personal Data. We follow it where it applies to us.
 
-15.7 **Sultanate of Oman.** The main law is the Personal Data Protection Law (Royal Decree No. 6/2022, as amended) and its executive regulation. The Ministry of Transport, Communications and Information Technology (MTCIT) supervises it. Religious data and children's data are subject to additional conditions. The law does not recognise legitimate interests as a legal basis (section 7.2(d)). Complaints: [TO CONFIRM].
+15.7 **Sultanate of Oman.** The main law is the Personal Data Protection Law (Royal Decree No. 6/2022, as amended) and its executive regulation. The Ministry of Transport, Communications and Information Technology (MTCIT) supervises it. Religious data and children's data are subject to additional conditions. The law does not recognise legitimate interests as a legal basis (section 7.2(d)).
 
-15.8 **Registrations and permits.** Some of these laws may require a registration, a permit or a permission before sensitive data or children's data is processed, or the appointment of a data protection officer. Details will be given here once confirmed [TO CONFIRM].
-
-> **Drafting note (remove before publication):** Possible filings (Saudi registration on the National Data Governance Platform, an Oman permit for religious data, a Qatar permission for special-nature data, a data protection officer) are owner decision LD-14 and [legal review]. Whether families in the United States, the European Union or the United Kingdom are accepted (which may bring in COPPA or the GDPR) is owner decision LD-15; if they are, add sections for them. Regulator names and complaint routes must be confirmed against official sources before publication. Do not state that any filing has been made until it has.
+15.8 **Registrations and permits.** Some of these laws may require a registration, a permit or a permission before sensitive data or children's data is processed, or the appointment of a data protection officer. We will give details here once any such step has been completed.
 
 ## 16. Cookies and similar technologies
 
@@ -726,20 +702,18 @@ Child-safety concerns are handled as described in the Child Safety and Parental 
 
 | Version | Effective | Summary |
 |---|---|---|
-| {{VERSION}} | {{EFFECTIVE_DATE}} | First published version |
+| 1.0 | 2026-11-17 | First published version |
 
 ## 18. Contact and complaints
 
-18.1 **Privacy questions and requests:** {{PRIVACY_EMAIL}}.
+18.1 **Privacy questions and requests:** info@jawwid.com.
 
-18.2 **Data protection officer:** {{DPO_CONTACT}}.
+18.2 **Child-safety concerns:** info@jawwid.com (read every day), or a child-safety report in the app.
 
-18.3 **Child-safety concerns:** {{SAFEGUARDING_EMAIL}}, or a child-safety report in the app.
+18.3 **General support:** info@jawwid.com, or our [Help and Support](support-en.md) page.
 
-18.4 **General support:** {{SUPPORT_EMAIL}} or {{SUPPORT_URL}}.
+18.4 **Who answers:** Jawwid LLC, a limited liability company formed in the State of Wyoming, United States (Wyoming filing ID 2025-001768089). Write to info@jawwid.com, or to the Academy in the app.
 
-18.5 **By post:** {{ENTITY_NAME}}, {{ENTITY_ADDRESS}}.
+18.5 **Complaints.** If you are unhappy with how we have handled your personal data, please contact us first so that we can try to put it right. You also have the right to complain to the data protection authority of the country where you live (section 15).
 
-18.6 **Complaints.** If you are unhappy with how we have handled your personal data, please contact us first so that we can try to put it right. You also have the right to complain to the data protection authority of the country where you live (section 15).
-
-18.7 **Language.** This document is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails [legal review — LD-17].
+18.6 **Language.** This document is published in Arabic and English with the same meaning. If they conflict, the Arabic version prevails.

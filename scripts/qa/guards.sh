@@ -276,7 +276,22 @@ gate_g31() {
 
 gate_secret_scan() { bash scripts/infra/scan-secrets.sh --history; }
 
-gate_web_env() { bash scripts/infra/check-web-env.sh; }
+gate_web_env() {
+  bash scripts/infra/check-web-env.sh || return 1
+  # LR-04: what the Admin Web image publishes under /legal/. The generator's
+  # tests (both states of the publication switch, each refusal, the real nginx
+  # template and Dockerfile), then the committed tree: while docs/legal/
+  # publication.json has "publish": false, apps/admin-web/legal-web/ holds no
+  # page; once true, every committed page is exactly what its approved source
+  # renders and carries no placeholder or review marker. Both FAIL when python3
+  # is missing -- never a pass for want of a tool.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the legal pages cannot be checked, so web-env FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/legal/test_legal_pages.py || return 1
+  "$PYTHON" -I scripts/legal/legal_pages.py check
+}
 
 gate_env_example() { bash scripts/infra/check-env.sh local --file .env.example; }
 
