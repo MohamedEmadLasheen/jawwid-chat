@@ -1,6 +1,6 @@
 {
-  "_comment": "Generator config for the public legal pages (LR-04, docs/release/legal-pages-hosting.md, Option A). Read by scripts/legal/legal_pages.py. THE SWITCH: 'publish' stays false until the owner's confirmed values are applied and counsel has reviewed the text (docs/legal/apply-confirmed-values.md). While it is false the build is skipped and Admin Web answers 404 at /legal/. Setting it to true does not force anything out: the generator still refuses every page that carries a placeholder, a review marker, a drafting note or a draft status.",
-  "publish": false,
+  "_comment": "LAUNCH SET ONLY (2026-11-16): the five documents the store reviews need (Privacy Policy, Terms of Use, Child Safety Policy, Support, Account deletion). The other drafts in docs/legal/ are postponed and are not served. Generator config for the public legal pages (LR-04, docs/release/legal-pages-hosting.md, Option A). Read by scripts/legal/legal_pages.py. THE SWITCH: 'publish' is true since 2026-11-17 (owner's final instruction: publish the launch set, version 1.0, effective 2026-11-17). It only renders the pages; it does not record a version in chat.legal_document_version or set legal.current.* (the terms gate). While it is false the build is skipped and Admin Web answers 404 at /legal/. Setting it to true does not force anything out: the generator still refuses every page that carries a placeholder, a review marker, a drafting note or a draft status.",
+  "publish": true,
   "base_url": "https://admin.chat.jawwid.com/legal",
   "source_dir": "docs/legal",
   "output_dir": "apps/admin-web/legal-web",
@@ -22,11 +22,6 @@
   "documents": [
     {"source": "privacy-policy", "slug": "privacy", "nav": true, "pd048": true},
     {"source": "terms-of-use", "slug": "terms", "nav": true, "pd048": true, "gate_key": "terms_family"},
-    {"source": "user-conduct-policy", "slug": "code-of-conduct", "nav": true, "gate_key": "code_of_conduct"},
-    {"source": "terms-teachers", "slug": "terms/teachers", "nav": true, "gate_key": "terms_teacher"},
-    {"source": "terms-staff", "slug": "terms/staff", "nav": false, "gate_key": "terms_staff"},
-    {"source": "reporting-and-complaints-policy", "slug": "reporting", "nav": true},
-    {"source": "blocking-and-enforcement-policy", "slug": "enforcement", "nav": true},
     {"source": "child-safety-policy", "slug": "child-safety", "nav": true},
     {"source": "support", "slug": "support", "nav": true},
     {"source": "account-deletion", "slug": "account-deletion", "nav": true}

@@ -65,3 +65,7 @@ npm-debug.log*
 
 # Local database dumps taken by scripts/infra/backup-db.sh
 /backups/
+
+# Python bytecode
+__pycache__/
+*.pyc
