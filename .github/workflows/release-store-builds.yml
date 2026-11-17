@@ -12,8 +12,8 @@
 #     Nothing is sent for App Review and nothing is released.
 # A person releases each build to testers, and later to the public, in Play Console and App Store
 # Connect. No build output is kept as a GitHub artifact, with one exception: android_delivery =
-# first-bundle-artifact (Android only, no Google sign-in) attaches the verified .aab to the run for
-# 1 day, for the one-time manual first upload in Play Console (docs/release/signed-builds-ci.md §3.3a).
+# first-bundle-artifact (Android only, no Google sign-in) attaches the verified .aab, ENCRYPTED to the
+# owner's age public key, to the run for 1 day, for the one-time manual first upload in Play Console (docs/release/signed-builds-ci.md §3.3a).
 #
 # Every job that sees a secret runs in the `store-release` GitHub Environment: the owner is the
 # required reviewer, only `main` may deploy to it, and administrators may not bypass it. Preflight
@@ -69,7 +69,7 @@ on:
         required: true
         type: string
       android_delivery:
-        description: 'Android only. play = Play internal testing draft (normal). first-bundle-artifact = no Google sign-in; the verified .aab is attached to this run for 1 day for the one-time manual first upload in Play Console (docs/release/signed-builds-ci.md §3.3a).'
+        description: 'Android only. play = Play internal testing draft (normal). first-bundle-artifact = no Google sign-in; the verified .aab is attached to this run for 1 day, ENCRYPTED to your age key, for the one-time manual first upload in Play Console (docs/release/signed-builds-ci.md §3.3a).'
         required: true
         type: choice
         options: [play, first-bundle-artifact]
@@ -142,7 +142,7 @@ jobs:
             if [ "$DELIVERY" = play ]; then
               echo "| destination | Play internal testing (draft) / App Store Connect (TestFlight) |"
             else
-              echo "| destination | NOT Play: the verified .aab attached to this run for 1 day (first-bundle-artifact; no Google sign-in) |"
+              echo "| destination | NOT Play: the verified .aab, encrypted to the owner's age key, attached to this run for 1 day (first-bundle-artifact; no Google sign-in) |"
             fi
             echo "| android delivery | $DELIVERY |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -187,7 +187,7 @@ jobs:
           [ "$bad" -eq 0 ] || { echo "$manual"; exit 1; }
 
   android:
-    name: Signed Android App Bundle, to Play internal testing as a draft (or, in first-bundle mode, attached to the run for 1 day)
+    name: Signed Android App Bundle, to Play internal testing as a draft (or, in first-bundle mode, encrypted and attached to the run for 1 day)
     needs: [preflight]
     if: inputs.platform == 'android' || inputs.platform == 'both'
     runs-on: ubuntu-latest
@@ -283,6 +283,12 @@ jobs:
             || missing variable SENTRY_URL "optional; if set, https://<host>/"
           [ "$rc" -eq 0 ] || echo "Nothing was built. Owner steps: docs/release/signed-builds-ci.md"
           exit "$rc"
+      - name: The owner's age public key is present (first-bundle-artifact only)
+        if: inputs.android_delivery == 'first-bundle-artifact'
+        env:
+          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+        run: |
+          [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] || { echo "::error title=Missing variable::STORE_ARTIFACT_AGE_RECIPIENT is not set to an age public key (age1...) in the store-release Environment; nothing was built. Owner steps: docs/release/signed-builds-ci.md section 3.3a"; exit 1; }
       - name: Use the runner's preinstalled JDK 17
         run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -464,23 +470,39 @@ jobs:
           echo "- Google Play: draft release '$BUILD_NAME ($BUILD_NUMBER)' on the internal testing track; release it to testers in Play Console" >> "$GITHUB_STEP_SUMMARY"
       # First-bundle mode (docs/release/signed-builds-ci.md §3.3a): Google refuses API uploads for an
       # app that has never had a bundle uploaded by hand in Play Console. Instead of signing in to
-      # Google, this mode attaches the exact verified .aab (hash re-checked) to the run for one day;
-      # the owner downloads it, uploads it in Play Console, and the artifact is then deleted. The .aab
-      # holds no secret (only values every installed copy of the app carries).
-      - name: The App Bundle to hand over is the one verified (first-bundle-artifact only)
+      # Google, this mode verifies the .aab (hash re-checked), ENCRYPTS it to the owner's age public
+      # key and attaches only the ciphertext to the run for one day. The plain .aab is never
+      # attached: a GitHub artifact of a public repository is readable by any signed-in user, and
+      # only the owner's private age key opens this file. The owner downloads it, decrypts it on
+      # their Mac, checks its SHA-256 against the summary, uploads it in Play Console, and the
+      # artifact is then deleted. age is pinned by version and SHA-256 (the digest GitHub publishes
+      # for the release asset).
+      - name: Verify the App Bundle, then encrypt it to the owner's age public key (first-bundle-artifact only)
         if: inputs.android_delivery == 'first-bundle-artifact'
+        env:
+          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}
+          AGE_VERSION: v1.3.2
+          AGE_SHA256_LINUX_AMD64: 'cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10'
         run: |
           set -euo pipefail
           AAB=build/app/outputs/bundle/release/app-release.aab
           [ -n "${VERIFIED_AAB_SHA256:-}" ] || { echo "::error::no verified App Bundle hash; nothing was attached."; exit 1; }
           [ "$(sha256sum "$AAB" | awk '{print $1}')" = "$VERIFIED_AAB_SHA256" ] || { echo "::error::the App Bundle is not the one verified (SHA-256 differs); nothing was attached."; exit 1; }
-          echo "- First bundle: the verified App Bundle (SHA-256 \`$VERIFIED_AAB_SHA256\`) is attached to this run for 1 day as jawwid-android-first-bundle; upload it in Play Console > Internal testing, then have the artifact deleted" >> "$GITHUB_STEP_SUMMARY"
-      - name: Attach the verified App Bundle to this run for one day (first-bundle-artifact only)
+          [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] || { echo "::error::STORE_ARTIFACT_AGE_RECIPIENT is not an age public key (age1...); nothing was attached."; exit 1; }
+          d="$RUNNER_TEMP/age-install"; mkdir -p "$d"; f="$d/age.tar.gz"
+          curl -fsSL --retry 3 -o "$f" "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+          echo "$AGE_SHA256_LINUX_AMD64  $f" | sha256sum -c - || { echo "::error::the age download does not match its pinned SHA-256; nothing was attached."; exit 1; }
+          tar -xzf "$f" -C "$d"
+          "$d/age/age" --encrypt -r "$RECIPIENT" -o "$AAB.age" "$AAB"
+          [ "$(head -c 21 "$AAB.age")" = "age-encryption.org/v1" ] || { echo "::error::the file to attach is not an age file; nothing was attached."; exit 1; }
+          rm -f "$AAB"
+          echo "- First bundle: the verified App Bundle (SHA-256 \`$VERIFIED_AAB_SHA256\`) is attached to this run for 1 day, ENCRYPTED to your age public key, as jawwid-android-first-bundle (app-release.aab.age). Decrypt it on your Mac, check that SHA-256, upload it in Play Console > Internal testing, then have the artifact deleted (docs/release/signed-builds-ci.md section 3.3a)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Attach the encrypted App Bundle to this run for one day (first-bundle-artifact only)
         if: inputs.android_delivery == 'first-bundle-artifact'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: jawwid-android-first-bundle
-          path: build/app/outputs/bundle/release/app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab.age
           retention-days: 1
           if-no-files-found: error
           compression-level: 0

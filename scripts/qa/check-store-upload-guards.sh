@@ -726,7 +726,7 @@ FB_STEP = [
     '        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2',
     '        with:',
     '          name: jawwid-android-first-bundle',
-    '          path: build/app/outputs/bundle/release/app-release.aab',
+    '          path: build/app/outputs/bundle/release/app-release.aab.age',
     '          retention-days: 1',
     '          if-no-files-found: error',
     '          compression-level: 0',
@@ -737,13 +737,26 @@ FB_AAB = '          AAB=build/app/outputs/bundle/release/app-release.aab'
 AAB_HASH_RECORD = '          echo "VERIFIED_AAB_SHA256=$aab_sha" >> "$GITHUB_ENV"'
 AAB_HASH_ONCE = '          aab_sha="$(sha256sum "$AAB" | awk \'{print $1}\')"'
 # The step right before the attachment, line for line (after its name line).
+AGE_SHA = 'cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10'
 FB_RECHECK_STEP = [
     re.escape(FB_IF),
+    r'        env:',
+    r'          RECIPIENT: \$\{\{ vars\.STORE_ARTIFACT_AGE_RECIPIENT \}\}',
+    r'          AGE_VERSION: v1\.3\.2',
+    r"          AGE_SHA256_LINUX_AMD64: '" + AGE_SHA + r"'",
     r'        run: \|',
     r'          set -euo pipefail',
     re.escape(FB_AAB),
     r'          \[ -n "\$\{VERIFIED_AAB_SHA256:-\}" \] \|\| \{ echo "::error::[^"]*"; exit 1; \}',
     r'          ' + FB_RECHECK[len(r'^\s*'):-len(r'\s*$')],
+    r'          \[\[ "\$RECIPIENT" =~ \^age1\[0-9a-z\]\{58,\}\$ \]\] \|\| \{ echo "::error::[^"]*"; exit 1; \}',
+    r'          d="\$RUNNER_TEMP/age-install"; mkdir -p "\$d"; f="\$d/age\.tar\.gz"',
+    r'          curl -fsSL --retry 3 -o "\$f" "https://github\.com/FiloSottile/age/releases/download/\$AGE_VERSION/age-\$AGE_VERSION-linux-amd64\.tar\.gz"',
+    r'          echo "\$AGE_SHA256_LINUX_AMD64  \$f" \| sha256sum -c - \|\| \{ echo "::error::[^"]*"; exit 1; \}',
+    r'          tar -xzf "\$f" -C "\$d"',
+    r'          "\$d/age/age" --encrypt -r "\$RECIPIENT" -o "\$AAB\.age" "\$AAB"',
+    r'          \[ "\$\(head -c 21 "\$AAB\.age"\)" = "age-encryption\.org/v1" \] \|\| \{ echo "::error::[^"]*"; exit 1; \}',
+    r'          rm -f "\$AAB"',
     r'          echo "- First bundle: [^"]*" >> "\$GITHUB_STEP_SUMMARY"',
 ]
 FB_INPUT = ("      android_delivery:\n"
@@ -769,8 +782,8 @@ def check_first_bundle(text, errors):
     reads = [(n, l) for n, l in code if re.search(r'android_delivery', l, re.I) and not l.startswith('      android_delivery:')
              and not any(re.match(rx, l) for rx in FB_PREFLIGHT)]
     allowed = [n for n, l in reads if l in (FB_IF, PLAY_IF) or re.match(FB_INPUT_READS[1], l)]
-    if len(reads) != len(allowed) or len(reads) != 5:
-        errors.append(f'{WORKFLOW}: inputs.android_delivery may be read only by preflight\'s DELIVERY env and the four '
+    if len(reads) != len(allowed) or len(reads) != 6:
+        errors.append(f'{WORKFLOW}: inputs.android_delivery may be read only by preflight\'s DELIVERY env and the five '
                       f'pinned step conditions (found lines {[n for n, _ in reads]}) (FB)')
     if [n for n, l in reads if l == FB_IF and n not in dict(body)] or [n for n, l in reads if l == PLAY_IF and n not in dict(body)]:
         errors.append(f'{WORKFLOW}: the android_delivery conditions belong in the {ID_TOKEN_JOB} job (FB)')
@@ -804,6 +817,11 @@ def check_first_bundle(text, errors):
             or not all(re.fullmatch(rx, l) for rx, l in zip(FB_RECHECK_STEP, prev_code[1:]))):
         errors.append(f'{WORKFLOW}: the step right before the first-bundle attachment must re-check the .aab against '
                       f'VERIFIED_AAB_SHA256, in first-bundle-artifact mode only (FB)')
+    early = first(body, r'^\s*\[\[ "\$RECIPIENT" =~ \^age1\[0-9a-z\]\{58,\}\$ \]\] \|\| \{ echo "::error title=Missing variable::[^"]*"; exit 1; \}\s*$')
+    keystore = first(body, r'^\s*- name: Write the upload keystore')
+    if (early is None or keystore is None or early > keystore
+            or FB_IF not in [l for _, l in step_of(body, early)]):
+        errors.append(f'{WORKFLOW}: the owner\'s age public key must be checked, in first-bundle-artifact mode only, before the keystore is written and anything is built (FB)')
     jar = first(body, r'^\s*jarsigner -verify ')
     rec = [n for n, l in code if l == AAB_HASH_RECORD]
     once = [n for n, l in code if l == AAB_HASH_ONCE]
@@ -1061,7 +1079,7 @@ def mutations_w56():
 
 def move_fb_before_evidence(t):
     """Move the re-check and attachment steps, unchanged, above the android release evidence step."""
-    a = t.find('      - name: The App Bundle to hand over is the one verified')
+    a = t.find('      - name: Verify the App Bundle, then encrypt it')
     b = t.find('      - name: Remove the signing material, the symbols and the build outputs\n')
     e = t.find('      - name: Release evidence from the signed App Bundle')
     if min(a, b, e) < 0:
@@ -1082,8 +1100,19 @@ def mutations_fb():
         ('the first bundle kept 7 days', W, lambda t: replaced(t, '          retention-days: 1\n', '          retention-days: 7\n')),
         ('the artifact action unpinned', W, lambda t: replaced(t, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2',
          'actions/upload-artifact@v4')),
-        ('the artifact path not the verified .aab', W, lambda t: replaced(t, '          path: build/app/outputs/bundle/release/app-release.aab\n',
+        ('the artifact path not the encrypted .aab.age', W, lambda t: replaced(t, '          path: build/app/outputs/bundle/release/app-release.aab.age\n',
          '          path: build/app/outputs\n')),
+        ('the PLAIN .aab attached', W, lambda t: replaced(t, '          path: build/app/outputs/bundle/release/app-release.aab.age\n',
+         '          path: build/app/outputs/bundle/release/app-release.aab\n')),
+        ('the age download not checked against its SHA-256', W, lambda t: replaced(t, '| sha256sum -c - ||', '| cat ||')),
+        ('the age SHA-256 pin changed', W, lambda t: replaced(t, 'cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10', '0' * 64)),
+        ('age not pinned to a version', W, lambda t: replaced(t, '          AGE_VERSION: v1.3.2\n', '          AGE_VERSION: latest\n')),
+        ('encryption replaced by a copy', W, lambda t: replaced(t, '"$d/age/age" --encrypt -r "$RECIPIENT" -o "$AAB.age" "$AAB"', 'cp "$AAB" "$AAB.age"')),
+        ('the age-file header check removed', W, lambda t: replaced(t, '[ "$(head -c 21 "$AAB.age")" = "age-encryption.org/v1" ] ||', 'true ||')),
+        ('the plain .aab left beside its ciphertext', W, lambda t: replaced(t, '          rm -f "$AAB"\n', '')),
+        ('the recipient taken from another variable', W, lambda t: replaced(t, '          RECIPIENT: ${{ vars.STORE_ARTIFACT_AGE_RECIPIENT }}\n          AGE_VERSION', '          RECIPIENT: ${{ vars.SUPPORT_EMAIL }}\n          AGE_VERSION')),
+        ('the early age-key check removed', W, lambda t: replaced(t, '[[ "$RECIPIENT" =~ ^age1[0-9a-z]{58,}$ ]] || { echo "::error title=Missing variable::', 'true || { echo "::error title=Missing variable::')),
+        ('the early age-key check in every mode', W, lambda t: replaced(t, "      - name: The owner's age public key is present (first-bundle-artifact only)\n" + FB_IF + '\n', "      - name: The owner's age public key is present (first-bundle-artifact only)\n")),
         ('the artifact uploaded in play mode', W, lambda t: replaced(t, FB_IF + '\n' + USES, PLAY_IF + '\n' + USES)),
         ('the artifact uploaded always', W, lambda t: replaced(t, FB_IF + '\n' + USES, '        if: always()\n' + USES)),
         ('another key on the artifact step', W, lambda t: replaced(t, '          compression-level: 0\n',
