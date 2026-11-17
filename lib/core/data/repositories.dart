@@ -516,15 +516,83 @@ abstract interface class PasswordChangeRepository {
   Future<void> change({required String currentPassword, required String newPassword});
 }
 
+/// PD-56 O-3 (owner, 2026-11-07): a teacher's request to delete their account while lessons,
+/// students or payroll are still open. The academy closes them; the account is deleted by
+/// [deadlineAt] (30 days after [requestedAt]) whatever is left.
+class AccountDeletionRequest {
+  const AccountDeletionRequest({
+    required this.id,
+    required this.state,
+    required this.requestedAt,
+    required this.deadlineAt,
+    this.cancelledAt,
+    this.completedAt,
+  });
+
+  final String id;
+
+  /// `pending`, `completed` or `cancelled`.
+  final String state;
+  final DateTime requestedAt;
+  final DateTime deadlineAt;
+  final DateTime? cancelledAt;
+  final DateTime? completedAt;
+
+  bool get isPending => state == 'pending';
+
+  static AccountDeletionRequest fromJson(Map<String, Object?> json) {
+    DateTime? at(Object? v) => v is String ? DateTime.tryParse(v) : null;
+    return AccountDeletionRequest(
+      id: json['id'] as String,
+      state: json['state'] as String,
+      requestedAt: at(json['requestedAt'])!,
+      deadlineAt: at(json['deadlineAt'])!,
+      cancelledAt: at(json['cancelledAt']),
+      completedAt: at(json['completedAt']),
+    );
+  }
+}
+
+/// `GET /me/account/deletion`: what deleting would do now.
+class AccountDeletionStatus {
+  const AccountDeletionStatus({required this.immediate, required this.deadlineIfRequested, this.request});
+
+  /// True: nothing is open, the account is deleted at once. False: a teacher with work open,
+  /// whose deletion is a request.
+  final bool immediate;
+
+  /// The pending request, else the latest one, else null.
+  final AccountDeletionRequest? request;
+
+  /// The deadline a request made now would have (the server's clock, +30 days).
+  final DateTime deadlineIfRequested;
+}
+
+/// What `POST /me/account/delete` did: deleted (every session already ended), or recorded a
+/// teacher's [request] (nothing deleted yet, the session stays).
+class AccountDeletionOutcome {
+  const AccountDeletionOutcome.deleted() : deleted = true, request = null;
+  const AccountDeletionOutcome.requested(AccountDeletionRequest this.request) : deleted = false;
+
+  final bool deleted;
+  final AccountDeletionRequest? request;
+}
+
 /// PD-56 (store compliance): a parent or a teacher deletes their own account. On the
 /// AUTHENTICATED client; the password is asked again.
 abstract interface class AccountDeletionRepository {
   /// `POST /me/account/delete`. A refusal is an AppError with the server's code
   /// (`AUTH.INVALID_CREDENTIALS` for a wrong password, `AUTH.ACCOUNT_LOCKED`,
-  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account,
-  /// `AUTH.TEACHER_DELETION_BLOCKED` while a teacher has lessons, students or payroll open). On success every session
-  /// of the account has already ended on the server.
-  Future<void> deleteAccount({required String password});
+  /// `COMMON.RATE_LIMITED`, `AUTH.FORBIDDEN` for a staff account). Deleted: every session of
+  /// the account has already ended on the server. A teacher with lessons, students or payroll
+  /// open gets a request instead (O-3); asking again returns the same one.
+  Future<AccountDeletionOutcome> deleteAccount({required String password});
+
+  /// `GET /me/account/deletion`.
+  Future<AccountDeletionStatus> status();
+
+  /// `POST /me/account/deletion-request/cancel`. `AUTH.DELETION_REQUEST_NOT_PENDING` when none is pending.
+  Future<AccountDeletionRequest> cancelRequest();
 }
 
 /// The build with no account server (fixtures, tests that do not override it).
@@ -532,7 +600,14 @@ class NoAccountDeletionRepository implements AccountDeletionRepository {
   const NoAccountDeletionRepository();
 
   @override
-  Future<void> deleteAccount({required String password}) => throw UnsupportedError('no account server in this build');
+  Future<AccountDeletionOutcome> deleteAccount({required String password}) =>
+      throw UnsupportedError('no account server in this build');
+
+  @override
+  Future<AccountDeletionStatus> status() => throw UnsupportedError('no account server in this build');
+
+  @override
+  Future<AccountDeletionRequest> cancelRequest() => throw UnsupportedError('no account server in this build');
 }
 
 /// The build with no account server (fixtures, tests that do not override it).

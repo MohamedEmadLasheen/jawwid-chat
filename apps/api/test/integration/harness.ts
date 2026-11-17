@@ -514,6 +514,11 @@ export async function truncate(prisma: PrismaService): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       await truncateOnce(prisma, sql);
+      // Migration 20261117100000 seeds billing.card_paused = true so that the first deploy with live Stripe
+      // keys starts with cards paused. chat.config is not truncated (it holds seeded thresholds), so the row
+      // would carry into every suite; the card specs expect the app default (no row = not paused). Remove
+      // just that one key; the pause specs set and clear it themselves.
+      await prisma.$executeRaw`delete from chat.config where key = 'billing.card_paused'`;
       return;
     } catch (e) {
       if (attempt < TRUNCATE_DEADLOCK_TRIES && /\b40P01\b|deadlock detected/i.test(String((e as Error).message))) {

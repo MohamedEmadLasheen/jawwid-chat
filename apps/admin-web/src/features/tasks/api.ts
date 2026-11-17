@@ -39,6 +39,9 @@ export type SourceType =
   | 'makeup_owed'
   | 'family_without_account'
   | 'teacher_account_deleted'
+  | 'teacher_deletion_request'
+  | 'learner_needs_teacher'
+  | 'erased_teacher_payroll'
   | 'group_admin_absent'
 export type TaskActionName = 'complete' | 'acknowledge' | 'out_of_scope' | 'comment' | 'return' | 'remove' | 'reassign' | 'due' | 'priority'
 

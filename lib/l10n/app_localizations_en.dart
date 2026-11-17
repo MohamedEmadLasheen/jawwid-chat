@@ -376,6 +376,14 @@ class L10nEn extends L10n {
   String get callFailedNotAllowed => 'This call is not available.';
 
   @override
+  String get callFailedOneLearnerLesson =>
+      'This lesson is for one student. Every other child has their own lesson.';
+
+  @override
+  String get callFailedOneLearnerLessonStart =>
+      'During a lesson, a call is for one student only.';
+
+  @override
   String get callFailedNetwork =>
       'The call could not connect. Check your connection and try again.';
 
@@ -782,7 +790,7 @@ class L10nEn extends L10n {
   String get childLevelLabel => 'Level';
 
   @override
-  String get childSubscriptionLabel => 'Subscription';
+  String get childSubscriptionLabel => 'Lesson package';
 
   @override
   String get childScheduleLabel => 'Schedule';
@@ -1997,10 +2005,10 @@ class L10nEn extends L10n {
       'The student did not attend the trial lesson.';
 
   @override
-  String get cardTrialSubscribedTitle => 'The student has subscribed.';
+  String get cardTrialSubscribedTitle => 'The student has enrolled.';
 
   @override
-  String get cardTrialNotSubscribedTitle => 'The student did not subscribe.';
+  String get cardTrialNotSubscribedTitle => 'The student did not enrol.';
 
   @override
   String get cardTrialLevel => 'Level';
@@ -2837,7 +2845,7 @@ class L10nEn extends L10n {
 
   @override
   String get signupEmailIntro =>
-      'Enter the e-mail address you gave the academy when you subscribed.';
+      'Enter the e-mail address you gave the academy when you enrolled.';
 
   @override
   String get signupEmailLabel => 'E-mail';
@@ -3212,7 +3220,7 @@ class L10nEn extends L10n {
   String get tabPayments => 'Payments';
 
   @override
-  String get tabSubscriptions => 'Subscriptions';
+  String get tabSubscriptions => 'Packages';
 
   @override
   String subscriptionMonthCount(int months) {
@@ -3242,7 +3250,7 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get subscriptionNone => 'No subscription yet';
+  String get subscriptionNone => 'No lesson package yet';
 
   @override
   String subscriptionLessonsLeft(int count) {
@@ -3272,7 +3280,7 @@ class L10nEn extends L10n {
   String get subscriptionStateOpen => 'Active';
 
   @override
-  String get subscriptionStateGrace => 'Renewal due';
+  String get subscriptionStateGrace => 'Next package due';
 
   @override
   String get subscriptionStateLocked => 'Paused';
@@ -3286,10 +3294,10 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get subscriptionRequestRenewal => 'Request renewal';
+  String get subscriptionRequestRenewal => 'Request the next package';
 
   @override
-  String get subscriptionRenewalRequested => 'Renewal requested';
+  String get subscriptionRenewalRequested => 'Next package requested';
 
   @override
   String get lockBannerTitle => 'New lessons are paused';
@@ -3314,7 +3322,7 @@ class L10nEn extends L10n {
       'The chat stays open, and lessons already booked go ahead.';
 
   @override
-  String get lockBannerOpenSubscriptions => 'Go to Subscriptions';
+  String get lockBannerOpenSubscriptions => 'Go to Packages';
 
   @override
   String reportLessonOf(int number, int total) {
@@ -3344,7 +3352,7 @@ class L10nEn extends L10n {
 
   @override
   String get cardSubscriptionLockedHint =>
-      'Lessons already booked go ahead. To book new lessons, renew or pay the instalment in Subscriptions.';
+      'Lessons already booked go ahead. To book new lessons, request the next package or pay the instalment in Packages.';
 
   @override
   String get cardSubscriptionUnlockedTitle => 'New lessons are back on';
@@ -3574,6 +3582,14 @@ class L10nEn extends L10n {
   @override
   String get billingNoLongerOpen =>
       'This has already been paid or is no longer open. The list has been refreshed.';
+
+  @override
+  String get billingReceiptPendingNotice =>
+      'A transfer receipt for this request is waiting for the academy to check. Paying by card too may charge you twice.';
+
+  @override
+  String get billingReceiptPendingCardPaused =>
+      'Card payment will be available again if the academy cannot confirm the transfer.';
 
   @override
   String get billingCouldNotOpen => 'Couldn\'t open the page. Try again.';
@@ -5165,12 +5181,16 @@ class L10nEn extends L10n {
       'Deleted now: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications.';
 
   @override
+  String get deleteAccountGoesOnRequest =>
+      'Deleted with your account, within 30 days: your name and photo (you will be shown as “Deleted user”), the contact details the academy holds for you, your password and every session, and your notifications. Until then, your account works as usual.';
+
+  @override
   String get deleteAccountKeptParent =>
       'Kept: payments and invoices for 7 years, the messages you sent (as “Deleted user”), and your children’s records at the academy. The staff are told so they can follow up.';
 
   @override
   String get deleteAccountKeptTeacher =>
-      'Kept: payroll records for 7 years and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
+      'Kept: payroll records and the messages you sent (as “Deleted user”). Your students stay with the academy, and the staff are told so they can move them.';
 
   @override
   String get deleteAccountPasswordLabel => 'Your password';
@@ -5197,8 +5217,45 @@ class L10nEn extends L10n {
   String get deleteAccountDone => 'Your account has been deleted.';
 
   @override
-  String get deleteAccountTeacherBlocked =>
-      'Please contact the academy to close your lessons and payroll before deleting your account.';
+  String get deleteAccountRequestIntro =>
+      'You still have lessons, students or payroll open. You can request deletion now: the academy closes them, and your account is deleted within 30 days at the latest.';
+
+  @override
+  String get deleteAccountRequestAction => 'Request account deletion';
+
+  @override
+  String deleteAccountRequestConfirm(String date) {
+    return 'Request deletion of your account? The academy closes your lessons and payroll, and your account is deleted by $date at the latest. You can cancel the request until then.';
+  }
+
+  @override
+  String get deleteAccountRequested => 'Your deletion request is recorded.';
+
+  @override
+  String get deleteAccountRequestStatusTitle => 'Deletion requested';
+
+  @override
+  String deleteAccountRequestStatus(String requested, String deadline) {
+    return 'Requested on $requested; your account will be deleted by $deadline.';
+  }
+
+  @override
+  String get deleteAccountRequestCancel => 'Cancel request';
+
+  @override
+  String get deleteAccountRequestCancelConfirm =>
+      'Cancel your deletion request? Your account stays as it is.';
+
+  @override
+  String get deleteAccountRequestKeep => 'Keep the request';
+
+  @override
+  String get deleteAccountRequestCancelled =>
+      'Your deletion request was cancelled.';
+
+  @override
+  String get deleteAccountRequestCancelFailed =>
+      'The request could not be cancelled. Try again.';
 
   @override
   String get locationRowTitle => 'Location';
@@ -5563,4 +5620,12 @@ class L10nEn extends L10n {
   @override
   String get legalLoadFailed =>
       'We couldn\'t load the terms of use. Please try again.';
+
+  @override
+  String get billingReviewModeNotice =>
+      'App Review demo account: no real payment can be made. Card opens a page that explains the live card checkout, and bank transfer shows demo details only.';
+
+  @override
+  String get billingReviewModeTransferNotice =>
+      'App Review demo account: these bank details are not real. No transfer can be made and no receipt can be sent from this account.';
 }

@@ -39,8 +39,39 @@ Sources: <https://developer.apple.com/app-store/review/guidelines/#other-purchas
 | Anything refused above | — | The app shows no Pay for it. Card checkout and bank-transfer receipts refuse it with `409 COMM.PAYMENT_NOT_IN_APP`, checked before anything is written; a refused receipt's file is deleted. Staff can still collect it outside the app (web pay link, cash). Admin Web marks it "Not payable in the app", and its forms explain why. | `assertPayableInApp` and `assertInstalmentPayableInApp` in `parent-payments.service.ts`; `amountsDue` in `lib/features/billing/domain/amount_due.dart` |
 | Any purpose added later | — | **No**, until classified in `in-app-payability.ts` (fails closed, server and app) | the same |
 | Group classes | — | Not sold. A `Lesson` has exactly one `learner_id` and one `teacher_id` (`schema.prisma`), so a paid lesson cannot have two learners. Group chats (`class_group`, `student_group`) are chats, never priced. | the schema |
+| Lesson calls | The live call a lesson is held on: a call in the learner's Student Group or a family group (the conversations tied to a learner) | No other family's guardian may be seated on such a call with the lesson's teacher (still on the call) and family during the lesson's call window (15 minutes either side). The server refuses to start such a call, and refuses that guardian's answer and media token (`COMM.LESSON_ONE_LEARNER`). A call already live when the window opens is corrected the next time the server checks it (the call sweep, every few seconds, and LiveKit's report of any join to that room): the media server is told to remove the other family's guardian from the room, their place on the call is closed (`left_at`), and everyone on the call is told why (`call.participant_left`, reason `one_learner_lesson`); the guardian's app shows the one-learner message. That guardian cannot come back to that call: a new media token or answer is refused (`COMM.LESSON_ONE_LEARNER` in the window, `COMM.CALL_PARTICIPANT_LEFT` after), and a reconnect with a media token they still held is removed again as soon as LiveKit reports the join. Limits are listed under the table. | `CallService` (`oneLearnerAtStart`, `oneLearnerAtJoin`, `separateLessonLearners`) in `apps/api/src/communication/calls/call.service.ts`; `apps/api/src/worker.ts`; `livekit-webhook.controller.ts`; `apps/api/test/integration/lesson-one-learner-call.spec.ts` |
 | Materials, games, lesson audio | Free | Not sold, not part of any package | (no price or SKU exists) |
 | Lesson recording | None | No LiveKit egress or call recording exists | `test/app/store_payments_policy_test.dart`, `in-app-payability.spec.ts` |
+
+**Limits of the lesson-call rule (OA-12), stated plainly.**
+
+- **The server sees families, not children.** A child has no account; a learner is on a call
+  through their family's guardians. So the rule is "no other family's guardian", not "one child":
+  during sibling A's lesson, the teacher may still call the family group that covers siblings A
+  and B, and both may be in the room. That family's guardians are the lesson's guardians.
+- **A call already live when the window opens is corrected within one sweep pass** (5 seconds by
+  default, `CALL_SWEEP_INTERVAL_MS`), or at once if someone joins the room. Until then, the other
+  family's guardian is still connected. A guardian the media server cannot remove (unreachable)
+  stays on until a later pass succeeds.
+- **Removal depends on LiveKit.** Taking someone out of the room, and seeing them come back with
+  an older token, both rely on LiveKit's server API and its join webhook. If the webhook is not
+  delivered, a reconnect with a still-valid older token (tokens last two minutes) is not seen
+  until LiveKit delivers it; the official app never does this, because its rejoin asks for a new
+  token and is refused.
+- **A guardian taken off stays off that call.** On a teacher's back-to-back lessons, the next
+  family's guardian may be taken off while the earlier lesson is still under way, and cannot
+  rejoin that same call when their own lesson starts: a new call is needed.
+- **The window is opened by a teacher still on the call** (their place on it not closed). A
+  teacher who has left the call opens no window on it.
+- **Every lesson counts**, trials included where they name a learner. A lesson that was cancelled,
+  moved or voided opens no window.
+- **Where it applies.** Only to calls in the conversations a lesson is held in: the learner's
+  Student Group and family groups, the conversations tied to a learner. The database keeps each of
+  them to one family, so the API never seats another family on their calls; the rule is the
+  backstop should a call ever carry such a seat. A `class_group` call is a group chat call, not a
+  lesson call (a class group is tied to no learner, and group classes are not sold), so it is left
+  alone even during one of its teacher's lessons. Only a `class_group` may span families in the
+  database, and the API cannot create one yet.
 
 **What the parent reads.** The pay sheet and the Stripe Checkout page both say, in the family's
 language:
@@ -104,8 +135,37 @@ Stripe configured (`cardAvailable`); bank transfer always does.
   - Existing plans that were made with their lessons were linked by the migration.
   - **Any other existing open instalment or balance is no longer payable in the app.** Staff
     collect it outside the app, or re-create it naming the child's package.
+- **R-5 Both, the review accounts cannot pay (OA-12, owner decision 2026-11-10).** The review
+  accounts run in the server-enforced review payment mode (§3a). A reviewer sees the pay sheet,
+  what is bought and both payment methods, but cannot complete a payment. App Review may ask to
+  see a real card payment. If it does, answer with the screen recording of §6 item 3, made on a
+  real (non-review) account. **UNVERIFIED:** whether either store objects to a demo-only payment
+  flow; no policy page was re-read for this change.
+
+## 3a. The review payment mode (OA-12)
+
+**Owner decision (2026-11-10).** Reviewers never see Jawwid's real bank details, cannot make a
+real bank transfer, and cannot upload or store a real receipt. No real charge, invoice, payment
+request, payment obligation or staff task is created for a review account. Public families are
+unaffected. The server enforces it, not the app's UI.
+
+- The switch, its value and what each route does: `docs/release/review-accounts.md`, "Review
+  payment mode". The code: `apps/api/src/billing/review-mode.ts`.
+- What the reviewer sees: Packages tab → Amount due → "Lesson package (demo): 8 live
+  one-to-one lessons" → Pay. The pay sheet says it is a demo account and still shows the
+  live one-to-one description. **Card** opens, in the browser, a page that says (in Arabic and
+  English): "In the live app this opens Stripe's secure checkout page in the browser to pay this
+  lesson package by card. The review account cannot make a payment." **Bank transfer** shows
+  demo bank details, a notice that no transfer or receipt is possible, and Send is off.
+- How real parents pay: by card, on Stripe Checkout opened in the browser, or by bank transfer,
+  uploading the receipt for the academy to confirm (§2).
+- The notes to paste are §4 and §5 below, and Option C of `store-console/review-notes.md` §2.1.
 
 ## 4. App Store Connect: App Review Information → Notes (paste)
+
+**With the review payment mode on (OA-12), use Option C of `store-console/review-notes.md` §2.1
+instead of the text below**: it says that payment is disabled for the review account. The text
+below describes a review account that can pay, which is no longer the case.
 
 > Jawwid is a Quran academy. In the app, families buy only **live one-to-one Quran lessons**:
 > each lesson is a real-time audio call between one teacher and one student. There are no group
@@ -125,6 +185,15 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 
 ## 5. Google Play Console (paste where asked: App access instructions, or a policy appeal)
 
+With the review payment mode on (OA-12), add this sentence to the text below:
+
+> For the review account, payment is disabled on our server: Amount due shows a demo lesson
+> package, card opens a page that explains the live Stripe checkout, and bank transfer shows demo
+> bank details and cannot send a receipt. No charge is possible.
+
+**UNVERIFIED for this change:** the Payments policy pages were not re-read; the wording relies on
+§1 (read 2026-11-05).
+
 > Jawwid sells only live one-to-one Quran lessons, each between one teacher and one student, as
 > real-time audio calls. Lessons are not recorded and cannot be replayed or accessed again in the
 > app. Under the Payments policy's 1:1 online paid services rule (education classes), these are
@@ -136,7 +205,8 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 
 1. The store listings (both stores) describe the service as live one-to-one lessons, never as
    access to content or the app.
-2. Demo parent and teacher accounts on the production backend, with an open lesson-package
-   request so the reviewer can reach the pay sheet.
+2. Demo parent and teacher accounts on the production backend, with the review payment mode
+   switched on for their organization (§3a, OA-12), so the reviewer reaches the pay sheet through
+   the demo amount due. No real lesson-package request is created for the review family.
 3. A short screen recording of a lesson call and of the pay sheet, kept ready for an appeal.
 4. Re-read the three policy pages above on the day of submission; they change.

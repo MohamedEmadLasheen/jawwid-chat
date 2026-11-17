@@ -4,8 +4,8 @@ import '../data/wire/wire_vocab.dart';
 /// The call events the backend publishes, as Dart types.
 ///
 /// Mirrors `apps/api/src/communication/contracts/events.ts` — `CallPayload`,
-/// `CallParticipantPayload` and `CallEndedPayload` — and nothing else. The four
-/// names below are the four the server actually emits.
+/// `CallParticipantPayload` and `CallEndedPayload` — and nothing else. The
+/// names in [CallEventNames] are ones the server actually emits.
 ///
 /// WHAT THESE DO NOT MEAN
 /// ----------------------
@@ -98,7 +98,29 @@ final class CallEnded extends CallEvent {
 
 /// CHATSCHED-013: why a call ended. A drop nobody came back from within the
 /// grace is [connectionLost]; a participant ending it is [hungUp].
-enum CallEndReason { hungUp, declined, ringTimeout, connectionLost, unknown }
+/// [oneLearnerLesson] (OA-12) ends it for THIS device only: the server took
+/// this guardian off a lesson call that goes on for the others.
+enum CallEndReason { hungUp, declined, ringTimeout, connectionLost, oneLearnerLesson, unknown }
+
+/// OA-12: why the server took a participant off a call that goes on.
+enum CallParticipantLeftReason { oneLearnerLesson }
+
+/// `call.participant_left`. Without a [reason] it is media presence -- LiveKit
+/// saw them leave -- and never ends anything. With one, the SERVER took
+/// [actorId] off the call (OA-12: another family's guardian on a lesson call).
+final class CallParticipantLeft extends CallEvent {
+  const CallParticipantLeft({
+    required super.callId,
+    required super.conversationId,
+    required this.actorId,
+    this.reason,
+  });
+
+  final String actorId;
+
+  /// Null for presence, and for a reason this build does not know.
+  final CallParticipantLeftReason? reason;
+}
 
 /// CHATSCHED-013: the call dropped below two people in the room. The server
 /// ends it as connection lost at [until] unless someone rejoins first.
@@ -137,8 +159,9 @@ abstract final class CallEventNames {
   static const ended = 'call.ended';
   static const interrupted = 'call.interrupted';
   static const resumed = 'call.resumed';
+  static const participantLeft = 'call.participant_left';
 
-  static const all = <String>{incoming, accepted, declined, ended, interrupted, resumed};
+  static const all = <String>{incoming, accepted, declined, ended, interrupted, resumed, participantLeft};
 }
 
 /// Decode one server frame.
@@ -241,6 +264,18 @@ CallEvent? decodeCallEvent(String name, Object? payload) {
 
     case CallEventNames.resumed:
       return CallResumed(callId: callId, conversationId: conversationId);
+
+    case CallEventNames.participantLeft:
+      return CallParticipantLeft(
+        callId: callId,
+        conversationId: conversationId,
+        actorId: required('actorId'),
+        // Optional and open, like call.ended's reason.
+        reason: switch (map['reason']) {
+          'one_learner_lesson' => CallParticipantLeftReason.oneLearnerLesson,
+          _ => null,
+        },
+      );
   }
 
   // Unreachable: `all` and the switch above are the same names.
