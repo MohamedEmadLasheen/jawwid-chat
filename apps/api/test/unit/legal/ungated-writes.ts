@@ -144,6 +144,8 @@ export const UNGATED_WRITES: Readonly<Record<string, string>> = {
   'POST /materials/items/:id/open': 'records that the caller opened an item; no content',
   'POST /materials/recitations/:surah/open': 'records that the caller opened an item; no content',
   'POST /me/account/delete': 'account deletion is never gated (§7.4)',
+  'POST /me/account/deletion-request/cancel': 'cancelling the caller’s own account deletion request is never gated (§7.4)',
+  'POST /teacher-files/:teacherId/deletion-request/complete': 'staff offboarding action (teachers.offboard); creates no content others see',
   'POST /me/billing/checkout': 'a parent’s own payment or receipt; only staff read it',
   'POST /me/billing/receipts': 'a parent’s own payment or receipt; only staff read it',
   'DELETE /me/blocks/:id': 'unblocking removes the caller’s own block; removing is never gated',
