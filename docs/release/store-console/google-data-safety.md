@@ -55,7 +55,7 @@ Every row: **Shared = No**, **purposes never include Advertising or marketing or
 | Personal info | Race and ethnicity, Political or religious beliefs, Sexual orientation | **No** `[OWNER DECISION: counsel decides whether enrolment in Quran lessons is "religious beliefs"; if yes, declare "Political or religious beliefs", required, App functionality]` **OPEN: L-10 / L-14 / LD-13 (§6)** | — | — | — | No field records belief (see `apple-app-privacy.md` §3.4) |
 | Personal info | Other info | Yes | No | Optional (teachers only) | App functionality | A teacher's professional profile: bio, specialization, qualifications, experience, languages and certificate details (`http_teacher_profile_repository.dart:72-79`, `:120-125`). Declared here because it describes the person, not only content they post. Today only the teacher sees it (`lib/app/router.dart:558`). Certificate images and PDFs (`lib/shared/models/teacher_profile.dart:155-162`: PDF, JPEG, PNG) are the same kind of data as the Photos and Files and docs rows, which are already Yes. |
 | Financial info | Purchase history | Yes | No | Optional (only families who pay in the app) | App functionality | `lib/core/data/http/http_billing_repository.dart:27`, `:31-32`, `:76-81`, `:92-93`; invoices and receipts shown (`lib/features/billing/presentation/my_payments_screen.dart:323-330`); Sales staff record payments (`lib/core/data/http/http_sales_payments_repository.dart:64`) |
-| Financial info | User payment info | **No** **OPEN: counsel (§6)** | — | — | — | Card details are typed on Stripe's page in the browser, outside the app (`http_billing_repository.dart:31-32`). The app only shows Stripe's masked summary (card brand, last 4 digits, wallet) on each invoice (`:125-133`, `:226`); it never collects or sends card data. If counsel prefers to over-declare, mark it Yes. |
+| Financial info | User payment info | **No** (card payments off at launch) | — | — | — | Card details are typed on Stripe's page in the browser, outside the app (`http_billing_repository.dart:31-32`). The app only shows Stripe's masked summary (card brand, last 4 digits, wallet) on each invoice (`:125-133`, `:226`); it never collects or sends card data. If counsel prefers to over-declare, mark it Yes. |
 | Financial info | Credit score | **No** | — | — | — | — |
 | Financial info | Other financial info | Yes | No | Optional | App functionality | Bank-transfer receipt (photo or PDF), amount and date (`lib/features/billing/presentation/bank_transfer_screen.dart:21-25`; `http_billing_repository.dart:40-81`) |
 | Health and fitness | Health info, Fitness info | **No** | — | — | — | — |
@@ -151,11 +151,13 @@ under-declaring.
 - **What is kept, and why** (data inventory §4): messages the person sent (shown as "Deleted user"),
   children's lesson records, payment records ("7 years", L-6), the audit log, reports and consent records,
   and backups for up to 56 days. The Privacy Policy discloses it (§10).
-- **Open:** a teacher with lessons ahead is refused today and told to contact the academy (LR-03, PR #498
-  turns this into a 30-day request). Staff accounts cannot delete in the app (LR-20). Google allows a
-  stated delay; it does not allow "contact us". Do not submit until LR-03 is merged.
+- **Teachers with open work:** deletion records a request and the account is deleted within 30 days at the
+  latest (`supabase/migrations/20261107140000_chat_teacher_deletion_request.sql:1-12`; Privacy Policy 10.4.1;
+  Account deletion 1.5). Staff accounts are closed by the Academy (LR-20).
 
-## 4. Open question: Stripe and the child's name
+## 4. Stripe and the child's name (not applicable at launch)
+
+**Launch (2026-11-16): card payments are off in production (no Stripe keys, `LAUNCH_PHASE=review`), so no card data and no card summary exists; Payment Info = No is settled for launch.** Re-assess before card payments are switched on (the Privacy Policy is updated first, clause 4.11.2). Nothing reaches Stripe while cards are off, so Name stays "Not shared". The rest of this section applies only when card payments are switched on.
 
 The payment line item sent to Stripe contains the child's name (`apps/api/src/billing/checkout.service.ts:147`;
 data inventory §2, which cites the older line `:129`). Stripe is a service provider for the payment, so this is not "sharing" under
@@ -181,10 +183,10 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|
-| O-1 | User payment info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §2 |
+| O-1 | User payment info: does the stored card brand, last four digits and wallet count? | No | **Closed for launch:** card payments are off, so none is stored. Re-open (counsel) before cards go live | §2 |
 | O-2 | Political or religious beliefs: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §2 |
 | O-3 | Families Policy question | Not asked (audience 18+) | **OPEN.** Owner: target audience N-1 / LD-5; counsel: L-15 (SDK terms for child-directed use) | §1; `play-declarations.md` §1 |
 | O-4 | Advertising ID not collected | Not collected | **OPEN** pending the merged-manifest check of the release AAB from the release-readiness workflow (release audit WP-6) | §2.1; `play-declarations.md` §3 |
 | O-5 | Sentry automatic session tracking | Not declared beyond Crash logs and Diagnostics | **Decided: off in #526 (pending merge).** The lead turns `enableAutoSessionTracking` off in `crash_reporting.dart`, so nothing more is declared. Before Save, confirm #526 is merged and in the submitted build; if not, declare it (Diagnostics or App interactions, App functionality) | §2, §2.2; `apple-app-privacy.md` §3.8 |
-| O-6 | Name "Shared" because of the child's name in the Stripe line item | Not shared | **OPEN.** Owner LD-8; counsel L-4 | §4 |
+| O-6 | Name "Shared" because of the child's name in the Stripe line item | Not shared | **Closed for launch** (cards off, nothing sent to Stripe). Re-open with LD-8 before cards go live | §4 |
 | O-7 | Delete account URL | placeholder | **OPEN.** LR-04, LD-16 | §1, §3.2 |

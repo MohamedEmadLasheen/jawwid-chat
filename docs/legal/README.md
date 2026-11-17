@@ -5,6 +5,16 @@
 - **Nothing here is published or in force.** No document is hosted, and no URL exists yet.
 - The app is **not** store-ready. The blockers are listed in `outstanding-information-and-decisions.md` §7.
 
+**Launch set (2026-11-16), owner-review copy, version 1.0.** The smallest set the App Store and Google Play
+reviews need is filled in from the confirmed records: Privacy Policy, Terms of Use, Child Safety Policy,
+Help and Support, Account deletion (each in Arabic and English). Only `{{UAE_MAILING_ADDRESS}}` (owner; mailing and correspondence address only, never the registered address)
+and `{{EFFECTIVE_DATE}}` (set on publication day) remain. One mailbox, `info@jawwid.com`, replaces the
+support/privacy/safeguarding proposals. `publication.json` serves only these five; publication stays off.
+**Postponed** (kept as drafts, not served, not linked from the launch set): Teacher Terms, Staff Terms,
+Code of Conduct, Reporting and Complaints Policy, Blocking and Enforcement Policy. Their necessary rules
+(zero tolerance, reporting within 24 hours, blocking, enforcement and appeals) are folded into the Terms
+of Use (sections 7, 12 and 17). The values and placeholders below for those files are unchanged.
+
 ## Public documents (Arabic is the primary language)
 
 | Document | Arabic | English | Key (#462) | Kind |

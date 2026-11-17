@@ -40,7 +40,7 @@ relative to the repository root, cited as `file:line`.
 | Contact Info | Physical Address | **No** | — | — | — |
 | Contact Info | Other User Contact Info | **No** | — | — | — |
 | Health & Fitness | Health, Fitness | **No** | — | — | — |
-| Financial Info | Payment Info | **No** `[OWNER DECISION: counsel, §3.2; OPEN, §7]` | — | — | — |
+| Financial Info | Payment Info | **No** (card payments off at launch, §3.2) | — | — | — |
 | Financial Info | Credit Info | **No** | — | — | — |
 | Financial Info | Other Financial Info | Yes | Yes | No | App Functionality |
 | Location | Precise Location | **No** | — | — | — |
@@ -120,8 +120,7 @@ returned by Stripe on each invoice, linked to the family (`http_billing_reposito
 answer stays **No**, because the app never collects or sends card data; it only displays Stripe's own masked
 summary of a payment made outside the app. The invoice itself is declared under Purchase History. If counsel
 prefers to over-declare, change this to Yes, linked, App Functionality; the label is not otherwise affected.
-**OPEN (counsel; see §7):** whether the stored card summary counts as Payment Info. The answer stays No
-until counsel decides.
+**Launch (2026-11-16): card payments are off in production (no Stripe keys, `LAUNCH_PHASE=review`), so no card data and no card summary exists; Payment Info = No is settled for launch.** Re-assess before card payments are switched on (the Privacy Policy is updated first, clause 4.11.2). The text above describes the later card-payment flow.
 
 **Other Financial Info: Yes.**
 - For a bank transfer, the parent uploads the **transfer receipt** (a photo, a camera shot or a PDF),
@@ -344,7 +343,7 @@ Each answer below stays as drafted until its owner decides. Nothing here changes
 
 | # | Item | Answer today | Decision id and owner | Where |
 |---|---|---|---|---|
-| O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **OPEN.** Counsel. No id yet in `docs/legal/outstanding-information-and-decisions.md`; the lead should register one | §3.2; `google-data-safety.md` §2 |
+| O-1 | Payment Info: does the stored card brand, last four digits and wallet count? | No | **Closed for launch:** card payments are off, so none is stored. Re-open (counsel) before cards go live | §3.2; `google-data-safety.md` §2 |
 | O-2 | Sensitive Info: is Quran-lesson enrolment "religious beliefs"? | No | **OPEN.** Counsel. Related: L-10, L-14, LD-13, but none of them asks this label question directly; the lead should register an id | §3.4; `google-data-safety.md` §2 |
 | O-3 | Other Usage Data: Sentry automatic session tracking | No | **Decided: off in #526 (pending merge).** Confirm #526 is in the submitted build; if not, declare it | §3.8; `google-data-safety.md` §2.2 |
 | O-4 | Privacy Policy and User Privacy Choices URLs | placeholders | **OPEN.** LR-04, LD-16 | §4 |
