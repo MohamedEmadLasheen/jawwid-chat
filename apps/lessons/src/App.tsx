@@ -5,6 +5,7 @@ import { ArabicLesson } from './arabic/ArabicLesson';
 import { arabicLessonFor } from './arabic/index';
 import { ReadingLesson } from './reading/ReadingLesson';
 import { isReadingKind } from './reading/reading';
+import { TopicLesson } from './topic/TopicLesson';
 import { PlayRoute } from './play/PlayRoute';
 import { NO_AUDIO } from './audio/audio-controller';
 import { manifestSource, useAudioManifest, verifiedAudio } from './audio/audio-manifest';
@@ -20,6 +21,7 @@ export function App({ pathname = window.location.pathname }: { pathname?: string
   const r = route(pathname);
   if (r.kind === 'surah') return <Lesson surah={r.surah} />;
   if (r.kind === 'play') return <PlayRoute surah={r.surah} />;
+  if (r.kind === 'islamic') return <TopicLesson lesson={r.lesson} />;
   // Lessons 4, 5 and 10 are reading lessons (P0-5c); the rest are letter lessons. A withheld
   // pending lesson keeps its kind (release.ts), so it still opens on its own screen.
   if (r.kind === 'arabic') return isReadingKind(arabicLessonFor(r.lesson)) ? <ReadingLesson lesson={r.lesson} /> : <ArabicLesson lesson={r.lesson} />;
