@@ -4,7 +4,8 @@
 | # | Decision | Date | Notes |
 |---|---|---|---|
 | D1 | App name: **Jawwid** (Play title, Android launcher, iOS display name) | 2026-11-18 | Required file changes are listed, not made: `NAMING-DECISION-AND-REQUIRED-CHANGES.md` |
-| D2 | Target audience: children, parents and teachers | 2026-11-18 | Matches `child-safety-policy-en.md:39` (designed primarily for ages 5 to 12) |
+| D2 | ~~Target audience: children, parents and teachers~~ **superseded later 2026-11-18 by D2b** | 2026-11-18 | |
+| D2b | Primary user is the parent/guardian; children are beneficiaries, not intended direct users. The console age-group declaration is **not** decided: see `LAUNCH-BLOCKERS-AND-GO-NO-GO.md` section 3 (counsel) | 2026-11-18 | Own policy says lessons are designed primarily for ages 5 to 12 (`child-safety-policy-en.md:39`) |
 | D3 | Price: free to download | 2026-11-18 | |
 | D4 | Distribution: worldwide where Play distribution is available and legally permitted | 2026-11-18 | |
 | D5 | Category: Education is **proposed**, final confirmation pending | 2026-11-18 | |
