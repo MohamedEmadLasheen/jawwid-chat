@@ -34,7 +34,7 @@ jobs:
     name: Release-gate guards (fast)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Every step below is ONE call into scripts/qa/guards.sh, which holds the
       # patterns, exclusions and commands. Developers run the identical gates
@@ -138,6 +138,11 @@ jobs:
         # The App Store and Google Play reject the template artwork (PR-G).
         run: bash scripts/qa/guards.sh app-icons
 
+      - name: Every GitHub Action is pinned to a full commit SHA
+        # P3-11: a tag or branch can be repointed by the action's owner; a
+        # 40-hex commit cannot. A PR that adds an action must pin it.
+        run: bash scripts/qa/guards.sh actions-pinned
+
       - name: Every gate in scripts/qa/guards.sh runs in CI
         # Anti-drift: fails if guards.sh defines a gate this job never calls.
         run: bash scripts/qa/guards.sh ci-wiring
@@ -168,8 +173,8 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -191,8 +196,8 @@ jobs:
       run:
         working-directory: apps/admin-web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -225,12 +230,12 @@ jobs:
       run:
         working-directory: apps/lessons
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Nothing in this job pushes; no token is left on disk for the
           # dependencies' code to find.
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -301,14 +306,14 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm run test:render
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: lessons-quran-render-${{ github.sha }}
           path: apps/lessons/test-results
           if-no-files-found: warn
           retention-days: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: lessons-dist-${{ github.sha }}
           path: apps/lessons/dist
@@ -356,7 +361,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -473,7 +478,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -491,7 +496,7 @@ jobs:
             -c "alter system set full_page_writes = off"
           psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "select pg_reload_conf()"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -673,12 +678,12 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_e2e
       REDIS_URL: redis://localhost:6379
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -698,7 +703,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: guards
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Build API image
         # Note: this regenerates the Prisma client from scratch, so it catches
@@ -745,8 +750,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: guards
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Audit — high and critical
@@ -769,7 +774,7 @@ jobs:
     needs: guards
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: 3.47.2
@@ -791,8 +796,8 @@ jobs:
     needs: guards
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '17'
@@ -846,13 +851,13 @@ jobs:
     # Not required: that is branch protection's setting, not this file's. A
     # failure shows red here (continue-on-error would have shown it green).
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Enable KVM for the emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '17'
@@ -864,7 +869,7 @@ jobs:
       - run: flutter pub get
       - run: flutter build apk --debug
       - name: Ring a killed app; Answer reaches the call bridge
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           arch: x86_64
@@ -875,7 +880,7 @@ jobs:
           script: bash scripts/qa/android-ring-test.sh
       - name: Keep what the emulator showed
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: android-ring
           path: android-ring/
