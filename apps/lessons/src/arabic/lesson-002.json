@@ -1,0 +1,4500 @@
+{
+  "lesson": 2,
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-2/data/lettersData.ts, read as text from the quarantined copy, never built or run). One group per pair of letters that look alike (12) or sound alike (7); a unit per letter of each pair. The pair's difference or tip is unvowelled, so it is listed in the review doc for a teacher to vowel; notes stay empty. Positions are computed, never stored. Every added mark is held (ADDED TASHKEEL); words the rule refuses are left out and listed in the review doc."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-2 (read as text, never built or run)",
+    "sha256": {
+      "data/lettersData.ts": "753e4a9d155f2ba9650e9e85a10b31e5919b4141640596c73ffe0b0e7a1734b1"
+    }
+  },
+  "finalMark": "sukun",
+  "retiredIds": [],
+  "units": [
+    {
+      "id": "ba_vs_nun",
+      "letters": [
+        "ب"
+      ],
+      "group": "ب ن",
+      "name": "بَاءْ",
+      "forms": [
+        "ب",
+        "بـ",
+        "ـبـ",
+        "ـب"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ba_vs_nun-001",
+          "text": "بَابْ",
+          "was": "بَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-002",
+          "text": "بَطَّةْ",
+          "was": "بَطَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-003",
+          "text": "بِحَارْ",
+          "was": "بِحَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-004",
+          "text": "بَيْتْ",
+          "was": "بَيْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-005",
+          "text": "بُرْتُقَالْ",
+          "was": "بُرْتُقَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-006",
+          "text": "بَقَرَةْ",
+          "was": "بَقَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-007",
+          "text": "بَحْرْ",
+          "was": "بَحْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-008",
+          "text": "بِنْتْ",
+          "was": "بِنْت",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ba_vs_nun-009",
+          "text": "بَلَدْ",
+          "was": "بَلَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-010",
+          "text": "بُسْتَانْ",
+          "was": "بُسْتَان",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ba_vs_nun-011",
+          "text": "كِتَابْ",
+          "was": "كِتَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-012",
+          "text": "لَعِبْ",
+          "was": "لَعِب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-013",
+          "text": "حَبِيبْ",
+          "was": "حَبِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-014",
+          "text": "جَبَلْ",
+          "was": "جَبَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-015",
+          "text": "سَبُورَةْ",
+          "was": "سَبُورَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-016",
+          "text": "رَبِيعْ",
+          "was": "رَبِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-017",
+          "text": "ذَهَبْ",
+          "was": "ذَهَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ba_vs_nun-018",
+          "text": "أَرْنَبْ",
+          "was": "أَرْنَب",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        }
+      ]
+    },
+    {
+      "id": "nun_vs_ba",
+      "letters": [
+        "ن"
+      ],
+      "group": "ب ن",
+      "name": "نُونْ",
+      "forms": [
+        "ن",
+        "نـ",
+        "ـنـ",
+        "ـن"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "nun_vs_ba-001",
+          "text": "نَارْ",
+          "was": "نَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-002",
+          "text": "نَحْلَةْ",
+          "was": "نَحْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-003",
+          "text": "نَجْمْ",
+          "was": "نَجْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-004",
+          "text": "نُورْ",
+          "was": "نُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-005",
+          "text": "نَهْرْ",
+          "was": "نَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-006",
+          "text": "نَمِرْ",
+          "was": "نَمِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-007",
+          "text": "نَخْلَةْ",
+          "was": "نَخْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-008",
+          "text": "نَمْلَةْ",
+          "was": "نَمْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-009",
+          "text": "نَافِذَةْ",
+          "was": "نَافِذَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-010",
+          "text": "نَبَاتْ",
+          "was": "نَبَات",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "nun_vs_ba-011",
+          "text": "عَيْنْ",
+          "was": "عَيْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-012",
+          "text": "لَوْنْ",
+          "was": "لَوْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-013",
+          "text": "سِنّْ",
+          "was": "سِنّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-014",
+          "text": "مَنْزِلْ",
+          "was": "مَنْزِل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-015",
+          "text": "بَنَاتْ",
+          "was": "بَنَات",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "nun_vs_ba-016",
+          "text": "جُنْدِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ)"
+        },
+        {
+          "id": "nun_vs_ba-017",
+          "text": "حِصَانْ",
+          "was": "حِصَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "nun_vs_ba-018",
+          "text": "بُسْتَانْ",
+          "was": "بُسْتَان",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        }
+      ]
+    },
+    {
+      "id": "ta_vs_ya",
+      "letters": [
+        "ت"
+      ],
+      "group": "ت ي",
+      "name": "تَاءْ",
+      "forms": [
+        "ت",
+        "تـ",
+        "ـتـ",
+        "ـت"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ta_vs_ya-001",
+          "text": "تُفَّاحْ",
+          "was": "تُفَّاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-002",
+          "text": "تَمْرْ",
+          "was": "تَمْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-003",
+          "text": "تِينْ",
+          "was": "تِين",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ta_vs_ya-004",
+          "text": "تَاجْ",
+          "was": "تَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-005",
+          "text": "تِلْمِيذْ",
+          "was": "تِلْمِيذ",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ta_vs_ya-006",
+          "text": "تُرَابْ",
+          "was": "تُرَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-007",
+          "text": "تَمْسَاحْ",
+          "was": "تَمْسَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-008",
+          "text": "تَوْتْ",
+          "was": "تَوْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-009",
+          "text": "كِتَابْ",
+          "was": "كِتَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-010",
+          "text": "فَتَاةْ",
+          "was": "فَتَاة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-011",
+          "text": "بَيْتْ",
+          "was": "بَيْت",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ta_vs_ya-012",
+          "text": "وَقْتْ",
+          "was": "وَقْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-013",
+          "text": "زَيْتْ",
+          "was": "زَيْت",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ta_vs_ya-014",
+          "text": "صَوْتْ",
+          "was": "صَوْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-015",
+          "text": "تُوتْ",
+          "was": "تُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-016",
+          "text": "تَنِّينْ",
+          "was": "تَنِّين",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ta_vs_ya-017",
+          "text": "مَكْتَبَةْ",
+          "was": "مَكْتَبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ta_vs_ya-018",
+          "text": "سَاعَاتْ",
+          "was": "سَاعَات",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ya_vs_ta",
+      "letters": [
+        "ي"
+      ],
+      "group": "ت ي",
+      "name": "يَاءْ",
+      "forms": [
+        "ي",
+        "يـ",
+        "ـيـ",
+        "ـي"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ya_vs_ta-001",
+          "text": "يَدْ",
+          "was": "يَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-002",
+          "text": "يَاسَمِينْ",
+          "was": "يَاسَمِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-003",
+          "text": "يَمَامَةْ",
+          "was": "يَمَامَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-004",
+          "text": "يَقْطِينْ",
+          "was": "يَقْطِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-005",
+          "text": "يَوْمْ",
+          "was": "يَوْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-006",
+          "text": "يَنْبُوعْ",
+          "was": "يَنْبُوع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-007",
+          "text": "بَيْتْ",
+          "was": "بَيْت",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ya_vs_ta-008",
+          "text": "عَيْنْ",
+          "was": "عَيْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-009",
+          "text": "زَيْتْ",
+          "was": "زَيْت",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "ya_vs_ta-010",
+          "text": "لَيْلْ",
+          "was": "لَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-011",
+          "text": "كُرْسِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)"
+        },
+        {
+          "id": "ya_vs_ta-012",
+          "text": "هَادِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "ya_vs_ta-013",
+          "text": "عَرَبِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ)"
+        },
+        {
+          "id": "ya_vs_ta-014",
+          "text": "رَاعِي",
+          "was": null,
+          "review": null
+        },
+        {
+          "id": "ya_vs_ta-015",
+          "text": "يَنَابِيعْ",
+          "was": "يَنَابِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-016",
+          "text": "يَرْقَةْ",
+          "was": "يَرْقَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-017",
+          "text": "خَيْمَةْ",
+          "was": "خَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ya_vs_ta-018",
+          "text": "قَوِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed قَوِيّْ)"
+        }
+      ]
+    },
+    {
+      "id": "tha_vs_shin",
+      "letters": [
+        "ث"
+      ],
+      "group": "ث ش",
+      "name": "ثَاءْ",
+      "forms": [
+        "ث",
+        "ثـ",
+        "ـثـ",
+        "ـث"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tha_vs_shin-001",
+          "text": "ثَعْلَبْ",
+          "was": "ثَعْلَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-002",
+          "text": "ثَلْجْ",
+          "was": "ثَلْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-003",
+          "text": "ثَوْبْ",
+          "was": "ثَوْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-004",
+          "text": "ثَمَرَةْ",
+          "was": "ثَمَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-005",
+          "text": "ثُعْبَانْ",
+          "was": "ثُعْبَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-006",
+          "text": "ثَلَاثَةْ",
+          "was": "ثَلَاثَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-007",
+          "text": "ثَوْرْ",
+          "was": "ثَوْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-008",
+          "text": "ثِيَابْ",
+          "was": "ثِيَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-009",
+          "text": "أَثَاثْ",
+          "was": "أَثَاث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-010",
+          "text": "مُثَلَّثْ",
+          "was": "مُثَلَّث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-011",
+          "text": "حَدِيثْ",
+          "was": "حَدِيث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-012",
+          "text": "بَحْثْ",
+          "was": "بَحْث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-013",
+          "text": "ثَرْوَةْ",
+          "was": "ثَرْوَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-014",
+          "text": "ثَابِتْ",
+          "was": "ثَابِت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-015",
+          "text": "كَثِيرْ",
+          "was": "كَثِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-016",
+          "text": "حِثّْ",
+          "was": "حِثّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-017",
+          "text": "ثُلُثْ",
+          "was": "ثُلُث",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_shin-018",
+          "text": "وَرِيثْ",
+          "was": "وَرِيث",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "shin_vs_tha",
+      "letters": [
+        "ش"
+      ],
+      "group": "ث ش",
+      "name": "شِينْ",
+      "forms": [
+        "ش",
+        "شـ",
+        "ـشـ",
+        "ـش"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "shin_vs_tha-001",
+          "text": "شَمْسْ",
+          "was": "شَمْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-002",
+          "text": "شَجَرَةْ",
+          "was": "شَجَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-003",
+          "text": "شَارِعْ",
+          "was": "شَارِع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-004",
+          "text": "شُرْطَةْ",
+          "was": "شُرْطَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-005",
+          "text": "شَايْ",
+          "was": "شَاي",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-006",
+          "text": "شِتَاءْ",
+          "was": "شِتَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-007",
+          "text": "شَهْرْ",
+          "was": "شَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-008",
+          "text": "شَمْعَةْ",
+          "was": "شَمْعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-009",
+          "text": "مَشْرُوبْ",
+          "was": "مَشْرُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-010",
+          "text": "بِشَارَةْ",
+          "was": "بِشَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-011",
+          "text": "عُشّْ",
+          "was": "عُشّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-012",
+          "text": "فَرَاشْ",
+          "was": "فَرَاش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-013",
+          "text": "شُبَّاكْ",
+          "was": "شُبَّاك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-014",
+          "text": "شَرِيطْ",
+          "was": "شَرِيط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-015",
+          "text": "مُشْمِشْ",
+          "was": "مُشْمِش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-016",
+          "text": "رِيشْ",
+          "was": "رِيش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-017",
+          "text": "شَاطِئْ",
+          "was": "شَاطِئ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_tha-018",
+          "text": "عَطَشْ",
+          "was": "عَطَش",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "jim_vs_kha",
+      "letters": [
+        "ج"
+      ],
+      "group": "ج خ",
+      "name": "جِيمْ",
+      "forms": [
+        "ج",
+        "جـ",
+        "ـجـ",
+        "ـج"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "jim_vs_kha-001",
+          "text": "جَمَلْ",
+          "was": "جَمَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-002",
+          "text": "جَبَلْ",
+          "was": "جَبَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-003",
+          "text": "جَزَرْ",
+          "was": "جَزَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-004",
+          "text": "جُبْنْ",
+          "was": "جُبْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-005",
+          "text": "جَرَسْ",
+          "was": "جَرَس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-006",
+          "text": "جَنَّةْ",
+          "was": "جَنَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-007",
+          "text": "جِدَارْ",
+          "was": "جِدَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-008",
+          "text": "جُنْدِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed جُنْدِيّْ)"
+        },
+        {
+          "id": "jim_vs_kha-009",
+          "text": "نَجْمْ",
+          "was": "نَجْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-010",
+          "text": "رَجُلْ",
+          "was": "رَجُل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-011",
+          "text": "دَجَاجْ",
+          "was": "دَجَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-012",
+          "text": "ثَلْجْ",
+          "was": "ثَلْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-013",
+          "text": "جَوْزْ",
+          "was": "جَوْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-014",
+          "text": "جَامِعْ",
+          "was": "جَامِع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-015",
+          "text": "مَسْجِدْ",
+          "was": "مَسْجِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-016",
+          "text": "حَجَرْ",
+          "was": "حَجَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-017",
+          "text": "بُرْجْ",
+          "was": "بُرْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "jim_vs_kha-018",
+          "text": "مَوْجْ",
+          "was": "مَوْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kha_vs_jim",
+      "letters": [
+        "خ"
+      ],
+      "group": "ج خ",
+      "name": "خَاءْ",
+      "forms": [
+        "خ",
+        "خـ",
+        "ـخـ",
+        "ـخ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kha_vs_jim-001",
+          "text": "خَرُوفْ",
+          "was": "خَرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-002",
+          "text": "خُبْزْ",
+          "was": "خُبْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-003",
+          "text": "خَيْمَةْ",
+          "was": "خَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-004",
+          "text": "خَاتَمْ",
+          "was": "خَاتَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-005",
+          "text": "خَشَبْ",
+          "was": "خَشَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-006",
+          "text": "خَيْلْ",
+          "was": "خَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-007",
+          "text": "خَلِيجْ",
+          "was": "خَلِيج",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "kha_vs_jim-008",
+          "text": "خَرِيطَةْ",
+          "was": "خَرِيطَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-009",
+          "text": "نَخْلَةْ",
+          "was": "نَخْلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-010",
+          "text": "بُخَارْ",
+          "was": "بُخَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-011",
+          "text": "طَبَّاخْ",
+          "was": "طَبَّاخ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-012",
+          "text": "مَطْبَخْ",
+          "was": "مَطْبَخ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-013",
+          "text": "خَضْرَاءْ",
+          "was": "خَضْرَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-014",
+          "text": "خَزَانَةْ",
+          "was": "خَزَانَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-015",
+          "text": "دُخَانْ",
+          "was": "دُخَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-016",
+          "text": "صَخْرَةْ",
+          "was": "صَخْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-017",
+          "text": "فَخّْ",
+          "was": "فَخّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_jim-018",
+          "text": "تَارِيخْ",
+          "was": "تَارِيخ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sin_vs_shin",
+      "letters": [
+        "س"
+      ],
+      "group": "س ش",
+      "name": "سِينْ",
+      "forms": [
+        "س",
+        "سـ",
+        "ـسـ",
+        "ـس"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sin_vs_shin-001",
+          "text": "سَمَكْ",
+          "was": "سَمَك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-002",
+          "text": "سَيَّارَةْ",
+          "was": "سَيَّارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-003",
+          "text": "سَاعَةْ",
+          "was": "سَاعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-004",
+          "text": "سَرِيرْ",
+          "was": "سَرِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-005",
+          "text": "سَلَحْفَاةْ",
+          "was": "سَلَحْفَاة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-006",
+          "text": "سَمَاءْ",
+          "was": "سَمَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-007",
+          "text": "سُوقْ",
+          "was": "سُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-008",
+          "text": "سَفِينَةْ",
+          "was": "سَفِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-009",
+          "text": "مَدْرَسَةْ",
+          "was": "مَدْرَسَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-010",
+          "text": "شَمْسْ",
+          "was": "شَمْس",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "sin_vs_shin-011",
+          "text": "فَانُوسْ",
+          "was": "فَانُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-012",
+          "text": "سَحَابْ",
+          "was": "سَحَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-013",
+          "text": "سِكِّينْ",
+          "was": "سِكِّين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-014",
+          "text": "مَسْجِدْ",
+          "was": "مَسْجِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-015",
+          "text": "جَلَسْ",
+          "was": "جَلَسَ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "sin_vs_shin-016",
+          "text": "سُلَّمْ",
+          "was": "سُلَّم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_shin-017",
+          "text": "دَرْسْ",
+          "was": "دَرْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "shin_vs_sin",
+      "letters": [
+        "ش"
+      ],
+      "group": "س ش",
+      "name": "شِينْ",
+      "forms": [
+        "ش",
+        "شـ",
+        "ـشـ",
+        "ـش"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "shin_vs_sin-001",
+          "text": "شَمْسْ",
+          "was": "شَمْس",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "shin_vs_sin-002",
+          "text": "شَجَرَةْ",
+          "was": "شَجَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-003",
+          "text": "شُرْطَةْ",
+          "was": "شُرْطَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-004",
+          "text": "شَايْ",
+          "was": "شَاي",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-005",
+          "text": "شَمْعَةْ",
+          "was": "شَمْعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-006",
+          "text": "شَارِعْ",
+          "was": "شَارِع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-007",
+          "text": "شِتَاءْ",
+          "was": "شِتَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-008",
+          "text": "شَهْرْ",
+          "was": "شَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-009",
+          "text": "مَشْرُوبْ",
+          "was": "مَشْرُوب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-010",
+          "text": "عُشْبْ",
+          "was": "عُشْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-011",
+          "text": "فَرَاشْ",
+          "was": "فَرَاش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-012",
+          "text": "رِيشْ",
+          "was": "رِيش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-013",
+          "text": "شُبَّاكْ",
+          "was": "شُبَّاك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-014",
+          "text": "شَرِيطْ",
+          "was": "شَرِيط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-015",
+          "text": "بِشَارَةْ",
+          "was": "بِشَارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-016",
+          "text": "عَطَشْ",
+          "was": "عَطَش",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-017",
+          "text": "شَاطِئْ",
+          "was": "شَاطِئ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "shin_vs_sin-018",
+          "text": "عُشّْ",
+          "was": "عُشّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sad_vs_dad",
+      "letters": [
+        "ص"
+      ],
+      "group": "ص ض",
+      "name": "صَادْ",
+      "forms": [
+        "ص",
+        "صـ",
+        "ـصـ",
+        "ـص"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sad_vs_dad-001",
+          "text": "صَقْرْ",
+          "was": "صَقْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-002",
+          "text": "صُنْدُوقْ",
+          "was": "صُنْدُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-003",
+          "text": "صَابُونْ",
+          "was": "صَابُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-004",
+          "text": "صَحْرَاءْ",
+          "was": "صَحْرَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-005",
+          "text": "صَدِيقْ",
+          "was": "صَدِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-006",
+          "text": "صُورَةْ",
+          "was": "صُورَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-007",
+          "text": "صَبَاحْ",
+          "was": "صَبَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-008",
+          "text": "صَخْرَةْ",
+          "was": "صَخْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-009",
+          "text": "عُصْفُورْ",
+          "was": "عُصْفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-010",
+          "text": "نَصْرْ",
+          "was": "نَصْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-011",
+          "text": "قَفَصْ",
+          "was": "قَفَص",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-012",
+          "text": "رَصَاصْ",
+          "was": "رَصَاص",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-013",
+          "text": "صَيْفْ",
+          "was": "صَيْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-014",
+          "text": "صَلَاةْ",
+          "was": "صَلَاة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-015",
+          "text": "مِصْبَاحْ",
+          "was": "مِصْبَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-016",
+          "text": "قَصْرْ",
+          "was": "قَصْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-017",
+          "text": "حِصَانْ",
+          "was": "حِصَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sad_vs_dad-018",
+          "text": "خَلَاصْ",
+          "was": "خَلَاص",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dad_vs_sad",
+      "letters": [
+        "ض"
+      ],
+      "group": "ص ض",
+      "name": "ضَادْ",
+      "forms": [
+        "ض",
+        "ضـ",
+        "ـضـ",
+        "ـض"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dad_vs_sad-001",
+          "text": "ضِفْدَعْ",
+          "was": "ضِفْدَع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-002",
+          "text": "ضَوْءْ",
+          "was": "ضَوْء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-003",
+          "text": "ضَبَابْ",
+          "was": "ضَبَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-004",
+          "text": "ضَيْفْ",
+          "was": "ضَيْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-005",
+          "text": "ضَحِكْ",
+          "was": "ضَحِك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-006",
+          "text": "ضَرْبْ",
+          "was": "ضَرْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-007",
+          "text": "ضَعِيفْ",
+          "was": "ضَعِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-008",
+          "text": "ضَمِيرْ",
+          "was": "ضَمِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-009",
+          "text": "رِيَاضَةْ",
+          "was": "رِيَاضَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-010",
+          "text": "حَضَانَةْ",
+          "was": "حَضَانَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-011",
+          "text": "أَبْيَضْ",
+          "was": "أَبْيَض",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-012",
+          "text": "مَرِيضْ",
+          "was": "مَرِيض",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-013",
+          "text": "ضَابِطْ",
+          "was": "ضَابِط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-014",
+          "text": "ضَخْمْ",
+          "was": "ضَخْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-015",
+          "text": "مُضِيءْ",
+          "was": "مُضِيء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-016",
+          "text": "رَوْضَةْ",
+          "was": "رَوْضَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-017",
+          "text": "أَرْضْ",
+          "was": "أَرْض",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_sad-018",
+          "text": "بَيْضْ",
+          "was": "بَيْض",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tta_vs_zza",
+      "letters": [
+        "ط"
+      ],
+      "group": "ط ظ",
+      "name": "طَاءْ",
+      "forms": [
+        "ط",
+        "طـ",
+        "ـطـ",
+        "ـط"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tta_vs_zza-001",
+          "text": "طَائِرْ",
+          "was": "طَائِر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-002",
+          "text": "طَبِيبْ",
+          "was": "طَبِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-003",
+          "text": "طَاوِلَةْ",
+          "was": "طَاوِلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-004",
+          "text": "طَرِيقْ",
+          "was": "طَرِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-005",
+          "text": "طَبَقْ",
+          "was": "طَبَق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-006",
+          "text": "طِفْلْ",
+          "was": "طِفْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-007",
+          "text": "طَمَاطِمْ",
+          "was": "طَمَاطِم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-008",
+          "text": "طَيَّارَةْ",
+          "was": "طَيَّارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-009",
+          "text": "بَطَّةْ",
+          "was": "بَطَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-010",
+          "text": "قِطَارْ",
+          "was": "قِطَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-011",
+          "text": "قِطّْ",
+          "was": "قِطّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-012",
+          "text": "خَيْطْ",
+          "was": "خَيْط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-013",
+          "text": "طَبْلْ",
+          "was": "طَبْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-014",
+          "text": "طَحِينْ",
+          "was": "طَحِين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-015",
+          "text": "مَطَرْ",
+          "was": "مَطَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-016",
+          "text": "خَطّْ",
+          "was": "خَطّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-017",
+          "text": "بِسَاطْ",
+          "was": "بِسَاط",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tta_vs_zza-018",
+          "text": "نَشَاطْ",
+          "was": "نَشَاط",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zza_vs_tta",
+      "letters": [
+        "ظ"
+      ],
+      "group": "ط ظ",
+      "name": "ظَاءْ",
+      "forms": [
+        "ظ",
+        "ظـ",
+        "ـظـ",
+        "ـظ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zza_vs_tta-001",
+          "text": "ظَرْفْ",
+          "was": "ظَرْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-002",
+          "text": "ظِلّْ",
+          "was": "ظِلّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-003",
+          "text": "ظَبْيْ",
+          "was": "ظَبْي",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-004",
+          "text": "ظُفْرْ",
+          "was": "ظُفْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-005",
+          "text": "ظَهْرْ",
+          "was": "ظَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-006",
+          "text": "ظَلَامْ",
+          "was": "ظَلَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-007",
+          "text": "ظَرِيفْ",
+          "was": "ظَرِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-008",
+          "text": "ظَالِمْ",
+          "was": "ظَالِم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-009",
+          "text": "نَظَّارَةْ",
+          "was": "نَظَّارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-010",
+          "text": "مَحْفَظَةْ",
+          "was": "مَحْفَظَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-011",
+          "text": "حَظّْ",
+          "was": "حَظّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-012",
+          "text": "لَفْظْ",
+          "was": "لَفْظ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-013",
+          "text": "ظَمْآنْ",
+          "was": "ظَمْآن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-014",
+          "text": "ظَنّْ",
+          "was": "ظَنّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-015",
+          "text": "نِظَامْ",
+          "was": "نِظَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-016",
+          "text": "حَفِيظْ",
+          "was": "حَفِيظ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-017",
+          "text": "مُنَظَّمْ",
+          "was": "مُنَظَّم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_tta-018",
+          "text": "وَعْظْ",
+          "was": "وَعْظ",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ain_vs_ghain",
+      "letters": [
+        "ع"
+      ],
+      "group": "ع غ",
+      "name": "عَيْنْ",
+      "forms": [
+        "ع",
+        "عـ",
+        "ـعـ",
+        "ـع"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ain_vs_ghain-001",
+          "text": "عَيْنْ",
+          "was": "عَيْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-002",
+          "text": "عُصْفُورْ",
+          "was": "عُصْفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-003",
+          "text": "عِنَبْ",
+          "was": "عِنَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-004",
+          "text": "عَسَلْ",
+          "was": "عَسَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-005",
+          "text": "عَرَبِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed عَرَبِيّْ)"
+        },
+        {
+          "id": "ain_vs_ghain-006",
+          "text": "عَلَمْ",
+          "was": "عَلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-007",
+          "text": "عَجَلَةْ",
+          "was": "عَجَلَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-008",
+          "text": "عَقْرَبْ",
+          "was": "عَقْرَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-009",
+          "text": "مَعْلَمْ",
+          "was": "مَعْلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-010",
+          "text": "سَاعَةْ",
+          "was": "سَاعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-011",
+          "text": "رَبِيعْ",
+          "was": "رَبِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-012",
+          "text": "شُجَاعْ",
+          "was": "شُجَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-013",
+          "text": "عَنْكَبُوتْ",
+          "was": "عَنْكَبُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-014",
+          "text": "عَرُوسْ",
+          "was": "عَرُوس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-015",
+          "text": "مَعْرِفَةْ",
+          "was": "مَعْرِفَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-016",
+          "text": "شَمْعْ",
+          "was": "شَمْع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-017",
+          "text": "جَامِعْ",
+          "was": "جَامِع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ain_vs_ghain-018",
+          "text": "صُنْعْ",
+          "was": "صُنْع",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ghain_vs_ain",
+      "letters": [
+        "غ"
+      ],
+      "group": "ع غ",
+      "name": "غَيْنْ",
+      "forms": [
+        "غ",
+        "غـ",
+        "ـغـ",
+        "ـغ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ghain_vs_ain-001",
+          "text": "غَزَالْ",
+          "was": "غَزَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-002",
+          "text": "غَابَةْ",
+          "was": "غَابَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-003",
+          "text": "غُرَابْ",
+          "was": "غُرَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-004",
+          "text": "غَيْمَةْ",
+          "was": "غَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-005",
+          "text": "غُرْفَةْ",
+          "was": "غُرْفَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-006",
+          "text": "غَدَاءْ",
+          "was": "غَدَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-007",
+          "text": "غَنَمْ",
+          "was": "غَنَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-008",
+          "text": "غَسَّالَةْ",
+          "was": "غَسَّالَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-009",
+          "text": "صَغِيرْ",
+          "was": "صَغِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-010",
+          "text": "بَغْدَادْ",
+          "was": "بَغْدَاد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-011",
+          "text": "دِمَاغْ",
+          "was": "دِمَاغ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-012",
+          "text": "فَرَاغْ",
+          "was": "فَرَاغ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-013",
+          "text": "غَرِيبْ",
+          "was": "غَرِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-014",
+          "text": "غَنِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed غَنِيّْ)"
+        },
+        {
+          "id": "ghain_vs_ain-015",
+          "text": "مَغْرِبْ",
+          "was": "مَغْرِب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-016",
+          "text": "صِبَاغْ",
+          "was": "صِبَاغ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-017",
+          "text": "بَلَاغْ",
+          "was": "بَلَاغ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_ain-018",
+          "text": "نُغَمْ",
+          "was": "نُغَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "fa_vs_qaf",
+      "letters": [
+        "ف"
+      ],
+      "group": "ف ق",
+      "name": "فَاءْ",
+      "forms": [
+        "ف",
+        "فـ",
+        "ـفـ",
+        "ـف"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "fa_vs_qaf-001",
+          "text": "فِيلْ",
+          "was": "فِيل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-002",
+          "text": "فَرَاشَةْ",
+          "was": "فَرَاشَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-003",
+          "text": "فَأْرْ",
+          "was": "فَأْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-004",
+          "text": "فُسْتَانْ",
+          "was": "فُسْتَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-005",
+          "text": "فَوَاكِهْ",
+          "was": "فَوَاكِه",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-006",
+          "text": "فَنّْ",
+          "was": "فَنّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-007",
+          "text": "فَجْرْ",
+          "was": "فَجْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-008",
+          "text": "فُرْنْ",
+          "was": "فُرْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-009",
+          "text": "عُصْفُورْ",
+          "was": "عُصْفُور",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-010",
+          "text": "سَفِينَةْ",
+          "was": "سَفِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-011",
+          "text": "خَرُوفْ",
+          "was": "خَرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-012",
+          "text": "صَيْفْ",
+          "was": "صَيْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-013",
+          "text": "فَرَحْ",
+          "was": "فَرَح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-014",
+          "text": "فَلَّاحْ",
+          "was": "فَلَّاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-015",
+          "text": "مَفْتَاحْ",
+          "was": "مَفْتَاح",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-016",
+          "text": "ظَرْفْ",
+          "was": "ظَرْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-017",
+          "text": "نَظِيفْ",
+          "was": "نَظِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "fa_vs_qaf-018",
+          "text": "رَغِيفْ",
+          "was": "رَغِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "qaf_vs_fa",
+      "letters": [
+        "ق"
+      ],
+      "group": "ف ق",
+      "name": "قَافْ",
+      "forms": [
+        "ق",
+        "قـ",
+        "ـقـ",
+        "ـق"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "qaf_vs_fa-001",
+          "text": "قَمَرْ",
+          "was": "قَمَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-002",
+          "text": "قِطَّةْ",
+          "was": "قِطَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-003",
+          "text": "قَلَمْ",
+          "was": "قَلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-004",
+          "text": "قَلْبْ",
+          "was": "قَلْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-005",
+          "text": "قَوْسْ",
+          "was": "قَوْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-006",
+          "text": "قَصْرْ",
+          "was": "قَصْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-007",
+          "text": "قَارِبْ",
+          "was": "قَارِب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-008",
+          "text": "قُرْآنْ",
+          "was": "قُرْآن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-009",
+          "text": "بَقَرَةْ",
+          "was": "بَقَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-010",
+          "text": "صَقْرْ",
+          "was": "صَقْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-011",
+          "text": "طَرِيقْ",
+          "was": "طَرِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-012",
+          "text": "سُوقْ",
+          "was": "سُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-013",
+          "text": "قِرْدْ",
+          "was": "قِرْد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-014",
+          "text": "قَفَصْ",
+          "was": "قَفَص",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "qaf_vs_fa-015",
+          "text": "مَقْبَرَةْ",
+          "was": "مَقْبَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-016",
+          "text": "حَقِيبَةْ",
+          "was": "حَقِيبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-017",
+          "text": "بُرَاقْ",
+          "was": "بُرَاق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_fa-018",
+          "text": "عِرَاقْ",
+          "was": "عِرَاق",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "lam_vs_kaf",
+      "letters": [
+        "ل"
+      ],
+      "group": "ل ك",
+      "name": "لَامْ",
+      "forms": [
+        "ل",
+        "لـ",
+        "ـلـ",
+        "ـل"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "lam_vs_kaf-001",
+          "text": "لَيْمُونْ",
+          "was": "لَيْمُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-002",
+          "text": "لَعِبَةْ",
+          "was": "لَعِبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-003",
+          "text": "لَوْنْ",
+          "was": "لَوْن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-004",
+          "text": "لَيْلْ",
+          "was": "لَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-005",
+          "text": "لَبَنْ",
+          "was": "لَبَن",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-006",
+          "text": "لُغَةْ",
+          "was": "لُغَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-007",
+          "text": "لَوْحَةْ",
+          "was": "لَوْحَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-008",
+          "text": "لِسَانْ",
+          "was": "لِسَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-009",
+          "text": "عَلَمْ",
+          "was": "عَلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-010",
+          "text": "جَمَلْ",
+          "was": "جَمَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-011",
+          "text": "طِفْلْ",
+          "was": "طِفْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-012",
+          "text": "عَسَلْ",
+          "was": "عَسَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-013",
+          "text": "لَحْمْ",
+          "was": "لَحْم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-014",
+          "text": "لُؤْلُؤْ",
+          "was": "لُؤْلُؤ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-015",
+          "text": "سُلَّمْ",
+          "was": "سُلَّم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-016",
+          "text": "جَبَلْ",
+          "was": "جَبَل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "lam_vs_kaf-017",
+          "text": "مَلِكْ",
+          "was": "مَلِك",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "lam_vs_kaf-018",
+          "text": "هِلَالْ",
+          "was": "هِلَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kaf_vs_lam",
+      "letters": [
+        "ك"
+      ],
+      "group": "ل ك",
+      "name": "كَافْ",
+      "forms": [
+        "ك",
+        "كـ",
+        "ـكـ",
+        "ـك"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kaf_vs_lam-001",
+          "text": "كَلْبْ",
+          "was": "كَلْب",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "kaf_vs_lam-002",
+          "text": "كِتَابْ",
+          "was": "كِتَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-003",
+          "text": "كُرَةْ",
+          "was": "كُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-004",
+          "text": "كَنْزْ",
+          "was": "كَنْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-005",
+          "text": "كَعْكَةْ",
+          "was": "كَعْكَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-006",
+          "text": "كُرْسِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)"
+        },
+        {
+          "id": "kaf_vs_lam-007",
+          "text": "كَبِيرْ",
+          "was": "كَبِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-008",
+          "text": "كَوْكَبْ",
+          "was": "كَوْكَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-009",
+          "text": "سَمَكْ",
+          "was": "سَمَك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-010",
+          "text": "دِيكْ",
+          "was": "دِيك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-011",
+          "text": "مَلِكْ",
+          "was": "مَلِك",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "kaf_vs_lam-012",
+          "text": "بَنْكْ",
+          "was": "بَنْك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-013",
+          "text": "كَأْسْ",
+          "was": "كَأْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-014",
+          "text": "كَرَزْ",
+          "was": "كَرَز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-015",
+          "text": "شَبَكَةْ",
+          "was": "شَبَكَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-016",
+          "text": "حِكَايَةْ",
+          "was": "حِكَايَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-017",
+          "text": "سِكِّينْ",
+          "was": "سِكِّين",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_lam-018",
+          "text": "مُبَارَكْ",
+          "was": "مُبَارَك",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ra_vs_zay",
+      "letters": [
+        "ر"
+      ],
+      "group": "ر ز",
+      "name": "رَاءْ",
+      "forms": [
+        "ر",
+        "ـر"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ra_vs_zay-001",
+          "text": "رَجُلْ",
+          "was": "رَجُل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-002",
+          "text": "رُمَّانْ",
+          "was": "رُمَّان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-003",
+          "text": "رِيشَةْ",
+          "was": "رِيشَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-004",
+          "text": "رَبِيعْ",
+          "was": "رَبِيع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-005",
+          "text": "رَأْسْ",
+          "was": "رَأْس",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-006",
+          "text": "رَمْلْ",
+          "was": "رَمْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-007",
+          "text": "رِسَالَةْ",
+          "was": "رِسَالَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-008",
+          "text": "رُكْبَةْ",
+          "was": "رُكْبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-009",
+          "text": "شَجَرَةْ",
+          "was": "شَجَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-010",
+          "text": "بُرْتُقَالْ",
+          "was": "بُرْتُقَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-011",
+          "text": "نَهْرْ",
+          "was": "نَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-012",
+          "text": "بَحْرْ",
+          "was": "بَحْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-013",
+          "text": "رَقَمْ",
+          "was": "رَقَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-014",
+          "text": "رَوْضَةْ",
+          "was": "رَوْضَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-015",
+          "text": "مَرْكَبْ",
+          "was": "مَرْكَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-016",
+          "text": "قَمَرْ",
+          "was": "قَمَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-017",
+          "text": "طَيْرْ",
+          "was": "طَيْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ra_vs_zay-018",
+          "text": "سِحْرْ",
+          "was": "سِحْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zay_vs_ra",
+      "letters": [
+        "ز"
+      ],
+      "group": "ر ز",
+      "name": "زَايْ",
+      "forms": [
+        "ز",
+        "ـز"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zay_vs_ra-001",
+          "text": "زَرَافَةْ",
+          "was": "زَرَافَة",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "zay_vs_ra-002",
+          "text": "زَهْرَةْ",
+          "was": "زَهْرَة",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "zay_vs_ra-003",
+          "text": "زَيْتُونْ",
+          "was": "زَيْتُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-004",
+          "text": "زُجَاجْ",
+          "was": "زُجَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-005",
+          "text": "زَيْتْ",
+          "was": "زَيْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-006",
+          "text": "زِرّْ",
+          "was": "زِرّ",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "zay_vs_ra-007",
+          "text": "زَلَّاجَةْ",
+          "was": "زَلَّاجَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-008",
+          "text": "زِينَةْ",
+          "was": "زِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-009",
+          "text": "مَنْزِلْ",
+          "was": "مَنْزِل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-010",
+          "text": "غَزَالْ",
+          "was": "غَزَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-011",
+          "text": "خُبْزْ",
+          "was": "خُبْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-012",
+          "text": "أَرُزْ",
+          "was": "أَرُز",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "zay_vs_ra-013",
+          "text": "زَبِيبْ",
+          "was": "زَبِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-014",
+          "text": "زُرَافَةْ",
+          "was": "زُرَافَة",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "zay_vs_ra-015",
+          "text": "مِيزَانْ",
+          "was": "مِيزَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-016",
+          "text": "كَنْزْ",
+          "was": "كَنْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-017",
+          "text": "جَوْزْ",
+          "was": "جَوْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_ra-018",
+          "text": "رُمُوزْ",
+          "was": "رُمُوز",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        }
+      ]
+    },
+    {
+      "id": "dal_vs_dhal",
+      "letters": [
+        "د"
+      ],
+      "group": "د ذ",
+      "name": "دَالْ",
+      "forms": [
+        "د",
+        "ـد"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dal_vs_dhal-001",
+          "text": "دُبّْ",
+          "was": "دُبّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-002",
+          "text": "دَجَاجَةْ",
+          "was": "دَجَاجَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-003",
+          "text": "دَرَّاجَةْ",
+          "was": "دَرَّاجَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-004",
+          "text": "دَلْوْ",
+          "was": "دَلْو",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-005",
+          "text": "دَوَاءْ",
+          "was": "دَوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-006",
+          "text": "دُخَانْ",
+          "was": "دُخَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-007",
+          "text": "دَفْتَرْ",
+          "was": "دَفْتَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-008",
+          "text": "دِينَارْ",
+          "was": "دِينَار",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-009",
+          "text": "مَدْرَسَةْ",
+          "was": "مَدْرَسَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-010",
+          "text": "هُدْهُدْ",
+          "was": "هُدْهُد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-011",
+          "text": "أَسَدْ",
+          "was": "أَسَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-012",
+          "text": "وَلَدْ",
+          "was": "وَلَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-013",
+          "text": "دُودَةْ",
+          "was": "دُودَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-014",
+          "text": "دَقِيقْ",
+          "was": "دَقِيق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-015",
+          "text": "بَلَدْ",
+          "was": "بَلَد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-016",
+          "text": "جَدِيدْ",
+          "was": "جَدِيد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-017",
+          "text": "قَائِدْ",
+          "was": "قَائِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dhal-018",
+          "text": "مَسْجِدْ",
+          "was": "مَسْجِد",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dhal_vs_dal",
+      "letters": [
+        "ذ"
+      ],
+      "group": "د ذ",
+      "name": "ذَالْ",
+      "forms": [
+        "ذ",
+        "ـذ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dhal_vs_dal-001",
+          "text": "ذِئْبْ",
+          "was": "ذِئْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-002",
+          "text": "ذَهَبْ",
+          "was": "ذَهَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-003",
+          "text": "ذُرَةْ",
+          "was": "ذُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-004",
+          "text": "ذُبَابَةْ",
+          "was": "ذُبَابَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-005",
+          "text": "ذَكِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)"
+        },
+        {
+          "id": "dhal_vs_dal-006",
+          "text": "ذِرَاعْ",
+          "was": "ذِرَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-007",
+          "text": "ذَيْلْ",
+          "was": "ذَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-008",
+          "text": "ذَاكِرَةْ",
+          "was": "ذَاكِرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-009",
+          "text": "نَافِذَةْ",
+          "was": "نَافِذَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-010",
+          "text": "تِلْمِيذْ",
+          "was": "تِلْمِيذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-011",
+          "text": "أُسْتَاذْ",
+          "was": "أُسْتَاذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-012",
+          "text": "مُنْذْ",
+          "was": "مُنْذُ",
+          "review": "ADDED TASHKEEL: final vowel replaced by the pausal sukun"
+        },
+        {
+          "id": "dhal_vs_dal-013",
+          "text": "ذَوْقْ",
+          "was": "ذَوْق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-014",
+          "text": "ذَخِيرَةْ",
+          "was": "ذَخِيرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-015",
+          "text": "لَذِيذْ",
+          "was": "لَذِيذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-016",
+          "text": "مَلَاذْ",
+          "was": "مَلَاذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-017",
+          "text": "إِنْقَاذْ",
+          "was": "إِنْقَاذ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_dal-018",
+          "text": "حَذَاءْ",
+          "was": "حَذَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "qaf_vs_kaf",
+      "letters": [
+        "ق"
+      ],
+      "group": "ق ك",
+      "name": "قَافْ",
+      "forms": [
+        "ق",
+        "قـ",
+        "ـقـ",
+        "ـق"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "qaf_vs_kaf-001",
+          "text": "قَمَرْ",
+          "was": "قَمَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_kaf-002",
+          "text": "قَلَمْ",
+          "was": "قَلَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_kaf-003",
+          "text": "قِطَّةْ",
+          "was": "قِطَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_kaf-004",
+          "text": "قَلْبْ",
+          "was": "قَلْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_kaf-005",
+          "text": "قَصْرْ",
+          "was": "قَصْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "qaf_vs_kaf-006",
+          "text": "قَارِبْ",
+          "was": "قَارِب",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kaf_vs_qaf",
+      "letters": [
+        "ك"
+      ],
+      "group": "ق ك",
+      "name": "كَافْ",
+      "forms": [
+        "ك",
+        "كـ",
+        "ـكـ",
+        "ـك"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kaf_vs_qaf-001",
+          "text": "كَلْبْ",
+          "was": "كَلْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_qaf-002",
+          "text": "كِتَابْ",
+          "was": "كِتَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_qaf-003",
+          "text": "كُرَةْ",
+          "was": "كُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_qaf-004",
+          "text": "كَبِيرْ",
+          "was": "كَبِير",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_qaf-005",
+          "text": "كَعْكَةْ",
+          "was": "كَعْكَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kaf_vs_qaf-006",
+          "text": "كُرْسِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed كُرْسِيّْ)"
+        }
+      ]
+    },
+    {
+      "id": "zay_vs_dhal",
+      "letters": [
+        "ز"
+      ],
+      "group": "ز ذ",
+      "name": "زَايْ",
+      "forms": [
+        "ز",
+        "ـز"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zay_vs_dhal-001",
+          "text": "زَهْرَةْ",
+          "was": "زَهْرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_dhal-002",
+          "text": "زَرَافَةْ",
+          "was": "زَرَافَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_dhal-003",
+          "text": "زَيْتُونْ",
+          "was": "زَيْتُون",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_dhal-004",
+          "text": "زُجَاجْ",
+          "was": "زُجَاج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_dhal-005",
+          "text": "زَيْتْ",
+          "was": "زَيْت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zay_vs_dhal-006",
+          "text": "زِينَةْ",
+          "was": "زِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dhal_vs_zay",
+      "letters": [
+        "ذ"
+      ],
+      "group": "ز ذ",
+      "name": "ذَالْ",
+      "forms": [
+        "ذ",
+        "ـذ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dhal_vs_zay-001",
+          "text": "ذِئْبْ",
+          "was": "ذِئْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zay-002",
+          "text": "ذَهَبْ",
+          "was": "ذَهَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zay-003",
+          "text": "ذُرَةْ",
+          "was": "ذُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zay-004",
+          "text": "ذُبَابَةْ",
+          "was": "ذُبَابَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zay-005",
+          "text": "ذَكِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)"
+        },
+        {
+          "id": "dhal_vs_zay-006",
+          "text": "ذَيْلْ",
+          "was": "ذَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "sin_vs_tha",
+      "letters": [
+        "س"
+      ],
+      "group": "س ث",
+      "name": "سِينْ",
+      "forms": [
+        "س",
+        "سـ",
+        "ـسـ",
+        "ـس"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "sin_vs_tha-001",
+          "text": "سَمَكْ",
+          "was": "سَمَك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_tha-002",
+          "text": "سَيَّارَةْ",
+          "was": "سَيَّارَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_tha-003",
+          "text": "سَاعَةْ",
+          "was": "سَاعَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_tha-004",
+          "text": "سَمَاءْ",
+          "was": "سَمَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_tha-005",
+          "text": "سُوقْ",
+          "was": "سُوق",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "sin_vs_tha-006",
+          "text": "سَفِينَةْ",
+          "was": "سَفِينَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "tha_vs_sin",
+      "letters": [
+        "ث"
+      ],
+      "group": "س ث",
+      "name": "ثَاءْ",
+      "forms": [
+        "ث",
+        "ثـ",
+        "ـثـ",
+        "ـث"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tha_vs_sin-001",
+          "text": "ثَعْلَبْ",
+          "was": "ثَعْلَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_sin-002",
+          "text": "ثَلْجْ",
+          "was": "ثَلْج",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_sin-003",
+          "text": "ثَوْبْ",
+          "was": "ثَوْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_sin-004",
+          "text": "ثَمَرَةْ",
+          "was": "ثَمَرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_sin-005",
+          "text": "ثُعْبَانْ",
+          "was": "ثُعْبَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "tha_vs_sin-006",
+          "text": "ثَوْرْ",
+          "was": "ثَوْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "zza_vs_dhal",
+      "letters": [
+        "ظ"
+      ],
+      "group": "ظ ذ",
+      "name": "ظَاءْ",
+      "forms": [
+        "ظ",
+        "ظـ",
+        "ـظـ",
+        "ـظ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "zza_vs_dhal-001",
+          "text": "ظَرْفْ",
+          "was": "ظَرْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_dhal-002",
+          "text": "ظِلّْ",
+          "was": "ظِلّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_dhal-003",
+          "text": "ظُفْرْ",
+          "was": "ظُفْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_dhal-004",
+          "text": "ظَهْرْ",
+          "was": "ظَهْر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_dhal-005",
+          "text": "ظَلَامْ",
+          "was": "ظَلَام",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "zza_vs_dhal-006",
+          "text": "ظَرِيفْ",
+          "was": "ظَرِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dhal_vs_zza",
+      "letters": [
+        "ذ"
+      ],
+      "group": "ظ ذ",
+      "name": "ذَالْ",
+      "forms": [
+        "ذ",
+        "ـذ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dhal_vs_zza-001",
+          "text": "ذِئْبْ",
+          "was": "ذِئْب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zza-002",
+          "text": "ذَهَبْ",
+          "was": "ذَهَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zza-003",
+          "text": "ذُرَةْ",
+          "was": "ذُرَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zza-004",
+          "text": "ذَكِي",
+          "was": null,
+          "review": "NEEDS TASHKEEL: shadda (proposed ذَكِيّْ)"
+        },
+        {
+          "id": "dhal_vs_zza-005",
+          "text": "ذِرَاعْ",
+          "was": "ذِرَاع",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dhal_vs_zza-006",
+          "text": "ذَيْلْ",
+          "was": "ذَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ha_vs_hha",
+      "letters": [
+        "ه"
+      ],
+      "group": "ه ح",
+      "name": "هَاءْ",
+      "forms": [
+        "ه",
+        "هـ",
+        "ـهـ",
+        "ـه"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ha_vs_hha-001",
+          "text": "هِلَالْ",
+          "was": "هِلَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_vs_hha-002",
+          "text": "هَدِيَّةْ",
+          "was": "هَدِيَّة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_vs_hha-003",
+          "text": "هَاتِفْ",
+          "was": "هَاتِف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_vs_hha-004",
+          "text": "هَوَاءْ",
+          "was": "هَوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_vs_hha-005",
+          "text": "هُدْهُدْ",
+          "was": "هُدْهُد",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ha_vs_hha-006",
+          "text": "هَرَمْ",
+          "was": "هَرَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "hha_vs_ha",
+      "letters": [
+        "ح"
+      ],
+      "group": "ه ح",
+      "name": "حَاءْ",
+      "forms": [
+        "ح",
+        "حـ",
+        "ـحـ",
+        "ـح"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "hha_vs_ha-001",
+          "text": "حُوتْ",
+          "was": "حُوت",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_vs_ha-002",
+          "text": "حِصَانْ",
+          "was": "حِصَان",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_vs_ha-003",
+          "text": "حَلِيبْ",
+          "was": "حَلِيب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_vs_ha-004",
+          "text": "حَدِيقَةْ",
+          "was": "حَدِيقَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_vs_ha-005",
+          "text": "حَمَامَةْ",
+          "was": "حَمَامَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "hha_vs_ha-006",
+          "text": "حَقِيبَةْ",
+          "was": "حَقِيبَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dad_vs_dal",
+      "letters": [
+        "ض"
+      ],
+      "group": "ض د",
+      "name": "ضَادْ",
+      "forms": [
+        "ض",
+        "ضـ",
+        "ـضـ",
+        "ـض"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dad_vs_dal-001",
+          "text": "ضِفْدَعْ",
+          "was": "ضِفْدَع",
+          "review": "ADDED TASHKEEL: final sukun; CONTAINS BOTH LETTERS OF THE PAIR: a teacher decides"
+        },
+        {
+          "id": "dad_vs_dal-002",
+          "text": "ضَوْءْ",
+          "was": "ضَوْء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_dal-003",
+          "text": "ضَيْفْ",
+          "was": "ضَيْف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_dal-004",
+          "text": "ضَحِكْ",
+          "was": "ضَحِك",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_dal-005",
+          "text": "ضَعِيفْ",
+          "was": "ضَعِيف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dad_vs_dal-006",
+          "text": "ضَابِطْ",
+          "was": "ضَابِط",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "dal_vs_dad",
+      "letters": [
+        "د"
+      ],
+      "group": "ض د",
+      "name": "دَالْ",
+      "forms": [
+        "د",
+        "ـد"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "dal_vs_dad-001",
+          "text": "دُبّْ",
+          "was": "دُبّ",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dad-002",
+          "text": "دَجَاجَةْ",
+          "was": "دَجَاجَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dad-003",
+          "text": "دَلْوْ",
+          "was": "دَلْو",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dad-004",
+          "text": "دَوَاءْ",
+          "was": "دَوَاء",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dad-005",
+          "text": "دَفْتَرْ",
+          "was": "دَفْتَر",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "dal_vs_dad-006",
+          "text": "دُودَةْ",
+          "was": "دُودَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "ghain_vs_kha",
+      "letters": [
+        "غ"
+      ],
+      "group": "غ خ",
+      "name": "غَيْنْ",
+      "forms": [
+        "غ",
+        "غـ",
+        "ـغـ",
+        "ـغ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "ghain_vs_kha-001",
+          "text": "غَزَالْ",
+          "was": "غَزَال",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_kha-002",
+          "text": "غَابَةْ",
+          "was": "غَابَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_kha-003",
+          "text": "غُرَابْ",
+          "was": "غُرَاب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_kha-004",
+          "text": "غَيْمَةْ",
+          "was": "غَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_kha-005",
+          "text": "غُرْفَةْ",
+          "was": "غُرْفَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "ghain_vs_kha-006",
+          "text": "غَنَمْ",
+          "was": "غَنَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    },
+    {
+      "id": "kha_vs_ghain",
+      "letters": [
+        "خ"
+      ],
+      "group": "غ خ",
+      "name": "خَاءْ",
+      "forms": [
+        "خ",
+        "خـ",
+        "ـخـ",
+        "ـخ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "kha_vs_ghain-001",
+          "text": "خَرُوفْ",
+          "was": "خَرُوف",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_ghain-002",
+          "text": "خُبْزْ",
+          "was": "خُبْز",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_ghain-003",
+          "text": "خَيْمَةْ",
+          "was": "خَيْمَة",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_ghain-004",
+          "text": "خَاتَمْ",
+          "was": "خَاتَم",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_ghain-005",
+          "text": "خَشَبْ",
+          "was": "خَشَب",
+          "review": "ADDED TASHKEEL: final sukun"
+        },
+        {
+          "id": "kha_vs_ghain-006",
+          "text": "خَيْلْ",
+          "was": "خَيْل",
+          "review": "ADDED TASHKEEL: final sukun"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "ba_vs_nun-q1",
+      "kind": "contains",
+      "unit": "ba_vs_nun",
+      "options": [
+        "نَارْ",
+        "نَمْلَةْ",
+        "بَابْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ba_vs_nun-q2",
+      "kind": "position",
+      "unit": "ba_vs_nun",
+      "word": "بِحَارْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "nun_vs_ba-q1",
+      "kind": "contains",
+      "unit": "nun_vs_ba",
+      "options": [
+        "بَقَرَةْ",
+        "نَارْ",
+        "سَبُورَةْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "nun_vs_ba-q2",
+      "kind": "position",
+      "unit": "nun_vs_ba",
+      "word": "نَحْلَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ta_vs_ya-q1",
+      "kind": "contains",
+      "unit": "ta_vs_ya",
+      "options": [
+        "عَيْنْ",
+        "تُفَّاحْ",
+        "يَدْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ta_vs_ya-q2",
+      "kind": "position",
+      "unit": "ta_vs_ya",
+      "word": "تَمْرْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ya_vs_ta-q1",
+      "kind": "contains",
+      "unit": "ya_vs_ta",
+      "options": [
+        "هَادِي",
+        "فَتَاةْ",
+        "تَمْرْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ya_vs_ta-q2",
+      "kind": "position",
+      "unit": "ya_vs_ta",
+      "word": "رَاعِي",
+      "answer": "end",
+      "review": null
+    },
+    {
+      "id": "tha_vs_shin-q1",
+      "kind": "contains",
+      "unit": "tha_vs_shin",
+      "options": [
+        "شِتَاءْ",
+        "ثَعْلَبْ",
+        "شُبَّاكْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "tha_vs_shin-q2",
+      "kind": "position",
+      "unit": "tha_vs_shin",
+      "word": "ثَلْجْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "shin_vs_tha-q1",
+      "kind": "contains",
+      "unit": "shin_vs_tha",
+      "options": [
+        "ثَلْجْ",
+        "ثَرْوَةْ",
+        "شَمْسْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "shin_vs_tha-q2",
+      "kind": "position",
+      "unit": "shin_vs_tha",
+      "word": "شَجَرَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "jim_vs_kha-q1",
+      "kind": "contains",
+      "unit": "jim_vs_kha",
+      "options": [
+        "جَمَلْ",
+        "خَاتَمْ",
+        "مَطْبَخْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "jim_vs_kha-q2",
+      "kind": "position",
+      "unit": "jim_vs_kha",
+      "word": "جَبَلْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kha_vs_jim-q1",
+      "kind": "contains",
+      "unit": "kha_vs_jim",
+      "options": [
+        "حَجَرْ",
+        "خَرُوفْ",
+        "جَرَسْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "kha_vs_jim-q2",
+      "kind": "position",
+      "unit": "kha_vs_jim",
+      "word": "خُبْزْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sin_vs_shin-q1",
+      "kind": "contains",
+      "unit": "sin_vs_shin",
+      "options": [
+        "شَاطِئْ",
+        "عُشْبْ",
+        "سَمَكْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sin_vs_shin-q2",
+      "kind": "position",
+      "unit": "sin_vs_shin",
+      "word": "سَيَّارَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "shin_vs_sin-q1",
+      "kind": "contains",
+      "unit": "shin_vs_sin",
+      "options": [
+        "سَمَكْ",
+        "فَانُوسْ",
+        "شَجَرَةْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "shin_vs_sin-q2",
+      "kind": "position",
+      "unit": "shin_vs_sin",
+      "word": "شُرْطَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sad_vs_dad-q1",
+      "kind": "contains",
+      "unit": "sad_vs_dad",
+      "options": [
+        "ضَحِكْ",
+        "رَوْضَةْ",
+        "صَقْرْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sad_vs_dad-q2",
+      "kind": "position",
+      "unit": "sad_vs_dad",
+      "word": "صُنْدُوقْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dad_vs_sad-q1",
+      "kind": "contains",
+      "unit": "dad_vs_sad",
+      "options": [
+        "صَابُونْ",
+        "ضِفْدَعْ",
+        "نَصْرْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "dad_vs_sad-q2",
+      "kind": "position",
+      "unit": "dad_vs_sad",
+      "word": "ضَوْءْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tta_vs_zza-q1",
+      "kind": "contains",
+      "unit": "tta_vs_zza",
+      "options": [
+        "ظَهْرْ",
+        "حَفِيظْ",
+        "طَائِرْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tta_vs_zza-q2",
+      "kind": "position",
+      "unit": "tta_vs_zza",
+      "word": "طَبِيبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zza_vs_tta-q1",
+      "kind": "contains",
+      "unit": "zza_vs_tta",
+      "options": [
+        "مَطَرْ",
+        "ظَرْفْ",
+        "طَرِيقْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zza_vs_tta-q2",
+      "kind": "position",
+      "unit": "zza_vs_tta",
+      "word": "ظِلّْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ain_vs_ghain-q1",
+      "kind": "contains",
+      "unit": "ain_vs_ghain",
+      "options": [
+        "مَغْرِبْ",
+        "غَنَمْ",
+        "عَيْنْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ain_vs_ghain-q2",
+      "kind": "position",
+      "unit": "ain_vs_ghain",
+      "word": "عُصْفُورْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ghain_vs_ain-q1",
+      "kind": "contains",
+      "unit": "ghain_vs_ain",
+      "options": [
+        "غَزَالْ",
+        "شَمْعْ",
+        "عَلَمْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ghain_vs_ain-q2",
+      "kind": "position",
+      "unit": "ghain_vs_ain",
+      "word": "غَابَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "fa_vs_qaf-q1",
+      "kind": "contains",
+      "unit": "fa_vs_qaf",
+      "options": [
+        "فِيلْ",
+        "قَمَرْ",
+        "قُرْآنْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "fa_vs_qaf-q2",
+      "kind": "position",
+      "unit": "fa_vs_qaf",
+      "word": "فَرَاشَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "qaf_vs_fa-q1",
+      "kind": "contains",
+      "unit": "qaf_vs_fa",
+      "options": [
+        "قَمَرْ",
+        "فُرْنْ",
+        "مَفْتَاحْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "qaf_vs_fa-q2",
+      "kind": "position",
+      "unit": "qaf_vs_fa",
+      "word": "قِطَّةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "lam_vs_kaf-q1",
+      "kind": "contains",
+      "unit": "lam_vs_kaf",
+      "options": [
+        "بَنْكْ",
+        "لَيْمُونْ",
+        "كِتَابْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "lam_vs_kaf-q2",
+      "kind": "position",
+      "unit": "lam_vs_kaf",
+      "word": "لَعِبَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kaf_vs_lam-q1",
+      "kind": "contains",
+      "unit": "kaf_vs_lam",
+      "options": [
+        "عَلَمْ",
+        "كِتَابْ",
+        "جَبَلْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "kaf_vs_lam-q2",
+      "kind": "position",
+      "unit": "kaf_vs_lam",
+      "word": "كُرَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ra_vs_zay-q1",
+      "kind": "contains",
+      "unit": "ra_vs_zay",
+      "options": [
+        "رَجُلْ",
+        "كَنْزْ",
+        "مَنْزِلْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "ra_vs_zay-q2",
+      "kind": "position",
+      "unit": "ra_vs_zay",
+      "word": "رُمَّانْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zay_vs_ra-q1",
+      "kind": "contains",
+      "unit": "zay_vs_ra",
+      "options": [
+        "رِيشَةْ",
+        "زَيْتُونْ",
+        "بُرْتُقَالْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zay_vs_ra-q2",
+      "kind": "position",
+      "unit": "zay_vs_ra",
+      "word": "زُجَاجْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dal_vs_dhal-q1",
+      "kind": "contains",
+      "unit": "dal_vs_dhal",
+      "options": [
+        "دُبّْ",
+        "مَلَاذْ",
+        "ذِرَاعْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "dal_vs_dhal-q2",
+      "kind": "position",
+      "unit": "dal_vs_dhal",
+      "word": "دَجَاجَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dhal_vs_dal-q1",
+      "kind": "contains",
+      "unit": "dhal_vs_dal",
+      "options": [
+        "ذِئْبْ",
+        "دِينَارْ",
+        "بَلَدْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "dhal_vs_dal-q2",
+      "kind": "position",
+      "unit": "dhal_vs_dal",
+      "word": "ذَهَبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "qaf_vs_kaf-q1",
+      "kind": "contains",
+      "unit": "qaf_vs_kaf",
+      "options": [
+        "قَمَرْ",
+        "كَبِيرْ",
+        "كَلْبْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "qaf_vs_kaf-q2",
+      "kind": "position",
+      "unit": "qaf_vs_kaf",
+      "word": "قَلَمْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kaf_vs_qaf-q1",
+      "kind": "contains",
+      "unit": "kaf_vs_qaf",
+      "options": [
+        "قَلَمْ",
+        "قَمَرْ",
+        "كَلْبْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "kaf_vs_qaf-q2",
+      "kind": "position",
+      "unit": "kaf_vs_qaf",
+      "word": "كِتَابْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zay_vs_dhal-q1",
+      "kind": "contains",
+      "unit": "zay_vs_dhal",
+      "options": [
+        "ذَيْلْ",
+        "زَهْرَةْ",
+        "ذَهَبْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zay_vs_dhal-q2",
+      "kind": "position",
+      "unit": "zay_vs_dhal",
+      "word": "زَرَافَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dhal_vs_zay-q1",
+      "kind": "contains",
+      "unit": "dhal_vs_zay",
+      "options": [
+        "ذِئْبْ",
+        "زَرَافَةْ",
+        "زَيْتُونْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "dhal_vs_zay-q2",
+      "kind": "position",
+      "unit": "dhal_vs_zay",
+      "word": "ذَهَبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "sin_vs_tha-q1",
+      "kind": "contains",
+      "unit": "sin_vs_tha",
+      "options": [
+        "ثُعْبَانْ",
+        "ثَمَرَةْ",
+        "سَمَكْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "sin_vs_tha-q2",
+      "kind": "position",
+      "unit": "sin_vs_tha",
+      "word": "سَيَّارَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "tha_vs_sin-q1",
+      "kind": "contains",
+      "unit": "tha_vs_sin",
+      "options": [
+        "ثَعْلَبْ",
+        "سُوقْ",
+        "سَفِينَةْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "tha_vs_sin-q2",
+      "kind": "position",
+      "unit": "tha_vs_sin",
+      "word": "ثَلْجْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "zza_vs_dhal-q1",
+      "kind": "contains",
+      "unit": "zza_vs_dhal",
+      "options": [
+        "ذَهَبْ",
+        "ظَرْفْ",
+        "ذِرَاعْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "zza_vs_dhal-q2",
+      "kind": "position",
+      "unit": "zza_vs_dhal",
+      "word": "ظِلّْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dhal_vs_zza-q1",
+      "kind": "contains",
+      "unit": "dhal_vs_zza",
+      "options": [
+        "ظُفْرْ",
+        "ذِئْبْ",
+        "ظَهْرْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "dhal_vs_zza-q2",
+      "kind": "position",
+      "unit": "dhal_vs_zza",
+      "word": "ذَهَبْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ha_vs_hha-q1",
+      "kind": "contains",
+      "unit": "ha_vs_hha",
+      "options": [
+        "حَقِيبَةْ",
+        "هِلَالْ",
+        "حُوتْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "ha_vs_hha-q2",
+      "kind": "position",
+      "unit": "ha_vs_hha",
+      "word": "هَدِيَّةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "hha_vs_ha-q1",
+      "kind": "contains",
+      "unit": "hha_vs_ha",
+      "options": [
+        "حُوتْ",
+        "هَدِيَّةْ",
+        "هَاتِفْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "hha_vs_ha-q2",
+      "kind": "position",
+      "unit": "hha_vs_ha",
+      "word": "حِصَانْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dad_vs_dal-q1",
+      "kind": "contains",
+      "unit": "dad_vs_dal",
+      "options": [
+        "دَلْوْ",
+        "ضَوْءْ",
+        "دَوَاءْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "dad_vs_dal-q2",
+      "kind": "position",
+      "unit": "dad_vs_dal",
+      "word": "ضَيْفْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "dal_vs_dad-q1",
+      "kind": "contains",
+      "unit": "dal_vs_dad",
+      "options": [
+        "دُبّْ",
+        "ضَابِطْ",
+        "ضَيْفْ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "dal_vs_dad-q2",
+      "kind": "position",
+      "unit": "dal_vs_dad",
+      "word": "دَجَاجَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "ghain_vs_kha-q1",
+      "kind": "contains",
+      "unit": "ghain_vs_kha",
+      "options": [
+        "خَشَبْ",
+        "خَاتَمْ",
+        "غَزَالْ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "ghain_vs_kha-q2",
+      "kind": "position",
+      "unit": "ghain_vs_kha",
+      "word": "غَابَةْ",
+      "answer": "start",
+      "review": null
+    },
+    {
+      "id": "kha_vs_ghain-q1",
+      "kind": "contains",
+      "unit": "kha_vs_ghain",
+      "options": [
+        "غَنَمْ",
+        "خَرُوفْ",
+        "غَزَالْ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "kha_vs_ghain-q2",
+      "kind": "position",
+      "unit": "kha_vs_ghain",
+      "word": "خُبْزْ",
+      "answer": "start",
+      "review": null
+    }
+  ]
+}

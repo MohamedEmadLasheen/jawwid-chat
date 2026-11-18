@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ArabicLesson } from './ArabicLesson';
-import { harakatStandIn, standIn } from '../test/arabic-stand-in';
+import { resolveArabicLesson } from './arabic-lesson';
+import { harakatStandIn, pairStandIn, standIn } from '../test/arabic-stand-in';
 import { App } from '../App';
 
 describe('the Arabic letters lesson page', () => {
@@ -78,6 +79,21 @@ describe('the Arabic letters lesson page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'النتيجة' }));
     expect(screen.getByRole('status').textContent).toMatch(/١ من ١/);
     expect(screen.getByLabelText('النجوم').textContent).toBe('★☆☆☆');
+  });
+
+  it('lesson 2: the pairs first, then the pair\'s two letters', () => {
+    render(<ArabicLesson lesson={2} content={pairStandIn()} />);
+    expect(within(screen.getByRole('navigation', { name: 'الأزواج' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['ب ن']);
+    expect(within(screen.getByRole('navigation', { name: 'الحرفان' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['ب', 'ن']);
+    expect(screen.queryByRole('navigation', { name: 'الحركات' })).toBeNull();
+  });
+
+  it('lesson 2: a pair quiz never uses a word holding both letters of the pair', () => {
+    const c = pairStandIn();
+    c.units[0]!.words.push({ id: 'ba_vs_nun-002', text: 'بِنْتْ', was: null, review: 'CONTAINS BOTH LETTERS OF THE PAIR' });
+    expect(resolveArabicLesson(c, 2)).not.toBeNull();
+    c.quiz[0] = { ...c.quiz[0]!, options: ['بِنْتْ', 'نَارْ'] } as never;
+    expect(resolveArabicLesson(c, 2)).toBeNull();
   });
 
   it('lesson 3: the letters first, then that letter\'s harakat; only the letter carrying the mark counts', () => {

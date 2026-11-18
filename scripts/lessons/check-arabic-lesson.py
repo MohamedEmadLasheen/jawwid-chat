@@ -143,6 +143,19 @@ def occurrences(w, unit_letters, mark=None, after=None, tanween=None):
     return sorted(out)
 
 
+def pair_of(unit):
+    """Lesson 2: a unit grouped under a PAIR of letters (group 'ب ن') -- the pair's letters, else None."""
+    g = unit.get('group')
+    parts = g.split(' ') if is_str(g) else []
+    return parts if len(parts) >= 2 and all(len(x) == 1 and is_letter(x) for x in parts) else None
+
+
+def both_of_pair(w, unit):
+    """A word holding EVERY letter of its unit's pair cannot test telling them apart (review of #280)."""
+    pair = pair_of(unit)
+    return bool(pair) and all(has(w, [x]) for x in pair)
+
+
 def has(w, unit_letters, mark=None, after=None, tanween=None):
     return bool(occurrences(w, unit_letters, mark, after, tanween))
 
@@ -687,6 +700,9 @@ def check(lesson, number, quran=None):
                 if o not in vocabulary:
                     err(f'{where}: option {o!r} is not a word of this lesson')
             right = [i for i, o in enumerate(opts) if has(o, unit['letters'], unit['_mark'], unit['_after'], unit['_tanween'])]
+            for o in opts:
+                if both_of_pair(o, unit):
+                    err(f'{where}: option {o!r} contains both letters of the pair {unit["group"]!r}: a pair quiz never uses one')
             if not is_int(q.get('answer')) or right != [q['answer']]:
                 err(f'{where}: must have exactly one right answer, the answer (an index); by the one rule the right ones are {right}')
             elif opts[q['answer']] not in unit_words:
@@ -702,6 +718,8 @@ def check(lesson, number, quran=None):
                 err(f'{where}: {word!r} is not a unit\'s word of this lesson (never a distractor)')
                 continue
             at = positions(word, unit['letters'], unit['_mark'], unit['_after'], unit['_tanween'])
+            if both_of_pair(word, unit):
+                err(f'{where}: {word!r} contains both letters of the pair {unit["group"]!r}: a pair quiz never uses one')
             if not is_str(q.get('answer')) or at != [q['answer']]:
                 err(f'{where}: the letter must be in exactly one place, the answer; by the one rule it is {at}')
         else:
@@ -994,6 +1012,32 @@ def selftest():
         ok = (not errors) if expected is None else any(expected in e for e in errors)
         if not ok:
             failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
+    # Lesson 2: a pair of letters; its quiz never uses a word holding both (review of #280).
+    def pair_lesson():
+        return {
+            'lesson': 2, 'review': {'status': 'pending', 'by': None, 'note': ''}, 'provenance': {}, 'finalMark': 'sukun', 'retiredIds': [],
+            'units': [
+                {'id': 'ba_vs_nun', 'letters': ['ب'], 'group': 'ب ن', 'name': 'بَاءْ', 'forms': ['ب'], 'note': None,
+                 'words': [{'id': 'ba_vs_nun-001', 'text': 'بَابْ', 'was': None, 'review': None},
+                           {'id': 'ba_vs_nun-002', 'text': 'بِنْتْ', 'was': None, 'review': 'CONTAINS BOTH LETTERS OF THE PAIR'}]},
+                {'id': 'nun_vs_ba', 'letters': ['ن'], 'group': 'ب ن', 'name': 'نُونْ', 'forms': ['ن'], 'note': None,
+                 'words': [{'id': 'nun_vs_ba-001', 'text': 'نَارْ', 'was': None, 'review': None}]},
+            ],
+            'quiz': [{'id': 'q1', 'kind': 'contains', 'unit': 'ba_vs_nun', 'options': ['بَابْ', 'نَارْ'], 'answer': 0, 'review': None},
+                     {'id': 'q2', 'kind': 'position', 'unit': 'nun_vs_ba', 'word': 'نَارْ', 'answer': 'start', 'review': None}],
+        }
+    pcases = {
+        'pair-clean': (lambda c: None, None),
+        'pair-option-with-both-letters': (lambda c: c['quiz'][0].update(options=['بِنْتْ', 'نَارْ']), 'both letters of the pair'),
+        'pair-position-word-with-both-letters': (lambda c: c['quiz'][1].update(unit='ba_vs_nun', word='بِنْتْ'), 'both letters of the pair'),
+    }
+    for name, (mutate, expected) in pcases.items():
+        c = pair_lesson()
+        mutate(c)
+        errors = check(c, 2)
+        ok = (not errors) if expected is None else any(expected in e for e in errors)
+        if not ok:
+            failed.append(f'{name}: expected {expected or "no errors"}, got {errors}')
     # Real Quran, typed in standard spelling (review of #290), as code points: each must be REFUSED by the
     # reading check against the verified text; an ordinary sentence must pass.
     U = lambda *c: ''.join(map(chr, c))
@@ -1024,7 +1068,7 @@ def selftest():
     for f in failed:
         print(f'arabic-lesson selftest: FAIL {f}')
     if not failed:
-        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + len(rcases) + len(real) + 3} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
+        print(f'arabic-lesson selftest: {len(cases) + len(hcases) + len(scases) + len(pcases) + len(rcases) + len(real) + 3} cases, each caught; the shared letter fixture ({fx_count} cases) agrees with letters.ts')
     return 1 if failed else 0
 
 
