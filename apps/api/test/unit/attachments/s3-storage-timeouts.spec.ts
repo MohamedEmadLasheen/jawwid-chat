@@ -184,7 +184,10 @@ describe('a slow READER pacing a large streamed body', () => {
   afterAll(() => close(server));
 
   it('is not cut when it pauses longer than requestTimeoutMs (no socket idle timeout)', async () => {
-    const storage = storageAt(port(server), { requestTimeoutMs: 300, maxAttempts: 1 });
+    // The headers budget is generous (client and server share one event loop, and a loaded CI runner
+    // once stalled it past 300 ms); the guarantee under test is only that a pause LONGER than it
+    // does not cut the body, so the pause stays well above the budget.
+    const storage = storageAt(port(server), { requestTimeoutMs: 1_000, maxAttempts: 1 });
     try {
       const got = await storage.read(KEY);
       if (!got || got === 'unsatisfiable') throw new Error('expected a body');
@@ -194,7 +197,7 @@ describe('a slow READER pacing a large streamed body', () => {
         received += chunk.length;
         if (!paused && received > 1024 * 1024) {
           paused = true;
-          await sleep(1_000); // the viewer paused the video: buffers fill, the socket goes idle
+          await sleep(2_500); // the viewer paused the video: buffers fill, the socket goes idle
         }
       }
       expect(received).toBe(TOTAL);
