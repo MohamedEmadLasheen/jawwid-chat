@@ -153,6 +153,8 @@ export class SupervisionConversationService {
     let conv = await tx.conversation.findFirst({
       where: { type: ConversationType.TEACHER_SUPERVISION, supervisedTeacherId: teacherId, archivedAt: null },
     });
+    // RT-014: member rows first, before the rename or a member insert locks the conversation.
+    if (conv) await this.lockLiveMembers(tx, conv.id);
     const added: string[] = [];
     const removed: string[] = [];
 
@@ -221,6 +223,7 @@ export class SupervisionConversationService {
     });
     if (!conv?.supervisedTeacherId) return { added: [], removed: [] };
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'teacher_supervision:' + conv.supervisedTeacherId}))`;
+    await this.lockLiveMembers(tx, conv.id);
     const live = await tx.conversationMember.findMany({
       where: { conversationId: conv.id, leftAt: null, actorKind: ActorKind.STAFF },
       select: { actorId: true },
@@ -230,6 +233,22 @@ export class SupervisionConversationService {
       await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, ...staff });
     }
     return staff;
+  }
+
+  /**
+   * RT-014 lock order: every writer locks a conversation's member rows before
+   * the conversation row, as a send does (FOR SHARE on the same rows, in id
+   * order, then the conversation FOR UPDATE). A member insert takes KEY SHARE
+   * on the conversation (its foreign key) and a rename locks it outright; a
+   * sync that did either and only then ended a seat could deadlock with a send
+   * already holding that seat's row. Taken FOR UPDATE here, first, a send and
+   * this sync simply wait for each other.
+   */
+  private async lockLiveMembers(tx: Tx, conversationId: string): Promise<void> {
+    await tx.$queryRaw`
+      SELECT 1 FROM chat.conversation_member
+       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL
+       ORDER BY id FOR UPDATE`;
   }
 
   /**

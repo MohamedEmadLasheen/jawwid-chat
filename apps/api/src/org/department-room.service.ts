@@ -106,6 +106,8 @@ export class DepartmentRoomService {
     let conv = await tx.conversation.findFirst({
       where: { type: ConversationType.DEPARTMENT_ROOM, departmentId: dept.id, archivedAt: null },
     });
+    // RT-014: member rows first, before the rename or a member insert locks the room.
+    if (conv) await this.lockLiveMembers(tx, conv.id);
     if (!conv) {
       conv = await tx.conversation.create({
         data: {
@@ -154,5 +156,21 @@ export class DepartmentRoomService {
       await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added, removed });
     }
     return { conversation: conv, change: { conversationId: conv.id, added, removed } };
+  }
+
+  /**
+   * RT-014 lock order: every writer locks a conversation's member rows before
+   * the conversation row, as a send does (FOR SHARE on the same rows, in id
+   * order, then the conversation FOR UPDATE). A member insert takes KEY SHARE
+   * on the conversation (its foreign key) and a rename locks it outright; a
+   * sync that did either and only then ended a seat could deadlock with a send
+   * already holding that seat's row. Taken FOR UPDATE here, first, a send and
+   * this sync simply wait for each other.
+   */
+  private async lockLiveMembers(tx: Tx, conversationId: string): Promise<void> {
+    await tx.$queryRaw`
+      SELECT 1 FROM chat.conversation_member
+       WHERE conversation_id = ${conversationId}::uuid AND left_at IS NULL
+       ORDER BY id FOR UPDATE`;
   }
 }
