@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Store blocker S-05: an incoming call rings over the lock screen while the app is
          closed. Google Play grants this only to calling and alarm apps (Android 14+ checks
-         it at runtime: JawwidPush.mayUseFullScreenIntent) and the Play Console needs the
+         it at runtime: JawwidPush.canUseFullScreenIntent) and the Play Console needs the
          "full-screen intent" declaration for a calling app; without it the ring is a
          heads-up notification, still with Answer and Decline. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>

@@ -4,6 +4,13 @@
 teacher and one student, in the app. Stripe card checkout and bank transfer (with a receipt
 upload) stay in the production iOS and Android builds. The app relies on:
 
+> **Update (owner order, 2026-11-17): card payments are PAUSED in production at launch**
+> (`billing.card_paused`, `apps/api/src/billing/card-pause.ts`; seeded by migration `20261117100000`).
+> While they are paused, parents pay by bank transfer with a receipt upload, no card button is shown
+> (`cardAvailable` is false), and **no store text may claim that users can pay by card.** The card
+> statements below describe the code that is kept, for the day cards are switched on; they are not claims
+> to make to the stores now. Every paste block in §4 and §5 has been reworded accordingly.
+
 - App Store Review Guideline **3.1.3(d) Person-to-Person Services**;
 - Google Play's **1:1 online paid services** rule (Payments policy, explained in
   "Understanding Google Play's Payments policy").
@@ -73,7 +80,7 @@ Sources: <https://developer.apple.com/app-store/review/guidelines/#other-purchas
   alone even during one of its teacher's lessons. Only a `class_group` may span families in the
   database, and the API cannot create one yet.
 
-**What the parent reads.** The pay sheet and the Stripe Checkout page both say, in the family's
+**What the parent reads.** The pay sheet (and, if cards are switched on, the Stripe Checkout page) says, in the family's
 language:
 
 - EN: "Live one-to-one Quran lessons: one teacher and one student, in real time. Lessons are not recorded."
@@ -83,8 +90,9 @@ A non-lesson charge paid by web link is never described as a lesson.
 
 **Store builds keep both methods.** No billing screen has a platform, release-mode or build-flag
 gate, and `scripts/mobile/build-store.sh` defines nothing that could switch payments off
-(`test/app/store_payments_policy_test.dart`). "Pay by card" appears wherever the deployment has
-Stripe configured (`cardAvailable`); bank transfer always does.
+(`test/app/store_payments_policy_test.dart`). "Pay by card" appears only where the deployment has
+Stripe configured and cards are not paused (`cardAvailable`); bank transfer always does. At launch cards are
+paused, so only bank transfer appears.
 
 ## 3. Check against each policy
 
@@ -94,7 +102,7 @@ Stripe configured (`cardAvailable`); bank transfer always does.
 | Between two individuals | "between two individuals"; one-to-few needs IAP | "between two individuals" | PASS: one teacher, one learner per lesson (schema). A parent listening in does not add a learner. |
 | Not recorded, no replay | — | "not available for replay afterwards" | PASS for the call (no egress, guarded). **Risk:** see R-2 below. |
 | Only lesson items paid outside store billing | — | Mixed SKUs | PASS: non-lesson items refused in the app (tested) |
-| Marketed as live 1:1 lessons, never content or features | 3.1.1 | "marketed to users as digital" | PASS in the app (pay sheet, Stripe page). The **store listings** must say the same (owner, at submission). |
+| Marketed as live 1:1 lessons, never content or features | 3.1.1 | "marketed to users as digital" | PASS in the app (pay sheet; the Stripe page if cards are on). The **store listings** must say the same (owner, at submission). |
 | Nothing digital unlocked by paying | 3.1.1 | Payments §2 | PASS: the chat is never locked for payment; an unpaid package pauses only new lesson bookings (R-3 below) |
 | In-app links to the non-store payment | 3.1.3 intro | §4, unless exempt | Permitted under the exemption on Google Play. **Risk on Apple:** see R-1 below. |
 
@@ -139,7 +147,7 @@ Stripe configured (`cardAvailable`); bank transfer always does.
   accounts run in the server-enforced review payment mode (§3a). A reviewer sees the pay sheet,
   what is bought and both payment methods, but cannot complete a payment. App Review may ask to
   see a real card payment. If it does, answer with the screen recording of §6 item 3, made on a
-  real (non-review) account. **UNVERIFIED:** whether either store objects to a demo-only payment
+  real (non-review) account (bank transfer, while cards are paused). **UNVERIFIED:** whether either store objects to a demo-only payment
   flow; no policy page was re-read for this change.
 
 ## 3a. The review payment mode (OA-12)
@@ -153,12 +161,13 @@ unaffected. The server enforces it, not the app's UI.
   payment mode". The code: `apps/api/src/billing/review-mode.ts`.
 - What the reviewer sees: Packages tab → Amount due → "Lesson package (demo): 8 live
   one-to-one lessons" → Pay. The pay sheet says it is a demo account and still shows the
-  live one-to-one description. **Card** opens, in the browser, a page that says (in Arabic and
-  English): "In the live app this opens Stripe's secure checkout page in the browser to pay this
-  lesson package by card. The review account cannot make a payment." **Bank transfer** shows
-  demo bank details, a notice that no transfer or receipt is possible, and Send is off.
-- How real parents pay: by card, on Stripe Checkout opened in the browser, or by bank transfer,
-  uploading the receipt for the academy to confirm (§2).
+  live one-to-one description. **Bank transfer** shows
+  demo bank details, a notice that no transfer or receipt is possible, and Send is off. While cards are
+  paused there is no card button. (If cards were on, **Card** would open, in the browser, a page that
+  says in Arabic and English that the live app opens Stripe's checkout and that the review account cannot
+  make a payment.)
+- How real parents pay while cards are paused: by bank transfer, uploading the receipt for the academy to
+  confirm (§2). By card on Stripe Checkout only once cards are switched on.
 - The notes to paste are §4 and §5 below, and Option C of `store-console/review-notes.md` §2.1.
 
 ## 4. App Store Connect: App Review Information → Notes (paste)
@@ -173,11 +182,10 @@ below describes a review account that can pay, which is no longer the case.
 > app is free.
 >
 > Payments use methods other than in-app purchase under **Guideline 3.1.3(d) Person-to-Person
-> Services** (real-time tutoring between two individuals). A parent can pay a lesson package by
-> card (Stripe Checkout, opened in the browser) or by bank transfer, uploading the transfer
-> receipt for the academy to confirm. Lessons are not recorded.
+> Services** (real-time tutoring between two individuals). A parent pays a lesson package by
+> bank transfer, uploading the transfer receipt for the academy to confirm. Lessons are not recorded.
 >
-> Where to see it: sign in with the parent demo account below → Settings → Payments → Amount due
+> Where to see it: sign in with the parent demo account below → Packages tab → Amount due
 > → Pay. The pay sheet states what is bought ("Live one-to-one Quran lessons: one teacher and one
 > student, in real time. Lessons are not recorded.").
 >
@@ -188,8 +196,8 @@ below describes a review account that can pay, which is no longer the case.
 With the review payment mode on (OA-12), add this sentence to the text below:
 
 > For the review account, payment is disabled on our server: Amount due shows a demo lesson
-> package, card opens a page that explains the live Stripe checkout, and bank transfer shows demo
-> bank details and cannot send a receipt. No charge is possible.
+> package, and bank transfer shows demo bank details and cannot send a receipt. No charge is
+> possible.
 
 **UNVERIFIED for this change:** the Payments policy pages were not re-read; the wording relies on
 §1 (read 2026-11-05).
@@ -197,9 +205,9 @@ With the review payment mode on (OA-12), add this sentence to the text below:
 > Jawwid sells only live one-to-one Quran lessons, each between one teacher and one student, as
 > real-time audio calls. Lessons are not recorded and cannot be replayed or accessed again in the
 > app. Under the Payments policy's 1:1 online paid services rule (education classes), these are
-> paid by card (Stripe) or bank transfer rather than Google Play Billing. No group class, digital
+> paid by bank transfer rather than Google Play Billing. No group class, digital
 > content or app feature is sold; any other charge cannot be paid in the app. To see it: parent
-> demo account → Settings → Payments → Amount due → Pay.
+> demo account → Packages tab → Amount due → Pay.
 
 ## 6. Before submission (owner, in the consoles)
 

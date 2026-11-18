@@ -10,6 +10,14 @@ there. `age-rating.md` and `listing-copy.md` were not changed and stay pinned to
 re-verified file ends with an **Open items** list: answers that wait for an owner, counsel or lead
 decision, marked **OPEN** with the decision id.
 
+**LR-71 pre-audit fixes, 2026-11-10:** the drafts were checked against the combined launch candidate
+`claude/merge-rehearsal-3-2026-11-10` @ `0aec87f1` (read only; nothing built or run), and now describe it.
+This change is merged after the launch PRs (#498, #526, #531, #566, #580, #585), so it describes the code as
+it will be once they land. Fixed: teacher deletion is a 30-day request, not "contact the academy" (#498);
+the child's name no longer goes to Stripe, should cards be switched on (#580); Sentry session tracking is off (#526, merged); `remote-notification`
+is removed (#531); #524 and LR-11 are in. Citations refreshed in that pass say "as of the launch candidate";
+the rest stay pinned as each file's header says.
+
 Every answer cites its evidence as `file:line`. `[OWNER DECISION: ...]` marks an answer that waits for
 the owner or counsel. `{{PLACEHOLDER}}` marks a fact that does not exist yet (a URL, an e-mail, a
 credential). No credential, entity name, address or URL has been invented.
@@ -23,7 +31,7 @@ credential). No credential, entity name, address or URL has been invented.
 | [age-rating.md](age-rating.md) | App Store Connect → Age Rating; Play → Content rating (IARC) | Apple's current questionnaire (incl. user-generated content, messaging, social media) and IARC |
 | [play-declarations.md](play-declarations.md) | Play Console → App content, Store settings | Target audience, App access (review instructions), ads, financial features, health, news, government, foreground service (and its video), full-screen intent, permissions, category, countries |
 | [review-notes.md](review-notes.md) | App Store Connect → App Review Information → Notes; Play → App access | The paste-ready review text (LR-09f): three review accounts, deletion, calls, the staff role, the payments choice (OA-12), and the byte count |
-| [ios-background-modes.md](ios-background-modes.md) | (App Review checks the app) | LR-24: each `UIBackgroundModes` entry, the code that uses it, and its justification. `remote-notification` has no use: remove it |
+| [ios-background-modes.md](ios-background-modes.md) | (App Review checks the app) | LR-24: each `UIBackgroundModes` entry, the code that uses it, and its justification. `remote-notification` had no use and is removed (#531, in the launch candidate): `voip` and `audio` only |
 | [listing-copy.md](listing-copy.md) | Both listings | Name, subtitle, short and full descriptions, keywords, what's new (Arabic first), screenshot sizes and shot list |
 
 ## Findings from the code (for the lead)
@@ -40,14 +48,20 @@ credential). No credential, entity name, address or URL has been invented.
 4. **The review cohort has nothing to pay**, so a reviewer cannot reach the pay sheet that the payments
    review notes point to (`play-declarations.md` §2).
 5. **The payment tab is named "Packages" / «الباقات»** (LR-15; `tabSubscriptions` in
-   `lib/l10n/app_en.arb` and `app_ar.arb`; the key and the route `/subscriptions` keep their old names).
+   `lib/l10n/app_en.arb:1749` and `app_ar.arb`; the key and the route `/subscriptions` keep their old names).
    The screenshots and review notes use that name. LR-15 replaces the owner-chosen PD-30 wording, so
    it needs the owner's decision (row 6 below) before it ships.
-6. **The data inventory cites `checkout.service.ts:129`** for the child's name in the Stripe line item; it
-   is now line 147.
-7. **The Foreground service and full-screen intent declarations must match the submitted build.** LR-14
+6. **Card payments are paused at launch, so the store copy makes no card claim (owner order, 2026-11-17).**
+   The pause is `billing.card_paused` (`apps/api/src/billing/card-pause.ts`; seeded in migration
+   `20261117100000`, #609). The child's name is not sent to Stripe if cards are later switched on (LD-8,
+   #580: the line item is the payment request's label only, `checkoutProductName`,
+   `apps/api/src/billing/checkout.service.ts:190-192`); `google-data-safety.md` §4 and O-6 and
+   `apple-app-privacy.md` §6 say so, conditionally. The label is typed by staff, who must not type a
+   child's name in it. The data inventory (§2) still cites `checkout.service.ts:129` for the child's name
+   and was outside this change: correct it in a follow-up.
+7. **The Foreground service and full-screen intent declarations match the launch candidate.** LR-14
    is done (#505: microphone only, `phoneCall` and `MANAGE_OWN_CALLS` removed). LR-27 (check
-   `canUseFullScreenIntent()`) is still open.
+   `canUseFullScreenIntent()`) is done in #524, in the launch candidate (`JawwidPush.kt:180-184`).
 8. **"Encrypted in transit: Yes": LR-32 is done (#506).** The server refuses a non-`wss://` LiveKit URL
    when `APP_ENV=production` (`apps/api/src/communication/calls/media-token.ts:92-102`).
 9. **Crash data purposes differ between the stores on purpose (LR-71):** Google gets "App functionality,
@@ -57,9 +71,20 @@ credential). No credential, entity name, address or URL has been invented.
    (`google-data-safety.md` §2.3).
 10. **Collected but not cited before (LR-71):** learner certificate requests (Other User Content) and
     material opens (Product Interaction / App interactions). Both fall under types already declared Yes.
-11. **Sentry automatic session tracking is on by default** and not yet turned off in
-    `lib/core/crash/crash_reporting.dart` on main. Decided: off in #526 (pending merge). Confirm #526 is
-    in the submitted build before either privacy form is saved; if not, declare it.
+11. **Sentry automatic session tracking is on by default in the SDK; the app turns it off.** Done in #526,
+    in the launch candidate (`lib/core/crash/crash_reporting.dart:49`, `enableAutoSessionTracking = false`),
+    so neither privacy form declares session data.
+12. **Teacher deletion is a request, not a refusal (LR-03, done in #498, in the launch candidate).** A
+    teacher with lessons, students or payroll open requests deletion in Settings or on the web page, sees
+    the date, and is deleted within 30 days at the latest. `review-notes.md` (§2, §3), the public deletion
+    page (`docs/legal/account-deletion-*.md` §1.5) and the Teacher Terms (§12.2) now say so.
+    `docs/release/review-accounts.md` (re-run rules) and `docs/infrastructure/production-readiness.md`
+    (Account deletion row) say so too.
+13. **Export compliance (pre-audit item 13).** The app declares `ITSAppUsesNonExemptEncryption = false`
+    (`ios/Runner/Info.plist:37-38`, as of the launch candidate): only the system's standard encryption
+    (HTTPS/TLS, WebRTC's DTLS-SRTP), which is exempt. **App Store Connect:** answer the export compliance
+    question, if asked, with "No" for non-exempt encryption; with the key in the build it asks no question
+    per build. No export documentation is uploaded.
 
 ## Owner must confirm
 
@@ -73,12 +98,12 @@ Each item has a recommendation, so the answer can be yes or no.
 | 4 | Category | Education (both stores) | `listing-copy.md` §8; `play-declarations.md` §8 |
 | 5 | Are Arabic or tajweed taught as courses in this app? | Quran only unless yes | `listing-copy.md` §5.3, §6 |
 | 6 | Payment tab wording (LR-15, OA-12 D2): approve "Packages" / «الباقات» and the parent's button «عرض الباقات», replacing the PD-30 «عرض الاشتراكات» | Yes; done in the app, waiting only for this approval | `listing-copy.md` §9.2; `review-notes.md` §1 |
-| 7 | Live card payments at launch (LR-34) | Owner's call; the copy drops the card sentence if not | `listing-copy.md` §5.3 |
+| 7 | Live card payments (LR-34) | Cards are paused at launch; the owner ordered all card claims removed from store copy (2026-11-17). Add one back only when cards are switched on | `listing-copy.md` §5.3 |
 | 8 | A payable lesson-package request in the review cohort | Yes, so a reviewer can reach Pay | `play-declarations.md` §2 |
 | 9 | Apple "Social Media" answer | No | `age-rating.md` §1.2 |
 | 10 | Apple age-rating override | None (calculated rating, expected 4+) | `age-rating.md` §1.4 |
 | 11 | Counsel: is Quran-lesson enrolment "religious beliefs" data? | Counsel decides; declare if unsure | `apple-app-privacy.md` §3.4; `google-data-safety.md` §2 |
-| 12 | Counsel: Stripe's role (L-4) and the child's name in the line item (LD-8) | Remove the child's name | `google-data-safety.md` §4 |
+| 12 | Counsel: Stripe's role (L-4), relevant only if cards are switched on. The child's name in the line item (LD-8) is **done**: removed in #580 | Nothing more for LD-8; L-4 no longer changes any console answer | `google-data-safety.md` §4 |
 | 13 | Counsel: IARC "Shares Info" | No | `age-rating.md` §2.3 |
 | 14 | URLs and contacts | Required facts | `{{PRIVACY_POLICY_URL}}`, `{{TERMS_URL}}`, `{{SUPPORT_URL}}`, `{{SUPPORT_EMAIL}}`, `{{ACCOUNT_DELETION_URL}}`, `{{CHILD_SAFETY_POLICY_URL}}`, `{{SAFEGUARDING_EMAIL}}`, `{{RATING_CONTACT_EMAIL}}` |
 | 15 | Review credentials | Typed only into the consoles | `{{REVIEW_PARENT_EMAIL}}`, `{{REVIEW_PARENT_PASSWORD}}`, `{{REVIEW_TEACHER_EMAIL}}`, `{{REVIEW_TEACHER_PASSWORD}}` |
@@ -87,11 +112,11 @@ Each item has a recommendation, so the answer can be yes or no.
 
 ## Before submission (blocks the answers being true)
 
-LR-01 (production backend), LR-03 (teacher deletion), LR-04 (hosted policies), LR-05 (review accounts),
-LR-11 (notification permission timing), LR-15 (payment wording: done in #593, waiting for the owner's
-approval, row 6), LR-27 (full-screen check), and the
-merged-manifest and privacy-report checks of the release builds (release audit WP-6). LR-14 (#505),
-LR-32 (#506) and LR-73 (#508) are done. See the launch readiness checklist.
+LR-01 (production backend), LR-04 (hosted policies), LR-05 (review accounts), LR-15 (payment wording:
+done in the app, waiting for the owner's approval, row 6), and the merged-manifest and privacy-report checks of the release
+builds (release audit WP-6). LR-14 (#505), LR-32 (#506) and LR-73 (#508) are done; LR-03 (#498), LR-11 and
+LR-27 (#524) are done in the launch candidate. Submit only a build that contains the launch candidate. See
+the launch readiness checklist.
 
 ## Not verified here
 

@@ -72,7 +72,7 @@ store name must also be free in App Store Connect.
 • مواد وأنشطة تعليمية يفتحها المعلّم للطالب.
 
 المدفوعات
-• ادفع باقة الدروس ببطاقة عبر صفحة Stripe الآمنة، أو بالتحويل البنكي مع رفع إيصال التحويل.
+• ادفع باقة الدروس بالتحويل البنكي مع رفع إيصال التحويل في التطبيق.
 • اطّلع على المدفوعات والفواتير.
 
 الخصوصية والأمان
@@ -113,7 +113,7 @@ Learning materials
 • Materials and activities the teacher opens for the student.
 
 Payments
-• Pay for a lesson package by card on Stripe's secure page, or by bank transfer with the transfer receipt uploaded in the app.
+• Pay for a lesson package by bank transfer, with the transfer receipt uploaded in the app.
 • See your payments and invoices.
 
 Privacy and safety
@@ -142,11 +142,11 @@ Support: {{SUPPORT_URL}}
 | Voice calls | `lib/core/data/http/http_call_repository.dart:55-106`; `lib/features/calls/` |
 | Announcements | `lib/core/data/http/http_story_repository.dart` |
 | Materials and activities | `lib/features/materials/` |
-| Card on Stripe's page, bank transfer with receipt, invoices | `lib/core/data/http/http_billing_repository.dart:31-93`; `lib/features/billing/presentation/my_payments_screen.dart:323-330`. **Card appears only if live Stripe keys are configured** (launch item LR-34). If the owner launches without them, delete "by card on Stripe's secure page" from both languages. |
-| App lock | `ios/Runner/Info.plist:65-69`; `android/app/src/main/AndroidManifest.xml:14-17` |
+| Bank transfer with receipt, invoices | `lib/core/data/http/http_billing_repository.dart:31-93`; `lib/features/billing/presentation/my_payments_screen.dart:323-330`. **No card claim in the copy (owner order, 2026-11-17):** card payments are paused at launch (`billing.card_paused`, `apps/api/src/billing/card-pause.ts`; the store payments policy, `docs/release/app-review-notes-payments.md`). Add a card sentence back only when the owner switches cards on and the Privacy Policy is updated first. |
+| App lock | `ios/Runner/Info.plist:69-70` (as of the launch candidate); `android/app/src/main/AndroidManifest.xml:14-17` |
 | Names hidden on the lock screen by default | `docs/legal/data-inventory-and-retention-matrix.md` §2 (APNs row: `notification.lock_screen_names_default: false`) |
 | Report and block | PD-57: `lib/core/data/http/http_moderation_repository.dart:21`; `lib/core/data/http/http_block_repository.dart:23` |
-| Delete account in Settings | `lib/features/settings/presentation/settings_screen.dart:277-285`. **Teachers:** a teacher with students, lessons or payroll open records a deletion request instead, and the account is deleted within 30 days at the latest (`deleteAccountRequestIntro`, `lib/l10n/app_en.arb:3494`; published Account deletion 1.5) |
+| Delete account in Settings | `lib/features/settings/presentation/settings_screen.dart:281-285` (as of the launch candidate). **Teachers:** LR-03 is done in the launch candidate (#498): a teacher with lessons ahead requests deletion in the same screen and is deleted within 30 days at the latest (`lib/features/settings/presentation/delete_account_screen.dart:95-110`) |
 | Arabic and English | `ios/Runner/Info.plist:9-13`; `lib/l10n/` |
 | Account needed; activation with the registered e-mail | `lib/core/data/http/http_parent_signup_repository.dart:18`, `:49-50` |
 
@@ -229,7 +229,8 @@ Use only the review cohort (`docs/release/review-accounts.md`): fictional parent
 
 - [ ] Name, keywords and category decided (§1, §6, §8).
 - [ ] Every `{{...}}` URL is live in both languages (LR-04).
-- [ ] Card payment is live at launch, or the card sentence is removed (LR-34).
-- [ ] Teacher deletion works in the app (LR-03), or "Delete your account … at any time" is reworded.
-- [ ] The submitted build's payment tab says "Packages" / «الباقات», not "Subscriptions" (LR-15).
+- [x] No card sentence in the copy (cards are paused at launch, LR-34; owner order 2026-11-17).
+- [x] Teacher deletion works in the app (LR-03, done in #498, in the launch candidate): a teacher with work
+      open requests it in Settings and is deleted within 30 days at the latest.
+- [ ] The submitted build's payment tab says "Packages" / «الباقات», not "Subscriptions" (LR-15; `tabSubscriptions`, `lib/l10n/app_en.arb:1749`).
 - [ ] A second person reads §5 against the app on a phone.

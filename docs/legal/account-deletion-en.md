@@ -30,7 +30,7 @@ This page explains how to delete your account in **Jawwid: Quran Academy**, the 
 
 ## 2. What is deleted at once
 
-2.1 Deletion takes effect immediately. We delete:
+2.1 Deletion takes effect immediately; after a teacher's request (clause 1.5), it takes effect when the request is completed, at the latest on the date shown. We delete:
 
 (a) your sign-in name, your password, your devices, your push tokens, any pending reset codes and your own notifications; you are signed out everywhere;
 

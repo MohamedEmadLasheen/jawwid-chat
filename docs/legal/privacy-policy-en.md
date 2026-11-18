@@ -59,7 +59,7 @@ This Privacy Policy explains what personal data Jawwid Academy collects, why, wh
 > - **Your country and region** are typed by you, used for three stated purposes, and shared with no third party (section 4.3).
 > - **No card payments in the app.** Lesson packages are paid by bank transfer, or in cash where the Academy offers it, and recorded by the Academy. No payment provider receives your data or your child's name (section 4.11).
 > - **Staff support sessions** let an authorised staff member see the app as you see it, for at most 60 minutes, with a written reason and a permanent log. You are not notified today (section 9).
-> - **Deleting your account** is immediate. Some records are kept, for example the messages you sent (shown as "Deleted user"), your children's records, and financial records (section 10).
+> - **Deleting your account** is immediate (for a teacher with work still open, within 30 days of the request: section 10.4.1). Some records are kept, for example the messages you sent (shown as "Deleted user"), your children's records, and financial records (section 10).
 > - **Your data is hosted in Frankfurt, Germany.** Some service providers are in other countries, including the United States (section 11).
 > - **You have rights** to access, correct and delete your data and to complain. Write to info@jawwid.com (section 13).
 
@@ -434,7 +434,7 @@ Sales staff cannot. **Staff accounts can never be opened this way**, and no one 
 
 ### 10.2 What is deleted immediately
 
-10.2.1 Deletion takes effect at once, in a single operation. The following are deleted:
+10.2.1 Deletion takes effect at once, in a single operation (for a teacher with work still open, when the account is deleted, within 30 days of the request: section 10.4.1). The following are deleted:
 
 (a) your sign-in name (it is replaced by an internal marker, so the e-mail address can be used again), your password, your devices, your push tokens, any pending reset codes and your own notifications;
 
