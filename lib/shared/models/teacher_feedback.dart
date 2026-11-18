@@ -57,6 +57,7 @@ class FeedbackItem {
     required this.status,
     this.response,
     this.respondedAt,
+    this.replyUnread = false,
     required this.createdAt,
   });
 
@@ -71,7 +72,25 @@ class FeedbackItem {
   /// The staff reply, when there is one.
   final String? response;
   final DateTime? respondedAt;
+
+  /// PD-32 amendment: a reply this parent account has not opened yet (the unread dot).
+  /// Per account, decided by the server; cleared by opening the reply.
+  final bool replyUnread;
   final DateTime createdAt;
+
+  /// The same item once this account has opened its reply.
+  FeedbackItem asReplySeen() => FeedbackItem(
+        id: id,
+        learnerId: learnerId,
+        childName: childName,
+        teacherName: teacherName,
+        category: category,
+        body: body,
+        status: status,
+        response: response,
+        respondedAt: respondedAt,
+        createdAt: createdAt,
+      );
 }
 
 /// `GET /me/feedback`: the parent's children and every item they sent, newest first.
@@ -82,6 +101,9 @@ class MyFeedback {
   final List<FeedbackItem> items;
 
   FeedbackChild? child(String learnerId) => children.where((c) => c.learnerId == learnerId).firstOrNull;
+
+  /// One item by id; null when it is not (or no longer) the family's.
+  FeedbackItem? item(String id) => items.where((i) => i.id == id).firstOrNull;
 
   List<FeedbackItem> forChild(String learnerId) => [
         for (final item in items)

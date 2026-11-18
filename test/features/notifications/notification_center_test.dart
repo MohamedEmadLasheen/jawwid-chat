@@ -51,6 +51,19 @@ void main() {
       );
     });
 
+    test('PD-32 amendment: a feedback notice carries the one item it opens', () {
+      final e = HttpNotificationsRepository.entryFrom({
+        'id': 'n1',
+        'category': 'conversation',
+        'title': 'Jawwid',
+        'body': 'The administration has replied to your feedback.',
+        'at': '2026-11-03T10:00:00Z',
+        'action': {'kind': 'open_feedback', 'feedbackId': 'fb-1'},
+      })!;
+      expect(e.action!.kind, InboxActionKind.openFeedback);
+      expect(e.action!.feedbackId, 'fb-1');
+    });
+
     test('counts keep only the tabs this build knows, in the server\'s order', () {
       final c = HttpNotificationsRepository.countsFrom({
         'unread': 4,
@@ -82,6 +95,15 @@ void main() {
         routeFor(const InboxAction(InboxActionKind.openConversation, conversationId: 'x'), UserRole.parent),
         Routes.conversation('x'),
       );
+    });
+
+    test('PD-32 amendment: a feedback notice opens that one item, for a parent only', () {
+      const fb = InboxAction(InboxActionKind.openFeedback, feedbackId: 'fb-1');
+      expect(routeFor(fb, UserRole.parent), Routes.feedbackItem('fb-1'));
+      expect(Routes.feedbackItem('fb-1'), '/feedback/fb-1');
+      expect(routeFor(fb, UserRole.teacher), isNull);
+      expect(routeFor(fb, UserRole.sales), isNull);
+      expect(routeFor(const InboxAction(InboxActionKind.openFeedback), UserRole.parent), isNull);
     });
   });
 

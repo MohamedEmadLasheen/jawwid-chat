@@ -4253,6 +4253,15 @@ class L10nAr extends L10n {
   String get feedbackResponseLabel => 'ردّ الإدارة';
 
   @override
+  String get feedbackNewReply => 'ردّ جديد من الإدارة';
+
+  @override
+  String get feedbackOpenReply => 'اضغط لقراءته';
+
+  @override
+  String get feedbackItemGone => 'هذه الملاحظة لم تعد متاحة.';
+
+  @override
   String get feedbackCategoryLabel => 'ما نوع ملاحظتك؟';
 
   @override
@@ -4623,6 +4632,9 @@ class L10nAr extends L10n {
 
   @override
   String get notificationsActionOpenTask => 'فتح قائمة الإنجاز';
+
+  @override
+  String get notificationsActionOpenFeedback => 'عرض الملاحظة';
 
   @override
   String get lessonAudioAboutTitle => 'عن صوت الدروس';

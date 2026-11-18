@@ -31,6 +31,14 @@ export class ParentFeedbackController {
     return this.feedback.file(actorId, body ?? {});
   }
 
+  /** PD-32 amendment: this parent account opened the reply to one item (its unread dot goes). */
+  @NotForStaff()
+  @Post('me/feedback/:id/reply-seen')
+  @HttpCode(200)
+  replySeen(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.feedback.replySeen(actorId, id);
+  }
+
   // --- the Teachers department and the super admin ---
 
   @Requires('teacher_supervision.view', 'teacher_attendance.view', 'teacher_grants.view')

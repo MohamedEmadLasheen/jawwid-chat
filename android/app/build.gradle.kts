@@ -125,4 +125,6 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging")
     // NotificationCompat.CallStyle (the incoming-call notification) is core 1.9+.
     implementation("androidx.core:core-ktx:1.13.1")
+    // PD-32: the JVM unit tests of the push payload rules (src/test).
+    testImplementation("junit:junit:4.13.2")
 }
