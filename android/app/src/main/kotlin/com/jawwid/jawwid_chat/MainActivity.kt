@@ -182,6 +182,9 @@ class MainActivity : FlutterFragmentActivity() {
                     CallForegroundService.stop(applicationContext)
                     result.success(null)
                 }
+                // LR-27: may a ring take over the screen (Android 14+), and the screen to allow it.
+                "canUseFullScreenIntent" -> result.success(JawwidPush.canUseFullScreenIntent(applicationContext))
+                "openFullScreenIntentSettings" -> result.success(openFullScreenIntentSettings())
                 else -> result.notImplemented()
             }
         }
@@ -232,6 +235,31 @@ class MainActivity : FlutterFragmentActivity() {
         candidates.add(Intent(Settings.ACTION_SECURITY_SETTINGS))
         candidates.add(Intent(Settings.ACTION_SETTINGS))
 
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return true
+            } catch (e: ActivityNotFoundException) {
+                // This phone has no such screen; try the next one.
+            } catch (e: SecurityException) {
+                // Some vendors guard a screen; try the next one.
+            }
+        }
+        return false
+    }
+
+    /**
+     * LR-27: the system screen where the person lets this app's calls take over the
+     * screen (Android 14+), with the app's notification settings as the fallback.
+     * Returns whether anything opened; false below Android 14, where there is no such
+     * permission to give. It never throws into Flutter.
+     */
+    private fun openFullScreenIntentSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+        val candidates = listOf(
+            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, android.net.Uri.parse("package:$packageName")),
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+        )
         for (intent in candidates) {
             try {
                 startActivity(intent)
