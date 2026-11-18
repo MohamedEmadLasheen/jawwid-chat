@@ -30,6 +30,40 @@ staging.
 Any step failing stops the deployment. The configuration check runs **before**
 anything changes, so a missing secret costs a failed run rather than an outage.
 
+### First production deploys: the order (added 2026-11-10)
+
+The step-by-step owner checklist is `docs/release/first-deploy-readiness-2026-11-08.md` §6. In short:
+
+**Before Deploy 1: production configuration.** A names-only check on 2026-11-10 found no
+`STORAGE_ENDPOINT` and no `STORAGE_REGION` in the `production` Environment. Both are required in
+production (`infra/env/manifest.tsv:96-97`) and read by this workflow (`deploy-production.yml:228-229`,
+`:321`, `:353-355`). Add them as Environment **variables**: `STORAGE_ENDPOINT` =
+`https://fra1.digitaloceanspaces.com`, `STORAGE_REGION` = `fra1` (`scripts/infra/production-setup.py:62-63`).
+A missing `STORAGE_ENDPOINT` stops the run at the configuration check. A missing `STORAGE_REGION`
+does not: `:229` substitutes `auto`. `TRUSTED_PROXY_HOPS` stays **unset** until it is measured
+(§1d; `manifest.tsv:21-28`).
+
+**The order:**
+
+1. **PR #548 merges first** (deploy inputs through `env`; `image_tag` must be a full 40-character
+   SHA). It edits `.github/workflows/`, so it needs the owner's Code Owner approval. A run uses the
+   workflow on `main` when it starts.
+2. **Deploy 1** (`first_deploy` ticked, then the second run of the same SHA after DNS) from a `main`
+   commit **without PR #497**. With #497, the API and the worker refuse to start in production unless
+   the four `chat.config` rows `legal.current.terms_family`, `legal.current.terms_teacher`,
+   `legal.current.terms_staff` and `legal.current.code_of_conduct` each name a version published with
+   `chat.publish_legal_version` (`assertLegalConfiguration` in #497's
+   `apps/api/src/legal/legal-config.ts`). On a never-migrated database there is no `chat` schema, so
+   neither `chat.config`, the published-version table nor `chat.publish_legal_version` exists until
+   Deploy 1's migrations run. The versions cannot be published before it.
+3. **The owner publishes the four legal versions** and sets the four rows on the production database.
+   This is an owner action. #497's own release note adds that the Flutter and Admin Web terms screens
+   (ENG-11, ENG-12) ship before the rows are set.
+4. **PR #497 merges.**
+5. **Deploy 2**: a normal deploy (`first_deploy` unticked) of a `main` SHA that contains #497, after
+   staging has built its API image. Before it, #497's read-only check
+   `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal` must exit 0.
+
 ### 1a. Switches that wait for a deployed worker (PD-37)
 
 **`realtime.receipts_announce` stays OFF until the outbox WORKER runs PD-37.**

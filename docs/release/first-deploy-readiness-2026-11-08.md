@@ -14,6 +14,29 @@ deployed, run or changed to write it.**
 > create the schema by hand. The LR-77 "fails at the backup step" / "until LR-77 is fixed" notes in §1a-§1c,
 > §4 and §6 describe the state before the fix.
 
+> **Update, 2026-11-10: two corrections. They change the order of the first deploys.**
+>
+> 1. **Production is missing two required variables.** A read-only check by the lead on 2026-11-10
+>    listed names only. It found **no `STORAGE_ENDPOINT` and no `STORAGE_REGION`** in the `production`
+>    Environment. `infra/env/manifest.tsv:96-97` requires both in production. `deploy-production.yml`
+>    reads them at `:228-229`, `:321` and `:353-355`. The 2026-11-08 table below lists them as
+>    present; for 2026-11-10 that is wrong. Add both before the first deploy (§6 item 2a). The documented
+>    values are `scripts/infra/production-setup.py:62-63`: `STORAGE_ENDPOINT` =
+>    `https://fra1.digitaloceanspaces.com`, `STORAGE_REGION` = `fra1`. They are not secrets. §2a gives
+>    the details. `TRUSTED_PROXY_HOPS` is
+>    unchanged: it stays **unset** until it is measured on the live app (`manifest.tsv:21-28`, §6 item 11).
+> 2. **The first production deploy must not contain PR #497, and PR #548 should be on `main` before it.**
+>    #497 (PD-58 Terms of Use API gate, open on 2026-11-10) makes the API and the worker refuse to start
+>    in production unless four documents are configured. The four `chat.config` rows are
+>    `legal.current.terms_family`, `terms_teacher`, `terms_staff` and `code_of_conduct`. Each must name
+>    a version published with `chat.publish_legal_version` (`assertLegalConfiguration` in #497's
+>    `apps/api/src/legal/legal-config.ts`, called from `LegalService.onModuleInit`). On a database
+>    that was never migrated there is no `chat` schema yet, so no `chat.config` table, no
+>    published-version table and no `chat.publish_legal_version`. Only the first deploy's migrations
+>    create them; the versions can be published only after that. So the order is: **Deploy 1** from a `main` without #497 →
+>    the owner publishes the legal versions → #497 merges → **Deploy 2**. §6 "Deploy order" has the
+>    steps.
+
 Evidence base: `main` @ `9bb0418d` (this branch's parent), read on 2026-11-08, plus read-only GitHub
 queries that list **names only** (no secret or variable value was printed or read):
 
@@ -24,7 +47,7 @@ queries that list **names only** (no secret or variable value was printed or rea
 | `gh secret list --env staging` | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
 | `gh variable list --env staging` | `LIVEKIT_URL` |
 | `gh secret list --env production` | `APNS_PRIVATE_KEY`, `BACKUP_ENCRYPTION_PASSPHRASE`, `DATABASE_URL`, `DIGITALOCEAN_ACCESS_TOKEN`, `FCM_SERVICE_ACCOUNT_JSON`, `GHCR_PULL_CREDENTIALS`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `REDIS_URL`, `RESET_CODE_HASH_SECRET`, `SENTRY_DSN`, `SMTP_URL`, `STORAGE_ACCESS_KEY`, `STORAGE_ADMIN_ACCESS_KEY`, `STORAGE_ADMIN_SECRET_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_SIGNING_SECRET` (19) |
-| `gh variable list --env production` | `APNS_BUNDLE_ID`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `DATABASE_POOL_MAX`, `DATABASE_WORKER_POOL_MAX`, `FCM_PROJECT_ID`, `LAUNCH_PHASE`, `LIVEKIT_URL`, `RECOVERY_MAIL_FROM`, `STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_REGION` (12) |
+| `gh variable list --env production` | `APNS_BUNDLE_ID`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `DATABASE_POOL_MAX`, `DATABASE_WORKER_POOL_MAX`, `FCM_PROJECT_ID`, `LAUNCH_PHASE`, `LIVEKIT_URL`, `RECOVERY_MAIL_FROM`, `STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_REGION` (12). **Corrected 2026-11-10:** the lead's names-only check that day found neither `STORAGE_ENDPOINT` nor `STORAGE_REGION`; treat both as missing (§2a) |
 | `gh secret list --env backup` / `gh variable list --env backup` | none / none |
 | `gh run list --workflow deploy-staging.yml --limit 5` | newest: 2026-11-05 `workflow_dispatch` **cancelled** (run 42095782131, 4m25s); the 4 before it: 2026-10-06 `push` **failure** (before the push trigger was removed) |
 | `gh run list --workflow deploy-production.yml --limit 5` | **no runs ever** |
@@ -33,7 +56,8 @@ queries that list **names only** (no secret or variable value was printed or rea
 
 **Supersedes** the GitHub state in `docs/infrastructure/production-readiness.md:90-96` (2026-11-05:
 "`production` … holds nothing. There is no repository variable"). Both have changed since: the
-eight repository URL variables exist, and `production` now holds every name its deploy requires.
+eight repository URL variables exist, and `production` holds most names its deploy requires. As of
+2026-11-10 it is missing `STORAGE_ENDPOINT` and `STORAGE_REGION` (§2a).
 
 ### What could not be verified (and why)
 
@@ -247,8 +271,9 @@ refuses without it). Repository variables are visible to both environments.
 | `REDIS_URL` (secret; staging and prod-review must be `redis://redis:6379`) | manifest:64; staging `:219`; prod `:220`; `app-spec.py:121,463,764` | ❌ | ✅ (value UNVERIFIED) | Staging: add `redis://redis:6379` |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (secrets) | manifest:70-71; staging `:222-223`; prod `:223-224` | ❌ ❌ | ✅ ✅ | Staging: generate both |
 | `RESET_CODE_HASH_SECRET` (secret) | manifest:81; staging `:224`; prod `:225` | ❌ | ✅ | Staging: generate |
-| `STORAGE_ENDPOINT`, `STORAGE_BUCKET` (vars) | manifest:96,98; staging `:227,229`; prod `:228,230,353-354` | ❌ ❌ | ✅ ✅ | Staging: a separate staging bucket |
-| `STORAGE_REGION` (var) | manifest:97; staging `:228` (default `auto`); prod `:229` (default) and `:355` (**no default** in the storage check) | default | ✅ | — |
+| `STORAGE_ENDPOINT` (var) | manifest:96; staging `:227`; prod `:228`, `:321` (`STORAGE_ORIGIN`), `:353` | ❌ | **❌ (2026-11-10)**; listed on 2026-11-08 | Production: add the variable `STORAGE_ENDPOINT` = `https://fra1.digitaloceanspaces.com` (`production-setup.py:62`). Without it, `check-env.sh production` reports it MISSING in "Validate the production configuration", before anything changes. Staging: a separate staging bucket's endpoint |
+| `STORAGE_BUCKET` (var) | manifest:98; staging `:229`; prod `:230,354` | ❌ | ✅ | Staging: a separate staging bucket |
+| `STORAGE_REGION` (var) | manifest:97 (`req` in staging and production); staging `:228` (default `auto`); prod `:229` (default `auto`) and `:355` (**no default** in the storage check) | default | **❌ (2026-11-10)**; listed on 2026-11-08 | Production: add the variable `STORAGE_REGION` = `fra1` (`production-setup.py:63`). **The validation step does not catch it:** `:229` substitutes `auto` when the variable is unset, so `check-env.sh` sees a value and the app would be configured with `auto` instead of the documented `fra1`. Set it explicitly |
 | `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` (secrets) | manifest:99-100; staging `:230-231`; prod `:231-232` | ❌ ❌ | ✅ ✅ | Staging: a bucket-limited key for the staging bucket |
 | `STORAGE_SIGNING_SECRET` (secret) | manifest:113; staging `:236`; prod `:237` | ❌ | ✅ | Staging: generate |
 | `LIVEKIT_URL` (var or secret), `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | manifest:188-190; staging `:266-268`; prod `:268-270` | ✅ ✅ ✅ | ✅ ✅ ✅ | — (confirm production's are not staging's LiveKit project: UNVERIFIED) |
@@ -260,7 +285,9 @@ refuses without it). Repository variables are visible to both environments.
 | Hard-coded by the workflow (`NODE_ENV`, `PORT`, `LOG_LEVEL`, `SHUTDOWN_GRACE_MS`, `DATABASE_STATEMENT_TIMEOUT_MS`, `QUEUE_PREFIX`, `JWT_*_TTL`, `STORAGE_SIGNED_URL_TTL_SECONDS`, `APNS_PRODUCTION`, `GIT_COMMIT`, `BUILD_VERSION`, `BUILD_TIME`) | staging `:198-311`; prod `:199-310` | set by workflow | set by workflow | — |
 | `RECOVERY_DELIVERY_LOG` must be **absent** in production | manifest:322 (`forbid`) | — | ✅ absent | Never add it to production |
 
-**Result:** production has every name its first deploy requires. Staging is missing 13 required
+**Result (corrected 2026-11-10):** production is missing two required names, the variables
+`STORAGE_ENDPOINT` and `STORAGE_REGION` (§6 item 2a). It has every other name its first deploy
+requires. Staging is missing 13 required
 names (2 deploy credentials, the backup passphrase, and 10 application names), plus a staging database
 and a staging bucket to point them at.
 
@@ -316,8 +343,10 @@ the repository variables (`production-readiness.md:122-131`; also `scripts/infra
 
 ## 4. Staging first or production first
 
-Today: staging holds only `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (§2a); production holds
-every required name. **The owner decides; both are described.** Both options are blocked until LR-77
+Today: staging holds only `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (§2a). Production holds
+every required name except `STORAGE_ENDPOINT` and `STORAGE_REGION` (corrected 2026-11-10; §6 item 2a).
+Whichever option is chosen, the first production deploy runs from a `main` **without** PR #497
+(§6 "Deploy order"). **The owner decides; both are described.** Both options are blocked until LR-77
 (§1d) is fixed: the first `first_deploy=true` run of either workflow stops at the backup step today.
 
 Wherever a SHA is asked for below, use **the full 40-character commit SHA**, never the 7-character
@@ -353,7 +382,7 @@ while it runs (`production-readiness.md:33`). Benefit: the first-ever migration 
 creation, DNS and certificates are exercised where a mistake costs nothing, and the restore drill
 (G-41) has a target.
 
-### Option B: production first (possible today, deviates from the runbook)
+### Option B: production first (possible once the two storage variables are added, §6 item 2a; deviates from the runbook)
 
 It works because the production workflow needs only the **API image**, which the staging workflow's
 `build` job publishes without touching the `staging` Environment (`deploy-staging.yml:56-147`). That
@@ -385,8 +414,8 @@ deliberately red **Deploy staging** run is also a signal people must learn to re
 
 ### Recommendation (for the owner to decide)
 
-**Option B, production first**, while `LAUNCH_PHASE=review` and the database is empty: everything it
-needs already exists, the blast radius is an empty review-period project, and staging can follow
+**Option B, production first**, while `LAUNCH_PHASE=review` and the database is empty. Once
+`STORAGE_ENDPOINT` and `STORAGE_REGION` are added (§6 item 2a), everything it needs exists. The blast radius is an empty review-period project, and staging can follow
 before launch for the restore drill and multi-instance tests. Choose **Option A** if the owner wants
 the runbook's order kept exactly, or if the production Supabase project already holds data that must
 not be at risk (UNVERIFIED; it was empty on 2026-11-05).
@@ -414,13 +443,49 @@ The newest 10:
 
 Open PRs add more (as given in the brief; not re-read here): **#497** (`20261107130000`), **#498**
 (`20261107140000`), **#449** (`20261107150000`). Whichever of them is merged before the deploy SHA is
-chosen is in the first deploy; the rest arrive with a later deploy. `20260910120200_chat_connection_roles.sql`
+chosen is in the first deploy; the rest arrive with a later deploy. **Exception, 2026-11-10: #497 must
+not be in the first deploy** (§6 "Deploy order"). Its API refuses to start in production until the
+legal versions are published, and they can be published only after the first deploy's migrations. `20260910120200_chat_connection_roles.sql`
 grants BYPASSRLS (`deploy-production.yml:361-364`); the preflight step checks that the provider allows it
 before any migration runs.
 
 ---
 
 ## 6. Owner checklist for the first deploy
+
+### Deploy order (added 2026-11-10)
+
+Two production deploys, in this order. "Deploy 1" is the first-deploy sequence below: the two
+production runs of the **same** SHA in items 7-10 (the `first_deploy` run, and the run after DNS),
+with that SHA's API image built in item 6.
+
+1. **Before Deploy 1: PR #548 is merged** (deploy inputs reach the shell only through `env`, and
+   `image_tag` must be a full 40-character SHA; open on 2026-11-10). It changes `.github/workflows/`,
+   so it needs the owner's Code Owner approval. A run uses the workflow file on `main` at the moment
+   it is started, so #548 must be on `main` before the first Deploy 1 run is started.
+2. **Before Deploy 1: PR #497 is NOT merged.** Deploy 1's SHA must be a `main` commit without #497
+   (PD-58 Terms of Use API gate). With #497, the API and the worker refuse to start in production
+   until each of the four `chat.config` rows (`legal.current.terms_family`, `legal.current.terms_teacher`,
+   `legal.current.terms_staff`, `legal.current.code_of_conduct`) names a version published with
+   `chat.publish_legal_version` (`assertLegalConfiguration` in #497's `apps/api/src/legal/legal-config.ts`).
+   On a never-migrated database the tables those rows live in, and the publish function, are
+   created only by the first deploy's migrations, so nothing can be published before Deploy 1.
+   If #497 has merged before Deploy 1 starts, do not start it. Ask the lead to choose the SHA.
+3. **Deploy 1:** work through items 1-10 below. Add `STORAGE_ENDPOINT` and `STORAGE_REGION`
+   (item 2a) before item 7.
+4. **The owner publishes the legal versions** on the production database. This is the owner's
+   decision and an owner-run production database write. Publish each of the four documents with
+   `chat.publish_legal_version` (created by migration `20261107110000_chat_pd058_terms.sql`, which
+   Deploy 1 applies), and set the four `legal.current.*` rows to those versions. The API from Deploy 1
+   (no #497) has no code that reads those rows; on `main` they appear only in the Prisma schema and a
+   test. #497's own release note adds a condition: the Flutter (ENG-11) and Admin Web (ENG-12) terms
+   screens ship before the rows are set, because rows in force with an API that has #497 but clients
+   that cannot show the terms lock users out of messaging. #497 also adds a read-only check,
+   `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal`. Run it before Deploy 2;
+   exit 0 means all four rows are set and published.
+5. **Then #497 merges.**
+6. **Deploy 2:** an ordinary production deploy (`first_deploy` **unticked**) of a `main` SHA that
+   contains #497. First build its API image with **Deploy staging** (item 6's method).
 
 Production-first order (Option B). For Option A, do items 1-2 for staging first (§4 Option A). Each item
 names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report's inference (see
@@ -436,6 +501,16 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
    confirm in Supabase (Table Editor / SQL editor) that it is empty; the role has `statement_timeout = '15s'` (`:28`); the
    Supabase hardening is done (`:24`); the storage admin key is a different key from the app key; the
    LiveKit values are production's, not staging's. Unblocks: LR-01, LR-19.
+
+   2a. **Add the two missing storage variables (found 2026-11-10).** Settings → Environments →
+   `production` → Environment variables (variables, not secrets) → add `STORAGE_ENDPOINT` =
+   `https://fra1.digitaloceanspaces.com` and `STORAGE_REGION` = `fra1` (the values in
+   `production-setup.py:62-63`). Add only these two by hand. Do not run `production-setup.py fixed`
+   for this: it also rewrites every other fixed value (the repository URL variables, `LAUNCH_PHASE`,
+   the pool sizes, the APNs ids and the `REDIS_URL` secret, `production-setup.py:170-178`).
+   Without `STORAGE_ENDPOINT` the run stops at "Validate the production configuration", before
+   anything changes. Without `STORAGE_REGION` it does **not** stop: the
+   workflow substitutes `auto` (`deploy-production.yml:229`). Unblocks: LR-01.
 3. **Keep the backup passphrase outside GitHub** (password manager), the one in `production`'s
    `BACKUP_ENCRYPTION_PASSPHRASE`. Unblocks: LR-01, LR-29.
 4. **Leave `TRUSTED_PROXY_HOPS` unset** for the first deploy. Unblocks: LR-01 (LR-43 is item 11).
@@ -449,7 +524,8 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
    button next to the short SHA (it copies all 40 characters). Use the SHA of **that staging run**,
    not simply the newest commit on `main`: if anything merged after the run, the newest commit has no
    image and production stops at "The API image for this commit exists". The 7-character short SHA
-   does not work. Unblocks: LR-01.
+   does not work. The run must be on a `main` that has #548 and does **not** have #497 ("Deploy
+   order" above). Unblocks: LR-01.
 7. **First production run.** The LR-77 fix (#516, #518) is merged; with `first_deploy` ticked, "Back
    up the database" skips with a "Backup skipped" warning and the run continues to the migrations.
    **What this run does — read before starting it:**
@@ -504,6 +580,8 @@ names the tracker ID it unblocks; IDs other than LR-01 and LR-05 are this report
 LR-29's monitoring part (uptime check on `/health/ready`, alert e-mail, the on-call person of OA-19,
 proposed component alerts) is in `docs/infrastructure/monitoring.md` §7; its steps come after the
 first production deploy and do not block it.
+
+After item 10: "Deploy order" steps 4-6 (publish the legal versions, merge #497, Deploy 2).
 
 Until LR-77 is fixed and items 7-10 are done, LR-01 stays open. Nothing in this list changes Core, Core's DNS records or
 any protected project.
