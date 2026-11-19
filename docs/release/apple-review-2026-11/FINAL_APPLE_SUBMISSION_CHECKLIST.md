@@ -34,7 +34,7 @@ is server-side, and the app's half is already in the build.
 | 2.1 access | **COMPLETED** | No OTP or verification for the review accounts |
 | 1.2 report and block | **VERIFIED (simulator)** | S-8 to S-14 (API 201 and 204) |
 | 1.2 moderation operational | **BLOCKED (owner)** | Name the owner (Super Admin) and one backup manager (`APPLE_REVIEW_AUDIT.md` G-11) |
-| 1.2 Terms acceptance (zero tolerance) | **COMPLETED (code)** / **BLOCKED (owner: production)** | PR #497 mergeable, 30/30 checks. Local end-to-end proof: `reports/AR-H-terms-gate-e2e.md`. The owner procedure is in §D step 2 |
+| 1.2 Terms acceptance (zero tolerance) | **VERIFIED (local, end to end)** / **BLOCKED (owner: production)** | PR #497 with launch scope (family Terms only; head `03b8bc056`). Local proof: `reports/AR-H-terms-gate-e2e.md`. The owner procedure (two-pass deploy) is in §D step 2 |
 | 2.3.3 screenshots | **COMPLETED** | 4 per language and size: 01 chats, 02 family group, 03 calls, 05 settings. 04 Packages is optional (shows "(demo)") |
 | 3.1.1 / 3.1.3(d)(e) | **NOT APPLICABLE** (IAP) | Live one-to-one lessons on Zoom; nothing digital sold or unlocked; no StoreKit; bank transfer; card paused |
 | 3.2 business model | **COMPLETED** | Public enrolment framing; PR #613 enrol link in build 3 |
@@ -51,10 +51,36 @@ Do steps 1 to 3 in any order. They can run at the same time.
 
 1. **Phone (now; the update takes about 20-30 minutes):** Settings > General > Software Update > install iOS
    **27.2.1**.
-2. **Terms gate live (#497):**
-   - publish the four legal versions in production (procedure in `reports/AR-H-terms-gate-e2e.md`);
-   - approve and merge PR #497;
-   - approve the production deploy.
+2. **Terms gate live (#497, launch scope: family Terms only, your decision of 2026-11-19).** In this order:
+   1. Cloudflare: turn **off Email Address Obfuscation** for `admin.chat.jawwid.com` (Scrape Shield). Today it
+      rewrites the legal pages: the contact address shows as "[email protected]", and the served page no longer
+      matches its recorded hash.
+   2. Approve and merge **PR #497** (head `03b8bc056`: launch scope, family Terms only). Merge #613 and #614 at
+      the same time. Then run **Deploy staging** at the new `main` SHA. The production deploy accepts only the API
+      image digest a staging run recorded for that commit. Staging is not `APP_ENV=production`, so it starts
+      without the row.
+   3. **Deploy production, pass 1** (`image_tag` = the merge SHA). The workflow backs up the database and applies
+      #497's two migrations, which create `chat.publish_legal_version`. The new API then **refuses to start**,
+      because `legal.current.terms_family` is not set yet. That is by design: the release step fails, and **App
+      Platform keeps the current version serving** (`scripts/infra/do-release.sh`: "A failed deployment leaves the
+      previous one active"). Nothing is down.
+   4. Production database (owner): publish the family terms and put them in force. These values come from
+      `docs/legal/published-versions.json` and are not secret:
+      ```sql
+      select chat.publish_legal_version('terms_family', '1.0',
+        'https://admin.chat.jawwid.com/legal/ar/terms/1.0', 'https://admin.chat.jawwid.com/legal/en/terms/1.0',
+        '41f366d2eae85ac9a5750cbbeec25a935d02dee00ca3627742e98f766f18bace',
+        '907d5f65b9e158a2d59f837ad7d3810df690c1e27d6cd1ba2335919c69979c4c', true);
+      insert into chat.config (key, value, scope, description)
+      values ('legal.current.terms_family', to_jsonb('1.0'::text), 'legal', 'PD-58: the family terms in force')
+      on conflict (key) do update set value = excluded.value, updated_at = now();
+      ```
+      Check: `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal` must exit 0. `terms_family`
+      shows `set: '1.0'`; the other three show "not yet in force".
+   5. **Deploy production, pass 2** (same `image_tag`). No migrations are left; the API starts; the smoke test
+      passes.
+   6. Check after the deploy: sign in as the review parent, and "Before you continue" appears. Agree. Then report
+      a message, which succeeds.
 3. **Moderation:** confirm that you (Super Admin) and one named operations manager can open Admin Web `/moderation`.
 4. **Build 3:**
    - Approve and merge PR #613, and #614 (documentation).

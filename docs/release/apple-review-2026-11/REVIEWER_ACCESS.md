@@ -31,7 +31,7 @@ cohort login (changes to `review-cohort.ts`, `provision-review-cohort.ts`, `revi
 | One-time code (WhatsApp, SMS) | **None** for these accounts; e-mail and password only | `review-accounts.md`; sign-in is `POST /auth/login` with username and password (`auth.controller.ts:62`) |
 | E-mail verification | None | Same |
 | Two-factor | None | Same |
-| Terms gate at first sign-in | Not active in production today (PR #497 not merged). Once active, it is one "Agree" screen and does not block sign-in | AR-D G1 |
+| Terms gate at first sign-in | Once PR #497 is live: one "Before you continue" screen (Terms of Use, zero tolerance §7.3): tick, Agree. It does not block sign-in. Launch scope (owner 2026-11-19): family Terms only; teachers and staff are not asked until their terms are published | `reports/AR-H-terms-gate-e2e.md` (local proof) |
 | Lockout | **Ten wrong passwords lock an account for 15 minutes.** The login names are public in the repository, so a guessable domain is a risk | `auth.service.ts:54-57`. Repair: re-run the Review cohort workflow (it clears lockouts) |
 | Country or region | None | `REGIONAL_AVAILABILITY.md` |
 | Payment | The server enforces review payment mode for this organization: no charge and no receipt are possible | `review-mode.ts`; `billing.service.ts:731` |

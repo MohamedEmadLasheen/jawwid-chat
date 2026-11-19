@@ -21,13 +21,13 @@ Two texts:
 
 ---
 
-## A. App Review Information > Notes (paste; 3,719 bytes with the placeholders, all ASCII; fact-checked against the code, `reports/AR-G-notes-factcheck.md`)
+## A. App Review Information > Notes (paste; 3793 bytes with the placeholders, all ASCII; fact-checked against the code, `reports/AR-G-notes-factcheck.md`)
 
 <!-- NOTES-START -->
 ```text
 WHAT JAWWID IS: the communication and coordination app of Jawwid Academy, an online Quran and Arabic school open to the public worldwide, for students, their parents and their teachers. Families enrol on our public website (https://jawwid.com/enroll/: free trial, public prices); the academy then creates the parent's account, activated in the app with a one-time code. No anonymous sign-up, because the app connects children's families with teachers. Live one-to-one lessons take place on Zoom, outside this app; the app does not host, embed or link to them. In the app the family, the teacher and the academy talk, coordinate the schedule and follow progress. Account holders are adults (parents, teachers, a few academy staff); students use it with a parent. Not an employee-only app.
 
-SIGN-IN: e-mail in the Username field, then the password. No code or e-mail check. Arabic or English follows the phone (Settings > Language). After sign-in the app asks once where the family lives: pick a country or tap Later. All people and data are fictional, in a review-only organization.
+SIGN-IN: e-mail in the Username field, then the password. No code or e-mail check. Arabic or English follows the phone (Settings > Language). After sign-in: "Before you continue" shows our Terms of Use (zero tolerance for objectionable content or abusive users): tick and tap Agree. Then the app asks once where the family lives: pick a country or tap Later. All people and data are fictional, in a review-only organization.
 
 ACCOUNTS
 1. Parent (Sign-In Information above): Mariam Adel, mother of Yahya. Family group with his teacher and supervisor, a direct chat with the supervisor, lessons, Packages.
@@ -42,7 +42,7 @@ ACCOUNT DELETION: Settings > Delete account > password > Delete my account > con
 
 PAYMENTS (3.1.3(d) and (e)): the academy sells only live one-to-one lessons (one teacher, one student, real time on Zoom, outside the app). No digital content or app feature is sold. Parents pay lesson packages by bank transfer (card payment exists but is switched off). For the review family our server disables payment: Packages tab > Amount due shows a demo package with demo bank details; no receipt can be sent and no charge is possible.
 
-SERVICES: our own API and sign-in (DigitalOcean, Frankfurt; PostgreSQL), LiveKit Cloud (call audio), Apple Push Notification service, Sentry (crash reports). Zoom is used by the academy for lessons, outside the app. No analytics, ads or tracking.
+SERVICES: our own API and sign-in (DigitalOcean, Frankfurt; PostgreSQL), LiveKit Cloud (call audio), Apple Push Notification service, Sentry (crash reports). No analytics, ads or tracking.
 
 REGIONS: same features worldwide, Arabic and English. Not offered in China mainland (CallKit; no ICP filing).
 
@@ -74,7 +74,8 @@ The problem it solves: around online lessons, families, teachers and the school 
 It is not an internal or employee-only app. The academy's customers are members of the public who enrol their children. Accounts are created by the academy after enrolment rather than by an open sign-up form, because the app connects children's families with teachers, so every account holder must be an enrolled family or someone the academy engaged. Most academy staff work in a separate web portal; members of the academy's sales team and its senior administrator can also sign in to the app to answer families' chats and calls and to look up payments (Chats, Calls, Payments, Settings). We describe this so that no feature is undocumented; no review account is provided for that staff role.
 
 3. SETUP AND ACCESS INSTRUCTIONS
-- First launch: the app opens on the sign-in screen (Arabic or English, following the phone; Settings > Language changes it). Type the e-mail in the Username field and the password. The review accounts need no one-time code, SMS or e-mail verification. After the first sign-in the app asks once where the family lives (country and region, typed by the parent; no GPS, no location permission): choose a country or tap Later. iOS also asks to allow notifications.
+- First launch: the app opens on the sign-in screen (Arabic or English, following the phone; Settings > Language changes it). Type the e-mail in the Username field and the password. The review accounts need no one-time code, SMS or e-mail verification.
+- Terms of Use: after the first sign-in, a "Before you continue" screen links our Terms of Use, which state zero tolerance for objectionable content and abusive users (section 7.3). Tick the box and tap Agree; the acceptance is recorded on our server. Until a user agrees, reporting, blocking and posting are not available (a child-safety report is always allowed). After the first sign-in the app asks once where the family lives (country and region, typed by the parent; no GPS, no location permission): choose a country or tap Later. iOS also asks to allow notifications.
 - Accounts (all fictional, in a review-only organization; nothing reaches real families or staff):
   1. Parent: {{PARENT_LOGIN}} (Sign-In Information). One child, Yahya, with lessons; a family group with his teacher and supervisor; a direct chat with the supervisor.
   2. Teacher: {{TEACHER_LOGIN}}, password in the Notes. Yahya's teacher, in the same family group.
