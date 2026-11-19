@@ -606,7 +606,12 @@ class Serving(Site):
                           "form-action 'none'\"", "lacks frame-ancestors 'none'")
 
     def test_cache_entry_removed(self):
-        self.assertCaught(lp.NGINX_TEMPLATE, '    ~^/legal(/|$)     "no-cache";\n', '', 'no-cache')
+        self.assertCaught(lp.NGINX_TEMPLATE, '    ~^/legal(/|$)     "no-cache, no-transform";\n', '', 'no-cache')
+
+    def test_cache_entry_without_no_transform(self):
+        # The edge in front of App Platform (Cloudflare) rewrites every e-mail address into
+        # "[email protected]" plus a decoder script our CSP blocks, unless the origin says no-transform.
+        self.assertCaught(lp.NGINX_TEMPLATE, '"no-cache, no-transform";', '"no-cache";', 'no-transform')
 
     def test_dockerfile_without_the_refusal(self):
         self.assertCaught(lp.DOCKERFILE, "grep -rlF", "true || grep -rl", 'no longer refuses marked pages')
