@@ -11,9 +11,14 @@ Statuses:
 - **Marketing URL: leave empty** until the website is verified clean.
 - Worldwide distribution.
 
-**Recommended: build 3** (1.0.0, build number **4**, the next free number on both stores). It is `main` plus PR #613
-(the enrol link, the strongest visible answer to Guideline 3.2). It needs no other app change: the Terms gate (#497)
-is server-side, and the app's half is already in the build.
+**Build: reply with the build already under review, 1.0.0 (2)** (`2e4127015`; owner priority 2026-11-19: no build that
+Apple's message does not require). Apple asked for information, not a new binary. The Notes and §B are written for build 2.
+Build 3 (1.0.0 (4), `main` plus PR #613's enrol link) is optional: it strengthens the 3.2 answer but adds a build, an
+upload and a new TestFlight install. Step 4 below applies only if you choose it.
+
+**The "Before you continue" Terms screen needs step 2 (production deploy).** Without the deploy, use the alternative
+wording in `APP_REVIEW_NOTES.md` §C. Live check 2026-11-19: production runs `2e4127015`; the Terms page still serves
+`cache-control: no-cache` and its e-mail addresses are obfuscated (the #615 fix is not live).
 
 ## A. Apple's six requested items
 
@@ -112,25 +117,25 @@ Do steps 1 to 3 in any order. They can run at the same time.
      only with the old API.
    - Acceptance and version rows are consent records. Never delete them.
 3. **Moderation:** confirm that you (Super Admin) and one named operations manager can open Admin Web `/moderation`.
-4. **Build 3:**
+4. **Build 3 (optional; skip for the fastest path):**
    - Approve and merge PR #613, and #614 (documentation).
    - Approve the release run. The lead starts it on request:
      `gh workflow run release-store-builds.yml -f ref=<new main SHA> -f platform=ios -f build_name=1.0.0 -f build_number=4`.
      The `store-release` environment needs the owner's approval.
    - It uploads to App Store Connect / TestFlight. It does not submit.
-5. **Install** 1.0.0 (4) from TestFlight on the updated iPhone. Remove the old developer build first.
+5. **Install** 1.0.0 (2) (or 1.0.0 (4) if you chose step 4) from TestFlight on the updated iPhone. Remove the old developer build first.
 6. **Record** following `SCREEN_RECORDING_SCRIPT.md`. AirDrop the video to
    `~/jawwid-evidence/apple-review-2026-11-19/recording/`.
 7. **Restore the deletion-test account:** run the Review cohort workflow (owner approval). Then run
    `bash ~/jawwid-orchestrator/bin/verify-review-logins.sh` and expect 3 x OK.
 8. **App Store Connect:**
-   1. Version 1.0: select **build 1.0.0 (4)**.
+   1. Version 1.0: keep **build 1.0.0 (2)** (select 1.0.0 (4) only if you chose step 4).
    2. Pricing and Availability: all countries and regions **except China mainland**. Business: complete the EU
       trader checklist (`REGIONAL_AVAILABILITY.md` §3).
    3. App Information: **Marketing URL empty**.
    4. Screenshots: delete the existing iPhone screenshots. Upload `store-shots/upload/final/1206x2622/{en,ar}/` (6.3") and `upload/final/1320x2868/{en,ar}/` (6.9"): 4 files each (01 chats, 02 family group, 03 calls, 05 settings), in English and Arabic.
    5. App Review Information: Sign-in = parent login and password; **Notes = `APP_REVIEW_NOTES.md` §A**, with the
       placeholders typed.
-   6. App Review (Resolution Center): reply with **§B**, with the placeholders filled: `{{BUILD}}` = 1.0.0 (4) and
+   6. App Review (Resolution Center): reply with **§B**, with the placeholders filled: `{{BUILD}}` = 1.0.0 (2) (or (4)) and
       `{{IOS_VERSION}}` = 27.2.1. **Attach the recording.**
 9. **Resubmit** (owner's final approval).
