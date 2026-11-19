@@ -49,7 +49,31 @@ For each size and language (English, Arabic): see the table filled in §4.
 
 ## 4. Produced files and checks
 
-Filled in from the capture run (pixel sizes checked with `sips`).
+Captured on 2026-11-19 (capture log: `store-shots.log`). Every file was checked with
+`sips -g pixelWidth -g pixelHeight -g hasAlpha`. The simulator PNGs have an alpha channel, which App Store Connect
+refuses, so the **upload set is JPEG at quality 95 with no alpha**: `store-shots/upload/<size>/<lang-role>/*.jpg`.
+
+| Set | Files | Size | Alpha | Use |
+|---|---|---|---|---|
+| `upload/1206x2622/en-parent/` | 01 chats, 02 family group, 03 calls, 04 packages, 05 settings | 1206 x 2622 | no | **English, 6.3" (mandatory slot)** |
+| `upload/1206x2622/ar-parent/` | Same five, Arabic | 1206 x 2622 | no | **Arabic, 6.3"** |
+| `upload/1320x2868/en-parent/` | Same five | 1320 x 2868 | no | English, 6.9" |
+| `upload/1320x2868/ar-parent/` | Same five, Arabic | 1320 x 2868 | no | Arabic, 6.9" |
+| `upload/1206x2622/en-teacher/` | Chats, family group, calls, settings (teacher view) | 1206 x 2622 | no | Optional: shows the teacher's side |
+
+Totals: 14 files at 1206 x 2622 and 10 at 1320 x 2868, all without alpha.
+
+**Reviewed by eye (sample):**
+- Chats: the family group and the supervisor chat.
+- Family group: the supervisor, the teacher and the parent in a real conversation.
+- Arabic Settings: right-to-left layout, Arabic labels.
+- Arabic Packages: the amount due and Pay.
+
+No sign-in screen, no artwork, and no real person.
+
+**Owner's choice for 04 Packages:** it shows the review family's demo item, "Lesson package (demo): 8 live one-to-one
+lessons, USD 80.00". That text comes from the server in English, also in the Arabic screenshot. It is accurate but
+says "(demo)". If you prefer not to show it in the store, upload four screenshots (01, 02, 03, 05) per language.
 
 ## 5. Owner upload steps
 
