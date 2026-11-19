@@ -23,7 +23,7 @@ submitted build (`2e4127015`).
 
 | Storefront | Why | Action in App Store Connect |
 |---|---|---|
-| **China mainland** | The app uses **CallKit** to ring incoming calls, and Apple does not allow CallKit apps on the China mainland storefront. Distribution there also requires an ICP filing number, which Jawwid does not have | Pricing and Availability: select every country or region **except China mainland** |
+| **China mainland** | Two documented reasons. (1) **Technical:** build 2 links Apple's CallKit framework (`ios/Runner/CallKitBridge.swift`; `UIBackgroundModes` includes `voip`), and Apple does not allow apps that use CallKit on the China mainland storefront. (2) **Legal:** distribution there requires an ICP filing number, which Jawwid does not have. Removing CallKit from the binary would not lift (2) | Pricing and Availability: select every country or region **except China mainland** |
 
 No other storefront requires a restriction for this app. Apple has no storefront for the territories under
 comprehensive sanctions, so nothing more is needed for a free download.
@@ -33,6 +33,18 @@ comprehensive sanctions, so nothing more is needed for a free download.
 | Region | Step |
 |---|---|
 | European Union | Complete the **Digital Services Act trader** declaration: Jawwid LLC is a trader, so its address, phone and e-mail appear on the product page. Without it, App Store Connect will not distribute in the EU |
+
+**EU trader checklist** (App Store Connect > Business > your account > Digital Services Act; the owner types every
+value; nothing below is filled in for you):
+
+| # | Field | Value to prepare | Note |
+|---|---|---|---|
+| 1 | Trader status | **Trader** (Jawwid LLC sells lessons as a business) | Choosing "non-trader" would be false |
+| 2 | Legal name | Jawwid LLC, exactly as registered | Same as on the legal pages |
+| 3 | Address | A business address that is published on the EU product page | Decide whether the registered agent's address may be shown (open item B-ADDR) |
+| 4 | Phone number | A business number that can receive Apple's verification code | Shown publicly in the EU |
+| 5 | E-mail | A business mailbox that receives Apple's verification code (for example `info@jawwid.com`) | Shown publicly in the EU |
+| 6 | Verification | Enter the codes Apple sends to the phone and the e-mail | Until verified, EU storefronts stay unavailable |
 
 ## 4. Legal questions for counsel (not App Review blockers)
 

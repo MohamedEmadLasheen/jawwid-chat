@@ -85,7 +85,7 @@ detection); their folders are kept.
 
 | Item | Why | Covered by |
 |---|---|---|
-| Voice call | Needs LiveKit and two signed-in devices; the local stack has no LiveKit | The recording (step 8) with production LiveKit; owner device |
+| Voice call (communication; lessons are on Zoom) | Needs LiveKit and two signed-in devices; the local stack has no LiveKit | The recording (step 8) with production LiveKit; owner device |
 | Photo and voice-note sending | Needs a picker and microphone input on a device | The recording (step 7) |
 | Push notification delivery | Needs APNs with a signed build | The recording and TestFlight |
 | Packages > Pay (review payment mode) | Not driven. AR-F verified the server rule in code (`billing.service.ts:731`) | The recording (step 13) |

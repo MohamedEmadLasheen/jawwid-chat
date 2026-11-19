@@ -16,9 +16,15 @@ production on 2026-11-19. **UNVERIFIED** means not checked in a console or in th
 | 2 | **PostgreSQL**, hosted by Supabase (Frankfurt) during review; DigitalOcean Managed Postgres at launch | Database only. **Supabase Auth, Storage, Realtime and its Data API are not used**, and the app never talks to Supabase directly | Every read and write, through the API | All structured records | Indirectly (behind the API) |
 | 3 | **Redis / Valkey** | Presence, typing indicators, rate limits and the realtime adapter. Holds nothing durable | Realtime delivery, sign-in rate limiting | Short-lived keys only | Indirectly |
 | 4 | **DigitalOcean Spaces** (S3-compatible object storage), Frankfurt | Stores media | Photos, voice notes, files and profile photos in chats, bank-transfer receipts | User media | Yes, if media is tested |
-| 5 | **LiveKit Cloud** | Relays the audio of voice calls and live lessons. The server issues short-lived, microphone-only tokens. **Calls are not recorded** (the code has no egress or recording) | Voice calls, live lessons | Live audio in transit only; participant id, display name and room name | Yes, to test calls |
+| 5 | **LiveKit Cloud** | Relays the audio of the app's voice calls (family, teacher and academy; **lessons are not held in the app**). The server issues short-lived, microphone-only tokens. **Calls are not recorded** (the code has no egress or recording) | Voice calls | Live audio in transit only; participant id, display name and room name | Yes, to test calls |
 | 6 | **Apple Push Notification service** (alerts) and **PushKit VoIP** | Notifications. PushKit VoIP (ringing through CallKit while the app is closed) is built in but **switched off in production** (`APNS_VOIP_ENABLED` unset). The server sends directly; the iOS app has no Firebase SDK | Notifications, incoming calls | Device token; notification text (names hidden on the lock screen by default) | Yes, for notifications |
 | 7 | **Sentry** | Crash reporting (app and API). Session tracking, screenshots and tracing are off, no personal data is sent, and the user id is hashed | Diagnostics only | Scrubbed crash stack, hashed user id, device model and OS version | No |
+
+## Lessons: Zoom, outside the app
+
+| Service | Role | In the app? | Needed by the reviewer? |
+|---|---|---|---|
+| **Zoom** | The academy holds its live one-to-one lessons on Zoom (owner, 2026-11-19) | **No.** No Zoom SDK, link or account in build 2 (code search of `2e4127015`). Families and teachers use Zoom separately | No |
 
 ## Services used only outside the reviewer's path
 

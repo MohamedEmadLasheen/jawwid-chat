@@ -73,7 +73,7 @@ No sign-in screen, no artwork, and no real person.
 
 **Owner's choice for 04 Packages:** it shows the review family's demo item, "Lesson package (demo): 8 live one-to-one
 lessons, USD 80.00". That text comes from the server in English, also in the Arabic screenshot. It is accurate but
-says "(demo)". If you prefer not to show it in the store, upload four screenshots (01, 02, 03, 05) per language.
+says "(demo)". **Final upload set (decided 2026-11-19): 01, 02, 03, 05** per language and size; 04 is left out because of the "(demo)" label.
 
 ## 5. Owner upload steps
 
