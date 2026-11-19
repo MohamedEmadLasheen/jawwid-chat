@@ -695,8 +695,11 @@ def serving_problems(root):
             if bad in policy:
                 problems.append(f'{NGINX_TEMPLATE}: the /legal CSP must not contain {bad}')
     m = re.search(r'map \$uri \$jawwid_cache_control \{(.*?)\n\}', conf, re.S)
-    if not m or not re.search(r'~\^/legal\(/\|\$\)\s+"no-cache";', m.group(1)):
+    if not m or not re.search(r'~\^/legal\(/\|\$\)\s+"no-cache[^"]*";', m.group(1)):
         problems.append(f'{NGINX_TEMPLATE}: no /legal "no-cache" entry in the $jawwid_cache_control map')
+    elif not re.search(r'~\^/legal\(/\|\$\)\s+"no-cache, no-transform";', m.group(1)):
+        # The edge in front of App Platform (Cloudflare) obfuscates e-mail addresses unless told no-transform.
+        problems.append(f'{NGINX_TEMPLATE}: the /legal Cache-Control must be "no-cache, no-transform" (edge e-mail obfuscation)')
     for lm in re.finditer(r'\blocation\b[^{]*\{', conf):
         body = block_of(conf[lm.start():], lm.group(0))
         if body is not None and 'add_header' in body:

@@ -16,12 +16,17 @@
 #   /teacher/  the PD-28 portal: Flutter's names are not hashed, so every file
 #              is revalidated (ETag, a 304 when unchanged)
 #   /legal/    LR-04: the public legal pages; revalidated, so a new version is
-#              seen at once
+#              seen at once. `no-transform`: App Platform's edge (Cloudflare,
+#              which we do not control) otherwise rewrites every e-mail address
+#              into "[email protected]" plus a decoder script that this page's
+#              CSP blocks, and changes the bytes whose SHA-256 is published
+#              (docs/legal/published-versions.json). Cloudflare skips Email
+#              Address Obfuscation when the origin sends no-transform.
 map $uri $jawwid_cache_control {
     ~^/assets/        "public, immutable";
     /index.html       "no-store, must-revalidate";
     ~^/teacher(/|$)   "no-cache";
-    ~^/legal(/|$)     "no-cache";
+    ~^/legal(/|$)     "no-cache, no-transform";
     default           "";
 }
 
