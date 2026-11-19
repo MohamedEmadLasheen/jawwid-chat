@@ -23,7 +23,7 @@ submitted build (`2e4127015`).
 
 | Storefront | Why | Action in App Store Connect |
 |---|---|---|
-| **China mainland** | Two documented reasons. (1) **Technical:** build 2 links Apple's CallKit framework (`ios/Runner/CallKitBridge.swift`; `UIBackgroundModes` includes `voip`), and Apple does not allow apps that use CallKit on the China mainland storefront. (2) **Legal:** distribution there requires an ICP filing number, which Jawwid does not have. Removing CallKit from the binary would not lift (2) | Pricing and Availability: select every country or region **except China mainland** |
+| **China mainland** | Two documented reasons. (1) **Technical:** build 2 links Apple's CallKit framework (`ios/Runner/CallKitBridge.swift`; `UIBackgroundModes` includes `voip`), and Apple does not allow apps that use CallKit on the China mainland storefront. (2) **Legal:** distribution there requires an ICP filing number, which Jawwid does not have. (3) **Legal:** Apple lists a separate permit for religious content in China mainland; Jawwid teaches the Quran. Sources: App Store Connect Help, "App information" and "View China mainland compliance information" (checked 2026-11-19). Turning CallKit off, or removing it from the binary, would not lift (2) or (3). It is the only storefront excluded; reassessed 2026-11-19 for the worldwide objective | Pricing and Availability: select every country or region **except China mainland** |
 
 No other storefront requires a restriction for this app. Apple has no storefront for the territories under
 comprehensive sanctions, so nothing more is needed for a free download.

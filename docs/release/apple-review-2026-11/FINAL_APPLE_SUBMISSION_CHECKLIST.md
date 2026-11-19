@@ -116,7 +116,20 @@ Do steps 1 to 3 in any order. They can run at the same time.
    - Migration (rarely needed): `psql -v ON_ERROR_STOP=1 -1 "$DATABASE_URL" -f db/rollback/20261117110000_chat_pd058_publish_order.down.sql`,
      only with the old API.
    - Acceptance and version rows are consent records. Never delete them.
-3. **Moderation:** confirm that you (Super Admin) and one named operations manager can open Admin Web `/moderation`.
+3. **Moderation (proposal; names are yours to choose).** Traced in the code at `8a04dc60` (same at `2e4127015`):
+   - `/moderation` opens only for the **Super Admin** and **department managers** (`staff.role = manager` and
+     `manager_id` of a department). Managers hold `moderation.view` and `moderation.act` for their own
+     department's reports. Child-safety reports reach only the Super Admin and holders of
+     `moderation.child_safety`, which no default role includes.
+   - **Primary: the Super Admin** (you). This is the only account that sees every report, and the only one that
+     receives the 24-hour overdue alert.
+   - **Backup: one person you name.** As Super Admin: Staff accounts → a Manager account; Organization →
+     make them manager of **Operations** (most family reports route there; teacher reports go to Teachers);
+     Roles (`/accounts/roles`) → a role with `moderation.view`, `moderation.act` and
+     `moderation.child_safety`, granted to them. Both of you register a phone for push alerts.
+   - Alerts need the worker; `.do/app.production.yaml` declares it (`node dist/worker.js`).
+   - The App Review organization has no login-capable staff, so a reviewer's report is seen by nobody. The
+     Notes already say so ("stays Received"). Changing that would mean changing production data.
 4. **Build 3 (optional; skip for the fastest path):**
    - Approve and merge PR #613, and #614 (documentation).
    - Approve the release run. The lead starts it on request:
