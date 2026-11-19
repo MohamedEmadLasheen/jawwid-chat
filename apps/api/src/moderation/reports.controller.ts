@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { SelfService } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 import { parseIdempotencyKey } from './dto';
 import { ReportsService } from './reports.service';
 
@@ -24,8 +25,13 @@ export class ReportsController {
    * 201 `{id, status, dueAt}`; 200 with the same shape when the reporter's
    * report of this target is still open. Idempotency-Key (or X-Idempotency-Key):
    * a replay answers what the first request did.
+   *
+   * PD-58 (MG-1, LD-11): 403 COMM.TERMS_NOT_ACCEPTED until the reporter
+   * accepted the current terms -- except a `child_safety` report, which is
+   * always accepted.
    */
   @SelfService()
+  @RequiresLegal({ except: 'child_safety_report' })
   @Post('reports')
   async file(
     @ActorId() actorId: string,
@@ -34,9 +40,6 @@ export class ReportsController {
     @Headers('idempotency-key') key?: string,
     @Headers('x-idempotency-key') xKey?: string,
   ) {
-    // TODO(ENG-10): apply ENG-10's reusable terms-accepted guard to this route
-    // (COMM.TERMS_NOT_ACCEPTED, 403, roadmap §5.4 "after WP-3") once it lands.
-    // Deliberately not built here.
     const filed = await this.reports.file(actorId, body ?? {}, parseIdempotencyKey(key, xKey));
     res.status(filed.status);
     return filed.body;

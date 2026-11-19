@@ -17,6 +17,8 @@ import { AuthErrorFilter } from './auth.errors';
 import { LoginRateLimiter, RATE_LIMIT_STORE, type RateLimitStore } from './login-rate-limit';
 import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy } from './client-address';
 import { RedisRateLimitStore } from './redis-rate-limit.store';
+import { LegalModule } from '../../legal/legal.module';
+import { LegalGuard } from '../../legal/legal.guard';
 
 /**
  * Runtime authentication (PR-B).
@@ -84,6 +86,8 @@ export const loginRateLimitStoreProvider = {
 };
 
 @Module({
+  // PD-58: the Terms of Use (LegalService for /me, login, refresh, sign-up; LegalGuard below).
+  imports: [LegalModule],
   // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
   // PD-21: PasswordResetController -- the person finishes a reset an administrator issued.
   // PD-23: MeSessionsController -- the person's own Devices & sessions.
@@ -104,6 +108,10 @@ export const loginRateLimitStoreProvider = {
     // AuthenticatedGuard (it reads the actor that guard attached) and before
     // the throttle, so a refused request spends no action budget.
     { provide: APP_GUARD, useClass: PermissionGuard },
+    // PD-58: the Terms of Use gate on @RequiresLegal() routes. After the two
+    // above (it reads the account AuthenticatedGuard attached) and BEFORE the
+    // throttle, so a caller who has not accepted spends no action budget.
+    { provide: APP_GUARD, useClass: LegalGuard },
     // Phase 8 abuse limits. MUST stay after AuthenticatedGuard: Nest runs
     // global guards in registration order, and this one counts against the
     // actor that guard resolved from the token. It shares the login limiter's

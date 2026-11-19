@@ -67,7 +67,7 @@ describe('POST /auth/password-reset (PasswordResetService.complete) -- every acc
 
 describe('POST /auth/signup/verify (ParentSignupService.verify)', () => {
   // An unusable e-mail is refused as an invalid code AFTER the password is checked and hashed.
-  const service = new ParentSignupService({} as never, {} as never);
+  const service = new ParentSignupService({} as never, {} as never, { validateSignup: async () => null } as never);
 
   it('refuses 3 characters', async () => {
     expect(await codeOf(service.verify('', '123456', 'abc'))).toBe(AuthErrorCode.PASSWORD_TOO_WEAK);

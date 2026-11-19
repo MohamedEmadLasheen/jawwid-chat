@@ -35,6 +35,7 @@ import { AuthModule } from '@platform/auth/auth.module';
 import { COMMUNICATION_CONFIG_DEFAULTS } from '@platform/app-config.service';
 import type { RateLimitStore } from '@platform/auth/login-rate-limit';
 import { FakeRateLimitStore } from '../auth/support/fake-db';
+import { LegalGuard } from '../../../src/legal/legal.guard';
 
 class Routes {
   @RateLimited(ActionScope.MESSAGE_SEND)
@@ -209,9 +210,10 @@ describe('ActionThrottleGuard — registration', () => {
   it('is a global guard registered AFTER AuthenticatedGuard', () => {
     // Nest runs APP_GUARDs in registration order. Before AuthenticatedGuard
     // there is no verified actor, and the guard would count nothing. PD-40's
-    // PermissionGuard sits between them, so a refused request spends no budget.
+    // PermissionGuard sits between them, so a refused request spends no budget;
+    // so does PD-58's LegalGuard (a caller who has not accepted the terms spends none).
     const providers = Reflect.getMetadata('providers', AuthModule) as Array<{ provide?: unknown; useClass?: unknown }>;
     const guards = providers.filter((p) => p?.provide === APP_GUARD).map((p) => p.useClass);
-    expect(guards).toEqual([AuthenticatedGuard, PermissionGuard, ActionThrottleGuard]);
+    expect(guards).toEqual([AuthenticatedGuard, PermissionGuard, LegalGuard, ActionThrottleGuard]);
   });
 });

@@ -5,6 +5,7 @@ import { EnrollmentService } from './enrollment.service';
 import { LessonRecordService } from './lesson-record.service';
 import { LessonService } from './lesson.service';
 import { Requires } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 
 /**
  * PD-15: the student's journey after enrolment. Behind the global bearer
@@ -34,7 +35,9 @@ export class JourneyController {
     return this.records.correct(actorId, id, body ?? {});
   }
 
+  /** PD-58: the teacher (or staff) rewrites the report card the family sees. */
   @Requires('lessons.manage')
+  @RequiresLegal()
   @Post('lessons/:id/report/edit')
   editReport(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.records.editReport(actorId, id, body ?? {});

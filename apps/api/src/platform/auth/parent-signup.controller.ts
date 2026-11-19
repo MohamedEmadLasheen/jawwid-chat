@@ -36,7 +36,19 @@ export class ParentSignupController {
   @Public()
   @Post('verify')
   @HttpCode(200)
-  async verify(@Body() body: { email?: unknown; code?: unknown; password?: unknown; lessonAudioNotice?: unknown }, @Ip() ip?: string) {
+  async verify(
+    @Body()
+    body: {
+      email?: unknown;
+      code?: unknown;
+      password?: unknown;
+      lessonAudioNotice?: unknown;
+      acceptLegal?: unknown;
+      client?: unknown;
+      locale?: unknown;
+    },
+    @Ip() ip?: string,
+  ) {
     const email = typeof body?.email === 'string' ? body.email : '';
     const code = typeof body?.code === 'string' ? body.code : '';
     const password = typeof body?.password === 'string' ? body.password : '';
@@ -44,6 +56,11 @@ export class ParentSignupController {
     await this.rateLimit.reserve(`signup:${email.trim().toLowerCase()}`, sourceAddress(ip, this.addressPolicy));
     // PD-48: the version of the lesson-audio notice the parent ticked at sign-up (or nothing).
     const notice = typeof body?.lessonAudioNotice === 'number' ? body.lessonAudioNotice : null;
-    return this.signup.verify(email, code, password, notice);
+    // PD-58: the Terms of Use accepted on the sign-up screen (GET /auth/signup/legal lists them).
+    return this.signup.verify(email, code, password, notice, {
+      acceptLegal: body?.acceptLegal,
+      client: body?.client,
+      locale: body?.locale,
+    });
   }
 }

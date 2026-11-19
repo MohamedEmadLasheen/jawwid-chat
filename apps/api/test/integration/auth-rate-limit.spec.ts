@@ -15,6 +15,7 @@ import { PrismaService } from '@platform/prisma.service';
 import { PrismaIdentityService } from '@platform/identity.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import type { ClientAddressPolicy } from '@platform/auth/client-address';
+import { LegalService } from '../../src/legal/legal.service';
 
 /**
  * Login rate limiting against a REAL Redis, under REAL concurrency.
@@ -275,6 +276,7 @@ describe('the login endpoint under a concurrent burst', () => {
     controller = new AuthController(
       auth,
       new LoginRateLimiter(new RedisRateLimitStore(client)),
+      new LegalService(prisma),
       sourceEnabled,
     );
 

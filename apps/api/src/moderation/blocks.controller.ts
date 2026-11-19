@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { SelfService } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 import { BlocksService } from './blocks.service';
 
 /**
@@ -17,11 +18,14 @@ import { BlocksService } from './blocks.service';
 export class BlocksController {
   constructor(private readonly blocks: BlocksService) {}
 
-  /** `{subject: {kind, id}}` -> 201 `{id, subject: {kind, id, name}, createdAt}`; 200 when already blocked. */
+  /**
+   * `{subject: {kind, id}}` -> 201 `{id, subject: {kind, id, name}, createdAt}`; 200 when already blocked.
+   * PD-58 (MG-1): 403 COMM.TERMS_NOT_ACCEPTED until the blocker accepted the current terms.
+   */
   @SelfService()
+  @RequiresLegal()
   @Post()
   async block(@ActorId() actorId: string, @Body() body: Record<string, unknown>, @Res({ passthrough: true }) res: Response) {
-    // TODO(ENG-10): the terms-accepted guard (COMM.TERMS_NOT_ACCEPTED, roadmap §6.2 "after WP-3") once it lands.
     const made = await this.blocks.block(actorId, body ?? {});
     res.status(made.status);
     return made.body;

@@ -6,6 +6,7 @@ import { CommErrorFilter } from './http-exception.filter';
 import { Requires } from '../../platform/permissions/route-access';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { CallEndReason } from '../contracts/vocab';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 @Controller('calls')
 @UseFilters(CommErrorFilter)
@@ -17,6 +18,7 @@ export class CallController {
    * the room name is minted server-side; neither is client-supplied.
    */
   @Requires('calls.use')
+  @RequiresLegal()
   @Post()
   @RateLimited(ActionScope.CALL_START)
   async start(@ActorId() actorId: string, @Body() body: { conversationId: string }) {
@@ -28,12 +30,14 @@ export class CallController {
    * revoked permission takes effect on the next join even mid-call.
    */
   @Requires('calls.use')
+  @RequiresLegal() // PD-58: joining a call is taking part in it, as POST /calls and scheduled-call join.
   @Post(':id/token')
   async token(@ActorId() actorId: string, @Param('id') id: string) {
     return this.calls.issueToken(id, actorId);
   }
 
   @Requires('calls.use')
+  @RequiresLegal() // PD-58: answering a call is taking part in it.
   @Post(':id/accept')
   async accept(@ActorId() actorId: string, @Param('id') id: string) {
     await this.calls.accept(id, actorId);

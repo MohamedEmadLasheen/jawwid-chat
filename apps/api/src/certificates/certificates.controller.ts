@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { Requires } from '../platform/permissions/route-access';
+import { RequiresLegal } from '../legal/requires-legal.decorator';
 import { CertificateService } from './certificate.service';
 import { CertificateTypeService } from './certificate-type.service';
 
@@ -146,7 +147,9 @@ export class CertificatesController {
     return this.certificates.recordConsent(actorId, id, body ?? {});
   }
 
+  /** PD-58: publishes a Story to families (as POST /stories/:id/publish does). */
   @Requires('certificates.story')
+  @RequiresLegal()
   @Post(':id/story')
   story(@ActorId() actorId: string, @Param('id') id: string) {
     return this.certificates.publishStory(actorId, id);

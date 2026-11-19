@@ -1,5 +1,6 @@
 import type { Actor } from '../types';
 import type { LiveSession, TokenPair } from './auth.service';
+import type { LegalDto } from '../../legal/legal-documents';
 
 /**
  * The client-facing authentication shapes (API-CONTRACT §2, Phase 1 DTOs).
@@ -21,6 +22,13 @@ export interface ActorDto {
   readonly canMessage: boolean | null;
   readonly organizationId: string | null;
   readonly permissions: readonly string[];
+  /**
+   * PD-58 (roadmap §7.4): the Terms of Use documents this account must still
+   * accept -- its kind's terms and the Code of Conduct, at the versions in
+   * force, with each language's URL. Empty when everything is accepted. UX:
+   * the server gates content routes regardless (403 COMM.TERMS_NOT_ACCEPTED).
+   */
+  readonly legal: LegalDto;
 }
 
 export interface TokenPairDto {
@@ -39,6 +47,8 @@ export interface TokenPairDto {
     readonly absoluteExpiresAt: string | null;
   };
   readonly actor: ActorDto;
+  /** PD-58: the same block as `actor.legal`, at the top level where §7.4 names it. */
+  readonly legal: LegalDto;
 }
 
 /**
@@ -87,7 +97,7 @@ export function toSessionListDto(rows: readonly LiveSession[], currentSessionId:
  */
 export const NO_PERMISSIONS: readonly string[] = Object.freeze([]);
 
-export function toActorDto(actor: Actor, permissions: readonly string[] = NO_PERMISSIONS): ActorDto {
+export function toActorDto(actor: Actor, legal: LegalDto, permissions: readonly string[] = NO_PERMISSIONS): ActorDto {
   return {
     actorId: actor.actorId,
     kind: actor.kind,
@@ -99,10 +109,17 @@ export function toActorDto(actor: Actor, permissions: readonly string[] = NO_PER
     canMessage: actor.canMessage ?? null,
     organizationId: actor.organizationId ?? null,
     permissions,
+    // Rebuilt, never passed through: only the named fields reach a client.
+    legal: {
+      state: legal.state,
+      required: legal.required.map((d) => ({ documentKey: d.documentKey, version: d.version, urlAr: d.urlAr, urlEn: d.urlEn })),
+      unavailable: [...legal.unavailable],
+    },
   };
 }
 
-export function toTokenPairDto(pair: TokenPair): TokenPairDto {
+export function toTokenPairDto(pair: TokenPair, legal: LegalDto): TokenPairDto {
+  const actor = toActorDto(pair.actor, legal);
   return {
     tokenType: 'Bearer',
     accessToken: pair.accessToken,
@@ -115,6 +132,7 @@ export function toTokenPairDto(pair: TokenPair): TokenPairDto {
       expiresAt: pair.expiresAt.toISOString(),
       absoluteExpiresAt: pair.absoluteExpiresAt?.toISOString() ?? null,
     },
-    actor: toActorDto(pair.actor),
+    actor,
+    legal: actor.legal,
   };
 }

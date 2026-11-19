@@ -12,6 +12,7 @@ import { TeacherProfileService } from '../teacher-profile/teacher-profile.servic
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { NotForStaff, Requires } from '../../platform/permissions/route-access';
+import { RequiresLegal } from '../../legal/requires-legal.decorator';
 
 /**
  * The teacher's professional profile, and certificate review.
@@ -64,6 +65,7 @@ export class TeacherProfileController {
 
   /** Save the profile. Immediately current; nothing waits for a reviewer. */
   @NotForStaff()
+  @RequiresLegal()
   @Post('me/teacher-profile')
   async save(
     @ActorId() actorId: string,
@@ -95,6 +97,7 @@ export class TeacherProfileController {
    * feature. Folding it into the profile body would imply the profile owns it.
    */
   @NotForStaff()
+  @RequiresLegal()
   @Patch('me/teacher-profile/name')
   async rename(@ActorId() actorId: string, @Body() body: { name?: string }) {
     return this.profiles.updateName(actorId, body?.name ?? '');
@@ -103,6 +106,7 @@ export class TeacherProfileController {
   // --- certificates ----------------------------------------------------------
 
   @NotForStaff()
+  @RequiresLegal()
   @Post('me/teacher-profile/certificates/upload')
   async authorizeCertificate(
     @ActorId() actorId: string,
@@ -115,6 +119,7 @@ export class TeacherProfileController {
   }
 
   @NotForStaff()
+  @RequiresLegal()
   @Post('me/teacher-profile/certificates')
   async addCertificate(
     @ActorId() actorId: string,
@@ -140,6 +145,7 @@ export class TeacherProfileController {
 
   /** Metadata only. There is no field here for the file. */
   @NotForStaff()
+  @RequiresLegal()
   @Patch('me/teacher-profile/certificates/:id')
   async updateCertificate(
     @ActorId() actorId: string,
@@ -155,6 +161,7 @@ export class TeacherProfileController {
   }
 
   @NotForStaff()
+  @RequiresLegal()
   @Delete('me/teacher-profile/certificates/:id')
   async removeCertificate(@ActorId() actorId: string, @Param('id') id: string) {
     return this.profiles.removeCertificate(actorId, id);

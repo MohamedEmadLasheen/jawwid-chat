@@ -412,7 +412,7 @@ The newest 10:
 9. `20261107110000_chat_pd058_terms.sql`
 10. `20261107120000_chat_pd027_stripe_lifecycle.sql`
 
-Open PRs add more (as given in the brief; not re-read here): **#497** (`20261107130000`), **#498**
+Open PRs add more (as given in the brief; not re-read here): **#497** (`20261117110000`), **#498**
 (`20261107140000`), **#449** (`20261107150000`). Whichever of them is merged before the deploy SHA is
 chosen is in the first deploy; the rest arrive with a later deploy. `20260910120200_chat_connection_roles.sql`
 grants BYPASSRLS (`deploy-production.yml:361-364`); the preflight step checks that the provider allows it
