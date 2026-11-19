@@ -1,0 +1,393 @@
+# App Store / Google Play review accounts (LR-05). Owner: release engineering.
+#
+# Runs apps/api/src/cli/provision-review-cohort.ts against the PRODUCTION
+# database, from the API image already built for a commit on main. Runbook:
+# docs/release/review-accounts.md. Never run the command from a laptop.
+#
+# MANUAL ONLY, and gated by the `production` GitHub Environment (its required
+# reviewers and its branch restriction to main): every run is an owner
+# decision recorded against a specific commit.
+#
+# What it writes: only the review organization ("app-review") -- three
+# ordinary logins (parent@, teacher@, parent2@<domain>), synthetic staff with
+# no login, two synthetic families. Safe to repeat; a re-run is the repair
+# procedure (lockouts cleared, passwords re-set, a deleted parent re-created).
+#
+# Secrets (production Environment): DATABASE_URL, REVIEW_PARENT_PASSWORD,
+# REVIEW_TEACHER_PASSWORD, REVIEW_DELETION_PARENT_PASSWORD. No password and no
+# DATABASE_URL is ever echoed, passed on a command line or written to a log:
+# the passwords reach the container only as mode-600 files, DATABASE_URL only
+# as an environment variable passed by name.
+#
+# LR-46: before anyone is asked to approve, a preflight job with no secrets
+# refuses the run unless (P2-3) the `production` Environment really has
+# required reviewers and deploys from `main` only -- read through the API,
+# failing closed if unreadable -- and (P2-2) api:<sha> resolves to the digest
+# a "Deploy staging" run AT THAT COMMIT recorded when it pushed the image. The
+# provision job then runs the image BY DIGEST, so moving the tag afterwards
+# changes nothing. Runbook: docs/release/review-accounts.md.
+#
+# LR-46 P3-9: the repository is public, and so are this workflow's logs and
+# run summaries. The review logins (parent@, teacher@, parent2@<domain>) are
+# never printed. The login domain is read from the event payload, never placed
+# in an env: block or ${{ }} expression (GitHub prints a step's env values in
+# its log), is refused if it holds a line break (a mask covers one line), and
+# is registered with ::add-mask:: first thing in each job, so the CLI's own
+# output, which names the logins, shows *** in its place. The CLI's stdout is
+# also reduced to counts before it is printed. The summary records counts, the
+# organization slug, the commit and the image digest. The owner keeps the
+# logins in the store review notes and a password manager.
+# This only REDUCES exposure; it is not a defence. The three login names are
+# in this public source, and the domain may be guessable (for example
+# Jawwid's own), so anyone who guesses it can still lock the accounts with ten
+# wrong passwords during store review. The real protection is a review login
+# domain (or login names) that is hard to guess; choosing it is the owner's
+# decision (docs/release/review-accounts.md).
+#
+# No action is used at all, so there is nothing to pin: registry login, the
+# checks and the run are plain shell, gh and jq from the runner image.
+name: Review cohort
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Full 40-character commit SHA on main whose API image (ghcr.io/<repo>/api:<sha>) is already built.'
+        required: true
+        type: string
+      email_domain:
+        description: 'Login domain of the review accounts (one Jawwid controls). Must stay the same for good.'
+        required: true
+        type: string
+      confirm_email_domain:
+        description: 'Type the login domain again. The first run fixes it for good, so a typo must not get through.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  # Two runs at once could create duplicate rows (review-accounts.md). GitHub
+  # keeps at most one pending run per group: a third run cancels the pending
+  # second one. Deliberately NOT the deploy-production group, so a queued
+  # cohort run can never cancel a queued deploy; the runbook says not to run
+  # this while a deploy is in progress.
+  group: review-cohort
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    # No environment and no secrets: refuses a bad request before anyone is
+    # asked to approve it.
+    name: Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # actions: read is for the production Environment's protection rules and
+    # for the Deploy staging runs that recorded the image digest. A job-level
+    # block replaces the workflow's, so the rest is repeated.
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - name: Inputs are well formed
+        # Inputs are never interpolated into the script, so an input cannot
+        # inject shell. image_tag comes through env:. The two domain inputs are
+        # read from the event payload instead (LR-46 P3-9): an env: value is
+        # printed in the step's log, and the domain names the review logins.
+        # It is masked before anything else runs, and no message quotes it.
+        # A mask covers a single line, so a value with a line break is refused
+        # first, by a message that prints nothing of it.
+        run: |
+          EMAIL_DOMAIN="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
+          CONFIRM_EMAIL_DOMAIN="$(jq -r '.inputs.confirm_email_domain // ""' "$GITHUB_EVENT_PATH")"
+          case "$EMAIL_DOMAIN$CONFIRM_EMAIL_DOMAIN" in
+            *$'\n'*|*$'\r'*) echo "::error::email_domain and confirm_email_domain must each be one line. Nothing was changed."; exit 1 ;;
+          esac
+          [ -z "$EMAIL_DOMAIN" ] || echo "::add-mask::$EMAIL_DOMAIN"
+          [ -z "$CONFIRM_EMAIL_DOMAIN" ] || echo "::add-mask::$CONFIRM_EMAIL_DOMAIN"
+          # The production Environment's branch restriction is the real gate
+          # (checked below); this makes a run from another branch fail with a
+          # clear message.
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::run this workflow from main"; exit 1; }
+          case "$IMAGE_TAG" in
+            *[!0-9a-f]*|'') echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1 ;;
+          esac
+          [ "${#IMAGE_TAG}" -eq 40 ] || { echo "::error::image_tag must be a full lowercase 40-character commit SHA"; exit 1; }
+          printf '%s' "$EMAIL_DOMAIN" | grep -Eq '^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$' \
+            || { echo "::error::email_domain must be a plain lowercase domain name"; exit 1; }
+          [ "$CONFIRM_EMAIL_DOMAIN" = "$EMAIL_DOMAIN" ] \
+            || { echo "::error::confirm_email_domain does not match email_domain. Nothing was changed."; exit 1; }
+
+      - name: The tag must be an ancestor of main
+        # The same check as deploy-production.yml: only a merged, reviewed
+        # commit's image may touch production. The repository is public, so
+        # main is fetched without a credential and without a checkout action.
+        run: |
+          git init -q "$RUNNER_TEMP/main"
+          cd "$RUNNER_TEMP/main"
+          git fetch -q --depth=200 "https://github.com/${GITHUB_REPOSITORY}.git" "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor "$IMAGE_TAG" origin/main 2>/dev/null; then
+            echo "::error::$IMAGE_TAG is not on main (or not within its last 200 commits). The review cohort runs reviewed commits only."
+            exit 1
+          fi
+
+      - name: The production Environment is protected (required reviewers, main only)
+        # LR-46 P2-3, the same check as release-store-builds.yml (#547, pending merge). GitHub creates
+        # an Environment named by a job on first use with NO protection, and the
+        # in-file GITHUB_REF check above is only as good as this file. Refuse
+        # unless the reviewers and the main-only branch rule are really there.
+        # Fails closed: anything unreadable, missing or unexpected is a refusal.
+        # GitHub enforces the same rules again when the provision job starts.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api() { gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
+          manual="Nothing was changed. Configure Settings -> Environments -> production as in docs/release/review-accounts.md."
+          e="$(api "repos/$GITHUB_REPOSITORY/environments/production")" \
+            || { echo "::error::Could not read the production Environment with the job token. $manual"; exit 1; }
+          p="$(api "repos/$GITHUB_REPOSITORY/environments/production/deployment-branch-policies")" \
+            || { echo "::error::Could not read production's deployment branch policies with the job token. $manual"; exit 1; }
+          bad=0
+          no() { echo "::error title=production is not protected::$1"; bad=1; }
+          reviewers="$(jq -r '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]? | (.reviewer.login // .reviewer.slug // "?")] | join(", ")' <<<"$e")"
+          [ -n "$reviewers" ] || no "it has no required reviewer"
+          # jq's `//` treats false as missing, so every flag is compared as a string ("null" if absent).
+          admins_bypass="$(jq -r '.can_admins_bypass | tostring' <<<"$e")"
+          [ "$(jq -r '.deployment_branch_policy.custom_branch_policies | tostring' <<<"$e")" = true ] \
+            && [ "$(jq -r '.deployment_branch_policy.protected_branches | tostring' <<<"$e")" = false ] \
+            || no "its deployment branches are not 'Selected branches and tags'"
+          [ "$(jq -c '[.branch_policies[]? | {name, type}]' <<<"$p")" = '[{"name":"main","type":"branch"}]' ] \
+            || no "its only deployment branch rule must be the branch 'main'"
+          {
+            echo "### production Environment"
+            echo ""
+            echo "- required reviewers: ${reviewers:-none}"
+            echo "- deployment branches: $(jq -r '[.branch_policies[]? | "\(.type) \(.name)"] | join(", ")' <<<"$p")"
+            echo "- administrators may bypass: $admins_bypass"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$bad" -eq 0 ] || { echo "$manual"; exit 1; }
+
+      - name: The API image is the one recorded for this commit (by digest)
+        id: image
+        # LR-46 P2-2. A tag is a name anyone with packages:write can move, from
+        # any branch, so "the commit is on main" proves nothing about the IMAGE.
+        # api:<sha> is accepted only if it resolves to the digest that a run of
+        # deploy-staging.yml whose head_sha IS <sha> recorded when it pushed.
+        # Such a run executes the workflow file of that reviewed commit; a run
+        # with an edited file has a different head_sha (workflow_dispatch only: a pull_request run executes the merge commit's file, hence the event and branch filter). The provision job then
+        # pulls BY DIGEST, so moving the tag after this step changes nothing.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          digest="$(docker buildx imagetools inspect "$REPO:$IMAGE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')" \
+            || { echo "::error::$REPO:$IMAGE_TAG does not exist -- build and deploy this commit first"; exit 1; }
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+            || { echo "::error::could not resolve $REPO:$IMAGE_TAG to a digest"; exit 1; }
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/runs?head_sha=$IMAGE_TAG&per_page=100" \
+            | jq -r --arg repo "$GITHUB_REPOSITORY" --arg sha "$IMAGE_TAG" \
+                '.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo
+                  and .event == "workflow_dispatch" and .head_branch == "main"
+                  and ((.path // "") | split("@")[0]) == ".github/workflows/deploy-staging.yml") | .id')" \
+            || { echo "::error::could not list the Deploy staging runs with the job token"; exit 1; }
+          found=""
+          for id in $runs; do
+            [[ "$id" =~ ^[0-9]+$ ]] || continue
+            d="$RUNNER_TEMP/api-image-digest/$id"
+            gh run download "$id" -R "$GITHUB_REPOSITORY" -n api-image-digest -D "$d" >/dev/null 2>&1 || continue
+            if [ "$(cat "$d/api-image-digest" 2>/dev/null || true)" = "$IMAGE_TAG $digest" ]; then found="$id"; break; fi
+          done
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          [ -n "$found" ] || {
+            echo "::error::$REPO:$IMAGE_TAG resolves to $digest, which no Deploy staging run at $IMAGE_TAG recorded. The tag was overwritten, or the record expired (90 days): dispatch Deploy staging from main while main's head is $IMAGE_TAG (or deploy a newer commit), then retry."
+            exit 1
+          }
+          echo "image=$REPO@$digest" >> "$GITHUB_OUTPUT"
+          echo "API image $REPO@$digest, recorded by Deploy staging run $found"
+          echo "- API image: \`$REPO@$digest\` (recorded by Deploy staging run $found)" >> "$GITHUB_STEP_SUMMARY"
+
+  provision:
+    name: Provision the review accounts
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      # Pinned by digest in preflight: ghcr.io/<repo>/api@sha256:<64 hex>.
+      IMAGE: ${{ needs.preflight.outputs.image }}
+      # No EMAIL_DOMAIN here (LR-46 P3-9): an env: value is printed in every
+      # step's log. The steps read it from the event payload.
+    steps:
+      - name: Mask the login domain
+        # A mask is per job, so preflight's does not cover this one. First
+        # step, before the CLI (whose output names the logins) can print. A
+        # value with a line break (preflight refuses it too) would be masked
+        # only up to the break, so it is refused here first, printing nothing.
+        run: |
+          d="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
+          [ -n "$d" ] || { echo "::error::email_domain is empty"; exit 1; }
+          case "$d" in
+            *$'\n'*|*$'\r'*) echo "::error::email_domain must be one line. Nothing was changed."; exit 1 ;;
+          esac
+          echo "::add-mask::$d"
+          echo "The login domain is masked in this job's log."
+
+      - name: The secrets are present
+        # Booleans only: no secret value enters this step.
+        env:
+          HAS_DATABASE_URL: ${{ secrets.DATABASE_URL != '' }}
+          HAS_PARENT: ${{ secrets.REVIEW_PARENT_PASSWORD != '' }}
+          HAS_TEACHER: ${{ secrets.REVIEW_TEACHER_PASSWORD != '' }}
+          HAS_DELETION_PARENT: ${{ secrets.REVIEW_DELETION_PARENT_PASSWORD != '' }}
+        run: |
+          rc=0
+          [ "$HAS_DATABASE_URL" = "true" ] || { echo "::error title=Review cohort secrets::DATABASE_URL is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_PARENT" = "true" ] || { echo "::error title=Review cohort secrets::REVIEW_PARENT_PASSWORD is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_TEACHER" = "true" ] || { echo "::error title=Review cohort secrets::REVIEW_TEACHER_PASSWORD is not set in the production GitHub Environment"; rc=1; }
+          [ "$HAS_DELETION_PARENT" = "true" ] || { echo "::error title=Review cohort secrets::REVIEW_DELETION_PARENT_PASSWORD is not set in the production GitHub Environment"; rc=1; }
+          [ "$rc" -eq 0 ] || echo "Nothing was changed. Owner steps: docs/release/review-accounts.md"
+          exit "$rc"
+
+      - name: Pull the API image for this commit, by digest
+        # Never builds: production runs what was built and tested for this
+        # commit. Never by tag: IMAGE is the digest preflight verified, so the
+        # bytes that run are the bytes that were checked.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+/api@sha256:[0-9a-f]{64}$ ]] \
+            || { echo "::error::preflight did not hand over a digest-pinned API image"; exit 1; }
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull -q "$IMAGE" >/dev/null \
+            || { echo "::error::could not pull $IMAGE"; exit 1; }
+
+      - name: Write the password files
+        # Mode 600 in a mode-700 directory under RUNNER_TEMP; printf '%s' writes
+        # the value with no trailing newline and nothing is echoed. Secrets are
+        # masked in the log by GitHub; they are also never printed here.
+        env:
+          REVIEW_PARENT_PASSWORD: ${{ secrets.REVIEW_PARENT_PASSWORD }}
+          REVIEW_TEACHER_PASSWORD: ${{ secrets.REVIEW_TEACHER_PASSWORD }}
+          REVIEW_DELETION_PARENT_PASSWORD: ${{ secrets.REVIEW_DELETION_PARENT_PASSWORD }}
+        run: |
+          umask 077
+          dir="$RUNNER_TEMP/review-cohort"
+          rm -rf "$dir"
+          mkdir -m 700 "$dir"
+          printf '%s' "$REVIEW_PARENT_PASSWORD" > "$dir/parent.pw"
+          printf '%s' "$REVIEW_TEACHER_PASSWORD" > "$dir/teacher.pw"
+          printf '%s' "$REVIEW_DELETION_PARENT_PASSWORD" > "$dir/parent2.pw"
+          chmod 600 "$dir/parent.pw" "$dir/teacher.pw" "$dir/parent2.pw"
+
+      - name: Provision the review cohort
+        # --target is derived by the CLI's own describeTarget, inside the same
+        # image, so it matches exactly what the command checks. GitHub masks
+        # only the whole DATABASE_URL secret, so the derived host:port/database
+        # is registered with ::add-mask:: before anything prints: the log of
+        # this public repository shows *** in its place, in this step and in
+        # the CLI's own output. A failure to load the module and an invalid URL
+        # get different messages; neither quotes the URL. The container runs
+        # as this runner's user so it can read the mode-600 files it is given
+        # read-only. DATABASE_URL is passed by name (-e DATABASE_URL), so its
+        # value is never on a command line.
+        #
+        # LR-46 P3-9: the CLI's stdout is one JSON line that names the three
+        # logins. It is captured, never echoed, and reduced with jq to counts
+        # and ids; output jq cannot read is not printed at all. A refusal goes
+        # to stderr and may quote a login: the domain is masked (first step),
+        # so the log shows parent@*** at most.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          EMAIL_DOMAIN="$(jq -r '.inputs.email_domain // ""' "$GITHUB_EVENT_PATH")"
+          dir="$RUNNER_TEMP/review-cohort"
+          run() {
+            docker run --rm \
+              --user "$(id -u):$(id -g)" \
+              -e HOME=/tmp \
+              -e DATABASE_URL \
+              -e APP_ENV=production \
+              -v "$dir:/run/review-cohort:ro" \
+              "$IMAGE" "$@"
+          }
+          target="$(run node -e '
+            let describeTarget;
+            try {
+              ({ describeTarget } = require("./dist/cli/bootstrap-super-admin.js"));
+            } catch {
+              describeTarget = undefined;
+            }
+            if (typeof describeTarget !== "function") {
+              process.stderr.write("could not load dist/cli/bootstrap-super-admin.js from the image\n");
+              process.exit(3);
+            }
+            let target;
+            try {
+              target = describeTarget(process.env.DATABASE_URL);
+            } catch {
+              process.stderr.write("DATABASE_URL is not a valid URL\n");
+              process.exit(2);
+            }
+            process.stdout.write(target);')" || { echo "::error::could not derive --target from DATABASE_URL (see the line above)"; exit 1; }
+          [ -n "$target" ] || { echo "::error::could not derive --target from DATABASE_URL"; exit 1; }
+          echo "::add-mask::$target"
+          echo "Target derived from DATABASE_URL (masked in this log)."
+          out="$(run node dist/cli/provision-review-cohort.js \
+            --target "$target" \
+            --email-domain "$EMAIL_DOMAIN" \
+            --parent-password-file /run/review-cohort/parent.pw \
+            --teacher-password-file /run/review-cohort/teacher.pw \
+            --deletion-parent-password-file /run/review-cohort/parent2.pw \
+            --allow-non-local)" && rc=0 || rc=$?
+          # The CLI sets exit code 2 on a refusal, with the reason on stderr
+          # (already in the log above).
+          [ "$rc" -eq 0 ] || { echo "::error::the review cohort command refused or failed (exit $rc); its reason is above"; exit 1; }
+          # Only these fields leave jq: no login, no target. Exactly three
+          # accounts must be reported, or the run is not called a success.
+          counts="$(jq -er '
+            [.parent, .teacher, .deletionParent] as $a
+            | if ($a | map(select(type == "object" and (.created | type) == "boolean")) | length) == 3
+              then "\($a | length) \($a | map(select(.created)) | length) \(.organizationId // "?")"
+              else error("unexpected") end' <<<"$out" 2>/dev/null)" \
+            || { echo "::error::the command succeeded but its summary could not be read; it is not printed because it names the logins"; exit 1; }
+          read -r total created org <<<"$counts"
+          echo "$total review logins provisioned ($created created, $((total - created)) already existed) in the app-review organization ($org)."
+          echo "REVIEW_LOGINS_TOTAL=$total" >> "$GITHUB_ENV"
+          echo "REVIEW_LOGINS_CREATED=$created" >> "$GITHUB_ENV"
+
+      - name: Record the run
+        # LR-46 P3-9: counts only, never a login. The summary of a public
+        # repository's run is public.
+        if: success()
+        run: |
+          {
+            echo "### Review cohort provisioned"
+            echo ""
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| commit | \`${IMAGE_TAG}\` |"
+            echo "| image | \`${IMAGE}\` |"
+            echo "| organization | \`app-review\` |"
+            echo "| review logins | ${REVIEW_LOGINS_TOTAL} provisioned (${REVIEW_LOGINS_CREATED} created); the logins are in the store review notes and the owner's password manager, never here |"
+            echo "| run by | ${GITHUB_ACTOR} |"
+            echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the password files and the registry login
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/review-cohort"
+          docker logout ghcr.io >/dev/null 2>&1 || true

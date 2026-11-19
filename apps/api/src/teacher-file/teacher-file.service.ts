@@ -13,6 +13,7 @@ import { NO_TEACHER_FILE_ACCESS, OPERATIONS_ENTRY_KINDS, teacherFilePageAccess }
 import { NO_PD012_ACCESS, decidePd012StaffAccess } from '../platform/pd012-policy';
 import { PermissionService } from '../platform/permissions/permission.service';
 import { OutboxService } from '../communication/outbox/outbox.service';
+import { tellParent } from './feedback-notice';
 import { CommEvent } from '../communication/contracts/events';
 import { entryKeyAllows, type RecordsBasis } from '../platform/teacher-records-policy';
 import { decideTeacherOnboarding, type TeacherOnboardingAccess } from '../platform/teacher-onboarding-policy';
@@ -481,7 +482,7 @@ export class TeacherFileService {
       // PD-32: a follow-up or a resolution on a parent's app complaint is what the
       // parent reads as "in review" / "resolved" -- never its text.
       if (data.refersTo && (kind === TeacherFileEntryKind.COMPLAINT_FOLLOWUP || kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION)) {
-        await advanceParentFeedback(tx, data.refersTo, kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION ? 'resolved' : 'in_review');
+        await advanceParentFeedback(tx, data.refersTo, kind === TeacherFileEntryKind.COMPLAINT_RESOLUTION ? 'resolved' : 'in_review', this.outbox);
       }
       await this.audit.audit(tx, {
         actorId: actor.actorId,
@@ -1153,19 +1154,31 @@ export interface Away {
 
 /**
  * PD-32: move the parent feedback behind an app complaint forward (never back:
- * a follow-up after the resolution leaves it resolved).
+ * a follow-up after the resolution leaves it resolved). PD-32 amendment: when
+ * it did move, the parent who filed it is told (in review / resolved).
  */
 export async function advanceParentFeedback(
   tx: Prisma.TransactionClient,
   complaintEntryId: string,
   to: 'in_review' | 'resolved',
+  outbox: OutboxService = new OutboxService(),
 ): Promise<void> {
   const complaint = await tx.teacherSupervisionEntry.findUnique({ where: { id: complaintEntryId }, select: { parentFeedbackId: true } });
   if (!complaint?.parentFeedbackId) return;
-  await tx.parentFeedback.updateMany({
+  const moved = await tx.parentFeedback.updateMany({
     where: { id: complaint.parentFeedbackId, status: { in: to === 'resolved' ? ['received', 'in_review'] : ['received'] } },
     data: { status: to },
   });
+  if (moved.count !== 1) return;
+  // Read after the update, so under its row lock: a reply racing this resolution
+  // has either committed (and is counted) or waits behind it.
+  const feedback = await tx.parentFeedback.findUniqueOrThrow({
+    where: { id: complaint.parentFeedbackId },
+    select: { id: true, contactId: true, organizationId: true, parentResponse: true },
+  });
+  // Owner, 2026-11-03: "resolved -- view the reply" only when there is a reply to view.
+  const notice = to === 'in_review' ? 'complaint_in_review' : feedback.parentResponse !== null ? 'complaint_resolved' : 'complaint_closed';
+  await tellParent(tx, outbox, feedback, notice);
 }
 
 /** PD-32: the parent feedback an app complaint was filed as, for the staff who handle it. */

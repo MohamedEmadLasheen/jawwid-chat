@@ -40,6 +40,8 @@ export type ActionKind =
   | 'open_task'
   /** PD-52: a teacher's records page (refs.page: attendance | grants; refs.teacherId), which re-checks who may see it. */
   | 'open_teacher_records'
+  /** PD-32 amendment: the parent's own feedback item (refs.feedbackId), read through /me/feedback. */
+  | 'open_feedback'
   /** PD-57 ENG-04: a report, opened in the moderation queue (refs.reportId), which re-checks the scope. */
   | 'open_report'
   /** PD-57 ENG-04: the reporter's own My reports (refs.reportId), with the answer. */
@@ -121,6 +123,13 @@ const BY_EVENT: Readonly<Record<string, CatalogEntry>> = {
   // texts: no teacher, child, family or words; the page re-checks who may see it.
   teacher_complaint_received: { version: 1, category: 'task', inbox: 'inbox.teacher_complaint_received', action: 'open_teacher_records' },
   teacher_praise_received: { version: 1, category: 'task', inbox: 'inbox.teacher_praise_received', action: 'open_teacher_records' },
+  // PD-32 amendment: to the parent who filed the feedback. Under 'conversation' --
+  // the academy answering them -- so the parent's own push switch for it applies.
+  // Generic texts: never the teacher, the child, the parent's words or the reply.
+  feedback_replied: { version: 1, category: 'conversation', inbox: 'inbox.feedback_replied', action: 'open_feedback' },
+  feedback_complaint_in_review: { version: 1, category: 'conversation', inbox: 'inbox.feedback_complaint_in_review', action: 'open_feedback' },
+  feedback_complaint_resolved: { version: 1, category: 'conversation', inbox: 'inbox.feedback_complaint_resolved', action: 'open_feedback' },
+  feedback_complaint_closed: { version: 1, category: 'conversation', inbox: 'inbox.feedback_complaint_closed', action: 'open_feedback' },
   task_returned: { version: 1, category: 'task', inbox: 'inbox.task_returned', action: 'open_task' },
   task_out_of_scope: { version: 1, category: 'task', inbox: 'inbox.task_out_of_scope', action: 'open_task' },
   task_overdue: { version: 1, category: 'task', inbox: 'inbox.task_overdue', action: 'open_task' },

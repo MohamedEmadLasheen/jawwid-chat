@@ -34,6 +34,10 @@ class _Boards implements WhiteboardsRepository {
 
   /// When set, the grant waits for it (an upload still on its way).
   Completer<void>? hold;
+
+  /// Grants asked for: once this is 1 under [hold], the upload is on its way
+  /// (the picture read and checked, held at the grant, before the PUT).
+  int grants = 0;
   final saved = <BoardPage>[];
   int revision = 1;
 
@@ -50,6 +54,7 @@ class _Boards implements WhiteboardsRepository {
 
   @override
   Future<ImageGrant> grantImage(String boardId, {required String contentType, required int byteSize}) async {
+    grants++;
     await hold?.future;
     if (grantError != null) throw grantError!;
     return const ImageGrant(assetId: 'a1', objectKey: 'whiteboard-uploads/o/b1/a1/u', uploadUrl: 'https://s.test/up', headers: {});
@@ -191,7 +196,11 @@ void main() {
     final l10n = await pump(tester);
     repo.hold = Completer<void>();
     await tapImage(tester, l10n);
-    await work(tester, until: () => find.text(l10n.boardImageAdding).evaluate().isNotEmpty);
+    // "Adding" shows before the picture is decoded; the upload is on its way
+    // only once the grant is asked for (held there).
+    await work(tester, until: () => repo.grants == 1);
+    expect(repo.grants, 1);
+    expect(uploads.puts, 0);
     expect(find.text(l10n.boardImageAdding), findsOneWidget);
     container.read(boardEditorProvider('b1').notifier).goTo(1);
     repo.hold!.complete();
@@ -252,7 +261,13 @@ void main() {
     final l10n = await pump(tester);
     repo.hold = Completer<void>();
     await tapImage(tester, l10n);
-    await work(tester, until: () => find.text(l10n.boardImageAdding).evaluate().isNotEmpty);
+    // Leave only once the upload is really under way: held at the grant. The
+    // "Adding" text shows earlier, while the picture is still being decoded,
+    // and leaving then rightly uploads nothing (CI run 42816036597).
+    await work(tester, until: () => repo.grants == 1);
+    expect(repo.grants, 1);
+    expect(uploads.puts, 0);
+    expect(find.text(l10n.boardImageAdding), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     repo.hold!.complete();
     await work(tester);

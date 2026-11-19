@@ -136,8 +136,9 @@ class TeacherFeedbackScreen extends ConsumerWidget {
               label: Text(l10n.feedbackNew),
             )
           : null,
+      // A refresh (opening a reply) keeps the list on screen rather than a spinner.
       body: switch (state) {
-        AsyncData(:final value) => _History(
+        AsyncValue(:final value?) => _History(
             learnerId: learnerId,
             childName: childName,
             feedback: value,
@@ -204,7 +205,7 @@ class _History extends ConsumerWidget {
           else ...[
             Text(l10n.feedbackHistoryTitle, style: theme.textTheme.labelLarge?.copyWith(color: tokens.colorTextSecondary)),
             const SizedBox(height: Spacing.spacing3),
-            for (final item in items) _FeedbackCard(item: item),
+            for (final item in items) FeedbackCard(key: ValueKey('feedback-card-${item.id}'), item: item),
           ],
         ],
       ),
@@ -212,18 +213,127 @@ class _History extends ConsumerWidget {
   }
 }
 
-class _FeedbackCard extends StatelessWidget {
-  const _FeedbackCard({required this.item});
+/// PD-32 amendment: one child's single feedback item, opened from a notification ("The
+/// administration has replied to your feedback"). The reply is shown at once, so opening
+/// this screen is opening the reply: its unread dot goes for this account.
+class FeedbackItemScreen extends ConsumerStatefulWidget {
+  const FeedbackItemScreen({super.key, required this.feedbackId});
 
-  final FeedbackItem item;
+  final String feedbackId;
+
+  @override
+  ConsumerState<FeedbackItemScreen> createState() => _FeedbackItemScreenState();
+}
+
+class _FeedbackItemScreenState extends ConsumerState<FeedbackItemScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Read the list again: one kept alive by an open history screen may predate the
+    // reply this notification is about.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(myFeedbackProvider);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final state = ref.watch(myFeedbackProvider);
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.feedbackEntryTitle)),
+      body: switch (state) {
+        AsyncValue(:final value?) => switch (value.item(widget.feedbackId)) {
+            final item? => ListView(
+                padding: const EdgeInsets.all(Spacing.spacing5),
+                children: [FeedbackCard(key: ValueKey('feedback-card-${item.id}'), item: item, openReply: true)],
+              ),
+            null => state.isLoading
+                ? const JawwidLoadingView()
+                : JawwidEmptyView(icon: Icons.rate_review_outlined, title: l10n.feedbackItemGone),
+          },
+        AsyncError(:final error) => Builder(builder: (context) {
+            final message = ErrorPresenter.present(asAppErrorOf(error), l10n);
+            return JawwidErrorView(
+              title: message.title,
+              body: message.body,
+              retryLabel: message.canRetry ? l10n.retryAction : null,
+              onRetry: message.canRetry ? () => ref.invalidate(myFeedbackProvider) : null,
+            );
+          }),
+        _ => const JawwidLoadingView(),
+      },
+    );
+  }
+}
+
+/// One item: its kind, status, words and -- when there is one -- the administration's reply.
+///
+/// A reply this account has not opened yet is held behind a "New reply" row with a dot;
+/// tapping it shows the reply and tells the server it was seen (this account only). With
+/// [openReply] (the item opened on its own, from a notification) the reply is shown at
+/// once and counts as opened.
+class FeedbackCard extends ConsumerStatefulWidget {
+  const FeedbackCard({super.key, required this.item, this.openReply = false});
+
+  final FeedbackItem item;
+  final bool openReply;
+
+  @override
+  ConsumerState<FeedbackCard> createState() => _FeedbackCardState();
+}
+
+class _FeedbackCardState extends ConsumerState<FeedbackCard> {
+  /// Opened here, before the list comes back from the server saying so.
+  bool _opened = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _openIfAsked();
+  }
+
+  @override
+  void didUpdateWidget(FeedbackCard old) {
+    super.didUpdateWidget(old);
+    // The item opened on its own, and a fresher read now shows a reply it did not have.
+    _openIfAsked();
+  }
+
+  void _openIfAsked() {
+    if (!_opened && widget.openReply && widget.item.replyUnread && widget.item.response != null) {
+      _opened = true;
+      // After this frame: a provider may not be refreshed while the tree builds.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _markSeen());
+    }
+  }
+
+  Future<void> _open() async {
+    setState(() => _opened = true);
+    await _markSeen();
+  }
+
+  Future<void> _markSeen() async {
+    if (!mounted) return;
+    final container = ProviderScope.containerOf(context, listen: false);
+    try {
+      await container.read(feedbackRepositoryProvider).markReplySeen(widget.item.id);
+    } catch (_) {
+      // The reply is on screen either way; the dot comes back next time and can be opened again.
+      return;
+    }
+    container.invalidate(myFeedbackProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final tokens = JawwidTokens.of(context);
     final locale = Localizations.localeOf(context).toLanguageTag();
     final response = item.response;
+    final unread = response != null && item.replyUnread && !_opened;
 
     return Card(
       key: ValueKey('feedback-${item.id}'),
@@ -251,7 +361,43 @@ class _FeedbackCard extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.spacing3),
             ContentText(item.body, style: theme.textTheme.bodyMedium),
-            if (response != null) ...[
+            if (unread) ...[
+              const SizedBox(height: Spacing.spacing4),
+              Material(
+                color: tokens.colorSurfaceMuted,
+                borderRadius: Radii.card,
+                child: InkWell(
+                  key: ValueKey('feedback-open-reply-${item.id}'),
+                  borderRadius: Radii.card,
+                  onTap: _open,
+                  child: Padding(
+                    padding: const EdgeInsets.all(Spacing.spacing4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.circle, key: ValueKey('feedback-unread-${item.id}'), size: 10, color: tokens.colorBrandPrimary),
+                        const SizedBox(width: Spacing.spacing3),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.feedbackNewReply,
+                                style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                l10n.feedbackOpenReply,
+                                style: theme.textTheme.bodySmall?.copyWith(color: tokens.colorTextSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ] else if (response != null) ...[
               const SizedBox(height: Spacing.spacing4),
               DecoratedBox(
                 decoration: BoxDecoration(

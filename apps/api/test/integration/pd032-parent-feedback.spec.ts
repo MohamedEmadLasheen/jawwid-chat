@@ -121,7 +121,8 @@ describe('1. the parent files feedback and reads back only what is theirs', () =
     expect(mine.feedback.map((f) => f.id)).toEqual([complaint.id, praise.id]);
     // Exactly these keys: no handler, no follow-ups, no decision, no staff names.
     expect(Object.keys(mine.feedback[0]).sort()).toEqual(
-      ['body', 'category', 'childName', 'createdAt', 'id', 'learnerId', 'respondedAt', 'response', 'status', 'teacherName'].sort(),
+      // PD-32 amendment: replyUnread -- this account's own read state of the reply.
+      ['body', 'category', 'childName', 'createdAt', 'id', 'learnerId', 'replyUnread', 'respondedAt', 'response', 'status', 'teacherName'].sort(),
     );
 
     // The family's other parent reads the same family's feedback.

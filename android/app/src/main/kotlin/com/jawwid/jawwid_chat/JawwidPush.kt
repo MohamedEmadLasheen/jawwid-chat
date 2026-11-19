@@ -6,6 +6,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
@@ -76,6 +79,19 @@ object JawwidPush {
     /** Call actions taken before Flutter was ready (a cold start from Answer). */
     private val pending = mutableListOf<Pair<String, Map<String, String?>>>()
 
+    /**
+     * LR-79: calls whose ring was taken down on purpose (Answer, Decline, Dart's
+     * `dismiss`, all through [cancelCall]), with when, so a ring check never
+     * re-posts one. Kept for two rings' time; this process only, like the check.
+     */
+    private val settled = RingCheck.SettledCalls({ SystemClock.elapsedRealtime() }, 2 * RING_TIMEOUT_MS)
+
+    /**
+     * LR-79: the ring checks run here, on the main thread, where Answer, Decline and
+     * Dart's `dismiss` also run: a check and a cancel never interleave.
+     */
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+
     fun isCall(data: Map<String, String>): Boolean =
         data["eventType"] in CALL_EVENTS && !data["callId"].isNullOrEmpty()
 
@@ -84,7 +100,9 @@ object JawwidPush {
         ensureChannels(context)
         if (isCall(data)) {
             showIncomingCall(context, data["callId"]!!, data["conversationId"], data["title"], data["body"])
-        } else if (!inForeground) {
+        } else {
+            // PD-32: its own rule decides, in front or not -- chat stays quiet while the app
+            // is open (already on screen), other kinds are drawn once (PushPayload.shouldDisplay).
             showMessage(context, data)
         }
     }
@@ -137,23 +155,113 @@ object JawwidPush {
             // IllegalArgumentException from notify() and nothing rings at all. Where
             // the app may not use full-screen intents (Android 14+, the user or Play
             // revoked it), the system itself downgrades the request to a heads-up
-            // notification -- still with Answer and Decline.
+            // notification -- still with Answer and Decline. LR-27: that permission is
+            // checked below and offered to Dart (canUseFullScreenIntent), never assumed;
+            // dropping the intent when it is denied would make build() throw instead.
             .setFullScreenIntent(open, true)
             // Lock screen (#408 review): the caller's name is not shown to whoever
             // holds the phone; the public version says only "Incoming call".
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicVersion(context, CHANNEL_CALLS, R.string.call_incoming))
 
-        notify(context, notificationId(callId), builder)
+        if (!canUseFullScreenIntent(context)) {
+            android.util.Log.i(TAG, "ring $callId: full-screen intent not allowed; heads-up only")
+        }
+        val id = notificationId(callId)
+        val startedAt = SystemClock.elapsedRealtime()
+        if (notify(context, id, builder)) watchRing(context, callId, id, builder, startedAt, repostsDone = 0)
     }
 
+    /**
+     * LR-27: whether the ring may take over the screen (Android 14+ asks the system;
+     * the user or Play may have revoked it). Never throws: unknown counts as allowed,
+     * which is what the app assumed before this check.
+     */
+    fun canUseFullScreenIntent(context: Context): Boolean =
+        RingCheck.fullScreenIntentAllowed(Build.VERSION.SDK_INT) {
+            try {
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+                    context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true
+            } catch (e: RuntimeException) {
+                true
+            }
+        }
+
+    // ------------------------------------------------------------ LR-79: the ring check
+
+    private fun watchRing(context: Context, callId: String, id: Int, builder: NotificationCompat.Builder, startedAt: Long, repostsDone: Int) {
+        mainHandler.postDelayed({ checkRing(context, callId, id, builder, startedAt, repostsDone) }, RingCheck.CHECK_DELAY_MS)
+    }
+
+    /**
+     * Is the ring really on the screen? If Android dropped it, post it again
+     * ([RingCheck.next] decides). Logs the call id only.
+     */
+    private fun checkRing(context: Context, callId: String, id: Int, builder: NotificationCompat.Builder, startedAt: Long, repostsDone: Int) {
+        val elapsed = SystemClock.elapsedRealtime() - startedAt
+        val active = isRingActive(context, id)
+        when (RingCheck.next(active, settled.isSettled(callId, startedAt), repostsDone, elapsed, RING_TIMEOUT_MS)) {
+            RingCheck.Next.ACTIVE ->
+                if (repostsDone > 0) android.util.Log.i(TAG, "ring $callId active after re-post $repostsDone")
+            RingCheck.Next.SETTLED, RingCheck.Next.EXPIRED -> Unit
+            RingCheck.Next.GIVE_UP ->
+                android.util.Log.w(TAG, "ring $callId still not active after ${RingCheck.MAX_REPOSTS} re-posts")
+            RingCheck.Next.REPOST -> {
+                val attempt = repostsDone + 1
+                android.util.Log.w(TAG, "ring $callId not active; re-post $attempt of ${RingCheck.MAX_REPOSTS}")
+                // The re-posted ring ends when the first one would have. If the first one was
+                // only slow to appear (not dropped), the update must not sound a second time:
+                // only-alert-once alerts a ring that is not showing, and never re-alerts one that is.
+                builder.setTimeoutAfter(RING_TIMEOUT_MS - elapsed).setOnlyAlertOnce(true)
+                if (notify(context, id, builder)) watchRing(context, callId, id, builder, startedAt, attempt)
+            }
+        }
+    }
+
+    /**
+     * Whether the ring is among this app's active notifications. When that cannot be
+     * read, or the person switched the calls channel off (nothing could show), it
+     * counts as active: a check that cannot see must not re-alert.
+     */
+    private fun isRingActive(context: Context, id: Int): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return true
+        return try {
+            if (manager.getNotificationChannel(CHANNEL_CALLS)?.importance == NotificationManager.IMPORTANCE_NONE) return true
+            manager.activeNotifications.any { it.id == id && it.tag == null }
+        } catch (e: RuntimeException) {
+            true
+        }
+    }
+
+
+    /**
+     * An ordinary notification (PD-32), drawn by the app because FCM sends data only.
+     *
+     *   - chat is not drawn while the app is open, where it is already on screen; every
+     *     other kind is drawn once, in any state, as iOS does ([PushPayload.shouldDisplay]);
+     *   - one per conversation for chat, one per delivery otherwise ([PushPayload.tag]),
+     *     so a repeated delivery replaces itself and never stacks a duplicate;
+     *   - the tap opens the exact item: an explicit intent carrying the allow-listed ids and
+     *     this install's nonce (MainActivity.handlePushTap);
+     *   - private on the lock screen: the public version names no one.
+     */
     private fun showMessage(context: Context, data: Map<String, String>) {
-        val title = data["title"]?.takeIf { it.isNotBlank() } ?: context.getString(R.string.app_name)
-        val body = data["body"]?.takeIf { it.isNotBlank() } ?: context.getString(R.string.message_new)
+        if (!PushPayload.shouldDisplay(data, inForeground)) return
+        val title = data["title"]?.takeIf { it.isNotBlank() }?.take(200) ?: context.getString(R.string.app_name)
+        val body = data["body"]?.takeIf { it.isNotBlank() }?.take(1000) ?: context.getString(R.string.message_new)
+        val tag = PushPayload.tag(data)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            action = PushBridge.ACTION_OPEN
+            // A distinct data URI per tag, so two notifications never share a PendingIntent.
+            setData(android.net.Uri.parse("jawwid-push://open/" + android.net.Uri.encode(tag)))
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            PushPayload.openExtras(data).forEach { (k, v) -> putExtra(k, v) }
+            putExtra(PushBridge.EXTRA_NONCE, PushBridge.nonce(context))
+        }
         val open = PendingIntent.getActivity(
             context,
-            0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            tag.hashCode(),
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
@@ -168,8 +276,28 @@ object JawwidPush {
             // unlike iOS: a message preview stays behind the unlock.
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicVersion(context, CHANNEL_MESSAGES, R.string.message_new))
-        // One per conversation: a second message replaces the first rather than stacking.
-        notify(context, (data["conversationId"] ?: data["notificationId"] ?: "jawwid").hashCode(), builder)
+        notifyTagged(context, tag, builder)
+    }
+
+    private fun notifyTagged(context: Context, tag: String, builder: NotificationCompat.Builder) {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return // the person said no; it is still in the app
+        try {
+            manager.notify(tag, MESSAGE_ID, builder.build())
+        } catch (e: SecurityException) {
+            android.util.Log.w(TAG, "notification refused", e)
+        } catch (e: IllegalArgumentException) {
+            // A malformed notification must never take the messaging service down (as notify() above).
+            android.util.Log.e(TAG, "notification malformed", e)
+        }
+    }
+
+    private const val MESSAGE_ID = 1
+
+    /** Sign-out (PD-32): this app's notifications leave the tray, a ringing call's included. */
+    fun clearMessages(context: Context) {
+        settled.clearAll() // LR-79: no ring check re-posts one
+        NotificationManagerCompat.from(context).cancelAll()
     }
 
     /** What the lock screen shows instead: the app's name and a generic line, nothing more. */
@@ -180,26 +308,33 @@ object JawwidPush {
             .setContentText(context.getString(text))
             .build()
 
-    private fun notify(context: Context, id: Int, builder: NotificationCompat.Builder) {
+    /** Whether notify() was handed the notification (LR-79: Android may still drop it). */
+    private fun notify(context: Context, id: Int, builder: NotificationCompat.Builder): Boolean {
         val manager = NotificationManagerCompat.from(context)
         // POST_NOTIFICATIONS refused (Android 13+): nothing can be shown, and nothing is thrown.
         if (!manager.areNotificationsEnabled()) {
             android.util.Log.w(TAG, "notification $id not shown: notifications are off for the app")
-            return
+            return false
         }
-        try {
+        return try {
             manager.notify(id, builder.build())
             android.util.Log.i(TAG, "notification $id posted")
+            true
         } catch (e: SecurityException) {
             // The permission was revoked between the check and the post.
             android.util.Log.w(TAG, "notification $id refused", e)
+            false
         } catch (e: IllegalArgumentException) {
             // A malformed notification must never take the messaging service down.
             android.util.Log.e(TAG, "notification $id malformed", e)
+            false
         }
     }
 
+    /** Answer, Decline and Dart's `dismiss` all come here: the ring is down for good (LR-79). */
     fun cancelCall(context: Context, callId: String) {
+        // LR-79: marked before the cancel, so a ring check that runs next never re-posts it.
+        settled.markSettled(callId)
         NotificationManagerCompat.from(context).cancel(notificationId(callId))
     }
 
@@ -211,6 +346,9 @@ object JawwidPush {
                 .setAction(action)
                 .putExtra(EXTRA_CALL_ID, callId)
                 .putExtra(EXTRA_CONVERSATION_ID, conversationId)
+                // MainActivity is exported, so Answer/Open count only with this install's
+                // nonce (PushPayload.isTrustedTap), like a notification tap.
+                .putExtra(PushBridge.EXTRA_NONCE, PushBridge.nonce(context))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

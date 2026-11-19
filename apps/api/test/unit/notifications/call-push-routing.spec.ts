@@ -160,6 +160,38 @@ describe('the payload', () => {
     expect(data).not.toHaveProperty('callId');
   });
 
+  describe('PD-32 amendment: what a tap opens', () => {
+    const base = { eventType: 'feedback_replied', notificationId: 'n_1', dedupeKey: 'feedback_replied:f-1:actor-1' };
+
+    it('an ordinary push carries its Center entry\'s action: the kind and the ids, nothing else', () => {
+      const data = buildPushData({ ...base, action: { kind: 'open_feedback', feedbackId: 'f-1', note: 'secret words', teacherName: 'teacher_t' } });
+      expect(data).toEqual({ eventType: 'feedback_replied', notificationId: 'n_1', actionKind: 'open_feedback', feedbackId: 'f-1' });
+    });
+
+    it('a call carries no action, whatever it is given: its payload is unchanged', () => {
+      const data = buildPushData({
+        eventType: 'call_started',
+        notificationId: 'n_1',
+        conversationId: 'c_1',
+        dedupeKey: `incoming_call:${CALL_ID}:actor-1`,
+        action: { kind: 'open_conversation', conversationId: 'c_1' },
+      });
+      expect(data).toEqual({ eventType: 'call_started', notificationId: 'n_1', conversationId: 'c_1', callId: CALL_ID });
+    });
+
+    it('anything not shaped like a kind or an id is dropped, never passed through', () => {
+      expect(buildPushData({ ...base, action: { kind: 'Open Feedback!', feedbackId: 'f-1' } })).not.toHaveProperty('actionKind');
+      expect(buildPushData({ ...base, action: { kind: 'open_feedback', feedbackId: '../../admin' } })).toEqual({
+        eventType: 'feedback_replied',
+        notificationId: 'n_1',
+        actionKind: 'open_feedback',
+      });
+      expect(buildPushData({ ...base, action: { kind: 'open_feedback', feedbackId: 7 } })).not.toHaveProperty('feedbackId');
+      expect(buildPushData({ ...base, action: ['open_feedback'] })).not.toHaveProperty('actionKind');
+      expect(buildPushData({ ...base, action: null })).not.toHaveProperty('actionKind');
+    });
+  });
+
   it('a call whose id cannot be read still produces a usable payload', () => {
     // Better an absent id than an invented one: the push still wakes the app.
     const data = buildPushData({

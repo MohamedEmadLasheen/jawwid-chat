@@ -148,6 +148,7 @@ export const UNGATED_WRITES: Readonly<Record<string, string>> = {
   'POST /teacher-files/:teacherId/deletion-request/complete': 'staff offboarding action (teachers.offboard); creates no content others see',
   'POST /me/billing/checkout': 'a parent’s own payment or receipt; only staff read it',
   'POST /me/billing/receipts': 'a parent’s own payment or receipt; only staff read it',
+  'POST /me/feedback/:id/reply-seen': 'the parent’s own read state for a staff reply (PD-32); no content',
   'DELETE /me/blocks/:id': 'unblocking removes the caller’s own block; removing is never gated',
   'POST /me/labels': 'chat labels are private to the staff member who made them',
   'DELETE /me/labels/:id': 'chat labels are private to the staff member who made them',
