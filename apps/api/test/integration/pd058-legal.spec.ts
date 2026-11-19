@@ -772,7 +772,7 @@ describe('9. production fails closed', () => {
   afterEach(async () => {
     if (inheritedAppEnv === undefined) delete process.env.APP_ENV;
     else process.env.APP_ENV = inheritedAppEnv;
-    for (const key of ['terms_family', 'terms_staff', 'code_of_conduct'] as const) await setCurrent(key, 'v1');
+    for (const key of ['terms_family', 'terms_teacher', 'terms_staff', 'code_of_conduct'] as const) await setCurrent(key, 'v1');
   });
 
   it('the boot check refuses a missing legal.current.terms_family row in production, and only warns elsewhere', async () => {
