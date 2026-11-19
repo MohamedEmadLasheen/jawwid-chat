@@ -2841,6 +2841,9 @@ class L10nEn extends L10n {
   String get signupOpen => 'New parent? Create your account';
 
   @override
+  String get signInEnrolOpen => 'New to Jawwid? Enrol your child';
+
+  @override
   String get signupTitle => 'Create your parent account';
 
   @override

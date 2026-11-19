@@ -195,3 +195,37 @@ class SupportLinksTiles extends ConsumerWidget {
     );
   }
 }
+
+/// Apple 2.1 / 3.2: how a member of the public becomes a family of the academy. The academy's
+/// public enrolment page, from the build-time `ENROL_URL` (`{lang}` becomes `ar` or `en`,
+/// https only), defaulting to the public page so every build shows it. Unset or malformed: no link.
+class EnrolPage {
+  const EnrolPage({required this.url});
+
+  static const defaultUrl = 'https://jawwid.com/enroll/';
+
+  final String url;
+
+  Uri? pageFor(String languageCode) => LegalLinks._resolve(url, languageCode);
+}
+
+final enrolPageProvider = Provider<EnrolPage>(
+  (ref) => const EnrolPage(url: String.fromEnvironment('ENROL_URL', defaultValue: EnrolPage.defaultUrl)),
+);
+
+/// "New to Jawwid? Enrol your child" on the sign-in screen: opens the enrolment page in the browser.
+class EnrolLink extends ConsumerWidget {
+  const EnrolLink({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final page = ref.watch(enrolPageProvider).pageFor(Localizations.localeOf(context).languageCode);
+    if (page == null) return const SizedBox.shrink();
+    final open = ref.watch(legalLinkOpenerProvider);
+    return TextButton(
+      key: const ValueKey('enrol-open'),
+      onPressed: () => open(page),
+      child: Text(L10n.of(context).signInEnrolOpen),
+    );
+  }
+}

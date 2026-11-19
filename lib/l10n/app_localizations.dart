@@ -4975,6 +4975,12 @@ abstract class L10n {
   /// **'New parent? Create your account'**
   String get signupOpen;
 
+  /// Sign-in screen link to the academy's public enrolment page (for people who are not yet families of the academy).
+  ///
+  /// In en, this message translates to:
+  /// **'New to Jawwid? Enrol your child'**
+  String get signInEnrolOpen;
+
   /// No description provided for @signupTitle.
   ///
   /// In en, this message translates to:

@@ -2887,6 +2887,9 @@ class L10nAr extends L10n {
   String get signupOpen => 'ولي أمر جديد؟ أنشئ حسابك';
 
   @override
+  String get signInEnrolOpen => 'جديد في جوِّد؟ سجّل طفلك';
+
+  @override
   String get signupTitle => 'إنشاء حساب ولي الأمر';
 
   @override
