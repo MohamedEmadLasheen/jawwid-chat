@@ -1,10 +1,11 @@
-import { LEGAL_DOCUMENT_KEYS, currentVersionKey, type LegalDocumentKey } from './legal-documents';
+import { LEGAL_DOCUMENT_KEYS, currentVersionKey, isLaunchRequired, type LegalDocumentKey } from './legal-documents';
 
 /**
  * PD-58 §7.3: configuration safety, FAIL CLOSED.
  *
  * In production the API (and the worker, which boots the same AppModule)
- * refuses to start when any of the four `legal.current.*` rows is missing, is
+ * refuses to start when `legal.current.terms_family` is missing (launch scope,
+ * owner decision 2026-11-19: the other three are optional while absent), or any row is
  * not a version name, or names a version that was never published -- the same
  * stance as the Stripe guard (billing/stripe-config.ts) and the push provider
  * guard. Outside production a missing configuration is a warning, and the gate
@@ -38,14 +39,18 @@ export function isProduction(env: NodeJS.ProcessEnv = process.env): boolean {
 /**
  * Every problem with the configuration, one line each (names and keys only --
  * a version name is the owner's, but it is not a secret; still, only the key
- * is printed). Empty when all four documents are configured and published.
+ * is printed). Empty when terms_family is configured and published and every other row that
+ * exists names a published version (an absent optional row is "not yet in force").
  */
 export function legalConfigurationProblems(states: readonly LegalConfigState[]): string[] {
   const problems: string[] = [];
   for (const key of LEGAL_DOCUMENT_KEYS) {
     const state = states.find((s) => s.documentKey === key);
     const name = currentVersionKey(key);
-    if (!state || !state.configured) problems.push(`${name} is missing`);
+    if (!state || !state.configured) {
+      // Owner decision 2026-11-19: an absent row of a document not required at launch means "not yet in force".
+      if (isLaunchRequired(key)) problems.push(`${name} is missing`);
+    }
     else if (state.version === null) problems.push(`${name} is not a version name (a JSON string)`);
     else if (!state.published) problems.push(`${name} names a version that was never published (chat.publish_legal_version)`);
   }

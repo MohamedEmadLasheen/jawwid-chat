@@ -21,7 +21,8 @@ staging.
      version published with `chat.publish_legal_version` (roadmap §7.3). Check,
      read-only:
      `DATABASE_URL=... python3 -I scripts/infra/production-setup.py legal` (exit 0
-     = all four set). **Release order:** ENG-11 (Flutter gate) and ENG-12 (Admin
+     = `terms_family` set, and every other row that exists names a published version;
+     owner decision 2026-11-19: the other three are optional until published). **Release order:** ENG-11 (Flutter gate) and ENG-12 (Admin
      Web gate) ship first; then the owner publishes the versions and sets the
      rows; then this deploy. Setting the rows before the clients can show the
      gate locks app users and staff out of messaging (403

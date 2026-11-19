@@ -772,40 +772,76 @@ describe('9. production fails closed', () => {
   afterEach(async () => {
     if (inheritedAppEnv === undefined) delete process.env.APP_ENV;
     else process.env.APP_ENV = inheritedAppEnv;
-    await setCurrent('terms_staff', 'v1');
+    for (const key of ['terms_family', 'terms_staff', 'code_of_conduct'] as const) await setCurrent(key, 'v1');
   });
 
-  it('the boot check refuses a missing legal.current row in production, and only warns elsewhere', async () => {
+  it('the boot check refuses a missing legal.current.terms_family row in production, and only warns elsewhere', async () => {
     const legal = app.get(LegalService);
     await expect(legal.onModuleInit()).resolves.toBeUndefined();
     process.env.APP_ENV = 'production';
     await expect(legal.onModuleInit()).resolves.toBeUndefined();
     process.env.APP_ENV = inheritedAppEnv ?? '';
-    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'legal.current.terms_staff'`);
+    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'legal.current.terms_family'`);
     await expect(legal.onModuleInit()).resolves.toBeUndefined();
     process.env.APP_ENV = 'production';
-    await expect(legal.onModuleInit()).rejects.toThrow(/legal\.current\.terms_staff is missing/);
+    await expect(legal.onModuleInit()).rejects.toThrow(/legal\.current\.terms_family is missing/);
   });
 
   it('in production a gated route answers 503 LEGAL_NOT_CONFIGURED, never "nothing required"; GET /me still answers', async () => {
-    const staff = await login(m.supervisors[2]!.subject);
-    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'legal.current.terms_staff'`);
+    const family = m.families[1]!;
+    const parent = await login(family.parent.subject);
+    await g.prisma.$executeRawUnsafe(`delete from chat.config where key = 'legal.current.terms_family'`);
     process.env.APP_ENV = 'production';
-    const group = m.families.find((f) => f.groups.some((gr) => gr.supervisorId === m.supervisors[2]!.id))?.groups.find((gr) => gr.supervisorId === m.supervisors[2]!.id);
-    const path = `/conversations/${group?.conversationId ?? randomUUID()}/messages`;
-    const r = await call(staff.token, 'POST', path, { body: 'hello', clientMessageId: randomUUID() });
+    const path = `/conversations/${family.groups[0]!.conversationId}/messages`;
+    const r = await call(parent.token, 'POST', path, { body: 'hello', clientMessageId: randomUUID() });
     expect({ status: r.status, code: r.code }).toEqual({ status: 503, code: CommErrorCode.LEGAL_NOT_CONFIGURED });
     // ENG-10 review: never "nothing required" -- an explicit state the client tells apart from "all accepted".
-    const unavailable = { state: 'unavailable', unavailable: ['terms_staff'] };
-    const me = await call(staff.token, 'GET', '/me');
+    const unavailable = { state: 'unavailable', unavailable: ['terms_family'] };
+    const me = await call(parent.token, 'GET', '/me');
     expect(me.status).toBe(200);
     expect(me.json.legal).toMatchObject(unavailable);
-    const state = await call(staff.token, 'GET', '/me/legal');
+    const state = await call(parent.token, 'GET', '/me/legal');
     expect(state.status).toBe(200);
     expect(state.json).toMatchObject(unavailable);
-    const again = await login(m.supervisors[2]!.subject);
+    const again = await login(family.parent.subject);
     expect(again.json.legal).toMatchObject(unavailable);
     expect(again.json.actor.legal).toMatchObject(unavailable);
+  });
+
+  // Owner decision 2026-11-19 (Apple 1.2, launch scope): only the family Terms of Use are in force at launch.
+  // The Teacher Terms, Staff Terms and Code of Conduct are drafts; a MISSING row for them means "not yet in
+  // force" (never asked for, never 503), and each becomes required the moment its row is set.
+  it('launch scope: without the optional rows, production starts, a parent accepts the family terms alone, staff are not asked', async () => {
+    await g.prisma.$executeRawUnsafe(
+      `delete from chat.config where key in ('legal.current.terms_staff', 'legal.current.code_of_conduct', 'legal.current.terms_teacher')`,
+    );
+    process.env.APP_ENV = 'production';
+    await expect(app.get(LegalService).onModuleInit()).resolves.toBeUndefined();
+
+    const family = m.families[2]!;
+    const version = await setCurrent('terms_family', 'launch');
+    const parent = await login(family.parent.subject);
+    const required = [{ documentKey: 'terms_family', version, urlAr: fixtureUrl('ar', 'terms_family', version), urlEn: fixtureUrl('en', 'terms_family', version) }];
+    expect(parent.json.legal).toEqual(pending(required));
+    const path = `/conversations/${family.groups[0]!.conversationId}/messages`;
+    const refused = await call(parent.token, 'POST', path, { body: 'before', clientMessageId: randomUUID() });
+    expect({ status: refused.status, code: refused.code }).toEqual({ status: 403, code: CommErrorCode.TERMS_NOT_ACCEPTED });
+    const accepted = await accept(parent.token, [{ documentKey: 'terms_family', version }]);
+    expect({ status: accepted.status, json: accepted.json }).toEqual({ status: 200, json: { legal: ACCEPTED } });
+    const sent = await call(parent.token, 'POST', path, { body: 'after', clientMessageId: randomUUID() });
+    expect(sent.status).toBe(201);
+    // A document that is not in force cannot be accepted (nothing to name).
+    const conduct = await accept(parent.token, [{ documentKey: 'code_of_conduct', version: 'qa-anything' }]);
+    expect(conduct.status).toBe(400);
+
+    const staff = await login(m.supervisors[2]!.subject);
+    expect(staff.json.legal).toEqual(ACCEPTED);
+
+    // Setting a row puts that document in force at once.
+    await setCurrent('code_of_conduct', 'later');
+    expect((await call(parent.token, 'GET', '/me')).json.legal.required.map((d: { documentKey: string }) => d.documentKey)).toEqual([
+      'code_of_conduct',
+    ]);
   });
 
   it('a row naming a version that was never published is refused everywhere', async () => {

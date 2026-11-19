@@ -42,6 +42,7 @@ ENV = "production"
 # PD-58 (roadmap §7.3): the API refuses to start in production unless each of
 # these chat.config rows names a version published with chat.publish_legal_version.
 LEGAL_DOCUMENTS = ("terms_family", "terms_teacher", "terms_staff", "code_of_conduct")
+LEGAL_LAUNCH_REQUIRED = ("terms_family",)  # owner decision 2026-11-19; mirrors apps/api/src/legal/legal-documents.ts
 LEGAL_SQL = (
     "select d.key, (c.key is not null), "
     "coalesce(case when jsonb_typeof(c.value) = 'string' then c.value #>> '{}' end, ''), "
@@ -201,7 +202,12 @@ def cmd_legal() -> int:
         key, configured, version, published = line.split("\t")
         name = f"legal.current.{key}"
         if configured != "t":
-            state, problems = "MISSING", problems + 1
+            # Owner decision 2026-11-19 (Apple 1.2 launch scope): only terms_family must be in force; an
+            # absent row of another document means "not yet in force" (it becomes required once set).
+            if key in LEGAL_LAUNCH_REQUIRED:
+                state, problems = "MISSING", problems + 1
+            else:
+                state = "not set: not yet in force (becomes required when you set it)"
         elif not version:
             state, problems = "NOT A VERSION NAME (a JSON string)", problems + 1
         elif published != "t":
@@ -210,7 +216,7 @@ def cmd_legal() -> int:
             state = f"set: {version!r}"
         print(f"{name:34} {state}")
     if problems:
-        print(f"{problems} of {len(LEGAL_DOCUMENTS)} missing: production refuses to start (PD-58, roadmap §7.3). "
+        print(f"{problems} problem(s): production refuses to start (PD-58, roadmap §7.3; terms_family is required at launch). "
               "Release order: ENG-11 and ENG-12 first, then publish and set these rows, then deploy the API.")
     return 0 if problems == 0 else 1
 

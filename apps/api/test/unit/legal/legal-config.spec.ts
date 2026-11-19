@@ -35,14 +35,31 @@ describe('PD-58: the production configuration check (fail closed)', () => {
     expect(assertLegalConfiguration(all(), PROD)).toEqual([]);
   });
 
-  it.each(LEGAL_DOCUMENT_KEYS)('production refuses to start when legal.current.%s is missing', (key) => {
-    const states = without(key, { configured: false, version: null, published: false });
-    expect(() => assertLegalConfiguration(states, PROD)).toThrow(`legal.current.${key} is missing`);
+  it('production refuses to start when legal.current.terms_family is missing', () => {
+    const states = without('terms_family', { configured: false, version: null, published: false });
+    expect(() => assertLegalConfiguration(states, PROD)).toThrow('legal.current.terms_family is missing');
+  });
+
+  // Owner decision 2026-11-19 (Apple 1.2, launch scope): only the family Terms of Use are in force at
+  // launch. The Teacher Terms, Staff Terms and Code of Conduct are drafts; each becomes required the
+  // moment its legal.current.* row is set. A MISSING row for them means "not yet in force", never a
+  // problem; a row that IS set but names nothing publishable still fails closed (tests below).
+  it.each(['terms_teacher', 'terms_staff', 'code_of_conduct'] as const)(
+    'a missing legal.current.%s row means "not yet in force": production starts',
+    (key) => {
+      const states = without(key, { configured: false, version: null, published: false });
+      expect(legalConfigurationProblems(states)).toEqual([]);
+      expect(assertLegalConfiguration(states, PROD)).toEqual([]);
+    },
+  );
+
+  it('the launch configuration (only terms_family set) starts in production', () => {
+    expect(assertLegalConfiguration([good('terms_family')], PROD)).toEqual([]);
   });
 
   it('production refuses when no row exists at all (an empty answer is not "no terms required")', () => {
     expect(() => assertLegalConfiguration([], PROD)).toThrow(/production refuses to start/);
-    expect(legalConfigurationProblems([])).toHaveLength(4);
+    expect(legalConfigurationProblems([])).toEqual(['legal.current.terms_family is missing']);
   });
 
   it('production refuses a row that names a version never published', () => {
@@ -58,8 +75,8 @@ describe('PD-58: the production configuration check (fail closed)', () => {
   });
 
   it('outside production the same problems are returned as warnings and the boot goes on', () => {
-    expect(assertLegalConfiguration([], STAGING)).toHaveLength(4);
-    expect(assertLegalConfiguration([], {} as NodeJS.ProcessEnv)).toHaveLength(4);
+    expect(assertLegalConfiguration([], STAGING)).toEqual(['legal.current.terms_family is missing']);
+    expect(assertLegalConfiguration([], {} as NodeJS.ProcessEnv)).toEqual(['legal.current.terms_family is missing']);
   });
 
   it('production is APP_ENV=production exactly (the Stripe guard\'s test), never NODE_ENV', () => {

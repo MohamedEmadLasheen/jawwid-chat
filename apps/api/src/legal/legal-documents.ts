@@ -14,6 +14,20 @@
 export const LEGAL_DOCUMENT_KEYS = ['terms_family', 'terms_teacher', 'terms_staff', 'code_of_conduct'] as const;
 export type LegalDocumentKey = (typeof LEGAL_DOCUMENT_KEYS)[number];
 
+/**
+ * Owner decision 2026-11-19 (Apple App Review 1.2, launch scope): the documents that must be in force
+ * before production starts. Only the family Terms of Use are published at launch (they carry the
+ * zero-tolerance clause, Terms 7.3). The Teacher Terms, Staff Terms and Code of Conduct are drafts awaiting
+ * legal review: while a document's `legal.current.<key>` row is ABSENT it is simply not in force -- not asked
+ * for, not a 503 -- and it becomes required the moment the owner sets that row. A row that IS set but names
+ * nothing publishable still fails closed, for every document.
+ */
+export const LAUNCH_REQUIRED_DOCUMENT_KEYS: readonly LegalDocumentKey[] = ['terms_family'];
+
+export function isLaunchRequired(key: LegalDocumentKey): boolean {
+  return LAUNCH_REQUIRED_DOCUMENT_KEYS.includes(key);
+}
+
 export type AccountKind = 'family' | 'teacher' | 'staff';
 
 /** The documents one account kind accepts, in the order a client shows them. */

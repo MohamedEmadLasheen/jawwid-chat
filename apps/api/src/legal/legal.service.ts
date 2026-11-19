@@ -6,6 +6,7 @@ import { assertLegalConfiguration, isProduction, type LegalConfigState } from '.
 import {
   LEGAL_DOCUMENT_KEYS,
   documentsFor,
+  isLaunchRequired,
   isAccountKind,
   isLegalClient,
   isLegalLocale,
@@ -98,13 +99,13 @@ export class LegalService implements OnModuleInit {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** §7.3: production refuses to start without the owner's four versions. */
+  /** §7.3: production refuses to start without the family terms in force (launch scope, owner 2026-11-19). */
   async onModuleInit(): Promise<void> {
     const problems = assertLegalConfiguration(await this.configuration());
     if (problems.length > 0) {
       this.log.warn(`PD-58 Terms of Use not fully configured (allowed outside production only): ${problems.join('; ')}`);
     } else {
-      this.log.log('PD-58 Terms of Use: all four documents are in force');
+      this.log.log('PD-58 Terms of Use: the required documents are in force');
     }
   }
 
@@ -335,11 +336,13 @@ export class LegalService implements OnModuleInit {
       documents.push(state);
       if (state.published && state.version !== null && state.urlAr !== null && state.urlEn !== null) {
         if (!state.accepted) required.push({ documentKey: key, version: state.version, urlAr: state.urlAr, urlEn: state.urlEn });
-      } else if (state.configured || production) {
+      } else if (state.configured || (production && isLaunchRequired(key))) {
         // A row that names nothing publishable is a misconfiguration everywhere;
-        // a missing row is one in production (§7.3, fail closed).
+        // a missing terms_family row is one in production (§7.3, fail closed).
+        // An absent row of a document not required at launch (owner decision
+        // 2026-11-19) is "not yet in force": not asked for, never a 503.
         misconfigured.push(key);
-      } else if (!this.warned.has(key)) {
+      } else if (!production && !this.warned.has(key)) {
         this.warned.add(key);
         this.log.warn(`PD-58: legal.current.${key} is not configured; outside production it is not asked for`);
       }
