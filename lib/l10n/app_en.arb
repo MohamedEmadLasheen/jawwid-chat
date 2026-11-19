@@ -1580,6 +1580,10 @@
     }
   },
   "signupOpen": "New parent? Create your account",
+  "signInEnrolOpen": "New to Jawwid? Enrol your child",
+  "@signInEnrolOpen": {
+    "description": "Sign-in screen link to the academy's public enrolment page (for people who are not yet families of the academy)."
+  },
   "signupTitle": "Create your parent account",
   "signupEmailIntro": "Enter the e-mail address you gave the academy when you enrolled.",
   "signupEmailLabel": "E-mail",
