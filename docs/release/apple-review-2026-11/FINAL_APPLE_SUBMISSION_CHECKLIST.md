@@ -72,8 +72,7 @@ Do steps 1 to 3 in any order. They can run at the same time.
    2. Pricing and Availability: all countries and regions **except China mainland**. Business: complete the EU
       trader checklist (`REGIONAL_AVAILABILITY.md` §3).
    3. App Information: **Marketing URL empty**.
-   4. Screenshots: delete the existing iPhone screenshots. Upload `store-shots/upload/final/1206x2622/{en,ar}/` (6.3") and `upload/final/1320x2868/{en,ar}/` (6.9"): 4 files each. That is the same set as
-      02, 03, 05 (6.3") and `upload/1320x2868/{en,ar}-parent/` 01, 02, 03, 05 (6.9").
+   4. Screenshots: delete the existing iPhone screenshots. Upload `store-shots/upload/final/1206x2622/{en,ar}/` (6.3") and `upload/final/1320x2868/{en,ar}/` (6.9"): 4 files each (01 chats, 02 family group, 03 calls, 05 settings), in English and Arabic.
    5. App Review Information: Sign-in = parent login and password; **Notes = `APP_REVIEW_NOTES.md` §A**, with the
       placeholders typed.
    6. App Review (Resolution Center): reply with **§B**, with the placeholders filled: `{{BUILD}}` = 1.0.0 (4) and
