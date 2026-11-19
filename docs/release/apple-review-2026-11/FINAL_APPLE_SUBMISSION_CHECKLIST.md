@@ -52,10 +52,10 @@ Do steps 1 to 3 in any order. They can run at the same time.
 1. **Phone (now; the update takes about 20-30 minutes):** Settings > General > Software Update > install iOS
    **27.2.1**.
 2. **Terms gate live (#497, launch scope: family Terms only, your decision of 2026-11-19).** In this order:
-   1. Cloudflare: turn **off Email Address Obfuscation** for `admin.chat.jawwid.com` (Scrape Shield). Today it
-      rewrites the legal pages: the contact address shows as "[email protected]", and the served page no longer
-      matches its recorded hash.
-   2. Approve and merge **PR #497** (head `03b8bc056`: launch scope, family Terms only). Merge #613 and #614 at
+   1. **Contact e-mail on the legal pages:** merge **PR #615** together with #497. Today App Platform's own edge
+      (Cloudflare, not in our account) rewrites `info@jawwid.com` into "[email protected]". The fix is a
+      `Cache-Control: no-transform` header on `/legal/`, and it ships with the same deploy. No DNS change.
+   2. Approve and merge **PR #497** (head `03b8bc056`: launch scope, family Terms only). Merge #613, #614 and #615 at
       the same time. Then run **Deploy staging** at the new `main` SHA. The production deploy accepts only the API
       image digest a staging run recorded for that commit. Staging is not `APP_ENV=production`, so it starts
       without the row.
