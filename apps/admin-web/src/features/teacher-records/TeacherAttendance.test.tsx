@@ -92,15 +92,15 @@ describe('PD-52: the nav entry', () => {
       .flatMap(({ dest, group }) => group.entries.map((e) => ({ dest, heading: group.label?.en ?? null, key: e.key, path: e.path })))
       .find((e) => e.key === 'teacher-attendance')
 
-  it('is offered under People, in its own Teacher records group, only when the server says so', () => {
-    expect(entry('admin', true)).toEqual({ dest: 'people', heading: 'Teacher records', key: 'teacher-attendance', path: '/teacher-attendance' })
+  it('is offered under People, in the Teachers group, only when the server says so', () => {
+    expect(entry('admin', true)).toEqual({ dest: 'people', heading: 'Teachers', key: 'teacher-attendance', path: '/teacher-attendance' })
     expect(entry('manager', true)?.path).toBe('/teacher-attendance')
     expect(entry('admin', false)).toBeUndefined()
     expect(entry('manager', false)).toBeUndefined()
   })
 
   it('the super admin has it in the Admin Portal', () => {
-    expect(entry('super_admin', false)).toEqual({ dest: 'people', heading: 'Teacher records', key: 'teacher-attendance', path: '/admin/teacher-attendance' })
+    expect(entry('super_admin', false)).toEqual({ dest: 'people', heading: 'Teachers', key: 'teacher-attendance', path: '/admin/teacher-attendance' })
     expect(destinationsFor('super_admin').flatMap(entriesOf).filter((e) => e.key === 'teacher-attendance')).toHaveLength(1)
   })
 })

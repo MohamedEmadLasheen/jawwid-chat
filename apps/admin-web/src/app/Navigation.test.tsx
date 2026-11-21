@@ -75,7 +75,7 @@ afterEach(() => {
 describe('The navigation registry', () => {
   it('gives each of the twenty-one sections exactly one destination, with the Dashboard under More', () => {
     const destinations = destinationsFor('super_admin')
-    expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
+    expect(destinations.map((d) => d.key)).toEqual(['conversations', 'people', 'calls', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
     // Accounts (PD-21: where every staff role administers accounts),
@@ -144,7 +144,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/schedule', '/trials', '/teacher-profiles', '/cases', '/certificates', '/materials', '/lesson-audio', '/moderation'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/teacher-profiles', '/schedule', '/trials', '/materials', '/cases', '/certificates', '/lesson-audio', '/moderation'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -154,6 +154,28 @@ describe('The navigation registry', () => {
     // The Teachers manager is offered Materials on the server's word only.
     expect(destinationsFor('manager', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).toContain('/materials')
     expect(destinationsFor('admin', { materialsManager: true }).flatMap((d) => entriesOf(d).map((e) => e.path))).not.toContain('/materials')
+  })
+})
+
+describe('People & Organization', () => {
+  it('groups the super admin\'s pages by subject and holds nothing that is not about people', () => {
+    const people = destinationsFor('super_admin').find((d) => d.key === 'people')!
+    expect(people.groups.map((g) => [g.label?.en, g.entries.map((e) => e.key)])).toEqual([
+      ['Staff & accounts', ['accounts', 'users']],
+      ['Teachers', ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants']],
+      ['Families', ['parents']],
+      ['Organization', ['teams']],
+    ])
+    // Money, trials, scheduling and escalations moved out; they are not people management.
+    const keys = entriesOf(people).map((e) => e.key)
+    for (const gone of ['instalments', 'payments', 'trials', 'schedule', 'cases', 'certificates']) expect(keys).not.toContain(gone)
+  })
+
+  it('shows an operator only the headings it has pages under, and no heading for a lone group', () => {
+    const manager = destinationsFor('manager', { lessonManager: true, billingReader: true }).find((d) => d.key === 'people')!
+    expect(manager.groups.map((g) => g.key)).toEqual(['accounts', 'teachers', 'families', 'organization'])
+    const admin = destinationsFor('admin', {}).find((d) => d.key === 'people')!
+    expect(admin.groups.map((g) => g.label)).toEqual([null])
   })
 })
 
@@ -304,7 +326,7 @@ describe('The desktop rail', () => {
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
     const items = [...nav.querySelectorAll('[data-destination]')]
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
-      'conversations', 'calls', 'people', 'stories', 'more',
+      'conversations', 'people', 'calls', 'stories', 'more',
     ])
     // Conversations is a menu now -- Chat and All conversations -- and it is
     // where the super admin lands.
@@ -315,7 +337,7 @@ describe('The desktop rail', () => {
     expect(within(nav).getByRole('link', { name: 'Calls' })).toHaveAttribute('href', '/admin/calls')
     // A placeholder still says so, inside its menu.
     expect(within(nav).queryByRole('link', { name: /In development/ })).not.toBeInTheDocument()
-    expect(within(nav).getByRole('button', { name: 'People & teams' })).toHaveAttribute('aria-expanded', 'false')
+    expect(within(nav).getByRole('button', { name: 'People & Organization' })).toHaveAttribute('aria-expanded', 'false')
     expect(within(nav).getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false')
     // The Dashboard is not a primary destination; it waits in the closed More menu.
     expect(within(nav).queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
@@ -330,9 +352,10 @@ describe('The desktop rail', () => {
     expect(more).toHaveAttribute('aria-expanded', 'true')
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
-    // 13 + Payments (PD-27, beside Instalments under Operations & performance)
-    // + Materials (PD-29, under Overview) + Lesson audio (PD-48).
-    expect(within(menu).getAllByRole('link')).toHaveLength(17)
+    // 13 + Payments (PD-27) + Materials (PD-29) + Lesson audio (PD-48), and the
+    // four pages that left People until they have their own destination (Phase 2):
+    // Schedule, Trials & new students, Escalations, Certificates.
+    expect(within(menu).getAllByRole('link')).toHaveLength(21)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -346,44 +369,24 @@ describe('The desktop rail', () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
-    const people = within(nav).getByRole('button', { name: 'People & teams' })
+    const people = within(nav).getByRole('button', { name: 'People & Organization' })
     people.focus()
     await userEvent.keyboard('{ArrowDown}')
-    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Users'))
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-8: the people group's second page is the built Organization page (no badge).
-    expect(document.activeElement).toHaveAccessibleName('Organization')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-10: then the Teachers page,
-    expect(document.activeElement).toHaveAccessibleName('Teachers')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-21: then Accounts,
-    expect(document.activeElement).toHaveAccessibleName('Accounts')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-38: then the Schedule,
-    expect(document.activeElement).toHaveAccessibleName('Schedule')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-11 T4 / PD-16: then Trials & new students,
-    expect(document.activeElement).toHaveAccessibleName('Trials & new students')
-    await userEvent.keyboard('{ArrowDown}')
-    // then Teacher credentials review,
-    expect(document.activeElement).toHaveAccessibleName('Teacher credentials review')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-35 B5: then Escalations,
-    expect(document.activeElement).toHaveAccessibleName('Escalations')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-41: then Certificates, closing the first People group,
-    expect(document.activeElement).toHaveAccessibleName('Certificates')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-17: then Parents (an Operations section under People),
-    expect(document.activeElement).toHaveAccessibleName('Parents')
-    await userEvent.keyboard('{ArrowDown}')
-    // PD-52: then the Teacher records group's two pages, then the menu wraps.
-    expect(document.activeElement).toHaveAccessibleName('Attendance & complaints')
-    await userEvent.keyboard('{ArrowDown}')
-    expect(document.activeElement).toHaveAccessibleName('Grants & testimonials')
-    await userEvent.keyboard('{ArrowDown}')
-    expect(document.activeElement).toHaveAccessibleName('Users')
+    // People & Organization is grouped by subject: accounts first (PD-21),
+    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Accounts'))
+    for (const name of [
+      'Users', // the read-only directory beside the account actions,
+      'Teachers', // PD-10, then the teachers' pages: files,
+      'Teacher credentials review',
+      'Attendance & complaints', // PD-52
+      'Grants & testimonials',
+      'Parents', // PD-17: the families,
+      'Organization', // PD-8: and the structure, then the menu wraps.
+      'Accounts',
+    ]) {
+      await userEvent.keyboard('{ArrowDown}')
+      expect(document.activeElement).toHaveAccessibleName(name)
+    }
     await userEvent.keyboard('{Escape}')
     expect(people).toHaveAttribute('aria-expanded', 'false')
     expect(people).toHaveFocus()
@@ -407,10 +410,11 @@ describe('The desktop rail', () => {
       // Teacher Profile V2: the certificate review queue sits under People beside
       // the other people pages, so for admin and coverage People is a menu.
       // PD-44: the Dashboard is its own destination for a manager, beside
-      // Conversations, which leaves More holding Tasks alone: a direct link.
-      ['manager', ['conversations', 'dashboard', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
-      ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
-      ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
+      // Conversations. More holds Tasks and Escalations (Phase 2: Escalations left
+      // People until it has its own destination), so it is a menu.
+      ['manager', ['conversations', 'dashboard', 'people', 'calls', 'stories', 'more'], ['Conversations', 'Dashboard', 'Calls', 'Stories'], ['People & Organization', 'More']],
+      ['admin', ['conversations', 'people', 'calls', 'stories', 'more'], ['Conversations', 'Accounts', 'Calls', 'Stories'], ['More']],
+      ['coverage', ['conversations', 'people', 'calls', 'stories', 'more'], ['Conversations', 'Accounts', 'Calls', 'Stories'], ['More']],
       // PD-21: Accounts is every role's, so a department has two one-page destinations.
       ['finance', ['people', 'more'], ['Accounts', 'Tasks'], []],
     ]
@@ -497,13 +501,13 @@ describe('The drawer, below desktop width', () => {
     const conversations = within(nav).getByRole('group', { name: 'المحادثات' })
     expect(within(conversations).getByRole('link', { name: 'كل المحادثات' })).toHaveAttribute('aria-current', 'page')
     expect(within(conversations).getByRole('link', { name: 'الدردشة' })).toHaveAttribute('href', '/chat')
-    expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
+    expect(within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
     expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
     expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
-    const people = within(nav).getByRole('group', { name: 'الأشخاص والفرق' })
-    expect(within(people).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
+    const people = within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })
+    expect(within(more).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
     expect(within(people).getByRole('link', { name: 'مراجعة مؤهلات المعلمين' })).toHaveAttribute('href', '/teacher-profiles')
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')

@@ -52,8 +52,9 @@ export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
   // PD-44: a manager's Dashboard is one click from anywhere, beside the chats it counts.
   { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
+  // The owner's order: People & Organization is the third icon.
+  { key: 'people', icon: 'users', label: { en: 'People & Organization', ar: 'الأشخاص والهيكل التنظيمي' } },
   { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
-  { key: 'people', icon: 'users', label: { en: 'People & teams', ar: 'الأشخاص والفرق' } },
   { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
   { key: 'more', icon: 'more', label: { en: 'More', ar: 'المزيد' } },
 ]
@@ -95,20 +96,20 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   calls: 'calls',
   organization: 'people',
   teachers: 'people',
-  instalments: 'people',
+  instalments: 'more',
   parents: 'people',
-  payments: 'people',
-  trials: 'people',
+  payments: 'more',
+  trials: 'more',
   'teacher-profiles': 'people',
   accounts: 'people',
   stories: 'stories',
   materials: 'more',
-  schedule: 'people',
+  schedule: 'more',
   tasks: 'more',
   // PD-35 B5: escalation cases, for every operator who may open or own one.
-  cases: 'people',
+  cases: 'more',
   // PD-41: the Certificates page.
-  certificates: 'people',
+  certificates: 'more',
   // PD-48: lesson voice-over review.
   'lesson-audio': 'more',
   // PD-57: the moderation queue.
@@ -216,17 +217,17 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   // PD-21: Accounts, the page every staff role shares; Users stays read-only.
   { area: 'accounts', destination: 'people', label: ADMIN_ACCOUNTS_LABEL },
   // PD-38: the academy's schedule.
-  { area: 'schedule', destination: 'people', label: ADMIN_SCHEDULE_LABEL },
+  { area: 'schedule', destination: 'more', label: ADMIN_SCHEDULE_LABEL },
   // PD-11 T4 / PD-16: trial lessons and new students.
-  { area: 'trials', destination: 'people', label: ADMIN_TRIALS_LABEL },
+  { area: 'trials', destination: 'more', label: ADMIN_TRIALS_LABEL },
   // Teacher Profile V2: the credential review queue.
   { area: 'teacher-profiles', destination: 'people', label: ADMIN_TEACHER_CREDENTIALS_LABEL },
   // PD-29: the Materials library.
   { area: 'materials', destination: 'more', label: ADMIN_MATERIALS_LABEL },
   // PD-35 B5: escalation cases.
-  { area: 'cases', destination: 'people', label: ADMIN_CASES_LABEL },
+  { area: 'cases', destination: 'more', label: ADMIN_CASES_LABEL },
   // PD-41: the Certificates page and its types.
-  { area: 'certificates', destination: 'people' },
+  { area: 'certificates', destination: 'more' },
   // PD-48: lesson voice-over review.
   { area: 'lesson-audio', destination: 'more' },
   // PD-57: the moderation queue.
@@ -268,17 +269,17 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     if (e.lead) first?.entries.unshift(entry)
     else first?.entries.push(entry)
   }
-  // PD-52: the two teacher-records pages, in their own group under People.
-  out.get('people')?.push({
-    ...TEACHER_RECORDS_GROUP,
-    entries: (['teacher-attendance', 'teacher-grants'] as const).map((area) => ({
+  // PD-52: the two teacher-records pages (the super admin's own paths).
+  for (const area of ['teacher-attendance', 'teacher-grants'] as const) {
+    out.get('people')?.[0]?.entries.push({
       key: area,
       path: `/admin${AREA_PATH[area]}`,
       icon: AREA_ICON[area],
       label: { message: `nav.${area}` as const },
       inDevelopment: false,
-    })),
-  })
+    })
+  }
+  organizePeople(out)
   // One registry group inside a destination needs no heading.
   for (const groups of out.values()) {
     if (groups.length === 1) groups[0]!.label = null
@@ -286,12 +287,37 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   return out
 }
 
-/** PD-52: the teacher-records pages, under one heading wherever they sit. */
-export const TEACHER_RECORDS_GROUP: { key: string; label: Bilingual } = {
-  key: 'teacher-records',
-  label: { en: 'Teacher records', ar: 'سجلات المعلمين' },
+/**
+ * People & Organization, grouped by what each page is about. The same four
+ * headings for every role; a heading with no page the role may open is left
+ * out, and a single remaining heading is dropped (the rail then shows the
+ * pages alone).
+ */
+export const PEOPLE_GROUPS: readonly { key: string; label: Bilingual; members: readonly string[] }[] = [
+  { key: 'accounts', label: { en: 'Staff & accounts', ar: 'الموظفون والحسابات' }, members: ['accounts', 'users'] },
+  { key: 'teachers', label: { en: 'Teachers', ar: 'المعلمون' }, members: ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants'] },
+  { key: 'families', label: { en: 'Families', ar: 'العائلات' }, members: ['parents'] },
+  { key: 'organization', label: { en: 'Organization', ar: 'الهيكل التنظيمي' }, members: ['teams', 'organization'] },
+]
+
+function organizePeople(out: Map<DestinationKey, NavEntryGroup[]>): void {
+  const groups = out.get('people')
+  if (!groups) return
+  const entries = groups.flatMap((g) => g.entries)
+  const bucketed: NavEntryGroup[] = PEOPLE_GROUPS.map((g) => ({ key: g.key, label: g.label, entries: [] }))
+  for (const e of entries) {
+    const i = PEOPLE_GROUPS.findIndex((g) => g.members.includes(e.key))
+    // A page nobody placed lands in the last group rather than vanishing.
+    bucketed[i === -1 ? bucketed.length - 1 : i]!.entries.push(e)
+  }
+  for (const [i, g] of bucketed.entries()) {
+    const order = PEOPLE_GROUPS[i]!.members
+    g.entries.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
+  }
+  const kept = bucketed.filter((g) => g.entries.length > 0)
+  if (kept.length === 1) kept[0]!.label = null
+  out.set('people', kept)
 }
-const TEACHER_RECORDS_AREAS: ReadonlySet<OperatorArea> = new Set<OperatorArea>(['teacher-attendance', 'teacher-grants'])
 
 function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
@@ -300,12 +326,7 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
     const dest = AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
-    let group = groups[0]!
-    if (TEACHER_RECORDS_AREAS.has(area)) {
-      group = groups.find((g) => g.key === TEACHER_RECORDS_GROUP.key) ?? { ...TEACHER_RECORDS_GROUP, entries: [] }
-      if (!groups.includes(group)) groups.push(group)
-    }
-    group.entries.push({
+    groups[0]!.entries.push({
       key: area,
       path: AREA_PATH[area],
       icon: AREA_ICON[area],
@@ -314,6 +335,7 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
     })
     out.set(dest, groups)
   }
+  organizePeople(out)
   return out
 }
 
