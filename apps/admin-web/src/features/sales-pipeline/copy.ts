@@ -120,8 +120,27 @@ export const H = {
   missing: { en: 'No room in the family record for', ar: 'لا يوجد مكان في سجل العائلة لـ' },
   days: { en: 'days', ar: 'يومًا' },
   forbidden: {
-    en: 'This list is for the Sales manager and the super admin.',
-    ar: 'هذه القائمة لمدير المبيعات والمدير العام فقط.',
+    en: 'This list is for Operations, the Sales manager and the super admin.',
+    ar: 'هذه القائمة للتشغيل ومدير المبيعات والمدير العام فقط.',
+  },
+  // Operations' read-only view (minimised): in the Trials area
+  tabTrials: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' },
+  introOperations: {
+    en: 'Trial families whose lead is not linked to the family record yet. This list only shows them: nothing here changes a lead or a family.',
+    ar: 'عائلات التجارب التي لم يُربط عميلها بسجل العائلة بعد. تعرض هذه القائمة الحالات فقط: لا يتغير هنا أي عميل أو عائلة.',
+  },
+  guidanceOperations: {
+    en: 'To resolve a case: add the missing channel to the family\'s profile. The Sales manager then presses Convert.',
+    ar: 'لحل الحالة: أضف وسيلة التواصل الناقصة إلى ملف العائلة. ثم يضغط مدير المبيعات على تحويل.',
+  },
+  family: { en: 'Family', ar: 'العائلة' },
+  blockerChannelMissingOperations: {
+    en: 'The family record has no room for one of the lead\'s channels. Add it to the family\'s profile; the Sales manager then presses Convert.',
+    ar: 'لا يوجد مكان في سجل العائلة لإحدى وسائل تواصل العميل. أضفها إلى ملف العائلة؛ ثم يضغط مدير المبيعات على تحويل.',
+  },
+  blockerReadyOperations: {
+    en: 'Every channel is already in the family record. The Sales manager presses Convert to link it.',
+    ar: 'كل وسائل التواصل موجودة في سجل العائلة. يضغط مدير المبيعات على تحويل لربطه.',
   },
 } satisfies Record<string, Pair>
 

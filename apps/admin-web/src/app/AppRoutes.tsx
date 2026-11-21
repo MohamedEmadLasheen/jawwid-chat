@@ -24,6 +24,7 @@ import { TeachersAreaTabs } from '@/features/teachers/area'
 import { CasesPage } from '@/features/cases/CasesPage'
 import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
+import { NeedsHandOverPage } from '@/features/trials/NeedsHandOverPage'
 import { SalesPipelinePage } from '@/features/sales-pipeline/SalesPipelinePage'
 import { SALES_PIPELINE_PATH } from '@/features/sales-pipeline/paths'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
@@ -155,6 +156,8 @@ export function AppRoutes() {
         <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
         <Route path={SALES_PIPELINE_PATH} element={<Area area="sales-pipeline"><SalesPipelinePage /></Area>} />
         <Route path="/trials/new-students" element={<Area area="trials"><NewStudentsPage /></Area>} />
+        {/* PD-59 O4: Operations' read-only "Needs hand-over" list; the server decides who reads it. */}
+        <Route path="/trials/needs-handover" element={<Area area="trials"><NeedsHandOverPage /></Area>} />
         <Route path="/teachers/discipline" element={<Navigate to="/teacher-attendance?section=excuses" replace />} />
         {/* PD-12 S3: Operations; the super admin reaches it as /admin/instalments. */}
         <Route path="/instalments" element={<Area area="instalments"><InstalmentsPage /></Area>} />

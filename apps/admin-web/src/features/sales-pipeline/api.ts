@@ -103,20 +103,29 @@ export interface HandOverRow {
   blocker: HandOverBlocker
   ageDays: number
   waitingSince: string
-  owner: LeadOwner | null
+  /** Sales' owner of the lead: the full projection only (never sent to Operations). */
+  owner?: LeadOwner | null
   hasContactCopy: boolean
   enrolled: boolean
-  learnerLinked: boolean
+  learnerLinked?: boolean
+  /** The family the lead's own trial was enrolled into, only when the reader already reaches it: Operations' projection only. */
+  family?: { id: string; displayName: string } | null
   /** For `channel_missing`: the channel kinds the family's record has no room for. */
   missingKinds: ChannelKind[]
 }
 
 export interface HandOverList {
+  /** 'full' for the Sales manager and the super admin; 'operations' is the minimised, read-only projection. */
+  projection?: 'full' | 'operations'
   leads: HandOverRow[]
   total: number
-  counts: Record<HandOverState, number>
+  /** The full projection only: Operations is not told the Sales pipeline's volume. */
+  counts?: Record<HandOverState, number>
   truncated: boolean
 }
+
+/** Who may read the list, and in which projection (advisory; the list asks the server again). */
+export type HandOverAccess = { handOver: 'full' | 'operations' | null }
 
 export interface ContactInput {
   parentName?: string | null
@@ -166,6 +175,7 @@ export const pipelineKeys = {
   access: ['sales-pipeline', 'access'] as const,
   owners: ['sales-pipeline', 'owners'] as const,
   handOver: ['sales-pipeline', 'hand-over'] as const,
+  handOverAccess: ['sales-pipeline', 'hand-over', 'access'] as const,
   list: (q: LeadQuery) => ['sales-pipeline', 'leads', q] as const,
   detail: (id: string) => ['sales-pipeline', 'lead', id] as const,
 }
@@ -177,6 +187,7 @@ export const pipelineApi = {
   owners: () => api.get<{ owners: Array<{ id: string; name: string; role: string }> }>('/sales-pipeline/owners'),
   /** Manager and super admin only (the server refuses everyone else); read-only. */
   handOver: () => api.get<HandOverList>('/sales-pipeline/reconciliation'),
+  handOverAccess: () => api.get<HandOverAccess>('/sales-pipeline/reconciliation/access'),
   reassign: (id: string, ownerId: string) => api.post<LeadDetail>(`/sales-pipeline/leads/${enc(id)}/owner`, { ownerId }),
   list: (q: LeadQuery) => {
     const query: Record<string, string> = {}

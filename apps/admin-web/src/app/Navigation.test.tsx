@@ -260,7 +260,7 @@ describe('No URL was lost in the redesign', () => {
 
   it('every URL that existed before the redesign still opens for the roles that had it', async () => {
     const legacy = [
-      '/trials', '/trials/new-students', '/sales/pipeline', '/schedule', '/teachers', '/teachers/needs-action', '/teachers/schedules',
+      '/trials', '/trials/new-students', '/trials/needs-handover', '/sales/pipeline', '/schedule', '/teachers', '/teachers/needs-action', '/teachers/schedules',
       '/teachers/students', '/teachers/files', '/teachers/cases', '/cases', '/certificates',
       '/lesson-audio', '/moderation', '/instalments', '/parents', '/payments', '/materials', '/tasks', '/dashboard',
       '/stories', '/accounts', '/organization', '/calls', '/chat', '/teacher-profiles', '/teacher-attendance', '/teacher-grants',

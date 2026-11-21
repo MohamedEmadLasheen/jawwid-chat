@@ -559,6 +559,69 @@ describe('Convert refusals are worded in the page\'s language (PD-59 V-1)', () =
   })
 })
 
+describe('Needs hand-over for Operations (minimised, read-only) in the Trials area', () => {
+  const OPS_LIST = {
+    projection: 'operations',
+    leads: [
+      { id: 'o-1', displayName: 'Lead Missing', state: 'enrolled', blocker: 'channel_missing', ageDays: 12, waitingSince: '2026-11-09T10:00:00Z', hasContactCopy: true, enrolled: true, missingKinds: ['whatsapp'], family: { id: 'fam-1', displayName: 'Family One' } },
+      { id: 'o-2', displayName: 'Lead Hidden Family', state: 'enrolled', blocker: 'ready', ageDays: 3, waitingSince: '2026-11-18T10:00:00Z', hasContactCopy: true, enrolled: true, missingKinds: [], family: null },
+    ],
+    total: 2,
+    truncated: false,
+  }
+  const ops = makeStaff({ id: 'ops-1', name: 'Ops One', role: 'admin' })
+  const asOps = (handOver: 'operations' | 'full' | null, lessons: { operations?: boolean; sales?: boolean } = { operations: true }) => {
+    access(lessons)
+    on('GET', /\/sales-pipeline\/reconciliation\/access$/, () => json({ handOver }))
+    on('GET', /\/sales-pipeline\/reconciliation$/, () => json(OPS_LIST))
+  }
+
+  it('is offered as a tab beside New students, on the server\'s answer, and lists the minimised rows', async () => {
+    asOps('operations')
+    renderWithProviders(<AppRoutes />, { staff: ops, route: '/trials/needs-handover' })
+    const tabs = await screen.findByRole('navigation', { name: 'Trials' })
+    expect(await within(tabs).findByRole('link', { name: 'Needs hand-over' })).toHaveAttribute('href', '/trials/needs-handover')
+    expect(within(tabs).getByRole('link', { name: 'New students' })).toBeInTheDocument()
+    const row = (await screen.findByText('Lead Missing')).closest('tr')!
+    expect(within(row).getByText('Family One')).toBeInTheDocument()
+    expect(within(row).getByText(/WhatsApp/)).toBeInTheDocument()
+    expect(within(row).getByText(/the Sales manager then presses Convert/)).toBeInTheDocument()
+    const hidden = screen.getByText('Lead Hidden Family').closest('tr')!
+    expect(within(hidden).getByText('—')).toBeInTheDocument()
+    // no Sales owner column, no pipeline counts, no way into a lead's panel, no write action
+    expect(screen.queryByRole('columnheader', { name: 'Owner' })).not.toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Family' })).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Waiting for enrolment: \d/)).not.toBeInTheDocument()
+    expect(calls('POST', /./)).toHaveLength(0)
+    expect(calls('GET', /\/sales-pipeline\/leads/)).toHaveLength(0)
+  })
+
+  it('shows the Arabic strings right to left', async () => {
+    asOps('operations')
+    renderWithProviders(<AppRoutes />, { staff: ops, route: '/trials/needs-handover', locale: 'ar' })
+    expect(await screen.findByText('Lead Missing')).toBeInTheDocument()
+    expect(screen.getByText(/لحل الحالة: أضف وسيلة التواصل الناقصة إلى ملف العائلة/)).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'العائلة' })).toBeInTheDocument()
+    expect(document.documentElement.dir).toBe('rtl')
+  })
+
+  it('is not offered, and not asked for, when the server says nobody of this person may read it', async () => {
+    asOps(null, { sales: true })
+    renderWithProviders(<AppRoutes />, { staff: ops, route: '/trials/needs-handover' })
+    expect(await screen.findByText('This list is for Operations, the Sales manager and the super admin.')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Needs hand-over' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/sales-pipeline\/reconciliation$/)).toHaveLength(0)
+  })
+
+  it('the Sales manager does not get the tab in the Trials area (their view is on the pipeline page)', async () => {
+    asOps('full', { sales: true })
+    renderWithProviders(<AppRoutes />, { staff: ops, route: '/trials' })
+    const tabs = await screen.findByRole('navigation', { name: 'Trials' })
+    expect(within(tabs).queryByRole('link', { name: 'Needs hand-over' })).not.toBeInTheDocument()
+  })
+})
+
 describe('Needs hand-over: a family already exists under the lead\'s contact (V-2)', () => {
   it('shows plain guidance in both languages for the unavailable blocker', async () => {
     const lead = { id: 'h-9', displayName: 'Lead A2', state: 'awaiting_enrolment', blocker: 'unavailable', ageDays: 39, waitingSince: '2026-10-13T10:00:00Z', owner: { id: 's-1', name: 'Rep One' }, hasContactCopy: true, enrolled: false, learnerLinked: false, missingKinds: [] }

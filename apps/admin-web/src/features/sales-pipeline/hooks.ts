@@ -18,6 +18,11 @@ export function useHandOver(enabled: boolean) {
   return useQuery({ queryKey: pipelineKeys.handOver, queryFn: pipelineApi.handOver, enabled, staleTime: 30_000, retry: false })
 }
 
+/** Who may read the hand-over list (Sales manager, super admin, Operations) and in which projection. */
+export function useHandOverAccess() {
+  return useQuery({ queryKey: pipelineKeys.handOverAccess, queryFn: pipelineApi.handOverAccess, staleTime: 5 * 60_000, retry: false })
+}
+
 export function useLeads(query: LeadQuery) {
   return useQuery({
     queryKey: pipelineKeys.list(query),
