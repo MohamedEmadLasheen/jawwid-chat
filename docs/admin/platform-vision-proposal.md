@@ -1,232 +1,240 @@
-# Jawwid Academy operating platform: architecture and product proposal
+# Jawwid Academy operating platform: architecture and product recommendation (v2)
 
-Status: **PROPOSAL for the owner's review. Nothing is implemented, merged, deployed or migrated.** Date: 2026-11-21.
-Evidence base: four read-only studies of the repository on `main` `615e56db` (Admin Web inventory; roles, departments and
-permissions; academy workflows and handovers; data, work-tracking and integrations), plus this session's own work on PD-59
-(F7, the trial-ownership fixes, the visual review). Paths below are real; claims marked **(unverified)** could not be confirmed
-from the repository alone. Jawwid Core and Second School were not read or touched.
+Status: **RECOMMENDATION for the owner's decision. Nothing here is implemented, merged, deployed or migrated.** v2, 2026-11-21.
+v1 was a starting point; v2 is the result of a red-team review of v1, an external benchmark, a billing source-of-truth investigation,
+a simulated merge of every open PR, and individual reviews of every proposed migration. **Strategic boundary (owner, 2026-11-21): APPROVED.**
+Jawwid Chat Admin Web evolves into the unified Academy Operating and Management Platform. Jawwid Core and Second School were not read or touched.
+Claims marked **(unverified)** could not be confirmed from the repository.
 
 ---
 
-## 1. What we found (the honest diagnosis)
+## 0. What changed from v1, and why (the challenge log)
 
-**The application is organised by pages and departments, but the business is organised by shared records and handovers.**
+An independent red-team verified v1's facts (39 feature folders, 2 navigation trees, 9 placeholder sections, a three-value `department.kind`
+check, the permission guard in shadow mode, 87 keys, ~150 models: all CONFIRMED; two small count corrections) and then attacked the design.
+I accepted most objections. The result is a **smaller, staged and evidence-gated** architecture.
+
+| v1 proposal | Objection (evidence) | v2 decision |
+|---|---|---|
+| A relation table + Resource Access Layer over every entity | A rewrite presented as a refactor: ~150 models, 106+ RLS policies, 17 policy files, per-kind SQL predicates; two truths (TypeScript vs SQL); sync/drift triggers; dual-run on ~6 supervisors rarely converges | **Deferred.** Start with an **entity-scope registry + CI guard + per-entity cross-surface tests** (cheap, kills the defect class). Reopen the relation table only if the registry proves insufficient |
+| "Today" as one merged Queue | `work_task`, `supervision_case`, moderation, approvals and unreplied conversations differ in state machine, assignee model, SLA clock, realtime and permissions; merged priority is meaningless; a union costs 5+ queries on a pool of 7 | **Changed:** Today is a page of **sectioned feeds**, each backed by its own endpoint and scope, with per-source counts, fed by one read-side `/me/work` projection |
+| Universal Record view with a facet engine | Teacher, student and family records differ in privacy law (BR-1, phone confinement), lifecycle and facets; consolidation should be by task, not by entity | **Changed:** a shared **layout kit** (header, timeline, tabs), separate record pages per entity |
+| Generic Pipeline, Ledger, Scorecard, Approval primitives | Premature: no second consumer; trial pipeline is transactional, a candidate pipeline is not; money is the worst place to abstract | **Deferred** until a second concrete consumer is built |
+| Navigation as a generated projection, hard cap of six items | Support, training and bookmarks differ per person; a mis-granted capability hides work silently; the existing probe-based areas are the root of the Forbidden-frame defects (#623, #633) | **Changed:** one **server-provided `/me/navigation` contract**, a stable functional information architecture, one tree (the owner is a scope, not a second app) |
+| Data-driven departments first | Not required for the stated goal; moves business logic into configuration that then needs testing, versioning and audit | **Staged:** additive department kinds and positions behind one helper now; fully data-driven later if needed |
+| Phases 3 and 4 circular (records need the access layer which lands later) | Correct | **Reordered** (section 8) |
+| Missing: job analysis, success metrics, coexistence plan, data quality, capacity, build-vs-buy, sequencing with open PRs | Correct | Added (sections 3, 7, 8, 9) |
+
+The external benchmark supports the direction: a central policy function that returns a query filter (not a full relationship engine at
+this scale), shadow-mode migration, state machines per pipeline kept as data, a six-to-eight KPI executive strip with comparisons and an
+exceptions list, and the warning that detail pages must be list queries by id so views cannot disagree. Source quality is mostly vendor
+blogs; sourced and inferred statements are labelled in the digest.
+
+---
+
+## 1. What we found (diagnosis, unchanged and re-verified)
 
 | Finding | Evidence |
 |---|---|
-| 39 feature folders, each a page-set with its own list, filter, detail and "no access" pattern | `apps/admin-web/src/features/*`; no shared Table, Drawer, Tabs or Pagination (35 files hand-roll `<table>`) |
-| Two parallel navigation trees: operator areas and a super-admin `/admin/*` portal, duplicating at least 11 destinations (dashboard, tasks, parents, payments, instalments, teams/organization, teacher stats, teacher files, stories, calls, conversations/users) | `AppRoutes.tsx`, `navigation.ts` (`adminDestinations` vs `operatorDestinations`) |
-| Nav is hand-assembled: a static role-to-area list per role family, then ~17 areas filtered by "probe" endpoints (`GET /lessons/access` and others). "Department" is inferred, not known | `core/permissions/capabilities.ts` (`visibleAreas`, `SERVER_CONFIRMED_AREAS`) |
-| Adding one page touches ~8 files (`NavArea`, `visibleAreas`, probe flag, destination, path, icon, admin twin, messages, routes, tests) | same |
-| 9 "in development" sections (quality, academy, forms, notifications, whatsapp, approvals, integrations, audit, settings) are visible in the super admin's rail with no backend | `features/admin/sections.ts` |
-| The same student or trial is touched in up to four places (pipeline, trials, intake/new students, students directory, student profile, teachers/students); teachers are spread over eleven features | feature inventory |
-| Departments are hardcoded to three kinds in the schema and ~60 SQL/TS sites; roles are a closed enum; a new department cannot be expressed without schema changes | `department.kind CHECK ('operations','teachers','sales')`; `legacy_permission_bundle.department_kind CHECK`; `DEPARTMENT_KINDS` in `tasks/task.service.ts`; per-kind predicates `sales_department_role` etc. |
-| Access is decided by ~15 separate policy files and SQL functions, **not** by the 87 permission keys: the guard is still in `shadow` mode (`PERMISSION_GUARD_MODE = 'shadow'`) | `permission.guard.ts:20`; `platform/*-policy.ts` |
-| **The same bug class recurs:** a list is scoped but its detail, counts, cards, tasks, payments, search or realtime are not. PD-59 produced F7 and five siblings in a week (trials, New Students, payment cancel, teacher-records, trial-group cards, trial task owner) | PRs #627-#632 |
-| A real work kernel already exists (PD-47 `work_task` with system tasks, handovers, append-only history; cases; notification items that already mirror tasks) but the UI shows it as five unrelated pages (Dashboard counts, Tasks, Cases, Notifications, Approvals/Moderation) | `apps/api/src/tasks`, `notification-pipeline.service.ts`, dashboard tiles |
-| Functions the business needs and the product lacks: Marketing (no lead source or campaign), Recruitment/HR (nothing before a teacher record exists), Quality assurance (evaluations exist, no QA workflow), Executive KPIs (counts only), Finance beyond payments (no AR, reconciliation, expenses) | workflow study §4 |
-
-**Constraints the design must respect** (owner decisions recorded in the repo): BR-1/PD-7 (teacher and parent never share a direct
-channel); phone numbers never appear in UI (BR-2/G-07); Arabic first with every string bilingual; Core and Second School untouchable;
-Chat owns family money (PD-17/27/30); PD-59 ownership rules; `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` says Chat is "a
-communication platform first" and freezes tasks and cases as generic systems (**this proposal needs an explicit new decision, see §9**).
+| 39 feature folders, each its own page-set, list, filter, detail and "no access" pattern; no shared Table, Drawer, Tabs, Pagination (34 files hand-roll `<table>`) | `apps/admin-web/src/features/*`, `shared/components` |
+| Two navigation trees (operator, `/admin/*`) duplicating dashboard, tasks, parents, payments, instalments, teams/organization, teacher stats, teacher files, stories, calls, conversations/users | `navigation.ts` (`adminDestinations` vs `operatorDestinations`), `AppRoutes.tsx` |
+| Navigation is hand-assembled: static role-to-area lists plus ~17 areas filtered by probe endpoints; "department" is inferred | `core/permissions/capabilities.ts` |
+| Nine "in development" sections visible in the owner's rail, no backend | `features/admin/sections.ts` |
+| Department is a three-value CHECK; ~60 files name a kind; closed role enum; a new department needs schema and many code sites | `department.kind CHECK`, `legacy_permission_bundle`, `DEPARTMENT_KINDS` in `tasks/task.service.ts` |
+| 87 permission keys are advisory (guard in `shadow`); real access lives in 17 policy files and SQL functions | `permission.guard.ts:20` |
+| **The "list scoped, siblings not" defect class recurs**: PD-59 produced F7 and five siblings in a week (#627-#632) | the PRs |
+| A real work kernel exists (PD-47 `work_task`, system tasks, handovers, append-only events; notification items with task columns) shown as five unrelated pages | `apps/api/src/tasks`, `notification-pipeline.service.ts` |
+| Business functions with no or partial support: Marketing, Recruitment/HR, Quality, Executive KPIs, finance beyond payments | workflow study |
 
 ---
 
-## 2. The vision in one sentence
+## 2. Principles (the design in six sentences)
 
-**One platform where every employee opens to *what needs them today*, works on *shared records* in a consistent way, and hands work
-to the next person through *defined handovers*, with the visible product shaped by who they are, not by which department's pages exist.**
-
-Three ideas carry the whole design:
-
-1. **Organise around work and records, not pages and departments.** Departments become *lenses* (configured views), not codebases.
-2. **Enforce visibility once, at the record, not on every page.** One access layer decides "may this person see this record, and
-   which ones", and every list, detail, count, search, notification, realtime event and export uses it.
-3. **Make the organisation data, not code.** Departments, positions, ownership relations and handovers are configuration over a
-   small set of shared primitives, so a new department is a configuration, not a redesign.
+1. **Design around work, not departments or pages.** The unit of design is *a person doing a job with a record at a moment*.
+2. **Enforce visibility once per entity**, declared in a registry and proven by tests, so a list, its detail, counts, search, cards, tasks, payments, realtime and exports cannot disagree.
+3. **One navigation contract from the server**; one tree; the owner is a scope, not a second application.
+4. **Shared where the work is shared** (calendar, conversations, tasks, people directory, money), **separate where the domain differs** (teacher vs student vs family records, trial vs candidate pipelines).
+5. **Grow by evidence**: build an abstraction only when a second concrete consumer exists; buy or integrate commodity functions (BI, HR/ATS, marketing tools) rather than becoming a generic CRM/HR/BI product.
+6. **Every change is additive, flagged, reversible and measurable**; the existing 800+ integration tests and the "no URL lost" tests are the safety net.
 
 ---
 
-## 3. The information architecture
+## 3. How the academy actually works: the work model (hypotheses to validate)
 
-### 3.1 The five shared building blocks (and nothing else)
+Derived from the product docs, PD registry and code; **it must be validated with 6-8 short staff interviews (no engineering cost) before any
+screen is designed.** For each role: the decisions it makes, the data it needs, and today's friction.
 
-| Primitive | What it is | Today's pieces it absorbs |
+| Role | Core decisions | Needs to see | Friction today (from the code and visual review) |
+|---|---|---|---|
+| Sales representative | whom to contact next; book/skip a trial; record the outcome; subscribe | my leads and follow-ups due, my trials, trial results | leads vs trials vs new-students in separate pages; conversion hand-over invisible until Convert |
+| Sales manager | reassign leads; grant exceptions; spot stalled leads | team pipeline, unassigned leads, conversion by rep | no team view of stalls; hand-over gaps |
+| Operations supervisor | enrol a new family; assign supervisor/teacher; chase missing contact; handle excuses/make-ups | my families and children, new students awaiting assignment, lessons needing action | same child in four places; hand-over blockers visible only to Sales manager (fixed in #628) |
+| Operations manager | assign children to supervisors; activate backups; escalations | unassigned children, supervisor load, cases | no load view |
+| Teacher supervisor / Teachers manager | evaluate teachers; leave, discipline, complaints; reassign teachers | my teachers' reports due, attendance, complaints, trials awaiting outcome | teacher work spread over eleven features |
+| Quality reviewer (new) | sample lessons; score; improvement plans | sampled lessons, rubric, trends | evaluations exist, no QA workflow |
+| Recruiter / HR (new) | source, interview, onboard teachers and staff | candidate pipeline, onboarding checklist | nothing before the teacher record (PD-43 starts at "add teacher") |
+| Finance officer | verify receipts, chase instalments, refunds, payroll | receipts to review, overdue instalments, payments | no accountant role; non-delegable finance keys |
+| Marketer (new) | which channels bring paying students | lead source, campaign, cost per acquisition | no lead source field |
+| Executive | is the academy healthy; where to intervene | 6-8 KPIs with comparisons and exceptions | counts-only dashboard; one super admin per organisation |
+
+**Success criteria (measurable, to be baselined):** seconds/clicks to answer "what do I do next?" per role; time to first contact of a new lead;
+trial show-up and trial-to-enrolment rate; hand-over age (lead subscribed to family linked); unreplied-conversation SLA breach rate;
+**unscoped-surface defects per quarter** (the access-layer KPI); support questions per week about "where is X"; usability-test task success.
+
+---
+
+## 4. Architecture (v2)
+
+### 4.1 Information architecture
+
+| Destination | Purpose | Notes |
 |---|---|---|
-| **Record** | An entity with identity, owner, status, timeline and *facets*: Family, Student, Teacher, Lead, Staff member, Lesson | parents, student profile, students directory, teacher file, teacher profiles, pipeline drawer, trials, intake |
-| **Queue** | A list of work items with owner, due date, priority, state and a next action | tasks, cases, approvals, moderation, receipts to review, renewals, replies awaiting, notifications that require action |
-| **Pipeline** | Stages with owners and entry/exit rules over records | sales pipeline, trial desk, new-student assignment; *candidates (recruitment)* and *campaigns (marketing)* are the same primitive configured differently |
-| **Ledger** | Money movements with approval and reconciliation | payments, instalments, receipts, invoices, Stripe, payroll; later accounting |
-| **Conversation + Calendar** | Communication and time, shared by everyone | chat, calls, trial groups, department rooms; academy calendar, teacher and student schedules |
+| **Today** | sectioned feeds of what needs me: My tasks, Cases awaiting me, Moderation, Conversations awaiting reply, Receipts to review, Approvals (later); manager Team toggle and organisation toggle on the same page | each section keeps its own endpoint, scope and count; one read-side `/me/work`; replaces Dashboard-as-counts, standalone Tasks and Cases tabs |
+| **Conversations** | chat and calls | unchanged (the product's core); the owner's read-only "All conversations" becomes a scope toggle |
+| **People** | one directory: Families, Students, Teachers, Leads, Staff (candidates later) | type tabs and one search; each type opens its own record page; names only, never phone numbers (G-07); Arabic-aware search |
+| **Schedule** | the calendar (academy, teacher, student views as filters) | one page, not three |
+| **Your workspace** | a department's lens: its pipeline or queues, saved lists, KPIs | a *composition* of existing modules per department (Sales, Operations, Teachers, Finance, Quality, Marketing, HR), defined in code first, data later |
+| **Money** | payments, instalments, receipts, invoices, payroll | unchanged model; one place |
+| **Insights** | KPI catalogue and reports | see 4.5 |
+| **Admin** | organisation, roles, settings, integrations, audit | shown only to those with the capability |
 
-Plus two cross-cutting services: **Scorecard** (evaluations, QA, KPIs) and **Approval** (any decision that needs a second person).
+The server returns a **single `/me/navigation` contract** (destinations, entries, badges) computed from the same facts the pages use. Admin Web,
+the Sales app and teacher web read it. It replaces the hand-written role lists and probe endpoints. No hard item cap: stable IA per function,
+two or three workspaces per person at most. All existing URLs remain redirects (the 45-URL test stays).
 
-### 3.2 The experience: a small, personal navigation
+### 4.2 The visibility defect class (the first priority)
 
-Navigation is a **projection of the person**: `(identity × capabilities × assigned work)`, generated, never hand-listed. Every employee
-sees at most six items; most see four or five:
+**Entity-scope registry.** For each entity (family, learner, prospect/lead, trial, teacher, payment, task, conversation/card, document...)
+one module declares its scope (the existing SQL functions and TypeScript policies are the implementation) and the **surfaces** that must use it:
+list, detail, count/tile, search, export, notification, realtime, chat card, task, payment, report.
+**CI guard:** a test fails if an entity's model/table is queried outside a file that imports its scope, with a named owner for each allowlisted
+exception. **Cross-surface tests:** per entity, one test asks every surface the same question for two actors and asserts agreement (the pattern #624, #627, #632 already established).
+This gives most of the benefit of a unified access layer for a fraction of the cost and without a relation table. The enforcement switch for
+permission keys follows department by department after the readiness audit and shadow-comparison.
 
-| Item | For whom | Content |
+### 4.3 Organisation, roles and permissions: staged
+
+| Stage | Change | Trigger |
 |---|---|---|
-| **Today** | everyone (their landing) | "What needs me": one Queue merging my tasks, approvals, replies owed, follow-ups due, receipts to review, escalations. Managers get a *Team* toggle on the same page. Executives get *Organisation*. |
-| **Conversations** | everyone who communicates | chat and calls (kept as-is: it is the product's core) |
-| **People** | everyone | one directory and one search over Families, Students, Teachers, Leads, Staff, showing only what the person may see; opens the universal Record view |
-| **Schedule** | whoever schedules or is scheduled | the single calendar (academy, teacher, student views are filters, not pages) |
-| **My workspace** (named after their department: Sales, Operations, Teachers, Finance, Marketing, HR, Quality…) | department members and managers | the department's configured lens: its pipeline or queues, its lists with saved filters, its KPIs. Not new pages: a *composition* of the shared primitives |
-| **Insights** | managers, executives | KPI catalogue and reports (funnel, retention, teacher quality, revenue, SLA); replaces count-only Dashboard |
-| **Admin** | admins | organisation, roles, settings, audit, integrations |
+| A (now) | add department kinds additively (Marketing, Quality, Recruitment, Finance as needed) and positions; one generic helper replaces the per-kind predicates **as each is touched**; role templates for specialist-style accounts | first new department |
+| B | ownership vocabulary (`own, assigned, team, department, organisation`) used by the registry; reporting lines resolve `team` | registry covers the entities |
+| C (only if needed) | data-driven kinds and a relation table | A and B prove insufficient |
 
-Example landings: a Sales representative sees *Today · Conversations · People(my leads) · Sales · Schedule*; an Operations supervisor
-*Today · Conversations · People(my families) · Operations · Schedule*; a finance officer *Today · Money · Insights*; the owner *Today ·
-Conversations · People · Schedule · Insights · Admin*. A person in two functions gets a workspace switcher, not more menu items.
+Constraints discovered and to design around: one department per person, one super admin per organisation (decision needed for an executive role),
+non-delegable finance keys (a finance officer needs a defined path), covers/backups are Operations-only by trigger text, `specialist` accounts are not family-facing.
+Executives get **organisation scope as a toggle on every list and report**, read-only by default, with audited write actions.
 
-### 3.3 One Record view for every entity
+### 4.4 Shared capabilities and handovers
 
-Every Record opens in the same layout: **header** (identity, status, owner, next step) · **timeline** (audit, events, messages in one
-stream) · **facets** (tabs shown per capability: Sales, Operations, Finance, Teaching, Quality) · **actions** (the next legal moves).
-This replaces Student profile, Parent profile, Teacher file and the Lead drawer as four different screens with one pattern, and makes
-"who owns this and what happens next?" answerable everywhere. A **command palette** (global search) opens any record by name or id.
-
-### 3.4 One UI kit
-
-A small shared kit (DataList with filters, saved views and pagination; RecordView; Drawer; Tabs; Timeline; QueueItem; the three
-standard states: loading, empty, forbidden) replaces the 35 hand-rolled tables and the inconsistent "no access" renderings the visual
-review found. Terminology comes from one glossary, in Arabic and English, owned centrally.
-
----
-
-## 4. Organisation, roles and permissions
-
-### 4.1 Make the organisation data
-
-| Today | Proposed |
-|---|---|
-| `department.kind` is a three-value CHECK; ~60 hardcoded sites | **Department** is a row (name, kind label, manager, parent department). Behaviour comes from capabilities, not from the kind string |
-| Roles: closed enum (`admin`, `coverage`, `manager`, legacy `finance/technical/academic`, `specialist`) mapped to tiers | **Position** within a department (member / lead / manager) plus **role templates** (named capability sets); the legacy enum remains as a compatibility mapping |
-| Ownership is a different table per concept (`learner_supervision`, `family_sales_owner`, `trial_prospect.owner_staff_id`, `work_task.assignee`, `teacher_supervisor_assignment`, backups/covers) | One **relation table**: `(staff, entity_type, entity_id, relation)` with relations `owner`, `supervisor`, `backup`, `participant`; existing tables stay and project into it during migration |
-| Scope vocabulary differs per page (`all/reach/owned`, `member/manager/seated`, teacher scope, sales scope…) | One vocabulary: **own · assigned · team · department · organisation**, resolved from relations and reporting lines |
-| Keys exist (87) but are advisory; access really lives in ~15 policy files | **Capability = action on entity type, with a scope**. The key catalogue becomes the contract and is enforced |
-
-### 4.2 The Resource Access Layer (the single most important change)
-
-Every entity type declares **one** scope function: `visibleTo(actor) → predicate`. Everything that touches the entity uses it: list,
-detail, counts and dashboard tiles, search, exports, notifications, realtime fan-out, chat cards, tasks and payments that reference it.
-The F7 family of defects (a list scoped, its siblings not) becomes structurally impossible, and a new entity inherits correct
-behaviour by declaring its scope once. This is also what makes **department-manager and executive views safe**: they are scope
-choices (`team`, `organisation`), not separate implementations.
-
-### 4.3 What each audience gets
-
-| Audience | Experience | Visibility |
-|---|---|---|
-| Employee | Today, plus the records and workspace of their function | own and assigned |
-| Department manager | the same screens with a Team toggle, reassign and approve actions, team KPIs | team / department |
-| Senior management and the owner | Insights and an organisation toggle on every list | organisation (read), with audited write actions |
-| A new department (e.g. Marketing) | a workspace definition + a role template + any new entity facets | defined by capabilities, no schema change |
-
----
-
-## 5. Shared capabilities and how work moves
-
-### 5.1 Handovers as data
-
-Today a handover is code in SQL triggers (`work_task` source types: `trial_outcome`, `new_student_assign`, `renewal_request`, …) with
-assignment rules in SQL functions. The new model keeps that engine (it is solid: append-only history, sweeps, withdrawal,
-back-off) and lifts the rules into a **handover registry**: *from stage, to role/department, task template, SLA, notification, audit*.
-Reassignment (the PD-59 lesson: the task followed the prospect's creator, not its owner) then follows the record's owner relation
-by construction.
-
-### 5.2 The two journeys that define the academy
+Keep the PD-47 engine (solid: system tasks, append-only history, sweeps, withdrawal). Document every handover as a table now
+(*from stage, to role, task template, deadline, notification, audit*), enforce it with tests, and lift to data only when a department other than the current three needs one.
+The PD-59 lesson stands: a task must follow the record's current owner (#629).
 
 ```
-STUDENT   Lead → Trial booked → Trial held → Outcome → Enrol (Operations) → Parent signed up → Active (supervised, scheduled)
-          → Billing & instalments → Renewal → (Left / Paused)
-TEACHER   Candidate → Interview → Onboard → Trial group → Assigned students → Supervised → Evaluated → (Leave / Discipline) → Offboard
+STUDENT   Lead -> Trial booked -> Trial held -> Outcome -> Enrol (Operations) -> Parent signed up -> Active
+          -> Billing/instalments -> Renewal -> (Left / Paused)
+TEACHER   Candidate -> Interview -> Onboard -> Trial group -> Assigned -> Supervised -> Evaluated -> (Leave / Discipline) -> Offboard
 ```
 
-Each stage has an owner, an expected next action, an SLA and a handover. The current product covers the middle of both journeys well and
-leaves the **front** (marketing source and campaigns; candidate pipeline) and the **back** (retention analytics, left-student closure,
-refunds that return lessons) thin. Those become new Pipeline and Scorecard instances, not new code stacks.
+### 4.5 New functions: build, integrate or buy
 
-### 5.3 Where the new business functions land
-
-| Function | Built from | New |
-|---|---|---|
-| Marketing | Pipeline (leads), Stories, WhatsApp channel | lead source and campaign attribution; funnel and cost-per-acquisition Insights |
-| Sales | Pipeline, trials, subscription form | unchanged capability, reached through the shared Record and Queue |
-| Operations | Records, Schedule, Queue | the Needs hand-over queue (PD-59 O4) as a standard Queue |
-| Teacher supervision | Teacher Record, Scorecard, Queue | one Teacher record instead of eleven features |
-| Quality assurance | Scorecard, Approval, cases | lesson sampling, scorecards, improvement plans as a workflow |
-| Recruitment and HR | Pipeline (candidates), Teacher Record, Approval | candidate pipeline, interviews, onboarding checklist (PD-43 starts here), staff HR |
-| Finance and accounting | Ledger | receivables, reconciliation, expenses, accountant role |
-| Executive oversight | Insights, Approval | KPI catalogue, organisation toggle, approvals inbox |
-
----
-
-## 6. What changes in the existing application, and why
-
-| Disposition | Items | Reason |
-|---|---|---|
-| **Retain** | Conversations and calls; Schedule engine; Ledger and Stripe; PD-47 task engine; audit; confinement of contact data; Arabic/RTL; trial and enrolment transactions; all existing URLs (kept as redirects: the "no URL lost" test stays) | proven, owner-approved, high-risk to rewrite |
-| **Consolidate** | the two navigation trees into one; Dashboard + Tasks + Cases + Notification Center + Approvals + Moderation queue into **Today**; Students directory + Student profile + Parents + Teacher file + Teacher profiles + Lead drawer into **Record view + People**; Instalments + Payments + Subscriptions panels into **Money**; trials + new students + intake + pipeline into the Sales/Operations **Pipeline** and handover queue | removes the duplication the studies measured |
-| **Redesign** | permission enforcement (shadow to enforce, one access layer); department/role model (data-driven); navigation (generated); the "no access" and list/filter/detail patterns | root causes of the recurring defects and of the cost of adding a department |
-| **Introduce** | Resource Access Layer; handover registry; Insights/KPI catalogue; universal search; Pipeline for candidates and campaigns; Scorecard/QA; accountant and finance capabilities | the missing business functions |
-| **Remove (safely)** | the 9 placeholder sections from the rail until built; `/admin/*` duplicate routes (become redirects); the legacy `chat.task` remnants; stale docs and strings that claim Core owns subscriptions | noise and contradiction; none removes a capability |
-
----
-
-## 7. Phased roadmap
-
-Every phase is independently shippable behind a flag, additive in the database (new slots with rollbacks), and keeps all existing URLs.
-
-| Phase | Goal | Contents | Depends on | Exit criteria |
-|---|---|---|---|---|
-| **0. Decide and stabilise** | agree the target; close the PD-59 class | owner decisions of §9; finish and review #627-#632; reconcile Boundary/PD docs; glossary; KPI list; production audit for enforcing permissions (`pd040-enforce-readiness`) | owner | decisions recorded as a PD; no known unscoped surface for existing entities |
-| **1. UI kit and cleanup** | one visual and interaction language | shared DataList/RecordView/Drawer/Tabs/States; unified Forbidden/Empty; hide placeholders; one nav tree with the same destinations (no behaviour change) | 0 | navigation and "no URL lost" tests green; visual review re-run with no inconsistency findings |
-| **2. Today (unified Queue)** | one place for "what needs me" | `/me/work` API aggregating tasks, cases, approvals, moderation, receipts, replies; manager Team toggle; notification items become the inbox; Dashboard counts move to Insights | 1 | every existing queue reachable and counted identically; per-role usability test |
-| **3. Records and search** | one Record view; global search | Student, Family, Teacher, Lead records on the shared layout; command palette scoped by the access layer | 2, access layer | old pages redirect; search never returns an unauthorised record (property test) |
-| **4. Data-driven organisation** | new departments without redesign | department kinds and positions as data; relation table; capability x scope; **dual-run comparator** (old vs new decision logged, zero diffs before cut-over); enforce the permission guard | 0, 3 | golden-master authorization matrix (role x entity x action) identical; production shadow shows no unexplained denial |
-| **5. Workspaces, handover registry, new functions** | Marketing, HR/Recruitment, QA, Finance, Insights | workspace definitions; handover registry; Pipeline instances; Scorecard; ledger extensions; KPI catalogue | 4 | each new department launched by configuration with no schema change to the access layer |
-
-**Indicative sizing (unverified, for planning only):** phases 0-1 weeks; 2-3 a few weeks each; 4 is the largest and riskiest; 5 is
-incremental per function. Phases 1-3 deliver visible value before the authorisation rewrite.
-
-## 8. Verification strategy and risks
-
-**Verification.** (a) A **golden-master authorisation matrix** generated from today's behaviour (role x entity x action x record) must
-stay identical through every refactor; the existing ~800 integration tests plus the new cross-representative suites are the base.
-(b) **Dual-run decisions** in production shadow: log old and new answers, ship only when diffs are explained. (c) Property tests:
-search, counts, notifications and realtime never exceed `visibleTo`. (d) The 45-URL "no URL lost" test and the nav test for every role.
-(e) Visual review at desktop, tablet, phone, Arabic and English for every phase. (f) Usability sessions with real staff per role.
-(g) Performance budgets (the API pool is 7 connections per replica; unified queues and search must be indexed and paginated).
-(h) Migration safety: additive, rollbacks, slot claims, throwaway-database rehearsals as in PD-59.
-
-| Risk | Mitigation |
+| Function | Recommendation |
 |---|---|
-| Conflicts with the "communication first, no generic CRM/case system" boundary | explicit new owner decision first (§9); build on PD-47, do not revive the frozen legacy tasks |
-| Enforcing permissions locks someone out | readiness audit on production data; dual-run; staged enforce per department |
-| Authorisation rewrite regresses a privacy rule (BR-1, phone privacy) | those rules stay as database constraints; golden-master and structural tests (G-07) gate every phase |
-| Scope creep into a multi-year rewrite | phase gates with exit criteria; each phase ships value alone |
-| One organisation, three departments today: over-generalising | build primitives only when a second consumer exists (Pipeline: leads and candidates; Queue: tasks and approvals) |
-| Hot-table migrations (e.g. message_card) | additive columns, rehearse locks, owner approval before any apply |
-| Adoption: staff used to current pages | keep old URLs as redirects, ship Today first, train per department |
+| Marketing | add lead source and campaign to the lead (small, owned); attribution reports in Insights; use existing marketing tools for campaigns |
+| Recruitment/HR | a minimal candidate record and onboarding checklist in Chat (PD-43 continues it); integrate or buy an ATS/HRIS for sourcing and payroll-adjacent HR; decision needed |
+| Quality | scorecards, risk-weighted sampling, improvement plans (evaluations already exist); built in Chat (it needs lesson data) |
+| Finance | keep the Chat ledger; add receivables views; accounting/GL in an external system; **billing truth first (section 6)** |
+| Executive/Insights | a KPI catalogue with named owners and fixed denominators; a 6-8 KPI strip with comparison and status, an exceptions list, drill-down to the same scoped list; implement on a reporting schema/read replica with an embedded BI tool (build vs buy: owner decision) |
+
+Candidate KPI catalogue (definitions are proposals): lead response time; lead-to-trial; trial show-up rate; trial-to-enrolment within N days; hand-over age; renewal rate and churn; teacher utilisation; cancel/reschedule rate; QA observations vs target and mean score; complaints; overdue instalments; time to fill; teacher attrition; satisfaction after trial and after N lessons.
+
+### 4.6 UI kit and experience
+
+Extract DataList (filters, saved views, pagination), Drawer, Tabs and the three states (loading, empty, forbidden) **opportunistically** from the two or three most duplicated screens, then migrate others as they are touched; do not rewrite 34 table files at once.
+One glossary in Arabic and English owned centrally; RTL conventions decided once (mirror layout and chart axes, never numerals; one numeral-style setting); Arabic search normalisation for names.
+Retire the nine placeholders from the rail until built; unify "no access" (the visual review found two renderings).
 
 ---
 
-## 9. Decisions needed from the owner
+## 5. Relationship between the open PRs and the long-term architecture
 
-1. **Product boundary.** Approve extending Jawwid Chat from "communication first" into the academy's operating platform, as a new PD
-   that supersedes the relevant Boundary statements (tasks/cases freeze, "not a CRM"), while keeping BR-1/BR-2, Arabic first and the Core boundary.
-2. **Priority of new functions.** Which comes first after phases 1-3: Marketing, Recruitment/HR, Quality, Finance/accounting, Executive Insights?
-3. **Organisation reality.** Current and planned headcount and departments (docs show 4 primary + 2 backup supervisors in Operations,
-   2 in Teachers as of 2026-10-15), so the model is sized right.
-4. **Core and billing truth.** Docs say Chat owns subscriptions and takes one-off Stripe payments with no recurring billing; a recorded note
-   says live monthly auto-charges exist outside Chat (likely Core). Which is current? It decides the Finance design.
-5. **Permission enforcement.** Authorise the production readiness audit and, later, the shadow-to-enforce switch.
-6. **Executive access model.** One super admin per organisation is enforced today: is a second executive role wanted?
+| PR | What it is | Architectural role |
+|---|---|---|
+| #623 | pipeline route gated on the server's answer | an early instance of "the server decides what is shown" (becomes `/me/navigation`) |
+| #624, #627 | cross-representative tests; F7 | the first entity-scope registry entries (trial, prospect) and the cross-surface test pattern |
+| #628 | Needs hand-over (manager and Operations views) | first handover queue; the minimised projection is the pattern for cross-department read-only views |
+| #629 | task follows the lead's owner | handover correctness: tasks follow the record's owner |
+| #630 | Sales no longer administers family logins | capability trimming ahead of enforcement |
+| #631 | `sales_prospect_ids` owner-aware | DB layer agreeing with the app scope (registry for teacher-records) |
+| #632 | trial cards filtered | registry entry for chat cards; realtime/notification fan-out scoped |
+| #633 | owner redirect | removes a duplicate-tree artefact |
+| #625, #626 | stabilisation docs; visual review | evidence base; staging runbook; findings feed phases 2-3 |
 
-## 10. Next step if approved
+None is discarded; each is either a registry entry, a handover, or evidence. Do not merge them in a different order than section 7.
 
-Phase 0 only: record the decision, review and finish PRs #627-#632 (the stabilisation of the existing access model), write the glossary and
-KPI catalogue, and produce the detailed Phase 1 UI-kit and Phase 2 Today designs (screens and API contract) for approval. No code for phases 2-5 starts before that.
+### 5.1 Merge plan (verified by simulation; nothing merged)
+
+Simulated sequentially in a scratch worktree from `main` `615e56db`, then typechecked as one tree (API and Admin Web: clean).
+**Order:** #623, #624, #627, #628, #629, #630, #631, #632, #633, #625, #626. Stacked PRs (#627 on #624; #628-#632 on #627) must be **retargeted to `main`** after their base merges.
+**One real conflict:** #623 and #628 both add `usePipelineAccess()` in `SalesPipelinePage.tsx`. Resolution (verified; typecheck and 73 sales-pipeline/navigation tests pass):
+keep #623's `const access = usePipelineAccess()`, delete #628's `handOverAccess` line, read `access.data?.standing` in the `mayReconcile` line; merge the import lines.
+**Migration slots (apply order is by filename):** `20261121110000` (#629), `115000` (#632), `120000` (#631), `140000` (#630) all depend only on the merged `20261121100000`; verified independent of each other in slot order and two shuffled orders (byte-identical schema).
+No migration is executed without your approval, individually (section 7).
+
+---
+
+## 6. Billing: verified findings and remaining uncertainty (no redesign)
+
+**Verified in code (Chat):** one-off Stripe Checkout only (`mode: 'payment'`, `stripe.gateway.ts:257`); no subscription, invoice, saved-card or off-session call anywhere; Chat owns the lesson ledger (`chat.learner_subscription`) and lock; webhook handles checkout/payment-intent/refund/dispute events and **records `invoice.*`, `customer.subscription.*` as `ignored_not_chat`**; a foreign charge never credits lessons; the reconciler only checks Chat's own checkouts and never lists Stripe charges (a foreign charge is never discovered); the lock is computed only from Chat's ledger and instalments; enforcement is off by default in production (`SUBSCRIPTION_LOCK_ENFORCED`).
+**Verified in history:** card payments were deployed paused (production deploy 2026-11-17, seed `billing.card_paused = true`; whether resumed since is unknown); the runbook records the owner decision that Chat uses the same live Stripe credential as Core.
+**Documentation contradictions:** the Boundary and core-integration-contract still say Core is authoritative for subscriptions and payments; PD-17/PD-27 and the code say Chat. The Terms say no automatic renewal; an open legal question asks whether Core renews.
+**Not verified (hearsay):** "live monthly auto-charges run in Core" rests on the owner's 2026-11-07 statement and a sandbox-only inspection (0 subscriptions, 0 webhooks); its plan document exists only on branch `claude/stripe-jawwid-chat-integration-f3e06a`. **Nobody has seen live subscriptions.**
+**Settled only by the operator/owner (read-only):** the live Stripe Dashboard Subscriptions list and Webhook endpoints; the read-only counts of ignored/unknown payment events in `chat.stripe_event` (SQL in the investigation); `chat.config billing.card_paused`; Core's maintainer on how it treats events for objects it did not create.
+**Impact if Core also bills the same parents (scenario B):** Chat's ledger, invoices and lesson balances miss every renewal; with the lock on, paying children would be locked; instalment reminders could chase parents who paid Core; no double counting of refunds; possible double charge. **Safe interim controls with no model change:** keep the lock off in production, keep cards paused until the owner decides, watch ignored/unknown payment events weekly, never write to a subscription Chat did not create.
+**Decision on the Finance design is blocked on this verification.**
+
+---
+
+## 7. Migrations: individual review status
+
+Each proposed migration was reviewed independently on throwaway databases (locks measured, idempotent three times, rollback fidelity compared, slot-order and shuffled-order apply, `integration-db.sh verify`).
+
+| Slot | PR | Verdict | Key facts |
+|---|---|---|---|
+| `20261121110000` task follows owner | #629 | **Approve with one operational change** | ~20 ms, `SHARE ROW EXCLUSIVE` on `chat.trial_prospect` only (no rewrite); run with a lock timeout (queue-behind-DDL stall measured at 6 s without one); no backfill: nothing re-routes at apply; trigger adds ~0.4-0.5 ms per changed row (10 ms per lead; +23 s for a 42,000-lead mass reassign; no such tool exists); rollback restores the original body byte-for-byte; requires the merged `20261121100000` |
+| `20261121140000` Sales no `accounts.administer` | #630 | **Approve as-is** | two row deletes, ~3 ms, `ROW EXCLUSIVE`; exactly 53 of 532 seeded staff change and each loses only that key; rollback identical |
+| `20261121115000` `message_card.trial_id` generated column | #632 | **review pending: the riskiest (table rewrite)** | result to be appended |
+| `20261121120000` `sales_prospect_ids` owner-aware | #631 | **review pending** | result to be appended |
+
+Operational note: `APPLY_LOCK_TIMEOUT` exists only on #625's branch (`apply.sh`), not on `main`; until #625 merges use the documented `PGOPTIONS='-c lock_timeout=3s'` on a direct connection (the pooler drops it: ADR-014).
+
+---
+
+## 8. Roadmap (reordered; every phase flagged, additive, reversible)
+
+| Phase | Goal | Contents | Exit criteria |
+|---|---|---|---|
+| **0. Decide and stabilise** (in parallel, no engineering) | close PD-59; decide the open items; interviews | merge plan of section 5.1 on your approval; approve or reject each migration individually; billing verification by the operator; production permission-readiness audit; 6-8 role interviews; record the new PD that supersedes the Boundary's "communication first / no generic CRM" statements; success baselines | decisions recorded; no known unscoped surface for existing entities |
+| **1. Visibility foundation** | kill the defect class | entity-scope registry for the existing entities; CI guard; cross-surface tests; data-quality cleanup (unowned prospects, families without owner, teachers without supervisor) | every existing entity covered; guard green |
+| **2. One navigation** | one tree, one contract | `/me/navigation`; merge the two trees (owner as scope); hide placeholders; unified forbidden/empty states; first shared DataList/Drawer/Tabs extractions | navigation and "no URL lost" tests green; visual review (desktop, phone, Arabic, English) clean |
+| **3. Today** | what needs me | `/me/work` projection and sectioned feeds; per-role usability test against the success criteria | every existing queue reachable and counted identically per source |
+| **4. New functions, one at a time** | from the job analysis | candidates (Quality, Recruitment, Marketing source) as small owned modules; Insights on a reporting schema with the KPI catalogue; Finance per the verified billing truth | each function has an owner, KPIs and an exit review |
+| **5. Reconsider the heavy ideas** | only if proven necessary | relation table, data-driven departments, workspace definitions as data | the registry is demonstrably insufficient |
+
+Capacity and sequencing: store launch and Stripe go-live compete for the same people; phases 0-1 need almost no new surface and should start immediately. **Sizing is unverified**; the owner should supply team capacity.
+
+## 9. Verification strategy and risks
+
+**Verification.** Golden-master authorisation matrix (role x entity x action x record) generated from today's behaviour must stay identical through every refactor; the cross-surface tests; shadow-mode comparison of old and new permission decisions with alerting on any DENY-to-ALLOW change before enforcing; the 45-URL test and the navigation test for every role; visual review at desktop, tablet, phone, Arabic and English per phase; usability sessions per role; performance budgets (API pool of 7 connections per replica; Today and search must be indexed and paginated; counts may be 60 s stale); additive migrations with rollbacks and throwaway rehearsals; Flutter apps and teacher web share the API, so every new endpoint is additive and version-safe.
+**Risks.** Boundary conflict (mitigated by the explicit PD); enforcing permissions locks someone out (audit, shadow, per-department); privacy regression (BR-1/BR-2/G-07 stay as database constraints with structural tests); scope creep (phase gates); over-generalisation (second-consumer rule); mixed retention rules in unified timelines (timeline entries keep their source's retention; not merged); adoption (redirects, role-by-role rollout, flag per user, rollback of Today).
+
+## 10. Decisions for the owner
+
+1. **Approve the phase 0 plan** and the merge order of section 5.1 (no merge happens without your explicit instruction).
+2. **Each migration individually** (section 7), after the last two dossiers.
+3. **Billing verification:** authorise the operator to run the read-only Dashboard and SQL checks of section 6; hold the Finance design until the result.
+4. **Build vs buy** for BI/Insights, HR/ATS and marketing attribution.
+5. **First new function** after phases 1-3: Quality, Recruitment, Marketing, Finance or Executive Insights.
+6. **Executive role:** a second organisation-wide role in addition to the single super admin?
+7. **Capacity:** who staffs this alongside the store launch and Stripe go-live?
+8. **Finance path:** how a finance officer is granted non-delegable finance capabilities.
