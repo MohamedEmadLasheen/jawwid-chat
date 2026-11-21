@@ -111,9 +111,9 @@ describe('navigation', () => {
 
 describe('the super admin\'s link', () => {
   // The server admits the super admin as a reviewer, so the Admin Portal links
-  // the queue under People & teams -- named so it is not mistaken for Teacher
+  // the queue under People & Organization -- named so it is not mistaken for Teacher
   // files. Operators keep their own label.
-  it('is "Teacher credentials review" under People & teams, and opens the queue', async () => {
+  it('is "Teacher credentials review" under People & Organization, and opens the queue', async () => {
     const people = destinationsFor('super_admin').find((d) => d.key === 'people')!
     const entry = entriesOf(people).find((e) => e.path === '/teacher-profiles')
     expect(entry?.label).toEqual({ text: { en: 'Teacher credentials review', ar: 'مراجعة مؤهلات المعلمين' } })
@@ -126,7 +126,7 @@ describe('the super admin\'s link', () => {
     routes({})
     renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/conversations' })
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
-    const group = within(nav).getByRole('group', { name: 'People & teams' })
+    const group = within(nav).getByRole('group', { name: 'People & Organization' })
     const link = within(group).getByRole('link', { name: 'Teacher credentials review' })
     expect(link).toHaveAttribute('href', '/teacher-profiles')
     await userEvent.click(link)
