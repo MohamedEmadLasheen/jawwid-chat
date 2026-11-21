@@ -208,6 +208,16 @@ export function canConvert(stage: Stage, handedOver = false): boolean {
   return stage !== 'lost';
 }
 
+/**
+ * ONE rule for "the family's side already has this lead": the lead was handed over (converted), or Operations
+ * has enrolled one of its trials. The list and the detail both answer with it (PD-59 F8). It is NOT what
+ * decides whether Convert may run: that stays `canConvert` (an enrolled but not yet linked lead is exactly
+ * the one Convert links).
+ */
+export function isHandedOver(convertedAt: Date | null, enrolled: boolean): boolean {
+  return convertedAt !== null || enrolled;
+}
+
 /** The three channels of a lead, keyed (null when the channel is absent). */
 export interface ChannelKeys {
   phone: string | null;

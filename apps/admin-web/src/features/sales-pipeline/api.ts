@@ -78,11 +78,54 @@ export interface LeadDetail {
   createdAt: string
   convertedAt: string | null
   familyId: string | null
+  /** The ONE rule the list uses too: converted, or Operations has enrolled the lead. */
+  handedOver: boolean
   canConvert: boolean
   trial: { startsAt: string; result: string | null } | null
   /** Null when the lead has no contact (or it moved to the family's record on conversion). */
   contact: LeadContact | null
 }
+
+/** PD-59 O4: where a lead stands on the way to its family's record. */
+export const HAND_OVER_STATES = ['awaiting_enrolment', 'enrolled', 'enrolled_no_contact', 'learner_linked'] as const
+export type HandOverState = (typeof HAND_OVER_STATES)[number]
+
+/** What Convert would answer for the lead now (none of it is run). */
+export type HandOverBlocker = 'no_contact' | 'number_unreadable' | 'awaiting_enrolment' | 'unavailable' | 'channel_missing' | 'ready' | 'not_assessed'
+
+export type ChannelKind = 'phone' | 'whatsapp' | 'email'
+
+/** One lead of the "Needs hand-over" list: kinds only, never a contact value. */
+export interface HandOverRow {
+  id: string
+  displayName: string
+  state: HandOverState
+  blocker: HandOverBlocker
+  ageDays: number
+  waitingSince: string
+  /** Sales' owner of the lead: the full projection only (never sent to Operations). */
+  owner?: LeadOwner | null
+  hasContactCopy: boolean
+  enrolled: boolean
+  learnerLinked?: boolean
+  /** The family the lead's own trial was enrolled into, only when the reader already reaches it: Operations' projection only. */
+  family?: { id: string; displayName: string } | null
+  /** For `channel_missing`: the channel kinds the family's record has no room for. */
+  missingKinds: ChannelKind[]
+}
+
+export interface HandOverList {
+  /** 'full' for the Sales manager and the super admin; 'operations' is the minimised, read-only projection. */
+  projection?: 'full' | 'operations'
+  leads: HandOverRow[]
+  total: number
+  /** The full projection only: Operations is not told the Sales pipeline's volume. */
+  counts?: Record<HandOverState, number>
+  truncated: boolean
+}
+
+/** Who may read the list, and in which projection (advisory; the list asks the server again). */
+export type HandOverAccess = { handOver: 'full' | 'operations' | null }
 
 export interface ContactInput {
   parentName?: string | null
@@ -131,6 +174,8 @@ export const pipelineKeys = {
   all: ['sales-pipeline'] as const,
   access: ['sales-pipeline', 'access'] as const,
   owners: ['sales-pipeline', 'owners'] as const,
+  handOver: ['sales-pipeline', 'hand-over'] as const,
+  handOverAccess: ['sales-pipeline', 'hand-over', 'access'] as const,
   list: (q: LeadQuery) => ['sales-pipeline', 'leads', q] as const,
   detail: (id: string) => ['sales-pipeline', 'lead', id] as const,
 }
@@ -140,6 +185,9 @@ const enc = (id: string) => encodeURIComponent(id)
 export const pipelineApi = {
   access: () => api.get<{ allowed: boolean; standing: PipelineStanding | null }>('/sales-pipeline/access'),
   owners: () => api.get<{ owners: Array<{ id: string; name: string; role: string }> }>('/sales-pipeline/owners'),
+  /** Manager and super admin only (the server refuses everyone else); read-only. */
+  handOver: () => api.get<HandOverList>('/sales-pipeline/reconciliation'),
+  handOverAccess: () => api.get<HandOverAccess>('/sales-pipeline/reconciliation/access'),
   reassign: (id: string, ownerId: string) => api.post<LeadDetail>(`/sales-pipeline/leads/${enc(id)}/owner`, { ownerId }),
   list: (q: LeadQuery) => {
     const query: Record<string, string> = {}

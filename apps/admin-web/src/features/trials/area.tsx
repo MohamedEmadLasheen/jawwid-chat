@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useLessonAccess } from '../teachers/hooks'
+import { useHandOverAccess } from '../sales-pipeline/hooks'
 import type { Pair } from '../teachers/copy'
 
 /**
@@ -15,17 +16,21 @@ interface TrialsTab {
   key: string
   path: string
   label: Pair
-  offered: (a: { lessonManager: boolean; sales: boolean; operations: boolean }) => boolean
+  offered: (a: { lessonManager: boolean; sales: boolean; operations: boolean; handOver: 'full' | 'operations' | null }) => boolean
 }
 
 export const TRIALS_TABS: TrialsTab[] = [
   { key: 'trials', path: TRIALS_AREA_BASE, label: { en: 'Trial lessons', ar: 'الحصص التجريبية' }, offered: (a) => a.sales || a.operations || a.lessonManager },
   { key: 'new-students', path: `${TRIALS_AREA_BASE}/new-students`, label: { en: 'New students', ar: 'الطلاب الجدد' }, offered: (a) => a.sales || a.operations },
+  // PD-59 O4: Operations' read-only "Needs hand-over" list. Offered on the server's own answer (the Sales manager keeps theirs on the pipeline page).
+  { key: 'needs-handover', path: `${TRIALS_AREA_BASE}/needs-handover`, label: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' }, offered: (a) => a.handOver !== null && (a.operations || a.handOver === 'operations') },
 ]
 
 export function useTrialsAccess() {
   const q = useLessonAccess()
+  const hand = useHandOverAccess()
   return {
+    handOver: hand.data?.handOver ?? null,
     lessonManager: q.data?.lessonManager === true,
     sales: q.data?.sales === true,
     operations: q.data?.operations === true,

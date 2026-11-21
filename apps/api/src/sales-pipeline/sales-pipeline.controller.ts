@@ -29,6 +29,20 @@ export class SalesPipelineController {
     return this.pipeline.owners(actorId);
   }
 
+  /** Who may read the hand-over list and in which projection: { handOver: 'full' | 'operations' | null }. Advisory. */
+  @SelfService()
+  @Get('reconciliation/access')
+  handOverAccess(@ActorId() actorId: string) {
+    return this.pipeline.handOverAccess(actorId);
+  }
+
+  /** Leads a subscribed trial made Converted that are not linked to a family yet (the Sales manager and super admin in full, Operations minimised; read-only; no value). */
+  @Requires('new_students.view')
+  @Get('reconciliation')
+  reconciliation(@ActorId() actorId: string) {
+    return this.pipeline.reconciliation(actorId);
+  }
+
   /** ?stage&q&followUp=due&limit&offset -- leads with their derived stage; no contact value. */
   @Requires('new_students.view')
   @Get('leads')

@@ -13,6 +13,16 @@ export function useOwners(enabled: boolean) {
   return useQuery({ queryKey: pipelineKeys.owners, queryFn: pipelineApi.owners, enabled, staleTime: 60_000, retry: false })
 }
 
+/** The "Needs hand-over" list: asked only by someone who may see it (manager, super admin); the server decides again. */
+export function useHandOver(enabled: boolean) {
+  return useQuery({ queryKey: pipelineKeys.handOver, queryFn: pipelineApi.handOver, enabled, staleTime: 30_000, retry: false })
+}
+
+/** Who may read the hand-over list (Sales manager, super admin, Operations) and in which projection. */
+export function useHandOverAccess() {
+  return useQuery({ queryKey: pipelineKeys.handOverAccess, queryFn: pipelineApi.handOverAccess, staleTime: 5 * 60_000, retry: false })
+}
+
 export function useLeads(query: LeadQuery) {
   return useQuery({
     queryKey: pipelineKeys.list(query),

@@ -22,6 +22,7 @@ import {
   decideLeadAccess,
   deriveStage,
   followUpDue,
+  isHandedOver,
   isStage,
   matchesFilter,
   planChannelMerge,
@@ -44,6 +45,9 @@ import {
 } from './pipeline-stage';
 
 type Tx = Prisma.TransactionClient;
+
+/** Where a lead stands on the way to its family's record (the "Needs hand-over" list). */
+export type HandOverState = 'awaiting_enrolment' | 'enrolled' | 'enrolled_no_contact' | 'learner_linked';
 
 interface KeyedChannel {
   value: string;
@@ -122,6 +126,8 @@ interface Facts {
   convertedFamilyId: string | null;
   trials: TrialFact[];
   trialLessonIds: string[];
+  /** Operations has enrolled one of the lead's trials (a student_enrolment row). */
+  enrolled: boolean;
 }
 
 /**
@@ -182,6 +188,33 @@ export class SalesPipelineService {
     } catch {
       return { allowed: false, standing: null };
     }
+  }
+
+  /**
+   * Who may read the "Needs hand-over" list, and in which projection: 'full' (the Sales manager, the super admin),
+   * 'operations' (Operations staff: minimised) or null. Advisory: the list decides again on every call. Kept apart from
+   * `access`, which says who may use the pipeline itself (Operations may not).
+   */
+  async handOverAccess(actorId: string): Promise<{ handOver: 'full' | 'operations' | null }> {
+    try {
+      const c = await this.caller(actorId);
+      if (reachesAll(c)) return { handOver: 'full' };
+    } catch {
+      // not Sales
+    }
+    return { handOver: (await this.operationsViewer(actorId).catch(() => null)) ? 'operations' : null };
+  }
+
+  /** Live Operations staff (members and the manager) of the academy, or null. The answer comes from the database. */
+  private async operationsViewer(actorId: string): Promise<{ staffId: string; organizationId: string } | null> {
+    if (!isUuid(actorId)) return null;
+    const [row] = await this.prisma.$queryRaw<Array<{ organization_id: string }>>`
+      SELECT s.organization_id::text AS organization_id
+        FROM chat.staff s
+       WHERE s.id = ${actorId}::uuid AND s.is_active AND s.left_at IS NULL
+         AND chat.operations_department_role(s.id) IS NOT NULL
+         AND chat.sales_department_role(s.id) IS NULL`;
+    return row ? { staffId: actorId, organizationId: row.organization_id } : null;
   }
 
   // ------------------------------------------------------------------
@@ -257,7 +290,7 @@ export class SalesPipelineService {
         followUpDue: due,
         followUpNote: p.followUpNote,
         createdAt: p.createdAt.toISOString(),
-        handedOver: p.convertedAt !== null || p.lessons.some((l) => enrolled.has(l.id)),
+        handedOver: isHandedOver(p.convertedAt, p.lessons.some((l) => enrolled.has(l.id))),
         contact: presence.get(p.id) ?? NO_CONTACT,
         owner: p.ownerStaffId ? { id: p.ownerStaffId, name: owners.get(p.ownerStaffId) ?? '' } : null,
       };
@@ -482,7 +515,10 @@ export class SalesPipelineService {
     let refusal: string | null = null;
     const refuse = (outcome: string, err: CommError): never => {
       refusal = outcome;
-      throw err;
+      // The same code, message and status as ever; `detail.reason` is the audited outcome, so the page can word it in its own language.
+      // The intake's own refusal (PARENT_EXISTS) stays exactly as it was: it says nothing at all about the family.
+      if (err.code === CommErrorCode.PARENT_EXISTS) throw err;
+      throw new CommError(err.code, err.message, err.status, { ...err.detail, reason: outcome });
     };
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -607,6 +643,194 @@ export class SalesPipelineService {
   }
 
   // ------------------------------------------------------------------
+  // Needs hand-over (read-only)
+  // ------------------------------------------------------------------
+
+  /**
+   * PD-59 stabilization, option O4: the leads a subscribed trial made Converted (or Core linked to a learner)
+   * that are not linked to a family yet, for the Sales manager and the super admin ONLY. Read-only: it
+   * writes nothing and changes nothing. Per lead: the state, the age, the owner, whether the lead still
+   * holds its contact copy, whether Operations enrolled it, what Convert would answer now (`blocker`, the
+   * same checks in the same order, none of them run) and, for `channel_missing`, the channel KINDS the
+   * family's record has no room for. Never a value, never a hash: the contact is read only to be keyed in
+   * memory, as Convert keys it.
+   */
+  async reconciliation(actorId: string) {
+    // The Sales manager and the super admin see the full list; Operations (members and the manager) a minimised,
+    // read-only projection of the same facts; everyone else is refused.
+    let c: { staffId: string; organizationId: string };
+    let projection: 'full' | 'operations' = 'full';
+    try {
+      const sales = await this.caller(actorId);
+      if (!reachesAll(sales)) throw denied();
+      c = sales;
+    } catch (e) {
+      const ops = e instanceof CommError ? await this.operationsViewer(actorId) : null;
+      if (!ops) throw e;
+      c = ops;
+      projection = 'operations';
+    }
+    const now = new Date();
+    const prospects = await this.prisma.trialProspect.findMany({
+      where: { organizationId: c.organizationId, convertedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: PIPELINE_SCAN_LIMIT,
+      select: {
+        id: true, displayName: true, createdAt: true, ownerStaffId: true, learnerId: true,
+        pipelineStage: true, lostReason: true,
+        lessons: {
+          where: { kind: 'trial' },
+          select: { id: true, startsAt: true, outcome: true, trialOutcome: { select: { result: true, reasonCode: true } } },
+        },
+      },
+    });
+    const candidates = prospects.flatMap((p) => {
+      const stage = deriveStage({
+        pipelineStage: asStored(p.pipelineStage), lostReason: p.lostReason, convertedAt: null, now, trials: p.lessons.map(trialFact),
+      }).stage;
+      return stage === 'converted' || p.learnerId !== null ? [{ p, stage }] : [];
+    });
+    const lessonIds = candidates.flatMap(({ p }) => p.lessons.map((l) => l.id));
+    const enrolments = lessonIds.length === 0
+      ? []
+      : await this.prisma.studentEnrolment.findMany({
+          where: { lessonId: { in: lessonIds }, organizationId: c.organizationId },
+          select: { lessonId: true, familyId: true, assignedAt: true },
+        });
+    const enrolmentOf = new Map(enrolments.flatMap((e) => (e.lessonId ? [[e.lessonId, e] as const] : [])));
+    const owners = await this.staffNames(candidates.flatMap(({ p }) => (p.ownerStaffId ? [p.ownerStaffId] : [])));
+    const contacts = new Map(
+      (await this.prisma.salesLeadContact.findMany({ where: { prospectId: { in: candidates.map(({ p }) => p.id) }, organizationId: c.organizationId } }))
+        .map((r) => [r.prospectId, {
+          parentName: r.parentName, phone: r.confinedLeadPhone, whatsapp: r.confinedLeadWhatsapp, email: r.confinedLeadEmail, country: r.countryCode,
+        } as ContactDto] as const),
+    );
+
+    /** `family` is where Convert would look: the enrolled family, else the one the lead's own contact keys match (when the caller may handle it). */
+    type Prep = {
+      enrolment: { familyId: string; assignedAt: Date } | null; keys: LeadKeys | null; unreadable: boolean;
+      family: string | null; unavailable: boolean;
+    };
+    const prep = new Map<string, Prep>();
+    for (const { p, stage } of candidates) {
+      const first = p.lessons.map((l) => enrolmentOf.get(l.id)).find((e) => !!e) ?? null;
+      const contact = contacts.get(p.id) ?? null;
+      let keys: LeadKeys | null = null;
+      let unreadable = false;
+      if (contact) {
+        try { keys = this.keysOf(contact); } catch { unreadable = true; }
+      }
+      // Convert looks for the family of the lead's own trial only when a subscribed trial made it Converted.
+      const enrolment = stage === 'converted' ? first : null;
+      // No enrolment: Convert falls back to the family that already holds the lead's e-mail / numbers (the same lookup, in memory),
+      // for the person who would press it: the lead's owner (the manager when it has none).
+      let family: string | null = enrolment?.familyId ?? null;
+      let unavailable = false;
+      if (stage === 'converted' && !enrolment && keys) {
+        const k = keys;
+        const matched = await this.prisma.$transaction((tx) => this.findFamily(tx, c.organizationId, k.email?.value ?? null, k.hashes));
+        if (matched === 'blocked') unavailable = true;
+        else if (matched) {
+          const [o] = await this.prisma.$queryRaw<Array<{ owns: boolean }>>`SELECT chat.staff_owns_family(${(p.ownerStaffId ?? c.staffId)}::uuid, ${matched}::uuid) AS owns`;
+          // An unowned lead is the Sales manager's to convert: Operations sees what the manager would get.
+          if (o?.owns === true || (projection === 'operations' && !p.ownerStaffId)) family = matched;
+          else unavailable = true;
+        }
+      }
+      prep.set(p.id, { enrolment, keys, unreadable, family, unavailable });
+    }
+    const allHashes = [...new Set([...prep.values()].flatMap((x) => (x.family && x.keys ? x.keys.hashes : [])))];
+    const keyRows = allHashes.length === 0
+      ? []
+      : await this.prisma.familyContactKey.findMany({ where: { organizationId: c.organizationId, keyHash: { in: allHashes } }, select: { keyHash: true, familyId: true } });
+    const slotsOf = new Map<string, { phoneEmpty: boolean; emailEmpty: boolean } | null>();
+    for (const familyId of new Set([...prep.values()].flatMap((x) => (x.family && x.keys ? [x.family] : [])))) {
+      slotsOf.set(familyId, await this.prisma.$transaction(async (tx) => {
+        const s = await familyChannelSlots(tx, { familyId, organizationId: c.organizationId });
+        return s ? { phoneEmpty: s.phoneEmpty, emailEmpty: s.emailEmpty } : null;
+      }));
+    }
+
+    const rows = candidates.map(({ p, stage }) => {
+      const x = prep.get(p.id)!;
+      const enrolled = p.lessons.some((l) => enrolmentOf.has(l.id));
+      const hasContactCopy = contacts.has(p.id);
+      const learnerLinked = p.learnerId !== null;
+      const state: HandOverState = learnerLinked ? 'learner_linked' : !enrolled ? 'awaiting_enrolment' : hasContactCopy ? 'enrolled' : 'enrolled_no_contact';
+      let blocker: 'no_contact' | 'number_unreadable' | 'awaiting_enrolment' | 'unavailable' | 'channel_missing' | 'ready' | 'not_assessed';
+      let missingKinds: ChannelKind[] = [];
+      if (!hasContactCopy) blocker = 'no_contact';
+      else if (x.unreadable || !x.keys) blocker = 'number_unreadable';
+      else if (stage !== 'converted') blocker = 'not_assessed';
+      else if (x.unavailable) blocker = 'unavailable';
+      else if (!x.family) blocker = 'awaiting_enrolment';
+      else {
+        const familyId = x.family;
+        const held = keyRows.filter((r) => x.keys!.hashes.includes(r.keyHash));
+        if (held.some((r) => r.familyId !== familyId)) blocker = 'unavailable';
+        else {
+          const plan = planChannelMerge(
+            { phone: x.keys.phone?.hash ?? null, whatsapp: x.keys.whatsapp?.hash ?? null, email: x.keys.email?.hash ?? null },
+            new Set(held.map((r) => r.keyHash)),
+            slotsOf.get(familyId) ?? null,
+          );
+          missingKinds = plan.missing;
+          blocker = plan.missing.length > 0 ? 'channel_missing' : 'ready';
+        }
+      }
+      const since = x.enrolment?.assignedAt ?? [...p.lessons].sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())[0]?.startsAt ?? p.createdAt;
+      return {
+        enrolledFamilyId: x.enrolment?.familyId ?? null,
+        id: p.id,
+        displayName: p.displayName,
+        state,
+        blocker,
+        ageDays: Math.max(0, Math.floor((now.getTime() - since.getTime()) / 86_400_000)),
+        waitingSince: since.toISOString(),
+        owner: p.ownerStaffId ? { id: p.ownerStaffId, name: owners.get(p.ownerStaffId) ?? '' } : null,
+        hasContactCopy,
+        enrolled,
+        learnerLinked,
+        missingKinds,
+      };
+    });
+    rows.sort((a, b) => b.ageDays - a.ageDays || a.id.localeCompare(b.id));
+    const truncated = prospects.length === PIPELINE_SCAN_LIMIT;
+    if (projection === 'operations') {
+      // What Operations needs to fix missing information, and nothing of the Sales pipeline: no owner, no counts, no notes,
+      // no stage history. The family is named only when the lead's own trial was enrolled into one this person reaches.
+      const familyIds = [...new Set(rows.flatMap((r) => (r.enrolledFamilyId ? [r.enrolledFamilyId] : [])))];
+      const reached: string[] = [];
+      for (const familyId of familyIds) {
+        const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+          SELECT (chat.staff_reaches_family(${c.staffId}::uuid, ${familyId}::uuid) IS NOT NULL
+                  OR chat.is_operations_manager(${c.staffId}::uuid, ${c.organizationId}::uuid)) AS ok`;
+        if (ok?.ok === true) reached.push(familyId);
+      }
+      const names = new Map((await this.prisma.family.findMany({
+        where: { id: { in: reached }, organizationId: c.organizationId }, select: { id: true, displayName: true },
+      })).map((f) => [f.id, f.displayName]));
+      return {
+        projection: 'operations' as const,
+        leads: rows.map((r) => ({
+          id: r.id, displayName: r.displayName, state: r.state, blocker: r.blocker, ageDays: r.ageDays, waitingSince: r.waitingSince,
+          enrolled: r.enrolled, hasContactCopy: r.hasContactCopy, missingKinds: r.missingKinds,
+          family: r.enrolledFamilyId && names.has(r.enrolledFamilyId) ? { id: r.enrolledFamilyId, displayName: names.get(r.enrolledFamilyId)! } : null,
+        })),
+        total: rows.length,
+        truncated,
+      };
+    }
+    const counts = { awaiting_enrolment: 0, enrolled: 0, enrolled_no_contact: 0, learner_linked: 0 };
+    for (const r of rows) counts[r.state] += 1;
+    return {
+      projection: 'full' as const,
+      leads: rows.map(({ enrolledFamilyId: _f, ...r }) => r),
+      total: rows.length, counts, truncated,
+    };
+  }
+
+  // ------------------------------------------------------------------
   // Ownership
   // ------------------------------------------------------------------
 
@@ -703,11 +927,12 @@ export class SalesPipelineService {
       },
     });
     if (!p) throw notFound();
+    const enrolled = p.lessons.length > 0 && (await tx.studentEnrolment.count({ where: { lessonId: { in: p.lessons.map((l) => l.id) } } })) > 0;
     return {
       id: p.id, displayName: p.displayName, level: p.level, note: p.note, createdAt: p.createdAt, ownerStaffId: p.ownerStaffId,
       pipelineStage: asStored(p.pipelineStage), lostReason: p.lostReason, lastContactedAt: p.lastContactedAt,
       nextFollowUpOn: day(p.nextFollowUpOn), followUpNote: p.followUpNote, convertedAt: p.convertedAt, convertedFamilyId: p.convertedFamilyId,
-      trials: p.lessons.map(trialFact), trialLessonIds: p.lessons.map((l) => l.id),
+      trials: p.lessons.map(trialFact), trialLessonIds: p.lessons.map((l) => l.id), enrolled,
     };
   }
 
@@ -810,6 +1035,7 @@ export class SalesPipelineService {
       createdAt: f.createdAt.toISOString(),
       convertedAt: f.convertedAt?.toISOString() ?? null,
       familyId: f.convertedFamilyId,
+      handedOver: isHandedOver(f.convertedAt, f.enrolled),
       canConvert: canConvert(d.stage, f.convertedAt !== null),
       trial: latest ? { startsAt: latest.startsAt.toISOString(), result: latest.result } : null,
       contact,

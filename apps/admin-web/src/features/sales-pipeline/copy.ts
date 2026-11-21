@@ -1,7 +1,7 @@
 import { ApiError } from '@/core/api/errors'
 import type { Tone } from '@/shared/components/Badge'
 import type { Pair } from '../teachers/copy'
-import type { LostReason, Stage } from './api'
+import type { HandOverBlocker, HandOverState, LostReason, Stage } from './api'
 
 /** PD-59: the Sales pipeline's words, Arabic first and English beside it. */
 
@@ -97,6 +97,92 @@ export const P = {
   today: { en: 'Today', ar: 'اليوم' },
 } satisfies Record<string, Pair>
 
+/** PD-59 O4: the manager's read-only "Needs hand-over" list. */
+export const H = {
+  tabPipeline: { en: 'Pipeline', ar: 'المسار' },
+  tabNeeds: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' },
+  title: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' },
+  intro: {
+    en: 'Leads whose trial subscribed but are not linked to a family record yet. This list only shows them: nothing here changes a lead or a family.',
+    ar: 'عملاء اشترك طلابهم بعد التجربة ولم يُربطوا بسجل عائلة بعد. تعرض هذه القائمة الحالات فقط: لا يتغير هنا أي عميل أو عائلة.',
+  },
+  guidance: {
+    en: 'For Operations: add the missing channel to the family\'s profile, then open the lead and press Convert again. The lead\'s own details are kept until then.',
+    ar: 'للتشغيل: أضف وسيلة التواصل الناقصة إلى ملف العائلة، ثم افتح العميل واضغط تحويل مرة أخرى. تبقى بيانات العميل محفوظة إلى حينها.',
+  },
+  empty: { en: 'Nothing is waiting for a hand-over.', ar: 'لا يوجد شيء بانتظار التسليم.' },
+  age: { en: 'Waiting', ar: 'مدة الانتظار' },
+  status: { en: 'What is needed', ar: 'المطلوب' },
+  contactCopy: { en: 'Contact copy', ar: 'نسخة بيانات التواصل' },
+  enrolled: { en: 'Enrolled by Operations', ar: 'سجّله التشغيل' },
+  yes: { en: 'Yes', ar: 'نعم' },
+  no: { en: 'No', ar: 'لا' },
+  missing: { en: 'No room in the family record for', ar: 'لا يوجد مكان في سجل العائلة لـ' },
+  days: { en: 'days', ar: 'يومًا' },
+  forbidden: {
+    en: 'This list is for Operations, the Sales manager and the super admin.',
+    ar: 'هذه القائمة للتشغيل ومدير المبيعات والمدير العام فقط.',
+  },
+  // Operations' read-only view (minimised): in the Trials area
+  tabTrials: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' },
+  introOperations: {
+    en: 'Trial families whose lead is not linked to the family record yet. This list only shows them: nothing here changes a lead or a family.',
+    ar: 'عائلات التجارب التي لم يُربط عميلها بسجل العائلة بعد. تعرض هذه القائمة الحالات فقط: لا يتغير هنا أي عميل أو عائلة.',
+  },
+  guidanceOperations: {
+    en: 'To resolve a case: add the missing channel to the family\'s profile. The Sales manager then presses Convert.',
+    ar: 'لحل الحالة: أضف وسيلة التواصل الناقصة إلى ملف العائلة. ثم يضغط مدير المبيعات على تحويل.',
+  },
+  family: { en: 'Family', ar: 'العائلة' },
+  blockerChannelMissingOperations: {
+    en: 'The family record has no room for one of the lead\'s channels. Add it to the family\'s profile; the Sales manager then presses Convert.',
+    ar: 'لا يوجد مكان في سجل العائلة لإحدى وسائل تواصل العميل. أضفها إلى ملف العائلة؛ ثم يضغط مدير المبيعات على تحويل.',
+  },
+  blockerReadyOperations: {
+    en: 'Every channel is already in the family record. The Sales manager presses Convert to link it.',
+    ar: 'كل وسائل التواصل موجودة في سجل العائلة. يضغط مدير المبيعات على تحويل لربطه.',
+  },
+} satisfies Record<string, Pair>
+
+export const HAND_OVER_STATE: Record<HandOverState, { label: Pair; tone: Tone }> = {
+  awaiting_enrolment: { label: { en: 'Waiting for enrolment', ar: 'بانتظار التسجيل' }, tone: 'waiting' },
+  enrolled: { label: { en: 'Enrolled, not linked', ar: 'مسجّل، غير مربوط' }, tone: 'warn' },
+  enrolled_no_contact: { label: { en: 'Enrolled, no contact copy', ar: 'مسجّل، بلا نسخة تواصل' }, tone: 'info' },
+  learner_linked: { label: { en: 'Linked to a learner', ar: 'مربوط بطالب' }, tone: 'info' },
+}
+
+/** What Convert would answer now, in words for the manager and Operations. Kinds only, never a value. */
+export const HAND_OVER_BLOCKER: Record<HandOverBlocker, Pair> = {
+  channel_missing: {
+    en: 'The family record has no room for one of the lead\'s channels. Add it to the family\'s profile, then Convert again.',
+    ar: 'لا يوجد مكان في سجل العائلة لإحدى وسائل تواصل العميل. أضفها إلى ملف العائلة ثم حوّل مرة أخرى.',
+  },
+  ready: {
+    en: 'Every channel is already in the family record. Open the lead and press Convert to link it.',
+    ar: 'كل وسائل التواصل موجودة في سجل العائلة. افتح العميل واضغط تحويل لربطه.',
+  },
+  awaiting_enrolment: {
+    en: 'Waiting for Operations to enrol the family.',
+    ar: 'بانتظار أن يسجّل التشغيل العائلة.',
+  },
+  no_contact: {
+    en: 'No contact copy, so nothing can be lost. Bookkeeping only, later.',
+    ar: 'لا توجد نسخة تواصل، فلا شيء يضيع. إجراء محاسبي فقط لاحقًا.',
+  },
+  unavailable: {
+    en: 'A family already exists under this lead\'s contact (for example entered by hand, or owned by someone else). Ask Operations or the family\'s owner to link or confirm it. The lead is kept as it is.',
+    ar: 'توجد عائلة بالفعل بنفس بيانات تواصل هذا العميل (مثلًا أُدخلت يدويًا أو يملكها شخص آخر). اطلب من التشغيل أو من مسؤول العائلة ربطها أو تأكيدها. يبقى العميل كما هو.',
+  },
+  number_unreadable: {
+    en: 'A phone number needs its country code or a correction before the hand-over.',
+    ar: 'رقم هاتف يحتاج إلى رمز الدولة أو تصحيح قبل التسليم.',
+  },
+  not_assessed: {
+    en: 'Linked to a learner by the Core confirmation. Bookkeeping only.',
+    ar: 'مربوط بطالب بتأكيد النظام. إجراء محاسبي فقط.',
+  },
+}
+
 export const STAGE: Record<Stage, { label: Pair; tone: Tone }> = {
   new_lead: { label: { en: 'New lead', ar: 'عميل جديد' }, tone: 'info' },
   contacted: { label: { en: 'Contacted', ar: 'تم التواصل' }, tone: 'waiting' },
@@ -122,12 +208,33 @@ export function lostText(reason: string | null, locale: 'ar' | 'en'): string {
   return p ? (locale === 'ar' ? p.ar : p.en) : reason
 }
 
+/** Why Convert was refused (the server's `detail.reason`, the audited outcome), in both languages. Never a value. */
+export const CONVERT_REFUSAL: Record<string, Pair> = {
+  channel_missing: {
+    en: 'The family record has no room for one of this lead\'s contact channels (a second phone or WhatsApp number, or another e-mail). Add it to the family\'s profile first, then convert again.',
+    ar: 'لا يوجد مكان في سجل العائلة لإحدى وسائل تواصل هذا العميل (رقم هاتف أو واتساب ثانٍ، أو بريد إلكتروني آخر). أضفها إلى ملف العائلة أولًا ثم حوّل مرة أخرى.',
+  },
+  no_contact: { en: 'This lead has no contact details to hand over.', ar: 'لا توجد بيانات تواصل لدى هذا العميل لتسليمها.' },
+  number_unreadable: {
+    en: 'A phone or WhatsApp number needs its country code or a correction before the hand-over.',
+    ar: 'رقم الهاتف أو واتساب يحتاج إلى رمز الدولة أو تصحيح قبل التسليم.',
+  },
+  unavailable: {
+    en: 'This parent is already in Chat under a family that is not yours. Ask your manager.',
+    ar: 'ولي الأمر موجود بالفعل في عائلة ليست عائلتك. اسأل مديرك.',
+  },
+  lost: { en: 'A lost lead is reopened before it is converted.', ar: 'يُعاد فتح العميل المفقود قبل تحويله.' },
+  already_converted: { en: 'This lead is already converted.', ar: 'تم تحويل هذا العميل بالفعل.' },
+}
+
 export function describePipelineError(error: unknown, locale: 'ar' | 'en'): string {
   const pick = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   if (error instanceof ApiError) {
     if (error.code === 'COMM.SALES_LEAD_DENIED') {
       return pick({ en: 'The Sales pipeline is for the Sales department and the super admin.', ar: 'مسار المبيعات لقسم المبيعات والمدير العام فقط.' })
     }
+    const reason = (error.detail as { reason?: unknown } | null | undefined)?.reason
+    if (error.code === 'COMM.SALES_LEAD_STATE' && typeof reason === 'string' && CONVERT_REFUSAL[reason]) return pick(CONVERT_REFUSAL[reason])
     if (error.code === 'COMM.PARENT_EXISTS') {
       return pick({
         en: 'This parent is already in Chat under a family that is not yours. Ask your manager.',

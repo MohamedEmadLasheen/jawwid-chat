@@ -8,9 +8,10 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { formatWhen } from '@/features/trials/copy'
 import { STAGES, type ContactPresence, type LeadRow, type Stage } from './api'
 import { CreateLeadDialog } from './CreateLeadDialog'
+import { NeedsHandOver } from './NeedsHandOver'
 import { LeadDrawer } from './LeadDrawer'
-import { P, STAGE, lostText } from './copy'
-import { useLeads } from './hooks'
+import { H, P, STAGE, lostText } from './copy'
+import { useLeads, usePipelineAccess } from './hooks'
 import '../teachers/teachers.css'
 import '../trials/trials.css'
 import '../trials/new-students.css'
@@ -18,6 +19,7 @@ import './sales-pipeline.css'
 
 const PAGE_SIZE = 25
 type StageFilter = Stage | 'all'
+type View = 'pipeline' | 'hand-over'
 
 /** A search that waits for a pause in typing, so each key is not a request. */
 function useDebounced<T>(value: T, ms = 300): T {
@@ -40,6 +42,7 @@ function useDebounced<T>(value: T, ms = 300): T {
 export function SalesPipelinePage() {
   const { locale, number } = useI18n()
   const tx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
+  const [view, setView] = useState<View>('pipeline')
   const [stage, setStage] = useState<StageFilter>('all')
   const [search, setSearch] = useState('')
   const [due, setDue] = useState(false)
@@ -47,6 +50,11 @@ export function SalesPipelinePage() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const q = useDebounced(search.trim())
+
+  // The "Needs hand-over" view is the manager's and the super admin's: offered on the server's access answer (it refuses everyone else again).
+  const handOverAccess = usePipelineAccess()
+  const mayReconcile = handOverAccess.data?.standing === 'sales_manager' || handOverAccess.data?.standing === 'super_admin'
+  const showHandOver = mayReconcile && view === 'hand-over'
 
   const list = useLeads({ stage: stage === 'all' ? '' : stage, q, followUp: due ? 'due' : '', limit: PAGE_SIZE, offset })
   useEffect(() => setOffset(0), [stage, q, due])
@@ -69,6 +77,15 @@ export function SalesPipelinePage() {
           subtitle={tx(P.subtitle)}
           actions={<button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>{tx(P.newLead)}</button>}
         />
+        {mayReconcile && (
+          <FilterChips<View>
+            options={[{ value: 'pipeline', label: tx(H.tabPipeline) }, { value: 'hand-over', label: tx(H.tabNeeds) }]}
+            value={view}
+            onChange={setView}
+            label={tx(H.tabNeeds)}
+          />
+        )}
+        {showHandOver ? <NeedsHandOver onOpen={setOpenId} /> : <>
         <div className="ns-toolbar">
           <label className="search ns-toolbar__search">
             <Icon name="search" size={16} />
@@ -115,6 +132,7 @@ export function SalesPipelinePage() {
             </>
           )}
         </QueryBoundary>
+        </>}
         {openId && <LeadDrawer id={openId} onClose={() => setOpenId(null)} />}
         {creating && <CreateLeadDialog onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setOpenId(id) }} />}
       </div>
