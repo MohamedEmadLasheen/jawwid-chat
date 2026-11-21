@@ -623,7 +623,7 @@ export class MessageService {
   private async validateReplyTarget(conversationId: string, replyToMessageId: string | null, actor?: Actor) {
     if (!replyToMessageId) return;
     // PD-59 / F7: a trial card the sender may not read cannot be replied to (it looks absent).
-    const trial = actor ? await trialCardScopeWhere(this.prisma, actor, [conversationId]) : null;
+    const trial = actor ? await trialCardScopeWhere(this.prisma, actor) : null;
     if (trial && (await this.prisma.message.count({ where: { AND: [{ id: replyToMessageId }, trial] } })) === 0) {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'reply target not found', 404);
     }
@@ -741,7 +741,7 @@ export class MessageService {
     // PD-59 / F7: a Sales representative reads only the trial cards of their own prospects.
     const trial = trialScope !== undefined
       ? trialScope
-      : await trialCardScopeWhere(this.prisma, actor, typeof conversationId === 'string' ? [conversationId] : conversationId.in);
+      : await trialCardScopeWhere(this.prisma, actor);
     if (trial) where.AND = [trial];
 
     return where;
@@ -760,7 +760,7 @@ export class MessageService {
   async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message & { card: { kind: string } | null }>> {
     const out = new Map<string, Message & { card: { kind: string } | null }>();
     // PD-59 / F7: resolved once for the whole list, not per row.
-    const trialScope = await trialCardScopeWhere(this.prisma, actor, conversationIds);
+    const trialScope = await trialCardScopeWhere(this.prisma, actor);
     const found = await Promise.all(
       conversationIds.map(async (id) =>
         this.prisma.message.findFirst({
@@ -1055,9 +1055,9 @@ export class MessageService {
    * below, so the number on the chat list and the number from
    * `GET /conversations/:id/messages/unread` cannot disagree.
    */
-  private async unreadWhere(actorId: string, conversationIds?: readonly string[]): Promise<Prisma.MessageWhereInput> {
+  private async unreadWhere(actorId: string): Promise<Prisma.MessageWhereInput> {
     // PD-59 / F7: a card a Sales representative may not read is never counted (badge or Center).
-    const trial = await trialCardScopeWhere(this.prisma, await this.conversations.requireActor(actorId), conversationIds);
+    const trial = await trialCardScopeWhere(this.prisma, await this.conversations.requireActor(actorId));
     const base: Prisma.MessageWhereInput = {
       // PD-57: what the viewer's block hides is never counted -- a badge is a signal of contact.
       ...notHiddenByBlock(await blockedBy(this.prisma, actorId)),
@@ -1075,7 +1075,7 @@ export class MessageService {
 
   async unreadCount(conversationId: string, actorId: string): Promise<number> {
     return this.prisma.message.count({
-      where: { conversationId, ...(await this.unreadWhere(actorId, [conversationId])) },
+      where: { conversationId, ...(await this.unreadWhere(actorId)) },
     });
   }
 
@@ -1107,7 +1107,7 @@ export class MessageService {
       by: ['conversationId'],
       where: {
         conversationId: { in: conversationIds },
-        ...(await this.unreadWhere(actorId, conversationIds)),
+        ...(await this.unreadWhere(actorId)),
       },
       _count: { _all: true },
     });
@@ -1886,7 +1886,7 @@ export class MessageService {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
     }
     // PD-59 / F7: another representative's trial card looks absent to a Sales representative.
-    const trial = await trialCardScopeWhere(this.prisma, actor, [conv.id]);
+    const trial = await trialCardScopeWhere(this.prisma, actor);
     if (trial && (await this.prisma.message.count({ where: { AND: [{ id: message.id }, trial] } })) === 0) {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
     }
