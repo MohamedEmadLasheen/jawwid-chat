@@ -29,7 +29,14 @@ export class SalesPipelineController {
     return this.pipeline.owners(actorId);
   }
 
-  /** Leads a subscribed trial made Converted that are not linked to a family yet (manager and super admin only; read-only; no value). */
+  /** Who may read the hand-over list and in which projection: { handOver: 'full' | 'operations' | null }. Advisory. */
+  @SelfService()
+  @Get('reconciliation/access')
+  handOverAccess(@ActorId() actorId: string) {
+    return this.pipeline.handOverAccess(actorId);
+  }
+
+  /** Leads a subscribed trial made Converted that are not linked to a family yet (the Sales manager and super admin in full, Operations minimised; read-only; no value). */
   @Requires('new_students.view')
   @Get('reconciliation')
   reconciliation(@ActorId() actorId: string) {

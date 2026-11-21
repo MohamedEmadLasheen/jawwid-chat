@@ -162,6 +162,7 @@ beforeAll(async () => {
   who.superAdmin = { id: m.superAdmin.id, subject: m.superAdmin.subject };
   who.manager = { id: m.salesManager.id, subject: m.salesManager.subject };
   who.ops = { id: m.supervisors[0].id, subject: m.supervisors[0].subject };
+  who.opsManager = { id: m.operationsManager.id, subject: m.operationsManager.subject };
   who.teachers = { id: m.teacherSupervisors[0].id, subject: m.teacherSupervisors[0].subject };
   await staffWho('repA', 'rep_a', 'admin', true);
   await staffWho('repB', 'rep_b', 'admin', true);
@@ -245,7 +246,7 @@ describe('1. who may read the list', () => {
     expect(Array.isArray(r.json.leads)).toBe(true);
   });
 
-  it.each(['repA', 'repB', 'ops', 'teachers', 'finance', 'unrelated'])('%s is refused (403)', async (actor) => {
+  it.each(['repA', 'repB', 'teachers', 'finance', 'unrelated'])('%s is refused (403)', async (actor) => {
     const r = await http(actor, 'GET', '/sales-pipeline/reconciliation');
     expect(r.status).toBe(403);
     expect(r.json.leads).toBeUndefined();
@@ -334,6 +335,73 @@ describe('2c. V-1: a refused Convert carries a machine-readable reason, status a
   });
 });
 
+describe('2d. Operations reads a minimised, read-only projection', () => {
+  const OMITTED_TOP = ['counts'];
+  const LEAD_KEYS = ['ageDays', 'blocker', 'displayName', 'enrolled', 'family', 'hasContactCopy', 'id', 'missingKinds', 'state', 'waitingSince'];
+  const reaches = async (staffKey: string, family: string) =>
+    (await g.prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
+      `select (chat.staff_reaches_family($1::uuid, $2::uuid) is not null or chat.is_operations_manager($1::uuid, $3::uuid)) ok`, who[staffKey].id, family, orgId))[0].ok;
+
+  it.each(['ops', 'opsManager'])('%s: 200, the same leads, only the fields Operations needs', async (actor) => {
+    const full = await http('manager', 'GET', '/sales-pipeline/reconciliation');
+    const r = await http(actor, 'GET', '/sales-pipeline/reconciliation');
+    expect(r.status).toBe(200);
+    expect(Object.keys(r.json).sort()).toEqual(['leads', 'projection', 'total', 'truncated']);
+    expect(r.json.projection).toBe('operations');
+    for (const k of OMITTED_TOP) expect(r.json[k]).toBeUndefined();
+    expect((r.json.leads as Array<{ id: string }>).map((l) => l.id)).toEqual((full.json.leads as Array<{ id: string }>).map((l) => l.id));
+    for (const l of r.json.leads) expect(Object.keys(l).sort()).toEqual(LEAD_KEYS);
+    expect(byId(r, missing)).toMatchObject({ state: 'enrolled', blocker: 'channel_missing', hasContactCopy: true, enrolled: true, ageDays: 12 });
+    expect([...byId(r, missing).missingKinds].sort()).toEqual(['email', 'phone', 'whatsapp']);
+    expect(byId(r, handEntered)).toMatchObject({ blocker: 'unavailable', family: null });
+    expect(byId(r, foreign)).toBeUndefined();
+  });
+
+  it('nothing of Sales or of the contact: no owner, note, counts, value or hash anywhere in the body', async () => {
+    for (const actor of ['ops', 'opsManager']) {
+      const text = JSON.stringify((await http(actor, 'GET', '/sales-pipeline/reconciliation')).json);
+      for (const v of [...VALUES, ...KEYED, ...KEYED.map((k) => k.slice(1)), who.repA.id, who.repB.id, 'rep_a', 'rep_b']) expect(text).not.toContain(v);
+      for (const k of KEYED) expect(text).not.toContain(contactKeyHash('phone', k));
+      expect(text).not.toMatch(/"owner"|"note"|followUp|lostReason|"counts"|Synthetic Parent|example\.test|\+1555/);
+    }
+  });
+
+  it('names a family only when its enrolment exists and this person reaches the family', async () => {
+    const families = [m.families[0], m.families[1], m.families[2]];
+    const reach = await Promise.all(families.map((f) => reaches('ops', f.id)));
+    expect(reach.some(Boolean)).toBe(true);
+    expect(reach.every(Boolean)).toBe(false); // the check is meaningful: a family this member cannot reach exists
+    const r = await http('ops', 'GET', '/sales-pipeline/reconciliation');
+    const expected = [[missing, 0], [ready, 1], [noContact, 2]] as const;
+    for (const [lead, i] of expected) {
+      const fam = byId(r, lead).family;
+      if (reach[i]) expect(fam).toEqual({ id: families[i].id, displayName: families[i].displayName });
+      else expect(fam).toBeNull();
+    }
+    expect(byId(r, awaiting).family).toBeNull(); // no enrolment, no family
+    const all = await http('opsManager', 'GET', '/sales-pipeline/reconciliation');
+    for (const [lead, i] of expected) expect(byId(all, lead).family).toEqual({ id: families[i].id, displayName: families[i].displayName });
+  });
+
+  it('the access answer says who may read, and in which projection; the pipeline\'s own access is unchanged', async () => {
+    const answer = async (a: string) => (await http(a, 'GET', '/sales-pipeline/reconciliation/access')).json;
+    expect(await answer('manager')).toEqual({ handOver: 'full' });
+    expect(await answer('superAdmin')).toEqual({ handOver: 'full' });
+    expect(await answer('ops')).toEqual({ handOver: 'operations' });
+    expect(await answer('opsManager')).toEqual({ handOver: 'operations' });
+    for (const a of ['repA', 'finance', 'teachers', 'unrelated']) expect(await answer(a)).toEqual({ handOver: null });
+    expect((await http('ops', 'GET', '/sales-pipeline/access')).json).toEqual({ allowed: false, standing: null });
+    expect((await http('ops', 'GET', '/sales-pipeline/leads')).status).toBe(403);
+  });
+
+  it('the manager and super admin still get the full projection', async () => {
+    const r = await http('manager', 'GET', '/sales-pipeline/reconciliation');
+    expect(r.json.projection).toBe('full');
+    expect(r.json.counts).toBeDefined();
+    expect(byId(r, awaiting).owner).toMatchObject({ id: who.repA.id });
+  });
+});
+
 describe('3. kinds only: no value, no hash', () => {
   it('the whole response carries none of the seeded contact values, their keyed forms or their hashes', async () => {
     const r = await http('manager', 'GET', '/sales-pipeline/reconciliation');
@@ -379,7 +447,8 @@ describe('5. the list is read-only', () => {
     const before = await snapshot();
     const auditsBefore = await auditTotal();
     for (const actor of ['manager', 'superAdmin', 'manager']) expect((await http(actor, 'GET', '/sales-pipeline/reconciliation')).status).toBe(200);
-    for (const actor of ['repA', 'ops', 'finance']) expect((await http(actor, 'GET', '/sales-pipeline/reconciliation')).status).toBe(403);
+    for (const actor of ['ops', 'opsManager']) expect((await http(actor, 'GET', '/sales-pipeline/reconciliation')).status).toBe(200);
+    for (const actor of ['repA', 'finance']) expect((await http(actor, 'GET', '/sales-pipeline/reconciliation')).status).toBe(403);
     expect(await snapshot()).toEqual(before);
     expect(await auditTotal()).toBe(auditsBefore);
   });

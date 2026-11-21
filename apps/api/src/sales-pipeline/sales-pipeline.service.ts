@@ -190,6 +190,33 @@ export class SalesPipelineService {
     }
   }
 
+  /**
+   * Who may read the "Needs hand-over" list, and in which projection: 'full' (the Sales manager, the super admin),
+   * 'operations' (Operations staff: minimised) or null. Advisory: the list decides again on every call. Kept apart from
+   * `access`, which says who may use the pipeline itself (Operations may not).
+   */
+  async handOverAccess(actorId: string): Promise<{ handOver: 'full' | 'operations' | null }> {
+    try {
+      const c = await this.caller(actorId);
+      if (reachesAll(c)) return { handOver: 'full' };
+    } catch {
+      // not Sales
+    }
+    return { handOver: (await this.operationsViewer(actorId).catch(() => null)) ? 'operations' : null };
+  }
+
+  /** Live Operations staff (members and the manager) of the academy, or null. The answer comes from the database. */
+  private async operationsViewer(actorId: string): Promise<{ staffId: string; organizationId: string } | null> {
+    if (!isUuid(actorId)) return null;
+    const [row] = await this.prisma.$queryRaw<Array<{ organization_id: string }>>`
+      SELECT s.organization_id::text AS organization_id
+        FROM chat.staff s
+       WHERE s.id = ${actorId}::uuid AND s.is_active AND s.left_at IS NULL
+         AND chat.operations_department_role(s.id) IS NOT NULL
+         AND chat.sales_department_role(s.id) IS NULL`;
+    return row ? { staffId: actorId, organizationId: row.organization_id } : null;
+  }
+
   // ------------------------------------------------------------------
   // Read
   // ------------------------------------------------------------------
@@ -629,8 +656,20 @@ export class SalesPipelineService {
    * memory, as Convert keys it.
    */
   async reconciliation(actorId: string) {
-    const c = await this.caller(actorId);
-    if (!reachesAll(c)) throw denied();
+    // The Sales manager and the super admin see the full list; Operations (members and the manager) a minimised,
+    // read-only projection of the same facts; everyone else is refused.
+    let c: { staffId: string; organizationId: string };
+    let projection: 'full' | 'operations' = 'full';
+    try {
+      const sales = await this.caller(actorId);
+      if (!reachesAll(sales)) throw denied();
+      c = sales;
+    } catch (e) {
+      const ops = e instanceof CommError ? await this.operationsViewer(actorId) : null;
+      if (!ops) throw e;
+      c = ops;
+      projection = 'operations';
+    }
     const now = new Date();
     const prospects = await this.prisma.trialProspect.findMany({
       where: { organizationId: c.organizationId, convertedAt: null },
@@ -693,7 +732,8 @@ export class SalesPipelineService {
         if (matched === 'blocked') unavailable = true;
         else if (matched) {
           const [o] = await this.prisma.$queryRaw<Array<{ owns: boolean }>>`SELECT chat.staff_owns_family(${(p.ownerStaffId ?? c.staffId)}::uuid, ${matched}::uuid) AS owns`;
-          if (o?.owns === true) family = matched;
+          // An unowned lead is the Sales manager's to convert: Operations sees what the manager would get.
+          if (o?.owns === true || (projection === 'operations' && !p.ownerStaffId)) family = matched;
           else unavailable = true;
         }
       }
@@ -740,6 +780,7 @@ export class SalesPipelineService {
       }
       const since = x.enrolment?.assignedAt ?? [...p.lessons].sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())[0]?.startsAt ?? p.createdAt;
       return {
+        enrolledFamilyId: x.enrolment?.familyId ?? null,
         id: p.id,
         displayName: p.displayName,
         state,
@@ -754,9 +795,39 @@ export class SalesPipelineService {
       };
     });
     rows.sort((a, b) => b.ageDays - a.ageDays || a.id.localeCompare(b.id));
+    const truncated = prospects.length === PIPELINE_SCAN_LIMIT;
+    if (projection === 'operations') {
+      // What Operations needs to fix missing information, and nothing of the Sales pipeline: no owner, no counts, no notes,
+      // no stage history. The family is named only when the lead's own trial was enrolled into one this person reaches.
+      const familyIds = [...new Set(rows.flatMap((r) => (r.enrolledFamilyId ? [r.enrolledFamilyId] : [])))];
+      const reached: string[] = [];
+      for (const familyId of familyIds) {
+        const [ok] = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
+          SELECT (chat.staff_reaches_family(${c.staffId}::uuid, ${familyId}::uuid) IS NOT NULL
+                  OR chat.is_operations_manager(${c.staffId}::uuid, ${c.organizationId}::uuid)) AS ok`;
+        if (ok?.ok === true) reached.push(familyId);
+      }
+      const names = new Map((await this.prisma.family.findMany({
+        where: { id: { in: reached }, organizationId: c.organizationId }, select: { id: true, displayName: true },
+      })).map((f) => [f.id, f.displayName]));
+      return {
+        projection: 'operations' as const,
+        leads: rows.map((r) => ({
+          id: r.id, displayName: r.displayName, state: r.state, blocker: r.blocker, ageDays: r.ageDays, waitingSince: r.waitingSince,
+          enrolled: r.enrolled, hasContactCopy: r.hasContactCopy, missingKinds: r.missingKinds,
+          family: r.enrolledFamilyId && names.has(r.enrolledFamilyId) ? { id: r.enrolledFamilyId, displayName: names.get(r.enrolledFamilyId)! } : null,
+        })),
+        total: rows.length,
+        truncated,
+      };
+    }
     const counts = { awaiting_enrolment: 0, enrolled: 0, enrolled_no_contact: 0, learner_linked: 0 };
     for (const r of rows) counts[r.state] += 1;
-    return { leads: rows, total: rows.length, counts, truncated: prospects.length === PIPELINE_SCAN_LIMIT };
+    return {
+      projection: 'full' as const,
+      leads: rows.map(({ enrolledFamilyId: _f, ...r }) => r),
+      total: rows.length, counts, truncated,
+    };
   }
 
   // ------------------------------------------------------------------
