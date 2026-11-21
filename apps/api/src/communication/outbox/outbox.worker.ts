@@ -998,11 +998,9 @@ export class OutboxWorker {
   }
 
   /** The Sales representatives a trial card (message.created) must not reach: none for any other message. */
-  private async trialCardHidden(conversationId: string, payload: Record<string, unknown>): Promise<string[]> {
+  private async trialCardHidden(_conversationId: string, payload: Record<string, unknown>): Promise<string[]> {
     if (payload.type !== 'card' || typeof payload.messageId !== 'string') return [];
-    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { organizationId: true } });
-    if (!conv) return [];
-    return [...(await trialCardHiddenFrom(this.prisma, payload.messageId, conv.organizationId, null))];
+    return [...(await trialCardHiddenFrom(this.prisma, payload.messageId, null))];
   }
 
   /**

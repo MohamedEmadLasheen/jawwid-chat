@@ -61,16 +61,15 @@ async function ownedTrialCardMessageIds(db: Db, staffId: string, conversationIds
 export async function trialCardHiddenFrom(
   db: Db,
   messageId: string,
-  organizationId: string,
   audience: readonly string[] | null,
 ): Promise<Set<string>> {
   if (audience && audience.length === 0) return new Set();
-  const [card] = await db.$queryRaw<Array<{ trial_id: string | null }>>`
-    SELECT mc.payload->>'trialId' AS trial_id
+  const [card] = await db.$queryRaw<Array<{ trial_id: string | null; organization_id: string }>>`
+    SELECT mc.payload->>'trialId' AS trial_id, mc.organization_id::text AS organization_id
       FROM chat.message_card mc
      WHERE mc.message_id = ${messageId}::uuid AND mc.kind = ANY(${TRIAL_CARD_KINDS}::text[])`;
   if (!card) return new Set();
-  const reps = await salesRepsAmong(db, organizationId, audience);
+  const reps = await salesRepsAmong(db, card.organization_id, audience);
   if (reps.size === 0) return new Set();
   const [owner] = card.trial_id
     ? await db.$queryRaw<Array<{ owner: string | null }>>`

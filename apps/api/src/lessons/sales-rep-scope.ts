@@ -14,10 +14,14 @@ import type { LessonService } from './lesson.service';
  */
 export async function salesRepScope(
   prisma: Pick<PrismaService, '$queryRaw'>,
-  _lessons: Pick<LessonService, 'inDepartment' | 'isManager'>,
+  lessons: Pick<LessonService, 'inDepartment' | 'isManager'>,
   actor: Actor,
 ): Promise<string | null> {
-  return salesRepScopeOf(prisma, actor);
+  if (actor.kind !== ActorKind.STAFF || actor.staffRole === StaffRole.SUPER_ADMIN || !actor.organizationId) return null;
+  const [r] = await prisma.$queryRaw<Array<{ role: string | null }>>`SELECT chat.sales_department_role(${actor.actorId}::uuid) AS role`;
+  if (r?.role !== 'member') return null;
+  if ((await lessons.inDepartment(actor, 'operations')) || (await lessons.isManager(actor))) return null;
+  return actor.actorId;
 }
 
 /** `salesRepScope` without a LessonService: the message read path has none. */
@@ -29,8 +33,8 @@ export async function salesRepScopeOf(prisma: Pick<PrismaService, '$queryRaw'>, 
 /**
  * Of `staffIds` (staff of `organizationId`), the Sales representatives, by the one rule above: a member
  * of the organization's Sales department who is not the super admin and is not also in the Operations or
- * Teachers department (as manager or member). `staffIds` null means every staff member of the organization. Set-based so the message fan-out can ask for a whole
- * audience at once; `salesRepScope` is this with one id, so the two can never drift apart.
+ * Teachers department (as manager or member). `staffIds` null means every staff member of the organization. Set-based, for the message path (which has no LessonService) and the fan-out; it states the same rule as
+ * `salesRepScope` above, and both are exercised by the PD-59 integration specs.
  */
 export async function salesRepsAmong(
   prisma: Pick<PrismaService, '$queryRaw'>,
