@@ -18,7 +18,7 @@ import type { IconName } from '@/shared/components/Icon'
  * answer "forbidden". (Listing is UX, not security: the server decides.)
  */
 
-export type DestinationKey = 'conversations' | 'dashboard' | 'calls' | 'people' | 'stories' | 'more'
+export type DestinationKey = 'conversations' | 'dashboard' | 'calls' | 'people' | 'sales' | 'scheduling' | 'stories' | 'more'
 
 type OperatorArea = Exclude<NavArea, 'settings'>
 
@@ -32,6 +32,11 @@ export interface NavEntry {
   label: EntryLabel
   /** A placeholder page: it says so, and does nothing else. */
   inDevelopment: boolean
+  /**
+   * Another entry's path lies beneath this one's (`/trials` and
+   * `/trials/new-students`): the link is current on its own page only.
+   */
+  exact?: boolean
 }
 
 export interface NavEntryGroup {
@@ -54,6 +59,9 @@ export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label
   { key: 'dashboard', icon: 'dashboard', label: { en: 'Dashboard', ar: 'لوحة المتابعة' } },
   // The owner's order: People & Organization is the third icon.
   { key: 'people', icon: 'users', label: { en: 'People & Organization', ar: 'الأشخاص والهيكل التنظيمي' } },
+  // Sales and Scheduling are the two most-used workspaces after People.
+  { key: 'sales', icon: 'tag', label: { en: 'Sales', ar: 'المبيعات' } },
+  { key: 'scheduling', icon: 'calendar', label: { en: 'Scheduling', ar: 'الجدولة' } },
   { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
   { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
   { key: 'more', icon: 'more', label: { en: 'More', ar: 'المزيد' } },
@@ -99,12 +107,15 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   instalments: 'more',
   parents: 'people',
   payments: 'more',
-  trials: 'more',
+  trials: 'sales',
+  'new-students': 'sales',
+  'teacher-schedules': 'scheduling',
+  'student-schedules': 'scheduling',
   'teacher-profiles': 'people',
   accounts: 'people',
   stories: 'stories',
   materials: 'more',
-  schedule: 'more',
+  schedule: 'scheduling',
   tasks: 'more',
   // PD-35 B5: escalation cases, for every operator who may open or own one.
   cases: 'more',
@@ -132,6 +143,9 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   parents: '/parents',
   payments: '/payments',
   trials: '/trials',
+  'new-students': '/trials/new-students',
+  'teacher-schedules': '/teachers/schedules',
+  'student-schedules': '/schedule/students',
   tasks: '/tasks',
   dashboard: '/dashboard',
   stories: '/stories',
@@ -156,6 +170,9 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   parents: 'users',
   payments: 'tag',
   trials: 'calendar',
+  'new-students': 'users',
+  'teacher-schedules': 'calendar',
+  'student-schedules': 'calendar',
   tasks: 'tasks',
   dashboard: 'dashboard',
   stories: 'stories',
@@ -177,11 +194,11 @@ export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
 /** PD-29: the Materials library, under More. */
 export const ADMIN_MATERIALS_LABEL: Bilingual = { en: 'Materials', ar: 'المواد التعليمية' }
 
-/** PD-38: the scheduling calendar, under People. */
-export const ADMIN_SCHEDULE_LABEL: Bilingual = { en: 'Schedule', ar: 'الجدول' }
+/** PD-38: the academy's calendar, first page of Scheduling. */
+export const ADMIN_SCHEDULE_LABEL: Bilingual = { en: 'Academy calendar', ar: 'تقويم الأكاديمية' }
 
-/** PD-11 T4 / PD-16: trial lessons and new students, under People. */
-export const ADMIN_TRIALS_LABEL: Bilingual = { en: 'Trials & new students', ar: 'الحصص التجريبية والطلاب الجدد' }
+/** PD-11 T4 / PD-16: trial lessons, first page of Sales. */
+export const ADMIN_TRIALS_LABEL: Bilingual = { en: 'Trial lessons', ar: 'الحصص التجريبية' }
 
 /** Teacher Profile V2: the credential review queue, under People -- not "Teacher profiles",
  *  whose Arabic is Teacher files' own name. */
@@ -217,9 +234,12 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   // PD-21: Accounts, the page every staff role shares; Users stays read-only.
   { area: 'accounts', destination: 'people', label: ADMIN_ACCOUNTS_LABEL },
   // PD-38: the academy's schedule.
-  { area: 'schedule', destination: 'more', label: ADMIN_SCHEDULE_LABEL },
-  // PD-11 T4 / PD-16: trial lessons and new students.
-  { area: 'trials', destination: 'more', label: ADMIN_TRIALS_LABEL },
+  { area: 'schedule', destination: 'scheduling', label: ADMIN_SCHEDULE_LABEL },
+  { area: 'teacher-schedules', destination: 'scheduling' },
+  { area: 'student-schedules', destination: 'scheduling' },
+  // PD-11 T4 / PD-16: trial lessons and new students: Sales' workspace.
+  { area: 'trials', destination: 'sales', label: ADMIN_TRIALS_LABEL },
+  { area: 'new-students', destination: 'sales' },
   // Teacher Profile V2: the credential review queue.
   { area: 'teacher-profiles', destination: 'people', label: ADMIN_TEACHER_CREDENTIALS_LABEL },
   // PD-29: the Materials library.
@@ -265,9 +285,11 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
       label: e.label ? { text: e.label } : { message: `nav.${e.area}` },
       inDevelopment: false,
     }
-    const first = out.get(e.destination)?.[0]
-    if (e.lead) first?.entries.unshift(entry)
-    else first?.entries.push(entry)
+    // A destination with no registry section of its own (Sales, Scheduling) starts here.
+    if (!out.has(e.destination)) out.set(e.destination, [{ key: e.destination, label: null, entries: [] }])
+    const first = out.get(e.destination)![0]!
+    if (e.lead) first.entries.unshift(entry)
+    else first.entries.push(entry)
   }
   // PD-52: the two teacher-records pages (the super admin's own paths).
   for (const area of ['teacher-attendance', 'teacher-grants'] as const) {
@@ -346,6 +368,8 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
  */
 export function destinationsFor(role: StaffRole, opts: DepartmentAccess = {}): Destination[] {
   const byKey = isSuperAdmin(role) ? adminDestinations() : operatorDestinations(role, opts)
+  const all = [...byKey.values()].flatMap((gs) => gs.flatMap((g) => g.entries))
+  for (const e of all) if (all.some((o) => o.path.startsWith(`${e.path}/`))) e.exact = true
   return DESTINATIONS.filter((d) => byKey.has(d.key)).map((d) => ({ ...d, groups: byKey.get(d.key)! }))
 }
 

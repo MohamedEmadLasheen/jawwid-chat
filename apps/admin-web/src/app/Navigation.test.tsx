@@ -75,18 +75,18 @@ afterEach(() => {
 describe('The navigation registry', () => {
   it('gives each of the twenty-one sections exactly one destination, with the Dashboard under More', () => {
     const destinations = destinationsFor('super_admin')
-    expect(destinations.map((d) => d.key)).toEqual(['conversations', 'people', 'calls', 'stories', 'more'])
+    expect(destinations.map((d) => d.key)).toEqual(['conversations', 'people', 'sales', 'scheduling', 'calls', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty-one sections, plus Chat (PD-8: where the super admin replies),
     // Accounts (PD-21: where every staff role administers accounts),
     // Materials (PD-29: the library the super admin manages), the Schedule
-    // (PD-38: the academy's calendar), Trials & new students (PD-11 T4,
-    // PD-16), Teacher credentials review, Escalations (PD-35 B5) and
+    // (PD-38: the academy's calendar), Trials and New students (PD-11 T4,
+    // PD-16, now Sales), the Teachers' and Student schedules (Scheduling), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
     // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(33)
+    expect(keys).toHaveLength(36)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'trials', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
@@ -111,12 +111,16 @@ describe('The navigation registry', () => {
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
           // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
           ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
+          // Scheduling desks: the Teachers department's, on the same word as its area.
+          ...(!lessonManager && visibleAreas(role).includes('teacher-schedules') ? ['teacher-schedules', 'student-schedules'] : []),
           ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
           // PD-17: the Parent Profile follows the money's rule (GET /instalments/access).
           ...(!billingReader && visibleAreas(role).includes('parents') ? ['parents'] : []),
           // PD-27: Payments likewise.
           ...(!billingReader && visibleAreas(role).includes('payments') ? ['payments'] : []),
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
+          // New students waits for Sales or Operations (GET /lessons/access), neither asked here.
+          ...(visibleAreas(role).includes('new-students') ? ['new-students'] : []),
           // ADMIN-006: Teacher credentials waits for the Teachers department (GET /lessons/access).
           ...(!lessonManager && visibleAreas(role).includes('teacher-profiles') ? ['teacher-profiles'] : []),
           // PD-29: Materials waits for the Teachers manager (GET /materials/admin/access).
@@ -144,7 +148,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/teacher-profiles', '/schedule', '/trials', '/materials', '/cases', '/certificates', '/lesson-audio', '/moderation'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts', '/teacher-profiles', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/materials', '/cases', '/certificates', '/lesson-audio', '/moderation'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -326,7 +330,7 @@ describe('The desktop rail', () => {
     const nav = await screen.findByRole('navigation', { name: 'Admin Portal' })
     const items = [...nav.querySelectorAll('[data-destination]')]
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
-      'conversations', 'people', 'calls', 'stories', 'more',
+      'conversations', 'people', 'sales', 'scheduling', 'calls', 'stories', 'more',
     ])
     // Conversations is a menu now -- Chat and All conversations -- and it is
     // where the super admin lands.
@@ -353,9 +357,9 @@ describe('The desktop rail', () => {
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
     // 13 + Payments (PD-27) + Materials (PD-29) + Lesson audio (PD-48), and the
-    // four pages that left People until they have their own destination (Phase 2):
-    // Schedule, Trials & new students, Escalations, Certificates.
-    expect(within(menu).getAllByRole('link')).toHaveLength(21)
+    // Escalations and Certificates, which left People until Operations exists
+    // (Phase 2); Schedule and Trials moved to Scheduling and Sales (Phase 3).
+    expect(within(menu).getAllByRole('link')).toHaveLength(19)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -507,12 +511,14 @@ describe('The drawer, below desktop width', () => {
     expect(within(more).getByRole('link', { name: 'المواد التعليمية' })).toHaveAttribute('href', '/materials')
     expect(within(nav).getAllByRole('link', { name: 'التصعيدات' })[0]).toHaveAttribute('href', '/cases')
     const people = within(nav).getByRole('group', { name: 'الأشخاص والهيكل التنظيمي' })
-    expect(within(more).getByRole('link', { name: 'الحصص التجريبية والطلاب الجدد' })).toHaveAttribute('href', '/trials')
+    const sales = within(nav).getByRole('group', { name: 'المبيعات' })
+    expect(within(sales).getByRole('link', { name: 'الحصص التجريبية' })).toHaveAttribute('href', '/trials')
+    expect(within(sales).getByRole('link', { name: 'الطلاب الجدد' })).toHaveAttribute('href', '/trials/new-students')
     expect(within(people).getByRole('link', { name: 'مراجعة مؤهلات المعلمين' })).toHaveAttribute('href', '/teacher-profiles')
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(33)
+    expect(within(nav).getAllByRole('link')).toHaveLength(36)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

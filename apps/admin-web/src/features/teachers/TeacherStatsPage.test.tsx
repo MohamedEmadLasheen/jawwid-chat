@@ -125,7 +125,7 @@ describe('who is offered the page', () => {
     on(/\/lessons\/access$/, () => json({ lessonManager: true }))
     const { unmount } = renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'admin' }), route: '/' })
     const nav = await screen.findByRole('navigation', { name: 'Jawwid Operations' })
-    expect(await within(nav).findByRole('link', { name: /^Teachers/ })).toHaveAttribute('href', '/teachers')
+    expect(await within(nav).findByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/teachers')
     unmount()
 
     routes = routes.filter(([p]) => !p.test('/lessons/access'))
