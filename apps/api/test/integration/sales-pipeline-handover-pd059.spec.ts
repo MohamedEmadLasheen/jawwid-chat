@@ -325,11 +325,12 @@ describe('2c. V-1: a refused Convert carries a machine-readable reason, status a
     expect([r.status, r.code, r.json.error.detail]).toEqual([409, 'COMM.SALES_LEAD_STATE', { reason: 'channel_missing' }]);
     expect(JSON.stringify(r.json)).not.toMatch(/Synthetic Parent|\+1555|example\.test/);
   });
-  it('no contact, already converted and unavailable carry their reasons too', async () => {
+  it('already converted carries its reason; unavailable stays the intake own refusal', async () => {
     const a = await http('manager', 'POST', `/sales-pipeline/leads/${linkedAlready}/convert`, {});
     expect([a.status, a.json.error.detail]).toEqual([409, { reason: 'already_converted' }]);
     const u = await http('repA', 'POST', `/sales-pipeline/leads/${handEntered}/convert`, {});
-    expect([u.status, u.code, u.json.error.detail]).toEqual([409, 'COMM.PARENT_EXISTS', { reason: 'unavailable' }]);
+    // the intake's own refusal is unchanged: its code says it, and it carries no detail about the family
+    expect([u.status, u.code, u.json.error.detail]).toEqual([409, 'COMM.PARENT_EXISTS', undefined]);
   });
 });
 

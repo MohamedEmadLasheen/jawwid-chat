@@ -489,6 +489,8 @@ export class SalesPipelineService {
     const refuse = (outcome: string, err: CommError): never => {
       refusal = outcome;
       // The same code, message and status as ever; `detail.reason` is the audited outcome, so the page can word it in its own language.
+      // The intake's own refusal (PARENT_EXISTS) stays exactly as it was: it says nothing at all about the family.
+      if (err.code === CommErrorCode.PARENT_EXISTS) throw err;
       throw new CommError(err.code, err.message, err.status, { ...err.detail, reason: outcome });
     };
     try {
