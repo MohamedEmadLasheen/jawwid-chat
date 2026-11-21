@@ -147,6 +147,7 @@ export const UNGATED_WRITES: Readonly<Record<string, string>> = {
   'POST /me/account/deletion-request/cancel': 'cancelling the caller’s own account deletion request is never gated (§7.4)',
   'POST /sales-pipeline/leads': 'Sales pipeline kept by staff (PD-59); not content families see',
   'POST /sales-pipeline/leads/:leadId': 'Sales pipeline kept by staff (PD-59); not content families see',
+  'POST /sales-pipeline/leads/:leadId/owner': 'Sales pipeline kept by staff (PD-59); not content families see',
   'POST /sales-pipeline/leads/:leadId/contacted': 'Sales pipeline kept by staff (PD-59); not content families see',
   'POST /sales-pipeline/leads/:leadId/convert': 'Sales pipeline kept by staff (PD-59); not content families see',
   'POST /teacher-files/:teacherId/deletion-request/complete': 'staff offboarding action (teachers.offboard); creates no content others see',

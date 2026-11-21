@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SalesPipelineController } from './sales-pipeline.controller';
 import { SalesPipelineService } from './sales-pipeline.service';
+import { SalesLeadRetentionService } from './lead-retention.service';
 
 /**
  * PD-59: the Sales pipeline. The ONLY module that may read chat.sales_lead_contact,
@@ -10,6 +11,7 @@ import { SalesPipelineService } from './sales-pipeline.service';
  */
 @Module({
   controllers: [SalesPipelineController],
-  providers: [SalesPipelineService],
+  providers: [SalesPipelineService, SalesLeadRetentionService],
+  exports: [SalesLeadRetentionService],
 })
 export class SalesPipelineModule {}

@@ -92,6 +92,7 @@ export function SalesPipelinePage() {
                     <tr>
                       <th scope="col">{tx(P.lead)}</th>
                       <th scope="col">{tx(P.stage)}</th>
+                      <th scope="col">{tx(P.owner)}</th>
                       <th scope="col">{tx(P.lastContacted)}</th>
                       <th scope="col">{tx(P.nextFollowUp)}</th>
                       <th scope="col">{tx(P.channels)}</th>
@@ -137,6 +138,7 @@ function LeadRowView({ row, onOpen }: { row: LeadRow; onOpen: () => void }) {
         <Badge tone={stage.tone} dot>{tx(stage.label)}</Badge>
         {row.stage === 'lost' && row.lostReason && <span className="ts-muted sp-reason"> {lostText(row.lostReason, locale)}</span>}
       </td>
+      <td dir="auto">{row.owner?.name || <span className="ts-muted">{tx(P.unassigned)}</span>}</td>
       <td>{row.lastContactedAt ? <time dateTime={row.lastContactedAt}>{formatWhen(row.lastContactedAt, locale)}</time> : <span className="ts-muted">{tx(P.never)}</span>}</td>
       <td>
         {row.nextFollowUpOn ? (

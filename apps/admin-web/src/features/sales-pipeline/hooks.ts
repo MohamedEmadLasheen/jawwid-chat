@@ -3,6 +3,16 @@ import { trialKeys } from '@/features/trials/api'
 import { profileKeys } from '@/features/profiles/api'
 import { pipelineApi, pipelineKeys, type CreateLeadInput, type LeadDetail, type LeadQuery, type UpdateLeadInput } from './api'
 
+/** What the page may offer (the server decides every call again): a manager or the super admin may reassign. */
+export function usePipelineAccess() {
+  return useQuery({ queryKey: pipelineKeys.access, queryFn: pipelineApi.access, staleTime: 5 * 60_000, retry: false })
+}
+
+/** The Sales staff a lead may be assigned to; asked only by someone who may assign. */
+export function useOwners(enabled: boolean) {
+  return useQuery({ queryKey: pipelineKeys.owners, queryFn: pipelineApi.owners, enabled, staleTime: 60_000, retry: false })
+}
+
 export function useLeads(query: LeadQuery) {
   return useQuery({
     queryKey: pipelineKeys.list(query),
@@ -54,6 +64,11 @@ export function useCreateLead() {
 export function useUpdateLead(id: string) {
   const refresh = useRefresh()
   return useMutation({ ...NO_CACHE, mutationFn: (b: UpdateLeadInput) => pipelineApi.update(id, b), onSuccess: (lead) => refresh(lead) })
+}
+
+export function useReassign(id: string) {
+  const refresh = useRefresh()
+  return useMutation({ ...NO_CACHE, mutationFn: (ownerId: string) => pipelineApi.reassign(id, ownerId), onSuccess: (lead) => refresh(lead) })
 }
 
 export function useMarkContacted(id: string) {

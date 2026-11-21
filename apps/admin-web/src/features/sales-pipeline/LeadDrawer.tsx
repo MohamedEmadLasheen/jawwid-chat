@@ -10,7 +10,7 @@ import { useIntakeOptions } from '@/features/intake/hooks'
 import { LOST_REASONS, type LeadContact, type LeadDetail, type LostReason } from './api'
 import { ContactFields, contactInput, contactValid, emptyContact, type ContactDraft } from './ContactFields'
 import { LOST, P, STAGE, describePipelineError, lostText } from './copy'
-import { useConvertLead, useLead, useMarkContacted, useUpdateLead } from './hooks'
+import { useConvertLead, useLead, useMarkContacted, useOwners, usePipelineAccess, useReassign, useUpdateLead } from './hooks'
 
 const draftOf = (c: LeadContact | null): ContactDraft =>
   c ? { parentName: c.parentName, phone: c.phone ?? '', whatsapp: c.whatsapp ?? '', email: c.email ?? '', country: c.country ?? '' } : emptyContact()
@@ -41,6 +41,12 @@ function LeadBody({ lead }: { lead: LeadDetail }) {
   const update = useUpdateLead(lead.id)
   const contacted = useMarkContacted(lead.id)
   const convert = useConvertLead(lead.id)
+  const reassign = useReassign(lead.id)
+  const access = usePipelineAccess()
+  // Only the Sales manager and the super admin assign; the server refuses everyone else again.
+  const mayAssign = access.data?.standing === 'sales_manager' || access.data?.standing === 'super_admin'
+  const owners = useOwners(mayAssign)
+  const [newOwner, setNewOwner] = useState('')
   const intake = useIntakeOptions()
   const [followUp, setFollowUp] = useState(lead.nextFollowUpOn ?? '')
   const [followUpNote, setFollowUpNote] = useState(lead.followUpNote ?? '')
@@ -52,7 +58,7 @@ function LeadBody({ lead }: { lead: LeadDetail }) {
   // What the family intake starts with, kept while it is open: converting links the lead and removes its own copy of the contact.
   const [handing, setHanding] = useState<IntakePrefill | null>(null)
 
-  const error = update.error ?? contacted.error ?? convert.error
+  const error = update.error ?? contacted.error ?? convert.error ?? reassign.error
   const stage = STAGE[lead.stage]
 
   const doConvert = () => {
@@ -87,6 +93,29 @@ function LeadBody({ lead }: { lead: LeadDetail }) {
         {lead.convertedAt && <Badge tone="ok">{tx(P.handedOver)}</Badge>}
       </div>
       {!lead.manualStage && lead.stage !== 'converted' && <p className="field__hint">{tx(P.stageDerived)}</p>}
+      <p className="sp-line">
+        <span className="sp-line__label">{tx(P.owner)}</span>
+        <span dir="auto">{lead.owner?.name || tx(P.unassigned)}</span>
+      </p>
+      {mayAssign && (
+        <div className="field">
+          <label className="field__label" htmlFor={`${uid}-owner`}>{tx(P.reassign)}</label>
+          <div className="sp-actions sp-actions--wrap">
+            <SearchableSelect id={`${uid}-owner`} className="input" value={newOwner} clearable={false} onValueChange={(v) => setNewOwner(v)}>
+              <option value="">{tx(P.chooseOwner)}</option>
+              {(owners.data?.owners ?? []).filter((o) => o.id !== lead.owner?.id).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </SearchableSelect>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={!newOwner || reassign.isPending}
+              onClick={() => reassign.mutate(newOwner, { onSuccess: () => { setNewOwner(''); setMessage(tx(P.reassignDone)) } })}
+            >
+              {tx(P.reassign)}
+            </button>
+          </div>
+        </div>
+      )}
       {lead.level && <p className="ts-muted" dir="auto">{lead.level}</p>}
       {lead.note && <p dir="auto">{lead.note}</p>}
       {lead.trial && (

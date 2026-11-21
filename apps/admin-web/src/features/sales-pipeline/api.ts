@@ -19,8 +19,15 @@ export interface ContactPresence {
   email: boolean
 }
 
+/** The Sales representative a lead is assigned to. */
+export interface LeadOwner {
+  id: string
+  name: string
+}
+
 export interface LeadRow {
   id: string
+  owner: LeadOwner | null
   displayName: string
   level: string | null
   stage: Stage
@@ -57,6 +64,7 @@ export interface LeadContact {
 
 export interface LeadDetail {
   id: string
+  owner: LeadOwner | null
   displayName: string
   level: string | null
   note: string | null
@@ -91,6 +99,8 @@ export interface CreateLeadInput {
   contact?: ContactInput
   nextFollowUpOn?: string | null
   followUpNote?: string | null
+  /** The Sales manager (or the super admin) assigns another representative; left out, the creator owns it. */
+  ownerId?: string
 }
 
 export interface UpdateLeadInput {
@@ -115,8 +125,12 @@ export interface LeadQuery {
   offset?: number
 }
 
+export type PipelineStanding = 'super_admin' | 'sales_manager' | 'sales_member'
+
 export const pipelineKeys = {
   all: ['sales-pipeline'] as const,
+  access: ['sales-pipeline', 'access'] as const,
+  owners: ['sales-pipeline', 'owners'] as const,
   list: (q: LeadQuery) => ['sales-pipeline', 'leads', q] as const,
   detail: (id: string) => ['sales-pipeline', 'lead', id] as const,
 }
@@ -124,6 +138,9 @@ export const pipelineKeys = {
 const enc = (id: string) => encodeURIComponent(id)
 
 export const pipelineApi = {
+  access: () => api.get<{ allowed: boolean; standing: PipelineStanding | null }>('/sales-pipeline/access'),
+  owners: () => api.get<{ owners: Array<{ id: string; name: string; role: string }> }>('/sales-pipeline/owners'),
+  reassign: (id: string, ownerId: string) => api.post<LeadDetail>(`/sales-pipeline/leads/${enc(id)}/owner`, { ownerId }),
   list: (q: LeadQuery) => {
     const query: Record<string, string> = {}
     if (q.stage) query.stage = q.stage

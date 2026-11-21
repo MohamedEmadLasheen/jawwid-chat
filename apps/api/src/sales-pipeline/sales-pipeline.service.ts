@@ -87,6 +87,11 @@ function verdictError(v: Extract<TransitionVerdict, { ok: false }>): CommError {
   }
 }
 
+function uuidField(v: unknown, key: string): string {
+  if (typeof v !== 'string' || !isUuid(v)) throw new LeadInputError(`${key}: a staff id`);
+  return v;
+}
+
 const day = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 const dayDate = (s: string | null | undefined): Date | null | undefined => (s === undefined ? undefined : s === null ? null : new Date(`${s}T00:00:00Z`));
 
@@ -96,7 +101,13 @@ interface Caller {
   standing: LeadStanding;
 }
 
+/** The Sales manager and the super admin reach every lead of the academy; a Sales representative only their own. */
+const reachesAll = (c: Caller): boolean => c.standing !== 'sales_member';
+/** The part of every lead query that keeps a representative to their own leads (nothing for the others). */
+const ownScope = (c: Caller): { ownerStaffId?: string } => (reachesAll(c) ? {} : { ownerStaffId: c.staffId });
+
 interface Facts {
+  ownerStaffId: string | null;
   id: string;
   displayName: string;
   level: string | null;
@@ -201,11 +212,11 @@ export class SalesPipelineService {
     const now = new Date();
 
     const prospects = await this.prisma.trialProspect.findMany({
-      where: { organizationId: c.organizationId },
+      where: { organizationId: c.organizationId, ...ownScope(c) },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: PIPELINE_SCAN_LIMIT,
       select: {
-        id: true, displayName: true, level: true, createdAt: true,
+        id: true, displayName: true, level: true, createdAt: true, ownerStaffId: true,
         pipelineStage: true, lostReason: true, lastContactedAt: true, nextFollowUpOn: true, followUpNote: true,
         convertedAt: true, convertedFamilyId: true,
         lessons: {
@@ -215,6 +226,7 @@ export class SalesPipelineService {
       },
     });
     const presence = await this.presence(c.organizationId);
+    const owners = await this.staffNames(prospects.flatMap((p) => (p.ownerStaffId ? [p.ownerStaffId] : [])));
     const lessonIds = prospects.flatMap((p) => p.lessons.map((l) => l.id));
     const enrolled = new Set(
       lessonIds.length === 0
@@ -247,6 +259,7 @@ export class SalesPipelineService {
         createdAt: p.createdAt.toISOString(),
         handedOver: p.convertedAt !== null || p.lessons.some((l) => enrolled.has(l.id)),
         contact: presence.get(p.id) ?? NO_CONTACT,
+        owner: p.ownerStaffId ? { id: p.ownerStaffId, name: owners.get(p.ownerStaffId) ?? '' } : null,
       };
     });
     const matched = rows.filter((r) => matchesFilter(r, filter, today));
@@ -284,7 +297,8 @@ export class SalesPipelineService {
         reason: 'a lead\'s contact details were read (PD-59)',
       });
     }
-    return this.detail(f, derived, contact, await this.today());
+    const ownerName = f.ownerStaffId ? ((await this.staffNames([f.ownerStaffId])).get(f.ownerStaffId) ?? null) : null;
+    return this.detail(f, derived, contact, await this.today(), ownerName);
   }
 
   // ------------------------------------------------------------------
@@ -302,13 +316,19 @@ export class SalesPipelineService {
       const followUpNote = optText(body.followUpNote, 'followUpNote', 1000) ?? null;
       const contact = body.contact === undefined || body.contact === null ? null : parseContact(body.contact);
       if (contact) mergeContact(null, contact);
-      return { displayName, level, note, nextFollowUpOn, followUpNote, contact };
+      const ownerId = body.ownerId === undefined || body.ownerId === null ? null : uuidField(body.ownerId, 'ownerId');
+      return { displayName, level, note, nextFollowUpOn, followUpNote, contact, ownerId };
     });
+    // The creator owns the lead unless the Sales manager (or the super admin) names another representative.
+    if (input.ownerId && input.ownerId !== c.staffId && !reachesAll(c)) throw denied();
+    const ownerId = input.ownerId ?? c.staffId;
     const created = await this.prisma.$transaction(async (tx) => {
+      await this.requireEligibleOwner(tx, c, ownerId);
       const p = await tx.trialProspect.create({
         data: {
           organizationId: c.organizationId, displayName: input.displayName, level: input.level, note: input.note, createdBy: c.staffId,
           pipelineStage: 'new_lead', nextFollowUpOn: dayDate(input.nextFollowUpOn) ?? null, followUpNote: input.followUpNote,
+          ownerStaffId: ownerId, lastActivityAt: new Date(),
         },
       });
       // A booking reads its students from here (as TrialService.createProspect writes it).
@@ -326,7 +346,7 @@ export class SalesPipelineService {
       }
       await this.audit.audit(tx, {
         actorId: c.staffId, action: 'sales_lead.created', entity: 'trial_prospect', entityId: p.id,
-        after: { displayName: input.displayName, stage: 'new_lead', contact: input.contact ? contactFieldNames(input.contact) : [] },
+        after: { displayName: input.displayName, stage: 'new_lead', ownerId, contact: input.contact ? contactFieldNames(input.contact) : [] },
         reason: 'lead recorded (PD-59)',
       });
       return this.readIn(tx, c, p.id, false);
@@ -371,10 +391,11 @@ export class SalesPipelineService {
       }
       if (input.nextFollowUpOn !== undefined) { data.nextFollowUpOn = dayDate(input.nextFollowUpOn); changed.push('nextFollowUpOn'); }
       if (input.followUpNote !== undefined) { data.followUpNote = input.followUpNote; changed.push('followUpNote'); }
-      if (Object.keys(data).length > 0) await tx.trialProspect.update({ where: { id: leadId }, data });
-
       let contactFields: string[] = [];
       if (input.contact) contactFields = await this.writeContact(tx, c, f, input.contact);
+      // Meaningful activity (stage, follow-up or contact edit) moves the retention clock; a read never does.
+      if (Object.keys(data).length > 0 || contactFields.length > 0) data.lastActivityAt = now;
+      if (Object.keys(data).length > 0) await tx.trialProspect.update({ where: { id: leadId }, data });
 
       if (moved) {
         await this.audit.audit(tx, {
@@ -424,6 +445,7 @@ export class SalesPipelineService {
         where: { id: leadId },
         data: {
           lastContactedAt: now,
+          lastActivityAt: now,
           ...(next ? { pipelineStage: next.pipelineStage, lostReason: next.lostReason } : {}),
           ...(input.nextFollowUpOn !== undefined ? { nextFollowUpOn: dayDate(input.nextFollowUpOn) } : {}),
           ...(input.followUpNote !== undefined ? { followUpNote: input.followUpNote } : {}),
@@ -585,6 +607,60 @@ export class SalesPipelineService {
   }
 
   // ------------------------------------------------------------------
+  // Ownership
+  // ------------------------------------------------------------------
+
+  /** The Sales staff a lead may be assigned to (manager and super admin only): live members and managers of Sales. */
+  async owners(actorId: string) {
+    const c = await this.caller(actorId);
+    if (!reachesAll(c)) throw denied();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; role: string }>>`
+      SELECT s.id::text AS id, s.name, chat.sales_department_role(s.id) AS role
+        FROM chat.staff s
+       WHERE s.organization_id = ${c.organizationId}::uuid AND s.is_active AND s.left_at IS NULL
+         AND chat.sales_department_role(s.id) IS NOT NULL
+       ORDER BY s.name, s.id`;
+    return { owners: rows.map((r) => ({ id: r.id, name: r.name, role: r.role })) };
+  }
+
+  /**
+   * { ownerId } -- the Sales manager (or the super admin) moves a lead to another representative. A
+   * representative cannot; the new owner must be live Sales staff (the database checks it again).
+   * Audited: who, from, to -- never a contact value. Counts as meaningful activity.
+   */
+  async reassign(actorId: string, leadId: string, body: Record<string, unknown>) {
+    const c = await this.caller(actorId);
+    if (!reachesAll(c)) throw denied();
+    this.requireId(leadId);
+    const ownerId = parsed(() => uuidField(body.ownerId, 'ownerId'));
+    return this.prisma.$transaction(async (tx) => {
+      const f = await this.lockedFacts(tx, c, leadId);
+      await this.requireEligibleOwner(tx, c, ownerId);
+      if (f.ownerStaffId !== ownerId) {
+        await tx.trialProspect.update({ where: { id: leadId }, data: { ownerStaffId: ownerId, lastActivityAt: new Date() } });
+        await this.audit.audit(tx, {
+          actorId: c.staffId, action: 'sales_lead.reassigned', entity: 'trial_prospect', entityId: leadId,
+          before: { ownerId: f.ownerStaffId }, after: { ownerId }, reason: 'lead reassigned by the Sales manager (PD-59)',
+        });
+      }
+      return this.readIn(tx, c, leadId, false);
+    });
+  }
+
+  /** An owner is live Sales staff of the academy (or the super admin): the service says so in words, the database again. */
+  private async requireEligibleOwner(tx: Tx, c: Caller, ownerId: string): Promise<void> {
+    const [row] = await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.sales_lead_owner_eligible(${ownerId}::uuid, ${c.organizationId}::uuid) AS ok`;
+    if (row?.ok !== true) throw invalid('ownerId: live Sales staff of this academy');
+  }
+
+  private async staffNames(ids: string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await this.prisma.staff.findMany({ where: { id: { in: unique } }, select: { id: true, name: true } });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
+  // ------------------------------------------------------------------
   // Internals
   // ------------------------------------------------------------------
 
@@ -615,9 +691,10 @@ export class SalesPipelineService {
 
   private async facts(tx: Tx, c: Caller, leadId: string): Promise<Facts> {
     const p = await tx.trialProspect.findFirst({
-      where: { id: leadId, organizationId: c.organizationId },
+      // A representative asking for another's lead gets the answer for a lead that does not exist.
+      where: { id: leadId, organizationId: c.organizationId, ...ownScope(c) },
       select: {
-        id: true, displayName: true, level: true, note: true, createdAt: true,
+        id: true, displayName: true, level: true, note: true, createdAt: true, ownerStaffId: true,
         pipelineStage: true, lostReason: true, lastContactedAt: true, nextFollowUpOn: true, followUpNote: true,
         convertedAt: true, convertedFamilyId: true,
         lessons: { where: { kind: 'trial' }, select: { id: true, startsAt: true, outcome: true, trialOutcome: { select: { result: true, reasonCode: true } } } },
@@ -625,7 +702,7 @@ export class SalesPipelineService {
     });
     if (!p) throw notFound();
     return {
-      id: p.id, displayName: p.displayName, level: p.level, note: p.note, createdAt: p.createdAt,
+      id: p.id, displayName: p.displayName, level: p.level, note: p.note, createdAt: p.createdAt, ownerStaffId: p.ownerStaffId,
       pipelineStage: asStored(p.pipelineStage), lostReason: p.lostReason, lastContactedAt: p.lastContactedAt,
       nextFollowUpOn: day(p.nextFollowUpOn), followUpNote: p.followUpNote, convertedAt: p.convertedAt, convertedFamilyId: p.convertedFamilyId,
       trials: p.lessons.map(trialFact), trialLessonIds: p.lessons.map((l) => l.id),
@@ -635,7 +712,9 @@ export class SalesPipelineService {
   /** The lead's facts under a row lock, so two changes to one lead are decided one after the other. */
   private async lockedFacts(tx: Tx, c: Caller, leadId: string): Promise<Facts> {
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id::text AS id FROM chat.trial_prospect WHERE id = ${leadId}::uuid AND organization_id = ${c.organizationId}::uuid FOR UPDATE`;
+      SELECT id::text AS id FROM chat.trial_prospect
+       WHERE id = ${leadId}::uuid AND organization_id = ${c.organizationId}::uuid
+         AND (${reachesAll(c)}::boolean OR owner_staff_id = ${c.staffId}::uuid) FOR UPDATE`;
     if (locked.length === 0) throw notFound();
     return this.facts(tx, c, leadId);
   }
@@ -711,13 +790,14 @@ export class SalesPipelineService {
     return familyId;
   }
 
-  private detail(f: Facts, d: DerivedStage, contact: ContactDto | null, today: string) {
+  private detail(f: Facts, d: DerivedStage, contact: ContactDto | null, today: string, ownerName: string | null) {
     const latest = [...f.trials].sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())[0] ?? null;
     return {
       id: f.id,
       displayName: f.displayName,
       level: f.level,
       note: f.note,
+      owner: f.ownerStaffId ? { id: f.ownerStaffId, name: ownerName ?? '' } : null,
       stage: d.stage,
       lostReason: d.lostReason,
       manualStage: d.manual,

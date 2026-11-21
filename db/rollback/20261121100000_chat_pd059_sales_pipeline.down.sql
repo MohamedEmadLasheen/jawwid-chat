@@ -42,17 +42,42 @@ begin
 end;
 $$;
 
+-- Restore chat.guard_trial_student to 20261021130000's body, and drop the PD-59 retention and owner functions.
+create or replace function chat.guard_trial_student()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op <> 'INSERT' then
+    raise exception 'a trial''s students are written with the booking and never changed' using errcode = 'check_violation';
+  end if;
+  if not exists (
+    select 1 from chat.trial_prospect p where p.id = new.prospect_id and p.organization_id = new.organization_id
+  ) then
+    raise exception 'a trial student belongs to its booking''s organization' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+drop function if exists chat.purge_expired_sales_leads(integer, boolean);
+drop function if exists chat.expired_sales_leads(integer);
+
 drop trigger if exists sales_lead_contact_is_coherent on chat.sales_lead_contact;
 -- The guard refuses a delete of an unconverted lead's contact; this table is being removed whole.
 drop table if exists chat.sales_lead_contact;
 drop function if exists chat.guard_sales_lead_contact();
+drop function if exists chat.sales_lead_purging();
+drop function if exists chat.sales_lead_owner_eligible(uuid, uuid);
 
 drop index if exists chat.trial_prospect_follow_up_idx;
+drop index if exists chat.trial_prospect_owner_idx;
 alter table chat.trial_prospect
   drop constraint if exists trial_prospect_conversion_coherent,
   drop constraint if exists trial_prospect_follow_up_note_length,
   drop constraint if exists trial_prospect_lost_reason_coherent,
   drop constraint if exists trial_prospect_pipeline_stage_known,
+  drop column if exists last_activity_at,
+  drop column if exists owner_staff_id,
   drop column if exists converted_family_id,
   drop column if exists converted_at,
   drop column if exists follow_up_note,

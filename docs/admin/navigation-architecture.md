@@ -10,9 +10,9 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 | 1 | Conversations | Chat `/chat`; All conversations `/admin/conversations` (super admin); Moderation `/moderation` | role; `moderation.view` |
 | 2 | Dashboard | Dashboard `/dashboard`; Tasks `/tasks` | role |
 | 3 | People & Organization | *Staff & accounts:* Accounts `/accounts`, Users `/admin/users` · *Teachers:* Teachers `/teachers` (`/admin/teachers`), Credentials review `/teacher-profiles`, Attendance & complaints, Grants & testimonials · *Families:* Parents `/parents`, Students `/students` · *Organization:* `/organization` (`/admin/teams`) | role; `lessonManager` (Students too); `billingReader`; `teacherAttendance`/`teacherGrants` |
-| 4 | Sales | Sales pipeline `/sales/pipeline` (PD-59); Trial lessons `/trials`; New students `/trials/new-students` | `sales` (pipeline); `sales`/`operations`/`lessonManager` |
+| 4 | Sales | Sales pipeline `/sales/pipeline` (PD-59); Trial lessons `/trials`; New students `/trials/new-students` | `sales` (pipeline); `sales`/`operations` (trials, new students; a Teachers-department account's Trial lessons is listed under Operations instead) |
 | 5 | Scheduling | Academy calendar `/schedule`; Teachers' schedules `/teachers/schedules`; Student schedules `/schedule/students` | `calendar`; `lessonManager` |
-| 6 | Operations | Needs action `/teachers/needs-action`; Materials; Escalations `/cases`; Certificates; Lesson audio | `lessonManager`; `materialsManager`; role; `certificates`; `lessonAudio` |
+| 6 | Operations | Trial lessons `/trials` (only for a Teachers-department account that is neither Sales nor Operations); Needs action `/teachers/needs-action`; Materials; Escalations `/cases`; Certificates; Lesson audio | `lessonManager`; `materialsManager`; role; `certificates`; `lessonAudio` |
 | 7 | Finance | Instalments `/instalments`; Payments `/payments` | `billingReader` |
 | 8 | Communication | Stories `/stories`; Calls `/calls`; Notifications*, WhatsApp* | role |
 | 9 | Admin & Settings | *Reports & quality:* Reports & analytics, Quality*, Academy operations*, Forms* · *System:* Approvals*, Integrations*, Audit log*, System settings* | super admin |
@@ -64,4 +64,13 @@ contact table before conversion.
   audited with its outcome code (`sales_lead.converted | convert_attempted | convert_refused`), never a value. The
   database also refuses a `converted_family_id` from another organization.
 
-Open (owner): retention of the contact of a lead that is never converted (no purge is built yet).
+**The Sales icon (owner decision 2026-11-21).** It is offered only to accounts the server confirms as `sales`
+(representative or manager -- `GET /lessons/access` does not tell them apart; the pipeline's own `GET
+/sales-pipeline/access` does), `operations`, and the super admin. A Teachers-department account (`lessonManager` only)
+has no Sales icon and no Sales workspace, but keeps its Trial lessons page (`/trials`, same route) listed under
+**Operations**. The server enforces it: every `/sales-pipeline` call refuses a caller who is not Sales or the super admin.
+
+**Ownership.** A representative sees and works only the leads assigned to them; the Sales manager sees all and
+reassigns; the super admin has full access (enforced in the service on every read path and by a database guard on the
+owner; see PD-59). **Retention:** 12 months after the last meaningful activity an unconverted lead's contact and notes
+are deleted by an audited, switched-off-by-default worker job (see PD-59).

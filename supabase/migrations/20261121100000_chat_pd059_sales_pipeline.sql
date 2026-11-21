@@ -34,7 +34,13 @@ alter table chat.trial_prospect
   add column if not exists next_follow_up_on   date,
   add column if not exists follow_up_note      text,
   add column if not exists converted_at        timestamptz,
-  add column if not exists converted_family_id uuid references chat.family (id);
+  add column if not exists converted_family_id uuid references chat.family (id),
+  -- Ownership: the Sales representative a lead is assigned to (a rep reaches only their own leads;
+  -- the Sales manager and the super admin reach all). Null on a prospect that existed before PD-59.
+  add column if not exists owner_staff_id      uuid references chat.staff (id),
+  -- The retention clock: the last MEANINGFUL activity on the lead (created, contacted, stage change,
+  -- follow-up change, contact edit, reassignment). Written by the API; a read never moves it.
+  add column if not exists last_activity_at    timestamptz;
 
 do $$
 begin
@@ -58,9 +64,39 @@ begin
 end
 $$;
 
+create index if not exists trial_prospect_owner_idx
+  on chat.trial_prospect (organization_id, owner_staff_id)
+  where owner_staff_id is not null;
+
 create index if not exists trial_prospect_follow_up_idx
   on chat.trial_prospect (organization_id, next_follow_up_on)
   where next_follow_up_on is not null;
+
+-- ---------------------------------------------------------------------------
+-- Who may own a lead
+-- ---------------------------------------------------------------------------
+
+-- A live member or manager of the organization's Sales department, or its super admin.
+create or replace function chat.sales_lead_owner_eligible(p_staff uuid, p_org uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select exists (
+    select 1 from chat.staff s
+     where s.id = p_staff and s.organization_id = p_org and s.is_active and s.left_at is null
+       and (s.role = 'super_admin' or chat.sales_department_role(s.id) is not null));
+$$;
+
+-- True only inside chat.purge_expired_sales_leads (a transaction-local setting, and only for a server-side caller).
+create or replace function chat.sales_lead_purging()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(current_setting('chat.sales_lead_purge', true), '') = 'on' and chat.caller_is_server_side();
+$$;
 
 -- ---------------------------------------------------------------------------
 -- The hand-over stays inside the organization
@@ -81,13 +117,18 @@ begin
     if new.converted_family_id is not null then
       raise exception 'a prospect is linked to a family only by its hand-over' using errcode = 'check_violation';
     end if;
+    if new.owner_staff_id is not null and not chat.sales_lead_owner_eligible(new.owner_staff_id, new.organization_id) then
+      raise exception 'a lead is owned by live Sales staff of its organization' using errcode = 'check_violation';
+    end if;
     return new;
   end if;
   -- UPDATE: the one change is the link to the learner Core created, made once,
   -- by the confirmation (server side).
-  if (new.id, new.organization_id, new.display_name, new.level, new.note, new.created_by, new.created_at)
+  -- The retention purge (chat.purge_expired_sales_leads) may clear the free-text note, and nothing else of these.
+  if (new.id, new.organization_id, new.display_name, new.level, new.created_by, new.created_at)
      is distinct from
-     (old.id, old.organization_id, old.display_name, old.level, old.note, old.created_by, old.created_at) then
+     (old.id, old.organization_id, old.display_name, old.level, old.created_by, old.created_at)
+     or (new.note is distinct from old.note and not (chat.sales_lead_purging() and new.note is null)) then
     raise exception 'a prospect is not rewritten' using errcode = 'check_violation';
   end if;
   if new.learner_id is distinct from old.learner_id then
@@ -104,6 +145,11 @@ begin
     if not exists (select 1 from chat.family f where f.id = new.converted_family_id and f.organization_id = new.organization_id) then
       raise exception 'a lead is handed over to a family of its organization' using errcode = 'insufficient_privilege';
     end if;
+  end if;
+  -- PD-59: an owner is live Sales staff of the lead's organization (checked when it is set or changed).
+  if new.owner_staff_id is distinct from old.owner_staff_id and new.owner_staff_id is not null
+     and not chat.sales_lead_owner_eligible(new.owner_staff_id, new.organization_id) then
+    raise exception 'a lead is owned by live Sales staff of its organization' using errcode = 'check_violation';
   end if;
   return new;
 end;
@@ -140,9 +186,10 @@ set search_path = chat, pg_temp
 as $$
 begin
   if tg_op = 'DELETE' then
-    -- Only after the hand-over: the family's own record holds the contact now.
-    if not exists (select 1 from chat.trial_prospect p where p.id = old.prospect_id and p.converted_at is not null) then
-      raise exception 'a lead''s contact is deleted only when the lead is converted' using errcode = 'check_violation';
+    -- After the hand-over (the family's own record holds the contact now), or by the retention purge.
+    if not exists (select 1 from chat.trial_prospect p where p.id = old.prospect_id and p.converted_at is not null)
+       and not chat.sales_lead_purging() then
+      raise exception 'a lead''s contact is deleted only when the lead is converted or its retention has run out' using errcode = 'check_violation';
     end if;
     return old;
   end if;
@@ -184,3 +231,98 @@ create trigger sales_lead_contact_is_coherent
 alter table chat.sales_lead_contact enable row level security;
 revoke all on chat.sales_lead_contact from public, anon, authenticated, chat_app;
 revoke all on function chat.guard_sales_lead_contact() from public;
+
+-- ---------------------------------------------------------------------------
+-- Retention: 12 months after the last meaningful activity
+-- ---------------------------------------------------------------------------
+
+-- chat.trial_student is "never changed" (20261021130000). The retention purge may clear a student's
+-- free-text note, and nothing else; every other rule of the guard is kept.
+create or replace function chat.guard_trial_student()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'UPDATE' and chat.sales_lead_purging() and new.note is null
+     and (new.id, new.prospect_id, new.organization_id, new.position, new.display_name, new.level, new.created_at)
+         is not distinct from (old.id, old.prospect_id, old.organization_id, old.position, old.display_name, old.level, old.created_at) then
+    return new;
+  end if;
+  if tg_op <> 'INSERT' then
+    raise exception 'a trial''s students are written with the booking and never changed' using errcode = 'check_violation';
+  end if;
+  if not exists (
+    select 1 from chat.trial_prospect p where p.id = new.prospect_id and p.organization_id = new.organization_id
+  ) then
+    raise exception 'a trial student belongs to its booking''s organization' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+-- The leads whose personal data has outlived its purpose: not converted, no meaningful activity for 12
+-- months (the later of the lead's own last activity and its latest trial), and still holding a contact
+-- row or a free-text note. Reads, views and analytics never count as activity.
+create or replace function chat.expired_sales_leads(p_limit integer)
+returns table (prospect_id uuid, organization_id uuid)
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select p.id, p.organization_id
+    from chat.trial_prospect p
+   where p.converted_at is null
+     and greatest(
+           coalesce(p.last_activity_at, p.created_at),
+           (select max(l.created_at) from chat.lesson l where l.prospect_id = p.id),
+           (select max(l.ends_at) from chat.lesson l where l.prospect_id = p.id)
+         ) < now() - interval '12 months'
+     and (exists (select 1 from chat.sales_lead_contact c where c.prospect_id = p.id)
+          or p.note is not null or p.follow_up_note is not null
+          or exists (select 1 from chat.trial_student t where t.prospect_id = p.id and t.note is not null))
+   order by p.created_at, p.id
+   limit greatest(p_limit, 0);
+$$;
+
+-- Deletes the confined contact of every expired lead and clears its free-text notes (the lead's own, its
+-- follow-up note, its students' notes); the stage, the lost reason code, the timestamps and the counts
+-- stay, as analytics. One audit row per lead: its id and what was cleared, never a value. NEVER touches
+-- a family, a parent record, a contact or a learner. Dry-run (the default) only lists. Idempotent: a
+-- purged lead no longer qualifies. Returns the lead ids.
+create or replace function chat.purge_expired_sales_leads(p_limit integer default 200, p_dry_run boolean default true)
+returns setof uuid
+language plpgsql
+set search_path = chat, pg_temp
+as $$
+declare
+  r record;
+  v_contact integer;
+  v_notes boolean;
+begin
+  for r in select * from chat.expired_sales_leads(p_limit) loop
+    if p_dry_run then
+      return next r.prospect_id;
+      continue;
+    end if;
+    perform set_config('chat.sales_lead_purge', 'on', true);
+    delete from chat.sales_lead_contact c where c.prospect_id = r.prospect_id;
+    get diagnostics v_contact = row_count;
+    select (p.note is not null or p.follow_up_note is not null
+            or exists (select 1 from chat.trial_student t where t.prospect_id = p.id and t.note is not null))
+      into v_notes from chat.trial_prospect p where p.id = r.prospect_id;
+    update chat.trial_student t set note = null where t.prospect_id = r.prospect_id and t.note is not null;
+    update chat.trial_prospect p set note = null, follow_up_note = null where p.id = r.prospect_id;
+    perform set_config('chat.sales_lead_purge', 'off', true);
+    insert into chat.audit_log (actor_id, action, entity, entity_id, after, reason)
+    values (null, 'sales_lead.retention_purged', 'trial_prospect', r.prospect_id,
+            jsonb_build_object('contactDeleted', v_contact > 0, 'notesCleared', coalesce(v_notes, false)),
+            'retention: 12 months without meaningful activity (PD-59)');
+    return next r.prospect_id;
+  end loop;
+end;
+$$;
+
+revoke all on function chat.sales_lead_owner_eligible(uuid, uuid) from public, anon, authenticated, chat_app;
+revoke all on function chat.sales_lead_purging() from public, anon, authenticated, chat_app;
+revoke all on function chat.expired_sales_leads(integer) from public, anon, authenticated, chat_app;
+revoke all on function chat.purge_expired_sales_leads(integer, boolean) from public, anon, authenticated, chat_app;

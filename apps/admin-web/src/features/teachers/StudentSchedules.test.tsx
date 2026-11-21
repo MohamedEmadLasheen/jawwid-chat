@@ -97,7 +97,10 @@ describe('Scheduling navigation', () => {
     expect(sales({ sales: true })).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
     expect(sales({ operations: true })).toEqual(['/trials', '/trials/new-students'])
     // The Teachers department sees the teachers' trials, not the new-student set-up.
-    expect(sales({ lessonManager: true })).toEqual(['/trials'])
+    // ...nor a Sales icon: its Trial lessons page is listed under Operations (PD-59 owner decision).
+    expect(sales({ lessonManager: true })).toEqual([])
+    const ops = destinationsFor('admin', { lessonManager: true }).find((x) => x.key === 'operations')
+    expect(ops ? entriesOf(ops).map((e) => e.path) : []).toContain('/trials')
     expect(sales({})).toEqual([])
   })
 })

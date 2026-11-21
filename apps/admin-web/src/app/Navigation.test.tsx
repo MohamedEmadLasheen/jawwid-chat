@@ -207,7 +207,8 @@ describe('The nine sections', () => {
 
   it('Operations holds the supervisors\' queue, escalations, certificates, lesson audio and materials', () => {
     expect(pathsIn('operations', 'manager', { lessonManager: true, certificates: true, lessonAudio: true, materialsManager: true })).toEqual([
-      '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio',
+      // The Teachers department's Trial lessons page is listed here, not under Sales (PD-59 owner decision).
+      '/teachers/needs-action', '/trials', '/materials', '/cases', '/certificates', '/lesson-audio',
     ])
     expect(pathsIn('operations', 'admin', {})).toEqual(['/cases'])
   })

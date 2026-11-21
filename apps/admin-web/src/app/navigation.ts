@@ -379,7 +379,10 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
   const out = new Map<DestinationKey, NavEntryGroup[]>()
   // navAreas, not visibleAreas: some areas wait for the server to confirm them.
   for (const area of navAreas(role, access)) {
-    const dest = AREA_DESTINATION[area]
+    // A Teachers-department account (the server confirms `lessonManager` only: neither `sales` nor
+    // `operations`) keeps its Trial lessons page, but it is listed under Operations: the Sales icon is
+    // for Sales, Operations and the super admin.
+    const dest = area === 'trials' && access.sales !== true && access.operations !== true ? 'operations' : AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
     groups[0]!.entries.push({

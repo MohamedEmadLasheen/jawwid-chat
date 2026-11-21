@@ -22,6 +22,13 @@ export class SalesPipelineController {
     return this.pipeline.access(actorId);
   }
 
+  /** The Sales staff a lead may be assigned to (the Sales manager and the super admin only). */
+  @Requires('new_students.view')
+  @Get('owners')
+  owners(@ActorId() actorId: string) {
+    return this.pipeline.owners(actorId);
+  }
+
   /** ?stage&q&followUp=due&limit&offset -- leads with their derived stage; no contact value. */
   @Requires('new_students.view')
   @Get('leads')
@@ -43,7 +50,7 @@ export class SalesPipelineController {
     return this.pipeline.get(actorId, leadId);
   }
 
-  /** { displayName, level?, note?, contact?, nextFollowUpOn?, followUpNote? } */
+  /** { displayName, level?, note?, contact?, nextFollowUpOn?, followUpNote?, ownerId? (manager only) } */
   @Requires('new_students.manage')
   @Post('leads')
   create(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
@@ -55,6 +62,13 @@ export class SalesPipelineController {
   @Post('leads/:leadId')
   update(@ActorId() actorId: string, @Param('leadId') leadId: string, @Body() body: Record<string, unknown>) {
     return this.pipeline.update(actorId, leadId, body ?? {});
+  }
+
+  /** { ownerId } -- the Sales manager (or the super admin) reassigns a lead to another representative. */
+  @Requires('new_students.manage')
+  @Post('leads/:leadId/owner')
+  reassign(@ActorId() actorId: string, @Param('leadId') leadId: string, @Body() body: Record<string, unknown>) {
+    return this.pipeline.reassign(actorId, leadId, body ?? {});
   }
 
   /** { nextFollowUpOn?, followUpNote? } -- the lead was contacted now. */

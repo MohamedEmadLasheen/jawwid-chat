@@ -2122,6 +2122,10 @@ model TrialProspect {
   /// A hand-over made without a trial: the family the lead was linked to.
   convertedAt       DateTime? @map("converted_at") @db.Timestamptz
   convertedFamilyId String?   @map("converted_family_id") @db.Uuid
+  /// The Sales representative the lead is assigned to (null before PD-59). A rep reaches only their own leads.
+  ownerStaffId      String?   @map("owner_staff_id") @db.Uuid
+  /// The retention clock: last MEANINGFUL activity (never a read). Null = created_at.
+  lastActivityAt    DateTime? @map("last_activity_at") @db.Timestamptz
 
   lessons  Lesson[]
   students TrialStudent[]

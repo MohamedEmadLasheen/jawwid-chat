@@ -3,7 +3,8 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { ContactFields, contactInput, contactTouched, contactValid, emptyContact } from './ContactFields'
 import { P, describePipelineError } from './copy'
-import { useCreateLead } from './hooks'
+import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useCreateLead, useOwners, usePipelineAccess } from './hooks'
 
 /** New lead: the prospect's name, optionally the parent's contact and the first follow-up. */
 export function CreateLeadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
@@ -11,6 +12,10 @@ export function CreateLeadDialog({ onClose, onCreated }: { onClose: () => void; 
   const tx = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
   const uid = useId()
   const create = useCreateLead()
+  const access = usePipelineAccess()
+  const mayAssign = access.data?.standing === 'sales_manager' || access.data?.standing === 'super_admin'
+  const owners = useOwners(mayAssign)
+  const [ownerId, setOwnerId] = useState('')
   const [name, setName] = useState('')
   const [level, setLevel] = useState('')
   const [note, setNote] = useState('')
@@ -33,6 +38,7 @@ export function CreateLeadDialog({ onClose, onCreated }: { onClose: () => void; 
         ...(touched ? { contact: contactInput(contact) } : {}),
         nextFollowUpOn: followUp || null,
         followUpNote: followUpNote.trim() || null,
+        ...(mayAssign && ownerId ? { ownerId } : {}),
       },
       { onSuccess: (lead) => onCreated(lead.id) },
     )
@@ -66,6 +72,15 @@ export function CreateLeadDialog({ onClose, onCreated }: { onClose: () => void; 
         <label className="field__label" htmlFor={`${uid}-note`}>{tx(P.note)}</label>
         <textarea id={`${uid}-note`} className="input" dir="auto" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+      {mayAssign && (
+        <div className="field">
+          <label className="field__label" htmlFor={`${uid}-owner`}>{tx(P.ownerOptional)}</label>
+          <SearchableSelect id={`${uid}-owner`} className="input" value={ownerId} onValueChange={(v) => setOwnerId(v)}>
+            <option value="">{tx(P.chooseOwner)}</option>
+            {(owners.data?.owners ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </SearchableSelect>
+        </div>
+      )}
       <ContactFields value={contact} onChange={setContact} invalid={tried && touched} />
       <div className="tj-row">
         <div className="field">

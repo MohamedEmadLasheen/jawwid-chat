@@ -38,6 +38,7 @@ const SECRET_EMAIL = 'parent.one@example.com'
 
 const row = (over: Partial<LeadRow> = {}): LeadRow => ({
   id: 'lead-1',
+  owner: { id: 's-1', name: 'Rep One' },
   displayName: 'Lead Alpha',
   level: null,
   stage: 'contacted',
@@ -65,6 +66,7 @@ const PAGE: LeadPage = {
 
 const DETAIL: LeadDetail = {
   id: 'lead-1',
+  owner: { id: 's-1', name: 'Rep One' },
   displayName: 'Lead Alpha',
   level: null,
   note: null,
@@ -321,5 +323,101 @@ describe('a lead\'s panel', () => {
     await waitFor(() => expect(calls('POST', /\/family-intake$/)).toHaveLength(1))
     await waitFor(() => expect(calls('POST', /\/convert$/)).toHaveLength(2))
     expect(await screen.findByText(/already in Chat: the lead is now linked/)).toBeInTheDocument()
+  })
+})
+
+describe('who gets the Sales icon, per the server\'s answers (PD-59 owner decision)', () => {
+  const salesPaths = (role: Parameters<typeof destinationsFor>[0], access: Parameters<typeof destinationsFor>[1]) =>
+    destinationsFor(role, access).find((d) => d.key === 'sales')?.groups.flatMap((g) => g.entries.map((e) => e.path)) ?? null
+  const opsPaths = (role: Parameters<typeof destinationsFor>[0], access: Parameters<typeof destinationsFor>[1]) =>
+    destinationsFor(role, access).find((d) => d.key === 'operations')?.groups.flatMap((g) => g.entries.map((e) => e.path)) ?? []
+
+  it('the super admin: the whole Sales workspace', () => {
+    expect(salesPaths('super_admin', {})).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
+  })
+
+  it('a Sales representative or manager (the server answers `sales` for both; the pipeline itself tells them apart): pipeline, trials, new students', () => {
+    for (const role of ['admin', 'manager'] as const) {
+      expect(salesPaths(role, { sales: true, lessonManager: false }), role).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
+    }
+  })
+
+  it('Operations: trials and new students, no pipeline', () => {
+    expect(salesPaths('admin', { operations: true })).toEqual(['/trials', '/trials/new-students'])
+  })
+
+  it('the Teachers department (lessonManager only): NO Sales icon; Trial lessons stays reachable, listed under Operations', () => {
+    for (const role of ['admin', 'manager'] as const) {
+      expect(salesPaths(role, { lessonManager: true }), role).toBeNull()
+      expect(opsPaths(role, { lessonManager: true }), role).toContain('/trials')
+      expect(opsPaths(role, { lessonManager: true }), role).not.toContain('/trials/new-students')
+    }
+    // Sales or Operations on top of it keeps Trial lessons under Sales, not Operations.
+    expect(salesPaths('admin', { lessonManager: true, operations: true })).toContain('/trials')
+    expect(opsPaths('admin', { lessonManager: true, operations: true })).not.toContain('/trials')
+  })
+
+  it('the Teachers department can still open /trials by URL (nothing it had was lost)', async () => {
+    on('GET', /\/trials(\?.*)?$/, () => json({ trials: [] }))
+    on('GET', /\/trials\/prospects$/, () => json({ prospects: [] }))
+    access({ lessonManager: true })
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'td', role: 'manager' }), route: '/trials' })
+    await waitFor(() => expect(document.querySelector('.state--forbidden')).toBeNull())
+    expect(screen.queryByRole('link', { name: 'Sales pipeline' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ownership in the page', () => {
+  const manager = makeStaff({ id: 'm-1', name: 'Sales Manager', role: 'admin' })
+
+  it('shows each lead\'s owner in the list', async () => {
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+    const alpha = (await screen.findByText('Lead Alpha')).closest('tr')!
+    expect(within(alpha).getByText('Rep One')).toBeInTheDocument()
+  })
+
+  it('a representative is not offered Reassign', async () => {
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: true, standing: 'sales_member' }))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+    await user.click(await screen.findByRole('button', { name: 'Open Lead Alpha' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByText('Parent One')
+    expect(within(dialog).queryByText('Reassign to')).not.toBeInTheDocument()
+    expect(calls('GET', /\/sales-pipeline\/owners$/)).toHaveLength(0)
+  })
+
+  it('the Sales manager reassigns a lead to another representative', async () => {
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: true, standing: 'sales_manager' }))
+    on('GET', /\/sales-pipeline\/owners$/, () => json({ owners: [{ id: 's-1', name: 'Rep One', role: 'member' }, { id: 's-2', name: 'Rep Two', role: 'member' }] }))
+    on('POST', /\/sales-pipeline\/leads\/lead-1\/owner$/, () => json({ ...DETAIL, owner: { id: 's-2', name: 'Rep Two' } }))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/sales/pipeline' })
+    await user.click(await screen.findByRole('button', { name: 'Open Lead Alpha' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByText('Parent One')
+    const picker = await within(dialog).findByRole('combobox', { name: 'Reassign to' })
+    await chooseOption(user, picker, 'Rep Two')
+    await user.click(within(dialog).getByRole('button', { name: 'Reassign to' }))
+    await waitFor(() => expect(calls('POST', /\/owner$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/owner$/)[0])).toEqual({ ownerId: 's-2' })
+    expect(await within(dialog).findByText('The lead was reassigned.')).toBeInTheDocument()
+    // the answer carries the lead: no second (audited) read of the contact
+    expect(calls('GET', /\/sales-pipeline\/leads\/lead-1$/)).toHaveLength(1)
+  })
+
+  it('the manager may name the owner when creating a lead', async () => {
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: true, standing: 'sales_manager' }))
+    on('GET', /\/sales-pipeline\/owners$/, () => json({ owners: [{ id: 's-2', name: 'Rep Two', role: 'member' }] }))
+    on('POST', /\/sales-pipeline\/leads$/, () => json(DETAIL, 201))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: manager, route: '/sales/pipeline' })
+    await user.click(await screen.findByRole('button', { name: 'New lead' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/Child or prospect name/), 'Lead Delta')
+    await chooseOption(user, await within(dialog).findByRole('combobox', { name: /Owner/ }), 'Rep Two')
+    await user.click(within(dialog).getByRole('button', { name: 'Create lead' }))
+    await waitFor(() => expect(calls('POST', /\/sales-pipeline\/leads$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/sales-pipeline\/leads$/)[0])).toMatchObject({ displayName: 'Lead Delta', ownerId: 's-2' })
   })
 })

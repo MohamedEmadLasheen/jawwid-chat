@@ -10,7 +10,7 @@ Regenerate with `PD040_WRITE_ROUTE_TABLE=1 npx jest pd040-route-permissions` in 
 
 Only staff callers are checked. The service behind each route still decides department, scope and state.
 
-610 routes.
+612 routes.
 
 | Method | Route | Staff need | Handler |
 |---|---|---|---|
@@ -449,6 +449,8 @@ Only staff callers are checked. The service behind each route still decides depa
 | POST | `/api/v1/sales-pipeline/leads/:leadId` | new_students.manage | `sales-pipeline/sales-pipeline.controller.ts#SalesPipelineController.update` |
 | POST | `/api/v1/sales-pipeline/leads/:leadId/contacted` | new_students.manage | `sales-pipeline/sales-pipeline.controller.ts#SalesPipelineController.contacted` |
 | POST | `/api/v1/sales-pipeline/leads/:leadId/convert` | new_students.manage | `sales-pipeline/sales-pipeline.controller.ts#SalesPipelineController.convert` |
+| POST | `/api/v1/sales-pipeline/leads/:leadId/owner` | new_students.manage | `sales-pipeline/sales-pipeline.controller.ts#SalesPipelineController.reassign` |
+| GET | `/api/v1/sales-pipeline/owners` | new_students.view | `sales-pipeline/sales-pipeline.controller.ts#SalesPipelineController.owners` |
 | POST | `/api/v1/schedule-change-requests/:id/decide` | schedule.manage | `lessons/scheduling.controller.ts#SchedulingController.decideChange` |
 | GET | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.upcoming` |
 | POST | `/api/v1/scheduled-calls` | calls.use | `scheduled-calls/scheduled-call.controller.ts#ScheduledCallController.create` |
