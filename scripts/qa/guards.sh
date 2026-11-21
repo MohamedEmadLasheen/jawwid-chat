@@ -340,7 +340,15 @@ gate_app_spec() {
 gate_backup_client() {
   # pg_dump refuses to dump from a server newer than itself, so PG_IMAGE naming
   # a client has to outrank whatever is on PATH.
-  bash scripts/qa/check-backup-client-selection.sh
+  bash scripts/qa/check-backup-client-selection.sh || return 1
+  # LR-46 P3-12 rides on this gate (a new gate id would need a ci.yml step):
+  # production-setup.py hands DATABASE_URL to psql as PG* variables, read-only,
+  # and never echoes the password. Pure; no network, no psql.
+  if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "guards: $PYTHON not found -- the pg_env tests cannot run, so the gate FAILS"
+    return 2
+  fi
+  "$PYTHON" -I scripts/qa/check-production-setup-pg-env.py
 }
 
 gate_backup_encryption() {
