@@ -225,6 +225,51 @@ describe('The nine sections', () => {
   })
 })
 
+describe('No URL was lost in the redesign', () => {
+  const ALL = { lessonManager: true, sales: true, operations: true, billingReader: true, calendar: true, materialsManager: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true }
+
+  /** Every path this suite can render must stay where it points: not sent home, not Forbidden. */
+  async function staysPut(role: StaffRole, path: string) {
+    vi.stubGlobal('fetch', routeFetch({}))
+    const { unmount } = renderWithProviders(
+      <>
+        <AppRoutes />
+        <Where />
+      </>,
+      // The moderation queue is a permission's page, not a role's: hold its key.
+      { staff: makeStaff({ id: `staff_${role}`, name: `Synthetic ${role}`, role, permissions: ['moderation.view'] }), route: path },
+    )
+    await waitFor(() => expect(screen.getByTestId('where')).toBeInTheDocument())
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByTestId('where').textContent, `${role} ${path}`).toBe(path)
+    expect(document.querySelector('.state--forbidden'), `${role} ${path} is forbidden`).toBeNull()
+    unmount()
+  }
+
+  it('every page the rail offers a role opens on its own URL', async () => {
+    for (const role of ['super_admin', 'manager', 'admin', 'coverage', 'finance'] as const) {
+      const paths = destinationsFor(role, ALL).flatMap((d) => entriesOf(d).map((e) => e.path))
+      expect(paths.length, role).toBeGreaterThan(0)
+      expect(new Set(paths).size, `${role}: one entry per page`).toBe(paths.length)
+      for (const path of paths) await staysPut(role, path)
+    }
+  }, 60_000)
+
+  it('every URL that existed before the redesign still opens for the roles that had it', async () => {
+    const legacy = [
+      '/trials', '/trials/new-students', '/schedule', '/teachers', '/teachers/needs-action', '/teachers/schedules',
+      '/teachers/students', '/teachers/files', '/teachers/cases', '/cases', '/certificates',
+      '/lesson-audio', '/moderation', '/instalments', '/parents', '/payments', '/materials', '/tasks', '/dashboard',
+      '/stories', '/accounts', '/organization', '/calls', '/chat', '/teacher-profiles', '/teacher-attendance', '/teacher-grants',
+    ]
+    for (const path of legacy) await staysPut('manager', path)
+    // The older Supervision and Leave links keep redirecting to Attendance & complaints (PD-52).
+    // They are covered by the PD-52 tests.
+    const admin = ['/admin/conversations', '/admin/dashboard', '/admin/tasks', '/admin/reports', '/admin/teachers', '/admin/instalments', '/admin/payments', '/admin/parents', '/admin/users', '/admin/teams', '/admin/calls', '/admin/stories', '/admin/whatsapp', '/admin/audit', '/admin/settings', '/admin/teacher-attendance', '/admin/teacher-grants']
+    for (const path of admin) await staysPut('super_admin', path)
+  }, 90_000)
+})
+
 describe('Landing and deep links', () => {
   it('"/" opens each role\'s conversations, and a department\'s tasks', async () => {
     const expected: [StaffRole, string][] = [
