@@ -49,6 +49,7 @@ interface Stub {
 
 function build(stub: Stub) {
   const audits: Array<Record<string, unknown>> = [];
+  const actorSettings: Array<{ sql: string; values: unknown[] }> = [];
   const updates: Array<Record<string, unknown>> = [];
   const deleted: string[] = [];
   const filled: Array<Record<string, unknown>> = [];
@@ -58,6 +59,8 @@ function build(stub: Stub) {
   let rolledBack = 0;
   const familyKeys = stub.familyKeys ?? [];
   const tx: Record<string, unknown> = {
+    // The reassignment names its actor to the database for the task move (trigger trial_prospect_owner_moves_its_tasks).
+    $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => { actorSettings.push({ sql: strings.join('?'), values }); return 0; },
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join('?');
       if (sql.includes('FOR UPDATE')) {
@@ -136,7 +139,7 @@ function build(stub: Stub) {
   const audit = { audit: async (_t: unknown, i: Record<string, unknown>) => { audits.push(i); }, event: async () => undefined };
   const config = { get: async () => null };
   const service = new SalesPipelineService(prisma as never, config as never, audit as never);
-  return { service, audits, updates, deleted, filled, keysCreated, created, contactReads: () => contactReads, rolledBack: () => rolledBack };
+  return { service, audits, actorSettings, updates, deleted, filled, keysCreated, created, contactReads: () => contactReads, rolledBack: () => rolledBack };
 }
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -396,6 +399,7 @@ describe('ownership: who reaches which lead (PD-59)', () => {
       const lead = await t.service.reassign(ME, LEAD, { ownerId: OTHER_REP });
       expect(lead.id).toBe(LEAD);
       expect(t.updates[0]).toMatchObject({ data: expect.objectContaining({ ownerStaffId: OTHER_REP }) });
+      expect(t.actorSettings).toEqual([{ sql: expect.stringContaining('chat.sales_lead_actor'), values: [ME] }]);
       expect(t.audits).toEqual([{
         actorId: ME, action: 'sales_lead.reassigned', entity: 'trial_prospect', entityId: LEAD,
         before: { ownerId: ME }, after: { ownerId: OTHER_REP }, reason: expect.any(String),
