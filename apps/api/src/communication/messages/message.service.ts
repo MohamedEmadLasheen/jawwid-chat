@@ -1,4 +1,5 @@
 import { signActorAvatar } from '../profile/avatar-urls';
+import { trialCardScopeWhere } from './trial-card-scope';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, ConversationMember, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -331,7 +332,7 @@ export class MessageService {
     // LD-12 / MG-3: a text and a caption alike (a forward is a send, so its
     // text too), after canSend: only someone who may post here learns of it.
     await this.contentFilter.assertAllowed(actor.kind, input.body);
-    await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
+    await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null, actor);
 
     // PD-36: resolved before the transaction; a mention of anyone this sender
     // may not reach here refuses the whole send. Never on a forward.
@@ -619,8 +620,13 @@ export class MessageService {
   }
 
   /** A reply may only target a message in the same conversation. */
-  private async validateReplyTarget(conversationId: string, replyToMessageId: string | null) {
+  private async validateReplyTarget(conversationId: string, replyToMessageId: string | null, actor?: Actor) {
     if (!replyToMessageId) return;
+    // PD-59 / F7: a trial card the sender may not read cannot be replied to (it looks absent).
+    const trial = actor ? await trialCardScopeWhere(this.prisma, actor, [conversationId]) : null;
+    if (trial && (await this.prisma.message.count({ where: { AND: [{ id: replyToMessageId }, trial] } })) === 0) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'reply target not found', 404);
+    }
     const target = await this.prisma.message.findUnique({
       where: { id: replyToMessageId },
       select: { conversationId: true },
@@ -660,7 +666,7 @@ export class MessageService {
     const ascending = cursor.after !== undefined;
     // A card that owes a make-up reads its live make-up's time (owed-makeup.ts).
     const rows = await withOwedMakeups(this.prisma, await this.prisma.message.findMany({
-      where: this.visibilityFilter(actor, conv.id, cursor),
+      where: await this.visibilityFilter(actor, conv.id, cursor),
       include: MESSAGE_INCLUDE,
       orderBy: { seq: ascending ? 'asc' : 'desc' },
       take: limit,
@@ -706,11 +712,12 @@ export class MessageService {
    *   staff; it is never visible to the rest of the group
    * - a REJECTED message is visible only to its author
    */
-  private visibilityFilter(
+  private async visibilityFilter(
     actor: Actor,
     conversationId: string | { in: string[] },
     cursor: ListCursor = {},
-  ): Prisma.MessageWhereInput {
+    trialScope?: Prisma.MessageWhereInput | null,
+  ): Promise<Prisma.MessageWhereInput> {
     const where: Prisma.MessageWhereInput = { conversationId };
 
     // Already validated by parseListCursor: at most one of the two is set.
@@ -731,6 +738,12 @@ export class MessageService {
         ]
       : [{ moderation: Moderation.PUBLISHED }, { authorId: actor.actorId }];
 
+    // PD-59 / F7: a Sales representative reads only the trial cards of their own prospects.
+    const trial = trialScope !== undefined
+      ? trialScope
+      : await trialCardScopeWhere(this.prisma, actor, typeof conversationId === 'string' ? [conversationId] : conversationId.in);
+    if (trial) where.AND = [trial];
+
     return where;
   }
 
@@ -746,10 +759,12 @@ export class MessageService {
    */
   async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message & { card: { kind: string } | null }>> {
     const out = new Map<string, Message & { card: { kind: string } | null }>();
+    // PD-59 / F7: resolved once for the whole list, not per row.
+    const trialScope = await trialCardScopeWhere(this.prisma, actor, conversationIds);
     const found = await Promise.all(
-      conversationIds.map((id) =>
+      conversationIds.map(async (id) =>
         this.prisma.message.findFirst({
-          where: this.visibilityFilter(actor, id),
+          where: await this.visibilityFilter(actor, id, {}, trialScope),
           orderBy: { seq: 'desc' },
           // RQA-F4: a card's kind, so a list row can name it ("Lesson report").
           include: { card: { select: { kind: true } } },
@@ -1040,8 +1055,10 @@ export class MessageService {
    * below, so the number on the chat list and the number from
    * `GET /conversations/:id/messages/unread` cannot disagree.
    */
-  private async unreadWhere(actorId: string): Promise<Prisma.MessageWhereInput> {
-    return {
+  private async unreadWhere(actorId: string, conversationIds?: readonly string[]): Promise<Prisma.MessageWhereInput> {
+    // PD-59 / F7: a card a Sales representative may not read is never counted (badge or Center).
+    const trial = await trialCardScopeWhere(this.prisma, await this.conversations.requireActor(actorId), conversationIds);
+    const base: Prisma.MessageWhereInput = {
       // PD-57: what the viewer's block hides is never counted -- a badge is a signal of contact.
       ...notHiddenByBlock(await blockedBy(this.prisma, actorId)),
       deletedForAll: false,
@@ -1053,11 +1070,12 @@ export class MessageService {
         },
       },
     };
+    return trial ? { AND: [base, trial] } : base;
   }
 
   async unreadCount(conversationId: string, actorId: string): Promise<number> {
     return this.prisma.message.count({
-      where: { conversationId, ...(await this.unreadWhere(actorId)) },
+      where: { conversationId, ...(await this.unreadWhere(actorId, [conversationId])) },
     });
   }
 
@@ -1089,7 +1107,7 @@ export class MessageService {
       by: ['conversationId'],
       where: {
         conversationId: { in: conversationIds },
-        ...(await this.unreadWhere(actorId)),
+        ...(await this.unreadWhere(actorId, conversationIds)),
       },
       _count: { _all: true },
     });
@@ -1281,7 +1299,7 @@ export class MessageService {
     const pins = await this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, orderBy: { pinnedAt: 'asc' } });
     if (pins.length === 0) return { pins: [] };
     const rows = await this.prisma.message.findMany({
-      where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
+      where: { AND: [await this.visibilityFilter(actor, conv.id), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
       include: MESSAGE_INCLUDE,
     });
     const dtos = await this.dtosFor(rows, conv.id, actor);
@@ -1325,7 +1343,7 @@ export class MessageService {
       const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
       if (!(await this.conversations.canReadResolved(actor, conv, membership)).allowed) continue;
       const rows = await this.prisma.message.findMany({
-        where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: ids } }] },
+        where: { AND: [await this.visibilityFilter(actor, conv.id), { id: { in: ids } }] },
         include: MESSAGE_INCLUDE,
       });
       for (const d of await this.dtosFor(rows, conv.id, actor)) dtos.set(d.id, { ...d, starred: true });
@@ -1408,7 +1426,7 @@ export class MessageService {
         LIMIT ${window}`;
       if (candidates.length > 0) {
         const visible = await this.prisma.message.findMany({
-          where: { AND: [this.visibilityFilter(actor, conv.id), { id: { in: candidates.map((c) => c.id) } }] },
+          where: { AND: [await this.visibilityFilter(actor, conv.id), { id: { in: candidates.map((c) => c.id) } }] },
           include: MESSAGE_INCLUDE,
           orderBy: { seq: 'desc' },
           take: page - hits.length,
@@ -1467,7 +1485,7 @@ export class MessageService {
       if (candidates.length > 0) {
         rows.push(
           ...(await this.prisma.message.findMany({
-            where: { AND: [this.visibilityFilter(actor, { in: ids }), { id: { in: candidates.map((c) => c.id) } }] },
+            where: { AND: [await this.visibilityFilter(actor, { in: ids }), { id: { in: candidates.map((c) => c.id) } }] },
             include: MESSAGE_INCLUDE,
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: limit - rows.length,
@@ -1518,7 +1536,7 @@ export class MessageService {
       const rows = await this.prisma.message.findMany({
         where: {
           AND: [
-            this.visibilityFilter(actor, conversationId),
+            await this.visibilityFilter(actor, conversationId),
             upToSeq === null ? {} : { seq: { lte: upToSeq } },
           ],
         },
@@ -1800,7 +1818,7 @@ export class MessageService {
     if (!loaded) return null;
     const { actor, conv } = loaded;
     const message = await this.prisma.message.findFirst({
-      where: { AND: [this.visibilityFilter(actor, conv.id), { id: loaded.message.id, deletedForAll: false }] },
+      where: { AND: [await this.visibilityFilter(actor, conv.id), { id: loaded.message.id, deletedForAll: false }] },
       include: { attachments: { orderBy: { createdAt: 'asc' } } },
     });
     return message ? { actor, conv, message } : null;
@@ -1830,7 +1848,7 @@ export class MessageService {
 
     const { actor, conv, message } = await this.loadForActor(attachment.message.id, actorId);
     const visible = await this.prisma.message.count({
-      where: { ...this.visibilityFilter(actor, conv.id), id: attachment.message.id },
+      where: { ...(await this.visibilityFilter(actor, conv.id)), id: attachment.message.id },
     });
     if (visible === 0) throw absent();
     // PD-57: the bytes of a message the viewer's block hides are not served to them.
@@ -1865,6 +1883,11 @@ export class MessageService {
       message.authorId !== actor.actorId &&
       !this.authz.canReadInternal(actor)
     ) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    }
+    // PD-59 / F7: another representative's trial card looks absent to a Sales representative.
+    const trial = await trialCardScopeWhere(this.prisma, actor, [conv.id]);
+    if (trial && (await this.prisma.message.count({ where: { AND: [{ id: message.id }, trial] } })) === 0) {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
     }
 

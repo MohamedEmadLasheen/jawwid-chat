@@ -10,6 +10,7 @@ import { statusUpdatesByAuthor } from '../messages/receipt-status';
 import { mentionRuleFor } from '../mentions/mention-policy';
 import { NotificationPipeline } from '../notifications/notification-pipeline.service';
 import { messageAudience } from './message-audience';
+import { trialCardHiddenFrom } from '../messages/trial-card-scope';
 import { blockersOf, hasBlocked, hideableByBlock } from '../../platform/blocks';
 import { ActorKind, CallOutcome, CallType, StoryState, Visibility } from '../contracts/vocab';
 
@@ -763,7 +764,10 @@ export class OutboxWorker {
     const authorId = payload.authorId as string | null;
     // PD-35 seat rules and PD-33 cover substitution, in one place shared with
     // the pipeline's send-time check (message-audience.ts).
-    const members = (await messageAudience(this.prisma, conversationId, authorId, { messageType: payload.type as string | undefined })).map((actorId) => ({ actorId }));
+    const hiddenTrial = new Set(await this.trialCardHidden(conversationId, payload));
+    const members = (await messageAudience(this.prisma, conversationId, authorId, { messageType: payload.type as string | undefined }))
+      .filter((actorId) => !hiddenTrial.has(actorId))
+      .map((actorId) => ({ actorId }));
     // PD-36: someone mentioned in THIS message has the mention push (rule
     // `mention`, through a mute); the message itself still lists in their
     // Notification Center, but is not pushed a second time.
@@ -977,12 +981,28 @@ export class OutboxWorker {
   private async toThreadMarkingBlocked(conversationId: string, payload: Record<string, unknown>): Promise<void> {
     const authorId = payload.authorId as string | null;
     const blockers = authorId && hideableByBlock(payload.type as string) ? await blockersOf(this.prisma, authorId) : [];
-    if (blockers.length === 0 || !this.realtime.toThreadAudience) {
+    // PD-59 / F7: a trial card is not signalled to a Sales representative who may not read it.
+    const hiddenTrial = await this.trialCardHidden(conversationId, payload);
+    if (hiddenTrial.length > 0 && !this.realtime.toThreadAudience) {
+      throw new Error('a hidden trial card needs a publisher that can narrow the audience');
+    }
+    if ((blockers.length === 0 && hiddenTrial.length === 0) || !this.realtime.toThreadAudience) {
       await this.realtime.toThread(conversationId, CommEvent.MESSAGE_CREATED, payload as never);
       return;
     }
     const perActor = Object.fromEntries(blockers.map((id) => [id, { ...payload, hiddenByBlock: true }]));
-    await this.realtime.toThreadAudience(conversationId, CommEvent.MESSAGE_CREATED, payload as never, { perActor });
+    await this.realtime.toThreadAudience(conversationId, CommEvent.MESSAGE_CREATED, payload as never, {
+      perActor,
+      ...(hiddenTrial.length > 0 ? { exceptActors: hiddenTrial } : {}),
+    });
+  }
+
+  /** The Sales representatives a trial card (message.created) must not reach: none for any other message. */
+  private async trialCardHidden(conversationId: string, payload: Record<string, unknown>): Promise<string[]> {
+    if (payload.type !== 'card' || typeof payload.messageId !== 'string') return [];
+    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { organizationId: true } });
+    if (!conv) return [];
+    return [...(await trialCardHiddenFrom(this.prisma, payload.messageId, conv.organizationId, null))];
   }
 
   /**
