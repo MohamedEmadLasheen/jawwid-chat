@@ -46,7 +46,7 @@ no other document may restate or reinterpret them.
 `architecture/organization-model.md` · `communication/README.md`, `realtime-events.md`, `error-codes.md`,
 `scope-decisions.md` (D-2 superseded), `mobile-contract.md`, `admin-contract.md`, `test-contract.md`,
 `integration-audit.md` · `release/database-decision.md` · `release/od-01-conversation-model.md` ·
-`qa/authoritative-scope.md`, `release-gate.md`, `test-plan.md`, `defects.md`, `seams-required.md`, `system-inventory.md` ·
+`release/launch-readiness-checklist.md` (the store-submission checklist; supersedes the 2026-11-03 store reports) · `engineering/organization.md` (roles, models, operating loop) · `qa/authoritative-scope.md`, `release-gate.md`, `test-plan.md`, `defects.md`, `seams-required.md`, `system-inventory.md` ·
 `red-team/*` · `infrastructure/*` (runbooks, environment, secrets, backup/recovery, monitoring) ·
 `mobile/*` (architecture, http-integration, testing) · `admin/architecture.md`, `testing.md`, `workflows.md` ·
 `design/*` (design system, screens, terminology for display labels) · `product-operations/domain-language.md`.
@@ -56,7 +56,7 @@ no other document may restate or reinterpret them.
 `JAWWID_CHAT_BRIEF.pdf` / `.txt` (the superseded Customer Success brief) ·
 `architecture/backend-contract.md`, `open-contract-decisions.md` · `admin/backend-contract-required.md`,
 `future-work.md`, `discovery-report.md` · `integration/*` (nine parallel-agent reconciliation records) ·
-`release/handoff.md`, `branch-reconciliation.md`, `worktree-isolation.md`, `od-01-migration-impact.md`,
+`release/handoff.md`, `release/store-readiness-2026-11-03.md`, `release/google-play-readiness-2026-11-03.md`, `branch-reconciliation.md`, `worktree-isolation.md`, `od-01-migration-impact.md`,
 `blockers.md`, `integration-matrix.md`, `reconnaissance.md`, `release-scorecard.md`, `runtime-integration-dependency-map.md`,
 `cross-agent-product-conformance.md`, `domain-reconciliation.md`, `database-authority.md`, `admin-work-classification.md`,
 `prd-conformance-v0.1.md`, `realtime-contract-audit.md`, `integration-risk-register.md` ·

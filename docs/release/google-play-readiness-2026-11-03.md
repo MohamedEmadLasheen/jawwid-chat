@@ -1,3 +1,5 @@
+> **STATUS: Historical (2026-11-08).** Superseded by `launch-readiness-checklist.md`, re-audited against `main` @ `cebbcd99`. Its verdicts and statuses are out of date; do not build from them.
+
 # Google Play pre-launch review (2026-11-03)
 
 Branch `claude/google-play-readiness`, from `main` @ `3d669299`. This review covers Google Play
