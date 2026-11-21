@@ -83,6 +83,8 @@ export class CardPoster {
         attachmentsJson: [],
       },
     });
+    // message_card.trial_id is DATABASE-GENERATED from the payload's trialId (PD-59 / F7): never write it here,
+    // even though the generated Prisma type would allow it.
     await tx.messageCard.create({
       data: {
         messageId: message.id,

@@ -13,6 +13,7 @@ import { CommEvent } from '../communication/contracts/events';
 import { ActorKind, ConversationType, LessonKind, MemberRole } from '../communication/contracts/vocab';
 import { CardPoster } from '../supervision/card-poster';
 import { renderTrialCardBody, type CardLanguage } from './trial-cards';
+import { TRIAL_CARD_KINDS } from '../communication/messages/trial-card-scope';
 import { ACADEMY_ZONE, canonicalZone, whenWithZone } from '../platform/time-zone';
 
 type Tx = Prisma.TransactionClient;
@@ -232,6 +233,9 @@ export class TrialGroupService {
    * transaction (the group is ensured first). Written in the teacher's language.
    */
   async postCard(tx: Tx, trial: TrialForCard, recorder: Actor | null, kind: string, extra: Record<string, unknown> = {}) {
+    // PD-59 / F7: the message read path hides another representative's card by its kind (TRIAL_CARD_KINDS).
+    // A kind outside that set would bypass the filter, so it is refused here, before anything is written.
+    if (!TRIAL_CARD_KINDS.includes(kind)) throw new Error(`a trial group card must be one of the trial kinds, not "${kind}"`);
     const conv = await this.ensureInTx(tx, trial.teacherId, trial.organizationId, recorder?.kind === ActorKind.STAFF ? recorder.actorId : null);
     const teacher = await this.conversations.requireActor(trial.teacherId);
     const lang: CardLanguage = teacher.locale === 'en' ? 'en' : 'ar';
