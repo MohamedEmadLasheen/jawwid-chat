@@ -10,9 +10,9 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 | 1 | Conversations | Chat `/chat`; All conversations `/admin/conversations` (super admin); Moderation `/moderation` | role; `moderation.view` |
 | 2 | Dashboard | Dashboard `/dashboard`; Tasks `/tasks` | role |
 | 3 | People & Organization | *Staff & accounts:* Accounts `/accounts`, Users `/admin/users` · *Teachers:* Teachers `/teachers` (`/admin/teachers`), Credentials review `/teacher-profiles`, Attendance & complaints, Grants & testimonials · *Families:* Parents `/parents`, Students `/students` · *Organization:* `/organization` (`/admin/teams`) | role; `lessonManager` (Students too); `billingReader`; `teacherAttendance`/`teacherGrants` |
-| 4 | Sales | Trial lessons `/trials`; New students `/trials/new-students` | `sales`/`operations`/`lessonManager` |
+| 4 | Sales | Sales pipeline `/sales/pipeline` (PD-59); Trial lessons `/trials`; New students `/trials/new-students` | `sales` (pipeline); `sales`/`operations` (trials, new students; a Teachers-department account's Trial lessons is listed under Operations instead) |
 | 5 | Scheduling | Academy calendar `/schedule`; Teachers' schedules `/teachers/schedules`; Student schedules `/schedule/students` | `calendar`; `lessonManager` |
-| 6 | Operations | Needs action `/teachers/needs-action`; Materials; Escalations `/cases`; Certificates; Lesson audio | `lessonManager`; `materialsManager`; role; `certificates`; `lessonAudio` |
+| 6 | Operations | Trial lessons `/trials` (only for a Teachers-department account that is neither Sales nor Operations); Needs action `/teachers/needs-action`; Materials; Escalations `/cases`; Certificates; Lesson audio | `lessonManager`; `materialsManager`; role; `certificates`; `lessonAudio` |
 | 7 | Finance | Instalments `/instalments`; Payments `/payments` | `billingReader` |
 | 8 | Communication | Stories `/stories`; Calls `/calls`; Notifications*, WhatsApp* | role |
 | 9 | Admin & Settings | *Reports & quality:* Reports & analytics, Quality*, Academy operations*, Forms* · *System:* Approvals*, Integrations*, Audit log*, System settings* | super admin |
@@ -27,21 +27,50 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 - **Not merged yet** (deliberately, no functional gain for the risk): the two route trees `/teachers/*` and `/admin/teachers/*`; the `/cases` and `/teachers/cases` registrations; Chat + All conversations as tabs of one page. Candidates for a later clean-up PR.
 - **Students (PD-60)** is a People entry (`/students`, group Families) backed by `GET /learners`: paginated (max 100), searchable, filterable by teacher, supervisor and status, essential fields only, rows linking to the existing `/students/:id` profile. The server shows exactly the learners whose profile the caller may open (super admin, Teachers department in scope, a child's supervisor). No new table.
 
-## Sales pipeline — proposal (needs a migration slot and an owner decision on lead contact storage)
-Stages: New Lead · Contacted · Trial Booked · Trial Completed · Converted · Lost.
+## Sales pipeline (PD-59, built)
+Stages: New Lead · Contacted · Trial Booked · Trial Completed · Converted · Lost. Page: **Sales pipeline**
+`/sales/pipeline`, first page of Sales, offered on the server's `sales` answer (`GET /lessons/access`: the Sales
+department and the super admin) -- NavArea `sales-pipeline`.
 
-| Stage | Source today |
+| Stage | Where it comes from |
 |---|---|
-| Trial Booked | `trial_prospect` with a scheduled trial `lesson` (kind=trial) |
-| Trial Completed | that lesson held; `trial_outcome` pending or recorded |
-| Converted | `trial_outcome.result = subscribed` → New students / `family-intake` hand-over to Operations |
-| Lost | `trial_outcome` `not_subscribed`/`no_show`, or an explicit loss |
-| **New Lead, Contacted** | **no record exists** |
+| New Lead, Contacted, Lost *before a trial* | **stored** on the lead: `trial_prospect.pipeline_stage` (+ `lost_reason`, `last_contacted_at`, `next_follow_up_on`, `follow_up_note`) |
+| Trial Booked | **derived**: the latest live trial lesson is still ahead |
+| Trial Completed | **derived**: that trial has started and no outcome is recorded yet |
+| Converted | **derived**: a trial is `subscribed`, or the lead was handed over (`converted_at`) |
+| Lost after a trial | **derived**: the latest trial is `not_subscribed` / `no_show` |
 
-Safest implementation, using the existing architecture (no second student/lead system): a lead is a
-`trial_prospect` with no lesson yet. Add nullable columns to `trial_prospect` — `pipeline_stage`
-(`new_lead|contacted|lost`), `lost_reason`, `last_contacted_at`, `next_follow_up_on`, `follow_up_note`
-(additive, backwards compatible). Stages 3–5 stay derived on read from lessons/outcomes, never copied.
-One read endpoint returns prospects with their derived stage; the UI is a board/list in the Sales section.
-Open: whether a lead's phone/e-mail may be stored (today parent contact is confined to
-`src/new-students`, G-07) — if not, a lead stays name-only until it books a trial.
+No second lead system: a lead is a `trial_prospect`; derived stages are never copied
+(`apps/api/src/sales-pipeline/pipeline-stage.ts`). Booking a trial for a lost lead reopens it.
+
+**Contact (decided 2026-11-21).** A lead may carry the parent's name, phone, WhatsApp number and e-mail in the
+confined table `chat.sales_lead_contact` (G-07: no request-role grant, RLS on, read and written only by
+`src/sales-pipeline`, enforced by `sales-pipeline-confinement.spec.ts`). It is never written to a parent or
+contact table before conversion.
+- **Who:** the super admin and the Sales department (manager, member), decided on the server on every call.
+  Teachers, Operations, Finance and the Teachers department are refused.
+- **Lists** carry only whether a phone / WhatsApp / e-mail is on file. **The detail read** returns the contact and
+  is audited (`sales_lead.contact_viewed`). Every change is audited by field name, never value
+  (`sales_lead.created | stage_changed | contacted | contact_updated | follow_up_changed | converted`); the rows
+  appear in each person's action log. No contact value reaches a log line or an error message.
+- **Convert** keys the lead's e-mail and numbers with PD-42's contact key and looks for a family that already holds
+  one (for a lead a subscribed trial already made Converted: the family Operations enrolled that trial into).
+  Found and the caller may handle it -> the lead is **linked** (no second parent). Before the lead's own copy of the
+  contact is deleted, every channel the family record lacks is written into the parent file's EMPTY phone / e-mail
+  slot and keyed; a channel with no room (a second phone, a WhatsApp number, another e-mail) **refuses** the
+  hand-over and keeps the contact. Not found -> the **existing family intake** opens pre-filled and converting again
+  links it (a subscribed trial not yet enrolled answers `awaiting_enrolment`). A family that is not the caller's, or
+  an e-mail that belongs to a non-family account, gets the intake's one refusal, naming nothing. Every attempt is
+  audited with its outcome code (`sales_lead.converted | convert_attempted | convert_refused`), never a value. The
+  database also refuses a `converted_family_id` from another organization.
+
+**The Sales icon (owner decision 2026-11-21).** It is offered only to accounts the server confirms as `sales`
+(representative or manager -- `GET /lessons/access` does not tell them apart; the pipeline's own `GET
+/sales-pipeline/access` does), `operations`, and the super admin. A Teachers-department account (`lessonManager` only)
+has no Sales icon and no Sales workspace, but keeps its Trial lessons page (`/trials`, same route) listed under
+**Operations**. The server enforces it: every `/sales-pipeline` call refuses a caller who is not Sales or the super admin.
+
+**Ownership.** A representative sees and works only the leads assigned to them; the Sales manager sees all and
+reassigns; the super admin has full access (enforced in the service on every read path and by a database guard on the
+owner; see PD-59). **Retention:** 12 months after the last meaningful activity an unconverted lead's contact and notes
+are deleted by an audited, switched-off-by-default worker job (see PD-59).

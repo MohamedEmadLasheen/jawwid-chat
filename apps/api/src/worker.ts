@@ -24,6 +24,7 @@ import { SupervisionCaseService } from './cases/supervision-case.service';
 import { TaskService } from './tasks/task.service';
 import { DepartmentRoomService } from './org/department-room.service';
 import { WhiteboardService } from './whiteboards/whiteboard.service';
+import { SalesLeadRetentionService } from './sales-pipeline/lead-retention.service';
 import { ReportEscalationService } from './moderation/report-escalation.service';
 import { TeacherDeletionRequestService } from './account-deletion/teacher-deletion-request.service';
 import { PrismaService } from './platform/prisma.service';
@@ -204,6 +205,13 @@ const DEPARTMENT_ROOM_SWEEP_MS = 5 * 60_000;
 const WHITEBOARD_SWEEP_MS = 60 * 60_000;
 
 /**
+ * PD-59: the Sales lead retention purge (12 months after the last meaningful activity). OFF unless
+ * SALES_LEAD_RETENTION_ENABLED=true, and a dry run unless SALES_LEAD_RETENTION_DRY_RUN=false
+ * (lead-retention.service.ts). Daily is plenty for a 12-month deadline.
+ */
+const LEAD_RETENTION_SWEEP_MS = 24 * 60 * 60_000;
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -269,6 +277,7 @@ async function bootstrap(): Promise<void> {
   const lessonEvents = app.get(LessonEvents);
   const departmentRooms = app.get(DepartmentRoomService);
   const whiteboards = app.get(WhiteboardService);
+  const leadRetention = app.get(SalesLeadRetentionService);
   const reportEscalation = app.get(ReportEscalationService);
   const deletionRequests = app.get(TeacherDeletionRequestService);
   // PD-35: with strict teacher-supervisor scope on, the supervision conversations
@@ -336,6 +345,7 @@ async function bootstrap(): Promise<void> {
   let lastTaskIssues = 0;
   let nextRoomSweep = 0;
   let nextWhiteboardSweep = 0;
+  let nextLeadRetention = 0;
 
   // PD-30: the subscription sweep's own loop (see SUBSCRIPTION_SWEEP_MS).
   log.log(`payment lock (SUBSCRIPTION_LOCK_ENFORCED): ${subscriptionLockEnforced() ? 'ENFORCED' : 'off'}`);
@@ -653,6 +663,20 @@ async function bootstrap(): Promise<void> {
       } finally {
         draining = false;
         nextTaskSweep = Date.now() + TASK_SWEEP_MS;
+      }
+    }
+
+    // PD-59: expired, unconverted leads lose their personal data (off unless switched on; a dry run unless told otherwise).
+    if (Date.now() >= nextLeadRetention) {
+      draining = true;
+      try {
+        const swept = await leadRetention.sweep();
+        if (swept) log.log(`sales lead retention: ${swept.leadIds.length} lead(s) ${swept.dryRun ? 'would be purged (dry run)' : 'purged'}`);
+      } catch (e) {
+        report(log, 'sales lead retention', 'sales.lead_retention', e);
+      } finally {
+        draining = false;
+        nextLeadRetention = Date.now() + LEAD_RETENTION_SWEEP_MS;
       }
     }
 

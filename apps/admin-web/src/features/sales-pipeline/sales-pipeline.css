@@ -1,0 +1,22 @@
+/* PD-59: the Sales pipeline. Logical properties only, so Arabic and English
+   mirror exactly. Tokens only. */
+
+.sp-table th[scope='row'] { font-weight: var(--fw-semibold); text-align: start; }
+.sp-reason { font-size: var(--fs-sm); }
+
+.sp-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+}
+
+.sp-drawer { display: grid; gap: var(--space-4); }
+.sp-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.sp-section { display: grid; gap: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
+.sp-line { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; }
+.sp-line__label { color: var(--text-muted); }
+.sp-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
+.sp-actions--wrap { justify-content: flex-start; }

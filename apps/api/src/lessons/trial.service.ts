@@ -88,9 +88,10 @@ export class TrialService {
     const displayName = textField(body, 'displayName', 120, true) as string;
     const level = textField(body, 'level', 80, false);
     const note = textField(body, 'note', 1000, false);
+    const owner = await this.defaultOwner(actor);
     const p = await this.prisma.$transaction(async (tx) => {
       const created = await tx.trialProspect.create({
-        data: { organizationId: actor.organizationId as string, displayName, level, note, createdBy: actor.actorId },
+        data: { organizationId: actor.organizationId as string, displayName, level, note, createdBy: actor.actorId, ownerStaffId: owner },
       });
       await tx.trialStudent.create({
         data: { prospectId: created.id, organizationId: created.organizationId, position: 1, displayName, level, note },
@@ -107,8 +108,11 @@ export class TrialService {
   async prospects(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireSalesOrManager(actor);
+    // PD-59: a Sales REPRESENTATIVE reaches only the prospects assigned to them; everyone else who may
+    // read prospects (Sales manager, super admin, Operations, the Teachers department) reads as before.
+    const own = await this.repScope(actor);
     const rows = await this.prisma.trialProspect.findMany({
-      where: { organizationId: actor.organizationId },
+      where: { organizationId: actor.organizationId, ...(own ? { ownerStaffId: own } : {}) },
       orderBy: { createdAt: 'desc' },
       take: 1000,
     });
@@ -171,7 +175,9 @@ export class TrialService {
     // PD-45 "At booking too": optional; kept beside the prospect, never on the trial (BR-2).
     const location = parseBookingLocation(body.location);
     const existing = prospectId
-      ? await this.prisma.trialProspect.findFirst({ where: { id: prospectId, organizationId: actor.organizationId } })
+      ? await this.prisma.trialProspect.findFirst({
+          where: { id: prospectId, organizationId: actor.organizationId, ...((await this.repScope(actor)) ? { ownerStaffId: actor.actorId } : {}) },
+        })
       : null;
     if (prospectId && !existing) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'prospect not found');
     const free = await this.scheduling.freeSlots(teacher.id, duration);
@@ -691,6 +697,7 @@ export class TrialService {
         level: levels.length === 1 ? levels[0] : null,
         note: null,
         createdBy: actor.actorId,
+        ownerStaffId: await this.defaultOwner(actor),
       },
     });
     await tx.trialStudent.createMany({
@@ -755,6 +762,33 @@ export class TrialService {
     const s = await this.standing(actor, '');
     if (!s) throw new CommError(CommErrorCode.LESSON_DENIED, 'trials belong to Sales and the Teachers department');
     return s;
+  }
+
+  /**
+   * PD-59: a Sales REPRESENTATIVE -- a Sales-department member who is not its manager, not the super
+   * admin, and not also on the trial desk through Operations or the Teachers department. Their reads
+   * of prospects are scoped to the ones assigned to them; the returned id is theirs. Null for everyone
+   * else (existing approved rules: nothing changes for them).
+   */
+  private async repScope(actor: Actor): Promise<string | null> {
+    if (actor.kind !== ActorKind.STAFF || actor.staffRole === StaffRole.SUPER_ADMIN || !actor.organizationId) return null;
+    const [r] = await this.prisma.$queryRaw<Array<{ role: string | null }>>`SELECT chat.sales_department_role(${actor.actorId}::uuid) AS role`;
+    if (r?.role !== 'member') return null;
+    if ((await this.lessons.inDepartment(actor, 'operations')) || (await this.lessons.isManager(actor))) return null;
+    return actor.actorId;
+  }
+
+  /**
+   * PD-59: a prospect recorded here is owned by its creator when that is Sales staff (member or manager),
+   * so the representative sees what they record; an Operations, Teachers-department or super-admin creator
+   * leaves it unassigned (reached by the Sales manager and the super admin until assigned).
+   */
+  private async defaultOwner(actor: Actor): Promise<string | null> {
+    if (actor.kind !== ActorKind.STAFF || actor.staffRole === StaffRole.SUPER_ADMIN || !actor.organizationId) return null;
+    const [r] = await this.prisma.$queryRaw<Array<{ role: string | null }>>`SELECT chat.sales_department_role(${actor.actorId}::uuid) AS role`;
+    if (r?.role !== 'member' && r?.role !== 'manager') return null;
+    if ((await this.lessons.inDepartment(actor, 'operations')) || (await this.lessons.isManager(actor))) return null;
+    return actor.actorId;
   }
 
   private async requireSales(actor: Actor) {

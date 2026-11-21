@@ -24,6 +24,8 @@ import { TeachersAreaTabs } from '@/features/teachers/area'
 import { CasesPage } from '@/features/cases/CasesPage'
 import { TrialsPage } from '@/features/trials/TrialsPage'
 import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
+import { SalesPipelinePage } from '@/features/sales-pipeline/SalesPipelinePage'
+import { SALES_PIPELINE_PATH } from '@/features/sales-pipeline/paths'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/certificates/CertificatesPage'
@@ -151,6 +153,7 @@ export function AppRoutes() {
         <Route path="/teachers/leave" element={<Navigate to="/teacher-attendance?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
         <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
+        <Route path={SALES_PIPELINE_PATH} element={<Area area="sales-pipeline"><SalesPipelinePage /></Area>} />
         <Route path="/trials/new-students" element={<Area area="trials"><NewStudentsPage /></Area>} />
         <Route path="/teachers/discipline" element={<Navigate to="/teacher-attendance?section=excuses" replace />} />
         {/* PD-12 S3: Operations; the super admin reaches it as /admin/instalments. */}

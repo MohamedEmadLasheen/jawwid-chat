@@ -1,4 +1,5 @@
 import { ATTENDANCE_PATH, GRANTS_PATH } from '@/features/teacher-records/paths'
+import { SALES_PIPELINE_PATH } from '@/features/sales-pipeline/paths'
 import { isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
 import type { StaffRole } from '@/shared/types/domain'
 import {
@@ -128,6 +129,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   accounts: 'people',
   'teacher-attendance': 'people',
   'teacher-grants': 'people',
+  'sales-pipeline': 'sales',
   trials: 'sales',
   'new-students': 'sales',
   schedule: 'scheduling',
@@ -154,6 +156,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   parents: '/parents',
   students: '/students',
   payments: '/payments',
+  'sales-pipeline': SALES_PIPELINE_PATH,
   trials: '/trials',
   'new-students': '/trials/new-students',
   'needs-action': '/teachers/needs-action',
@@ -183,6 +186,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   parents: 'users',
   students: 'users',
   payments: 'tag',
+  'sales-pipeline': 'chart',
   trials: 'calendar',
   'new-students': 'users',
   'needs-action': 'alert',
@@ -255,6 +259,8 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   { area: 'teacher-schedules', destination: 'scheduling' },
   { area: 'student-schedules', destination: 'scheduling' },
   // PD-11 T4 / PD-16: trial lessons and new students: Sales' workspace.
+  // PD-59: the Sales pipeline leads Sales' workspace: a lead comes before its trial.
+  { area: 'sales-pipeline', destination: 'sales' },
   { area: 'trials', destination: 'sales', label: ADMIN_TRIALS_LABEL },
   { area: 'new-students', destination: 'sales' },
   // Teacher Profile V2: the credential review queue.
@@ -373,7 +379,10 @@ function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<De
   const out = new Map<DestinationKey, NavEntryGroup[]>()
   // navAreas, not visibleAreas: some areas wait for the server to confirm them.
   for (const area of navAreas(role, access)) {
-    const dest = AREA_DESTINATION[area]
+    // A Teachers-department account (the server confirms `lessonManager` only: neither `sales` nor
+    // `operations`) keeps its Trial lessons page, but it is listed under Operations: the Sales icon is
+    // for Sales, Operations and the super admin.
+    const dest = area === 'trials' && access.sales !== true && access.operations !== true ? 'operations' : AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
     groups[0]!.entries.push({
