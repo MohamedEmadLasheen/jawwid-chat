@@ -17,9 +17,12 @@
  *   - a recipient removed the same way is not given a receipt;
  *   - a removal that also locks the conversation row after its member row does
  *     not deadlock with the send;
- *   - a writer that locks the conversation first (a room sync's member insert,
- *     then a removal) does deadlock with it: Postgres cancels the send, which
- *     runs once more from the start and is sent exactly once;
+ *   - a writer that locks the conversation first (a member insert, then a
+ *     removal) does deadlock with it: Postgres cancels the send, which runs
+ *     once more from the start and is sent exactly once. (The room, trial-group
+ *     and supervision syncs and the seat sweep no longer do this: they lock
+ *     member rows first -- rt014-writer-lock-order.spec.ts. The retry is for
+ *     any writer that still does.);
  *   - a send already past its locked checks is ordered BEFORE a removal, which
  *     waits for it;
  *   - control: ordinary sends are unchanged.
@@ -188,7 +191,7 @@ describe('RT-014 · a send and a concurrent membership removal', () => {
     expect(await receiptHolders(m.id)).not.toContain(s.otherParentId);
   });
 
-  it('a room sync that locks the conversation (a member insert) before removing someone deadlocks with the send: the send is cancelled, runs again, and is sent once', async () => {
+  it('a writer that locks the conversation (a member insert) before removing someone deadlocks with the send: the send is cancelled, runs again, and is sent once', async () => {
     const expected = await liveExcept(s.parentId, s.otherParentId);
     const keyShared = deferred();
     const removeNow = deferred();
@@ -200,8 +203,8 @@ describe('RT-014 · a send and a concurrent membership removal', () => {
       // put far later, so the victim is always the send -- the case under test.
       await tx.$executeRawUnsafe(`set local deadlock_timeout = '30s'`);
       // The lock a conversation_member insert's foreign-key check takes on its
-      // conversation (department-room, trial-group and supervision syncs add
-      // a member before they remove one).
+      // conversation, as a writer that adds a member before it removes one
+      // without first locking the member rows would hold it.
       await tx.$queryRawUnsafe(`select 1 from chat.conversation where id = '${groupId}'::uuid for key share`);
       keyShared.resolve();
       await removeNow.promise;
