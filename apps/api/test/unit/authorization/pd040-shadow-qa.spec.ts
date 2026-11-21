@@ -32,12 +32,34 @@ const fixture = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'pd040-syste
 const routes = collectRoutes().filter((r) => r.method === 'GET');
 const byPath = new Map(routes.map((r) => [r.path, r]));
 
-const rows = Object.entries(fixture.personas).flatMap(([name, p]) => p.get200.map((path) => [name, path, p] as const));
+/**
+ * Routes a later owner decision REMOVED from a persona on purpose, so that the a547b0e2 snapshot no longer
+ * applies to them (plan section 14: the access was not intended, the bundle is right). Each needs a reason.
+ */
+const INTENDED_REMOVALS: ReadonlyArray<readonly [persona: string, path: string, why: string]> = [
+  ['sales.manager', '/admin/accounts', 'PD-59 (owner 2026-11-21): Sales does not administer family login accounts'],
+];
+const removed = new Set(INTENDED_REMOVALS.map(([n, p]) => `${n} ${p}`));
+
+const rows = Object.entries(fixture.personas)
+  .flatMap(([name, p]) => p.get200.map((path) => [name, path, p] as const))
+  .filter(([name, path]) => !removed.has(`${name} ${path.split('?')[0]}`));
 
 describe('PD-40: every route a persona reaches today stays allowed under enforcement', () => {
   it('the fixture covers the five seeded staff personas', () => {
     expect(Object.keys(fixture.personas).sort()).toEqual(['ops.manager', 'sales.manager', 'sup.noura', 'teachers.manager', 'tsup.heba']);
     expect(rows.length).toBeGreaterThan(200);
+  });
+
+  it('an intended removal is still a removal: the bundle really refuses the route', () => {
+    for (const [name, path] of INTENDED_REMOVALS) {
+      const p = fixture.personas[name]!;
+      expect(p.get200.map((x) => x.split('?')[0])).toContain(path);
+      const access = byPath.get(path)!.access;
+      if (access?.kind !== 'requires') throw new Error('not a keyed route');
+      const bundle = legacyBundle(legacyTierOf(p.role), { kind: p.kind, position: p.position });
+      expect(access.anyOf.some((k) => bundle.has(k))).toBe(false);
+    }
   });
 
   it.each(rows)('%s: GET %s', (_name, path, persona) => {

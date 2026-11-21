@@ -50,6 +50,11 @@ interface Later {
    * earlier one. Together the lists are every key catalogue.ts bars.
    */
   barred?: readonly string[];
+  /**
+   * Bundle rows this migration DELETES. They are no longer in legacy-bundles.ts; the first seed
+   * (frozen) still inserts them and the block of this migration removes them again.
+   */
+  removed?: readonly BundleRow[];
 }
 
 /** Rows a later migration adds to the catalogue, oldest first. */
@@ -254,12 +259,25 @@ const LATER: readonly Later[] = [
       (['moderation.act', 'moderation.view'] as const).map((key) => ['manager', kind, key] as const),
     ),
   },
+  {
+    // PD-59 (owner 2026-11-21): a Sales member, manager included, does not administer family login accounts.
+    migration: '20261121140000_chat_pd059_sales_no_accounts_administer.sql',
+    tag: 'pd059acct',
+    permissions: [],
+    bundles: [],
+    removed: [
+      ['manager', 'sales', 'accounts.administer'],
+      ['supervisor', 'sales', 'accounts.administer'],
+    ],
+  },
 ];
 
 const laterKey = new Set(LATER.flatMap((l) => l.permissions));
 const laterDelegable = new Set(LATER.flatMap((l) => l.delegable ?? []));
 const laterRow = new Set(LATER.flatMap((l) => l.bundles.map((r) => r.join('|'))));
 const laterBarred = LATER.flatMap((l) => l.barred ?? []);
+const laterRemoved = LATER.flatMap((l) => l.removed ?? []);
+const removedRow = new Set(laterRemoved.map((r) => r.join('|')));
 
 const BLOCKS: Block[] = [
   {
@@ -281,15 +299,20 @@ const BLOCKS: Block[] = [
   })),
 ];
 
-/** Every bundle row the TypeScript bundles hold, in a stable order. */
-function bundleRows(): BundleRow[] {
+/**
+ * Every bundle row the TypeScript bundles hold, in a stable order. `withRemoved` adds the rows a later
+ * migration deletes again: the frozen first seed still inserts them.
+ */
+function bundleRows(withRemoved = false): BundleRow[] {
   const rows: BundleRow[] = [];
   for (const name of legacyBundleNames()) {
     if (name === 'super_admin') continue;
     const [tier, kind] = name.split(':') as [LegacyTier, string];
     const placement: StaffPlacement =
       kind === 'none' ? { kind: null, position: null } : { kind: kind as StaffPlacement['kind'], position: tier === 'manager' ? 'manager' : 'member' };
-    for (const key of [...legacyBundle(tier, placement)].sort()) rows.push([tier, kind, key]);
+    const keys = new Set(legacyBundle(tier, placement));
+    if (withRemoved) for (const [t, k, key] of laterRemoved) if (t === tier && k === kind) keys.add(key);
+    for (const key of [...keys].sort()) rows.push([tier, kind, key]);
   }
   return rows;
 }
@@ -300,10 +323,18 @@ function render(block: Block): string {
   const permissions = PERMISSIONS.filter((p) => block.permission(p.key)).map(
     (p) => `  (${[q(p.key), q(p.page), q(p.action), q(p.label.en), q(p.label.ar), q(p.risk), String(delegable(p)), q(p.introducedBy)].join(', ')})`,
   );
-  const bundles = bundleRows()
+  const bundles = bundleRows(!block.current)
     .filter(block.bundle)
     .map(([tier, kind, key]) => `  (${q(tier)}, ${q(kind)}, ${q(key)})`);
   const lines = [block.begin];
+  const removed = block.later?.removed ?? [];
+  if (removed.length > 0) {
+    lines.push(
+      'delete from chat.legacy_permission_bundle where (tier, department_kind, permission_key) in (',
+      removed.map(([tier, kind, key]) => `  (${q(tier)}, ${q(kind)}, ${q(key)})`).join(',\n'),
+      ');',
+    );
+  }
   if (permissions.length > 0) {
     lines.push('insert into chat.permission (key, page, action, label_en, label_ar, risk, delegable, introduced_by) values', permissions.join(',\n') + ';');
   }
@@ -348,6 +379,11 @@ describe('PD-40: the migration seeds exactly the TypeScript catalogue and bundle
     expect([...laterDelegable].filter((k) => !delegable.has(k))).toEqual([]);
     // Every delegable key is made so by a later block: the first seed made none delegable.
     expect([...delegable].filter((k) => !laterDelegable.has(k))).toEqual([]);
+  });
+
+  it('a row a later migration deletes is gone from the TypeScript bundles', () => {
+    const rows = new Set(bundleRows().map((r) => r.join('|')));
+    expect([...removedRow].filter((r) => rows.has(r))).toEqual([]);
   });
 
   it('the barred lists are, together and once each, exactly the keys catalogue.ts keeps out of roles', () => {

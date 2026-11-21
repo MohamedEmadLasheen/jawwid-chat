@@ -7,8 +7,8 @@
  *   - suspend: the next request is refused and login says ACCOUNT_DISABLED;
  *   - reactivate: login works again, and NO old session or refresh token
  *     comes back to life;
- *   - who may (PD-40): parents by the super admin and Operations (Sales: reset
- *     and sign out), teachers by the super admin and the Teachers department;
+ *   - who may (PD-40): parents by the super admin and Operations (Sales: none,
+ *     PD-59), teachers by the super admin and the Teachers department;
  *     staff only by the super admin; never the super admin or oneself; parents
  *     and teachers never;
  *   - every action leaves its audit row, with the administrator and the reason.
@@ -211,7 +211,7 @@ describe('PD-21: who may', () => {
     }
   });
 
-  it('PD-40: the Teachers department lists and administers teachers only; Sales resets and signs out parents only', async () => {
+  it('PD-40: the Teachers department lists and administers teachers only; Sales administers no accounts (PD-59)', async () => {
     const teachersSupervisor = m.teacherSupervisors[0]!.subject;
     const list = await as(teachersSupervisor, 'GET', '/admin/accounts');
     expect(list.json.administers).toEqual(['teacher']);
@@ -238,16 +238,14 @@ describe('PD-21: who may', () => {
     expect(await audits(parentAccount, 'account.suspended')).toHaveLength(0);
     expect(await audits(teacherAccount, 'account.suspended')).toHaveLength(0);
 
+    // PD-59 (owner 2026-11-21): Sales, the manager included, lists nothing and every act is refused
+    // (the full matrix over real HTTP: sales-accounts-administer-pd059.spec.ts).
     const sales = await as(m.salesManager.subject, 'GET', '/admin/accounts');
-    expect(sales.json.administers).toEqual(['family']);
-    for (const a of sales.json.accounts as Array<{ kind: string; allowed: Record<string, boolean> }>) {
-      expect(a.kind).toBe('family');
-      expect(a.allowed).toMatchObject({ suspend: false, reactivate: false, impersonate: false });
+    expect({ status: sales.status, accounts: sales.json.accounts, administers: sales.json.administers }).toEqual({ status: 200, accounts: [], administers: [] });
+    for (const act of ['password-reset', 'suspend']) {
+      const refused = await as(m.salesManager.subject, 'POST', `/admin/accounts/${parentAccount}/${act}`, { reason: 'new parent cannot sign in' });
+      expect({ act, status: refused.status, code: refused.code }).toEqual({ act, status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
     }
-    const salesReset = await as(m.salesManager.subject, 'POST', `/admin/accounts/${parentAccount}/password-reset`, { reason: 'new parent cannot sign in' });
-    expect(salesReset.status).toBe(201);
-    const salesSuspend = await as(m.salesManager.subject, 'POST', `/admin/accounts/${parentAccount}/suspend`, { reason: 'try' });
-    expect({ status: salesSuspend.status, code: salesSuspend.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
   });
 
   it('the super admin also lists staff -- but not their own account', async () => {

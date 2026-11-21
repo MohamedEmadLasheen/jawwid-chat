@@ -513,21 +513,23 @@ describe('6. review of #202', () => {
     expect(await code(intake.addChildren(salesB, r.familyId, { intakeId: randomUUID(), children: [{ name: 'child_b' }] }))).toBe(CommErrorCode.INTAKE_NOT_FOUND);
   });
 
-  it('P1-3 "own": parent accounts -- list, open, sign-out -- are a Sales member\'s for their own families only', async () => {
+  it('P1-3 / PD-59: parent accounts -- list, open, sign-out -- are no Sales member\'s, owner or not, under either switch (owner decision 2026-11-21)', async () => {
     const email = `pd42.acct.${randomUUID().slice(0, 8)}@qa.jawwid.test`;
     await intake.enter(salesA, form({ parent: { name: 'parent_acct', email } }));
     const account = await g.prisma.account.findUniqueOrThrow({ where: { subject: email } });
     const b = await g.conversations.requireActor(salesB);
     const a = await g.conversations.requireActor(salesA);
-    expect((await accounts.list(b, {})).accounts.map((x) => x.accountId)).toContain(account.id); // 'all': as before
-    await scope('own');
-    expect((await accounts.list(b, {})).accounts.map((x) => x.accountId)).not.toContain(account.id);
-    expect(await code(accounts.get(b, account.id))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
-    expect(await code(accounts.listSessions(b, account.id))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
-    expect((await accounts.list(a, {})).accounts.map((x) => x.accountId)).toContain(account.id);
-    await accounts.get(a, account.id);
     const manager = await g.conversations.requireActor(salesManager);
-    await accounts.get(manager, account.id);
+    // PD-59: before, 'all' showed the account to every Sales member and 'own' to its owner and the manager.
+    // Now Sales administers no family login, so neither switch changes anything: nobody in Sales lists or opens it.
+    for (const mode of ['all', 'own'] as const) {
+      await scope(mode);
+      for (const who of [a, b, manager]) {
+        expect((await accounts.list(who, {})).accounts.map((x) => x.accountId)).not.toContain(account.id);
+        expect(await code(accounts.get(who, account.id))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
+        expect(await code(accounts.listSessions(who, account.id))).toBe(CommErrorCode.ACCOUNT_ADMIN_DENIED);
+      }
+    }
   });
 
   it('P1-3 "own": money and subscriptions -- the API finds nothing; the database refuses parent file, instalment and payment writes', async () => {

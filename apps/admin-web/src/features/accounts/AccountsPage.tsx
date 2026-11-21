@@ -49,7 +49,7 @@ const STATUS_TONE: Record<AccountStatus, Tone> = {
  * PD-21: account administration. Staff find a parent (by the parent's, the
  * family's or a child's name) or a teacher, and reset the password or set the
  * account inactive; the super admin also other staff. PD-40: which kinds is
- * the server's answer (`administers`) -- parents for Operations and Sales,
+ * the server's answer (`administers`) -- parents for Operations (PD-59: not Sales),
  * teachers for the Teachers department. The server decides the list and every
  * action; the chips and buttons follow its answer, which is advisory.
  */

@@ -3,8 +3,8 @@
  * account, exercised directly on AuthorizationService.canAdministerAccount.
  *
  * Owner decision 2026-10-22, narrowed by PD-40 (2026-10-27): a PARENT account
- * by the super admin and the Operations department (Sales: reset and sign out
- * only); a TEACHER account by the super admin and the Teachers department; a
+ * by the super admin and the Operations department (PD-59, 2026-11-21: Sales,
+ * representative or manager, none); a TEACHER account by the super admin and the Teachers department; a
  * staff account only by the super admin; never the super admin's account;
  * never one's own; never a staff account impersonated. And nobody who is not
  * staff, whatever they send.
@@ -72,7 +72,7 @@ function matrix(target: AccountAdminTarget) {
 }
 
 describe('PD-21 / PD-40: parent and teacher accounts', () => {
-  it('a parent account: the super admin and Operations do everything, Sales resets and signs out, nobody else anything', () => {
+  it('a parent account: the super admin and Operations do everything, Sales none (PD-59), nobody else anything', () => {
     const every = [...ACTS];
     expect(matrix(familyAccount())).toEqual({
       'super admin': every,
@@ -81,8 +81,8 @@ describe('PD-21 / PD-40: parent and teacher accounts', () => {
       'Operations coverage': every,
       'Teachers manager': [],
       'Teachers supervisor': [],
-      'Sales manager': ['reset_password', 'sign_out'],
-      'Sales member': ['reset_password', 'sign_out'],
+      'Sales manager': [],
+      'Sales member': [],
       ...Object.fromEntries(OUTSIDERS.map((w) => [w.label, []])),
     });
   });
@@ -115,7 +115,8 @@ describe('PD-21 / PD-40: parent and teacher accounts', () => {
     const kinds = (w: Who) => accountKindsAdministered(w.actor, w.standing);
     expect(kinds(SUPER)).toEqual(['family', 'teacher', 'staff']);
     expect(kinds(OPS_SUPERVISOR)).toEqual(['family']);
-    expect(kinds(SALES_MEMBER)).toEqual(['family']);
+    expect(kinds(SALES_MEMBER)).toEqual([]);
+    expect(kinds(SALES_MANAGER)).toEqual([]);
     expect(kinds(TEACHERS_SUPERVISOR)).toEqual(['teacher']);
     expect(kinds({ ...OPS_MANAGER, standing: standing({ operations: 'manager', teachers: 'member' }) })).toEqual(['family']);
     for (const w of OUTSIDERS) expect({ who: w.label, kinds: kinds(w) }).toEqual({ who: w.label, kinds: [] });

@@ -10,7 +10,7 @@ import type { Actor } from './types';
  * account. The departments that do that work keep it; nobody else has it.
  *
  *   act on a ...           super admin   Operations          Sales                 Teachers dept       anyone else
- *   parent (family)        every act     every act           reset + sign out      --                  never
+ *   parent (family)        every act     every act           -- (PD-59)            --                  never
  *   teacher                every act     --                  --                    every act           never
  *   staff                  every act¹    --                  --                    --                  never
  *
@@ -20,9 +20,11 @@ import type { Actor } from './types';
  * "Operations" / "Teachers dept" are the department's manager (staff role
  * manager) or one of its members (admin / coverage): the same shape as
  * decidePd012StaffAccess and decideBillingAccess, the role re-checked so a
- * stale department row is harmless. "Sales" is any live member or the manager
- * of the Sales department, as in decideBillingAccess: Sales enrols the family
- * (PD-16) and helps a new parent sign in, but does not suspend or open them.
+ * stale department row is harmless. PD-59 (owner 2026-11-21): Sales -- a representative
+ * or the manager -- administers no family account at all. It enrols the family
+ * (PD-16) and enters the new parent's first sign-in e-mail through the intake
+ * (new_students.manage); a reset, the devices and the sessions are Operations'.
+ * Owning the lead, or the family it became, confers nothing here.
  *
  * DB-free: the caller resolves the department roles (accountAdminStandingOf),
  * so the matrix is unit-testable whole.
@@ -48,7 +50,6 @@ export interface AccountAdminStanding {
 export const NO_ACCOUNT_ADMIN_STANDING: AccountAdminStanding = Object.freeze({ operations: null, teachers: null, sales: null });
 
 const EVERY_ACT: ReadonlySet<AccountAdminAct> = new Set(ACCOUNT_ADMIN_ACTS);
-const SALES_ACTS: ReadonlySet<AccountAdminAct> = new Set<AccountAdminAct>(['reset_password', 'sign_out']);
 const NO_ACTS: ReadonlySet<AccountAdminAct> = new Set();
 
 /** A department's manager or member, the staff role re-checked. */
@@ -68,7 +69,6 @@ export function accountAdminActs(actor: Actor, standing: AccountAdminStanding, k
   if (actor.staffRole === StaffRole.SUPER_ADMIN) return EVERY_ACT;
   if (kind === 'family') {
     if (inDepartment(actor, standing.operations)) return EVERY_ACT;
-    if (standing.sales !== null) return SALES_ACTS;
     return NO_ACTS;
   }
   if (kind === 'teacher') return inDepartment(actor, standing.teachers) ? EVERY_ACT : NO_ACTS;

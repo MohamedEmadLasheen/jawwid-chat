@@ -39,8 +39,8 @@ export interface AccountList {
   accounts: AccountSummary[]
   truncated: boolean
   /**
-   * PD-40: the kinds this caller administers -- parents for Operations (and
-   * Sales), teachers for the Teachers department, all three for the super
+   * PD-40: the kinds this caller administers -- parents for Operations (PD-59:
+   * never Sales), teachers for the Teachers department, all three for the super
    * admin, none for anyone else. Absent from a server older than PD-40.
    */
   administers?: Array<'family' | 'teacher' | 'staff'>
