@@ -86,9 +86,9 @@ describe('The navigation registry', () => {
     // PD-16, now Sales), the Teachers' and Student schedules (Scheduling), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
     // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(37)
+    expect(keys).toHaveLength(38)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'students', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations', '/moderation'])
@@ -118,7 +118,7 @@ describe('The navigation registry', () => {
           // PD-38: the Schedule waits for GET /lessons/access to say `calendar`.
           ...(visibleAreas(role).includes('schedule') ? ['schedule'] : []),
           // Scheduling desks: the Teachers department's, on the same word as its area.
-          ...(!lessonManager && visibleAreas(role).includes('teacher-schedules') ? ['teacher-schedules', 'student-schedules', 'needs-action'] : []),
+          ...(!lessonManager && visibleAreas(role).includes('teacher-schedules') ? ['teacher-schedules', 'student-schedules', 'students', 'needs-action'] : []),
           ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
           // PD-17: the Parent Profile follows the money's rule (GET /instalments/access).
           ...(!billingReader && visibleAreas(role).includes('parents') ? ['parents'] : []),
@@ -154,7 +154,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/students', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -173,7 +173,7 @@ describe('People & Organization', () => {
     expect(people.groups.map((g) => [g.label?.en, g.entries.map((e) => e.key)])).toEqual([
       ['Staff & accounts', ['accounts', 'users']],
       ['Teachers', ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants']],
-      ['Families', ['parents']],
+      ['Families', ['parents', 'students']],
       ['Organization', ['teams']],
     ])
     // Money, trials, scheduling and escalations moved out; they are not people management.
@@ -467,6 +467,7 @@ describe('The desktop rail', () => {
       'Attendance & complaints', // PD-52
       'Grants & testimonials',
       'Parents', // PD-17: the families,
+      'Students', // PD-60: and their children,
       'Organization', // PD-8: and the structure, then the menu wraps.
       'Accounts',
     ]) {
@@ -598,7 +599,7 @@ describe('The drawer, below desktop width', () => {
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(37)
+    expect(within(nav).getAllByRole('link')).toHaveLength(38)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

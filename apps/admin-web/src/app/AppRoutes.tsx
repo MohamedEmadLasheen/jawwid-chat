@@ -38,6 +38,7 @@ import { BoardViewerPage } from '@/features/teacher-boards/BoardViewerPage'
 import { BOARD_KEYS } from '@/features/teacher-boards/api'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
+import { StudentDirectoryPage } from '@/features/students/StudentDirectoryPage'
 import { ParentProfilePage } from '@/features/profiles/ParentProfilePage'
 import { StudentProfilePage } from '@/features/profiles/StudentProfilePage'
 import { PaymentsPage } from '@/features/payments/PaymentsPage'
@@ -162,6 +163,8 @@ export function AppRoutes() {
         {/* PD-29: the Materials library (the super admin and the Teachers manager). */}
         <Route path="/materials" element={<Area area="materials"><MaterialsPage /></Area>} />
         {/* PD-17: the Student Profile. Several departments open it, so the server alone decides. */}
+        {/* PD-60: People -> Students; the server decides each row. */}
+        <Route path="/students" element={<Area area="students"><StudentDirectoryPage /></Area>} />
         <Route path="/students/:learnerId" element={<StudentProfilePage />} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />

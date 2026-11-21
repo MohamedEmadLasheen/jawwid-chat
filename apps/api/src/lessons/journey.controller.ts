@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { EnrollmentService } from './enrollment.service';
+import { StudentDirectoryService } from './student-directory.service';
 import { LessonRecordService } from './lesson-record.service';
 import { LessonService } from './lesson.service';
 import { Requires } from '../platform/permissions/route-access';
@@ -20,6 +21,7 @@ export class JourneyController {
     private readonly lessons: LessonService,
     private readonly records: LessonRecordService,
     private readonly enrollment: EnrollmentService,
+    private readonly directory: StudentDirectoryService,
   ) {}
 
   /** A supervisor excuses the learner after the start: excused at once. */
@@ -61,6 +63,13 @@ export class JourneyController {
   @Get('conversations/:id/learners')
   groupLearners(@ActorId() actorId: string, @Param('id') id: string) {
     return this.enrollment.groupLearners(actorId, id);
+  }
+
+  /** PD-60: the Students page -- paginated, searchable; only learners whose profile the caller may open. */
+  @Requires('students.view')
+  @Get('learners')
+  students(@ActorId() actorId: string, @Query() query: Record<string, unknown>) {
+    return this.directory.list(actorId, query);
   }
 
   /** PD-17: the Student Profile -- the administration and the child's own teacher. */
