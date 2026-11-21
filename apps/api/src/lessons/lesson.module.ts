@@ -19,6 +19,7 @@ import { ReportCorrectionController } from './report-correction.controller';
 import { TrialService } from './trial.service';
 import { SchedulingService } from './scheduling.service';
 import { EnrollmentService } from './enrollment.service';
+import { StudentDirectoryService } from './student-directory.service';
 import { JourneyController } from './journey.controller';
 import { LessonRecordService } from './lesson-record.service';
 import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
@@ -48,7 +49,7 @@ import { LessonEvents } from './lesson-events';
     // PD-46: every lesson change announced once (lesson.changed / schedule.refreshed).
     LessonEvents,
     // PD-15: corrections and report edits / deletes; enrolment details and courses.
-    LessonRecordService, EnrollmentService,
+    LessonRecordService, EnrollmentService, StudentDirectoryService,
     // PD-16: enrolling a new student. The file lives in src/new-students (it reads
     // the confined form); it is provided here, beside the scheduling it calls.
     NewStudentEnrolmentService,
