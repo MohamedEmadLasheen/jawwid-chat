@@ -11,11 +11,15 @@ import { PrismaService } from '../platform/prisma.service';
  * booked or held for the lead (the later of its lesson's creation and end). Reads and views, list or detail,
  * never count -- opening a lead must not keep its data alive.
  *
- * The work is one SQL function, chat.purge_expired_sales_leads, which re-checks the expiry itself, deletes
+ * A lead that is a customer is never purged: converted, linked to a learner, with a subscribed trial or any
+ * enrolment record are kept whole (chat.sales_lead_expired). The work is one SQL function,
+ * chat.purge_expired_sales_leads, which takes an advisory lock (one run at a time), locks each candidate row
+ * (skipping a lead being changed), re-checks the expiry after the lock, deletes
  * through the table's own guard (that allows it only while the purge runs), writes one audit row per lead (its
  * id and what was cleared, never a value) and touches NO family, parent record, contact or learner.
  *
- * Safe by default (the repository's switch convention: a flag read at the worker's start, off unless set):
+ * Safe by default (the repository's switch convention: environment flags, read at each sweep, off unless set;
+ * a change needs a restart of the worker's environment, not a code change):
  *   SALES_LEAD_RETENTION_ENABLED=true   the worker runs the job at all (default: it does not)
  *   SALES_LEAD_RETENTION_DRY_RUN=false  actually delete; any other value only lists what would go (default: dry run)
  *   SALES_LEAD_RETENTION_BATCH=n        leads per pass, 1..1000 (default 200)

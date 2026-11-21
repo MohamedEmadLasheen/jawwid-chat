@@ -635,6 +635,8 @@ export class SalesPipelineService {
     const ownerId = parsed(() => uuidField(body.ownerId, 'ownerId'));
     return this.prisma.$transaction(async (tx) => {
       const f = await this.lockedFacts(tx, c, leadId);
+      // A lead already converted (by a subscribed trial or a hand-over) belongs to Operations' families now.
+      if (this.derive(f, new Date()).stage === 'converted') throw stateError('a converted lead is not reassigned');
       await this.requireEligibleOwner(tx, c, ownerId);
       if (f.ownerStaffId !== ownerId) {
         await tx.trialProspect.update({ where: { id: leadId }, data: { ownerStaffId: ownerId, lastActivityAt: new Date() } });

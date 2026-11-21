@@ -61,6 +61,7 @@ end;
 $$;
 drop function if exists chat.purge_expired_sales_leads(integer, boolean);
 drop function if exists chat.expired_sales_leads(integer);
+drop function if exists chat.sales_lead_expired(uuid);
 
 drop trigger if exists sales_lead_contact_is_coherent on chat.sales_lead_contact;
 -- The guard refuses a delete of an unconverted lead's contact; this table is being removed whole.

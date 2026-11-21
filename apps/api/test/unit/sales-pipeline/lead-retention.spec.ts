@@ -1,9 +1,8 @@
 /**
  * PD-59 retention: the job is off and a dry run unless switched on, bounded by a batch, calls only the one
  * SQL function, and that function (chat.purge_expired_sales_leads) is written so it can touch nothing but a
- * lead's own PII. What it does to rows -- only expired, unconverted leads; analytics kept; idempotent;
- * recent leads skipped; families, parents and learners untouched -- is proven against a real Postgres in the
- * migration smoke check recorded on the PR (the database refuses a purge of a fresh lead even when asked).
+ * lead's own PII. What it does to rows is NOT proven by this file: the throwaway-Postgres check run for the PR
+ * (results in its description) exercised it; no integration spec in this repository does yet.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -58,7 +57,7 @@ describe('the purge function in the migration', () => {
 
   it('is 12 months, never converted, and keeps the clock to meaningful activity (not reads)', () => {
     expect(RETENTION_MONTHS).toBe(12);
-    const expired = fn('expired_sales_leads');
+    const expired = fn('sales_lead_expired');
     expect(expired).toContain("interval '12 months'");
     expect(expired).toContain('p.converted_at is null');
     expect(expired).toContain('p.last_activity_at');
@@ -66,10 +65,11 @@ describe('the purge function in the migration', () => {
   });
 
   it('touches only the lead\'s own PII: never a family, a parent, a contact, a learner or an account', () => {
-    const purge = fn('purge_expired_sales_leads') + fn('expired_sales_leads');
+    const purge = fn('purge_expired_sales_leads') + fn('expired_sales_leads') + fn('sales_lead_expired');
     const touched = [...purge.matchAll(/\b(?:delete from|update|insert into)\s+chat\.([a-z_]+)/g)].map((m) => m[1]).sort();
     expect([...new Set(touched)]).toEqual(['audit_log', 'sales_lead_contact', 'trial_prospect', 'trial_student']);
-    for (const table of ['family', 'contact', 'learner', 'parent_file', 'account', 'student_enrolment', 'family_contact_key']) {
+    // Customers are only ever READ, to be kept (never written): the same tables the purge must not write.
+    for (const table of ['family', 'contact', 'learner', 'parent_file', 'account', 'family_contact_key']) {
       expect(purge).not.toMatch(new RegExp(`chat\\.${table}\\b`));
     }
   });
@@ -77,9 +77,32 @@ describe('the purge function in the migration', () => {
   it('clears notes and the contact, keeps the analytics columns, and audits ids and flags, never a value', () => {
     const purge = fn('purge_expired_sales_leads');
     expect(purge).toContain('set note = null, follow_up_note = null');
-    for (const kept of ['pipeline_stage', 'lost_reason', 'last_contacted_at', 'created_at']) expect(purge).not.toContain(kept);
+    for (const kept of ['pipeline_stage', 'lost_reason', 'last_contacted_at']) expect(purge).not.toContain(kept);
     expect(purge).toContain("jsonb_build_object('contactDeleted'");
     expect(purge).not.toMatch(/phone|whatsapp|email|parent_name/);
+  });
+
+  it('S3: never a customer -- converted, learner-linked, subscribed, or enrolled leads are kept whole', () => {
+    const expired = fn('sales_lead_expired');
+    for (const kept of ['p.converted_at is null', 'p.converted_family_id is null', 'p.learner_id is null', "o.result = 'subscribed'", 'chat.student_enrolment']) {
+      expect(expired).toContain(kept);
+    }
+  });
+
+  it('S4: one run at a time, candidates locked skip-locked, expiry re-checked after the lock', () => {
+    const purge = fn('purge_expired_sales_leads');
+    expect(purge).toContain("pg_try_advisory_xact_lock(hashtext('chat.purge_expired_sales_leads'))");
+    expect(purge).toContain('for update of p skip locked');
+    expect(purge.indexOf('if not chat.sales_lead_expired(r.prospect_id)')).toBeLessThan(purge.indexOf('delete from chat.sales_lead_contact'));
+  });
+
+  it('S2: the backfill gives a pre-PD-59 prospect to its creator only when the creator is live Sales staff (never the super admin)', () => {
+    const at = sql.indexOf('update chat.trial_prospect p\n   set owner_staff_id = p.created_by');
+    expect(at).toBeGreaterThan(-1);
+    const block = sql.slice(at, sql.indexOf(';', at));
+    expect(block).toContain('p.owner_staff_id is null');
+    expect(block).toContain("s.role <> 'super_admin'");
+    expect(block).toContain('chat.sales_department_role(s.id) is not null');
   });
 
   it('defaults to a dry run, and is closed to every request role', () => {

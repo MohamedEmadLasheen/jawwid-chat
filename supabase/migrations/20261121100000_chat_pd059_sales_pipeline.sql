@@ -146,6 +146,10 @@ begin
       raise exception 'a lead is handed over to a family of its organization' using errcode = 'insufficient_privilege';
     end if;
   end if;
+  -- PD-59: an owner, once set, is changed to another owner and never cleared (a reassignment names the new one).
+  if old.owner_staff_id is not null and new.owner_staff_id is null then
+    raise exception 'a lead''s owner is reassigned, never cleared' using errcode = 'check_violation';
+  end if;
   -- PD-59: an owner is live Sales staff of the lead's organization (checked when it is set or changed).
   if new.owner_staff_id is distinct from old.owner_staff_id and new.owner_staff_id is not null
      and not chat.sales_lead_owner_eligible(new.owner_staff_id, new.organization_id) then
@@ -233,6 +237,21 @@ revoke all on chat.sales_lead_contact from public, anon, authenticated, chat_app
 revoke all on function chat.guard_sales_lead_contact() from public;
 
 -- ---------------------------------------------------------------------------
+-- Backfill: the owner of a prospect recorded before PD-59 is its creator, where the creator is (still) live
+-- Sales staff of the same organization -- so a representative keeps sight of what they recorded. The super
+-- admin, Operations and the Teachers department as creators leave it unassigned (NULL: reached by the Sales
+-- manager and the super admin until assigned). Idempotent: only unowned prospects are touched.
+-- ---------------------------------------------------------------------------
+
+update chat.trial_prospect p
+   set owner_staff_id = p.created_by
+ where p.owner_staff_id is null
+   and exists (select 1 from chat.staff s
+                where s.id = p.created_by and s.organization_id = p.organization_id
+                  and s.is_active and s.left_at is null and s.role <> 'super_admin'
+                  and chat.sales_department_role(s.id) is not null);
+
+-- ---------------------------------------------------------------------------
 -- Retention: 12 months after the last meaningful activity
 -- ---------------------------------------------------------------------------
 
@@ -260,9 +279,38 @@ begin
 end;
 $$;
 
--- The leads whose personal data has outlived its purpose: not converted, no meaningful activity for 12
--- months (the later of the lead's own last activity and its latest trial), and still holding a contact
--- row or a free-text note. Reads, views and analytics never count as activity.
+-- Whether ONE lead's personal data has outlived its purpose. Never a customer: a lead is kept while it is
+-- converted (converted_at), linked to a learner, has a subscribed trial, or has any enrolment / hand-over
+-- record (the PD-45 booking-location retention keeps a subscribed prospect the same way). Otherwise it must
+-- have had no meaningful activity for 12 months (the later of the lead's own last activity and its latest
+-- trial; a pre-PD-59 prospect falls back to created_at), and still hold a contact row or a free-text note.
+-- Reads, views and analytics never count as activity.
+create or replace function chat.sales_lead_expired(p_prospect uuid)
+returns boolean
+language sql
+stable
+set search_path = chat, pg_temp
+as $$
+  select exists (
+    select 1 from chat.trial_prospect p
+     where p.id = p_prospect
+       and p.converted_at is null
+       and p.converted_family_id is null
+       and p.learner_id is null
+       and not exists (select 1 from chat.lesson l join chat.trial_outcome o on o.lesson_id = l.id
+                        where l.prospect_id = p.id and o.result = 'subscribed')
+       and not exists (select 1 from chat.lesson l join chat.student_enrolment e on e.lesson_id = l.id
+                        where l.prospect_id = p.id)
+       and greatest(
+             coalesce(p.last_activity_at, p.created_at),
+             (select max(l.created_at) from chat.lesson l where l.prospect_id = p.id),
+             (select max(l.ends_at) from chat.lesson l where l.prospect_id = p.id)
+           ) < now() - interval '12 months'
+       and (exists (select 1 from chat.sales_lead_contact c where c.prospect_id = p.id)
+            or p.note is not null or p.follow_up_note is not null
+            or exists (select 1 from chat.trial_student t where t.prospect_id = p.id and t.note is not null)));
+$$;
+
 create or replace function chat.expired_sales_leads(p_limit integer)
 returns table (prospect_id uuid, organization_id uuid)
 language sql
@@ -271,15 +319,7 @@ set search_path = chat, pg_temp
 as $$
   select p.id, p.organization_id
     from chat.trial_prospect p
-   where p.converted_at is null
-     and greatest(
-           coalesce(p.last_activity_at, p.created_at),
-           (select max(l.created_at) from chat.lesson l where l.prospect_id = p.id),
-           (select max(l.ends_at) from chat.lesson l where l.prospect_id = p.id)
-         ) < now() - interval '12 months'
-     and (exists (select 1 from chat.sales_lead_contact c where c.prospect_id = p.id)
-          or p.note is not null or p.follow_up_note is not null
-          or exists (select 1 from chat.trial_student t where t.prospect_id = p.id and t.note is not null))
+   where chat.sales_lead_expired(p.id)
    order by p.created_at, p.id
    limit greatest(p_limit, 0);
 $$;
@@ -288,7 +328,12 @@ $$;
 -- follow-up note, its students' notes); the stage, the lost reason code, the timestamps and the counts
 -- stay, as analytics. One audit row per lead: its id and what was cleared, never a value. NEVER touches
 -- a family, a parent record, a contact or a learner. Dry-run (the default) only lists. Idempotent: a
--- purged lead no longer qualifies. Returns the lead ids.
+-- purged lead no longer qualifies.
+--
+-- Concurrency: one run at a time (a transaction-level advisory lock: a second worker, or a restart in the
+-- middle of a run, gets nothing back), the candidate rows are locked FOR UPDATE SKIP LOCKED (a lead being
+-- changed right now is left for the next run), and the expiry is checked AGAIN after the lock, so a lead
+-- touched between selection and deletion is not purged. Returns the lead ids.
 create or replace function chat.purge_expired_sales_leads(p_limit integer default 200, p_dry_run boolean default true)
 returns setof uuid
 language plpgsql
@@ -299,7 +344,21 @@ declare
   v_contact integer;
   v_notes boolean;
 begin
-  for r in select * from chat.expired_sales_leads(p_limit) loop
+  if not pg_try_advisory_xact_lock(hashtext('chat.purge_expired_sales_leads')) then
+    return;
+  end if;
+  for r in
+    select p.id as prospect_id
+      from chat.trial_prospect p
+     where chat.sales_lead_expired(p.id)
+     order by p.created_at, p.id
+     limit greatest(p_limit, 0)
+       for update of p skip locked
+  loop
+    -- Re-check under the row lock, on a fresh snapshot.
+    if not chat.sales_lead_expired(r.prospect_id) then
+      continue;
+    end if;
     if p_dry_run then
       return next r.prospect_id;
       continue;
@@ -324,5 +383,6 @@ $$;
 
 revoke all on function chat.sales_lead_owner_eligible(uuid, uuid) from public, anon, authenticated, chat_app;
 revoke all on function chat.sales_lead_purging() from public, anon, authenticated, chat_app;
+revoke all on function chat.sales_lead_expired(uuid) from public, anon, authenticated, chat_app;
 revoke all on function chat.expired_sales_leads(integer) from public, anon, authenticated, chat_app;
 revoke all on function chat.purge_expired_sales_leads(integer, boolean) from public, anon, authenticated, chat_app;
