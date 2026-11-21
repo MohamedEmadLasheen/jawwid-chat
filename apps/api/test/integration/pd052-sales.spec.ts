@@ -118,7 +118,9 @@ async function fixtures() {
 /** A held trial of teacher_c, two hours ago (the teacher reported attendance). */
 async function heldTrial(): Promise<{ lessonId: string; prospectId: string }> {
   const organizationId = (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId;
-  const prospect = await g.prisma.trialProspect.create({ data: { organizationId, displayName: 'prospect_q', createdBy: salesId } });
+  // F7: a Sales representative reads the trials of the prospects assigned to them (PD-59's backfill makes a live
+  // Sales creator the owner), so the fixture is owned by the Sales member who records about it.
+  const prospect = await g.prisma.trialProspect.create({ data: { organizationId, displayName: 'prospect_q', createdBy: salesId, ownerStaffId: salesId } });
   const start = Date.now() - 2 * HOUR - (slot++ % 10) * 45 * 60_000;
   const trial = await g.prisma.lesson.create({
     data: {

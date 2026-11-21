@@ -12,6 +12,7 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { LessonService, cancelReminders, dateField, invalid, stateError, textField } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { TrialGroupService } from './trial-group.service';
+import { salesRepScope } from './sales-rep-scope';
 import { NewStudentsService } from '../new-students/new-students.service';
 import { bookingLocationOf, parseBookingLocation, recordBookingLocation } from '../new-students/booking-location';
 import { dashboardTile, type DashboardTile } from '../dashboard/dashboard-tile';
@@ -225,10 +226,13 @@ export class TrialService {
     const to = query.to ? parse(query.to, 'to') : new Date(now + LIST_WINDOW_DAYS * 86_400_000);
     if (to <= from || to.getTime() - from.getTime() > MAX_RANGE_DAYS * 86_400_000) throw invalid(`from/to: at most ${MAX_RANGE_DAYS} days`);
     if (query.teacherId !== undefined && !isUuid(query.teacherId)) throw invalid('teacherId: must be a uuid');
+    // F7: a Sales representative lists only the trials of the prospects assigned to them.
+    const rep = await this.repScope(actor);
     const rows = await this.prisma.lesson.findMany({
       where: {
         organizationId: actor.organizationId,
         kind: LessonKind.TRIAL,
+        ...(rep ? { prospect: { is: { ownerStaffId: rep } } } : {}),
         startsAt: { gte: from, lt: to },
         // A moved trial lives on as its new row; the old one is history.
         OR: [{ outcome: null }, { outcome: { not: LessonOutcome.RESCHEDULED } }],
@@ -266,6 +270,7 @@ export class TrialService {
     const scope = standing === 'manager' ? await this.lessons.teacherScope.scopeOf(actor) : ALL_TEACHERS;
     const all = scope.all;
     const ids = scope.all ? [] : [...scope.teacherIds];
+    const rep = await this.repScope(actor); // F7: the tile counts what `list` shows this viewer
     const from = new Date(now.getTime() - LIST_WINDOW_DAYS * 86_400_000);
     const to = new Date(now.getTime() + LIST_WINDOW_DAYS * 86_400_000);
     const [r] = await this.prisma.$queryRaw<Array<{ awaiting: number; awaiting_oldest: Date | null; upcoming: number; seen: number }>>`
@@ -278,6 +283,8 @@ export class TrialService {
            AND l.starts_at >= ${from}::timestamptz AND l.starts_at < ${to}::timestamptz
            AND (l.outcome IS NULL OR l.outcome <> 'rescheduled')
            AND (${all}::boolean OR l.teacher_id = ANY (${ids}::uuid[]))
+           AND (${rep}::uuid IS NULL OR EXISTS (
+                 SELECT 1 FROM chat.trial_prospect p WHERE p.id = l.prospect_id AND p.owner_staff_id = ${rep}::uuid))
          ORDER BY l.starts_at, l.id
          LIMIT ${LIST_LIMIT + 1}
       ),
@@ -639,9 +646,11 @@ export class TrialService {
     const context = await this.groups.context(actor, conversationId);
     const teacherId = context.teacher?.id as string;
     const now = Date.now();
+    const rep = await this.repScope(actor); // F7: a representative sees only their own prospects' trials here too
     const rows = await this.prisma.lesson.findMany({
       where: {
         organizationId: actor.organizationId, kind: LessonKind.TRIAL, teacherId,
+        ...(rep ? { prospect: { is: { ownerStaffId: rep } } } : {}),
         OR: [
           // Started within the window: awaiting an outcome, or recorded (to correct).
           {
@@ -717,6 +726,23 @@ export class TrialService {
   // Internals
   // ------------------------------------------------------------------
 
+  /**
+   * F7: the trial's payment-request routes (New Students) name a trial by id; a Sales representative may
+   * act on one only when its prospect is theirs. Anyone else is unchanged; another's trial answers as missing.
+   */
+  async assertTrialReachable(actorId: string, lessonId: string): Promise<void> {
+    const actor = await this.conversations.requireActor(actorId);
+    const rep = await this.repScope(actor);
+    if (!rep) return;
+    const owned = isUuid(lessonId)
+      ? await this.prisma.lesson.findFirst({
+          where: { id: lessonId, kind: LessonKind.TRIAL, organizationId: actor.organizationId, prospect: { is: { ownerStaffId: rep } } },
+          select: { id: true },
+        })
+      : null;
+    if (!owned) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'trial not found');
+  }
+
   async get(actorId: string, lessonId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const { trial, standing } = await this.load(actor, lessonId);
@@ -725,8 +751,15 @@ export class TrialService {
 
   private async load(actor: Actor, lessonId: string): Promise<{ trial: TrialRow; standing: TrialStanding }> {
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'trial not found');
+    // F7: a Sales representative reaches only a trial of a prospect assigned to them; another's answers
+    // exactly like a missing trial. `load` backs get, attendance, reschedule, cancel, outcome, correction,
+    // the subscription prefill and the subscription update, so every one of them follows.
+    const rep = await this.repScope(actor);
     const trial = await this.prisma.lesson.findFirst({
-      where: { id: lessonId, kind: LessonKind.TRIAL, organizationId: actor.organizationId },
+      where: {
+        id: lessonId, kind: LessonKind.TRIAL, organizationId: actor.organizationId,
+        ...(rep ? { prospect: { is: { ownerStaffId: rep } } } : {}),
+      },
       include: TRIAL_INCLUDE,
     });
     if (!trial) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'trial not found');
@@ -770,12 +803,8 @@ export class TrialService {
    * of prospects are scoped to the ones assigned to them; the returned id is theirs. Null for everyone
    * else (existing approved rules: nothing changes for them).
    */
-  private async repScope(actor: Actor): Promise<string | null> {
-    if (actor.kind !== ActorKind.STAFF || actor.staffRole === StaffRole.SUPER_ADMIN || !actor.organizationId) return null;
-    const [r] = await this.prisma.$queryRaw<Array<{ role: string | null }>>`SELECT chat.sales_department_role(${actor.actorId}::uuid) AS role`;
-    if (r?.role !== 'member') return null;
-    if ((await this.lessons.inDepartment(actor, 'operations')) || (await this.lessons.isManager(actor))) return null;
-    return actor.actorId;
+  private repScope(actor: Actor): Promise<string | null> {
+    return salesRepScope(this.prisma, this.lessons, actor);
   }
 
   /**

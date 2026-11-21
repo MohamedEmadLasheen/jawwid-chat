@@ -866,6 +866,23 @@ export class PaymentsService {
     return { actor, access };
   }
 
+  /**
+   * F7: money of a TRIAL (no family yet) is a Sales REPRESENTATIVE's only for a trial of a prospect assigned to
+   * them. A representative is a Sales-department member (not its manager, not the super admin); the billing scope
+   * does not decide it, because the organization's Sales switch can give a representative scope 'all' for families.
+   * Everyone else, and every family payer, keeps the existing rule (true).
+   */
+  private async trialMoneyReachable(actor: Actor, access: BillingAccess, familyId: string | null, trialLessonId: string | null): Promise<boolean> {
+    void access;
+    if (familyId || actor.staffRole === 'super_admin') return true;
+    const [r] = await this.prisma.$queryRaw<Array<{ rep: boolean; owns: boolean }>>`
+      SELECT chat.sales_department_role(${actor.actorId}::uuid) = 'member' AS rep,
+             EXISTS (SELECT 1 FROM chat.lesson l JOIN chat.trial_prospect p ON p.id = l.prospect_id
+                      WHERE l.id = ${trialLessonId}::uuid AND l.organization_id = ${actor.organizationId}::uuid
+                        AND p.owner_staff_id = ${actor.actorId}::uuid) AS owns`;
+    return r?.rep !== true || r.owns === true;
+  }
+
   private async requirePayerInScope(actor: Actor, access: BillingAccess, familyId: string | null) {
     if (familyId) {
       await this.billing.requireFamily(actor, access, familyId);
@@ -880,6 +897,11 @@ export class PaymentsService {
     if (!isUuid(requestId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment request not found');
     const request = await this.prisma.paymentRequest.findFirst({ where: { id: requestId.toLowerCase(), organizationId: actor.organizationId as string } });
     if (!request) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment request not found');
+    // F7: a Sales representative (scope 'owned') reaches a trial's request only when the trial's prospect is theirs;
+    // another's answers exactly like a missing request.
+    if (!(await this.trialMoneyReachable(actor, access, request.familyId, request.trialLessonId))) {
+      throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment request not found');
+    }
     await this.requirePayerInScope(actor, access, request.familyId);
     return request;
   }
@@ -888,6 +910,9 @@ export class PaymentsService {
     if (!isUuid(paymentId)) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment not found');
     const payment = await this.prisma.payment.findFirst({ where: { id: paymentId.toLowerCase(), organizationId: actor.organizationId as string } });
     if (!payment) throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment not found');
+    if (!(await this.trialMoneyReachable(actor, access, payment.familyId, payment.trialLessonId))) {
+      throw new CommError(CommErrorCode.BILLING_NOT_FOUND, 'payment not found'); // F7, as for a request
+    }
     await this.requirePayerInScope(actor, access, payment.familyId);
     return payment;
   }

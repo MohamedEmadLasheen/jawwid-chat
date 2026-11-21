@@ -106,6 +106,7 @@ export class TrialController {
   @Requires('new_students.view')
   @Get('new-students/:trialId/payment-requests')
   async trialPaymentRequests(@ActorId() actorId: string, @Param('trialId') trialId: string) {
+    await this.trials.assertTrialReachable(actorId, trialId);
     const payer = await this.payments.trialPayer(actorId, trialId, (org, id) => this.forms.payerFor(org, id));
     return this.payments.trialRequests(actorId, payer);
   }
@@ -114,6 +115,7 @@ export class TrialController {
   @Requires('new_students.manage')
   @Post('new-students/:trialId/payment-requests')
   async createTrialPaymentRequest(@ActorId() actorId: string, @Param('trialId') trialId: string, @Body() body: Record<string, unknown>) {
+    await this.trials.assertTrialReachable(actorId, trialId);
     const payer = await this.payments.trialPayer(actorId, trialId, (org, id) => this.forms.payerFor(org, id));
     return this.payments.createTrialRequest(actorId, payer, body ?? {});
   }

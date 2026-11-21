@@ -374,7 +374,9 @@ describe('4. the New Students page', () => {
     await trials.outcome(salesId, id, { result: 'subscribed', subscription: form() });
     const before = (await cardsIn(conv)).length;
     expect(await code(trials.updateSubscription(tsupId, id, { subscription: form() }))).toBe(CommErrorCode.LESSON_DENIED);
-    const updated = await trials.updateSubscription(sales2Id, id, { subscription: form({ payment: { currency: 'USD', method: 'bank_transfer' } }) });
+    // F7: another Sales REPRESENTATIVE (sales2) no longer reaches a colleague's trial; the lead's owner, the manager and the super admin do.
+    expect(await code(trials.updateSubscription(sales2Id, id, { subscription: form() }))).toBe(CommErrorCode.LESSON_NOT_FOUND);
+    const updated = await trials.updateSubscription(s.ownerId, id, { subscription: form({ payment: { currency: 'USD', method: 'bank_transfer' } }) });
     expect(updated).toMatchObject({ payment: { currency: 'USD', method: 'bank_transfer' } });
     expect(updated?.updatedAt).not.toBeNull();
     expect((await enrolment.page(salesId)).students).toHaveLength(1);
@@ -399,7 +401,9 @@ describe('5. corrections', () => {
     expect((await enrolment.page(salesId)).students).toEqual([]);
 
     // -> no-show: the attendance follows.
-    t = await trials.correct(sales2Id, id, { result: 'no_show', why: 'the teacher confirmed nobody joined' });
+    // F7: a Sales representative who does not own the lead is refused as for a missing trial; the super admin corrects.
+    expect(await code(trials.correct(sales2Id, id, { result: 'no_show', why: 'the teacher confirmed nobody joined' }))).toBe(CommErrorCode.LESSON_NOT_FOUND);
+    t = await trials.correct(s.ownerId, id, { result: 'no_show', why: 'the teacher confirmed nobody joined' });
     expect(t).toMatchObject({ attendance: 'no_show', outcome: 'no_show' });
 
     // -> subscribed again, with a fresh form: the same row comes back.
@@ -412,7 +416,7 @@ describe('5. corrections', () => {
     const history = await g.prisma.trialOutcomeRevision.findMany({ where: { lessonId: id }, orderBy: { correctedAt: 'asc' } });
     expect(history.map((h) => [h.previousResult, h.result, h.correctedBy])).toEqual([
       ['subscribed', 'not_subscribed', salesId],
-      ['not_subscribed', 'no_show', sales2Id],
+      ['not_subscribed', 'no_show', s.ownerId],
       ['no_show', 'subscribed', salesId],
     ]);
     expect(history[0].why).toBe('the family cancelled the next day');
@@ -593,7 +597,9 @@ describe('9. moving a booked trial', () => {
     // 60-minute one); a wall-clock pick failed every evening from 20:00 to 20:30.
     const at = (await trials.slots(salesId, s.teacherId, '60')).slots[2];
     expect(slots).toContain(at);
-    const t = await trials.book(s.ownerId, { students: [{ name: 'Karim' }, { name: 'Huda' }], teacherId: s.teacherId, startsAt: at });
+    // F7: booked by the Sales representative, so the party is theirs (a super-admin booking would leave it unassigned,
+    // and a representative does not reach an unassigned lead's trial).
+    const t = await trials.book(salesId, { students: [{ name: 'Karim' }, { name: 'Huda' }], teacherId: s.teacherId, startsAt: at });
 
     expect(await code(trials.reschedule(s.teacherId, t.id, { startsAt: slots[5] }))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(trials.reschedule(salesId, t.id, { startsAt: at }))).toBe(CommErrorCode.LESSON_STATE); // nothing changed
