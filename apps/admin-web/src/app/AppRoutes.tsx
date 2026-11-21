@@ -119,7 +119,14 @@ export function AppRoutes() {
             call link (members-only) lands on /calls/join/:id for both. */}
         <Route path="/calls" element={<Area area="calls"><CallsPage /></Area>} />
         <Route path="/calls/join/:scheduledCallId" element={<Area area="calls"><JoinLinkPage /></Area>} />
-        <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
+        {/* The owner's equivalent of the operator /organization page is the Admin Portal's Teams section (same page): an old
+            bookmark or link lands there instead of a Forbidden frame. Everyone else is gated as before. */}
+        <Route
+          path="/organization"
+          element={isSuperAdmin(staff.role)
+            ? <Navigate to={adminSectionPath('teams')} replace />
+            : <Area area="organization"><OrganizationPage /></Area>}
+        />
         {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
         <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />
         <Route path="/teachers/needs-action" element={<Area area="teachers"><NeedsActionPage /></Area>} />

@@ -271,6 +271,20 @@ describe('No URL was lost in the redesign', () => {
     const admin = ['/admin/conversations', '/admin/dashboard', '/admin/tasks', '/admin/reports', '/admin/teachers', '/admin/instalments', '/admin/payments', '/admin/parents', '/admin/users', '/admin/teams', '/admin/calls', '/admin/stories', '/admin/whatsapp', '/admin/audit', '/admin/settings', '/admin/teacher-attendance', '/admin/teacher-grants']
     for (const path of admin) await staysPut('super_admin', path)
   }, 90_000)
+
+  it('the owner at the operator URL /organization lands on the Admin Portal Teams page, not a Forbidden frame', async () => {
+    vi.stubGlobal('fetch', routeFetch({}))
+    const { unmount } = renderWithProviders(
+      <>
+        <AppRoutes />
+        <Where />
+      </>,
+      { staff: staff('super_admin'), route: '/organization' },
+    )
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/admin/teams'))
+    expect(screen.queryByText(/forbidden|لا تملك/i)).toBeNull()
+    unmount()
+  })
 })
 
 describe('Landing and deep links', () => {
