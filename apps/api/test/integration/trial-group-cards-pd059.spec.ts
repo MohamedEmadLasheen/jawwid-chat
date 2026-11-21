@@ -32,6 +32,10 @@ import { LessonModule } from '../../src/lessons/lesson.module';
 import { SalesPipelineModule } from '../../src/sales-pipeline/sales-pipeline.module';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { CardKind } from '../../src/communication/contracts/vocab';
+import { CommErrorCode } from '../../src/platform/errors';
+import { LessonService } from '../../src/lessons/lesson.service';
+import { PrismaService } from '../../src/platform/prisma.service';
+import { salesRepScope, salesRepsAmong } from '../../src/lessons/sales-rep-scope';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
 
@@ -290,12 +294,16 @@ describe('1. every read path hides another representative\'s (and an unowned) tr
     expect(exported).toEqual(expect.arrayContaining([cardA, textId]));
     expect(exported).not.toContain(cardB);
     expect(exported).not.toContain(cardU);
-    // pin / star / info / react on a hidden card: exactly a missing message; on one's own card: not refused as absent
+    // pin / star / info / react: on a hidden card the answer is "message not found" for THAT id; the very same
+    // call on a card the rep may read is not (so the 404 is the filter, not a wrong route or a wrong body).
     const absent = await http('repA', 'POST', `/conversations/${conv}/messages/${randomUUID()}/star`);
-    expect(absent.status).toBe(404);
+    expect([absent.status, absent.code]).toEqual([404, CommErrorCode.MESSAGE_NOT_FOUND]);
     for (const tail of [['POST', 'star'], ['POST', 'pin'], ['GET', 'info'], ['POST', 'reactions']] as const) {
-      const r = await http('repA', tail[0], `/conversations/${conv}/messages/${cardB}/${tail[1]}`, tail[0] === 'POST' ? { emoji: '👍' } : undefined);
-      expect([tail[1], r.status]).toEqual([tail[1], 404]);
+      const call = (id: string) => http('repA', tail[0], `/conversations/${conv}/messages/${id}/${tail[1]}`, tail[0] === 'POST' ? { emoji: '\u{1F44D}' } : undefined);
+      const hidden = await call(cardB);
+      expect([tail[1], hidden.status, hidden.code, hidden.json]).toEqual([tail[1], 404, CommErrorCode.MESSAGE_NOT_FOUND, absent.json]);
+      const visible = await call(cardA);
+      expect([tail[1], visible.code === CommErrorCode.MESSAGE_NOT_FOUND]).toEqual([tail[1], false]);
     }
     expect((await http('repA', 'POST', `/conversations/${conv}/messages/${cardA}/star`)).status).toBeLessThan(300);
     const starred = (await http('repA', 'GET', '/me/starred')).json.items as Array<{ message: { id: string } }>;
@@ -382,5 +390,167 @@ describe('4. the card follows the CURRENT owner of its prospect', () => {
     expect(await listIds('repA')).not.toContain(cardU);
     expect(await listIds('repB')).not.toContain(cardU);
     expect(await listIds('manager')).toContain(cardU);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// 5. hardening: roles that are NOT representatives, parity of the two statements of the rule, fail-closed,
+//    forward, the pins list. Fresh fixtures: section 4 moved B's first lead to A.
+// ---------------------------------------------------------------------------------------------------------
+
+/** A prospect owned (through the real create path) by `owner`, one trial for it, and its card. */
+async function freshCard(owner: string, name: string, extra: Record<string, unknown> = {}): Promise<{ prospect: string; trial: string; card: string }> {
+  const prospect = (await http(owner, 'POST', '/sales-pipeline/leads', { displayName: name, contact: { parentName: `Synthetic Parent ${name}`, phone: `+1555779${String(++slot).padStart(4, '0')}` } })).json.id as string;
+  const trial = await trialFor(prospect, name, who[owner].id);
+  const card = await postTrialCard(trial, name, extra);
+  return { prospect, trial, card };
+}
+const drainAll = async () => {
+  sent.length = 0;
+  const w = new OutboxWorker(g.prisma, g.notifications, recording as never, g.identity, g.pipeline);
+  while ((await w.drain(500)) > 0) { /* all pending */ }
+};
+const exceptFor = (messageId: string) => new Set(sent.find((x) => x.event === 'message.created' && x.payload.messageId === messageId)?.except ?? []);
+
+describe('5a. a Sales member who is ALSO the manager of Operations or of the Teachers department is not a representative', () => {
+  // The guarded path cannot make this person (a department member must be admin/coverage, a manager must have
+  // the manager role), so the rows are written the way a legacy or hand-repaired database could hold them,
+  // with the guard triggers off. The rule says such a person is on the trial desk and keeps full visibility.
+  const originalManager = new Map<string, string | null>();
+  async function dualRole(key: string, kind: 'operations' | 'teachers'): Promise<void> {
+    await staffWho(key, key, 'admin', true);
+    const [d] = await g.prisma.$queryRawUnsafe<Array<{ id: string; manager_id: string | null }>>(
+      `select id::text, manager_id::text from chat.department where organization_id = $1::uuid and kind = $2`, orgId, kind);
+    originalManager.set(d.id, d.manager_id);
+    await rows(`update chat.department set manager_id = $1::uuid where id = $2::uuid`, who[key].id, d.id);
+  }
+  afterAll(async () => {
+    for (const [id, manager] of originalManager) await rows(`update chat.department set manager_id = $1::uuid where id = $2::uuid`, manager, id);
+  });
+
+  it('reads every trial card and is never excluded from the realtime event', async () => {
+    await dualRole('repOps', 'operations');
+    await dualRole('repTeachers', 'teachers');
+    for (const k of ['repOps', 'repTeachers']) expect([k, (await http(k, 'POST', `/trials/groups/${conv}/join`)).status < 300]).toEqual([k, true]);
+    const b = await freshCard('repB', 'Orchid Dual-Role-Prospect');
+    await drainAll();
+    // a plain representative who does not own it (A) is excluded; the owner (B) and the two dual-role people are not
+    expect(exceptFor(b.card)).toEqual(new Set([who.repA.id]));
+    for (const k of ['repOps', 'repTeachers']) expect([k, await listIds(k, '?limit=100')]).toEqual([k, expect.arrayContaining([b.card, cardU, cardA])]);
+    const own = await listIds('repB', '?limit=100');
+    expect([own.includes(b.card), own.includes(cardU)]).toEqual([true, false]);
+    expect(await listIds('repA', '?limit=100')).not.toContain(b.card);
+    for (const k of ['repOps', 'repTeachers']) {
+      const reps = await salesRepsAmong(g.prisma, orgId, [who[k].id]);
+      expect([k, reps.size]).toEqual([k, 0]);
+    }
+  });
+});
+
+describe('5b. salesRepScope and salesRepsAmong state one rule', () => {
+  it('agree on every actor shape (rep, Sales manager, super admin, Operations, Teachers, departed, another organization)', async () => {
+    const lessons = app.get(LessonService, { strict: false });
+    const prisma = app.get(PrismaService, { strict: false });
+    // an inactive, departed Sales member, and a Sales member of ANOTHER organization
+    const departed = await g.prisma.staff.create({ data: { organizationId: orgId, name: 'departed_sales', role: 'admin', isActive: false, leftAt: new Date() } });
+    await rows(`insert into chat.department_member (staff_id, organization_id, department_id, position) values ($1::uuid, $2::uuid, $3::uuid, 'supervisor')`, departed.id, orgId, m.departments.sales);
+    const org2 = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.organization (id, slug, display_name) values ('${org2}'::uuid, 'pd59cards-${org2.slice(0, 8)}', 'other academy')`);
+    const outsider = await g.prisma.staff.create({ data: { organizationId: org2, name: 'outsider_sales', role: 'admin', isActive: true } });
+    await rows(`insert into chat.department (organization_id, kind, display_name) values ($1::uuid, 'sales', 'Sales')`, org2);
+    await rows(`insert into chat.department_member (staff_id, organization_id, department_id, position)
+                select $1::uuid, $2::uuid, id, 'supervisor' from chat.department where organization_id = $2::uuid and kind = 'sales'`, outsider.id, org2);
+    // label, staff id, organization, isActive, staff role, is a representative
+    const shapes: Array<[string, string, string, boolean, string, boolean]> = [
+      ['rep A', who.repA.id, orgId, true, 'admin', true],
+      ['rep B', who.repB.id, orgId, true, 'admin', true],
+      ['Sales manager', who.manager.id, orgId, true, 'manager', false],
+      ['super admin', who.superAdmin.id, orgId, true, 'super_admin', false],
+      ['Operations supervisor', who.ops.id, orgId, true, 'admin', false],
+      ['Teachers supervisor', who.teachers.id, orgId, true, 'admin', false],
+      ['the teacher', who.teacher.id, orgId, true, 'admin', false],
+      ['departed Sales member', departed.id, orgId, false, 'admin', true],
+      ['Sales member of another organization (in its own)', outsider.id, org2, true, 'admin', true],
+    ];
+    for (const [label, id, org, active, role, expected] of shapes) {
+      const actor = { actorId: id, kind: 'staff', displayName: label, locale: 'en', isActive: active, staffRole: role, organizationId: org } as never;
+      const viaScope = (await salesRepScope(prisma, lessons, actor)) !== null;
+      const viaAmong = (await salesRepsAmong(prisma, org, [id])).has(id);
+      expect([label, 'scope', viaScope]).toEqual([label, 'scope', expected]);
+      expect([label, 'among', viaAmong]).toEqual([label, 'among', expected]);
+    }
+    // another organization's staff are never this organization's representatives
+    expect((await salesRepsAmong(prisma, orgId, [outsider.id])).size).toBe(0);
+    // null = every staff member of the organization: the representatives only
+    const all = await salesRepsAmong(prisma, orgId, null);
+    expect(all.has(who.repA.id) && all.has(who.repB.id) && all.has(departed.id)).toBe(true);
+    for (const k of ['manager', 'superAdmin', 'ops', 'teachers', 'teacher']) expect([k, all.has(who[k].id)]).toEqual([k, false]);
+    expect(all.has(outsider.id)).toBe(false);
+  });
+});
+
+describe('5c. fail closed: a card that does not name a readable trial is hidden from every representative', () => {
+  it('no trialId, a trialId that is not a uuid, a trial that does not exist, and a trial without a prospect', async () => {
+    const mk = (extra: Record<string, unknown>, trial: string) => postTrialCard(trial, 'Nebula Orphan-Prospect', extra);
+    // postCard spreads `extra` over trialId: undefined drops the key from the JSON, null and a string replace it
+    const noKey = await mk({ trialId: undefined }, trialA);
+    const notUuid = await mk({ trialId: 'not-a-uuid' }, trialA);
+    const nullKey = await mk({ trialId: null }, trialA);
+    const missingTrial = await mk({ trialId: randomUUID() }, trialA);
+    // a real trial row whose prospect_id is NULL (if the schema allows one)
+    const noProspect = randomUUID();
+    let orphan: string | null = null;
+    try {
+      await rows(
+        `insert into chat.lesson (id, organization_id, teacher_id, kind, starts_at, ends_at, created_by, created_by_kind, prospect_id)
+         values ($1::uuid, $2::uuid, $3::uuid, 'trial', now() - interval '9 days', now() - interval '9 days' + interval '30 minutes', $4::uuid, 'staff', null)`,
+        noProspect, orgId, m.teachers[0].id, who.ops.id);
+      orphan = await mk({}, noProspect);
+    } catch {
+      orphan = null;
+    }
+    const generated = await g.prisma.$queryRawUnsafe<Array<{ trial_id: string | null }>>(
+      `select trial_id::text from chat.message_card where message_id = any($1::uuid[])`, [noKey, notUuid, nullKey]);
+    expect(generated.map((r) => r.trial_id)).toEqual([null, null, null]);
+    const hidden = [noKey, notUuid, missingTrial, nullKey, ...(orphan ? [orphan] : [])];
+    for (const k of ['repA', 'repB']) {
+      const ids = await listIds(k, '?limit=100');
+      for (const id of hidden) expect([k, id, ids.includes(id)]).toEqual([k, id, false]);
+    }
+    for (const k of ['manager', 'superAdmin', 'ops', 'teacher', 'teachers']) {
+      const ids = await listIds(k, '?limit=100');
+      for (const id of hidden) expect([k, id, ids.includes(id)]).toEqual([k, id, true]);
+    }
+    await drainAll();
+    for (const id of hidden) expect([id, exceptFor(id).has(who.repA.id), exceptFor(id).has(who.repB.id)]).toEqual([id, true, true]);
+  });
+});
+
+describe('5d. forward and pins', () => {
+  it('forwarding a hidden card is "message not found"; a card the rep may read is "not forwardable" (cards never leave); the manager gets the latter for either', async () => {
+    const f = (actor: string, id: string) => http(actor, 'POST', `/conversations/${conv}/messages/forward`, { messageIds: [id], toConversationIds: [randomUUID()] });
+    const hidden = await f('repA', cardU);
+    expect([hidden.status, hidden.code]).toEqual([404, CommErrorCode.MESSAGE_NOT_FOUND]);
+    const own = await f('repA', cardA);
+    expect([own.status, own.code]).toEqual([403, CommErrorCode.MESSAGE_NOT_FORWARDABLE]);
+    const manager = await f('manager', cardU);
+    expect([manager.status, manager.code]).toEqual([403, CommErrorCode.MESSAGE_NOT_FORWARDABLE]);
+  });
+
+  it('the pins list shows a representative only the pinned cards they may read', async () => {
+    const x = await freshCard('repA', 'Vega Pin-Alpha');
+    const y = await freshCard('repB', 'Rigel Pin-Bravo');
+    for (const id of [x.card, y.card]) expect([id, (await http('manager', 'POST', `/conversations/${conv}/messages/${id}/pin`)).status < 300]).toEqual([id, true]);
+    const pins = async (k: string) => ((await http(k, 'GET', `/conversations/${conv}/messages/pins`)).json.pins as Array<{ message: { id: string } }>).map((p) => p.message.id);
+    const a = await pins('repA');
+    expect(a).toContain(x.card);
+    expect(a).not.toContain(y.card);
+    const b = await pins('repB');
+    expect(b).toContain(y.card);
+    expect(b).not.toContain(x.card);
+    expect(await pins('manager')).toEqual(expect.arrayContaining([x.card, y.card]));
+    // and rep A cannot pin B's card
+    const intruder = await http('repA', 'POST', `/conversations/${conv}/messages/${y.card}/pin`);
+    expect([intruder.status, intruder.code]).toEqual([404, CommErrorCode.MESSAGE_NOT_FOUND]);
   });
 });
