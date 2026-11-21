@@ -52,6 +52,17 @@ const ALLOWED: ReadonlyArray<string> = [
   // grant on chat.parent_file, and parent-file-confinement.spec.ts fails the
   // build if any source outside src/parent-profile names the table, its model
   // or these fields. The audit trail names changed fields, never their values.
+  // PD-59 (owner decision 2026-11-21): Sales stores a prospective parent's phone and
+  // WhatsApp number on a lead until it is converted. Same structure again: no
+  // request-role grant on chat.sales_lead_contact, and
+  // sales-pipeline-confinement.spec.ts fails the build if any source outside
+  // src/sales-pipeline names the table, its model or these fields. Audit rows
+  // name changed fields, never their values.
+  'phone            text constraint sales_lead_contact_phone_is_confined check',
+  'whatsapp         text constraint sales_lead_contact_whatsapp_is_confined check',
+  'constraint sales_lead_contact_has_channel check (num_nonnulls(phone, whatsapp, email) > 0)',
+  'confinedLeadPhone       String?   @map("phone")',
+  'confinedLeadWhatsapp    String?   @map("whatsapp")',
   'phone text constraint parent_file_phone_is_admin_only check',
   'adminOnlyParentPhone String?  @map("phone")',
   // ...and its one-time backfill, which copies the phone Sales typed for a

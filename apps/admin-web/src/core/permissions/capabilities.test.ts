@@ -84,6 +84,9 @@ describe('navigation lists what a role may open', () => {
     }
   })
 
+  /** PD-59: the Sales pipeline waits for `sales`, which none of the steps below confirm until the last. */
+  const withoutPipeline = (role: Parameters<typeof visibleAreas>[0]) => visibleAreas(role).filter((a) => a !== 'sales-pipeline')
+
   it('nothing else is hidden: navigation is the openable areas minus Teacher statistics, Teacher credentials (ADMIN-006), Instalments, Parents, Payments, Materials, the Schedule and the Scheduling and Sales pages until the server confirms the department', () => {
     const money = (a: string) => a === 'instalments' || a === 'parents' || a === 'payments'
     for (const role of ROLES) {
@@ -92,20 +95,20 @@ describe('navigation lists what a role may open', () => {
       // PD-52: Attendance & complaints waits for GET /teacher-records/access.
       const certs = (a: string) => a === 'certificates' || a === 'lesson-audio' || a === 'teacher-attendance' || a === 'teacher-grants' || a === 'moderation'
       expect(navAreas(role)).toEqual(
-        visibleAreas(role).filter(
+        withoutPipeline(role).filter(
           (a) => a !== 'teachers' && a !== 'trials' && a !== 'new-students' && a !== 'needs-action' && a !== 'teacher-schedules' && a !== 'student-schedules' && a !== 'teacher-profiles' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a),
         ),
       )
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'new-students' && a !== 'schedule' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'schedule' && !certs(a)))
       // PD-38: the Schedule on GET /lessons/access's `calendar`.
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(visibleAreas(role).filter((a) => a !== 'new-students' && !certs(a)))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true })).toEqual(visibleAreas(role).filter((a) => a !== 'lesson-audio' && a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true })).toEqual(visibleAreas(role).filter((a) => a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true })).toEqual(visibleAreas(role).filter((a) => a !== 'teacher-grants' && a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true })).toEqual(visibleAreas(role).filter((a) => a !== 'moderation'))
-      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true })).toEqual(visibleAreas(role))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && !certs(a)))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'lesson-audio' && a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'teacher-attendance' && a !== 'teacher-grants' && a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'teacher-grants' && a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'moderation'))
+      expect(navAreas(role, { lessonManager: true, billingReader: true, materialsManager: true, calendar: true, operations: true, certificates: true, lessonAudio: true, teacherAttendance: true, teacherGrants: true, moderation: true, sales: true })).toEqual(visibleAreas(role))
     }
   })
 
@@ -133,6 +136,20 @@ describe('navigation lists what a role may open', () => {
       }
     }
     expect(navAreas('finance', { sales: true })).not.toContain('trials')
+  })
+
+  it('PD-59: the Sales pipeline is offered only on the server\'s `sales` -- never on Operations or the Teachers department alone, never to a department role', () => {
+    for (const role of ['super_admin', 'manager', 'admin', 'coverage'] as const) {
+      expect(navAreas(role, { sales: true })).toContain('sales-pipeline')
+      for (const opts of [{}, { operations: true }, { lessonManager: true }, { billingReader: true }]) {
+        expect(navAreas(role, opts), role).not.toContain('sales-pipeline')
+      }
+    }
+    for (const role of ['finance', 'technical', 'academic', 'specialist'] as const) {
+      expect(navAreas(role, { sales: true }), role).not.toContain('sales-pipeline')
+    }
+    // It leads the Sales pages: a lead comes before its trial.
+    expect(visibleAreas('admin').indexOf('sales-pipeline')).toBeLessThan(visibleAreas('admin').indexOf('trials'))
   })
 })
 

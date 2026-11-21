@@ -7,6 +7,7 @@ import { AdminModule } from './admin/admin.module';
 import { StaffProfileModule } from './staff-profile/staff-profile.module';
 import { OrgStructureModule } from './org/org-structure.module';
 import { LessonModule } from './lessons/lesson.module';
+import { SalesPipelineModule } from './sales-pipeline/sales-pipeline.module';
 import { TeacherFileModule } from './teacher-file/teacher-file.module';
 import { SupervisionModule } from './supervision/supervision.module';
 import { CertificateModule } from './certificates/certificate.module';
@@ -65,6 +66,7 @@ import { ModerationModule } from './moderation/moderation.module';
     StaffProfileModule,
     OrgStructureModule,
     LessonModule,
+    SalesPipelineModule,
     TeacherFileModule,
     SupervisionModule,
     CertificateModule,

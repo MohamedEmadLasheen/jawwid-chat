@@ -60,7 +60,15 @@ function toChild(c: ChildDraft): IntakeChildInput {
   }
 }
 
-type Mode = { kind: 'new' } | { kind: 'add'; familyId: string; familyName: string }
+/** PD-59: a Sales lead being handed over opens the form with what Sales already knows (`prefill`). */
+export interface IntakePrefill {
+  name: string
+  phone: string
+  email: string
+  country: string
+}
+
+type Mode = { kind: 'new'; prefill?: IntakePrefill } | { kind: 'add'; familyId: string; familyName: string }
 
 /**
  * PD-42: "Add family" (from the Parents list) and "Add child" (from a Parent
@@ -71,16 +79,28 @@ type Mode = { kind: 'new' } | { kind: 'add'; familyId: string; familyName: strin
  * PARENT_EXISTS offers to add the children to that family instead; CHILD_EXISTS
  * asks whether it is another child.
  */
-export function IntakeDialog({ options, initial, onClose }: { options: IntakeOptions; initial: Mode; onClose: () => void }) {
+export function IntakeDialog({
+  options,
+  initial,
+  onClose,
+  onEntered,
+}: {
+  options: IntakeOptions
+  initial: Mode
+  onClose: () => void
+  /** PD-59: called once the family (or child) is saved, before the dialog shows its result. */
+  onEntered?: () => void
+}) {
   const tx = useCopy()
   const { locale } = useI18n()
   const uid = useId()
   const [mode, setMode] = useState<Mode>(initial)
   const [intakeId, setIntakeId] = useState(newIntakeId)
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [country, setCountry] = useState('')
+  const prefill = initial.kind === 'new' ? initial.prefill : undefined
+  const [name, setName] = useState(prefill?.name ?? '')
+  const [phone, setPhone] = useState(prefill?.phone ?? '')
+  const [email, setEmail] = useState(prefill?.email ?? '')
+  const [country, setCountry] = useState(prefill?.country ?? '')
   const [onBehalfOf, setOnBehalfOf] = useState('')
   const [children, setChildren] = useState<ChildDraft[]>([emptyChild()])
   const [confirmOver, setConfirmOver] = useState(false)
@@ -120,7 +140,10 @@ export function IntakeDialog({ options, initial, onClose }: { options: IntakeOpt
 
   const save = () => {
     const list = children.map(toChild)
-    const done = (r: IntakeResult) => setResult(r)
+    const done = (r: IntakeResult) => {
+      setResult(r)
+      onEntered?.()
+    }
     if (mode.kind === 'new') {
       enter.mutate(
         {

@@ -10,7 +10,7 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 | 1 | Conversations | Chat `/chat`; All conversations `/admin/conversations` (super admin); Moderation `/moderation` | role; `moderation.view` |
 | 2 | Dashboard | Dashboard `/dashboard`; Tasks `/tasks` | role |
 | 3 | People & Organization | *Staff & accounts:* Accounts `/accounts`, Users `/admin/users` · *Teachers:* Teachers `/teachers` (`/admin/teachers`), Credentials review `/teacher-profiles`, Attendance & complaints, Grants & testimonials · *Families:* Parents `/parents` · *Organization:* `/organization` (`/admin/teams`) | role; `lessonManager`; `billingReader`; `teacherAttendance`/`teacherGrants` |
-| 4 | Sales | Trial lessons `/trials`; New students `/trials/new-students` | `sales`/`operations`/`lessonManager` |
+| 4 | Sales | Sales pipeline `/sales/pipeline` (PD-59); Trial lessons `/trials`; New students `/trials/new-students` | `sales` (pipeline); `sales`/`operations`/`lessonManager` |
 | 5 | Scheduling | Academy calendar `/schedule`; Teachers' schedules `/teachers/schedules`; Student schedules `/schedule/students` | `calendar`; `lessonManager` |
 | 6 | Operations | Needs action `/teachers/needs-action`; Materials; Escalations `/cases`; Certificates; Lesson audio | `lessonManager`; `materialsManager`; role; `certificates`; `lessonAudio` |
 | 7 | Finance | Instalments `/instalments`; Payments `/payments` | `billingReader` |
@@ -27,21 +27,36 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 - **Not merged yet** (deliberately, no functional gain for the risk): the two route trees `/teachers/*` and `/admin/teachers/*`; the `/cases` and `/teachers/cases` registrations; Chat + All conversations as tabs of one page. Candidates for a later clean-up PR.
 - **No student directory exists** (only `/students/:id` and the paused/stopped list), so Students is not a People entry. It needs a list endpoint.
 
-## Sales pipeline — proposal (needs a migration slot and an owner decision on lead contact storage)
-Stages: New Lead · Contacted · Trial Booked · Trial Completed · Converted · Lost.
+## Sales pipeline (PD-59, built)
+Stages: New Lead · Contacted · Trial Booked · Trial Completed · Converted · Lost. Page: **Sales pipeline**
+`/sales/pipeline`, first page of Sales, offered on the server's `sales` answer (`GET /lessons/access`: the Sales
+department and the super admin) -- NavArea `sales-pipeline`.
 
-| Stage | Source today |
+| Stage | Where it comes from |
 |---|---|
-| Trial Booked | `trial_prospect` with a scheduled trial `lesson` (kind=trial) |
-| Trial Completed | that lesson held; `trial_outcome` pending or recorded |
-| Converted | `trial_outcome.result = subscribed` → New students / `family-intake` hand-over to Operations |
-| Lost | `trial_outcome` `not_subscribed`/`no_show`, or an explicit loss |
-| **New Lead, Contacted** | **no record exists** |
+| New Lead, Contacted, Lost *before a trial* | **stored** on the lead: `trial_prospect.pipeline_stage` (+ `lost_reason`, `last_contacted_at`, `next_follow_up_on`, `follow_up_note`) |
+| Trial Booked | **derived**: the latest live trial lesson is still ahead |
+| Trial Completed | **derived**: that trial has started and no outcome is recorded yet |
+| Converted | **derived**: a trial is `subscribed`, or the lead was handed over (`converted_at`) |
+| Lost after a trial | **derived**: the latest trial is `not_subscribed` / `no_show` |
 
-Safest implementation, using the existing architecture (no second student/lead system): a lead is a
-`trial_prospect` with no lesson yet. Add nullable columns to `trial_prospect` — `pipeline_stage`
-(`new_lead|contacted|lost`), `lost_reason`, `last_contacted_at`, `next_follow_up_on`, `follow_up_note`
-(additive, backwards compatible). Stages 3–5 stay derived on read from lessons/outcomes, never copied.
-One read endpoint returns prospects with their derived stage; the UI is a board/list in the Sales section.
-Open: whether a lead's phone/e-mail may be stored (today parent contact is confined to
-`src/new-students`, G-07) — if not, a lead stays name-only until it books a trial.
+No second lead system: a lead is a `trial_prospect`; derived stages are never copied
+(`apps/api/src/sales-pipeline/pipeline-stage.ts`). Booking a trial for a lost lead reopens it.
+
+**Contact (decided 2026-11-21).** A lead may carry the parent's name, phone, WhatsApp number and e-mail in the
+confined table `chat.sales_lead_contact` (G-07: no request-role grant, RLS on, read and written only by
+`src/sales-pipeline`, enforced by `sales-pipeline-confinement.spec.ts`). It is never written to a parent or
+contact table before conversion.
+- **Who:** the super admin and the Sales department (manager, member), decided on the server on every call.
+  Teachers, Operations, Finance and the Teachers department are refused.
+- **Lists** carry only whether a phone / WhatsApp / e-mail is on file. **The detail read** returns the contact and
+  is audited (`sales_lead.contact_viewed`). Every change is audited by field name, never value
+  (`sales_lead.created | stage_changed | contacted | contact_updated | follow_up_changed | converted`); the rows
+  appear in each person's action log. No contact value reaches a log line or an error message.
+- **Convert** keys the lead's e-mail and numbers with PD-42's contact key and looks for a family that already holds
+  one: found and the caller may handle it -> the lead is **linked** to that family (no second parent) and its own copy
+  of the contact is deleted; not found -> the **existing family intake** opens pre-filled (the hand-over Operations
+  receives), and converting again links the new family; a family that is not the caller's answers as the intake does,
+  naming nothing.
+
+Open (owner): retention of the contact of a lead that is never converted (no purge is built yet).

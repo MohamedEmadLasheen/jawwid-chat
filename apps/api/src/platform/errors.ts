@@ -616,6 +616,15 @@ export enum CommErrorCode {
   PARENT_EXISTS = 'COMM.PARENT_EXISTS',
   /** A child with this name (and date of birth) is already in the family; resend with confirmDuplicate for twins. 409. */
   CHILD_EXISTS = 'COMM.CHILD_EXISTS',
+  // --- PD-59: the Sales pipeline ---
+  /** The pipeline (and a lead's contact) is for Sales and the super admin. 403, before any lookup. */
+  SALES_LEAD_DENIED = 'COMM.SALES_LEAD_DENIED',
+  /** No such lead in this organization. 404. */
+  SALES_LEAD_NOT_FOUND = 'COMM.SALES_LEAD_NOT_FOUND',
+  /** A field failed validation (the message names the field, never its value). 400. */
+  SALES_LEAD_INVALID = 'COMM.SALES_LEAD_INVALID',
+  /** The change does not apply to the lead's stage (a trial decides it, already converted, no contact). 409. */
+  SALES_LEAD_STATE = 'COMM.SALES_LEAD_STATE',
   // --- PD-57 WP-1: Report (roadmap 2026-11-03 §5.4) ---
   /**
    * The message or person is not one the reporter can see now: a message they

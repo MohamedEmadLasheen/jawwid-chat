@@ -2112,6 +2112,16 @@ model TrialProspect {
   learnerId      String?  @map("learner_id") @db.Uuid
   createdBy      String   @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// PD-59 (20261121100000_chat_pd059_sales_pipeline): the STORED stages only (new_lead | contacted | lost).
+  /// Trial Booked / Trial Completed / Converted and a trial's Lost are derived on read, never stored.
+  pipelineStage     String?   @map("pipeline_stage")
+  lostReason        String?   @map("lost_reason")
+  lastContactedAt   DateTime? @map("last_contacted_at") @db.Timestamptz
+  nextFollowUpOn    DateTime? @map("next_follow_up_on") @db.Date
+  followUpNote      String?   @map("follow_up_note")
+  /// A hand-over made without a trial: the family the lead was linked to.
+  convertedAt       DateTime? @map("converted_at") @db.Timestamptz
+  convertedFamilyId String?   @map("converted_family_id") @db.Uuid
 
   lessons  Lesson[]
   students TrialStudent[]
@@ -3099,6 +3109,30 @@ model TrialProspectLocation {
   recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz
 
   @@map("trial_prospect_location")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-59 -- 20261121100000_chat_pd059_sales_pipeline.sql owns the DDL.
+// A prospective parent's contact, CONFINED (G-07): read and written ONLY by
+// src/sales-pipeline (sales-pipeline-confinement.spec.ts).
+// =====================================================================
+
+/// A lead's contact. No request-role grant; deleted when the lead is linked to an existing family.
+model SalesLeadContact {
+  prospectId              String    @id @map("prospect_id") @db.Uuid
+  organizationId          String    @map("organization_id") @db.Uuid
+  parentName              String    @map("parent_name")
+  confinedLeadPhone       String?   @map("phone")
+  confinedLeadWhatsapp    String?   @map("whatsapp")
+  confinedLeadEmail       String?   @map("email")
+  countryCode             String?   @map("country_code")
+  createdBy               String    @map("created_by") @db.Uuid
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedBy               String?   @map("updated_by") @db.Uuid
+  updatedAt               DateTime? @map("updated_at") @db.Timestamptz
+
+  @@map("sales_lead_contact")
   @@schema("chat")
 }
 

@@ -86,9 +86,9 @@ describe('The navigation registry', () => {
     // PD-16, now Sales), the Teachers' and Student schedules (Scheduling), Teacher credentials review, Escalations (PD-35 B5) and
     // Certificates (PD-41) and Lesson audio (PD-48, under More), and
     // the two teacher-records pages (PD-52, their own group under People).
-    expect(keys).toHaveLength(37)
+    expect(keys).toHaveLength(38)
     expect([...keys].sort()).toEqual(
-      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
+      [...ADMIN_SECTIONS.map((s) => s.key), 'needs-action', 'chat', 'accounts', 'materials', 'schedule', 'teacher-schedules', 'student-schedules', 'sales-pipeline', 'trials', 'new-students', 'teacher-profiles', 'cases', 'certificates', 'lesson-audio', 'moderation', 'teacher-attendance', 'teacher-grants'].sort(),
     )
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations', '/moderation'])
@@ -124,6 +124,8 @@ describe('The navigation registry', () => {
           ...(!billingReader && visibleAreas(role).includes('parents') ? ['parents'] : []),
           // PD-27: Payments likewise.
           ...(!billingReader && visibleAreas(role).includes('payments') ? ['payments'] : []),
+          // PD-59: the Sales pipeline waits for `sales` (GET /lessons/access), not asked here.
+          ...(visibleAreas(role).includes('sales-pipeline') ? ['sales-pipeline'] : []),
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
           // New students waits for Sales or Operations (GET /lessons/access), neither asked here.
           ...(visibleAreas(role).includes('new-students') ? ['new-students'] : []),
@@ -154,7 +156,7 @@ describe('The navigation registry', () => {
     // (PD-35 B5) and Materials, the library it manages with the Teachers
     // manager (PD-29), and Lesson audio, whose keys it holds (PD-48).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio'])
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/moderation', '/accounts', '/teacher-profiles', '/sales/pipeline', '/trials', '/trials/new-students', '/schedule', '/teachers/schedules', '/schedule/students', '/teachers/needs-action', '/materials', '/cases', '/certificates', '/lesson-audio'])
     // PD-38: an operator is offered the Schedule on the server's word only
     // (the department roles -- finance, technical, academic -- never are).
     for (const role of ['manager', 'admin', 'coverage'] as const) {
@@ -257,7 +259,7 @@ describe('No URL was lost in the redesign', () => {
 
   it('every URL that existed before the redesign still opens for the roles that had it', async () => {
     const legacy = [
-      '/trials', '/trials/new-students', '/schedule', '/teachers', '/teachers/needs-action', '/teachers/schedules',
+      '/trials', '/trials/new-students', '/sales/pipeline', '/schedule', '/teachers', '/teachers/needs-action', '/teachers/schedules',
       '/teachers/students', '/teachers/files', '/teachers/cases', '/cases', '/certificates',
       '/lesson-audio', '/moderation', '/instalments', '/parents', '/payments', '/materials', '/tasks', '/dashboard',
       '/stories', '/accounts', '/organization', '/calls', '/chat', '/teacher-profiles', '/teacher-attendance', '/teacher-grants',
@@ -598,7 +600,7 @@ describe('The drawer, below desktop width', () => {
     // PD-52: its own heading under People.
     expect(within(people).getByRole('link', { name: 'الحضور والتأخير والأعذار والشكاوى' })).toHaveAttribute('href', '/admin/teacher-attendance')
     expect(within(people).getByRole('link', { name: 'المنح والشهادات الطيبة' })).toHaveAttribute('href', '/admin/teacher-grants')
-    expect(within(nav).getAllByRole('link')).toHaveLength(37)
+    expect(within(nav).getAllByRole('link')).toHaveLength(38)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {
