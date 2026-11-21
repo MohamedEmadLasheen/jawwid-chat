@@ -49,7 +49,6 @@ dependencies:
 
   # Storage. Tokens go to the platform keystore/keychain, never to preferences (§50, §56).
   flutter_secure_storage: ^11.0.0
-  sqflite: ^2.4.3
   shared_preferences: ^2.5.5
   path: ^1.9.1
 
