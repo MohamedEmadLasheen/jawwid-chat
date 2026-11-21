@@ -1,0 +1,1319 @@
+{
+  "lesson": 8,
+  "review": {
+    "status": "pending",
+    "by": null,
+    "note": "Rewritten as data from the old lesson (jawwid-lessons @ c231532 arabic/lesson-8/lib/tanweenData.ts, read as text from the quarantined copy, never built or run). Three tanween units: a word belongs to one if it ENDS in that tanween. Every word keeps its tanween (finalMarkException), held until the file is approved."
+  },
+  "provenance": {
+    "source": "jawwid-lessons @ c231532, src/lessons/arabic/lesson-8 (read as text, never built or run)",
+    "sha256": {
+      "lib/tanweenData.ts": "a1266cb188aa08664f530068fd433ed602c4479fe4a7e28e78be700acd2611bb"
+    }
+  },
+  "finalMark": "sukun",
+  "retiredIds": [],
+  "units": [
+    {
+      "id": "tanween_fath",
+      "letters": [],
+      "tanween": "fath",
+      "name": "تَنْوِينُ الْفَتْحْ",
+      "forms": [
+        "ـً"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tanween_fath-001",
+          "text": "كِتَابًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-002",
+          "text": "وَلَدًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-003",
+          "text": "قَلَمًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-004",
+          "text": "مَسْجِدًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-005",
+          "text": "كُرْسِيًّا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-006",
+          "text": "بَيْتًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-007",
+          "text": "مَاءً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-008",
+          "text": "نُورًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-009",
+          "text": "بَحْرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-010",
+          "text": "قَمَرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-011",
+          "text": "نَهْرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-012",
+          "text": "شَجَرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-013",
+          "text": "زَهْرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-014",
+          "text": "طَيْرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-015",
+          "text": "سَمَكًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-016",
+          "text": "عِنَبًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-017",
+          "text": "تُفَّاحًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-018",
+          "text": "مَوْزًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-019",
+          "text": "خُبْزًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-020",
+          "text": "حَلِيبًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-021",
+          "text": "عَسَلًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-022",
+          "text": "بَابًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-023",
+          "text": "دَرْسًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-024",
+          "text": "صَفًّا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-025",
+          "text": "فَصْلًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-026",
+          "text": "عِلْمًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-027",
+          "text": "حَرْفًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-028",
+          "text": "رَقْمًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-029",
+          "text": "لَوْنًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-030",
+          "text": "صَوْتًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-031",
+          "text": "ضَوْءًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-032",
+          "text": "ظِلًّا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-033",
+          "text": "جِسْرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-034",
+          "text": "طَرِيقًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-035",
+          "text": "مَدْرَسَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-036",
+          "text": "حَدِيقَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-037",
+          "text": "سَيَّارَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-038",
+          "text": "طَائِرَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-039",
+          "text": "سَفِينَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-040",
+          "text": "قِطَّةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-041",
+          "text": "كَلْبًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-042",
+          "text": "أَسَدًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-043",
+          "text": "فِيلًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-044",
+          "text": "أَرْنَبًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-045",
+          "text": "عُصْفُورًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-046",
+          "text": "فَرَاشَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-047",
+          "text": "نَحْلَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-048",
+          "text": "وَرْدَةً",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-049",
+          "text": "شَمْسًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-050",
+          "text": "قَصْرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-051",
+          "text": "جَبَلًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-052",
+          "text": "سَهْلًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-053",
+          "text": "نَجْمًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-054",
+          "text": "غَيْمًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_fath-055",
+          "text": "مَطَرًا",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        }
+      ]
+    },
+    {
+      "id": "tanween_damm",
+      "letters": [],
+      "tanween": "damm",
+      "name": "تَنْوِينُ الضَّمّْ",
+      "forms": [
+        "ـٌ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tanween_damm-001",
+          "text": "كِتَابٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-002",
+          "text": "قَلَمٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-003",
+          "text": "وَلَدٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-004",
+          "text": "مَسْجِدٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-005",
+          "text": "بَيْتٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-006",
+          "text": "نُورٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-007",
+          "text": "قَمَرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-008",
+          "text": "نَهْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-009",
+          "text": "بَحْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-010",
+          "text": "شَجَرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-011",
+          "text": "زَهْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-012",
+          "text": "طَيْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-013",
+          "text": "سَمَكٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-014",
+          "text": "عِنَبٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-015",
+          "text": "خُبْزٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-016",
+          "text": "عَسَلٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-017",
+          "text": "بَابٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-018",
+          "text": "دَرْسٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-019",
+          "text": "فَصْلٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-020",
+          "text": "عِلْمٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-021",
+          "text": "حَرْفٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-022",
+          "text": "رَقْمٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-023",
+          "text": "لَوْنٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-024",
+          "text": "صَوْتٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-025",
+          "text": "ضَوْءٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-026",
+          "text": "جِسْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-027",
+          "text": "طَرِيقٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-028",
+          "text": "كَلْبٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-029",
+          "text": "أَسَدٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-030",
+          "text": "فِيلٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-031",
+          "text": "قَصْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-032",
+          "text": "جَبَلٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-033",
+          "text": "سَهْلٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-034",
+          "text": "نَجْمٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-035",
+          "text": "مَطَرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-036",
+          "text": "حَلِيبٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-037",
+          "text": "غَيْمٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-038",
+          "text": "وَقْتٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-039",
+          "text": "يَوْمٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-040",
+          "text": "شَهْرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-041",
+          "text": "عَامٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-042",
+          "text": "حَجَرٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-043",
+          "text": "تُرَابٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-044",
+          "text": "رَمْلٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-045",
+          "text": "ثَلْجٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-046",
+          "text": "هَوَاءٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-047",
+          "text": "سَحَابٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-048",
+          "text": "بُسْتَانٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-049",
+          "text": "مَيْدَانٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-050",
+          "text": "دُكَّانٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-051",
+          "text": "إِنْسَانٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-052",
+          "text": "أَرْنَبٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-053",
+          "text": "عُصْفُورٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-054",
+          "text": "مَوْزٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_damm-055",
+          "text": "تُفَّاحٌ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        }
+      ]
+    },
+    {
+      "id": "tanween_kasr",
+      "letters": [],
+      "tanween": "kasr",
+      "name": "تَنْوِينُ الْكَسْرْ",
+      "forms": [
+        "ـٍ"
+      ],
+      "note": null,
+      "words": [
+        {
+          "id": "tanween_kasr-001",
+          "text": "كِتَابٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-002",
+          "text": "قَلَمٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-003",
+          "text": "وَلَدٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-004",
+          "text": "مَسْجِدٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-005",
+          "text": "بَيْتٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-006",
+          "text": "مَاءٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-007",
+          "text": "نُورٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-008",
+          "text": "بَحْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-009",
+          "text": "قَمَرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-010",
+          "text": "نَهْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-011",
+          "text": "شَجَرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-012",
+          "text": "زَهْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-013",
+          "text": "طَيْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-014",
+          "text": "سَمَكٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-015",
+          "text": "عِنَبٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-016",
+          "text": "خُبْزٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-017",
+          "text": "عَسَلٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-018",
+          "text": "بَابٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-019",
+          "text": "دَرْسٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-020",
+          "text": "فَصْلٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-021",
+          "text": "عِلْمٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-022",
+          "text": "حَرْفٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-023",
+          "text": "رَقْمٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-024",
+          "text": "لَوْنٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-025",
+          "text": "صَوْتٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-026",
+          "text": "ضَوْءٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-027",
+          "text": "جِسْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-028",
+          "text": "طَرِيقٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-029",
+          "text": "كَلْبٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-030",
+          "text": "أَسَدٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-031",
+          "text": "فِيلٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-032",
+          "text": "قَصْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-033",
+          "text": "جَبَلٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-034",
+          "text": "سَهْلٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-035",
+          "text": "نَجْمٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-036",
+          "text": "مَطَرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-037",
+          "text": "حَلِيبٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-038",
+          "text": "صَفٍّ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-039",
+          "text": "ظِلٍّ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-040",
+          "text": "غَيْمٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-041",
+          "text": "وَقْتٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-042",
+          "text": "يَوْمٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-043",
+          "text": "شَهْرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-044",
+          "text": "عَامٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-045",
+          "text": "حَجَرٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-046",
+          "text": "تُرَابٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-047",
+          "text": "رَمْلٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-048",
+          "text": "ثَلْجٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-049",
+          "text": "نَارٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-050",
+          "text": "هَوَاءٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-051",
+          "text": "سَحَابٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-052",
+          "text": "بُسْتَانٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-053",
+          "text": "مَيْدَانٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-054",
+          "text": "دُكَّانٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        },
+        {
+          "id": "tanween_kasr-055",
+          "text": "إِنْسَانٍ",
+          "was": null,
+          "review": "FINAL MARK EXCEPTION: the lesson's tanween",
+          "finalMarkException": "the lesson's tanween"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "tanween_fath-q1",
+      "kind": "contains",
+      "unit": "tanween_fath",
+      "options": [
+        "لَوْنٌ",
+        "كِتَابًا",
+        "فِيلٌ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "tanween_fath-q2",
+      "kind": "contains",
+      "unit": "tanween_fath",
+      "options": [
+        "تُرَابٌ",
+        "حَلِيبٌ",
+        "نُورًا"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tanween_fath-q3",
+      "kind": "contains",
+      "unit": "tanween_fath",
+      "options": [
+        "سَمَكًا",
+        "مَيْدَانٌ",
+        "كِتَابٍ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "tanween_damm-q1",
+      "kind": "contains",
+      "unit": "tanween_damm",
+      "options": [
+        "كِتَابٌ",
+        "فِيلٍ",
+        "صَفٍّ"
+      ],
+      "answer": 0,
+      "review": null
+    },
+    {
+      "id": "tanween_damm-q2",
+      "kind": "contains",
+      "unit": "tanween_damm",
+      "options": [
+        "عَامٍ",
+        "نَهْرٌ",
+        "سَحَابٍ"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "tanween_damm-q3",
+      "kind": "contains",
+      "unit": "tanween_damm",
+      "options": [
+        "بَحْرًا",
+        "وَلَدًا",
+        "خُبْزٌ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tanween_kasr-q1",
+      "kind": "contains",
+      "unit": "tanween_kasr",
+      "options": [
+        "شَجَرًا",
+        "كِتَابٍ",
+        "خُبْزًا"
+      ],
+      "answer": 1,
+      "review": null
+    },
+    {
+      "id": "tanween_kasr-q2",
+      "kind": "contains",
+      "unit": "tanween_kasr",
+      "options": [
+        "ظِلًّا",
+        "فَصْلًا",
+        "بَحْرٍ"
+      ],
+      "answer": 2,
+      "review": null
+    },
+    {
+      "id": "tanween_kasr-q3",
+      "kind": "contains",
+      "unit": "tanween_kasr",
+      "options": [
+        "عِنَبٍ",
+        "طَائِرَةً",
+        "عُصْفُورًا"
+      ],
+      "answer": 0,
+      "review": null
+    }
+  ]
+}
