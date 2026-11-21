@@ -200,6 +200,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onPressed: isBusy ? null : _openSignup,
                         child: Text(l10n.signupOpen),
                       ),
+                    // Apple 2.1 / 3.2: someone who is not yet a family of the academy learns how to enrol.
+                    if (!kIsWeb) const EnrolLink(),
                     // TEACHER-023: self-service recovery is for parents (PD-25); it
                     // answers alike for every name, so it cannot say who is staff. A
                     // teacher or staff member is told plainly where their way back is.
