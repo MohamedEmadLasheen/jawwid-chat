@@ -45,9 +45,20 @@ for file in "$MIGRATIONS"/*.sql; do
   # (Supabase's, ADR-014), that timeout is set on the role instead, and the
   # migration runner connects as the same role. LOCAL ends with this
   # transaction, so nothing after it is affected.
+  # APPLY_LOCK_TIMEOUT (optional, e.g. 5s): how long a migration may wait for a lock before it gives up
+  # (and rolls back whole, ledger row unwritten, safe to retry) instead of queueing behind a long
+  # transaction and blocking every other writer. Set as `set local` for the same reason as the
+  # statement timeout above: a pooler that drops the connection's `options` (Supabase's, ADR-014)
+  # would silently ignore PGOPTIONS='-c lock_timeout=...'. Unset = unchanged behaviour.
+  lock_timeout_sql=""
+  if [ -n "${APPLY_LOCK_TIMEOUT:-}" ]; then
+    [[ "$APPLY_LOCK_TIMEOUT" =~ ^[0-9]+(ms|s|min)?$ ]] || { echo "APPLY_LOCK_TIMEOUT must look like 5s, 500ms or 1min" >&2; exit 2; }
+    lock_timeout_sql="set local lock_timeout = '$APPLY_LOCK_TIMEOUT';"
+  fi
   {
     echo "begin;"
     echo "set local statement_timeout = 0;"
+    [ -z "$lock_timeout_sql" ] || echo "$lock_timeout_sql"
     cat "$file"
     echo ";"
     echo "insert into chat.schema_migrations (version) values ('$version');"
