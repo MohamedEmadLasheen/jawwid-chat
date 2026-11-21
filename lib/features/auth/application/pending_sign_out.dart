@@ -18,7 +18,8 @@ import '../../../shared/models/auth.dart';
 /// account's would keep arriving on it. So the minimum needed to finish the job -- the
 /// session's tokens -- is kept in the Keychain / Keystore ([PendingSignOutStore]) and the
 /// sign-out is retried: at app start ([start]), when connectivity returns, on a backoff
-/// timer, and before any new sign-in ([flushBeforeSignIn]).
+/// timer, before any new sign-in ([flushBeforeSignIn], bounded by [signInWait]), and once
+/// more just after it ([retryAfterSignIn]).
 ///
 /// ## What ends it
 ///
@@ -164,7 +165,9 @@ class PendingSignOutRetrier {
     });
   }
 
-  /// Best effort before a new sign-in, and never blocking it beyond [signInWait].
+  /// Best effort before a new sign-in, and never blocking it beyond [signInWait]. The attempt
+  /// is not cancelled at the bound: it carries on in the background, and a failure re-arms
+  /// the backoff timer as any other does.
   Future<void> flushBeforeSignIn() async {
     try {
       await flush(force: true).timeout(signInWait);
@@ -172,6 +175,20 @@ class PendingSignOutRetrier {
       _logger.warn('pending sign-out not flushed before sign-in', data: {'type': error.runtimeType.toString()});
     }
   }
+
+  /// After a new sign-in succeeded (LR-46 P3-3): one more forced attempt, in the background.
+  ///
+  /// The attempt before the sign-in may have been cut short by [signInWait], or failed while
+  /// the network was still coming back; the sign-in has just reached the server, so the
+  /// network is up now. If an attempt is still out, this one runs after it. After that the
+  /// backoff timer keeps retrying until the server ends the session, or the entry is given up
+  /// ([maxAttempts] answered-without-verdict attempts, or [maxAge]).
+  ///
+  /// The residual window: from the sign-in until one of those, the earlier account's session
+  /// is still live on the server, and so is whatever it still has bound to this device for
+  /// push (#537). It is never longer than the server session itself (thirty days) and, with a
+  /// working network, normally a few seconds. Never throws; never awaited by the sign-in.
+  void retryAfterSignIn() => unawaited(flush(force: true));
 
   Future<void> _flush(bool force) async {
     final entries = await _store.read();
