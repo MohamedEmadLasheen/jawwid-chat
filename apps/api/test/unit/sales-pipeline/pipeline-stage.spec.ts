@@ -16,6 +16,7 @@ import {
   optDay,
   pageOf,
   parseContact,
+  planChannelMerge,
   type DerivedStage,
   type TrialFact,
 } from '../../../src/sales-pipeline/pipeline-stage';
@@ -149,10 +150,20 @@ describe('decideConversion: link into the existing parent, never a second one', 
   it('a lead without contact cannot be matched, so it is not handed over blind', () => {
     expect(decideConversion({ hasContact: false, matchedFamilyId: null, callerMayHandle: true })).toEqual({ kind: 'no_contact' });
   });
-  it('only a lead still in the funnel converts', () => {
+  it('a lead in the funnel converts; so does one a subscribed trial made Converted whose hand-over is not recorded; never twice', () => {
     expect(['new_lead', 'contacted', 'trial_booked', 'trial_completed'].every((s) => canConvert(s as never))).toBe(true);
-    expect(canConvert('converted')).toBe(false);
+    expect(canConvert('converted')).toBe(true); // converted by a trial, converted_at still null
+    expect(canConvert('converted', false)).toBe(true);
+    expect(canConvert('converted', true)).toBe(false); // already handed over
     expect(canConvert('lost')).toBe(false);
+  });
+  it('a subscribed trial links the family Operations enrolled, whoever owns it; with none yet it waits for the enrolment', () => {
+    expect(decideConversion({ hasContact: true, matchedFamilyId: null, callerMayHandle: false, subscribedTrial: true, enrolledFamilyId: 'fam-7' }))
+      .toEqual({ kind: 'link', familyId: 'fam-7' });
+    expect(decideConversion({ hasContact: true, matchedFamilyId: null, callerMayHandle: false, subscribedTrial: true, enrolledFamilyId: null }))
+      .toEqual({ kind: 'awaiting_enrolment' });
+    expect(decideConversion({ hasContact: false, matchedFamilyId: null, callerMayHandle: true, subscribedTrial: true, enrolledFamilyId: 'fam-7' }))
+      .toEqual({ kind: 'no_contact' });
   });
 });
 
@@ -212,5 +223,31 @@ describe('input', () => {
     expect(() => pageOf('0', '0')).toThrow();
     expect(() => pageOf('101', '0')).toThrow();
     expect(() => pageOf('10', '-1')).toThrow();
+  });
+});
+
+describe('planChannelMerge: no channel is lost on a hand-over', () => {
+  const lead = { phone: 'kp', whatsapp: 'kw', email: 'ke' };
+  const both = { phoneEmpty: true, emailEmpty: true };
+
+  it('channels the family already holds need nothing', () => {
+    expect(planChannelMerge(lead, new Set(['kp', 'kw', 'ke']), { phoneEmpty: false, emailEmpty: false })).toEqual({ fillPhoneFrom: null, fillEmail: false, missing: [] });
+  });
+  it('a missing phone or e-mail goes into the family file\'s EMPTY slot', () => {
+    expect(planChannelMerge({ phone: 'kp', whatsapp: null, email: 'ke' }, new Set(['ke']), both)).toEqual({ fillPhoneFrom: 'phone', fillEmail: false, missing: [] });
+    expect(planChannelMerge({ phone: null, whatsapp: null, email: 'ke' }, new Set(), both)).toEqual({ fillPhoneFrom: null, fillEmail: true, missing: [] });
+  });
+  it('never over a stored value: a taken slot makes the channel missing (refuse, keep the contact)', () => {
+    expect(planChannelMerge({ phone: 'kp', whatsapp: null, email: null }, new Set(), { phoneEmpty: false, emailEmpty: true }).missing).toEqual(['phone']);
+    expect(planChannelMerge({ phone: null, whatsapp: null, email: 'ke' }, new Set(), { phoneEmpty: true, emailEmpty: false }).missing).toEqual(['email']);
+  });
+  it('a WhatsApp number with no free phone slot is missing; the same number as phone and WhatsApp is one', () => {
+    expect(planChannelMerge(lead, new Set(['kp', 'ke']), { phoneEmpty: false, emailEmpty: false }).missing).toEqual(['whatsapp']);
+    expect(planChannelMerge({ phone: 'kp', whatsapp: 'kp', email: null }, new Set(), both)).toEqual({ fillPhoneFrom: 'phone', fillEmail: false, missing: [] });
+    // two new numbers, one slot: the second has no room
+    expect(planChannelMerge({ phone: 'kp', whatsapp: 'kw', email: null }, new Set(), both)).toEqual({ fillPhoneFrom: 'phone', fillEmail: false, missing: ['whatsapp'] });
+  });
+  it('a family with no parent file can take nothing', () => {
+    expect(planChannelMerge({ phone: 'kp', whatsapp: null, email: null }, new Set(), null).missing).toEqual(['phone']);
   });
 });

@@ -480,6 +480,47 @@ export async function recordSignInEmail(
 }
 
 /**
+ * PD-59: a Sales lead is handed over to a family that already exists. The parent file keeps one phone
+ * and one e-mail; this says which of the two are EMPTY on the family's primary parent, so the lead's
+ * channels can go there and none is lost. Null when the family has no parent file. Never returns a value.
+ */
+export async function familyChannelSlots(
+  tx: Prisma.TransactionClient,
+  input: { familyId: string; organizationId: string },
+): Promise<{ contactId: string; phoneEmpty: boolean; emailEmpty: boolean } | null> {
+  const family = await tx.family.findFirst({
+    where: { id: input.familyId, organizationId: input.organizationId },
+    select: { primaryContactId: true },
+  });
+  if (!family?.primaryContactId) return null;
+  const file = await tx.parentFile.findUnique({
+    where: { contactId: family.primaryContactId },
+    select: { adminOnlyParentPhone: true, adminOnlyParentEmail: true },
+  });
+  if (!file) return null;
+  return { contactId: family.primaryContactId, phoneEmpty: !file.adminOnlyParentPhone, emailEmpty: !file.adminOnlyParentEmail };
+}
+
+/** PD-59: write a lead's phone / e-mail into the parent file's EMPTY slots only; a stored value is never replaced. */
+export async function fillFamilyChannels(
+  tx: Prisma.TransactionClient,
+  input: { contactId: string; actorId: string; phone: string | null; email: string | null },
+): Promise<void> {
+  if (input.phone) {
+    await tx.parentFile.updateMany({
+      where: { contactId: input.contactId, adminOnlyParentPhone: null },
+      data: { adminOnlyParentPhone: input.phone.trim(), updatedBy: input.actorId },
+    });
+  }
+  if (input.email) {
+    await tx.parentFile.updateMany({
+      where: { contactId: input.contactId, adminOnlyParentEmail: null },
+      data: { adminOnlyParentEmail: input.email.trim().toLowerCase(), updatedBy: input.actorId },
+    });
+  }
+}
+
+/**
  * PD-45 §9 (PD-42 S1; review of #294): a family's country decides how a stored
  * LOCAL number reads ("050 765 3333" is +971... in the UAE, +20... in Egypt).
  * When the country changes, the family's earlier re-keyed readings are

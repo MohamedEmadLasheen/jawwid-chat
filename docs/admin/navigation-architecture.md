@@ -54,9 +54,14 @@ contact table before conversion.
   (`sales_lead.created | stage_changed | contacted | contact_updated | follow_up_changed | converted`); the rows
   appear in each person's action log. No contact value reaches a log line or an error message.
 - **Convert** keys the lead's e-mail and numbers with PD-42's contact key and looks for a family that already holds
-  one: found and the caller may handle it -> the lead is **linked** to that family (no second parent) and its own copy
-  of the contact is deleted; not found -> the **existing family intake** opens pre-filled (the hand-over Operations
-  receives), and converting again links the new family; a family that is not the caller's answers as the intake does,
-  naming nothing.
+  one (for a lead a subscribed trial already made Converted: the family Operations enrolled that trial into).
+  Found and the caller may handle it -> the lead is **linked** (no second parent). Before the lead's own copy of the
+  contact is deleted, every channel the family record lacks is written into the parent file's EMPTY phone / e-mail
+  slot and keyed; a channel with no room (a second phone, a WhatsApp number, another e-mail) **refuses** the
+  hand-over and keeps the contact. Not found -> the **existing family intake** opens pre-filled and converting again
+  links it (a subscribed trial not yet enrolled answers `awaiting_enrolment`). A family that is not the caller's, or
+  an e-mail that belongs to a non-family account, gets the intake's one refusal, naming nothing. Every attempt is
+  audited with its outcome code (`sales_lead.converted | convert_attempted | convert_refused`), never a value. The
+  database also refuses a `converted_family_id` from another organization.
 
 Open (owner): retention of the contact of a lead that is never converted (no purge is built yet).

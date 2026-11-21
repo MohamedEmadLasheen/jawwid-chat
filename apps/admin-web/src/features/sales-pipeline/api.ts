@@ -101,7 +101,11 @@ export interface UpdateLeadInput {
   followUpNote?: string | null
 }
 
-export type ConvertResult = { outcome: 'linked'; familyId: string } | { outcome: 'intake_required'; familyId: null }
+export type ConvertResult =
+  | { outcome: 'linked'; familyId: string }
+  | { outcome: 'intake_required'; familyId: null }
+  /** A subscribed trial made the lead Converted; Operations has not enrolled the family yet. */
+  | { outcome: 'awaiting_enrolment'; familyId: null }
 
 export interface LeadQuery {
   stage?: Stage | ''

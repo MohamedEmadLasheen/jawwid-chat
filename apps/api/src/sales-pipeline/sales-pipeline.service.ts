@@ -9,6 +9,7 @@ import { ACADEMY_ZONE, canonicalZone, localDate } from '../platform/time-zone';
 import { isUuid } from '../communication/conversations/conversation.service';
 import { contactKeyHash, normaliseEmailForKey } from '../new-students/contact-key';
 import { e164ForKey } from '../new-students/intake-input';
+import { familyChannelSlots, fillFamilyChannels } from '../parent-profile/parent-record.service';
 import {
   LeadInputError,
   NO_CONTACT,
@@ -23,11 +24,13 @@ import {
   followUpDue,
   isStage,
   matchesFilter,
+  planChannelMerge,
   optDay,
   optText,
   pageOf,
   parseContact,
   reqText,
+  type ChannelKind,
   type ContactDto,
   type ContactPresence,
   type DerivedStage,
@@ -41,6 +44,19 @@ import {
 } from './pipeline-stage';
 
 type Tx = Prisma.TransactionClient;
+
+interface KeyedChannel {
+  value: string;
+  hash: string;
+}
+
+/** A lead's channels, keyed. `hashes` is every distinct key, for the family lookup. */
+interface LeadKeys {
+  email: KeyedChannel | null;
+  phone: KeyedChannel | null;
+  whatsapp: KeyedChannel | null;
+  hashes: string[];
+}
 
 /** The pipeline reads at most this many prospects of an academy to build a page (stages are derived, so the page is cut after). */
 export const PIPELINE_SCAN_LIMIT = 5000;
@@ -172,6 +188,8 @@ export class SalesPipelineService {
       if (query.stage !== undefined && query.stage !== '' && !isStage(query.stage)) throw new LeadInputError('stage: a known stage');
       if (query.followUp !== undefined && query.followUp !== '' && query.followUp !== 'due') throw new LeadInputError('followUp: due');
       const q = optText(query.q, 'q', 120);
+      // The search is a query string (it reaches request logs): a name only, never a number or an e-mail.
+      if (q && (/\d{4,}/.test(q.replace(/[\s().+-]/g, '')) || q.includes('@'))) throw new LeadInputError('q: search by name only');
       return {
         stage: query.stage ? (query.stage as Stage) : null,
         q: q ?? null,
@@ -247,20 +265,26 @@ export class SalesPipelineService {
   async get(actorId: string, leadId: string) {
     const c = await this.caller(actorId);
     this.requireId(leadId);
-    const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
-      const f = await this.facts(tx, c, leadId);
-      const derived = this.derive(f, now);
-      const contact = await this.contactOf(tx, leadId);
-      if (contact) {
-        await this.audit.audit(tx, {
-          actorId: c.staffId, action: 'sales_lead.contact_viewed', entity: 'trial_prospect', entityId: leadId,
-          after: { fields: ['parentName', 'phone', 'whatsapp', 'email'].filter((k) => contact[k as keyof ContactDto]) },
-          reason: 'a lead\'s contact details were read (PD-59)',
-        });
-      }
-      return this.detail(f, derived, contact, await this.today());
-    });
+    return this.prisma.$transaction((tx) => this.readIn(tx, c, leadId, true));
+  }
+
+  /**
+   * The lead as the page shows it. `viewed` is a genuine detail read: it writes the audit row for the
+   * contact it returns. A write returns the lead too, without a second "view" row: the write is itself
+   * audited, and the caller just typed what comes back.
+   */
+  private async readIn(tx: Tx, c: Caller, leadId: string, viewed: boolean) {
+    const f = await this.facts(tx, c, leadId);
+    const derived = this.derive(f, new Date());
+    const contact = await this.contactOf(tx, leadId);
+    if (contact && viewed) {
+      await this.audit.audit(tx, {
+        actorId: c.staffId, action: 'sales_lead.contact_viewed', entity: 'trial_prospect', entityId: leadId,
+        after: { fields: ['parentName', 'phone', 'whatsapp', 'email'].filter((k) => contact[k as keyof ContactDto]) },
+        reason: 'a lead\'s contact details were read (PD-59)',
+      });
+    }
+    return this.detail(f, derived, contact, await this.today());
   }
 
   // ------------------------------------------------------------------
@@ -305,9 +329,9 @@ export class SalesPipelineService {
         after: { displayName: input.displayName, stage: 'new_lead', contact: input.contact ? contactFieldNames(input.contact) : [] },
         reason: 'lead recorded (PD-59)',
       });
-      return p.id;
+      return this.readIn(tx, c, p.id, false);
     });
-    return this.get(actorId, created);
+    return created;
   }
 
   /**
@@ -329,7 +353,7 @@ export class SalesPipelineService {
       return { stage: stage as StoredStage | undefined, lostReason: lostReason ?? null, nextFollowUpOn, followUpNote, contact };
     });
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const f = await this.lockedFacts(tx, c, leadId);
       const derived = this.derive(f, now);
       const data: Prisma.TrialProspectUpdateInput = {};
@@ -371,8 +395,8 @@ export class SalesPipelineService {
           after: { fields: contactFields }, reason: 'lead contact details changed (PD-59)',
         });
       }
+      return this.readIn(tx, c, leadId, false);
     });
-    return this.get(actorId, leadId);
   }
 
   /** { nextFollowUpOn?, followUpNote? } -- the lead was contacted now. */
@@ -384,7 +408,7 @@ export class SalesPipelineService {
       followUpNote: optText(body.followUpNote, 'followUpNote', 1000),
     }));
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const f = await this.lockedFacts(tx, c, leadId);
       const derived = this.derive(f, now);
       // A lead a trial or the hand-over decides can still be CONTACTED (a call before the trial): only the time moves.
@@ -410,58 +434,154 @@ export class SalesPipelineService {
         before: { stage: derived.stage }, after: { stage: next?.pipelineStage ?? derived.stage },
         reason: 'lead marked contacted (PD-59)',
       });
+      return this.readIn(tx, c, leadId, false);
     });
-    return this.get(actorId, leadId);
   }
 
   /**
-   * Convert: hand the lead over to the families Operations works from, without
-   * a second parent. The lead's e-mail and phone numbers are keyed (PD-42's
-   * contact key) and matched against every family in Chat:
-   *   - a family already holds one: the lead is LINKED to it (converted_at,
-   *     converted_family_id) and the lead's own copy of the contact is deleted;
-   *   - none does: `intake_required` -- the family is entered through the
-   *     existing family intake (the hand-over Operations receives); once it
-   *     exists, converting again links it;
-   *   - a family holds it but is not the caller's: the intake's own refusal,
-   *     which says nothing about the family.
+   * Convert: hand the lead over to the families Operations works from, without a second parent and
+   * without losing a channel. The lead's e-mail and phone numbers are keyed (PD-42's contact key) and
+   * matched against the families already in Chat:
+   *   - a family holds the parent (or, for a lead a subscribed trial already made Converted, Operations
+   *     enrolled the trial into one): the lead is LINKED to it. Channels the family record lacks are
+   *     first written into its EMPTY phone / e-mail slots; when a channel has no room the hand-over is
+   *     REFUSED and the contact kept. Only then is the lead's own copy of the contact deleted;
+   *   - none does: `intake_required` (the existing family intake is the hand-over; converting again links
+   *     it) or, for a subscribed trial not yet enrolled, `awaiting_enrolment`;
+   *   - a family holds it but is not the caller's (or the e-mail is a non-family account): ONE refusal,
+   *     the intake's own, which says nothing about the family.
+   * Every attempt is audited with its outcome code -- a refusal outside the rolled-back transaction --
+   * and never with a value. A lead already handed over is never converted twice (row lock).
    */
   async convert(actorId: string, leadId: string) {
     const c = await this.caller(actorId);
     this.requireId(leadId);
     const now = new Date();
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      const f = await this.lockedFacts(tx, c, leadId);
-      const derived = this.derive(f, now);
-      if (!canConvert(derived.stage)) {
-        throw stateError(derived.stage === 'converted' ? 'this lead is already converted' : 'a lost lead is reopened before it is converted');
-      }
-      const contact = await this.contactOf(tx, leadId);
-      const keys = contact ? await this.keysOf(contact) : { email: null, hashes: [] as string[] };
-      const matched = contact ? await this.findFamily(tx, c.organizationId, keys.email, keys.hashes) : null;
-      if (matched === 'blocked') throw unavailable();
-      const owns = matched
-        ? (await tx.$queryRaw<Array<{ owns: boolean }>>`SELECT chat.staff_owns_family(${c.staffId}::uuid, ${matched}::uuid) AS owns`)[0]?.owns === true
-        : false;
-      const decision = decideConversion({ hasContact: contact !== null, matchedFamilyId: matched, callerMayHandle: owns });
-      switch (decision.kind) {
-        case 'no_contact': throw stateError('this lead has no contact details to hand over; add them first');
-        case 'unavailable': throw unavailable();
-        case 'intake_required': return { outcome: 'intake_required' as const, familyId: null };
-        case 'link': {
-          await tx.trialProspect.update({ where: { id: leadId }, data: { convertedAt: now, convertedFamilyId: decision.familyId } });
-          // The family's own record holds the contact: the lead's copy is not kept (the guard allows it once converted).
-          await tx.salesLeadContact.delete({ where: { prospectId: leadId } });
-          await this.audit.audit(tx, {
-            actorId: c.staffId, action: 'sales_lead.converted', entity: 'trial_prospect', entityId: leadId,
-            before: { stage: derived.stage }, after: { stage: 'converted', familyId: decision.familyId, contactDeleted: true },
-            reason: 'lead linked to its existing family (PD-59)',
-          });
-          return { outcome: 'linked' as const, familyId: decision.familyId };
+    let refusal: string | null = null;
+    const refuse = (outcome: string, err: CommError): never => {
+      refusal = outcome;
+      throw err;
+    };
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const f = await this.lockedFacts(tx, c, leadId);
+        const derived = this.derive(f, now);
+        const handedOver = f.convertedAt !== null;
+        if (!canConvert(derived.stage, handedOver)) {
+          return refuse(
+            derived.stage === 'lost' ? 'lost' : 'already_converted',
+            stateError(derived.stage === 'lost' ? 'a lost lead is reopened before it is converted' : 'this lead is already converted'),
+          );
         }
-      }
+        const subscribedTrial = derived.stage === 'converted' && !handedOver;
+        const contact = await this.contactOf(tx, leadId);
+        if (!contact) return refuse('no_contact', stateError('this lead has no contact details to hand over'));
+        let keys: LeadKeys;
+        try {
+          keys = this.keysOf(contact);
+        } catch (e) {
+          return refuse('number_unreadable', e as CommError);
+        }
+        const enrolment = subscribedTrial && f.trialLessonIds.length > 0
+          ? await tx.studentEnrolment.findFirst({ where: { lessonId: { in: f.trialLessonIds } }, select: { familyId: true } })
+          : null;
+        const matched = enrolment ? null : await this.findFamily(tx, c.organizationId, keys.email?.value ?? null, keys.hashes);
+        if (matched === 'blocked') return refuse('unavailable', unavailable());
+        const owns = matched
+          ? (await tx.$queryRaw<Array<{ owns: boolean }>>`SELECT chat.staff_owns_family(${c.staffId}::uuid, ${matched}::uuid) AS owns`)[0]?.owns === true
+          : false;
+        const decision = decideConversion({
+          hasContact: true, matchedFamilyId: matched, callerMayHandle: owns, subscribedTrial, enrolledFamilyId: enrolment?.familyId ?? null,
+        });
+        switch (decision.kind) {
+          case 'no_contact': return refuse('no_contact', stateError('this lead has no contact details to hand over'));
+          case 'unavailable': return refuse('unavailable', unavailable());
+          case 'intake_required':
+          case 'awaiting_enrolment': {
+            await this.audit.audit(tx, {
+              actorId: c.staffId, action: 'sales_lead.convert_attempted', entity: 'trial_prospect', entityId: leadId,
+              after: { outcome: decision.kind }, reason: 'lead conversion attempted (PD-59)',
+            });
+            return { outcome: decision.kind, familyId: null };
+          }
+          case 'link': {
+            const merged = await this.mergeChannels(tx, c, decision.familyId, keys, contact, (o, e) => refuse(o, e));
+            await tx.trialProspect.update({ where: { id: leadId }, data: { convertedAt: now, convertedFamilyId: decision.familyId } });
+            // The family's own record holds every channel now: the lead's copy is not kept (the guard allows it once converted).
+            await tx.salesLeadContact.delete({ where: { prospectId: leadId } });
+            await this.audit.audit(tx, {
+              actorId: c.staffId, action: 'sales_lead.converted', entity: 'trial_prospect', entityId: leadId,
+              before: { stage: derived.stage },
+              after: { stage: 'converted', familyId: decision.familyId, contactDeleted: true, channelsAdded: merged, outcome: 'linked' },
+              reason: 'lead linked to its existing family (PD-59)',
+            });
+            return { outcome: 'linked', familyId: decision.familyId };
+          }
+        }
+      });
+    } catch (e) {
+      if (refusal) await this.auditRefusal(c, leadId, refusal);
+      throw e;
+    }
+  }
+
+  /** A refused conversion is audited on its own, since its transaction rolled back. Never a value; never masks the refusal. */
+  private async auditRefusal(c: Caller, leadId: string, outcome: string): Promise<void> {
+    try {
+      await this.prisma.$transaction((tx) =>
+        this.audit.audit(tx, {
+          actorId: c.staffId, action: 'sales_lead.convert_refused', entity: 'trial_prospect', entityId: leadId,
+          after: { outcome }, reason: 'lead conversion refused (PD-59)',
+        }),
+      );
+    } catch {
+      // The refusal itself is what the caller must see.
+    }
+  }
+
+  /**
+   * Before the lead's contact is deleted, make sure the family record holds every channel it had: the
+   * ones its keys already cover stay as they are, the rest go into the parent file's EMPTY slots
+   * (src/parent-profile owns that file) and are keyed for the family. A key another family holds is
+   * the intake's refusal; a channel with no room is refused and the contact kept. Returns the channel
+   * kinds that were added (names only).
+   */
+  private async mergeChannels(
+    tx: Tx, c: Caller, familyId: string, keys: LeadKeys, contact: ContactDto, refuse: (outcome: string, err: CommError) => never,
+  ): Promise<ChannelKind[]> {
+    const rows = await tx.familyContactKey.findMany({
+      where: { organizationId: c.organizationId, keyHash: { in: keys.hashes } },
+      select: { keyHash: true, familyId: true },
     });
-    return outcome;
+    if (rows.some((r) => r.familyId !== familyId)) return refuse('unavailable', unavailable());
+    const covered = new Set(rows.map((r) => r.keyHash));
+    const slots = await familyChannelSlots(tx, { familyId, organizationId: c.organizationId });
+    const plan = planChannelMerge(
+      { phone: keys.phone?.hash ?? null, whatsapp: keys.whatsapp?.hash ?? null, email: keys.email?.hash ?? null },
+      covered,
+      slots ? { phoneEmpty: slots.phoneEmpty, emailEmpty: slots.emailEmpty } : null,
+    );
+    if (plan.missing.length > 0) {
+      return refuse('channel_missing', stateError('the family\'s record has no room for one of the lead\'s contact channels (a second phone or WhatsApp number, or another e-mail); add it to the family\'s profile first, then convert again'));
+    }
+    const added: ChannelKind[] = [];
+    const phoneKey = plan.fillPhoneFrom ? keys[plan.fillPhoneFrom] : null;
+    if (slots && (phoneKey || plan.fillEmail)) {
+      await fillFamilyChannels(tx, {
+        contactId: slots.contactId, actorId: c.staffId,
+        phone: plan.fillPhoneFrom ? contact[plan.fillPhoneFrom] : null,
+        email: plan.fillEmail ? contact.email : null,
+      });
+    }
+    if (phoneKey && plan.fillPhoneFrom) {
+      await tx.familyContactKey.create({ data: { organizationId: c.organizationId, keyHash: phoneKey.hash, familyId, kind: 'phone', createdBy: c.staffId } });
+      added.push(plan.fillPhoneFrom);
+    }
+    if (plan.fillEmail && keys.email) {
+      await tx.familyContactKey.create({ data: { organizationId: c.organizationId, keyHash: keys.email.hash, familyId, kind: 'email', createdBy: c.staffId } });
+      added.push('email');
+    }
+    return added;
   }
 
   // ------------------------------------------------------------------
@@ -552,19 +672,21 @@ export class SalesPipelineService {
   }
 
   /** The e-mail and the keyed numbers (E.164) of a contact -- what PD-42 keys a parent by. */
-  private async keysOf(contact: ContactDto): Promise<{ email: string | null; hashes: string[] }> {
-    const hashes: string[] = [];
+  private keysOf(contact: ContactDto): LeadKeys {
     const email = contact.email ? normaliseEmailForKey(contact.email) : null;
-    if (email) hashes.push(contactKeyHash('email', email));
-    const numbers = [...new Set([contact.phone, contact.whatsapp].filter((n): n is string => !!n))];
-    for (const n of numbers) {
-      const keyed = e164ForKey(n, contact.country);
-      // Never the number in the message: say which channel needs fixing.
-      if (keyed === 'ambiguous') throw stateError('a phone or WhatsApp number needs its country code (+...) or the country chosen before the hand-over');
-      if (!keyed) throw stateError('a phone or WhatsApp number is not a number that can be matched; correct it before the hand-over');
-      hashes.push(contactKeyHash('phone', keyed));
-    }
-    return { email, hashes: [...new Set(hashes)] };
+    const keyed = (n: string | null): KeyedChannel | null => {
+      if (!n) return null;
+      const e164 = e164ForKey(n, contact.country);
+      // Never the number in the message: say which kind of channel needs fixing.
+      if (e164 === 'ambiguous') throw stateError('a phone or WhatsApp number needs its country code (+...) or the country chosen before the hand-over');
+      if (!e164) throw stateError('a phone or WhatsApp number is not a number that can be matched; correct it before the hand-over');
+      return { value: n, hash: contactKeyHash('phone', e164) };
+    };
+    const phone = keyed(contact.phone);
+    const whatsapp = keyed(contact.whatsapp);
+    const emailKey = email ? { value: email, hash: contactKeyHash('email', email) } : null;
+    const hashes = [...new Set([emailKey?.hash, phone?.hash, whatsapp?.hash].filter((h): h is string => !!h))];
+    return { email: emailKey, phone, whatsapp, hashes };
   }
 
   /**
@@ -606,7 +728,7 @@ export class SalesPipelineService {
       createdAt: f.createdAt.toISOString(),
       convertedAt: f.convertedAt?.toISOString() ?? null,
       familyId: f.convertedFamilyId,
-      canConvert: canConvert(d.stage),
+      canConvert: canConvert(d.stage, f.convertedAt !== null),
       trial: latest ? { startsAt: latest.startsAt.toISOString(), result: latest.result } : null,
       contact,
     };

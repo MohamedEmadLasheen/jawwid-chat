@@ -168,6 +168,8 @@ export type ConversionDecision =
   | { kind: 'no_contact' }
   /** No family holds this parent's contact: the hand-over is the existing family intake. */
   | { kind: 'intake_required' }
+  /** A subscribed trial made the lead Converted but Operations has not enrolled the family yet: nothing to link to. */
+  | { kind: 'awaiting_enrolment' }
   /** The family exists and the caller may handle it: link, never create. */
   | { kind: 'link'; familyId: string }
   /** The family exists but is not the caller's: say nothing about it (as the intake does). */
@@ -180,15 +182,77 @@ export type ConversionDecision =
  * for that family. A lead with no usable contact cannot be matched, so it is
  * refused rather than handed over blind.
  */
-export function decideConversion(d: { hasContact: boolean; matchedFamilyId: string | null; callerMayHandle: boolean }): ConversionDecision {
+export function decideConversion(d: {
+  hasContact: boolean;
+  matchedFamilyId: string | null;
+  callerMayHandle: boolean;
+  /** A subscribed trial already made the lead Converted (its hand-over is the New students flow). */
+  subscribedTrial?: boolean;
+  /** The family Operations enrolled that trial into, when it has. Authoritative: it came from the lead's own trial. */
+  enrolledFamilyId?: string | null;
+}): ConversionDecision {
   if (!d.hasContact) return { kind: 'no_contact' };
-  if (!d.matchedFamilyId) return { kind: 'intake_required' };
+  if (d.subscribedTrial && d.enrolledFamilyId) return { kind: 'link', familyId: d.enrolledFamilyId };
+  if (!d.matchedFamilyId) return d.subscribedTrial ? { kind: 'awaiting_enrolment' } : { kind: 'intake_required' };
   return d.callerMayHandle ? { kind: 'link', familyId: d.matchedFamilyId } : { kind: 'unavailable' };
 }
 
-/** A conversion is offered to a lead still in the funnel (not already converted, not lost). */
-export function canConvert(stage: Stage): boolean {
-  return stage === 'new_lead' || stage === 'contacted' || stage === 'trial_booked' || stage === 'trial_completed';
+/**
+ * A conversion is offered to a lead still in the funnel, and to one a subscribed trial already made
+ * Converted whose hand-over was never recorded (`handedOver` false): that lead still has its own copy
+ * of the contact and must be linked to its family. A lead already handed over (`converted_at` set)
+ * is never converted twice, and a lost lead is reopened first.
+ */
+export function canConvert(stage: Stage, handedOver = false): boolean {
+  if (stage === 'converted') return !handedOver;
+  return stage !== 'lost';
+}
+
+/** The three channels of a lead, keyed (null when the channel is absent). */
+export interface ChannelKeys {
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+}
+
+export type ChannelKind = 'phone' | 'whatsapp' | 'email';
+
+export interface ChannelPlan {
+  /** Which lead channel fills the family file's EMPTY phone slot, if any. */
+  fillPhoneFrom: 'phone' | 'whatsapp' | null;
+  fillEmail: boolean;
+  /** Channels the family record would lose: the hand-over is refused (and the contact kept) when not empty. */
+  missing: ChannelKind[];
+}
+
+/**
+ * What it takes to hand a lead's channels over WITHOUT losing one. A channel the family already holds
+ * (its key is in `familyKeys`) is covered. An uncovered one may go into the family file's empty phone /
+ * e-mail slot (never over a stored value); a WhatsApp number or a second phone with no slot to take it,
+ * or an e-mail beside another one, is `missing`. `file` is null when the family has no parent file.
+ */
+export function planChannelMerge(
+  lead: ChannelKeys,
+  familyKeys: ReadonlySet<string>,
+  file: { phoneEmpty: boolean; emailEmpty: boolean } | null,
+): ChannelPlan {
+  const plan: ChannelPlan = { fillPhoneFrom: null, fillEmail: false, missing: [] };
+  let phoneFree = file?.phoneEmpty === true;
+  if (lead.email && !familyKeys.has(lead.email)) {
+    if (file?.emailEmpty) plan.fillEmail = true;
+    else plan.missing.push('email');
+  }
+  for (const kind of ['phone', 'whatsapp'] as const) {
+    const key = lead[kind];
+    if (!key || familyKeys.has(key)) continue;
+    // The same number typed as phone and as WhatsApp is one number.
+    if (kind === 'whatsapp' && lead.phone && lead.phone === key) continue;
+    if (phoneFree) {
+      plan.fillPhoneFrom = kind;
+      phoneFree = false;
+    } else plan.missing.push(kind);
+  }
+  return plan;
 }
 
 // ---------------------------------------------------------------------------

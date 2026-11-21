@@ -73,8 +73,9 @@ export function SalesPipelinePage() {
           <label className="search ns-toolbar__search">
             <Icon name="search" size={16} />
             <span className="sr-only">{tx(P.search)}</span>
-            <input className="input" type="search" value={search} placeholder={tx(P.search)} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input" type="search" value={search} placeholder={tx(P.search)} aria-describedby="sp-search-hint" onChange={(e) => setSearch(e.target.value)} />
           </label>
+          <span id="sp-search-hint" className="field__hint">{tx(P.searchHint)}</span>
           <button type="button" className={`btn btn--sm${due ? ' btn--primary' : ''}`} aria-pressed={due} onClick={() => setDue((d) => !d)}>
             {tx(P.followUpDue)}{data ? ` (${number(data.dueCount)})` : ''}
           </button>

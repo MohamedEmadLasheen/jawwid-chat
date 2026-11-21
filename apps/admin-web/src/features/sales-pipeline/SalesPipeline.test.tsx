@@ -141,6 +141,7 @@ describe('the Sales pipeline page', () => {
     expect(document.body.textContent).not.toContain(SECRET_EMAIL)
     // The list's own request never asked for a contact; the detail has not been read.
     expect(calls('GET', /\/sales-pipeline\/leads\/lead-1$/)).toHaveLength(0)
+    expect(screen.getByText('Names only. Do not type phone numbers or e-mails here.')).toBeInTheDocument()
     // The stage filter shows its counts.
     const chips = screen.getByRole('group', { name: 'Stage' })
     expect(within(chips).getByRole('button', { name: /Trial booked/ })).toHaveTextContent('1')
@@ -237,6 +238,38 @@ describe('a lead\'s panel', () => {
     await waitFor(() => expect(calls('POST', /\/contacted$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/contacted$/)[0])).toEqual({ nextFollowUpOn: '2026-11-25', followUpNote: null })
     expect(await within(dialog).findByText('Contact recorded.')).toBeInTheDocument()
+    // The write answered with the lead: no second (audited) read of the contact was made.
+    expect(calls('GET', /\/sales-pipeline\/leads\/lead-1$/)).toHaveLength(1)
+  })
+
+  it('never re-reads the contact on a window focus (each read is an audited event)', async () => {
+    await open()
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(calls('GET', /\/sales-pipeline\/leads\/lead-1$/)).toHaveLength(1)
+  })
+
+  it('a subscribed-trial lead that Operations has not enrolled yet says to convert again afterwards', async () => {
+    on('GET', /\/sales-pipeline\/leads\/lead-1$/, () => json({ ...DETAIL, stage: 'converted', manualStage: false, canConvert: true }))
+    on('POST', /\/convert$/, () => json({ outcome: 'awaiting_enrolment', familyId: null }))
+    const { user, dialog } = await open()
+    await user.click(within(dialog).getByRole('button', { name: 'Convert' }))
+    expect(await within(dialog).findByText(/Convert again once Operations has enrolled the family/)).toBeInTheDocument()
+    expect(calls('POST', /\/family-intake$/)).toHaveLength(0)
+  })
+
+  it('offers no Convert for a lead already handed over', async () => {
+    on('GET', /\/sales-pipeline\/leads\/lead-1$/, () => json({ ...DETAIL, stage: 'converted', manualStage: false, canConvert: false, contact: null, convertedAt: '2026-11-19T10:00:00Z' }))
+    const { dialog } = await (async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+      await user.click(await screen.findByRole('button', { name: 'Open Lead Alpha' }))
+      const d = await screen.findByRole('dialog')
+      await within(d).findByText('The contact now lives in the family record.')
+      return { dialog: d }
+    })()
+    expect(within(dialog).queryByRole('button', { name: 'Convert' })).not.toBeInTheDocument()
   })
 
   it('marks a lead lost only with a reason', async () => {

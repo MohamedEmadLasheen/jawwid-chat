@@ -80,6 +80,11 @@ export const P = {
     ar: 'يسلّم العميل إلى التشغيل عبر إدخال العائلة، دون إنشاء سجل ثانٍ لولي الأمر.',
   },
   linked: { en: 'This parent is already in Chat: the lead is now linked to their family.', ar: 'ولي الأمر موجود بالفعل: تم ربط العميل بعائلته.' },
+  awaitingEnrolment: {
+    en: 'The trial subscribed. Convert again once Operations has enrolled the family: the contact is then linked to it.',
+    ar: 'اشترك الطالب بعد التجربة. حوّل العميل مرة أخرى بعد أن يسجّل التشغيل الأسرة، فتُربط بيانات التواصل بها.',
+  },
+  searchHint: { en: 'Names only. Do not type phone numbers or e-mails here.', ar: 'بالاسم فقط. لا تكتب أرقام الهاتف أو البريد الإلكتروني هنا.' },
   stageDerived: { en: 'A trial decides this stage.', ar: 'الحصة التجريبية هي التي تحدد هذه المرحلة.' },
   converted: { en: 'Converted', ar: 'تم التحويل' },
   loading: { en: 'Loading…', ar: 'جارٍ التحميل…' },

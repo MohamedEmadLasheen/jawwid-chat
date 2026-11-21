@@ -54,13 +54,13 @@ function LeadBody({ lead }: { lead: LeadDetail }) {
 
   const error = update.error ?? contacted.error ?? convert.error
   const stage = STAGE[lead.stage]
-  const inFunnel = lead.stage !== 'converted' && lead.stage !== 'lost'
 
   const doConvert = () => {
     setMessage(null)
     convert.mutate(undefined, {
       onSuccess: (r) => {
         if (r.outcome === 'linked') setMessage(tx(P.linked))
+        else if (r.outcome === 'awaiting_enrolment') setMessage(tx(P.awaitingEnrolment))
         else if (lead.contact) {
           setHanding({
             name: lead.contact.parentName,
@@ -197,13 +197,13 @@ function LeadBody({ lead }: { lead: LeadDetail }) {
         {lead.manualStage && lead.stage === 'lost' && (
           <button type="button" className="btn" disabled={update.isPending} onClick={() => update.mutate({ stage: 'contacted' })}>{tx(P.reopen)}</button>
         )}
-        {inFunnel && lead.canConvert && (
+        {lead.canConvert && (
           <button type="button" className="btn btn--primary" disabled={convert.isPending} onClick={doConvert} title={tx(P.convertHint)}>
             {tx(P.convert)}
           </button>
         )}
       </div>
-      {inFunnel && lead.canConvert && <p className="field__hint">{tx(P.convertHint)}</p>}
+      {lead.canConvert && <p className="field__hint">{tx(P.convertHint)}</p>}
 
       {handing && intake.data && (
         <IntakeDialog

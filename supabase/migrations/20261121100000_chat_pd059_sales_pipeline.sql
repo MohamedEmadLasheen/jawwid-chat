@@ -18,9 +18,11 @@
 --      (sales-pipeline-confinement.spec.ts fails the build otherwise).
 --
 -- Additive and backwards compatible: every new column is nullable, no existing
--- row, constraint, trigger or function changes. chat.guard_trial_prospect
--- compares named columns on UPDATE, so the new ones are writable by the API
--- exactly as it writes any column the guard does not name.
+-- row or constraint changes. chat.guard_trial_prospect (the table's ONE guard
+-- function, 20261019120000, never redefined since) is replaced with the same body
+-- plus ONE rule: converted_family_id must be a family of the prospect's own
+-- organization. The guard compares named columns on UPDATE, so the other new
+-- columns are writable by the API exactly as before.
 -- Idempotent: applying this file again changes nothing.
 -- Rollback: db/rollback/20261121100000_chat_pd059_sales_pipeline.down.sql
 -- =============================================================================
@@ -59,6 +61,53 @@ $$;
 create index if not exists trial_prospect_follow_up_idx
   on chat.trial_prospect (organization_id, next_follow_up_on)
   where next_follow_up_on is not null;
+
+-- ---------------------------------------------------------------------------
+-- The hand-over stays inside the organization
+-- ---------------------------------------------------------------------------
+
+create or replace function chat.guard_trial_prospect()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if not exists (select 1 from chat.staff s where s.id = new.created_by and s.organization_id = new.organization_id) then
+      raise exception 'a prospect is recorded by staff of its organization' using errcode = 'insufficient_privilege';
+    end if;
+    if new.learner_id is not null then
+      raise exception 'a prospect is linked to a learner only when Core confirms it' using errcode = 'check_violation';
+    end if;
+    if new.converted_family_id is not null then
+      raise exception 'a prospect is linked to a family only by its hand-over' using errcode = 'check_violation';
+    end if;
+    return new;
+  end if;
+  -- UPDATE: the one change is the link to the learner Core created, made once,
+  -- by the confirmation (server side).
+  if (new.id, new.organization_id, new.display_name, new.level, new.note, new.created_by, new.created_at)
+     is distinct from
+     (old.id, old.organization_id, old.display_name, old.level, old.note, old.created_by, old.created_at) then
+    raise exception 'a prospect is not rewritten' using errcode = 'check_violation';
+  end if;
+  if new.learner_id is distinct from old.learner_id then
+    if old.learner_id is not null or not chat.caller_is_server_side()
+       or coalesce(current_setting('chat.confirming_trial', true), '') <> 'on' then
+      raise exception 'a prospect is linked to its learner only by the confirmation' using errcode = 'check_violation';
+    end if;
+    if not exists (select 1 from chat.learner l where l.id = new.learner_id and l.organization_id = new.organization_id) then
+      raise exception 'a prospect is linked to a learner of its organization' using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+  -- PD-59: the family a lead was handed over to belongs to the lead's organization.
+  if new.converted_family_id is distinct from old.converted_family_id and new.converted_family_id is not null then
+    if not exists (select 1 from chat.family f where f.id = new.converted_family_id and f.organization_id = new.organization_id) then
+      raise exception 'a lead is handed over to a family of its organization' using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+  return new;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- The confined contact
