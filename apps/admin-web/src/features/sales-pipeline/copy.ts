@@ -1,7 +1,7 @@
 import { ApiError } from '@/core/api/errors'
 import type { Tone } from '@/shared/components/Badge'
 import type { Pair } from '../teachers/copy'
-import type { LostReason, Stage } from './api'
+import type { HandOverBlocker, HandOverState, LostReason, Stage } from './api'
 
 /** PD-59: the Sales pipeline's words, Arabic first and English beside it. */
 
@@ -96,6 +96,73 @@ export const P = {
   loading: { en: 'Loading…', ar: 'جارٍ التحميل…' },
   today: { en: 'Today', ar: 'اليوم' },
 } satisfies Record<string, Pair>
+
+/** PD-59 O4: the manager's read-only "Needs hand-over" list. */
+export const H = {
+  tabPipeline: { en: 'Pipeline', ar: 'المسار' },
+  tabNeeds: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' },
+  title: { en: 'Needs hand-over', ar: 'بحاجة إلى تسليم' },
+  intro: {
+    en: 'Leads whose trial subscribed but are not linked to a family record yet. This list only shows them: nothing here changes a lead or a family.',
+    ar: 'عملاء اشترك طلابهم بعد التجربة ولم يُربطوا بسجل عائلة بعد. تعرض هذه القائمة الحالات فقط: لا يتغير هنا أي عميل أو عائلة.',
+  },
+  guidance: {
+    en: 'For Operations: add the missing channel to the family\'s profile, then open the lead and press Convert again. The lead\'s own details are kept until then.',
+    ar: 'للتشغيل: أضف وسيلة التواصل الناقصة إلى ملف العائلة، ثم افتح العميل واضغط تحويل مرة أخرى. تبقى بيانات العميل محفوظة إلى حينها.',
+  },
+  empty: { en: 'Nothing is waiting for a hand-over.', ar: 'لا يوجد شيء بانتظار التسليم.' },
+  age: { en: 'Waiting', ar: 'مدة الانتظار' },
+  status: { en: 'What is needed', ar: 'المطلوب' },
+  contactCopy: { en: 'Contact copy', ar: 'نسخة بيانات التواصل' },
+  enrolled: { en: 'Enrolled by Operations', ar: 'سجّله التشغيل' },
+  yes: { en: 'Yes', ar: 'نعم' },
+  no: { en: 'No', ar: 'لا' },
+  missing: { en: 'No room in the family record for', ar: 'لا يوجد مكان في سجل العائلة لـ' },
+  days: { en: 'days', ar: 'يومًا' },
+  forbidden: {
+    en: 'This list is for the Sales manager and the super admin.',
+    ar: 'هذه القائمة لمدير المبيعات والمدير العام فقط.',
+  },
+} satisfies Record<string, Pair>
+
+export const HAND_OVER_STATE: Record<HandOverState, { label: Pair; tone: Tone }> = {
+  awaiting_enrolment: { label: { en: 'Waiting for enrolment', ar: 'بانتظار التسجيل' }, tone: 'waiting' },
+  enrolled: { label: { en: 'Enrolled, not linked', ar: 'مسجّل، غير مربوط' }, tone: 'warn' },
+  enrolled_no_contact: { label: { en: 'Enrolled, no contact copy', ar: 'مسجّل، بلا نسخة تواصل' }, tone: 'info' },
+  learner_linked: { label: { en: 'Linked to a learner', ar: 'مربوط بطالب' }, tone: 'info' },
+}
+
+/** What Convert would answer now, in words for the manager and Operations. Kinds only, never a value. */
+export const HAND_OVER_BLOCKER: Record<HandOverBlocker, Pair> = {
+  channel_missing: {
+    en: 'The family record has no room for one of the lead\'s channels. Add it to the family\'s profile, then Convert again.',
+    ar: 'لا يوجد مكان في سجل العائلة لإحدى وسائل تواصل العميل. أضفها إلى ملف العائلة ثم حوّل مرة أخرى.',
+  },
+  ready: {
+    en: 'Every channel is already in the family record. Open the lead and press Convert to link it.',
+    ar: 'كل وسائل التواصل موجودة في سجل العائلة. افتح العميل واضغط تحويل لربطه.',
+  },
+  awaiting_enrolment: {
+    en: 'Waiting for Operations to enrol the family.',
+    ar: 'بانتظار أن يسجّل التشغيل العائلة.',
+  },
+  no_contact: {
+    en: 'No contact copy, so nothing can be lost. Bookkeeping only, later.',
+    ar: 'لا توجد نسخة تواصل، فلا شيء يضيع. إجراء محاسبي فقط لاحقًا.',
+  },
+  unavailable: {
+    en: 'A channel belongs to another family. Ask Operations to check before converting.',
+    ar: 'إحدى وسائل التواصل تخص عائلة أخرى. اطلب من التشغيل المراجعة قبل التحويل.',
+  },
+  number_unreadable: {
+    en: 'A phone number needs its country code or a correction before the hand-over.',
+    ar: 'رقم هاتف يحتاج إلى رمز الدولة أو تصحيح قبل التسليم.',
+  },
+  not_assessed: {
+    en: 'Linked to a learner by the Core confirmation. Bookkeeping only.',
+    ar: 'مربوط بطالب بتأكيد النظام. إجراء محاسبي فقط.',
+  },
+}
 
 export const STAGE: Record<Stage, { label: Pair; tone: Tone }> = {
   new_lead: { label: { en: 'New lead', ar: 'عميل جديد' }, tone: 'info' },

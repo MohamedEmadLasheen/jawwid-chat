@@ -80,6 +80,7 @@ const DETAIL: LeadDetail = {
   createdAt: '2026-11-10T09:00:00Z',
   convertedAt: null,
   familyId: null,
+  handedOver: false,
   canConvert: true,
   trial: null,
   contact: { parentName: 'Parent One', phone: SECRET_PHONE, whatsapp: null, email: SECRET_EMAIL, country: 'EG' },
@@ -419,5 +420,100 @@ describe('ownership in the page', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create lead' }))
     await waitFor(() => expect(calls('POST', /\/sales-pipeline\/leads$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/sales-pipeline\/leads$/)[0])).toMatchObject({ displayName: 'Lead Delta', ownerId: 's-2' })
+  })
+})
+
+describe('Needs hand-over (PD-59 O4): the manager\'s read-only list', () => {
+  const HAND_OVER = {
+    leads: [
+      { id: 'h-1', displayName: 'Lead Missing', state: 'enrolled', blocker: 'channel_missing', ageDays: 12, waitingSince: '2026-11-09T10:00:00Z', owner: { id: 's-1', name: 'Rep One' }, hasContactCopy: true, enrolled: true, learnerLinked: false, missingKinds: ['whatsapp', 'email'] },
+      { id: 'h-2', displayName: 'Lead Legacy', state: 'enrolled_no_contact', blocker: 'no_contact', ageDays: 40, waitingSince: '2026-10-12T10:00:00Z', owner: null, hasContactCopy: false, enrolled: true, learnerLinked: false, missingKinds: [] },
+    ],
+    total: 2,
+    counts: { awaiting_enrolment: 0, enrolled: 1, enrolled_no_contact: 1, learner_linked: 0 },
+    truncated: false,
+  }
+  const asManager = (standing: 'sales_manager' | 'super_admin' | 'sales_member') => {
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: true, standing }))
+    on('GET', /\/sales-pipeline\/reconciliation$/, () => json(HAND_OVER))
+  }
+  const viewer = makeStaff({ id: 'm-1', name: 'Sales Manager', role: 'admin' })
+
+  it.each(['sales_manager', 'super_admin'] as const)('a %s sees the view, with state, age, owner and the missing channel KINDS only', async (standing) => {
+    asManager(standing)
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: viewer, route: '/sales/pipeline' })
+    await user.click(await screen.findByRole('button', { name: 'Needs hand-over' }))
+    const missing = (await screen.findByText('Lead Missing')).closest('tr')!
+    expect(within(missing).getByText('Enrolled, not linked')).toBeInTheDocument()
+    expect(within(missing).getByText(/12/)).toBeInTheDocument()
+    expect(within(missing).getByText('Rep One')).toBeInTheDocument()
+    expect(within(missing).getByText(/WhatsApp · E-mail/)).toBeInTheDocument()
+    expect(within(missing).getByText(/add it to the family's profile, then Convert again/i)).toBeInTheDocument()
+    const legacy = screen.getByText('Lead Legacy').closest('tr')!
+    expect(within(legacy).getByText(/No contact copy, so nothing can be lost/)).toBeInTheDocument()
+    expect(within(legacy).getByText('Unassigned')).toBeInTheDocument()
+    // plain guidance for Operations, and no write action anywhere in the view
+    expect(screen.getByText(/For Operations: add the missing channel to the family's profile/)).toBeInTheDocument()
+    expect(calls('POST', /./)).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /Convert|Reassign|Save/ })).not.toBeInTheDocument()
+    expect(document.body.textContent ?? '').not.toMatch(/\+\d{6,}|@example/)
+  })
+
+  it('opens a lead in the pipeline\'s own panel (where Convert already lives)', async () => {
+    asManager('sales_manager')
+    on('GET', /\/sales-pipeline\/leads\/h-1$/, () => json({ ...DETAIL, id: 'h-1', displayName: 'Lead Missing' }))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: viewer, route: '/sales/pipeline' })
+    await user.click(await screen.findByRole('button', { name: 'Needs hand-over' }))
+    await user.click(await screen.findByRole('button', { name: 'Open Lead Missing' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('a representative is not offered the view and never asks the server for it', async () => {
+    asManager('sales_member')
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+    expect(await screen.findByText('Lead Alpha')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Needs hand-over' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/sales-pipeline\/reconciliation$/)).toHaveLength(0)
+  })
+
+  it('when the access answer is missing or refused, the view is not offered either', async () => {
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline' })
+    expect(await screen.findByText('Lead Alpha')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Needs hand-over' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/sales-pipeline\/reconciliation$/)).toHaveLength(0)
+  })
+
+  it('says so when the server refuses the list (403): an error, no rows', async () => {
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: true, standing: 'sales_manager' }))
+    on('GET', /\/sales-pipeline\/reconciliation$/, () =>
+      json({ error: { code: 'COMM.SALES_LEAD_DENIED', message: 'the Sales pipeline is for the Sales department and the super admin' } }, 403))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: viewer, route: '/sales/pipeline' })
+    await user.click(await screen.findByRole('button', { name: 'Needs hand-over' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByText('Lead Missing')).not.toBeInTheDocument()
+  })
+
+  it('shows the Arabic strings right to left', async () => {
+    asManager('sales_manager')
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: viewer, route: '/sales/pipeline', locale: 'ar' })
+    await user.click(await screen.findByRole('button', { name: 'بحاجة إلى تسليم' }))
+    expect(await screen.findByText('Lead Missing')).toBeInTheDocument()
+    expect(screen.getByText(/للتشغيل: أضف وسيلة التواصل الناقصة/)).toBeInTheDocument()
+    expect(screen.getByText(/واتساب · البريد الإلكتروني/)).toBeInTheDocument()
+    expect(document.documentElement.dir).toBe('rtl')
+  })
+
+  it('every hand-over state and blocker has an English and an Arabic string', async () => {
+    const { HAND_OVER_STATE, HAND_OVER_BLOCKER } = await import('./copy')
+    const { HAND_OVER_STATES } = await import('./api')
+    for (const s of HAND_OVER_STATES) expect([HAND_OVER_STATE[s].label.en, HAND_OVER_STATE[s].label.ar].every((t) => t.trim().length > 0)).toBe(true)
+    for (const b of ['no_contact', 'number_unreadable', 'awaiting_enrolment', 'unavailable', 'channel_missing', 'ready', 'not_assessed'] as const) {
+      expect(HAND_OVER_BLOCKER[b].en.trim().length).toBeGreaterThan(0)
+      expect(HAND_OVER_BLOCKER[b].ar.trim().length).toBeGreaterThan(0)
+    }
   })
 })
