@@ -24,6 +24,8 @@ begin
     end if;
     return new;
   end if;
+  -- UPDATE: the one change is the link to the learner Core created, made once,
+  -- by the confirmation (server side).
   if (new.id, new.organization_id, new.display_name, new.level, new.note, new.created_by, new.created_at)
      is distinct from
      (old.id, old.organization_id, old.display_name, old.level, old.note, old.created_by, old.created_at) then
