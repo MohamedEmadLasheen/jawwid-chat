@@ -431,7 +431,7 @@ describe('Trials & new students, as the super admin', () => {
 
   it('is linked from the Admin Portal, and both tabs open', async () => {
     const listed = destinationsFor('super_admin', {}).find((d) => d.key === 'sales')!
-    expect(entriesOf(listed).map((e) => e.path)).toEqual(['/trials', '/trials/new-students'])
+    expect(entriesOf(listed).map((e) => e.path)).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
 
     access({ sales: true, operations: true })
     on('GET', /\/trials\/new-students$/, () => json({ students: [] }))

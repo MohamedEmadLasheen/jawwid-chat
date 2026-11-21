@@ -93,7 +93,8 @@ describe('Scheduling navigation', () => {
       const d = destinationsFor('admin', access).find((x) => x.key === 'sales')
       return d ? entriesOf(d).map((e) => e.path) : []
     }
-    expect(sales({ sales: true })).toEqual(['/trials', '/trials/new-students'])
+    // PD-59: the Sales pipeline leads the Sales pages, on `sales` alone.
+    expect(sales({ sales: true })).toEqual(['/sales/pipeline', '/trials', '/trials/new-students'])
     expect(sales({ operations: true })).toEqual(['/trials', '/trials/new-students'])
     // The Teachers department sees the teachers' trials, not the new-student set-up.
     expect(sales({ lessonManager: true })).toEqual(['/trials'])
