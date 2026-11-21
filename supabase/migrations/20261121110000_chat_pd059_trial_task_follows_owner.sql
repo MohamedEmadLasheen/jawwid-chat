@@ -30,7 +30,15 @@
 --   reassigned again or the assignee leaves.
 --
 -- Idempotent and additive: create or replace function, drop trigger if exists + create trigger.
+-- Lock wait bounded: the first statement is `set local lock_timeout = '3s'`. CREATE TRIGGER needs SHARE ROW
+-- EXCLUSIVE on chat.trial_prospect and, queued, would stall every writer behind it. A timeout aborts and rolls
+-- the whole file back (safe to retry); it bounds only the wait for the lock. (The runner sets no lock_timeout
+-- and a session pooler drops PGOPTIONS, so the bound lives in the file.)
+-- Requires 20261121100000 applied (chat.sales_lead_owner_eligible, owner_staff_id): otherwise it fails cleanly
+-- and rolls back.
 -- Rollback: db/rollback/20261121110000_chat_pd059_trial_task_follows_owner.down.sql.
+
+set local lock_timeout = '3s';
 
 create or replace function chat.work_task_trial_sales_owner(p_lesson uuid)
 returns uuid
