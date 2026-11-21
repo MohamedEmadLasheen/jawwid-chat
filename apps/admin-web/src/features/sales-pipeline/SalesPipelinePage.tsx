@@ -52,8 +52,8 @@ export function SalesPipelinePage() {
   const q = useDebounced(search.trim())
 
   // The "Needs hand-over" view is the manager's and the super admin's: offered on the server's access answer (it refuses everyone else again).
-  const access = usePipelineAccess()
-  const mayReconcile = access.data?.standing === 'sales_manager' || access.data?.standing === 'super_admin'
+  const handOverAccess = usePipelineAccess()
+  const mayReconcile = handOverAccess.data?.standing === 'sales_manager' || handOverAccess.data?.standing === 'super_admin'
   const showHandOver = mayReconcile && view === 'hand-over'
 
   const list = useLeads({ stage: stage === 'all' ? '' : stage, q, followUp: due ? 'due' : '', limit: PAGE_SIZE, offset })

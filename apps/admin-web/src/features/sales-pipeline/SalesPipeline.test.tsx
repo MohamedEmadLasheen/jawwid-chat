@@ -517,3 +517,58 @@ describe('Needs hand-over (PD-59 O4): the manager\'s read-only list', () => {
     }
   })
 })
+
+describe('Convert refusals are worded in the page\'s language (PD-59 V-1)', () => {
+  const refuse = (reason: string, code = 'COMM.SALES_LEAD_STATE', status = 409) =>
+    on('POST', /\/convert$/, () => json({ error: { code, message: 'a developer sentence in English', detail: { reason } } }, status))
+
+  async function pressConvert(locale: 'ar' | 'en') {
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: sales, route: '/sales/pipeline', locale })
+    await user.click(await screen.findByRole('button', { name: locale === 'ar' ? 'فتح Lead Alpha' : 'Open Lead Alpha' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(await within(dialog).findByRole('button', { name: locale === 'ar' ? 'تحويل' : 'Convert' }))
+    return dialog
+  }
+
+  it('channel_missing in Arabic shows the Arabic sentence, never the English one', async () => {
+    refuse('channel_missing')
+    const dialog = await pressConvert('ar')
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toMatch(/لا يوجد مكان في سجل العائلة/)
+    expect(alert.textContent).not.toMatch(/developer sentence|family record has no room/)
+  })
+
+  it('channel_missing in English shows the English wording', async () => {
+    refuse('channel_missing')
+    const dialog = await pressConvert('en')
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(/no room for one of this lead's contact channels/)
+  })
+
+  it('every refusal reason has both languages and the page uses them', async () => {
+    const { CONVERT_REFUSAL, describePipelineError } = await import('./copy')
+    const { ApiError } = await import('@/core/api/errors')
+    for (const reason of ['channel_missing', 'no_contact', 'number_unreadable', 'unavailable', 'lost', 'already_converted']) {
+      const p = CONVERT_REFUSAL[reason]!
+      expect(p.en.trim().length).toBeGreaterThan(0)
+      expect(p.ar.trim().length).toBeGreaterThan(0)
+      const e = new ApiError({ status: 409, code: 'COMM.SALES_LEAD_STATE', messageEn: 'dev', messageAr: 'dev', detail: { reason } })
+      expect(describePipelineError(e, 'ar')).toBe(p.ar)
+      expect(describePipelineError(e, 'en')).toBe(p.en)
+    }
+  })
+})
+
+describe('Needs hand-over: a family already exists under the lead\'s contact (V-2)', () => {
+  it('shows plain guidance in both languages for the unavailable blocker', async () => {
+    const lead = { id: 'h-9', displayName: 'Lead A2', state: 'awaiting_enrolment', blocker: 'unavailable', ageDays: 39, waitingSince: '2026-10-13T10:00:00Z', owner: { id: 's-1', name: 'Rep One' }, hasContactCopy: true, enrolled: false, learnerLinked: false, missingKinds: [] }
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: true, standing: 'sales_manager' }))
+    on('GET', /\/sales-pipeline\/reconciliation$/, () => json({ leads: [lead], total: 1, counts: { awaiting_enrolment: 1, enrolled: 0, enrolled_no_contact: 0, learner_linked: 0 }, truncated: false }))
+    const user = userEvent.setup()
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'm-1', name: 'Sales Manager', role: 'admin' }), route: '/sales/pipeline', locale: 'ar' })
+    await user.click(await screen.findByRole('button', { name: 'بحاجة إلى تسليم' }))
+    expect(await screen.findByText(/توجد عائلة بالفعل بنفس بيانات تواصل هذا العميل/)).toBeInTheDocument()
+    const { HAND_OVER_BLOCKER } = await import('./copy')
+    expect(HAND_OVER_BLOCKER.unavailable.en).toMatch(/A family already exists under this lead's contact/)
+  })
+})

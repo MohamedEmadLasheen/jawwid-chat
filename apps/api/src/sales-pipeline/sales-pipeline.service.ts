@@ -488,7 +488,8 @@ export class SalesPipelineService {
     let refusal: string | null = null;
     const refuse = (outcome: string, err: CommError): never => {
       refusal = outcome;
-      throw err;
+      // The same code, message and status as ever; `detail.reason` is the audited outcome, so the page can word it in its own language.
+      throw new CommError(err.code, err.message, err.status, { ...err.detail, reason: outcome });
     };
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -664,7 +665,11 @@ export class SalesPipelineService {
         } as ContactDto] as const),
     );
 
-    type Prep = { enrolment: { familyId: string; assignedAt: Date } | null; keys: LeadKeys | null; unreadable: boolean };
+    /** `family` is where Convert would look: the enrolled family, else the one the lead's own contact keys match (when the caller may handle it). */
+    type Prep = {
+      enrolment: { familyId: string; assignedAt: Date } | null; keys: LeadKeys | null; unreadable: boolean;
+      family: string | null; unavailable: boolean;
+    };
     const prep = new Map<string, Prep>();
     for (const { p, stage } of candidates) {
       const first = p.lessons.map((l) => enrolmentOf.get(l.id)).find((e) => !!e) ?? null;
@@ -675,14 +680,29 @@ export class SalesPipelineService {
         try { keys = this.keysOf(contact); } catch { unreadable = true; }
       }
       // Convert looks for the family of the lead's own trial only when a subscribed trial made it Converted.
-      prep.set(p.id, { enrolment: stage === 'converted' ? first : null, keys, unreadable });
+      const enrolment = stage === 'converted' ? first : null;
+      // No enrolment: Convert falls back to the family that already holds the lead's e-mail / numbers (the same lookup, in memory),
+      // for the person who would press it: the lead's owner (the manager when it has none).
+      let family: string | null = enrolment?.familyId ?? null;
+      let unavailable = false;
+      if (stage === 'converted' && !enrolment && keys) {
+        const k = keys;
+        const matched = await this.prisma.$transaction((tx) => this.findFamily(tx, c.organizationId, k.email?.value ?? null, k.hashes));
+        if (matched === 'blocked') unavailable = true;
+        else if (matched) {
+          const [o] = await this.prisma.$queryRaw<Array<{ owns: boolean }>>`SELECT chat.staff_owns_family(${(p.ownerStaffId ?? c.staffId)}::uuid, ${matched}::uuid) AS owns`;
+          if (o?.owns === true) family = matched;
+          else unavailable = true;
+        }
+      }
+      prep.set(p.id, { enrolment, keys, unreadable, family, unavailable });
     }
-    const allHashes = [...new Set([...prep.values()].flatMap((x) => (x.enrolment && x.keys ? x.keys.hashes : [])))];
+    const allHashes = [...new Set([...prep.values()].flatMap((x) => (x.family && x.keys ? x.keys.hashes : [])))];
     const keyRows = allHashes.length === 0
       ? []
       : await this.prisma.familyContactKey.findMany({ where: { organizationId: c.organizationId, keyHash: { in: allHashes } }, select: { keyHash: true, familyId: true } });
     const slotsOf = new Map<string, { phoneEmpty: boolean; emailEmpty: boolean } | null>();
-    for (const familyId of new Set([...prep.values()].flatMap((x) => (x.enrolment && x.keys ? [x.enrolment.familyId] : [])))) {
+    for (const familyId of new Set([...prep.values()].flatMap((x) => (x.family && x.keys ? [x.family] : [])))) {
       slotsOf.set(familyId, await this.prisma.$transaction(async (tx) => {
         const s = await familyChannelSlots(tx, { familyId, organizationId: c.organizationId });
         return s ? { phoneEmpty: s.phoneEmpty, emailEmpty: s.emailEmpty } : null;
@@ -700,9 +720,10 @@ export class SalesPipelineService {
       if (!hasContactCopy) blocker = 'no_contact';
       else if (x.unreadable || !x.keys) blocker = 'number_unreadable';
       else if (stage !== 'converted') blocker = 'not_assessed';
-      else if (!x.enrolment) blocker = 'awaiting_enrolment';
+      else if (x.unavailable) blocker = 'unavailable';
+      else if (!x.family) blocker = 'awaiting_enrolment';
       else {
-        const familyId = x.enrolment.familyId;
+        const familyId = x.family;
         const held = keyRows.filter((r) => x.keys!.hashes.includes(r.keyHash));
         if (held.some((r) => r.familyId !== familyId)) blocker = 'unavailable';
         else {

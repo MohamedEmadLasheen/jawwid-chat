@@ -112,14 +112,16 @@ const C_MISSING = { parentName: 'Synthetic Parent Missing', phone: '+15558880002
 const C_READY = { parentName: 'Synthetic Parent Ready', phone: '+15558880003' };
 const C_LEARNER = { parentName: 'Synthetic Parent Learner', phone: '+15558880004' };
 const C_NEW = { parentName: 'Synthetic Parent Newlead', phone: '+15558880005' };
-const VALUES = [C_AWAIT, C_MISSING, C_READY, C_LEARNER, C_NEW].flatMap((c) => Object.values(c));
-const KEYED = ['+15558880001', '+15558880002', '+15558880012', '+15558880003', '+15558880004', '+15558880005'];
+const C_HAND = { parentName: 'Synthetic Parent Handentered', phone: '+15558880006' };
+const VALUES = [C_AWAIT, C_MISSING, C_READY, C_LEARNER, C_NEW, C_HAND].flatMap((c) => Object.values(c));
+const KEYED = ['+15558880006', '+15558880001', '+15558880002', '+15558880012', '+15558880003', '+15558880004', '+15558880005'];
 
 let awaiting: string; // state 1-2: subscribed, not enrolled
 let missing: string; // state 3: enrolled, channel_missing
 let ready: string; // state 3: enrolled, every channel covered
 let noContact: string; // state 7: enrolled, no contact copy
 let learner: string; // state 6: learner linked
+let handEntered: string; // subscribed, not enrolled, but Operations entered a family by hand under the same phone (V-2)
 let plainLead: string; // a new lead: not listed
 let linkedAlready: string; // converted + linked: not listed
 let foreign: string; // another organization's learner-linked prospect: never listed
@@ -133,6 +135,8 @@ async function snapshot(): Promise<Record<string, string>> {
   }
   return out;
 }
+const audits = (action: string, entityId: string) =>
+  g.prisma.$queryRawUnsafe<Array<{ after: unknown }>>(`select after from chat.audit_log where action = $1 and entity_id = $2::uuid order by at`, action, entityId);
 const auditTotal = async () => Number((await g.prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`select count(*) n from chat.audit_log`))[0].n);
 
 beforeAll(async () => {
@@ -191,6 +195,11 @@ beforeAll(async () => {
   await subscribedTrial(learner);
   await legacyRows(`update chat.trial_prospect set learner_id = $2::uuid where id = $1::uuid`, learner, m.families[2].children[0].id);
   plainLead = await mk('repA', 'lead_plain', C_NEW);
+  handEntered = await mk('repA', 'lead_hand_entered', C_HAND);
+  await subscribedTrial(handEntered);
+  await g.prisma.familyContactKey.create({
+    data: { organizationId: orgId, keyHash: contactKeyHash('phone', '+15558880006'), familyId: m.families[0].id, kind: 'phone', createdBy: who.ops.id },
+  });
 
   // A prospect recorded before PD-59 by Operations: no owner, no contact copy, subscribed and enrolled.
   noContact = randomUUID();
@@ -252,9 +261,9 @@ describe('2. the states', () => {
   beforeAll(async () => { r = await http('manager', 'GET', '/sales-pipeline/reconciliation'); });
 
   it('lists exactly the unlinked leads of a subscribed trial or a learner link; not new, linked or foreign ones', () => {
-    expect((r.json.leads as Array<{ id: string }>).map((l) => l.id).sort()).toEqual([awaiting, missing, ready, noContact, learner].sort());
-    expect(r.json.total).toBe(5);
-    expect(r.json.counts).toEqual({ awaiting_enrolment: 1, enrolled: 2, enrolled_no_contact: 1, learner_linked: 1 });
+    expect((r.json.leads as Array<{ id: string }>).map((l) => l.id).sort()).toEqual([awaiting, missing, ready, noContact, learner, handEntered].sort());
+    expect(r.json.total).toBe(6);
+    expect(r.json.counts).toEqual({ awaiting_enrolment: 2, enrolled: 2, enrolled_no_contact: 1, learner_linked: 1 });
     expect(byId(r, plainLead)).toBeUndefined();
     expect(byId(r, linkedAlready)).toBeUndefined();
     expect(byId(r, foreign)).toBeUndefined();
@@ -290,6 +299,37 @@ describe('2. the states', () => {
   it('the oldest wait comes first', () => {
     const ages = (r.json.leads as Array<{ ageDays: number }>).map((l) => l.ageDays);
     expect(ages).toEqual([...ages].sort((a, b) => b - a));
+  });
+});
+
+describe('2b. V-2: a family entered by hand under the lead\'s contact', () => {
+  it('the list reports what Convert answers for the lead\'s owner: unavailable, not awaiting_enrolment; and Convert agrees', async () => {
+    const r = await http('manager', 'GET', '/sales-pipeline/reconciliation');
+    expect(byId(r, handEntered)).toMatchObject({ state: 'awaiting_enrolment', blocker: 'unavailable', enrolled: false, hasContactCopy: true, missingKinds: [] });
+    const c = await http('repA', 'POST', `/sales-pipeline/leads/${handEntered}/convert`, {});
+    expect([c.status, c.code]).toEqual([409, 'COMM.PARENT_EXISTS']);
+    expect((await audits('sales_lead.convert_refused', handEntered))[0].after).toEqual({ outcome: 'unavailable' });
+    // nothing was linked or lost: still listed, contact kept
+    expect(byId(await http('manager', 'GET', '/sales-pipeline/reconciliation'), handEntered)).toMatchObject({ blocker: 'unavailable', hasContactCopy: true });
+  });
+
+  it('a lead with no family under its contact is still awaiting_enrolment', async () => {
+    const r = await http('manager', 'GET', '/sales-pipeline/reconciliation');
+    expect(byId(r, awaiting)).toMatchObject({ blocker: 'awaiting_enrolment' });
+  });
+});
+
+describe('2c. V-1: a refused Convert carries a machine-readable reason, status and code unchanged', () => {
+  it('channel_missing: 409 COMM.SALES_LEAD_STATE with detail.reason', async () => {
+    const r = await http('repA', 'POST', `/sales-pipeline/leads/${missing}/convert`, {});
+    expect([r.status, r.code, r.json.error.detail]).toEqual([409, 'COMM.SALES_LEAD_STATE', { reason: 'channel_missing' }]);
+    expect(JSON.stringify(r.json)).not.toMatch(/Synthetic Parent|\+1555|example\.test/);
+  });
+  it('no contact, already converted and unavailable carry their reasons too', async () => {
+    const a = await http('manager', 'POST', `/sales-pipeline/leads/${linkedAlready}/convert`, {});
+    expect([a.status, a.json.error.detail]).toEqual([409, { reason: 'already_converted' }]);
+    const u = await http('repA', 'POST', `/sales-pipeline/leads/${handEntered}/convert`, {});
+    expect([u.status, u.code, u.json.error.detail]).toEqual([409, 'COMM.PARENT_EXISTS', { reason: 'unavailable' }]);
   });
 });
 
@@ -336,11 +376,11 @@ describe('4. F8: one rule for handedOver; convert() is unchanged', () => {
 describe('5. the list is read-only', () => {
   it('changes no row of any table it reads and writes no audit row, on every call and for every role that may call it', async () => {
     const before = await snapshot();
-    const audits = await auditTotal();
+    const auditsBefore = await auditTotal();
     for (const actor of ['manager', 'superAdmin', 'manager']) expect((await http(actor, 'GET', '/sales-pipeline/reconciliation')).status).toBe(200);
     for (const actor of ['repA', 'ops', 'finance']) expect((await http(actor, 'GET', '/sales-pipeline/reconciliation')).status).toBe(403);
     expect(await snapshot()).toEqual(before);
-    expect(await auditTotal()).toBe(audits);
+    expect(await auditTotal()).toBe(auditsBefore);
   });
 
   it('no write route exists for it', async () => {

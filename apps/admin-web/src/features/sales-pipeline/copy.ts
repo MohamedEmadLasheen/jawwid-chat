@@ -151,8 +151,8 @@ export const HAND_OVER_BLOCKER: Record<HandOverBlocker, Pair> = {
     ar: 'لا توجد نسخة تواصل، فلا شيء يضيع. إجراء محاسبي فقط لاحقًا.',
   },
   unavailable: {
-    en: 'A channel belongs to another family. Ask Operations to check before converting.',
-    ar: 'إحدى وسائل التواصل تخص عائلة أخرى. اطلب من التشغيل المراجعة قبل التحويل.',
+    en: 'A family already exists under this lead\'s contact (for example entered by hand, or owned by someone else). Ask Operations or the family\'s owner to link or confirm it. The lead is kept as it is.',
+    ar: 'توجد عائلة بالفعل بنفس بيانات تواصل هذا العميل (مثلًا أُدخلت يدويًا أو يملكها شخص آخر). اطلب من التشغيل أو من مسؤول العائلة ربطها أو تأكيدها. يبقى العميل كما هو.',
   },
   number_unreadable: {
     en: 'A phone number needs its country code or a correction before the hand-over.',
@@ -189,12 +189,33 @@ export function lostText(reason: string | null, locale: 'ar' | 'en'): string {
   return p ? (locale === 'ar' ? p.ar : p.en) : reason
 }
 
+/** Why Convert was refused (the server's `detail.reason`, the audited outcome), in both languages. Never a value. */
+export const CONVERT_REFUSAL: Record<string, Pair> = {
+  channel_missing: {
+    en: 'The family record has no room for one of this lead\'s contact channels (a second phone or WhatsApp number, or another e-mail). Add it to the family\'s profile first, then convert again.',
+    ar: 'لا يوجد مكان في سجل العائلة لإحدى وسائل تواصل هذا العميل (رقم هاتف أو واتساب ثانٍ، أو بريد إلكتروني آخر). أضفها إلى ملف العائلة أولًا ثم حوّل مرة أخرى.',
+  },
+  no_contact: { en: 'This lead has no contact details to hand over.', ar: 'لا توجد بيانات تواصل لدى هذا العميل لتسليمها.' },
+  number_unreadable: {
+    en: 'A phone or WhatsApp number needs its country code or a correction before the hand-over.',
+    ar: 'رقم الهاتف أو واتساب يحتاج إلى رمز الدولة أو تصحيح قبل التسليم.',
+  },
+  unavailable: {
+    en: 'This parent is already in Chat under a family that is not yours. Ask your manager.',
+    ar: 'ولي الأمر موجود بالفعل في عائلة ليست عائلتك. اسأل مديرك.',
+  },
+  lost: { en: 'A lost lead is reopened before it is converted.', ar: 'يُعاد فتح العميل المفقود قبل تحويله.' },
+  already_converted: { en: 'This lead is already converted.', ar: 'تم تحويل هذا العميل بالفعل.' },
+}
+
 export function describePipelineError(error: unknown, locale: 'ar' | 'en'): string {
   const pick = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   if (error instanceof ApiError) {
     if (error.code === 'COMM.SALES_LEAD_DENIED') {
       return pick({ en: 'The Sales pipeline is for the Sales department and the super admin.', ar: 'مسار المبيعات لقسم المبيعات والمدير العام فقط.' })
     }
+    const reason = (error.detail as { reason?: unknown } | null | undefined)?.reason
+    if (error.code === 'COMM.SALES_LEAD_STATE' && typeof reason === 'string' && CONVERT_REFUSAL[reason]) return pick(CONVERT_REFUSAL[reason])
     if (error.code === 'COMM.PARENT_EXISTS') {
       return pick({
         en: 'This parent is already in Chat under a family that is not yours. Ask your manager.',
