@@ -13,7 +13,8 @@
  *   3. POST /teachers/:id/reactivate: the super admin only (owner Q6); the
  *      same teacher, a waiting login and a new first sign-in code, e-mailed
  *      and shown to the super admin.
- *   4. The writers refuse a request role.
+ *   4. The writers refuse a request role; offboarding refuses a manager
+ *      outside Teachers even when an access role grants teachers.offboard.
  *   5. The set-up checklist on the Teacher File, and the count on the list.
  *
  * Synthetic people only (G-20).
@@ -302,6 +303,45 @@ describe('4. the database', () => {
         }),
       );
       expect(out).toMatch(/permission denied/);
+    }
+  });
+
+  // Review of #566: chat.teachers_department_role answers NULL outside the
+  // Teachers department, which made the role check NULL and the refusal skipped.
+  it('a manager outside Teachers holding teachers.offboard through an access role is refused, and nothing changes', async () => {
+    const roleId = (
+      await g.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT chat.define_access_role('w47_offboard', 'Offboard (en)', 'Offboard (ar)', null, 'manager', ARRAY['teachers.offboard']::text[], 'spec', ${m.superAdmin.id}::uuid)::text AS id`
+    )[0]!.id;
+    await g.prisma.$queryRaw`SELECT chat.grant_access_role(${m.operationsManager.id}::uuid, ${roleId}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
+    try {
+      // The precondition: the Operations manager does hold the key, and is outside Teachers.
+      const [held] = await g.prisma.$queryRaw<Array<{ held: boolean; dept: string | null }>>`
+        SELECT chat.staff_has_permission(${m.operationsManager.id}::uuid, 'teachers.offboard') AS held,
+               chat.teachers_department_role(${m.operationsManager.id}::uuid) AS dept`;
+      expect(held).toEqual({ held: true, dept: null });
+
+      const { id } = await signedInTeacher('w47');
+      const before = await g.prisma.teacher.findUniqueOrThrow({ where: { id }, include: { account: true } });
+      const assignments = await g.prisma.$queryRaw`SELECT supervisor_id FROM chat.teacher_supervisor_assignment WHERE teacher_id = ${id}::uuid`;
+      expect(
+        await sqlError(g.prisma.$queryRaw`SELECT chat.offboard_teacher(${id}::uuid, 'r', ARRAY[]::uuid[], ${m.operationsManager.id}::uuid)`),
+      ).toMatch(/only the Teachers manager or the super admin offboards a teacher/);
+      const after = await g.prisma.teacher.findUniqueOrThrow({ where: { id }, include: { account: true } });
+      expect(after).toMatchObject({ isActive: true, leftAt: null });
+      expect(after.account).toMatchObject({ status: before.account!.status, isActive: before.account!.isActive });
+      expect(await g.prisma.$queryRaw`SELECT supervisor_id FROM chat.teacher_supervisor_assignment WHERE teacher_id = ${id}::uuid`).toEqual(assignments);
+      expect(await g.prisma.auditLog.count({ where: { entityId: id, action: 'teacher.offboarded' } })).toBe(0);
+
+      // The Teachers manager and the super admin still offboard, in the database too.
+      for (const who of [m.teachersManager, m.superAdmin]) {
+        const { id: leaving } = await signedInTeacher(`w47-${who.id.slice(0, 4)}`);
+        await g.prisma.$queryRaw`SELECT chat.offboard_teacher(${leaving}::uuid, 'left the academy', ARRAY[]::uuid[], ${who.id}::uuid)`;
+        expect(await g.prisma.teacher.findUniqueOrThrow({ where: { id: leaving } })).toMatchObject({ isActive: false, leftAt: expect.any(Date) });
+        expect(await g.prisma.auditLog.count({ where: { entityId: leaving, action: 'teacher.offboarded', actorId: who.id } })).toBe(1);
+      }
+    } finally {
+      await g.prisma.$queryRaw`SELECT chat.revoke_access_role(${m.operationsManager.id}::uuid, ${roleId}::uuid, 'spec', ${m.superAdmin.id}::uuid)`;
     }
   });
 });
