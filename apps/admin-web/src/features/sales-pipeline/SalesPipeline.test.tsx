@@ -367,6 +367,26 @@ describe('who gets the Sales icon, per the server\'s answers (PD-59 owner decisi
   })
 })
 
+describe('an account the server refuses', () => {
+  it('gets the Forbidden page, not the pipeline frame, when it types /sales/pipeline', async () => {
+    access({ lessonManager: true })
+    on('GET', /\/sales-pipeline\/access$/, () => json({ allowed: false, standing: null }))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'td', role: 'manager' }), route: '/sales/pipeline' })
+    expect(await screen.findByText(/permission/i)).toBeInTheDocument()
+    expect(document.querySelector('.state--forbidden')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'New lead' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Sales pipeline' })).not.toBeInTheDocument()
+  })
+
+  it('also when the access answer is a 403', async () => {
+    access({ operations: true })
+    on('GET', /\/sales-pipeline\/access$/, () => json({ error: { code: 'SALES_LEAD_FORBIDDEN', message: 'Forbidden' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'op', role: 'admin' }), route: '/sales/pipeline' })
+    await waitFor(() => expect(document.querySelector('.state--forbidden')).not.toBeNull())
+    expect(screen.queryByRole('button', { name: 'New lead' })).not.toBeInTheDocument()
+  })
+})
+
 describe('ownership in the page', () => {
   const manager = makeStaff({ id: 'm-1', name: 'Sales Manager', role: 'admin' })
 
