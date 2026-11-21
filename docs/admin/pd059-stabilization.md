@@ -41,7 +41,7 @@ Postgres 17 is what CI (`ci.yml` `image: postgres:17`) and `scripts/db/integrati
 | Check | Result |
 |---|---|
 | Whole chain on an empty database (183 files) | applies; `db/tests/schema_acceptance.sql` and `br1_invariants.sql` pass |
-| Pre-existing data | count and md5 of every row of **every** `chat` table (216 tables; `trial_prospect` over its original columns) identical before and after PD-59, after the re-run, after the rollback and after the re-apply. No family, contact, learner, enrolment, lesson, outcome or subscription row changes |
+| Pre-existing data | count and md5 of every row of **every** `chat` table (217 tables before PD-59, 218 after; `trial_prospect` over its original columns) identical before and after PD-59, after the re-run, after the rollback and after the re-apply. No family, contact, learner, enrolment, lesson, outcome or subscription row changes |
 | Re-apply of the file (idempotency) | no error, no change; `chat.schema_migrations` skips it |
 | Backfill | 6 of 11 prospects got `owner_staff_id = created_by` (live Sales member or the Sales manager). Not owned: created by Operations (2), the Teachers department (1), the super admin (1), departed Sales staff (1). Idempotent (second run changes 0 rows) |
 | Constraints and indexes | `trial_prospect_pipeline_stage_known`, `_lost_reason_coherent`, `_follow_up_note_length`, `_conversion_coherent`, FKs `converted_family_id`, `owner_staff_id`; indexes `trial_prospect_owner_idx`, `trial_prospect_follow_up_idx`. Direct SQL: a stage `lost` without a reason, an unknown stage and a half-set conversion are refused |
@@ -50,7 +50,7 @@ Postgres 17 is what CI (`ci.yml` `image: postgres:17`) and `scripts/db/integrati
 | Confined contact table | RLS on, no policy, owner `postgres`; `chat_app`, `anon`, `authenticated`, `service_role`, `chat_service` have no privilege (SELECT as `chat_app`/`authenticated`/`service_role`: "permission denied"; as `anon`: "permission denied for schema chat") |
 | EXECUTE | `purge_expired_sales_leads`, `expired_sales_leads`, `sales_lead_expired`, `sales_lead_purging`, `sales_lead_owner_eligible`, `guard_sales_lead_contact`: ACL `{postgres=X/postgres}`, i.e. the owner (the API and worker connect as it) and superusers only; `chat_app`, `anon`, `authenticated`, `service_role`, `chat_service` and PUBLIC cannot |
 | Purge (a real run inside a rolled-back transaction) | deleted the contact, cleared notes, wrote one audit row per lead (`{contactDeleted, notesCleared}`, no value), changed no family, contact, learner or enrolment row (counts 2/2/3/2 before and after) |
-| Time and locks | whole migration 1.2 s wall (includes docker exec); with **50 000** extra prospects the backfill took 2.6 s (a few hundred prospects: milliseconds). Locks: ACCESS EXCLUSIVE on `chat.trial_prospect` (add columns, constraints) and SHARE ROW EXCLUSIVE on `chat.family` and `chat.staff` (new foreign keys) for the length of the transaction; no table rewrite (every new column is nullable, no default) |
+| Time and locks | whole migration 1.2 s wall (includes docker exec); with **50 000** extra prospects the backfill took 2.6 s (a few hundred prospects: milliseconds). Locks: ACCESS EXCLUSIVE on `chat.trial_prospect` (add columns, constraints) and SHARE ROW EXCLUSIVE on `chat.family`, `chat.staff` and `chat.organization` (new foreign keys) for the length of the transaction; no table rewrite (every new column is nullable, no default) |
 | `lock_timeout` | `apply.sh` sets `statement_timeout = 0` and **no** `lock_timeout`. With a transaction holding `chat.trial_prospect` open, the migration waited for it (6 s of an 8 s holder); with `PGOPTIONS='-c lock_timeout=3s'` it failed after 3 s ("canceling statement due to lock timeout") and rolled back whole, ledger row not written, safe to retry |
 | Rollback `db/rollback/20261121100000_...down.sql` | runs; both guards restored (`2a1670ab...` and `2b2e9a43...`, the originals); the `chat` schema dump is **byte-identical** to before PD-59 (this PR fixes a two-line comment that was missing from the restored `guard_trial_prospect`; it differed only in a comment); the dropped contact row is lost, as the file warns |
 | Re-apply after rollback | clean; guard md5 equal to the first apply |
@@ -72,7 +72,7 @@ for `trial_prospect`, `trial_student`, `guard_trial`, `sales_lead`, `sales_depar
 | Slots versus main | all seven are older than slots already on main (`20261110100000`, `20261117100000`, `20261117110000`, `20261121100000`) |
 | PD-59 object named in their added lines | 0 hits in all seven |
 | Stacking / mergeability | #537, #550, #551, #559, #566 are stacked on other branches (not on main). **#537 and #545 are CONFLICTING now** (previously only #537); #550, #551, #559, #566, #567 are MERGEABLE. They merge in stack order |
-| What they do touch | org-immutability and same-organization triggers on `chat.family`, `chat.staff`, `chat.learner`, `chat.contact`, `chat.conversation`, `chat.teacher`, `chat.account`; a device-token and a deletion-request fix. PD-59 only adds foreign keys to `chat.family` and `chat.staff`; it neither redefines nor is redefined by any of these |
+| What they do touch | org-immutability and same-organization triggers on `chat.family`, `chat.staff`, `chat.learner`, `chat.contact`, `chat.conversation`, `chat.teacher`, `chat.account`; a device-token and a deletion-request fix. PD-59 only adds foreign keys to `chat.family`, `chat.staff`, `chat.organization` and `chat.trial_prospect`; it neither redefines nor is redefined by any of these |
 
 Conclusion unchanged: `apply.sh` applies every file not yet in the ledger in filename order, whatever the ledger's maximum is, so
 each of the seven applies cleanly after PD-59 on a database that already has it. Slot order is therefore not a blocker, but the
@@ -368,12 +368,12 @@ connection (RAN, local: a holder on `trial_prospect`, `PGOPTIONS='-c lock_timeou
 statement due to lock timeout", ledger row not written). So the change is two parts:
 
 1. **`scripts/db/apply.sh`** (not a protected path; committed on this branch as its own small commit, can be dropped): reads an
-   optional `APPLY_LOCK_TIMEOUT` (`^[0-9]+(ms|s|min)?$`; anything else exits 2 before any SQL is sent) and, when set, adds
+   optional `APPLY_LOCK_TIMEOUT` (`^[0-9]+(ms|s|min)?$`; anything else exits 2 before the migration's SQL is sent; the ledger read that precedes it still runs, and a bad value is not validated at all when every migration is already applied) and, when set, adds
    `set local lock_timeout = '<value>'` inside each migration's transaction, next to the existing `set local statement_timeout = 0`.
    Unset = the previous behaviour. **RAN locally**, without `PGOPTIONS` (simulating the pooler): with another session holding
    `share` on `chat.trial_prospect`, `APPLY_LOCK_TIMEOUT=3s` failed after 3.2 s ("canceling statement due to lock timeout"),
    **0 ledger rows**, rolled back whole; after the holder ended, `APPLY_LOCK_TIMEOUT=5s` applied the migration and an immediate
-   re-run printed `skip`; `APPLY_LOCK_TIMEOUT='5s; drop table x'` was refused before any connection.
+   re-run printed `skip`; `APPLY_LOCK_TIMEOUT='5s; drop table x'` was refused (exit 2) before the migration's SQL was sent.
 2. **The workflow env line** (the owner-only part), the same four added lines in both files:
 
 ```diff
@@ -490,7 +490,7 @@ not name `service_role`).
 ### 4.6 Expected lock and duration
 
 Rehearsal: ~1.2 s total at 11 prospects; 2.6 s for the backfill at 50 000. Locks: ACCESS EXCLUSIVE on `chat.trial_prospect`
-and SHARE ROW EXCLUSIVE on `chat.family` and `chat.staff`, held to the end of the transaction. Writes to those three tables
+and SHARE ROW EXCLUSIVE on `chat.family`, `chat.staff` and `chat.organization` (the last through the confined contact table's foreign key; measured with `pg_locks` in a rolled-back run), held to the end of the transaction. Writes to those three tables
 queue for that second; nothing is rewritten. Run in a quiet minute; with `lock_timeout` a busy moment is a retry, not an outage.
 
 ### 4.7 Rollback

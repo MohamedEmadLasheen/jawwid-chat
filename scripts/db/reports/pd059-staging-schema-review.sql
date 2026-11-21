@@ -398,11 +398,11 @@ checks(n, area, what, expected, actual, status) as (
          case when (select count(*) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()
              and xact_start is not null and now() - xact_start > interval '60 seconds') = 0 then 'PASS' else 'WARN' end
   union all
-  select 82, 'activity', 'other sessions holding or awaiting a lock on trial_prospect, family or staff (the migration takes ACCESS EXCLUSIVE / SHARE ROW EXCLUSIVE on them)', '0',
+  select 82, 'activity', 'other sessions holding or awaiting a lock on trial_prospect, family, staff or organization (the migration takes ACCESS EXCLUSIVE / SHARE ROW EXCLUSIVE on them)', '0',
          (select count(distinct l.pid) from pg_locks l
-            where l.pid <> pg_backend_pid() and l.database = (select oid from pg_database where datname = current_database()) and l.relation in ('chat.trial_prospect'::regclass, 'chat.family'::regclass, 'chat.staff'::regclass))::text,
+            where l.pid <> pg_backend_pid() and l.database = (select oid from pg_database where datname = current_database()) and l.relation in ('chat.trial_prospect'::regclass, 'chat.family'::regclass, 'chat.staff'::regclass, 'chat.organization'::regclass))::text,
          case when (select count(distinct l.pid) from pg_locks l
-            where l.pid <> pg_backend_pid() and l.database = (select oid from pg_database where datname = current_database()) and l.relation in ('chat.trial_prospect'::regclass, 'chat.family'::regclass, 'chat.staff'::regclass)) = 0 then 'PASS' else 'WARN' end
+            where l.pid <> pg_backend_pid() and l.database = (select oid from pg_database where datname = current_database()) and l.relation in ('chat.trial_prospect'::regclass, 'chat.family'::regclass, 'chat.staff'::regclass, 'chat.organization'::regclass)) = 0 then 'PASS' else 'WARN' end
   union all
   select 83, 'activity', 'prepared (two-phase) transactions, which can hold locks indefinitely', '0',
          (select count(*) from pg_prepared_xacts)::text,
