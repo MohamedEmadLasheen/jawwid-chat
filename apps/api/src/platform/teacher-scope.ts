@@ -213,13 +213,20 @@ export class TeacherScopeService implements OnModuleInit {
    * and the insert guards (chat.may_record_teacher_row) cannot disagree.
    */
   async salesRowsOf(actor: Actor, at: Date = new Date()): Promise<PageScope> {
-    if (!(await this.salesBasis(actor))) return EMPTY_PAGE;
+    const basis = await this.salesBasis(actor);
+    if (!basis) return EMPTY_PAGE;
     const [teachers, learners, prospects] = await Promise.all([
       this.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.sales_teacher_ids(${actor.actorId}::uuid, ${at}::timestamptz) AS id`,
       this.prisma.$queryRaw<Array<{ learner: string; family: string }>>`
         SELECT l.id::text AS learner, l.family_id::text AS family
           FROM chat.learner l WHERE l.id IN (SELECT chat.sales_learner_ids(${actor.actorId}::uuid))`,
-      this.prisma.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM chat.sales_prospect_ids(${actor.actorId}::uuid, ${at}::timestamptz) AS id`,
+      // F7: the database function lists every prospect with a trial in the window ("Sales reads every trial"); a Sales
+      // REPRESENTATIVE (basis 'member') is narrowed here to the prospects assigned to them, so a teacher-records page
+      // names no other representative's prospect and a row about one is not theirs to record. The manager keeps all.
+      this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT sp.pid::text AS id FROM chat.sales_prospect_ids(${actor.actorId}::uuid, ${at}::timestamptz) AS sp(pid)
+         WHERE ${basis !== 'member'}::boolean
+            OR EXISTS (SELECT 1 FROM chat.trial_prospect p WHERE p.id = sp.pid AND p.owner_staff_id = ${actor.actorId}::uuid)`,
     ]);
     return {
       teachers: { all: false, teacherIds: new Set(teachers.map((r) => r.id)) },

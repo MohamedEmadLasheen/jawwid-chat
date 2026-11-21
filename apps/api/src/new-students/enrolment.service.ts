@@ -11,6 +11,7 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
+import { salesRepScope } from '../lessons/sales-rep-scope';
 import { normalizeEmail, signupWrongCodes } from '../platform/auth/parent-signup.service';
 import { subjectHash } from '../platform/auth/subject-hash';
 import { PaymentLedger } from '../billing/payment-ledger.service';
@@ -89,6 +90,7 @@ export class NewStudentEnrolmentService {
     if (!viewer.superAdmin && !viewer.opsManager && !viewer.operations && !viewer.sales) return [];
     const org = actor.organizationId as string;
     const all = viewer.superAdmin || viewer.opsManager;
+    const rep = await salesRepScope(this.prisma, this.lessons, actor); // F7: the tile counts what `page` shows this viewer
     const [r] = await this.prisma.$queryRaw<Array<{ unassigned: number; unassigned_oldest: Date | null; waiting: number; total: number }>>`
       WITH forms AS (
         SELECT f.lesson_id, f.recorded_at
@@ -99,12 +101,15 @@ export class NewStudentEnrolmentService {
       ),
       entry AS (
         SELECT forms.recorded_at, e.lesson_id IS NOT NULL AS enrolled, e.learner_ids,
+               (${rep}::uuid IS NULL OR EXISTS (
+                  SELECT 1 FROM chat.lesson tl JOIN chat.trial_prospect tp ON tp.id = tl.prospect_id
+                   WHERE tl.id = forms.lesson_id AND tp.owner_staff_id = ${rep}::uuid)) AS mine_as_rep,
                (e.account_id IS NOT NULL AND EXISTS (SELECT 1 FROM chat.account_credential c WHERE c.account_id = e.account_id)) AS signed_up
           FROM forms
           LEFT JOIN chat.student_enrolment e ON e.lesson_id = forms.lesson_id AND e.organization_id = ${org}::uuid
       )
-      SELECT count(*) FILTER (WHERE NOT enrolled AND (${all}::boolean OR ${viewer.sales}::boolean))::int AS unassigned,
-             min(recorded_at) FILTER (WHERE NOT enrolled AND (${all}::boolean OR ${viewer.sales}::boolean)) AS unassigned_oldest,
+      SELECT count(*) FILTER (WHERE NOT enrolled AND (${all}::boolean OR (${viewer.sales}::boolean AND mine_as_rep)))::int AS unassigned,
+             min(recorded_at) FILTER (WHERE NOT enrolled AND (${all}::boolean OR (${viewer.sales}::boolean AND mine_as_rep))) AS unassigned_oldest,
              count(*) FILTER (WHERE enrolled AND NOT signed_up
                                 AND (${all}::boolean OR learner_ids && ${viewer.supervised}::uuid[]))::int AS waiting,
              (SELECT count(*)::int FROM chat.trial_subscription f
@@ -155,11 +160,19 @@ export class NewStudentEnrolmentService {
       await Promise.all(waiting.map(async (a) => [a, await signupWrongCodes(this.prisma, { accountId: a })] as const)),
     );
     const mine = new Set(viewer.supervised);
+    // F7: a Sales REPRESENTATIVE sees the not-yet-assigned forms of their own prospects' trials only.
+    const rep = await salesRepScope(this.prisma, this.lessons, actor);
+    const ownedTrials = rep
+      ? new Set((await this.prisma.lesson.findMany({
+          where: { id: { in: forms.map((f) => f.trialId) }, organizationId: org, prospect: { is: { ownerStaffId: rep } } },
+          select: { id: true },
+        })).map((l) => l.id))
+      : null;
 
     const visible = forms.filter((f) => {
       const e = byTrial.get(f.trialId);
       if (viewer.superAdmin || viewer.opsManager) return true;
-      if (!e) return viewer.sales;
+      if (!e) return viewer.sales && (ownedTrials === null || ownedTrials.has(f.trialId));
       return e.learnerIds.some((l) => mine.has(l));
     });
     return {

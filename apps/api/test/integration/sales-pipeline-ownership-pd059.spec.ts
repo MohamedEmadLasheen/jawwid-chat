@@ -17,6 +17,10 @@
  *   5. CONTACT: the confined table has no grant for the request roles.
  *   6. HAND-OVER: a lead made Converted by a subscribed trial: not yet enrolled -> awaiting_enrolment, its
  *              contact kept; enrolled -> linked to that family, contact deleted, never a second parent.
+ *   8. F7    : EVERY trial endpoint follows the same ownership for a representative (list, detail, each
+ *              write, the subscription prefill, the trial group's context, the Dashboard tiles, the New
+ *              Students page and a trial's payment requests); a foreign trial answers exactly like a missing
+ *              one and nothing of it changes; the manager, the super admin and Operations still see all.
  */
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
@@ -33,6 +37,10 @@ import { applyInfrastructure } from '../../src/infra/http/bootstrap';
 import { LessonModule } from '../../src/lessons/lesson.module';
 import { SalesPipelineModule } from '../../src/sales-pipeline/sales-pipeline.module';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { TrialService } from '../../src/lessons/trial.service';
+import { ConversationService } from '../../src/communication/conversations/conversation.service';
+import { TeacherScopeService } from '../../src/platform/teacher-scope';
+import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.service';
 import { contactKeyHash } from '../../src/new-students/contact-key';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
 import { buildGraph, truncate } from './harness';
@@ -524,8 +532,9 @@ describe('6. hand-over of a lead a subscribed trial made Converted', () => {
     const contactsBefore = Number((await g.prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`select count(*) n from chat.contact`))[0].n);
     await legacyRows(
       `insert into chat.trial_subscription (lesson_id, organization_id, parent_name, email, phone, children, currency, payment_method, recorded_by)
-       values ($1::uuid, $2::uuid, 'Synthetic Parent Charlie', null, '+15557770044', '[{"name":"c"}]', 'USD', 'bank_transfer', $3::uuid)`,
-      lesson, orgId, who.repA.id);
+       values ($1::uuid, $2::uuid, 'Synthetic Parent Charlie', null, '+15557770044', $4::jsonb, 'USD', 'bank_transfer', $3::uuid)`,
+      lesson, orgId, who.repA.id,
+      JSON.stringify([{ name: 'c', age: 8, course: 'Quran', teacherId: m.teachers[0].id, packagePrice: 0, lessonPrice: 0, schedule: [] }]));
     await legacyRows(
       `insert into chat.student_enrolment (lesson_id, organization_id, family_id, contact_id, learner_ids, assigned_by, origin, kind)
        values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid[], $6::uuid, 'trial', 'added_children')`,
@@ -552,6 +561,227 @@ describe('6. hand-over of a lead a subscribed trial made Converted', () => {
     expect(JSON.stringify(await audits('sales_lead.converted', lead))).not.toMatch(/Charlie|1555777/);
     // converting again is refused
     expect((await http('repA', 'POST', `/sales-pipeline/leads/${lead}/convert`, {})).status).toBe(409);
+  });
+});
+
+
+describe('8. F7: every trial endpoint follows the ownership of its prospect (a representative only)', () => {
+  const DELTA = { parentName: 'Synthetic Parent Delta', phone: '+15557770081' };
+  const ECHO = { parentName: 'Synthetic Parent Echo', phone: '+15557770082' };
+  let trialA: string; // past, subscribed, not enrolled: prospect owned by rep A
+  let trialB: string; // same, rep B
+  let trialU: string; // past, held, prospect with NO owner (legacy shape)
+  let prospectA: string;
+  let prospectB: string;
+  const missingTrial = randomUUID();
+
+  async function rows(sql: string, ...args: unknown[]) {
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+      await tx.$executeRawUnsafe(sql, ...args);
+    });
+  }
+  async function pastTrial(prospect: string, daysAgo: number, by: string, form: typeof DELTA | null): Promise<string> {
+    const id = randomUUID();
+    await rows(
+      `insert into chat.lesson (id, organization_id, teacher_id, kind, starts_at, ends_at, outcome, outcome_by_kind, outcome_at, outcome_by, created_by, created_by_kind, prospect_id)
+       values ($1::uuid, $2::uuid, $3::uuid, 'trial', now() - ($6 || ' days')::interval, now() - ($6 || ' days')::interval + interval '30 minutes', 'held', 'staff', now() - ($6 || ' days')::interval, $4::uuid, $4::uuid, 'staff', $5::uuid)`,
+      id, orgId, m.teachers[0].id, by, prospect, String(daysAgo));
+    if (form) {
+      await rows(
+        `insert into chat.trial_outcome (lesson_id, organization_id, result, recorded_by) values ($1::uuid, $2::uuid, 'subscribed', $3::uuid)`,
+        id, orgId, by);
+      await rows(
+        `insert into chat.trial_subscription (lesson_id, organization_id, parent_name, email, phone, children, currency, payment_method, recorded_by)
+         values ($1::uuid, $2::uuid, $3, null, $4, $6::jsonb, 'USD', 'bank_transfer', $5::uuid)`,
+        id, orgId, form.parentName, form.phone, by,
+        JSON.stringify([{ name: 'c', age: 8, course: 'Quran', teacherId: m.teachers[0].id, packagePrice: 0, lessonPrice: 0, schedule: [] }]));
+    }
+    return id;
+  }
+  const actorOf = (k: string) => app.get(ConversationService, { strict: false }).requireActor(who[k].id);
+  const idsOf = (r: Res) => ((r.json.trials ?? []) as Array<{ id: string }>).map((t) => t.id);
+  const lessonState = async (id: string) =>
+    JSON.stringify(await g.prisma.$queryRawUnsafe(`select outcome, starts_at, ends_at, teacher_id from chat.lesson where id = $1::uuid`, id));
+  const auditTotal = async () => Number((await g.prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`select count(*) n from chat.audit_log`))[0].n);
+
+  beforeAll(async () => {
+    prospectA = (await http('repA', 'POST', '/sales-pipeline/leads', { displayName: 'f7_lead_a', contact: DELTA })).json.id;
+    prospectB = (await http('repB', 'POST', '/sales-pipeline/leads', { displayName: 'f7_lead_b', contact: ECHO })).json.id;
+    const unowned = randomUUID();
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.trial_prospect (id, organization_id, display_name, created_by) values ($1::uuid, $2::uuid, 'f7_unowned', $3::uuid)`,
+      unowned, orgId, who.ops.id);
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.trial_student (prospect_id, organization_id, position, display_name) values ($1::uuid, $2::uuid, 1, 'f7_unowned')`,
+      unowned, orgId);
+    trialA = await pastTrial(prospectA, 6, who.repA.id, DELTA);
+    trialB = await pastTrial(prospectB, 7, who.repB.id, ECHO);
+    trialU = await pastTrial(unowned, 8, who.ops.id, null);
+  });
+
+  it('GET /trials: a representative lists the trials of their own prospects only (an unowned one too is not theirs); the manager, super admin and Operations see all', async () => {
+    const a = idsOf(await http('repA', 'GET', '/trials'));
+    expect(a).toContain(trialA);
+    expect(a).not.toContain(trialB);
+    expect(a).not.toContain(trialU);
+    const b = idsOf(await http('repB', 'GET', '/trials'));
+    expect(b).toContain(trialB);
+    expect(b).not.toContain(trialA);
+    expect(b).not.toContain(trialU);
+    for (const k of ['manager', 'superAdmin', 'ops']) {
+      const all = idsOf(await http(k, 'GET', '/trials'));
+      expect([k, all.includes(trialA), all.includes(trialB), all.includes(trialU)]).toEqual([k, true, true, true]);
+    }
+    expect((await http('finance', 'GET', '/trials')).status).toBe(403);
+  });
+
+  it('GET /trials?teacherId= cannot be used to reach another representative\'s trials', async () => {
+    const r = await http('repA', 'GET', `/trials?teacherId=${m.teachers[0].id}`);
+    expect(idsOf(r)).not.toContain(trialB);
+    expect(idsOf(r)).not.toContain(trialU);
+  });
+
+  it('GET /trials/:id: another representative\'s trial and an unowned one answer exactly like a missing trial; the owner, the manager, the super admin and Operations read it', async () => {
+    const absent = await http('repA', 'GET', `/trials/${missingTrial}`);
+    expect(absent.status).toBe(404);
+    for (const t of [trialB, trialU]) {
+      const r = await http('repA', 'GET', `/trials/${t}`);
+      expect([r.status, r.json]).toEqual([absent.status, absent.json]);
+    }
+    expect((await http('repA', 'GET', `/trials/${trialA}`)).status).toBe(200);
+    for (const k of ['manager', 'superAdmin', 'ops']) expect([k, (await http(k, 'GET', `/trials/${trialB}`)).status]).toEqual([k, 200]);
+  });
+
+  it('every write and the prefill on another representative\'s (or an unowned) trial answers like a missing trial and changes nothing', async () => {
+    const routes: Array<[string, string, unknown?]> = [
+      ['POST', 'attendance', { attended: false }],
+      ['POST', 'reschedule', { startsAt: new Date(Date.now() + 5 * 86_400_000).toISOString() }],
+      ['POST', 'cancel', { reason: 'x' }],
+      ['POST', 'outcome', { result: 'no_show' }],
+      ['POST', 'correction', { result: 'not_subscribed', reason: 'price', why: 'x' }],
+      ['GET', 'subscription-prefill'],
+      ['POST', 'subscription', { subscription: {} }],
+    ];
+    const auditsBefore = await auditTotal();
+    const before = [await lessonState(trialB), await lessonState(trialU)];
+    for (const [method, tail, body] of routes) {
+      const absent = await http('repA', method, `/trials/${missingTrial}/${tail}`, body);
+      expect([tail, absent.status]).toEqual([tail, 404]);
+      for (const t of [trialB, trialU]) {
+        const r = await http('repA', method, `/trials/${t}/${tail}`, body);
+        expect([tail, r.status, r.json]).toEqual([tail, absent.status, absent.json]);
+      }
+    }
+    expect([await lessonState(trialB), await lessonState(trialU)]).toEqual(before);
+    expect(await auditTotal()).toBe(auditsBefore);
+    // the owner is not blocked by the scope: their own trial reaches the service's own rules (not a 404)
+    expect((await http('repA', 'GET', `/trials/${trialA}/subscription-prefill`)).status).toBe(200);
+    expect((await http('repA', 'POST', `/trials/${trialA}/outcome`, { result: 'no_show' })).status).not.toBe(404);
+    // and the manager reaches another representative's trial exactly as before
+    expect((await http('manager', 'GET', `/trials/${trialB}/subscription-prefill`)).status).toBe(200);
+  });
+
+  it('the trial group\'s context lists a representative only the trials of their own prospects; the manager lists all', async () => {
+    const open = await http('manager', 'POST', `/trials/teachers/${m.teachers[0].id}/group`);
+    expect([open.status]).toEqual([201]);
+    const conv = (open.json.conversationId ?? open.json.id) as string;
+    const a = idsOf(await http('repA', 'GET', `/trials/groups/${conv}`));
+    expect(a).toContain(trialA);
+    expect(a).not.toContain(trialB);
+    expect(a).not.toContain(trialU);
+    const b = idsOf(await http('repB', 'GET', `/trials/groups/${conv}`));
+    expect(b).toContain(trialB);
+    expect(b).not.toContain(trialA);
+    const all = idsOf(await http('manager', 'GET', `/trials/groups/${conv}`));
+    expect([all.includes(trialA), all.includes(trialB), all.includes(trialU)]).toEqual([true, true, true]);
+  });
+
+  it('the Dashboard trial tiles count what the representative\'s own list shows, never another\'s', async () => {
+    const tile = async (k: string, key: string) =>
+      (await app.get(TrialService, { strict: false }).dashboardCounts(who[k].id)).find((t) => t.key === key)?.count ?? 0;
+    const upcomingOf = async (k: string) =>
+      ((await http(k, 'GET', '/trials')).json.trials as Array<{ attendance: string }>).filter((t) => t.attendance === 'upcoming').length;
+    for (const k of ['repA', 'repB', 'manager']) expect([k, await tile(k, 'trials.upcoming')]).toEqual([k, await upcomingOf(k)]);
+    expect(await tile('repA', 'trials.upcoming')).toBeLessThan(await tile('manager', 'trials.upcoming'));
+  });
+
+  it('the New Students page and its tile show a representative the unassigned forms of their own prospects\' trials only; the manager and the super admin see all; an Operations supervisor is unchanged', async () => {
+    const listed = async (k: string) => {
+      const r = await http(k, 'GET', '/trials/new-students');
+      expect([k, r.status, r.code]).toEqual([k, 200, undefined]);
+      return (r.json.students as Array<{ trialId: string }>).map((x) => x.trialId);
+    };
+    const a = await listed('repA');
+    expect(a).toContain(trialA);
+    expect(a).not.toContain(trialB);
+    const b = await listed('repB');
+    expect(b).toContain(trialB);
+    expect(b).not.toContain(trialA);
+    for (const k of ['manager', 'superAdmin']) {
+      const all = await listed(k);
+      expect([k, all.includes(trialA), all.includes(trialB)]).toEqual([k, true, true]);
+    }
+    // An Operations supervisor (not the Operations manager) never saw the not-yet-assigned forms: unchanged.
+    const ops = await listed('ops');
+    expect([ops.includes(trialA), ops.includes(trialB)]).toEqual([false, false]);
+    const tile = async (k: string) =>
+      (await app.get(NewStudentEnrolmentService, { strict: false }).dashboardCounts(who[k].id)).find((t) => t.key === 'new_students.unassigned')?.count ?? 0;
+    expect(await tile('repA')).toBe(1);
+    expect(await tile('repB')).toBe(1);
+    expect(await tile('manager')).toBe(2);
+  });
+
+  it('a trial\'s payment requests: another representative\'s trial answers like a missing one (read and create), creates no request; the owner and the manager are not blocked', async () => {
+    const payments = async () => Number((await g.prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`select count(*) n from chat.payment_request`))[0].n);
+    const before = await payments();
+    const absentGet = await http('repA', 'GET', `/trials/new-students/${missingTrial}/payment-requests`);
+    const foreignGet = await http('repA', 'GET', `/trials/new-students/${trialB}/payment-requests`);
+    expect([foreignGet.status, foreignGet.json]).toEqual([absentGet.status, absentGet.json]);
+    expect(absentGet.status).toBe(404);
+    const body = { label: 'f7', amountMinor: 1000 };
+    const absentPost = await http('repA', 'POST', `/trials/new-students/${missingTrial}/payment-requests`, body);
+    const foreignPost = await http('repA', 'POST', `/trials/new-students/${trialB}/payment-requests`, body);
+    expect([foreignPost.status, foreignPost.json]).toEqual([absentPost.status, absentPost.json]);
+    expect(await payments()).toBe(before);
+    expect((await http('repA', 'GET', `/trials/new-students/${trialA}/payment-requests`)).status).toBe(200);
+    expect((await http('manager', 'GET', `/trials/new-students/${trialB}/payment-requests`)).status).toBe(200);
+  });
+
+  it('a trial\'s payment request cannot be cancelled by another representative (id-based route): answers like a missing request and changes nothing; the owner can cancel it', async () => {
+    const created = await http('repB', 'POST', `/trials/new-students/${trialB}/payment-requests`, { label: 'f7 request', amountMinor: 1000 });
+    expect([created.status, created.code]).toEqual([201, undefined]);
+    const id = (created.json.id ?? created.json.request?.id) as string;
+    expect(typeof id).toBe('string');
+    const absent = await http('repA', 'POST', `/payment-requests/${randomUUID()}/cancel`, { reason: 'x' });
+    const foreign = await http('repA', 'POST', `/payment-requests/${id}/cancel`, { reason: 'x' });
+    expect([foreign.status, foreign.json]).toEqual([absent.status, absent.json]);
+    expect(absent.status).toBe(404);
+    const row = async () => (await g.prisma.$queryRawUnsafe<Array<{ cancelled_at: Date | null }>>(`select cancelled_at from chat.payment_request where id = $1::uuid`, id))[0];
+    expect((await row()).cancelled_at).toBeNull();
+    expect((await http('repB', 'POST', `/payment-requests/${id}/cancel`, { reason: 'owner cancels' })).status).toBeLessThan(300);
+    expect((await row()).cancelled_at).not.toBeNull();
+  });
+
+  it('the teacher-records scope names a representative\'s own prospects only; the manager\'s names all (a row about another\'s prospect is not theirs to read or record)', async () => {
+    const scope = app.get(TeacherScopeService, { strict: false });
+    const mgr = (await scope.salesRowsOf(await actorOf('manager'))).prospectIds ?? new Set<string>();
+    expect([mgr.has(prospectA), mgr.has(prospectB)]).toEqual([true, true]);
+    const a = (await scope.salesRowsOf(await actorOf('repA'))).prospectIds ?? new Set<string>();
+    expect([a.has(prospectA), a.has(prospectB)]).toEqual([true, false]);
+    const b = (await scope.salesRowsOf(await actorOf('repB'))).prospectIds ?? new Set<string>();
+    expect([b.has(prospectA), b.has(prospectB)]).toEqual([false, true]);
+  });
+
+  it('reassigning the lead moves the trial\'s visibility with it (the old owner loses it, the new owner has it)', async () => {
+    // a lead whose trial has no subscription yet (a subscribed one is Converted and is not reassigned)
+    const lead = (await http('repB', 'POST', '/sales-pipeline/leads', { displayName: 'f7_lead_c', contact: { parentName: 'Synthetic Parent Foxtrot', phone: '+15557770083' } })).json.id;
+    const trialC = await pastTrial(lead, 9, who.repB.id, null);
+    expect(idsOf(await http('repB', 'GET', '/trials'))).toContain(trialC);
+    expect((await http('manager', 'POST', `/sales-pipeline/leads/${lead}/owner`, { ownerId: who.repA.id })).status).toBeLessThan(300);
+    expect(idsOf(await http('repA', 'GET', '/trials'))).toContain(trialC);
+    expect(idsOf(await http('repB', 'GET', '/trials'))).not.toContain(trialC);
+    expect((await http('repB', 'GET', `/trials/${trialC}`)).status).toBe(404);
   });
 });
 
