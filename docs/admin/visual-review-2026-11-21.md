@@ -120,6 +120,7 @@ Severity: High = data exposure or wrong access; Medium = misleading or broken be
   `super__pipeline_list.png`).
 
 ### I-1 (Medium) Route guard shows the Sales pipeline page to accounts the server refuses
+- **Status after this review:** fixed by open PR #623 (`b7aa41e6`, "the Sales pipeline shows Forbidden, not its frame, to an account the server refuses"), which the capture's base (`615e56db`) predates. Not re-captured against #623: confirm in the browser once it is merged.
 - Repro: sign in as `opsmgr`, `opssup`, `teachmgr` or `teachsup`; open `/sales/pipeline`.
 - Observed: the page title, the live "New lead" button, the search box and six stage chips (all 0) render, with an
   inline "you do not have access" card; the API answered `GET /sales-pipeline/leads` 403. Expected per the
