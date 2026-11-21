@@ -6,7 +6,8 @@ Status: **partly implemented.** No monitoring backend is provisioned (BLOCKER-3)
 The application side — health endpoints, build identity, sanitised probe
 errors, structured JSON logs and Sentry error tracking — exists and is tested;
 metrics and dashboards do not. The only alerts are App Platform's two app-level
-rules in the spec (§7.1). **For launch, read §7.**
+rules in the spec and, in production, the restart, memory and CPU alerts on the
+API and the worker (§7.1, §7.4). **For launch, read §7.**
 
 ## 1. Stack
 
@@ -14,7 +15,7 @@ rules in the spec (§7.1). **For launch, read §7.**
 |---|---|---|
 | Errors | Sentry (`SENTRY_DSN`) | **wired** in API and worker (§3a); inert without a DSN |
 | Traces / metrics | OpenTelemetry → OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`) | not wired; `OTEL_*` optional until it is |
-| Dashboards / alerts | Grafana (or the hosting platform's built-in) | dashboards not provisioned; App Platform's `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` in the spec (§7.1) |
+| Dashboards / alerts | Grafana (or the hosting platform's built-in) | dashboards not provisioned; App Platform's `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` in the spec (§7.1); production component alerts on `api` and `worker` (§7.4) |
 | Logs | structured JSON to stdout, collected by the platform | **implemented** in API and worker (§3) |
 | Health | `/health/live`, `/health/ready`, `/health` | **implemented and tested** |
 | Uptime | DigitalOcean Uptime check against `/health/ready` | not provisioned; the owner creates it after the first deploy (§7.3) |
@@ -261,6 +262,7 @@ deploy the owner approves, and the console steps are the owner's.
 | Post-deploy smoke test | `Smoke test` step of `.github/workflows/deploy-production.yml`, running `scripts/infra/smoke.sh` against `PRODUCTION_API_BASE_URL` | `/health/live` 200, `/health/ready` 200, no credential-shaped text in the health payload, security headers, CORS refuses a foreign origin | whoever ran the deploy (the workflow fails); once per deploy, never after |
 | Errors | Sentry, API and worker (§3a) | 5xx, worker-subsystem failures, WebSocket handler faults, process faults | the members of the Sentry project, by Sentry's own notification rules. `SENTRY_DSN` is **required** in production (`infra/env/manifest.tsv`, `PROD` column `req`), so a production deploy without it is refused |
 | `DEPLOYMENT_FAILED`, `DOMAIN_FAILED` | app-level `alerts:` in `.do/app.production.yaml` | a failed deploy; a domain or certificate that fails to configure | the App Platform alert destinations (§7.5); not yet set to anyone named |
+| `RESTART_COUNT`, `MEM_UTILIZATION`, `CPU_UTILIZATION` | component `alerts:` on `api` and `worker` in `.do/app.production.yaml` (§7.4); live from the next approved production deploy | a crash loop (for the worker, its only crash signal); sustained memory or CPU pressure | the App Platform alert destinations (§7.5); not yet set to anyone named |
 | Backups | `backup-daily.yml`, `backup-weekly.yml` (scheduled) | a failed backup run | GitHub e-mails a failed **scheduled** run to the user who last changed its `cron:` line, not to an on-call person |
 
 All health routes sit outside `/api/v1` (`apps/api/src/main.ts`, the global
@@ -277,8 +279,9 @@ unauthenticated (`@Public()`), so an outside checker needs no token.
    no escalation path, no contact list. The owner names the person.
 3. **An alert destination.** The two spec alerts and any uptime check need an
    e-mail address to go to; none is configured, and none can be inferred.
-4. **Component alerts** for the API and the worker (CPU, memory, restarts),
-   proposed in §7.4 and not yet in the spec.
+4. **Component alerts** for the API and the worker (CPU, memory, restarts):
+   now in the production spec (§7.4), but not live until the next approved
+   production deploy, and silent until their destinations are set (§7.5).
 
 Still out of scope for launch, unchanged: metrics, dashboards, queue age,
 error-rate alerts (§5, §6; BLOCKER-3).
@@ -293,7 +296,7 @@ feature on the existing account, or Sentry's existing project.
 | 1 | The owner names the on-call person and a backup (OA-19), and that person's e-mail. Both must be members of the DigitalOcean team (App Platform and Uptime only notify team members' e-mails) and of the Sentry project | owner, before launch |
 | 2 | DigitalOcean Uptime check on `https://api.chat.jawwid.com/health/ready`, alerting the on-call e-mail (steps below) | owner, after the first production deploy succeeds |
 | 3 | App Platform alert destinations: the on-call e-mail for `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` (§7.5) | owner, after the first deploy (the app id exists only then) |
-| 4 | Component alerts (§7.4), added through the generator in a follow-up PR | engineering, then applied by the next approved deploy |
+| 4 | Component alerts (§7.4): in the generator and the production spec; applied by the next approved deploy | engineering (done); the owner approves the deploy and sets destinations (§7.5) |
 | 5 | Sentry: confirm the on-call person is a project member and the project's alert rule e-mails on a new issue (Sentry's default rule) | owner |
 
 **Why `/health/ready` and not `/health/live`:** readiness is 503 whenever the
@@ -328,19 +331,23 @@ Optional, same steps: a second check on the Admin Web host's `/healthz`.
 
 **Staging:** no uptime check. Staging is not watched out of hours.
 
-### 7.4 Proposed component alerts (not yet in the spec)
+### 7.4 Component alerts (in the production spec)
 
-`.do/app.production.yaml` is **generated** by `scripts/infra/app-spec.py`
-(the header says so), and the `app-spec` guard
-(`bash scripts/qa/guards.sh app-spec`) fails CI when the file differs from
-what the generator renders. Editing the YAML by hand would therefore fail CI
-and be overwritten at the next render, so these alerts are a proposal here and
-belong in a follow-up PR that changes `app-spec.py` (component blocks for `api`
-and `worker`) and re-renders. That same guard runs
-`doctl apps spec validate --schema-only` on the rendered spec, which is the
-check of the exact field names below; they are written from DigitalOcean's app
-spec reference (`alerts[]` on a service or worker: `rule`, `operator`,
-`value`, `window`) and were **not** validated here.
+**Implemented** in the generator: `COMPONENT_ALERTS` and
+`component_alerts_block()` in `scripts/infra/app-spec.py` render the block
+below into the `api` and `worker` components of `.do/app.production.yaml`
+only; staging gets none. They take effect only at the next production deploy
+the owner approves, and each needs its destination set afterwards (§7.5).
+
+`.do/app.production.yaml` is **generated** (the header says so), and the
+`app-spec` guard (`bash scripts/qa/guards.sh app-spec`) fails CI when the file
+differs from what the generator renders. The same guard checks that both
+components carry all three alerts (`alert_invariants`), accepts a literal
+`value:` only as the numeric threshold of one of these alerts (every other
+`value:` must stay a `${NAME}` placeholder), and runs
+`doctl apps spec validate --schema-only` on the rendered spec, which checks
+the field names (`alerts[]` on a service or worker: `rule`, `operator`,
+`value`, `window`) against DigitalOcean's own AppSpec types.
 
 ```yaml
 # under services[name=api] and workers[name=worker]
@@ -390,6 +397,8 @@ the DigitalOcean team.
 - [ ] Uptime check on `/health/ready` exists, two or more regions, Down and
       certificate alerts to the on-call e-mail (owner, §7.3).
 - [ ] `DEPLOYMENT_FAILED` and `DOMAIN_FAILED` deliver to the on-call e-mail (owner, §7.5).
-- [ ] Component alerts in the generator, rendered, CI green, deployed (§7.4).
+- [ ] Component alerts deployed and delivering to the on-call e-mail (§7.4,
+      §7.5). In the generator and the rendered production spec already;
+      deploy and destinations pending.
 - [ ] On-call person is in the Sentry project and gets new-issue e-mails.
 - [ ] `incident-response.md` "Gaps" updated with the named contact.
