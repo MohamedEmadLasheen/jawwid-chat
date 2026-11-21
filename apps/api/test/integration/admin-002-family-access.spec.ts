@@ -345,7 +345,7 @@ describe('ADMIN-002 review (#363): the edges', () => {
     expect(await auditRows('family_access.revoked')).toHaveLength(1);
   });
 
-  it('a Sales manager who is also an Operations member keeps the Sales manager\'s reach', async () => {
+  it('a Sales manager who is also an Operations member keeps no family-account reach (PD-59)', async () => {
     // PD-8's guards forbid this today (a member is admin or coverage; a manager is
     // a manager; one department each), so it is built past them: the narrowing
     // must not depend on them -- only an Operations role narrows.
@@ -367,7 +367,8 @@ describe('ADMIN-002 review (#363): the edges', () => {
         salesManager,
       ),
     ]);
-    // family_x is admin_a's, not theirs; the Sales manager's rule reaches it all the same.
-    expect((await accounts.get(await actor(salesManager), parentAccount)).allowed.resetPassword).toBe(true);
+    // family_x is admin_a's, not theirs. Before PD-59 the Sales manager's rule reached it all the same;
+    // now neither the Sales role nor a (never narrowing) Operations placement gives a manager any reach.
+    expect(await code(accounts.get(await actor(salesManager), parentAccount))).toBe(CommErrorCode.ACCOUNT_ADMIN_NOT_FOUND);
   });
 });

@@ -8,8 +8,8 @@
  *     one, ends all the others, and ends the current one (= sign out); never
  *     another account's; a support session can read but not end anything;
  *   - administrators: list and end an account's sessions under the PD-21 rule
- *     as narrowed by PD-40 (parents: the super admin and Operations, Sales may
- *     sign out; teachers: the super admin and the Teachers department), with a
+ *     as narrowed by PD-40 (parents: the super admin and Operations, Sales
+ *     none since PD-59; teachers: the super admin and the Teachers department), with a
  *     reason, audited; parents and teachers reach none of it.
  *
  * Synthetic people only (G-20).
@@ -348,16 +348,17 @@ describe('PD-23: an administrator ends an account\'s sessions', () => {
     expect((await login(teacher, ios)).status).toBe(200);
   });
 
-  it('PD-40: Sales signs a parent out everywhere, but never a teacher', async () => {
+  it('PD-40 / PD-59: Sales signs nobody out -- neither a teacher nor a parent', async () => {
     const parent = m.families[9]!.parent.subject;
     const own = await login(parent, ios);
     const sales = (await login(m.salesManager.subject, web)).accessToken;
     const teacherAccount = await accountIdOf(m.teachers[2]!.subject);
-    const refused = await call(sales, 'POST', `/admin/accounts/${teacherAccount}/sessions/revoke-all`, { reason: 'x' });
-    expect({ status: refused.status, code: refused.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
-    const r = await call(sales, 'POST', `/admin/accounts/${await accountIdOf(parent)}/sessions/revoke-all`, { reason: 'new phone' });
-    expect(r.status).toBe(200);
-    expect((await call(own.accessToken, 'GET', '/me')).status).toBe(401);
+    for (const target of [teacherAccount, await accountIdOf(parent)]) {
+      const refused = await call(sales, 'POST', `/admin/accounts/${target}/sessions/revoke-all`, { reason: 'new phone' });
+      expect({ status: refused.status, code: refused.code }).toEqual({ status: 403, code: CommErrorCode.ACCOUNT_ADMIN_DENIED });
+    }
+    // The parent's own session is untouched.
+    expect((await call(own.accessToken, 'GET', '/me')).status).toBe(200);
   });
 
   it('follows the PD-21 rule: parents and teachers never; staff accounts only by the super admin; never the super admin', async () => {

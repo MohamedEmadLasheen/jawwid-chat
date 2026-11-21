@@ -183,7 +183,10 @@ const TEACHERS_MEMBER = k(
 /** Sales: enrolment, trials, payments (PD-16, PD-20). */
 const SALES_MEMBER = k(
   'org.covers',
-  'accounts.administer',
+  // PD-59 (owner 2026-11-21): no 'accounts.administer'. Owning a lead, or the family it became, does not
+  // make a Sales member (representative or manager) the administrator of the family's login. The first
+  // sign-in is entered through new_students.manage; reset, devices and sessions stay with Operations
+  // and the super admin (docs/admin/pd059-sales-accounts-administer.md).
   'parents.view',
   // PD-42: the contact record of the families they own (BillingAccess.editOwnedOnly).
   'parents.edit',
