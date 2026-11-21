@@ -192,6 +192,47 @@ export const ADMIN_CASES_LABEL: Bilingual = { en: 'Escalations', ar: 'التصع
 /** PD-21: account administration, beside the read-only Users section. */
 export const ADMIN_ACCOUNTS_LABEL: Bilingual = { en: 'Accounts', ar: 'الحسابات' }
 
+/**
+ * The pages the super admin holds beyond the Admin Portal's own sections: each
+ * is an operator area (same path, same page) offered in the portal's rail. One
+ * table, in the order they appear, so the placement of a page is one line and
+ * the navigation, the routes and the tests cannot disagree about it.
+ *
+ * `into`: the first heading of the destination (every page here joins it), or
+ * the Chat page, which leads its destination (PD-8: reply first, inspect second).
+ */
+interface AdminAreaEntry {
+  area: OperatorArea
+  /** Where the page is offered; the placement is the only thing that differs from the operator's. */
+  destination: DestinationKey
+  /** The super admin's own wording, where it differs from the operator's. */
+  label?: Bilingual
+  lead?: boolean
+}
+
+const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
+  // PD-8: the super admin replies in the Chat workspace.
+  { area: 'chat', destination: 'conversations', label: ADMIN_CHAT_LABEL, lead: true },
+  // PD-21: Accounts, the page every staff role shares; Users stays read-only.
+  { area: 'accounts', destination: 'people', label: ADMIN_ACCOUNTS_LABEL },
+  // PD-38: the academy's schedule.
+  { area: 'schedule', destination: 'people', label: ADMIN_SCHEDULE_LABEL },
+  // PD-11 T4 / PD-16: trial lessons and new students.
+  { area: 'trials', destination: 'people', label: ADMIN_TRIALS_LABEL },
+  // Teacher Profile V2: the credential review queue.
+  { area: 'teacher-profiles', destination: 'people', label: ADMIN_TEACHER_CREDENTIALS_LABEL },
+  // PD-29: the Materials library.
+  { area: 'materials', destination: 'more', label: ADMIN_MATERIALS_LABEL },
+  // PD-35 B5: escalation cases.
+  { area: 'cases', destination: 'people', label: ADMIN_CASES_LABEL },
+  // PD-41: the Certificates page and its types.
+  { area: 'certificates', destination: 'people' },
+  // PD-48: lesson voice-over review.
+  { area: 'lesson-audio', destination: 'more' },
+  // PD-57: the moderation queue.
+  { area: 'moderation', destination: 'more' },
+]
+
 function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
   // Sections keep their registry order; inside a destination that spans more
@@ -215,113 +256,28 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
       out.set(dest, groups)
     }
   }
-  // PD-8: the super admin replies in the Chat workspace -- the same
-  // conversations, on the real conversation API. It leads its destination, so
-  // replying is offered first and read-only inspection second.
-  out.get('conversations')?.[0]?.entries.unshift({
-    key: 'chat',
-    path: AREA_PATH.chat,
-    icon: AREA_ICON.chat,
-    label: { text: ADMIN_CHAT_LABEL },
-    inDevelopment: false,
-  })
-  // PD-21: the super admin administers accounts (reset, set inactive) at
-  // /accounts, the same page every staff role has; Users stays read-only.
-  out.get('people')?.[0]?.entries.push({
-    key: 'accounts',
-    path: AREA_PATH.accounts,
-    icon: AREA_ICON.accounts,
-    label: { text: ADMIN_ACCOUNTS_LABEL },
-    inDevelopment: false,
-  })
-  // PD-38: the academy's schedule at /schedule, the same page the Teachers
-  // department and Operations have.
-  out.get('people')?.[0]?.entries.push({
-    key: 'schedule',
-    path: AREA_PATH.schedule,
-    icon: AREA_ICON.schedule,
-    label: { text: ADMIN_SCHEDULE_LABEL },
-    inDevelopment: false,
-  })
-  // PD-11 T4 / PD-16: trial lessons and new students at /trials, the same
-  // pages Sales and Operations have; the server admits the super admin to
-  // both, and the page offers each tab GET /lessons/access confirms.
-  out.get('people')?.[0]?.entries.push({
-    key: 'trials',
-    path: AREA_PATH.trials,
-    icon: AREA_ICON.trials,
-    label: { text: ADMIN_TRIALS_LABEL },
-    inDevelopment: false,
-  })
-  // Teacher Profile V2: the server admits the super admin as a credential
-  // reviewer (canReviewTeacherProfile), at /teacher-profiles.
-  out.get('people')?.[0]?.entries.push({
-    key: 'teacher-profiles',
-    path: AREA_PATH['teacher-profiles'],
-    icon: AREA_ICON['teacher-profiles'],
-    label: { text: ADMIN_TEACHER_CREDENTIALS_LABEL },
-    inDevelopment: false,
-  })
-  // PD-29: the super admin manages the Materials library at /materials, the
-  // same page the Teachers manager has.
-  out.get('more')?.[0]?.entries.push({
-    key: 'materials',
-    path: AREA_PATH.materials,
-    icon: AREA_ICON.materials,
-    label: { text: ADMIN_MATERIALS_LABEL },
-    inDevelopment: false,
-  })
-  // PD-35 B5: the escalation cases the super admin sees and acts on, at /cases.
-  out.get('people')?.[0]?.entries.push({
-    key: 'cases',
-    path: AREA_PATH.cases,
-    icon: AREA_ICON.cases,
-    label: { text: ADMIN_CASES_LABEL },
-    inDevelopment: false,
-  })
-  // PD-41: the Certificates page, with its types, at /certificates.
-  out.get('people')?.[0]?.entries.push({
-    key: 'certificates',
-    path: AREA_PATH.certificates,
-    icon: AREA_ICON.certificates,
-    label: { message: 'nav.certificates' },
-    inDevelopment: false,
-  })
-  // PD-48: the super admin holds every key, so reviews lesson voice-over too.
-  out.get('more')?.[0]?.entries.push({
-    key: 'lesson-audio',
-    path: AREA_PATH['lesson-audio'],
-    icon: AREA_ICON['lesson-audio'],
-    label: { message: 'nav.lesson-audio' },
-    inDevelopment: false,
-  })
-  // PD-57: the super admin holds every key, so the moderation queue is always offered.
-  out.get('more')?.[0]?.entries.push({
-    key: 'moderation',
-    path: AREA_PATH.moderation,
-    icon: AREA_ICON.moderation,
-    label: { message: 'nav.moderation' },
-    inDevelopment: false,
-  })
+  for (const e of ADMIN_AREA_ENTRIES) {
+    const entry: NavEntry = {
+      key: e.area,
+      path: AREA_PATH[e.area],
+      icon: AREA_ICON[e.area],
+      label: e.label ? { text: e.label } : { message: `nav.${e.area}` },
+      inDevelopment: false,
+    }
+    const first = out.get(e.destination)?.[0]
+    if (e.lead) first?.entries.unshift(entry)
+    else first?.entries.push(entry)
+  }
   // PD-52: the two teacher-records pages, in their own group under People.
   out.get('people')?.push({
     ...TEACHER_RECORDS_GROUP,
-    entries: [
-      {
-        key: 'teacher-attendance',
-        path: `/admin${ATTENDANCE_PATH}`,
-        icon: AREA_ICON['teacher-attendance'],
-        label: { message: 'nav.teacher-attendance' },
-        inDevelopment: false,
-      },
-      {
-        key: 'teacher-grants',
-        path: `/admin${GRANTS_PATH}`,
-        icon: AREA_ICON['teacher-grants'],
-        label: { message: 'nav.teacher-grants' },
-        inDevelopment: false,
-      },
-    ],
+    entries: (['teacher-attendance', 'teacher-grants'] as const).map((area) => ({
+      key: area,
+      path: `/admin${AREA_PATH[area]}`,
+      icon: AREA_ICON[area],
+      label: { message: `nav.${area}` as const },
+      inDevelopment: false,
+    })),
   })
   // One registry group inside a destination needs no heading.
   for (const groups of out.values()) {
