@@ -96,7 +96,7 @@ describe('navigation lists what a role may open', () => {
       const certs = (a: string) => a === 'certificates' || a === 'lesson-audio' || a === 'teacher-attendance' || a === 'teacher-grants' || a === 'moderation'
       expect(navAreas(role)).toEqual(
         withoutPipeline(role).filter(
-          (a) => a !== 'teachers' && a !== 'trials' && a !== 'new-students' && a !== 'needs-action' && a !== 'teacher-schedules' && a !== 'student-schedules' && a !== 'teacher-profiles' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a),
+          (a) => a !== 'teachers' && a !== 'trials' && a !== 'new-students' && a !== 'needs-action' && a !== 'teacher-schedules' && a !== 'student-schedules' && a !== 'students' && a !== 'teacher-profiles' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a),
         ),
       )
       expect(navAreas(role, { lessonManager: true })).toEqual(withoutPipeline(role).filter((a) => a !== 'new-students' && a !== 'materials' && a !== 'schedule' && !money(a) && !certs(a)))

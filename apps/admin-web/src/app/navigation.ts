@@ -124,6 +124,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   organization: 'people',
   teachers: 'people',
   parents: 'people',
+  students: 'people',
   'teacher-profiles': 'people',
   accounts: 'people',
   'teacher-attendance': 'people',
@@ -153,6 +154,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   teachers: '/teachers',
   instalments: '/instalments',
   parents: '/parents',
+  students: '/students',
   payments: '/payments',
   'sales-pipeline': SALES_PIPELINE_PATH,
   trials: '/trials',
@@ -182,6 +184,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   teachers: 'academy',
   instalments: 'calendar',
   parents: 'users',
+  students: 'users',
   payments: 'tag',
   'sales-pipeline': 'chart',
   trials: 'calendar',
@@ -249,6 +252,8 @@ const ADMIN_AREA_ENTRIES: readonly AdminAreaEntry[] = [
   { area: 'chat', destination: 'conversations', label: ADMIN_CHAT_LABEL, lead: true },
   // PD-21: Accounts, the page every staff role shares; Users stays read-only.
   { area: 'accounts', destination: 'people', label: ADMIN_ACCOUNTS_LABEL },
+  // PD-60: the student directory, beside Parents.
+  { area: 'students', destination: 'people' },
   // PD-38: the academy's schedule.
   { area: 'schedule', destination: 'scheduling', label: ADMIN_SCHEDULE_LABEL },
   { area: 'teacher-schedules', destination: 'scheduling' },
@@ -347,7 +352,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
 export const PEOPLE_GROUPS: readonly { key: string; label: Bilingual; members: readonly string[] }[] = [
   { key: 'accounts', label: { en: 'Staff & accounts', ar: 'الموظفون والحسابات' }, members: ['accounts', 'users'] },
   { key: 'teachers', label: { en: 'Teachers', ar: 'المعلمون' }, members: ['teachers', 'teacher-profiles', 'teacher-attendance', 'teacher-grants'] },
-  { key: 'families', label: { en: 'Families', ar: 'العائلات' }, members: ['parents'] },
+  { key: 'families', label: { en: 'Families', ar: 'العائلات' }, members: ['parents', 'students'] },
   { key: 'organization', label: { en: 'Organization', ar: 'الهيكل التنظيمي' }, members: ['teams', 'organization'] },
 ]
 

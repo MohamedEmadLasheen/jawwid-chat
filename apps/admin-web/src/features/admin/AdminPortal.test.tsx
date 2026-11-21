@@ -147,8 +147,8 @@ describe('Admin Portal registry and navigation', () => {
     // app/Navigation.test.tsx.)
     // PD-41: plus Certificates under People; PD-48: Lesson audio under More;
     // PD-52: the two teacher-records pages, their own group under People.
-    // PD-59: plus the Sales pipeline, first page of Sales.
-    expect(within(nav).getAllByRole('link')).toHaveLength(38)
+    // PD-59: plus the Sales pipeline, first page of Sales. PD-60: plus Students under People.
+    expect(within(nav).getAllByRole('link')).toHaveLength(39)
     // PD-57: plus the moderation queue (Reports) under More.
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)

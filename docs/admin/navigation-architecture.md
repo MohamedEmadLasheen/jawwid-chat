@@ -9,7 +9,7 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 |---|---|---|---|
 | 1 | Conversations | Chat `/chat`; All conversations `/admin/conversations` (super admin); Moderation `/moderation` | role; `moderation.view` |
 | 2 | Dashboard | Dashboard `/dashboard`; Tasks `/tasks` | role |
-| 3 | People & Organization | *Staff & accounts:* Accounts `/accounts`, Users `/admin/users` · *Teachers:* Teachers `/teachers` (`/admin/teachers`), Credentials review `/teacher-profiles`, Attendance & complaints, Grants & testimonials · *Families:* Parents `/parents` · *Organization:* `/organization` (`/admin/teams`) | role; `lessonManager`; `billingReader`; `teacherAttendance`/`teacherGrants` |
+| 3 | People & Organization | *Staff & accounts:* Accounts `/accounts`, Users `/admin/users` · *Teachers:* Teachers `/teachers` (`/admin/teachers`), Credentials review `/teacher-profiles`, Attendance & complaints, Grants & testimonials · *Families:* Parents `/parents`, Students `/students` · *Organization:* `/organization` (`/admin/teams`) | role; `lessonManager` (Students too); `billingReader`; `teacherAttendance`/`teacherGrants` |
 | 4 | Sales | Sales pipeline `/sales/pipeline` (PD-59); Trial lessons `/trials`; New students `/trials/new-students` | `sales` (pipeline); `sales`/`operations`/`lessonManager` |
 | 5 | Scheduling | Academy calendar `/schedule`; Teachers' schedules `/teachers/schedules`; Student schedules `/schedule/students` | `calendar`; `lessonManager` |
 | 6 | Operations | Needs action `/teachers/needs-action`; Materials; Escalations `/cases`; Certificates; Lesson audio | `lessonManager`; `materialsManager`; role; `certificates`; `lessonAudio` |
@@ -25,7 +25,7 @@ The single source is `apps/admin-web/src/app/navigation.ts` (`DESTINATIONS`, `SE
 - **Moved out of People:** Trials, Schedule, Escalations, Certificates, Instalments, Payments.
 - **No URL changed.** `Navigation.test.tsx` ("No URL was lost") opens every rail entry for every role and 45 pre-redesign URLs.
 - **Not merged yet** (deliberately, no functional gain for the risk): the two route trees `/teachers/*` and `/admin/teachers/*`; the `/cases` and `/teachers/cases` registrations; Chat + All conversations as tabs of one page. Candidates for a later clean-up PR.
-- **No student directory exists** (only `/students/:id` and the paused/stopped list), so Students is not a People entry. It needs a list endpoint.
+- **Students (PD-60)** is a People entry (`/students`, group Families) backed by `GET /learners`: paginated (max 100), searchable, filterable by teacher, supervisor and status, essential fields only, rows linking to the existing `/students/:id` profile. The server shows exactly the learners whose profile the caller may open (super admin, Teachers department in scope, a child's supervisor). No new table.
 
 ## Sales pipeline (PD-59, built)
 Stages: New Lead · Contacted · Trial Booked · Trial Completed · Converted · Lost. Page: **Sales pipeline**
