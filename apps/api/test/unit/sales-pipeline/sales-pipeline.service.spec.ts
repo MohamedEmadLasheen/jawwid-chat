@@ -87,7 +87,7 @@ function build(stub: Stub) {
     trialStudent: { create: async () => undefined },
     account: { findUnique: async () => null },
     contact: { findFirst: async () => null },
-    studentEnrolment: { findFirst: async () => (stub.enrolledFamily ? { familyId: stub.enrolledFamily } : null) },
+    studentEnrolment: { findFirst: async () => (stub.enrolledFamily ? { familyId: stub.enrolledFamily } : null), count: async () => (stub.enrolledFamily ? 1 : 0) },
     family: { findFirst: async () => ({ primaryContactId: CONTACT_ID }) },
     parentFile: {
       findUnique: async () => (stub.file ? { adminOnlyParentPhone: stub.file.phone ? 'x' : null, adminOnlyParentEmail: stub.file.email ? 'x' : null } : null),
